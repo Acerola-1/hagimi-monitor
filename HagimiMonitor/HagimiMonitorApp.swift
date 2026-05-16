@@ -30,11 +30,10 @@ struct HagimiMonitorApp: App {
         }
         .windowResizability(.contentSize)
 
-        WindowGroup("设置", id: "settings") {
+        Settings {
             SettingsView(settings: monitorStore.settings)
                 .preferredColorScheme(monitorStore.settings.themePreference.colorScheme)
         }
-        .defaultSize(width: 720, height: 480)
         .windowResizability(.contentSize)
     }
 

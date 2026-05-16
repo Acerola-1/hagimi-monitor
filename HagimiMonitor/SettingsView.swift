@@ -8,14 +8,12 @@ struct SettingsView: View {
     var body: some View {
         HStack(spacing: 0) {
             SettingsSidebar(selection: $selection)
-                .frame(width: 180)
 
             Divider()
 
-            SettingsDetailView(selection: selection, settings: settings)
-                .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
+            SettingsDetailPane(selection: selection, settings: settings)
         }
-        .frame(width: 720, height: 480)
+        .frame(width: 600, height: 360)
         .background(.regularMaterial)
     }
 }
@@ -64,11 +62,13 @@ private enum SettingsSection: Hashable, Identifiable {
 
 private struct SettingsSidebar: View {
     @Binding var selection: SettingsSection
-    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
         VStack(spacing: 0) {
-            VStack(spacing: 3) {
+            Color.clear
+                .frame(height: 42)
+
+            VStack(spacing: 2) {
                 ForEach(SettingsSection.all) { section in
                     SidebarRow(
                         section: section,
@@ -78,34 +78,27 @@ private struct SettingsSidebar: View {
                     }
                 }
             }
-            .padding(.horizontal, 8)
-            .padding(.top, 12)
+            .padding(.horizontal, 10)
 
-            Spacer(minLength: 0)
+            Spacer(minLength: 10)
 
             Divider()
 
-            HStack(spacing: 0) {
-                Button {
-                    NSApp.terminate(nil)
-                } label: {
-                    Image(systemName: "power")
-                        .font(.system(size: 13, weight: .semibold))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.secondary)
-                .help("退出应用")
+            Button {
+                NSApp.terminate(nil)
+            } label: {
+                Label("退出", systemImage: "power")
+                    .font(.system(size: 12, weight: .medium))
+                    .frame(maxWidth: .infinity, minHeight: 36)
             }
-            .frame(height: 45)
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+            .help("退出应用")
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
         }
-        .background(sidebarBackground)
-    }
-
-    private var sidebarBackground: Color {
-        colorScheme == .dark
-            ? Color.white.opacity(0.035)
-            : Color.black.opacity(0.025)
+        .frame(width: 164)
+        .background(.bar)
     }
 }
 
@@ -116,58 +109,58 @@ private struct SidebarRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 9) {
+            HStack(spacing: 8) {
                 Image(systemName: section.symbol)
-                    .font(.system(size: 13, weight: .medium))
-                    .symbolRenderingMode(.monochrome)
-                    .frame(width: 18)
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                    .symbolVariant(isSelected ? .fill : .none)
+                    .frame(width: 18, alignment: .center)
 
                 Text(section.title)
-                    .font(.system(size: 13, weight: .medium))
+                    .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
                     .lineLimit(1)
 
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, 10)
-            .frame(height: 30)
-            .foregroundStyle(isSelected ? Color.primary : Color.secondary)
-            .background {
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(Color.accentColor.opacity(0.16))
-                }
-            }
-            .contentShape(Rectangle())
+            .foregroundStyle(isSelected ? .primary : .secondary)
+            .frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+            .padding(.horizontal, 9)
+            .contentShape(.rect)
         }
         .buttonStyle(.plain)
+        .background {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 6, style: .continuous)
+                    .fill(Color.accentColor.opacity(0.16))
+            }
+        }
     }
 }
 
-private struct SettingsDetailView: View {
+private struct SettingsDetailPane: View {
     let selection: SettingsSection
     @ObservedObject var settings: MonitorSettings
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text(selection.title)
-                    .font(.system(size: 24, weight: .semibold))
-                    .padding(.top, 4)
+        VStack(alignment: .leading, spacing: 16) {
+            Color.clear
+                .frame(height: 18)
 
-                switch selection {
-                case .general:
-                    GeneralSettingsPane(settings: settings)
-                case .module(let kind):
-                    ModuleSettingsPane(kind: kind, settings: settings)
-                }
+            Label(selection.title, systemImage: selection.symbol)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.primary)
 
-                Spacer(minLength: 0)
+            switch selection {
+            case .general:
+                GeneralSettingsPane(settings: settings)
+            case .module(let kind):
+                ModuleSettingsPane(kind: kind, settings: settings)
             }
-            .padding(.horizontal, 26)
-            .padding(.vertical, 24)
-            .frame(maxWidth: .infinity, alignment: .leading)
+
+            Spacer(minLength: 0)
         }
-        .background(.background.opacity(0.64))
+        .padding(.horizontal, 24)
+        .padding(.bottom, 22)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
@@ -175,35 +168,33 @@ private struct GeneralSettingsPane: View {
     @ObservedObject var settings: MonitorSettings
 
     var body: some View {
-        VStack(spacing: 14) {
-            SettingsSectionCard {
-                SettingsRow(title: "开机自启") {
-                    Toggle("", isOn: $settings.launchAtLogin)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-
-                SettingsDivider()
-
-                SettingsRow(title: "主题") {
-                    Picker("", selection: $settings.themePreference) {
-                        ForEach(AppThemePreference.allCases) { theme in
-                            Text(theme.title).tag(theme)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-                    .frame(width: 220)
+        PreferenceGroup {
+            PreferenceRow(title: "开机自启") {
+                Toggle("", isOn: $settings.launchAtLogin)
                     .labelsHidden()
-                }
+                    .toggleStyle(.switch)
+            }
 
-                SettingsDivider()
+            PreferenceDivider()
 
-                SettingsRow(title: "关于项目") {
-                    Button("打开") {
-                        NSApp.orderFrontStandardAboutPanel(nil)
+            PreferenceRow(title: "主题") {
+                Picker("", selection: $settings.themePreference) {
+                    ForEach(AppThemePreference.allCases) { theme in
+                        Text(theme.title).tag(theme)
                     }
-                    .controlSize(.small)
                 }
+                .labelsHidden()
+                .pickerStyle(.segmented)
+                .frame(width: 214)
+            }
+
+            PreferenceDivider()
+
+            PreferenceRow(title: "关于项目") {
+                Button("打开") {
+                    NSApp.orderFrontStandardAboutPanel(nil)
+                }
+                .controlSize(.small)
             }
         }
     }
@@ -214,57 +205,57 @@ private struct ModuleSettingsPane: View {
     @ObservedObject var settings: MonitorSettings
 
     var body: some View {
-        SettingsSectionCard {
-            SettingsRow(title: "显示") {
+        PreferenceGroup {
+            PreferenceRow(title: "显示") {
                 Toggle("", isOn: Binding(
                     get: { settings.isVisible(kind) },
                     set: { settings.setVisible($0, for: kind) }
                 ))
-                .toggleStyle(.switch)
                 .labelsHidden()
+                .toggleStyle(.switch)
             }
         }
     }
 }
 
-private struct SettingsSectionCard<Content: View>: View {
+private struct PreferenceGroup<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
         VStack(spacing: 0) {
             content
         }
-        .padding(.vertical, 2)
-        .background(.regularMaterial, in: .rect(cornerRadius: 8, style: .continuous))
+        .background(.background)
+        .clipShape(.rect(cornerRadius: 7, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                .strokeBorder(.separator.opacity(0.45), lineWidth: 1)
         }
     }
 }
 
-private struct SettingsRow<Accessory: View>: View {
+private struct PreferenceRow<Accessory: View>: View {
     let title: String
     @ViewBuilder var accessory: Accessory
 
     var body: some View {
-        HStack(spacing: 16) {
+        HStack(spacing: 12) {
             Text(title)
-                .font(.system(size: 13, weight: .regular))
+                .font(.system(size: 13))
                 .foregroundStyle(.primary)
 
-            Spacer(minLength: 12)
+            Spacer(minLength: 18)
 
             accessory
         }
-        .frame(minHeight: 44)
-        .padding(.horizontal, 14)
+        .frame(minHeight: 42)
+        .padding(.horizontal, 12)
     }
 }
 
-private struct SettingsDivider: View {
+private struct PreferenceDivider: View {
     var body: some View {
         Divider()
-            .padding(.leading, 14)
+            .padding(.leading, 12)
     }
 }
