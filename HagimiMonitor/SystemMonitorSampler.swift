@@ -13,6 +13,13 @@ final class SystemMonitorSampler {
     private var powerTelemetryService: io_service_t = IO_OBJECT_NULL
     private var didSearchPowerTelemetryService = false
     private let totalMemorySize = SystemMonitorSampler.memoryTotalSize()
+    private let uptimeFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.maximumUnitCount = 2
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = [.day, .hour, .minute]
+        return formatter
+    }()
 
     deinit {
         if powerTelemetryService != IO_OBJECT_NULL {
@@ -25,23 +32,25 @@ final class SystemMonitorSampler {
     }
 
     func sample(kinds: some Sequence<MonitorKind>, previousModules: [MonitorModule]) -> SystemMonitorSnapshot {
-        var modulesByKind = Dictionary(uniqueKeysWithValues: previousModules.map { ($0.kind, $0) })
+        autoreleasepool {
+            var modulesByKind = Dictionary(uniqueKeysWithValues: previousModules.map { ($0.kind, $0) })
 
-        for kind in kinds {
-            let module = makeModule(for: kind)
-            if let previous = modulesByKind[kind] {
-                var updated = module
-                updated.samples = Array((previous.samples + [module.value]).suffix(28))
-                modulesByKind[kind] = updated
-            } else {
-                modulesByKind[kind] = module
+            for kind in kinds {
+                let module = makeModule(for: kind)
+                if let previous = modulesByKind[kind] {
+                    var updated = module
+                    updated.samples = Array((previous.samples + [module.value]).suffix(28))
+                    modulesByKind[kind] = updated
+                } else {
+                    modulesByKind[kind] = module
+                }
             }
-        }
 
-        let modules = MonitorKind.allCases.map { kind in
-            modulesByKind[kind] ?? MonitorModule.placeholder(kind: kind)
+            let modules = MonitorKind.allCases.map { kind in
+                modulesByKind[kind] ?? MonitorModule.placeholder(kind: kind)
+            }
+            return SystemMonitorSnapshot(modules: modules)
         }
-        return SystemMonitorSnapshot(modules: modules)
     }
 
     private func makeModule(for kind: MonitorKind) -> MonitorModule {
@@ -257,8 +266,8 @@ final class SystemMonitorSampler {
 
         let smart = smartBatteryInfo()
         let adapterWatts = smart.adapterWatts ?? externalAdapterWatts()
-        let chargingPower = connected ? (smart.chargingPowerWatts ?? smart.batteryPowerWatts) : nil
-        let power = smart.systemPowerWatts ?? smart.batteryPowerWatts
+        let chargingPower = connected ? smart.chargingPowerWatts : nil
+        let batteryPower = smart.batteryPowerWatts
 
         return MonitorModule(
             kind: .battery,
@@ -269,7 +278,7 @@ final class SystemMonitorSampler {
                 MonitorMetric(name: "状态", value: isCharging ? "充电中" : (connected ? "外接电源" : "电池供电")),
                 MonitorMetric(name: "适配器", value: wattString(adapterWatts, rounded: true)),
                 MonitorMetric(name: "充电功率", value: wattString(chargingPower)),
-                MonitorMetric(name: "功耗", value: wattString(power)),
+                MonitorMetric(name: "功耗", value: wattString(batteryPower)),
                 MonitorMetric(name: "健康度", value: smart.healthPercent.map(percent) ?? "--"),
                 MonitorMetric(name: "循环数", value: smart.cycleCount.map { "\($0)" } ?? "--"),
                 MonitorMetric(name: "温度", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--")
@@ -327,11 +336,7 @@ final class SystemMonitorSampler {
             return "--"
         }
 
-        let formatter = DateComponentsFormatter()
-        formatter.maximumUnitCount = 2
-        formatter.unitsStyle = .abbreviated
-        formatter.allowedUnits = [.day, .hour, .minute]
-        return formatter.string(from: bootDate, to: Date()) ?? "--"
+        return uptimeFormatter.string(from: bootDate, to: Date()) ?? "--"
     }
 
     private func bootDate() -> Date? {
@@ -384,14 +389,17 @@ final class SystemMonitorSampler {
     }
 
     private func gpuReading() -> GPUReading? {
-        let accelerators = registryEntries(forClass: "IOAccelerator")
+        let accelerators = acceleratorServices()
         guard !accelerators.isEmpty else {
             return nil
+        }
+        defer {
+            accelerators.forEach { IOObjectRelease($0) }
         }
 
         var best: GPUReading?
         for accelerator in accelerators {
-            guard let stats = accelerator["PerformanceStatistics"] as? [String: Any] else {
+            guard let stats = registryDictionaryValue(accelerator, "PerformanceStatistics") else {
                 continue
             }
 
@@ -403,7 +411,9 @@ final class SystemMonitorSampler {
             let temperature = doubleValue(stats["Temperature(C)"])
             let usedMemory = doubleValue(stats["In use system memory"])
             let allocatedMemory = doubleValue(stats["Alloc system memory"])
-            let model = accelerator["model"] as? String ?? accelerator["IOClass"] as? String ?? "GPU"
+            let model = registryStringValue(accelerator, "model")
+                ?? registryStringValue(accelerator, "IOClass")
+                ?? "GPU"
 
             let reading = GPUReading(
                 model: model,
@@ -421,6 +431,24 @@ final class SystemMonitorSampler {
         }
 
         return best
+    }
+
+    private func acceleratorServices() -> [io_service_t] {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &iterator) == KERN_SUCCESS else {
+            return []
+        }
+        defer { IOObjectRelease(iterator) }
+
+        var services: [io_service_t] = []
+        while true {
+            let service = IOIteratorNext(iterator)
+            guard service != IO_OBJECT_NULL else {
+                break
+            }
+            services.append(service)
+        }
+        return services
     }
 
     private func smartBatteryInfo() -> SmartBatteryInfo {
@@ -541,31 +569,6 @@ final class SystemMonitorSampler {
         }
     }
 
-    private func registryEntries(forClass className: String) -> [[String: Any]] {
-        var iterator: io_iterator_t = 0
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching(className), &iterator) == KERN_SUCCESS else {
-            return []
-        }
-        defer { IOObjectRelease(iterator) }
-
-        var entries: [[String: Any]] = []
-        while true {
-            let service = IOIteratorNext(iterator)
-            if service == IO_OBJECT_NULL {
-                break
-            }
-            defer { IOObjectRelease(service) }
-
-            var properties: Unmanaged<CFMutableDictionary>?
-            if IORegistryEntryCreateCFProperties(service, &properties, kCFAllocatorDefault, 0) == KERN_SUCCESS,
-               let dictionary = properties?.takeRetainedValue() as? [String: Any] {
-                entries.append(dictionary)
-            }
-        }
-
-        return entries
-    }
-
     private func intRegistryValue(_ service: io_service_t, _ key: String) -> Int? {
         guard let value = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() else {
             return nil
@@ -578,6 +581,24 @@ final class SystemMonitorSampler {
             return nil
         }
         return doubleValue(value)
+    }
+
+    private func registryDictionaryValue(_ service: io_service_t, _ key: String) -> [String: Any]? {
+        IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any]
+    }
+
+    private func registryStringValue(_ service: io_service_t, _ key: String) -> String? {
+        guard let value = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() else {
+            return nil
+        }
+        if let string = value as? String {
+            return string
+        }
+        if let data = value as? Data {
+            return String(data: data, encoding: .utf8)?.trimmingCharacters(in: .controlCharacters)
+        }
+        return nil
     }
 
     private func memoryPressure() -> MemoryPressureState {

@@ -76,9 +76,10 @@ enum MonitorKind: String, CaseIterable, Identifiable {
 }
 
 struct MonitorMetric: Identifiable {
-    let id = UUID()
     let name: String
     let value: String
+
+    var id: String { name }
 }
 
 struct MonitorModule: Identifiable {
