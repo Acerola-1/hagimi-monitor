@@ -22,6 +22,7 @@ struct SettingsView: View {
                 }
         }
         .frame(width: 480)
+        .background(SettingsWindowActivator())
     }
 }
 
@@ -72,6 +73,25 @@ private struct ModuleSettingsPane: View {
         }
         .formStyle(.grouped)
         .padding(20)
+    }
+}
+
+private struct SettingsWindowActivator: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            view.window?.makeKeyAndOrderFront(nil)
+        }
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async {
+            guard let window = nsView.window else { return }
+            NSApp.activate(ignoringOtherApps: true)
+            window.makeKeyAndOrderFront(nil)
+        }
     }
 }
 

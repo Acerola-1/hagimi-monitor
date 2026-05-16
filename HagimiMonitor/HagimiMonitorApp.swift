@@ -29,6 +29,7 @@ struct HagimiMonitorApp: App {
                 .preferredColorScheme(monitorStore.settings.themePreference.colorScheme)
         }
         .windowResizability(.contentSize)
+        .commands { AppMenuCommands() }
 
         Settings {
             SettingsView(settings: monitorStore.settings)
@@ -39,5 +40,24 @@ struct HagimiMonitorApp: App {
 
     private var effectiveColorScheme: ColorScheme {
         monitorStore.settings.themePreference.colorScheme ?? colorScheme
+    }
+}
+
+// MARK: - Menu Commands
+
+struct AppMenuCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .appInfo) {
+            Button("关于 HagimiMonitor") {
+                NSApp.orderFrontStandardAboutPanel(nil)
+            }
+
+            Divider()
+
+            Button("退出 HagimiMonitor") {
+                NSApp.terminate(nil)
+            }
+            .keyboardShortcut("q", modifiers: .command)
+        }
     }
 }
