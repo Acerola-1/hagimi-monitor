@@ -4,6 +4,7 @@ import SwiftUI
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
     @Namespace private var glassNamespace
+    @State private var expandedKinds: Set<MonitorKind> = []
 
     var body: some View {
         GlassEffectContainer(spacing: 8) {
@@ -46,15 +47,47 @@ struct MonitorPanelView: View {
         case .cpu:
             MetricGlassRow(module: module, detail: module.summary, samples: module.samples)
         case .gpu:
-            MetricGlassRow(module: module, detail: module.summary, samples: module.samples)
+            MetricGlassRow(
+                module: module,
+                detail: module.summary,
+                samples: module.samples,
+                details: module.metrics,
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
         case .memory:
-            MetricGlassRow(module: module, detail: module.summary)
+            MetricGlassRow(
+                module: module,
+                detail: module.summary,
+                details: module.metrics,
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
         case .storage:
-            MetricGlassRow(module: module, detail: module.summary)
+            MetricGlassRow(
+                module: module,
+                detail: module.summary,
+                details: module.metrics,
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
         case .network:
             NetworkGlassRow(module: module)
         case .battery:
             BatteryGlassRow(module: module)
+        }
+    }
+
+    private func toggleExpansion(for kind: MonitorKind) {
+        withAnimation(.snappy(duration: 0.22, extraBounce: 0.03)) {
+            if expandedKinds.contains(kind) {
+                expandedKinds.remove(kind)
+            } else {
+                expandedKinds.insert(kind)
+            }
         }
     }
 
@@ -68,44 +101,100 @@ private struct MetricGlassRow: View {
     let module: MonitorModule
     let detail: String
     var samples: [Double] = []
+    var details: [MonitorMetric] = []
+    var isExpanded = false
+    var toggleExpansion: (() -> Void)?
 
     private var tint: Color {
         module.kind.paletteTint
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: module.kind.symbol)
-                .font(.system(size: 13, weight: .semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
-                .frame(width: 18)
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: module.kind.symbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(tint)
+                    .frame(width: 18)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(module.kind.title)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.primary)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(module.kind.title)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                }
+                .frame(width: 70, alignment: .leading)
+
+                Spacer(minLength: 8)
+
+                if !samples.isEmpty {
+                    Sparkline(samples: samples, tint: tint)
+                        .frame(width: 56, height: 18)
+                }
+
+                Text(detail)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .frame(width: 58, alignment: .trailing)
             }
-            .frame(width: 70, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
 
-            Spacer(minLength: 8)
-
-            if !samples.isEmpty {
-                Sparkline(samples: samples, tint: tint)
-                    .frame(width: 56, height: 18)
+            if isExpanded, !details.isEmpty {
+                MetricDetailGrid(metrics: details, tint: tint)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 9)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
-
-            Text(detail)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .frame(width: 58, alignment: .trailing)
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            toggleExpansion?()
+        }
         .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14))
+    }
+}
+
+private struct MetricDetailGrid: View {
+    let metrics: [MonitorMetric]
+    let tint: Color
+
+    private let columns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Rectangle()
+                .fill(tint.opacity(0.18))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+                ForEach(metrics) { metric in
+                    HStack(spacing: 6) {
+                        Text(metric.name)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+
+                        Spacer(minLength: 4)
+
+                        Text(metric.value)
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                }
+            }
+            .padding(.leading, 28)
+        }
     }
 }
 

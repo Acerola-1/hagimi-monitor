@@ -114,19 +114,21 @@ final class SystemMonitorSampler {
         let pressure = kernelMemoryPressure()
             ?? memorystatusPressure()
             ?? memoryPressureScore(
-            wired: wired,
-            compressed: compressed,
-            swapUsed: swap?.used ?? 0,
-            total: total
-        )
+                wired: wired,
+                compressed: compressed,
+                swapUsed: swap?.used ?? 0,
+                total: total
+            )
 
         return MonitorModule(
             kind: .memory,
             value: percentage,
             summary: percent(percentage),
             metrics: [
+                MonitorMetric(name: "已用", value: bytes(used)),
                 MonitorMetric(name: "压力", value: percent(pressure)),
-                MonitorMetric(name: "交换已用", value: swap.map { bytes($0.used) } ?? "--")
+                MonitorMetric(name: "交换已用", value: swap.map { bytes($0.used) } ?? "--"),
+                MonitorMetric(name: "总量", value: bytes(total))
             ],
             samples: seedSamples(percentage)
         )
@@ -138,24 +140,38 @@ final class SystemMonitorSampler {
         }
 
         let utilization = min(100, max(0, reading.utilization))
-        let usedMemory = reading.usedMemory.map(bytes) ?? "--"
+        var metrics = [
+            MonitorMetric(name: "GPU内存", value: reading.usedMemory.map(bytes) ?? "--"),
+            MonitorMetric(name: "已分配", value: reading.allocatedMemory.map(bytes) ?? "--")
+        ]
+
+        if let renderUtilization = reading.renderUtilization {
+            metrics.append(MonitorMetric(name: "渲染", value: percent(renderUtilization)))
+        }
+
+        if let tilerUtilization = reading.tilerUtilization {
+            metrics.append(MonitorMetric(name: "分块", value: percent(tilerUtilization)))
+        }
 
         return MonitorModule(
             kind: .gpu,
             value: utilization,
             summary: percent(utilization),
-            metrics: [
-                MonitorMetric(name: "GPU内存", value: usedMemory)
-            ],
+            metrics: metrics,
             samples: seedSamples(utilization)
         )
     }
 
     private func storageModule() -> MonitorModule {
         do {
+            let rootURL = URL(fileURLWithPath: "/")
+            let values = try rootURL.resourceValues(forKeys: [
+                .volumeTotalCapacityKey,
+                .volumeAvailableCapacityKey
+            ])
             let attributes = try FileManager.default.attributesOfFileSystem(forPath: "/")
-            let total = (attributes[.systemSize] as? NSNumber)?.doubleValue ?? 0
-            let free = (attributes[.systemFreeSize] as? NSNumber)?.doubleValue ?? 0
+            let total = Double(values.volumeTotalCapacity ?? Int((attributes[.systemSize] as? NSNumber)?.int64Value ?? 0))
+            let free = Double(values.volumeAvailableCapacity ?? Int((attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? 0))
             let used = max(0, total - free)
             let percentage = total > 0 ? (used / total) * 100 : 0
 

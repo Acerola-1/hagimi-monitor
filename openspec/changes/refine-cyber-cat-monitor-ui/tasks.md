@@ -24,6 +24,8 @@
 - [x] Add swap memory to memory secondary metrics.
 - [x] Limit network secondary metrics to upload and download.
 - [x] Show sparklines only for CPU and GPU.
+- [x] Add expandable GPU, memory, and storage detail rows.
+- [x] Show GPU memory, memory pressure, and storage used/total values in expanded details.
 
 ## 5. Dark Mode
 - [x] Add `@Environment(\.colorScheme)` to relevant views.

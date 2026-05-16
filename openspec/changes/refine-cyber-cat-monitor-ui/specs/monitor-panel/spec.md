@@ -52,6 +52,20 @@ Secondary metric text SHALL use consistent font size, weight, and color treatmen
 - **WHEN** secondary metric labels are visible
 - **THEN** the labels are visually consistent across CPU, GPU, memory, storage, network, and battery.
 
+### Requirement: Expandable Resource Details
+GPU, memory, and storage rows SHALL reveal additional details below the primary row without changing the default collapsed layout.
+
+#### Scenario: Resource row expands
+- **WHEN** the user clicks the GPU, memory, or storage row
+- **THEN** a compact secondary details area is shown below that row
+- **AND** the primary row keeps the same icon, title, summary, and chart placement.
+
+#### Scenario: Detailed metrics render
+- **WHEN** expanded details are visible
+- **THEN** GPU includes GPU memory usage
+- **AND** memory includes memory pressure
+- **AND** storage includes accurate used storage and total capacity.
+
 ### Requirement: Automatic Appearance Adaptation
 The popover SHALL automatically adapt to the system light or dark appearance.
 
@@ -64,4 +78,3 @@ The popover SHALL automatically adapt to the system light or dark appearance.
 - **WHEN** the system is in dark mode
 - **THEN** the popover uses a dark translucent glass visual style
 - **AND** text remains readable.
-
