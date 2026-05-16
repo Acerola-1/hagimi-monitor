@@ -26,6 +26,8 @@
 - [x] Show sparklines only for CPU and GPU.
 - [x] Add expandable GPU, memory, and storage detail rows.
 - [x] Show GPU memory, memory pressure, and storage used/total values in expanded details.
+- [x] Add expandable CPU details with system, user, idle, and boot time values.
+- [x] Pull `exelban/stats` under `docs/stats` as a monitoring implementation reference.
 
 ## 5. Dark Mode
 - [x] Add `@Environment(\.colorScheme)` to relevant views.

@@ -45,7 +45,15 @@ struct MonitorPanelView: View {
     private func row(for module: MonitorModule) -> some View {
         switch module.kind {
         case .cpu:
-            MetricGlassRow(module: module, detail: module.summary, samples: module.samples)
+            MetricGlassRow(
+                module: module,
+                detail: module.summary,
+                samples: module.samples,
+                details: module.metrics,
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
         case .gpu:
             MetricGlassRow(
                 module: module,

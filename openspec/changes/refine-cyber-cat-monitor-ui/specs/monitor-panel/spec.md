@@ -53,16 +53,17 @@ Secondary metric text SHALL use consistent font size, weight, and color treatmen
 - **THEN** the labels are visually consistent across CPU, GPU, memory, storage, network, and battery.
 
 ### Requirement: Expandable Resource Details
-GPU, memory, and storage rows SHALL reveal additional details below the primary row without changing the default collapsed layout.
+CPU, GPU, memory, and storage rows SHALL reveal additional details below the primary row without changing the default collapsed layout.
 
 #### Scenario: Resource row expands
-- **WHEN** the user clicks the GPU, memory, or storage row
+- **WHEN** the user clicks the CPU, GPU, memory, or storage row
 - **THEN** a compact secondary details area is shown below that row
 - **AND** the primary row keeps the same icon, title, summary, and chart placement.
 
 #### Scenario: Detailed metrics render
 - **WHEN** expanded details are visible
-- **THEN** GPU includes GPU memory usage
+- **THEN** CPU includes system, user, idle, and boot time values
+- **AND** GPU includes GPU memory usage
 - **AND** memory includes memory pressure
 - **AND** storage includes accurate used storage and total capacity.
 

@@ -15,14 +15,25 @@ final class SystemMonitorSampler {
     private var previousNetworkBytes: (input: UInt64, output: UInt64, timestamp: Date)?
 
     func sample(previousModules: [MonitorModule]) -> SystemMonitorSnapshot {
-        let modules = MonitorKind.allCases.map { kind in
+        sample(kinds: MonitorKind.allCases, previousModules: previousModules)
+    }
+
+    func sample(kinds: some Sequence<MonitorKind>, previousModules: [MonitorModule]) -> SystemMonitorSnapshot {
+        var modulesByKind = Dictionary(uniqueKeysWithValues: previousModules.map { ($0.kind, $0) })
+
+        for kind in kinds {
             let module = makeModule(for: kind)
-            if let previous = previousModules.first(where: { $0.kind == kind }) {
+            if let previous = modulesByKind[kind] {
                 var updated = module
                 updated.samples = Array((previous.samples + [module.value]).suffix(28))
-                return updated
+                modulesByKind[kind] = updated
+            } else {
+                modulesByKind[kind] = module
             }
-            return module
+        }
+
+        let modules = MonitorKind.allCases.map { kind in
+            modulesByKind[kind] ?? MonitorModule.placeholder(kind: kind)
         }
         return SystemMonitorSnapshot(modules: modules)
     }
@@ -63,14 +74,16 @@ final class SystemMonitorSampler {
             metrics = [
                 MonitorMetric(name: "系统", value: percent(system)),
                 MonitorMetric(name: "用户", value: percent(user)),
-                MonitorMetric(name: "闲置", value: percent(idle))
+                MonitorMetric(name: "闲置", value: percent(idle)),
+                MonitorMetric(name: "启动时间", value: systemUptime())
             ]
         } else {
             total = 0
             metrics = [
                 MonitorMetric(name: "系统", value: "--"),
                 MonitorMetric(name: "用户", value: "--"),
-                MonitorMetric(name: "闲置", value: "--")
+                MonitorMetric(name: "闲置", value: "--"),
+                MonitorMetric(name: "启动时间", value: systemUptime())
             ]
         }
 
@@ -272,6 +285,30 @@ final class SystemMonitorSampler {
             }
         }
         return result == KERN_SUCCESS ? info : nil
+    }
+
+    private func systemUptime() -> String {
+        guard let bootDate = bootDate() else {
+            return "--"
+        }
+
+        let formatter = DateComponentsFormatter()
+        formatter.maximumUnitCount = 2
+        formatter.unitsStyle = .abbreviated
+        formatter.allowedUnits = [.day, .hour, .minute]
+        return formatter.string(from: bootDate, to: Date()) ?? "--"
+    }
+
+    private func bootDate() -> Date? {
+        var mib = [CTL_KERN, KERN_BOOTTIME]
+        var bootTime = timeval()
+        var size = MemoryLayout<timeval>.stride
+        let result = sysctl(&mib, UInt32(mib.count), &bootTime, &size, nil, 0)
+        guard result == 0, bootTime.tv_sec > 0 else {
+            return nil
+        }
+
+        return Date(timeIntervalSince1970: TimeInterval(bootTime.tv_sec) + TimeInterval(bootTime.tv_usec) / 1_000_000)
     }
 
     private func networkBytes() -> (input: UInt64, output: UInt64, interface: String) {

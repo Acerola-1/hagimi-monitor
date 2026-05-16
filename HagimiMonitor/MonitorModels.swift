@@ -128,14 +128,16 @@ final class MonitorStore: ObservableObject {
     @Published var selectedKind: MonitorKind = .cpu
     @Published private(set) var menuBarFrame = 0
 
+    private let refreshSchedule = MonitorRefreshSchedule()
     private var timer: Timer?
     private var animationTimer: Timer?
     private let sampler = SystemMonitorSampler()
 
     init() {
         modules = MonitorKind.allCases.map(MonitorModule.placeholder)
-        advance()
-        timer = Timer.scheduledTimer(withTimeInterval: 1.2, repeats: true) { [weak self] _ in
+        advance(kinds: MonitorKind.allCases)
+        refreshSchedule.markRefreshed(MonitorKind.allCases, at: Date())
+        timer = Timer.scheduledTimer(withTimeInterval: refreshSchedule.tickInterval, repeats: true) { [weak self] _ in
             self?.advance()
         }
         animationTimer = Timer.scheduledTimer(withTimeInterval: 0.16, repeats: true) { [weak self] _ in
@@ -164,7 +166,15 @@ final class MonitorStore: ObservableObject {
     }
 
     private func advance() {
-        modules = sampler.sample(previousModules: modules).modules
+        let kinds = refreshSchedule.dueKinds(at: Date())
+        guard !kinds.isEmpty else {
+            return
+        }
+        advance(kinds: kinds)
+    }
+
+    private func advance(kinds: some Sequence<MonitorKind>) {
+        modules = sampler.sample(kinds: kinds, previousModules: modules).modules
     }
 
     private func advanceAnimation() {
@@ -190,6 +200,42 @@ final class MonitorStore: ObservableObject {
             return base + (100 - module.value)
         }
         return base + module.value
+    }
+}
+
+private final class MonitorRefreshSchedule {
+    let tickInterval: TimeInterval
+
+    private let intervals: [MonitorKind: TimeInterval]
+    private var lastRefreshDates: [MonitorKind: Date] = [:]
+
+    init(
+        tickInterval: TimeInterval = 2,
+        intervals: [MonitorKind: TimeInterval] = Dictionary(
+            uniqueKeysWithValues: MonitorKind.allCases.map { ($0, 2) }
+        )
+    ) {
+        self.tickInterval = tickInterval
+        self.intervals = intervals
+    }
+
+    func dueKinds(at date: Date) -> [MonitorKind] {
+        let dueKinds = MonitorKind.allCases.filter { kind in
+            let interval = intervals[kind] ?? tickInterval
+            guard let lastRefreshDate = lastRefreshDates[kind] else {
+                return true
+            }
+
+            return date.timeIntervalSince(lastRefreshDate) >= interval
+        }
+        markRefreshed(dueKinds, at: date)
+        return dueKinds
+    }
+
+    func markRefreshed(_ kinds: some Sequence<MonitorKind>, at date: Date) {
+        for kind in kinds {
+            lastRefreshDates[kind] = date
+        }
     }
 }
 
