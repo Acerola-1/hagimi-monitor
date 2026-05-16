@@ -3,10 +3,13 @@ import SwiftUI
 
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
+    @Environment(\.colorScheme) private var colorScheme
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
 
     var body: some View {
+        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 6) {
                 ForEach(store.modules) { module in
@@ -31,14 +34,20 @@ struct MonitorPanelView: View {
                     .buttonStyle(.glass)
                 }
                 .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(theme.primaryText)
                 .padding(.top, 2)
             }
             .padding(10)
             .frame(width: 320)
             .background(.clear)
         }
+        .background(theme.panelFill, in: .rect(cornerRadius: 22, style: .continuous))
         .glassEffect(.regular, in: .rect(cornerRadius: 22, style: .continuous))
         .glassEffectID("monitor-panel", in: glassNamespace)
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(theme.panelStroke, lineWidth: 1)
+        }
         .clipShape(.rect(cornerRadius: 22, style: .continuous))
         .background(TransparentWindowBackground())
     }
@@ -119,12 +128,15 @@ private struct MetricGlassRow: View {
     var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
+    @Environment(\.colorScheme) private var colorScheme
 
     private var tint: Color {
         module.kind.paletteTint
     }
 
     var body: some View {
+        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: module.kind.symbol)
@@ -136,7 +148,7 @@ private struct MetricGlassRow: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(module.kind.title)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(theme.primaryText)
                         .lineLimit(1)
                 }
                 .frame(width: 70, alignment: .leading)
@@ -151,7 +163,7 @@ private struct MetricGlassRow: View {
                 Text(detail)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(theme.valueText)
                     .lineLimit(1)
                     .frame(width: 58, alignment: .trailing)
             }
@@ -169,7 +181,12 @@ private struct MetricGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14, style: .continuous))
+        .background(theme.rowFill(for: tint), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(theme.rowStroke(for: tint), lineWidth: 1)
+        }
         .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 }
@@ -177,6 +194,7 @@ private struct MetricGlassRow: View {
 private struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
     let tint: Color
+    @Environment(\.colorScheme) private var colorScheme
 
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -184,9 +202,11 @@ private struct MetricDetailGrid: View {
     ]
 
     var body: some View {
+        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+
         VStack(spacing: 7) {
             Rectangle()
-                .fill(tint.opacity(0.18))
+                .fill(theme.separator(for: tint))
                 .frame(height: 1)
                 .padding(.leading, 28)
 
@@ -195,7 +215,7 @@ private struct MetricDetailGrid: View {
                     HStack(spacing: 6) {
                         Text(metric.name)
                             .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.tertiary)
+                            .foregroundStyle(theme.captionText)
                             .lineLimit(1)
 
                         Spacer(minLength: 4)
@@ -203,7 +223,7 @@ private struct MetricDetailGrid: View {
                         Text(metric.value)
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .monospacedDigit()
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(theme.secondaryText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
                     }
@@ -216,12 +236,15 @@ private struct MetricDetailGrid: View {
 
 private struct NetworkGlassRow: View {
     let module: MonitorModule
+    @Environment(\.colorScheme) private var colorScheme
 
     private var tint: Color {
         module.kind.paletteTint
     }
 
     var body: some View {
+        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+
         HStack(spacing: 10) {
             Image(systemName: "wifi")
                 .font(.system(size: 13, weight: .semibold))
@@ -231,7 +254,7 @@ private struct NetworkGlassRow: View {
 
             Text("网络: \(module.summary)")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.primary)
+                .foregroundStyle(theme.primaryText)
                 .lineLimit(1)
 
             Spacer(minLength: 8)
@@ -241,7 +264,12 @@ private struct NetworkGlassRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14, style: .continuous))
+        .background(theme.rowFill(for: tint), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(theme.rowStroke(for: tint), lineWidth: 1)
+        }
         .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 
@@ -254,12 +282,15 @@ private struct BatteryGlassRow: View {
     let module: MonitorModule
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
+    @Environment(\.colorScheme) private var colorScheme
 
     private var tint: Color {
         module.kind.paletteTint
     }
 
     var body: some View {
+        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: powerSymbol)
@@ -271,7 +302,7 @@ private struct BatteryGlassRow: View {
 
                 Text(module.kind.title)
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
@@ -300,7 +331,12 @@ private struct BatteryGlassRow: View {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14, style: .continuous))
+        .background(theme.rowFill(for: tint), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(theme.rowStroke(for: tint), lineWidth: 1)
+        }
         .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 
@@ -400,15 +436,66 @@ private final class TransparentBackgroundView: NSView {
 private struct MetricPill: View {
     let systemImage: String
     let text: String
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+
         Label(text, systemImage: systemImage)
             .labelStyle(.titleAndIcon)
             .font(.system(size: 11, weight: .medium, design: .rounded))
             .monospacedDigit()
-            .foregroundStyle(.secondary)
+            .foregroundStyle(theme.secondaryText)
             .lineLimit(1)
             .frame(width: 72, alignment: .trailing)
+    }
+}
+
+private struct MonitorPanelTheme {
+    let colorScheme: ColorScheme
+
+    var isDark: Bool {
+        colorScheme == .dark
+    }
+
+    var primaryText: Color {
+        isDark ? Color.white.opacity(0.94) : Color.primary
+    }
+
+    var valueText: Color {
+        isDark ? Color.white.opacity(0.82) : Color.secondary
+    }
+
+    var secondaryText: Color {
+        isDark ? Color.white.opacity(0.72) : Color.secondary
+    }
+
+    var captionText: Color {
+        isDark ? Color.white.opacity(0.52) : Color.black.opacity(0.36)
+    }
+
+    var panelFill: Color {
+        isDark ? Color.black.opacity(0.28) : Color.clear
+    }
+
+    var panelStroke: Color {
+        isDark ? Color.white.opacity(0.16) : Color.white.opacity(0.10)
+    }
+
+    func rowFill(for tint: Color) -> Color {
+        isDark ? tint.opacity(0.05) : Color.clear
+    }
+
+    func glassTint(for tint: Color) -> Color {
+        tint.opacity(isDark ? 0.16 : 0.08)
+    }
+
+    func rowStroke(for tint: Color) -> Color {
+        isDark ? tint.opacity(0.22) : Color.white.opacity(0.08)
+    }
+
+    func separator(for tint: Color) -> Color {
+        tint.opacity(isDark ? 0.28 : 0.18)
     }
 }
 
