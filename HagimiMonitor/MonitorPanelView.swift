@@ -4,6 +4,7 @@ import SwiftUI
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openSettings) private var openSettings
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
 
@@ -26,7 +27,9 @@ struct MonitorPanelView: View {
                     }
                     .buttonStyle(.glass)
 
-                    SettingsLink {
+                    Button {
+                        SettingsWindowPresenter.open(openSettings)
+                    } label: {
                         Label("设置", systemImage: "gearshape")
                             .frame(maxWidth: .infinity)
                     }

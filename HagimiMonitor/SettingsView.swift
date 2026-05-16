@@ -22,7 +22,7 @@ struct SettingsView: View {
                 }
         }
         .frame(width: 480)
-        .background(SettingsWindowActivator())
+        .background(SettingsWindowTracker())
     }
 }
 
@@ -76,21 +76,30 @@ private struct ModuleSettingsPane: View {
     }
 }
 
-private struct SettingsWindowActivator: NSViewRepresentable {
+private struct SettingsWindowTracker: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            view.window?.makeKeyAndOrderFront(nil)
-        }
-        return view
+        SettingsWindowTrackingView(frame: .zero)
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        DispatchQueue.main.async {
-            guard let window = nsView.window else { return }
-            NSApp.activate(ignoringOtherApps: true)
-            window.makeKeyAndOrderFront(nil)
+        guard let window = nsView.window else { return }
+
+        Task { @MainActor in
+            SettingsWindowPresenter.register(window)
+        }
+    }
+}
+
+private final class SettingsWindowTrackingView: NSView {
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        guard let window else {
+            return
+        }
+
+        Task { @MainActor in
+            SettingsWindowPresenter.register(window)
         }
     }
 }
