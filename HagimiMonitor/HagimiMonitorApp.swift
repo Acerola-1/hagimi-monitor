@@ -15,8 +15,9 @@ struct HagimiMonitorApp: App {
     var body: some Scene {
         MenuBarExtra {
             MonitorPanelView(store: monitorStore)
+                .preferredColorScheme(monitorStore.settings.themePreference.colorScheme)
         } label: {
-            Image(nsImage: MenuBarCatIcon.image(for: monitorStore.catModule, frame: monitorStore.menuBarFrame, darkMode: colorScheme == .dark))
+            Image(nsImage: MenuBarCatIcon.image(for: monitorStore.catModule, frame: monitorStore.menuBarFrame, darkMode: effectiveColorScheme == .dark))
                 .resizable()
                 .frame(width: 28, height: 18)
                 .help("HagimiMonitor")
@@ -25,7 +26,19 @@ struct HagimiMonitorApp: App {
 
         WindowGroup("HagimiMonitor Preview") {
             ContentView(store: monitorStore)
+                .preferredColorScheme(monitorStore.settings.themePreference.colorScheme)
         }
         .windowResizability(.contentSize)
+
+        WindowGroup("设置", id: "settings") {
+            SettingsView(settings: monitorStore.settings)
+                .preferredColorScheme(monitorStore.settings.themePreference.colorScheme)
+        }
+        .defaultSize(width: 720, height: 480)
+        .windowResizability(.contentSize)
+    }
+
+    private var effectiveColorScheme: ColorScheme {
+        monitorStore.settings.themePreference.colorScheme ?? colorScheme
     }
 }

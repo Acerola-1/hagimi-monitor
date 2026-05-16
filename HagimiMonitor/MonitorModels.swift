@@ -128,19 +128,36 @@ struct MonitorModule: Identifiable {
 }
 
 final class MonitorStore: ObservableObject {
+    let settings: MonitorSettings
+
     @Published private(set) var modules: [MonitorModule]
     @Published var selectedKind: MonitorKind = .cpu
     @Published private(set) var menuBarFrame = 0
 
+    private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timer: Timer?
     private var animationTimer: Timer?
     private let sampler = SystemMonitorSampler()
+    private var cancellables: Set<AnyCancellable> = []
 
     init() {
-        modules = MonitorKind.allCases.map(MonitorModule.placeholder)
+        let settings = MonitorSettings()
+        let initialModules = MonitorKind.allCases.map(MonitorModule.placeholder)
+        self.settings = settings
+        allModules = initialModules
+        modules = initialModules.filter { settings.isVisible($0.kind) }
         advance(kinds: MonitorKind.allCases)
         refreshSchedule.markRefreshed(MonitorKind.allCases, at: Date())
+        settings.objectWillChange
+            .sink { [weak self] _ in
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.modules = self.visibleModules(from: self.allModules)
+                    self.objectWillChange.send()
+                }
+            }
+            .store(in: &cancellables)
         timer = Timer.scheduledTimer(withTimeInterval: refreshSchedule.tickInterval, repeats: true) { [weak self] _ in
             self?.advance()
         }
@@ -155,18 +172,18 @@ final class MonitorStore: ObservableObject {
     }
 
     var selectedModule: MonitorModule {
-        modules.first { $0.kind == selectedKind }
-            ?? modules.first
+        allModules.first { $0.kind == selectedKind }
+            ?? allModules.first
             ?? MonitorModule.placeholder(kind: selectedKind)
     }
 
     var catModule: MonitorModule {
-        modules.max { catPriority($0) < catPriority($1) }
+        allModules.max { catPriority($0) < catPriority($1) }
             ?? MonitorModule.placeholder(kind: .cpu)
     }
 
     var catLine: String {
-        CatDialogueEngine.line(for: catModule, modules: modules)
+        CatDialogueEngine.line(for: catModule, modules: allModules)
     }
 
     private func advance() {
@@ -178,11 +195,12 @@ final class MonitorStore: ObservableObject {
     }
 
     private func advance(kinds: some Sequence<MonitorKind>) {
-        modules = sampler.sample(kinds: kinds, previousModules: modules).modules
+        allModules = sampler.sample(kinds: kinds, previousModules: allModules).modules
+        modules = visibleModules(from: allModules)
     }
 
     private func advanceAnimation() {
-        let cpuValue = modules.first { $0.kind == .cpu }?.value ?? 0
+        let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
         let stride = cpuValue >= 75 ? 2 : 1
         if cpuValue >= 8 {
             menuBarFrame = (menuBarFrame + stride) % 5
@@ -204,6 +222,10 @@ final class MonitorStore: ObservableObject {
             return base + (100 - module.value)
         }
         return base + module.value
+    }
+
+    private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
+        modules.filter { settings.isVisible($0.kind) }
     }
 }
 
