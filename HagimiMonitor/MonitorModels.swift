@@ -53,7 +53,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
         case .network:
             "网络"
         case .battery:
-            "电量"
+            "电源"
         }
     }
 
@@ -70,7 +70,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
         case .network:
             "network"
         case .battery:
-            "battery.75percent"
+            "powerplug"
         }
     }
 }
@@ -101,6 +101,9 @@ struct MonitorModule: Identifiable {
             if value >= 85 { return .warning }
             return .calm
         case .battery:
+            if metrics.first(where: { $0.name == "类型" })?.value == "外接电源" {
+                return .calm
+            }
             if value <= 12 { return .critical }
             if value <= 25 { return .warning }
             return .calm

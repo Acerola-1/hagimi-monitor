@@ -85,7 +85,12 @@ struct MonitorPanelView: View {
         case .network:
             NetworkGlassRow(module: module)
         case .battery:
-            BatteryGlassRow(module: module)
+            BatteryGlassRow(
+                module: module,
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
         }
     }
 
@@ -243,40 +248,69 @@ private struct NetworkGlassRow: View {
 
 private struct BatteryGlassRow: View {
     let module: MonitorModule
+    var isExpanded = false
+    var toggleExpansion: (() -> Void)?
 
     private var tint: Color {
         module.kind.paletteTint
     }
 
     var body: some View {
-        HStack(spacing: 10) {
-            Image(systemName: batterySymbol)
-                .font(.system(size: 13, weight: .semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
-                .frame(width: 18)
-                .symbolEffect(.variableColor.iterative, isActive: isCharging)
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: powerSymbol)
+                    .font(.system(size: 13, weight: .semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(tint)
+                    .frame(width: 18)
+                    .symbolEffect(.variableColor.iterative, isActive: isCharging)
 
-            Text(module.kind.title)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
+                Text(module.kind.title)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            MetricPill(systemImage: "battery.100percent", text: module.summary)
-            MetricPill(systemImage: "bolt.fill", text: value("功耗"))
+                if hasBattery {
+                    MetricPill(systemImage: "battery.100percent", text: module.summary)
+                    MetricPill(systemImage: powerPillIcon, text: powerPillValue)
+                } else {
+                    MetricPill(systemImage: "powerplug", text: value("适配器"))
+                    MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("功耗"))
+                }
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+
+            if hasBattery && isExpanded {
+                MetricDetailGrid(metrics: detailMetrics, tint: tint)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 9)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if hasBattery {
+                toggleExpansion?()
+            }
+        }
         .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14))
+    }
+
+    private var hasBattery: Bool {
+        value("类型") == "电池"
     }
 
     private var isCharging: Bool {
         value("状态") == "充电中"
     }
 
-    private var batterySymbol: String {
+    private var powerSymbol: String {
+        guard hasBattery else {
+            return "powerplug"
+        }
         if isCharging {
             return "battery.100percent.bolt"
         }
@@ -294,8 +328,33 @@ private struct BatteryGlassRow: View {
         }
     }
 
+    private var powerPillIcon: String {
+        return "gauge.with.dots.needle.33percent"
+    }
+
+    private var powerPillValue: String {
+        return value("功耗")
+    }
+
+    private var detailMetrics: [MonitorMetric] {
+        let names = isConnectedToPower
+            ? ["充电功率", "健康度", "循环数", "温度"]
+            : ["健康度", "循环数", "温度"]
+
+        return names.compactMap { name in
+            guard let metric = module.metrics.first(where: { $0.name == name }) else {
+                return nil
+            }
+            return metric
+        }
+    }
+
     private func value(_ name: String) -> String {
         module.metrics.first { $0.name == name }?.value ?? "--"
+    }
+
+    private var isConnectedToPower: Bool {
+        value("状态") != "电池供电"
     }
 }
 

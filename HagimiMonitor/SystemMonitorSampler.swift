@@ -10,7 +10,15 @@ struct SystemMonitorSnapshot {
 final class SystemMonitorSampler {
     private var previousCPUInfo: host_cpu_load_info?
     private var previousNetworkBytes: (input: UInt64, output: UInt64, timestamp: Date)?
+    private var powerTelemetryService: io_service_t = IO_OBJECT_NULL
+    private var didSearchPowerTelemetryService = false
     private let totalMemorySize = SystemMonitorSampler.memoryTotalSize()
+
+    deinit {
+        if powerTelemetryService != IO_OBJECT_NULL {
+            IOObjectRelease(powerTelemetryService)
+        }
+    }
 
     func sample(previousModules: [MonitorModule]) -> SystemMonitorSnapshot {
         sample(kinds: MonitorKind.allCases, previousModules: previousModules)
@@ -237,7 +245,7 @@ final class SystemMonitorSampler {
               let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef],
               let source = sources.first,
               let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
-            return placeholderModule(.battery, summary: "无法读取")
+            return externalPowerModule()
         }
 
         let current = doubleValue(description[kIOPSCurrentCapacityKey]) ?? 0
@@ -248,21 +256,42 @@ final class SystemMonitorSampler {
         let connected = sourceState == kIOPSACPowerValue
 
         let smart = smartBatteryInfo()
-        let power = smart.systemPowerWatts.map { "\(String(format: "%.1f", $0)) W" }
-            ?? smart.batteryPowerWatts.map { "\(String(format: "%.1f", $0)) W" }
-            ?? "--"
-        let adapterPower = smart.adapterWatts.map { "\(Int($0.rounded())) W" } ?? "--"
+        let adapterWatts = smart.adapterWatts ?? externalAdapterWatts()
+        let chargingPower = connected ? (smart.chargingPowerWatts ?? smart.batteryPowerWatts) : nil
+        let power = smart.systemPowerWatts ?? smart.batteryPowerWatts
 
         return MonitorModule(
             kind: .battery,
             value: percentage,
             summary: percent(percentage),
             metrics: [
+                MonitorMetric(name: "类型", value: "电池"),
                 MonitorMetric(name: "状态", value: isCharging ? "充电中" : (connected ? "外接电源" : "电池供电")),
-                MonitorMetric(name: "适配器", value: adapterPower),
-                MonitorMetric(name: "功耗", value: power)
+                MonitorMetric(name: "适配器", value: wattString(adapterWatts, rounded: true)),
+                MonitorMetric(name: "充电功率", value: wattString(chargingPower)),
+                MonitorMetric(name: "功耗", value: wattString(power)),
+                MonitorMetric(name: "健康度", value: smart.healthPercent.map(percent) ?? "--"),
+                MonitorMetric(name: "循环数", value: smart.cycleCount.map { "\($0)" } ?? "--"),
+                MonitorMetric(name: "温度", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--")
             ],
             samples: seedSamples(percentage)
+        )
+    }
+
+    private func externalPowerModule() -> MonitorModule {
+        let adapterWatts = externalAdapterWatts()
+        let powerWatts = powerTelemetryWatts()
+        return MonitorModule(
+            kind: .battery,
+            value: 100,
+            summary: "外接电源",
+            metrics: [
+                MonitorMetric(name: "类型", value: "外接电源"),
+                MonitorMetric(name: "状态", value: "外接电源"),
+                MonitorMetric(name: "适配器", value: wattString(adapterWatts, rounded: true)),
+                MonitorMetric(name: "功耗", value: wattString(powerWatts))
+            ],
+            samples: seedSamples(100)
         )
     }
 
@@ -409,13 +438,15 @@ final class SystemMonitorSampler {
         let amperage = doubleRegistryValue(service, "Amperage")
         let adapterWatts = adapterWatts(service)
         let systemPowerWatts = systemPowerWatts(service)
+        let chargingPowerWatts = chargingPowerWatts(service)
+        let temperature = doubleRegistryValue(service, "Temperature").map { $0 / 100 }
         let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
             min(100, max(0, maxCapacity / designCapacity * 100))
         } else {
             nil as Double?
         }
         let batteryWatts = if let voltage, let amperage {
-            abs(voltage * amperage / 1_000_000)
+            nonZeroWatts(abs(voltage * amperage / 1_000_000))
         } else {
             nil as Double?
         }
@@ -425,7 +456,9 @@ final class SystemMonitorSampler {
             healthPercent: health,
             batteryPowerWatts: batteryWatts,
             adapterWatts: adapterWatts,
-            systemPowerWatts: systemPowerWatts
+            systemPowerWatts: systemPowerWatts,
+            chargingPowerWatts: chargingPowerWatts,
+            temperatureCelsius: temperature
         )
     }
 
@@ -435,6 +468,34 @@ final class SystemMonitorSampler {
             return nil
         }
         return doubleValue(value["Watts"])
+    }
+
+    private func externalAdapterWatts() -> Double? {
+        guard let details = IOPSCopyExternalPowerAdapterDetails()?.takeRetainedValue() as? [String: Any] else {
+            return nil
+        }
+        return doubleValue(details[kIOPSPowerAdapterWattsKey])
+    }
+
+    private func chargingPowerWatts(_ service: io_service_t) -> Double? {
+        guard let value = IORegistryEntryCreateCFProperty(service, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any],
+              let current = doubleValue(value["ChargingCurrent"]),
+              let voltage = doubleValue(value["ChargingVoltage"]) else {
+            return nil
+        }
+        return nonZeroWatts(current * voltage / 1_000_000)
+    }
+
+    private func powerTelemetryWatts() -> Double? {
+        if powerTelemetryService == IO_OBJECT_NULL, !didSearchPowerTelemetryService {
+            powerTelemetryService = serviceWithProperty("PowerTelemetryData")
+            didSearchPowerTelemetryService = true
+        }
+        guard powerTelemetryService != IO_OBJECT_NULL else {
+            return nil
+        }
+        return systemPowerWatts(powerTelemetryService)
     }
 
     private func systemPowerWatts(_ service: io_service_t) -> Double? {
@@ -456,6 +517,28 @@ final class SystemMonitorSampler {
         }
 
         return nil
+    }
+
+    private func serviceWithProperty(_ key: String) -> io_service_t {
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOService"), &iterator) == KERN_SUCCESS else {
+            return IO_OBJECT_NULL
+        }
+        defer { IOObjectRelease(iterator) }
+
+        while true {
+            let service = IOIteratorNext(iterator)
+            guard service != IO_OBJECT_NULL else {
+                return IO_OBJECT_NULL
+            }
+
+            if let value = IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0) {
+                value.release()
+                return service
+            }
+
+            IOObjectRelease(service)
+        }
     }
 
     private func registryEntries(forClass className: String) -> [[String: Any]] {
@@ -593,6 +676,8 @@ private struct SmartBatteryInfo {
     var batteryPowerWatts: Double?
     var adapterWatts: Double?
     var systemPowerWatts: Double?
+    var chargingPowerWatts: Double?
+    var temperatureCelsius: Double?
 }
 
 private struct SwapUsage {
@@ -631,6 +716,23 @@ private func bytes(_ value: Double) -> String {
 
 private func memoryBytes(_ value: Double) -> String {
     memoryByteFormatter.string(fromByteCount: Int64(max(0, value)))
+}
+
+private func wattString(_ value: Double?, rounded: Bool = false) -> String {
+    guard let value else {
+        return "--"
+    }
+    if rounded {
+        return "\(Int(value.rounded())) W"
+    }
+    return "\(String(format: "%.1f", value)) W"
+}
+
+private func nonZeroWatts(_ value: Double?) -> Double? {
+    guard let value, value >= 0.05 else {
+        return nil
+    }
+    return value
 }
 
 private let byteFormatter: ByteCountFormatter = {
