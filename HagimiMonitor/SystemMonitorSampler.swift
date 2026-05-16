@@ -3,9 +3,6 @@ import Foundation
 import IOKit
 import IOKit.ps
 
-@_silgen_name("memorystatus_get_level")
-private func memorystatus_get_level(_ level: UInt64) -> Int32
-
 struct SystemMonitorSnapshot {
     var modules: [MonitorModule]
 }
@@ -13,6 +10,7 @@ struct SystemMonitorSnapshot {
 final class SystemMonitorSampler {
     private var previousCPUInfo: host_cpu_load_info?
     private var previousNetworkBytes: (input: UInt64, output: UInt64, timestamp: Date)?
+    private let totalMemorySize = SystemMonitorSampler.memoryTotalSize()
 
     func sample(previousModules: [MonitorModule]) -> SystemMonitorSnapshot {
         sample(kinds: MonitorKind.allCases, previousModules: previousModules)
@@ -115,33 +113,27 @@ final class SystemMonitorSampler {
 
         let pageSize = Double(vm_kernel_page_size)
         let active = Double(stats.active_count) * pageSize
+        let speculative = Double(stats.speculative_count) * pageSize
         let inactive = Double(stats.inactive_count) * pageSize
         let wired = Double(stats.wire_count) * pageSize
         let compressed = Double(stats.compressor_page_count) * pageSize
         let purgeable = Double(stats.purgeable_count) * pageSize
         let external = Double(stats.external_page_count) * pageSize
-        let used = max(0, active + inactive + wired + compressed - purgeable - external)
-        let total = Double(ProcessInfo.processInfo.physicalMemory)
+        let used = max(0, active + inactive + speculative + wired + compressed - purgeable - external)
+        let total = totalMemorySize
         let percentage = total > 0 ? (used / total) * 100 : 0
         let swap = swapUsage()
-        let pressure = kernelMemoryPressure()
-            ?? memorystatusPressure()
-            ?? memoryPressureScore(
-                wired: wired,
-                compressed: compressed,
-                swapUsed: swap?.used ?? 0,
-                total: total
-            )
+        let pressure = memoryPressure()
 
         return MonitorModule(
             kind: .memory,
             value: percentage,
             summary: percent(percentage),
             metrics: [
-                MonitorMetric(name: "已用", value: bytes(used)),
-                MonitorMetric(name: "压力", value: percent(pressure)),
-                MonitorMetric(name: "交换已用", value: swap.map { bytes($0.used) } ?? "--"),
-                MonitorMetric(name: "总量", value: bytes(total))
+                MonitorMetric(name: "已用", value: memoryBytes(used)),
+                MonitorMetric(name: "压力", value: pressure.title),
+                MonitorMetric(name: "交换已用", value: swapUsedText(swap)),
+                MonitorMetric(name: "总量", value: memoryBytes(total))
             ],
             samples: seedSamples(percentage)
         )
@@ -285,6 +277,20 @@ final class SystemMonitorSampler {
             }
         }
         return result == KERN_SUCCESS ? info : nil
+    }
+
+    private static func memoryTotalSize() -> Double {
+        var info = host_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<host_basic_info_data_t>.size / MemoryLayout<integer_t>.size)
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                host_info(mach_host_self(), HOST_BASIC_INFO, $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else {
+            return Double(ProcessInfo.processInfo.physicalMemory)
+        }
+        return Double(info.max_mem)
     }
 
     private func systemUptime() -> String {
@@ -491,50 +497,24 @@ final class SystemMonitorSampler {
         return doubleValue(value)
     }
 
-    private func kernelMemoryPressure() -> Double? {
-        var size = 0
-        guard sysctlbyname("vm.memory_pressure", nil, &size, nil, 0) == 0, size > 0 else {
-            return nil
-        }
-
-        var buffer = [UInt8](repeating: 0, count: size)
-        let result = buffer.withUnsafeMutableBytes { pointer in
-            sysctlbyname("vm.memory_pressure", pointer.baseAddress, &size, nil, 0)
-        }
-        guard result == 0, size >= MemoryLayout<Int32>.size else {
-            return nil
-        }
-
-        let raw = buffer.withUnsafeBytes { pointer in
-            pointer.loadUnaligned(as: Int32.self)
-        }
-        return min(100, max(0, Double(raw)))
-    }
-
-    private func memorystatusPressure() -> Double? {
-        var freePercent = UInt32(0)
-        let result = withUnsafeMutablePointer(to: &freePercent) { pointer in
-            memorystatus_get_level(UInt64(UInt(bitPattern: pointer)))
-        }
+    private func memoryPressure() -> MemoryPressureState {
+        let vmPressureWarning: Int32 = 2
+        let vmPressureCritical: Int32 = 4
+        var pressureLevel = Int32(0)
+        var size = MemoryLayout<Int32>.size
+        let result = sysctlbyname("kern.memorystatus_vm_pressure_level", &pressureLevel, &size, nil, 0)
         guard result == 0 else {
-            return nil
+            return .unknown
         }
 
-        return min(100, max(0, 100 - Double(freePercent)))
-    }
-
-    private func memoryPressureScore(wired: Double, compressed: Double, swapUsed: Double, total: Double) -> Double {
-        guard total > 0 else {
-            return 0
+        switch pressureLevel {
+        case vmPressureWarning:
+            return .warning
+        case vmPressureCritical:
+            return .critical
+        default:
+            return .normal
         }
-
-        // Activity Monitor does not expose its exact pressure formula. This score follows the same signal mix:
-        // wired memory, compressed memory, and swap pressure rather than simple used / total memory.
-        let wiredRatio = wired / total
-        let compressedRatio = compressed / total
-        let swapRatio = swapUsed / total
-        let score = wiredRatio * 42 + compressedRatio * 48 + swapRatio * 65
-        return min(100, max(0, score))
     }
 
     private func swapUsage() -> SwapUsage? {
@@ -549,6 +529,13 @@ final class SystemMonitorSampler {
             total: Double(usage.xsu_total),
             available: Double(usage.xsu_avail)
         )
+    }
+
+    private func swapUsedText(_ swap: SwapUsage?) -> String {
+        guard let used = swap?.used, used > 0 else {
+            return "--"
+        }
+        return memoryBytes(used)
     }
 
     private func networkInterfaceTitle(_ name: String?) -> String {
@@ -614,16 +601,51 @@ private struct SwapUsage {
     let available: Double
 }
 
+private enum MemoryPressureState {
+    case normal
+    case warning
+    case critical
+    case unknown
+
+    var title: String {
+        switch self {
+        case .normal:
+            "正常"
+        case .warning:
+            "偏高"
+        case .critical:
+            "严重"
+        case .unknown:
+            "--"
+        }
+    }
+}
+
 private func percent(_ value: Double) -> String {
     "\(Int(value.rounded()))%"
 }
 
 private func bytes(_ value: Double) -> String {
+    byteFormatter.string(fromByteCount: Int64(max(0, value)))
+}
+
+private func memoryBytes(_ value: Double) -> String {
+    memoryByteFormatter.string(fromByteCount: Int64(max(0, value)))
+}
+
+private let byteFormatter: ByteCountFormatter = {
     let formatter = ByteCountFormatter()
     formatter.allowedUnits = [.useGB, .useMB]
     formatter.countStyle = .file
-    return formatter.string(fromByteCount: Int64(max(0, value)))
-}
+    return formatter
+}()
+
+private let memoryByteFormatter: ByteCountFormatter = {
+    let formatter = ByteCountFormatter()
+    formatter.allowedUnits = [.useGB, .useMB]
+    formatter.countStyle = .memory
+    return formatter
+}()
 
 private func bytesPerSecond(_ value: Double) -> String {
     let safeValue = max(0, value)
