@@ -36,9 +36,11 @@ struct MonitorPanelView: View {
             .padding(10)
             .frame(width: 320)
             .background(.clear)
-            .glassEffect(.regular, in: .rect(cornerRadius: 22))
-            .glassEffectID("monitor-panel", in: glassNamespace)
         }
+        .glassEffect(.regular, in: .rect(cornerRadius: 22, style: .continuous))
+        .glassEffectID("monitor-panel", in: glassNamespace)
+        .clipShape(.rect(cornerRadius: 22, style: .continuous))
+        .background(TransparentWindowBackground())
     }
 
     @ViewBuilder
@@ -167,7 +169,8 @@ private struct MetricGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14))
+        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14, style: .continuous))
+        .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -238,7 +241,8 @@ private struct NetworkGlassRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14))
+        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14, style: .continuous))
+        .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 
     private func value(_ name: String) -> String {
@@ -296,7 +300,8 @@ private struct BatteryGlassRow: View {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14))
+        .glassEffect(.regular.tint(tint.opacity(0.08)), in: .rect(cornerRadius: 14, style: .continuous))
+        .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 
     private var hasBattery: Bool {
@@ -355,6 +360,40 @@ private struct BatteryGlassRow: View {
 
     private var isConnectedToPower: Bool {
         value("状态") != "电池供电"
+    }
+}
+
+private struct TransparentWindowBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        TransparentBackgroundView()
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+    }
+}
+
+private final class TransparentBackgroundView: NSView {
+    private weak var configuredWindow: NSWindow?
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+
+        guard let window, configuredWindow !== window else {
+            return
+        }
+
+        configuredWindow = window
+        window.isOpaque = false
+        window.backgroundColor = .clear
+        window.contentView?.wantsLayer = true
+        window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
+
+        var parent = superview
+        while let current = parent {
+            current.wantsLayer = true
+            current.layer?.backgroundColor = NSColor.clear.cgColor
+            parent = current.superview
+        }
     }
 }
 
