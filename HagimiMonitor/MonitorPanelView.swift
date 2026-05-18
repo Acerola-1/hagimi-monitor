@@ -253,13 +253,12 @@ private struct MetricDetailGrid: View {
 
             LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
                 ForEach(metrics) { metric in
-                    HStack(spacing: 6) {
-                        Text(metric.name)
+                    HStack(spacing: 5) {
+                        Text("\(metric.name):")
                             .font(.system(size: 10, weight: .medium))
                             .foregroundStyle(theme.captionText)
                             .lineLimit(1)
-
-                        Spacer(minLength: 4)
+                            .frame(width: 48, alignment: .leading)
 
                         Text(metric.value)
                             .font(.system(size: 11, weight: .semibold, design: .rounded))
@@ -267,6 +266,7 @@ private struct MetricDetailGrid: View {
                             .foregroundStyle(theme.secondaryText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
                 }
             }
