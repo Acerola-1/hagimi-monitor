@@ -236,10 +236,11 @@ private final class MonitorRefreshSchedule {
     private var lastRefreshDates: [MonitorKind: Date] = [:]
 
     init(
-        tickInterval: TimeInterval = 2,
-        intervals: [MonitorKind: TimeInterval] = Dictionary(
-            uniqueKeysWithValues: MonitorKind.allCases.map { ($0, 2) }
-        )
+        tickInterval: TimeInterval = 1,
+        intervals: [MonitorKind: TimeInterval] = [
+            .cpu: 1, .gpu: 2, .memory: 3,
+            .storage: 10, .network: 1, .battery: 5
+        ]
     ) {
         self.tickInterval = tickInterval
         self.intervals = intervals
