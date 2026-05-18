@@ -131,7 +131,7 @@ struct MonitorPanelView: View {
     }
 
     private func toggleExpansion(for kind: MonitorKind) {
-        withAnimation(.snappy(duration: 0.22, extraBounce: 0.03)) {
+        withAnimation(.smooth(duration: 0.18)) {
             if expandedKinds.contains(kind) {
                 expandedKinds.remove(kind)
             } else {
@@ -209,7 +209,7 @@ private struct MetricGlassRow: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+                .transition(.detailDisclosure)
             }
         }
         .contentShape(Rectangle())
@@ -534,7 +534,7 @@ private struct BatteryGlassRow: View {
                 MetricDetailGrid(metrics: detailMetrics, tint: tint)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                    .transition(.detailDisclosure)
             }
         }
         .contentShape(Rectangle())
@@ -809,6 +809,15 @@ private struct MonitorPanelTheme {
 
     var liveDot: Color {
         Color(red: 0.30, green: 0.85, blue: 0.50)
+    }
+}
+
+private extension AnyTransition {
+    static var detailDisclosure: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
+            removal: .opacity
+        )
     }
 }
 
