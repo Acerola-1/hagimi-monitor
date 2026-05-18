@@ -818,17 +818,17 @@ private extension MonitorKind {
     var paletteTint: Color {
         switch self {
         case .cpu:
-            return Color(hex: 0xFF6B4A)
+            return Color(hex: 0xFA4D56)
         case .gpu:
             return Color(hex: 0xA855F7)
         case .memory:
-            return Color(hex: 0x38BDF8)
+            return Color(hex: 0x1192E8)
         case .storage:
-            return Color(hex: 0x34D399)
+            return Color(hex: 0xB28600)
         case .network:
-            return Color(hex: 0xFBBF24)
+            return Color(hex: 0x009D9A)
         case .battery:
-            return Color(hex: 0x4ADE80)
+            return Color(hex: 0x198038)
         }
     }
 }
