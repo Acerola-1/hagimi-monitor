@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import Charts
 
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
@@ -13,6 +14,9 @@ struct MonitorPanelView: View {
 
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 6) {
+                // Header: Live 脉冲点 + 时间
+                header(theme: theme)
+
                 ForEach(store.modules) { module in
                     row(for: module)
                         .glassEffectID("metric-\(module.kind.id)", in: glassNamespace)
@@ -43,15 +47,34 @@ struct MonitorPanelView: View {
             .frame(width: 320)
             .background(.clear)
         }
-        .background(theme.panelFill, in: .rect(cornerRadius: 22, style: .continuous))
         .glassEffect(.regular, in: .rect(cornerRadius: 22, style: .continuous))
         .glassEffectID("monitor-panel", in: glassNamespace)
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .stroke(theme.panelStroke, lineWidth: 1)
-        }
-        .clipShape(.rect(cornerRadius: 22, style: .continuous))
         .background(TransparentWindowBackground())
+    }
+
+    private func header(theme: MonitorPanelTheme) -> some View {
+        HStack {
+            HStack(spacing: 5) {
+                Circle()
+                    .fill(theme.liveDot)
+                    .frame(width: 5, height: 5)
+                    .symbolEffect(.pulse, options: .repeating.speed(0.8))
+
+                Text("SYSTEM · LIVE")
+                    .font(.system(size: 9, weight: .semibold, design: .rounded))
+                    .kerning(0.6)
+                    .foregroundStyle(theme.captionText)
+            }
+
+            Spacer()
+
+            Text(timeString)
+                .font(.system(size: 9, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(theme.captionText)
+        }
+        .padding(.horizontal, 4)
+        .padding(.bottom, 1)
     }
 
     @ViewBuilder
@@ -117,11 +140,19 @@ struct MonitorPanelView: View {
         }
     }
 
+    private var timeString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: Date())
+    }
+
     private func openActivityMonitor() {
         let url = URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app")
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }
 }
+
+// MARK: - Metric Row
 
 private struct MetricGlassRow: View {
     let module: MonitorModule
@@ -141,33 +172,29 @@ private struct MetricGlassRow: View {
 
         VStack(spacing: 0) {
             HStack(spacing: 10) {
+                // 图标：保持原版紧凑 18px
                 Image(systemName: module.kind.symbol)
                     .font(.system(size: 13, weight: .semibold))
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(module.kind.title)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(theme.primaryText)
-                        .lineLimit(1)
-                }
-                .frame(width: 70, alignment: .leading)
-
-                Spacer(minLength: 8)
-
-                if !samples.isEmpty {
-                    Sparkline(samples: samples, tint: tint)
-                        .frame(width: 56, height: 18)
-                }
+                // 标签 + 数值紧随其后（用户反馈：CPU: 37%）
+                Text("\(module.kind.title):")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
 
                 Text(detail)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
-                    .frame(width: 58, alignment: .trailing)
+
+                Spacer(minLength: 8)
+
+                // 右侧：趋势图 / 进度条
+                trailingView(theme: theme)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -183,15 +210,27 @@ private struct MetricGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .background(theme.rowFill(for: tint), in: .rect(cornerRadius: 14, style: .continuous))
         .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(theme.rowStroke(for: tint), lineWidth: 1)
+    }
+
+    @ViewBuilder
+    private func trailingView(theme: MonitorPanelTheme) -> some View {
+        switch module.kind {
+        case .cpu, .gpu:
+            if !samples.isEmpty {
+                SparklineChart(samples: samples, tint: tint)
+                    .frame(width: 56, height: 18)
+            }
+        case .memory, .storage:
+            ProgressMeter(value: module.value, tint: tint, theme: theme)
+                .frame(width: 56, height: 3)
+        case .network, .battery:
+            EmptyView()
         }
-        .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 }
+
+// MARK: - Detail Grid
 
 private struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
@@ -236,6 +275,8 @@ private struct MetricDetailGrid: View {
     }
 }
 
+// MARK: - Network Row
+
 private struct NetworkGlassRow: View {
     let module: MonitorModule
     @Environment(\.colorScheme) private var colorScheme
@@ -254,9 +295,14 @@ private struct NetworkGlassRow: View {
                 .foregroundStyle(tint)
                 .frame(width: 18)
 
-            Text("网络: \(module.summary)")
+            Text("网络:")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.primaryText)
+                .lineLimit(1)
+
+            Text(module.summary)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(theme.valueText)
                 .lineLimit(1)
 
             Spacer(minLength: 8)
@@ -266,19 +312,15 @@ private struct NetworkGlassRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(theme.rowFill(for: tint), in: .rect(cornerRadius: 14, style: .continuous))
         .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(theme.rowStroke(for: tint), lineWidth: 1)
-        }
-        .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 
     private func value(_ name: String) -> String {
         module.metrics.first { $0.name == name }?.value ?? "--"
     }
 }
+
+// MARK: - Battery Row
 
 private struct BatteryGlassRow: View {
     let module: MonitorModule
@@ -302,15 +344,20 @@ private struct BatteryGlassRow: View {
                     .frame(width: 18)
                     .symbolEffect(.variableColor.iterative, isActive: isCharging)
 
-                Text(module.kind.title)
+                Text("电源:")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+
+                Text(module.summary)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(theme.valueText)
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
 
                 if hasBattery {
-                    MetricPill(systemImage: "battery.100percent", text: module.summary)
                     MetricPill(systemImage: powerPillIcon, text: powerPillValue)
                 } else {
                     MetricPill(systemImage: "powerplug", text: value("适配器"))
@@ -333,13 +380,7 @@ private struct BatteryGlassRow: View {
                 toggleExpansion?()
             }
         }
-        .background(theme.rowFill(for: tint), in: .rect(cornerRadius: 14, style: .continuous))
         .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(theme.rowStroke(for: tint), lineWidth: 1)
-        }
-        .clipShape(.rect(cornerRadius: 14, style: .continuous))
     }
 
     private var hasBattery: Bool {
@@ -401,13 +442,77 @@ private struct BatteryGlassRow: View {
     }
 }
 
+// MARK: - Sparkline Chart (Swift Charts 渐变填充)
+
+private struct SparklineChart: View {
+    let samples: [Double]
+    let tint: Color
+
+    var body: some View {
+        Chart(Array(samples.suffix(24).enumerated()), id: \.offset) { i, v in
+            AreaMark(
+                x: .value("t", i),
+                y: .value("v", v / 100)
+            )
+            .interpolationMethod(.monotone)
+            .foregroundStyle(
+                .linearGradient(
+                    colors: [tint.opacity(0.45), tint.opacity(0)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+
+            LineMark(
+                x: .value("t", i),
+                y: .value("v", v / 100)
+            )
+            .interpolationMethod(.monotone)
+            .foregroundStyle(tint)
+            .lineStyle(.init(lineWidth: 1.2, lineCap: .round))
+        }
+        .chartXAxis(.hidden)
+        .chartYAxis(.hidden)
+        .chartYScale(domain: 0...1)
+        .chartPlotStyle { $0.background(.clear) }
+    }
+}
+
+// MARK: - Progress Meter (渐变进度条)
+
+private struct ProgressMeter: View {
+    let value: Double
+    let tint: Color
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(theme.trackFill)
+
+                Capsule()
+                    .fill(
+                        LinearGradient(
+                            colors: [tint, tint.opacity(0.7)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                    .frame(width: geo.size.width * min(1, max(0, value / 100)))
+            }
+        }
+    }
+}
+
+// MARK: - Transparent Window Background
+
 private struct TransparentWindowBackground: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {
         TransparentBackgroundView()
     }
 
-    func updateNSView(_ nsView: NSView, context: Context) {
-    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 private final class TransparentBackgroundView: NSView {
@@ -416,9 +521,7 @@ private final class TransparentBackgroundView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
-        guard let window, configuredWindow !== window else {
-            return
-        }
+        guard let window, configuredWindow !== window else { return }
 
         configuredWindow = window
         window.isOpaque = false
@@ -434,6 +537,8 @@ private final class TransparentBackgroundView: NSView {
         }
     }
 }
+
+// MARK: - Metric Pill
 
 private struct MetricPill: View {
     let systemImage: String
@@ -452,6 +557,8 @@ private struct MetricPill: View {
             .frame(width: 72, alignment: .trailing)
     }
 }
+
+// MARK: - Theme
 
 private struct MonitorPanelTheme {
     let colorScheme: ColorScheme
@@ -476,74 +583,40 @@ private struct MonitorPanelTheme {
         isDark ? Color.white.opacity(0.52) : Color.black.opacity(0.36)
     }
 
-    var panelFill: Color {
-        isDark ? Color.black.opacity(0.28) : Color.clear
-    }
-
-    var panelStroke: Color {
-        isDark ? Color.white.opacity(0.16) : Color.white.opacity(0.10)
-    }
-
-    func rowFill(for tint: Color) -> Color {
-        isDark ? tint.opacity(0.05) : Color.clear
-    }
-
     func glassTint(for tint: Color) -> Color {
         tint.opacity(isDark ? 0.16 : 0.08)
-    }
-
-    func rowStroke(for tint: Color) -> Color {
-        isDark ? tint.opacity(0.22) : Color.white.opacity(0.08)
     }
 
     func separator(for tint: Color) -> Color {
         tint.opacity(isDark ? 0.28 : 0.18)
     }
-}
 
-private struct Sparkline: View {
-    let samples: [Double]
-    let tint: Color
-
-    var body: some View {
-        GeometryReader { proxy in
-            let points = normalizedPoints(in: proxy.size)
-
-            Path { path in
-                guard let first = points.first else { return }
-                path.move(to: first)
-                points.dropFirst().forEach { path.addLine(to: $0) }
-            }
-            .stroke(tint, style: StrokeStyle(lineWidth: 1.2, lineCap: .round, lineJoin: .round))
-        }
+    var trackFill: Color {
+        isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
     }
 
-    private func normalizedPoints(in size: CGSize) -> [CGPoint] {
-        guard samples.count > 1 else { return [] }
-
-        return samples.enumerated().map { index, value in
-            let x = CGFloat(index) / CGFloat(samples.count - 1) * size.width
-            let y = size.height - CGFloat(min(100, max(0, value)) / 100) * size.height
-            return CGPoint(x: x, y: y)
-        }
+    var liveDot: Color {
+        Color(red: 0.30, green: 0.85, blue: 0.50)
     }
 }
+
+// MARK: - Color Extensions
 
 private extension MonitorKind {
     var paletteTint: Color {
         switch self {
         case .cpu:
-            return Color(hex: 0xFF7A45)
+            return Color(hex: 0xFF6B4A)
         case .gpu:
-            return Color(hex: 0xB57BFF)
+            return Color(hex: 0xA855F7)
         case .memory:
-            return Color(hex: 0x4DA3FF)
+            return Color(hex: 0x38BDF8)
         case .storage:
-            return Color(hex: 0x32C896)
+            return Color(hex: 0x34D399)
         case .network:
-            return Color(hex: 0x5AC8FA)
+            return Color(hex: 0xFBBF24)
         case .battery:
-            return Color(hex: 0x34C759)
+            return Color(hex: 0x4ADE80)
         }
     }
 }
