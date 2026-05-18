@@ -200,10 +200,16 @@ private struct MetricGlassRow: View {
             .padding(.vertical, 8)
 
             if isExpanded, !details.isEmpty {
-                MetricDetailGrid(metrics: details, tint: tint)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 9)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                Group {
+                    if let storageVolumes {
+                        StorageVolumeDetailList(volumes: storageVolumes, tint: tint)
+                    } else {
+                        MetricDetailGrid(metrics: details, tint: tint)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 9)
+                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .contentShape(Rectangle())
@@ -227,6 +233,35 @@ private struct MetricGlassRow: View {
         case .network, .battery:
             EmptyView()
         }
+    }
+
+    private var storageVolumes: [StorageVolumeInfo]? {
+        guard module.kind == .storage else {
+            return nil
+        }
+
+        let externalVolumes = parseExternalVolumes(module.context)
+        guard !externalVolumes.isEmpty else {
+            return nil
+        }
+
+        return [systemVolumeInfo] + externalVolumes
+    }
+
+    private var systemVolumeInfo: StorageVolumeInfo {
+        StorageVolumeInfo(
+            id: "system",
+            name: "系统盘",
+            used: metricValue("已用"),
+            free: metricValue("可用"),
+            total: metricValue("总量"),
+            percentage: Int(module.value.rounded()),
+            isExternal: false
+        )
+    }
+
+    private func metricValue(_ name: String) -> String {
+        details.first { $0.name == name }?.value ?? "--"
     }
 }
 
@@ -253,25 +288,153 @@ private struct MetricDetailGrid: View {
 
             LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
                 ForEach(metrics) { metric in
-                    HStack(spacing: 5) {
-                        Text("\(metric.name):")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(theme.captionText)
-                            .lineLimit(1)
-                            .frame(width: 48, alignment: .leading)
-
-                        Text(metric.value)
-                            .font(.system(size: 11, weight: .semibold, design: .rounded))
-                            .monospacedDigit()
-                            .foregroundStyle(theme.secondaryText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
+                    metricCell(metric, theme: theme)
                 }
             }
             .padding(.leading, 28)
         }
+    }
+
+    private func metricCell(_ metric: MonitorMetric, theme: MonitorPanelTheme) -> some View {
+        HStack(spacing: 6) {
+            Text(metric.name)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            Text(metric.value)
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(theme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+        }
+    }
+}
+
+private struct StorageVolumeDetailList: View {
+    let volumes: [StorageVolumeInfo]
+    let tint: Color
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+
+        VStack(spacing: 8) {
+            Rectangle()
+                .fill(theme.separator(for: tint))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 8) {
+                ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(theme.separator(for: tint).opacity(0.72))
+                            .frame(height: 1)
+                            .padding(.leading, 22)
+                    }
+
+                    StorageVolumeRow(volume: volume, tint: tint, theme: theme)
+                }
+            }
+            .padding(.leading, 28)
+        }
+    }
+}
+
+private struct StorageVolumeRow: View {
+    let volume: StorageVolumeInfo
+    let tint: Color
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: volume.symbol)
+                .font(.system(size: 11, weight: .semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(tint)
+                .frame(width: 14)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(volume.name)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .help(volume.name)
+
+                    Spacer(minLength: 8)
+
+                    Text("\(volume.clampedPercentage)%")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background {
+                            Capsule()
+                                .fill(tint.opacity(theme.isDark ? 0.18 : 0.10))
+                        }
+                }
+
+                ProgressMeter(value: Double(volume.clampedPercentage), tint: tint, theme: theme)
+                    .frame(height: 3)
+
+                HStack(spacing: 8) {
+                    StorageVolumeStat(label: "已用", value: volume.used, theme: theme)
+                    StorageVolumeStat(label: "可用", value: volume.free, theme: theme)
+                    StorageVolumeStat(label: "总量", value: volume.total, theme: theme)
+                }
+            }
+        }
+    }
+}
+
+private struct StorageVolumeStat: View {
+    let label: String
+    let value: String
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(label)
+                .font(.system(size: 9, weight: .medium))
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+
+            Text(value)
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(theme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.78)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct StorageVolumeInfo: Identifiable {
+    let id: String
+    let name: String
+    let used: String
+    let free: String
+    let total: String
+    let percentage: Int
+
+    var isExternal: Bool
+
+    var symbol: String {
+        isExternal ? "externaldrive" : "internaldrive"
+    }
+
+    var clampedPercentage: Int {
+        min(100, max(0, percentage))
     }
 }
 
@@ -539,6 +702,55 @@ private final class TransparentBackgroundView: NSView {
 }
 
 // MARK: - Metric Pill
+
+private func parseExternalVolumes(_ context: String?) -> [StorageVolumeInfo] {
+    guard let context, let data = context.data(using: .utf8) else {
+        return []
+    }
+
+    if let payload = try? JSONDecoder().decode([ExternalVolumePayload].self, from: data) {
+        return payload.enumerated().map { index, volume in
+            StorageVolumeInfo(
+                id: "external-\(index)-\(volume.name)",
+                name: volume.name,
+                used: volume.used,
+                free: volume.free,
+                total: volume.total,
+                percentage: volume.percentage,
+                isExternal: true
+            )
+        }
+    }
+
+    return parseLegacyExternalVolumes(context)
+}
+
+private struct ExternalVolumePayload: Decodable {
+    let name: String
+    let used: String
+    let free: String
+    let total: String
+    let percentage: Int
+}
+
+private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo] {
+    context.split(separator: ";").enumerated().compactMap { index, item in
+        let parts = item.split(separator: "|", omittingEmptySubsequences: false)
+        guard parts.count == 5 else {
+            return nil
+        }
+
+        return StorageVolumeInfo(
+            id: "external-\(index)-\(parts[0])",
+            name: String(parts[0]),
+            used: String(parts[1]),
+            free: String(parts[2]),
+            total: String(parts[3]),
+            percentage: Int(parts[4]) ?? 0,
+            isExternal: true
+        )
+    }
+}
 
 private struct MetricPill: View {
     let systemImage: String
