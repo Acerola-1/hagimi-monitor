@@ -22,6 +22,13 @@ struct MonitorPanelView: View {
                         .glassEffectID("metric-\(module.kind.id)", in: glassNamespace)
                 }
 
+                #if DISPLAY_CONTROL
+                if store.settings.displayModuleVisible {
+                    DisplayControlsSection(settings: store.settings)
+                        .glassEffectID("display-controls", in: glassNamespace)
+                }
+                #endif
+
                 HStack(spacing: 8) {
                     Button {
                         openActivityMonitor()

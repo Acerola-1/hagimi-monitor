@@ -55,13 +55,16 @@ private struct GeneralSettingsPane: View {
 
 private struct ModuleSettingsPane: View {
     @ObservedObject var settings: MonitorSettings
+    #if DISPLAY_CONTROL
+    @State private var isDisplaySettingsExpanded = false
+    #endif
 
     var body: some View {
         Form {
-            ForEach(MonitorKind.allCases) { kind in
-                Section {
-                    Toggle(
-                        kind.title,
+            Section("模块") {
+                ForEach(MonitorKind.allCases) { kind in
+                    ModuleVisibilityRow(
+                        title: kind.title,
                         systemImage: kind.symbol,
                         isOn: Binding(
                             get: { settings.isVisible(kind) },
@@ -69,12 +72,138 @@ private struct ModuleSettingsPane: View {
                         )
                     )
                 }
+
+                #if DISPLAY_CONTROL
+                DisplayModuleSettingsRow(
+                    settings: settings,
+                    isExpanded: $isDisplaySettingsExpanded
+                )
+                #endif
             }
         }
         .formStyle(.grouped)
         .padding(20)
     }
 }
+
+private struct ModuleVisibilityRow: View {
+    let title: String
+    let systemImage: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            Label(title, systemImage: systemImage)
+        }
+    }
+}
+
+#if DISPLAY_CONTROL
+private struct DisplayModuleSettingsRow: View {
+    @ObservedObject var settings: MonitorSettings
+    @Binding var isExpanded: Bool
+
+    private let expansionAnimation = Animation.smooth(duration: 0.2)
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ModuleVisibilityRow(
+                title: "显示器",
+                systemImage: "display",
+                isOn: $settings.displayModuleVisible
+            )
+
+            Button {
+                withAnimation(expansionAnimation) {
+                    isExpanded.toggle()
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.secondary)
+                        .frame(width: 18)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+
+                    Text("选项")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+
+                    Spacer()
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 6)
+            .padding(.leading, 28)
+
+            if isExpanded {
+                VStack(alignment: .leading, spacing: 8) {
+                    Divider()
+                        .padding(.leading, 6)
+
+                    ModuleOptionToggle(
+                        title: "内置显示器",
+                        systemImage: "laptopcomputer",
+                        isOn: $settings.showBuiltInDisplays
+                    )
+
+                    ModuleOptionToggle(
+                        title: "亮度",
+                        systemImage: "sun.max",
+                        isOn: $settings.displayBrightnessControlEnabled
+                    )
+
+                    ModuleOptionToggle(
+                        title: "音量",
+                        systemImage: "speaker.wave.2",
+                        isOn: $settings.displayVolumeControlEnabled
+                    )
+
+                    ModuleOptionToggle(
+                        title: "对比度",
+                        systemImage: "circle.lefthalf.filled",
+                        isOn: $settings.displayContrastControlEnabled
+                    )
+                }
+                .padding(.top, 8)
+                .padding(.leading, 50)
+                .transition(.settingsDisclosure)
+            }
+        }
+        .animation(expansionAnimation, value: isExpanded)
+    }
+}
+
+private struct ModuleOptionToggle: View {
+    let title: String
+    let systemImage: String
+    @Binding var isOn: Bool
+
+    var body: some View {
+        Toggle(isOn: $isOn) {
+            Label {
+                Text(title)
+                    .font(.subheadline)
+            } icon: {
+                Image(systemName: systemImage)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .frame(width: 18)
+            }
+        }
+    }
+}
+
+private extension AnyTransition {
+    static var settingsDisclosure: AnyTransition {
+        .asymmetric(
+            insertion: .opacity,
+            removal: .opacity
+        )
+    }
+}
+#endif
 
 private struct SettingsWindowTracker: NSViewRepresentable {
     func makeNSView(context: Context) -> NSView {

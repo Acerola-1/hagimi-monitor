@@ -1,17 +1,32 @@
 #!/bin/bash
 # 构建并启动指定分支的 HagimiMonitor
-# 用法: ./launch.sh [分支名]
+# 用法: ./launch.sh [分支名] [版本]
 # 示例: ./launch.sh dev
+#       ./launch.sh dev direct
 #       ./launch.sh feature/liquid-glass-refactor
 
 set -e
 
 BRANCH="${1:-$(git branch --show-current)}"
+VERSION="${2:-direct}"
 CURRENT=$(git branch --show-current)
-APP_NAME="HagimiMonitor"
 PROJECT="hagimi-monitor.xcodeproj"
-SCHEME="HagimiMonitor"
 BUILD_DIR="/tmp/hagimi-builds"
+
+case "$VERSION" in
+  direct|full|pro)
+    SCHEME="HagimiMonitorDirect"
+    APP_NAME="HagimiMonitorDirect"
+    ;;
+  appstore|store|sandbox)
+    SCHEME="HagimiMonitor"
+    APP_NAME="HagimiMonitor"
+    ;;
+  *)
+    SCHEME="HagimiMonitorDirect"
+    APP_NAME="HagimiMonitorDirect"
+    ;;
+esac
 
 mkdir -p "$BUILD_DIR"
 
@@ -22,7 +37,7 @@ if [ "$BRANCH" != "$CURRENT" ]; then
 fi
 
 # 构建
-echo "构建 $BRANCH 分支..."
+echo "构建 $BRANCH 分支 ($SCHEME)..."
 xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
     CONFIGURATION_BUILD_DIR="$BUILD_DIR/$BRANCH" \
     build 2>&1 | grep -E "(BUILD|error:)" | tail -5
@@ -30,7 +45,7 @@ xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
 # 启动
 APP_PATH="$BUILD_DIR/$BRANCH/$APP_NAME.app"
 if [ -d "$APP_PATH" ]; then
-    echo "启动 $BRANCH 版本: $APP_PATH"
+    echo "启动 $BRANCH 版本 ($SCHEME): $APP_PATH"
     open "$APP_PATH"
 else
     echo "错误: 找不到构建产物 $APP_PATH"

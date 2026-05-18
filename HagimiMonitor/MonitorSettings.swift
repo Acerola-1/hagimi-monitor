@@ -48,6 +48,36 @@ final class MonitorSettings: ObservableObject {
         }
     }
 
+    @Published var showBuiltInDisplays: Bool {
+        didSet {
+            defaults.set(showBuiltInDisplays, forKey: Keys.showBuiltInDisplays)
+        }
+    }
+
+    @Published var displayModuleVisible: Bool {
+        didSet {
+            defaults.set(displayModuleVisible, forKey: Keys.displayModuleVisible)
+        }
+    }
+
+    @Published var displayBrightnessControlEnabled: Bool {
+        didSet {
+            defaults.set(displayBrightnessControlEnabled, forKey: Keys.displayBrightnessControlEnabled)
+        }
+    }
+
+    @Published var displayVolumeControlEnabled: Bool {
+        didSet {
+            defaults.set(displayVolumeControlEnabled, forKey: Keys.displayVolumeControlEnabled)
+        }
+    }
+
+    @Published var displayContrastControlEnabled: Bool {
+        didSet {
+            defaults.set(displayContrastControlEnabled, forKey: Keys.displayContrastControlEnabled)
+        }
+    }
+
     @Published private(set) var visibleKinds: Set<MonitorKind> {
         didSet {
             let values = visibleKinds.map(\.rawValue)
@@ -63,6 +93,12 @@ final class MonitorSettings: ObservableObject {
 
         let themeRawValue = defaults.string(forKey: Keys.themePreference) ?? AppThemePreference.system.rawValue
         themePreference = AppThemePreference(rawValue: themeRawValue) ?? .system
+
+        showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
+        displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? true
+        displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
+        displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
+        displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
             let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
@@ -105,5 +141,10 @@ final class MonitorSettings: ObservableObject {
 
 private enum Keys {
     static let themePreference = "settings.themePreference"
+    static let displayModuleVisible = "settings.display.moduleVisible"
+    static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
+    static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
+    static let displayVolumeControlEnabled = "settings.display.volumeControlEnabled"
+    static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"
     static let visibleKinds = "settings.visibleKinds"
 }
