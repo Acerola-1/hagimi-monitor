@@ -17,7 +17,7 @@ struct HagimiMonitorApp: App {
             MonitorPanelView(store: monitorStore)
                 .preferredColorScheme(effectiveColorScheme)
         } label: {
-            Image(nsImage: MenuBarCatIcon.image(for: monitorStore.catModule, frame: monitorStore.menuBarFrame, darkMode: effectiveColorScheme == .dark))
+            Image(nsImage: MenuBarCatIcon.image(for: monitorStore.catModule, frame: monitorStore.menuBarFrame, darkMode: colorScheme == .dark))
                 .resizable()
                 .frame(width: 28, height: 18)
                 .help("HagimiMonitor")
