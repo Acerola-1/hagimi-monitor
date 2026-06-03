@@ -51,10 +51,10 @@ struct MonitorPanelView: View {
                 .padding(.top, 2)
             }
             .padding(10)
-            .frame(width: 320)
+            .frame(width: MonitorConstants.panelWidth)
             .background(.clear)
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: 22, style: .continuous))
+        .glassEffect(.regular, in: .rect(cornerRadius: MonitorConstants.panelCornerRadius, style: .continuous))
         .glassEffectID("monitor-panel", in: glassNamespace)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
     }
@@ -223,7 +223,7 @@ private struct MetricGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     @ViewBuilder
@@ -426,7 +426,7 @@ private struct StorageVolumeStat: View {
     }
 }
 
-private struct StorageVolumeInfo: Identifiable {
+struct StorageVolumeInfo: Identifiable {
     let id: String
     let name: String
     let used: String
@@ -482,7 +482,7 @@ private struct NetworkGlassRow: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     private func value(_ name: String) -> String {
@@ -550,7 +550,7 @@ private struct BatteryGlassRow: View {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     private var hasBattery: Bool {
@@ -609,69 +609,6 @@ private struct BatteryGlassRow: View {
 
     private var isConnectedToPower: Bool {
         value("状态") != "电池供电"
-    }
-}
-
-// MARK: - Sparkline Chart (Swift Charts 渐变填充)
-
-private struct SparklineChart: View {
-    let samples: [Double]
-    let tint: Color
-
-    var body: some View {
-        Chart(Array(samples.suffix(24).enumerated()), id: \.offset) { i, v in
-            AreaMark(
-                x: .value("t", i),
-                y: .value("v", v / 100)
-            )
-            .interpolationMethod(.monotone)
-            .foregroundStyle(
-                .linearGradient(
-                    colors: [tint.opacity(0.45), tint.opacity(0)],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-
-            LineMark(
-                x: .value("t", i),
-                y: .value("v", v / 100)
-            )
-            .interpolationMethod(.monotone)
-            .foregroundStyle(tint)
-            .lineStyle(.init(lineWidth: 1.2, lineCap: .round))
-        }
-        .chartXAxis(.hidden)
-        .chartYAxis(.hidden)
-        .chartYScale(domain: 0...1)
-        .chartPlotStyle { $0.background(.clear) }
-    }
-}
-
-// MARK: - Progress Meter (渐变进度条)
-
-private struct ProgressMeter: View {
-    let value: Double
-    let tint: Color
-    let theme: MonitorPanelTheme
-
-    var body: some View {
-        GeometryReader { geo in
-            ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(theme.trackFill)
-
-                Capsule()
-                    .fill(
-                        LinearGradient(
-                            colors: [tint, tint.opacity(0.7)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .frame(width: geo.size.width * min(1, max(0, value / 100)))
-            }
-        }
     }
 }
 
@@ -820,7 +757,7 @@ private struct MetricPill: View {
 
 // MARK: - Theme
 
-private struct MonitorPanelTheme {
+struct MonitorPanelTheme {
     let colorScheme: ColorScheme
 
     var isDark: Bool {

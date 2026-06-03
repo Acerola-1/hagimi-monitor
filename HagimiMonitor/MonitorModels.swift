@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import OSLog
 
 enum MonitorSeverity {
     case calm
@@ -10,11 +11,11 @@ enum MonitorSeverity {
     var title: String {
         switch self {
         case .calm:
-            "正常"
+            String(localized: "severity.calm")
         case .warning:
-            "接近阈值"
+            String(localized: "severity.warning")
         case .critical:
-            "需要注意"
+            String(localized: "severity.critical")
         }
     }
 
@@ -43,17 +44,17 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .cpu:
-            "CPU"
+            String(localized: "kind.cpu")
         case .gpu:
-            "GPU"
+            String(localized: "kind.gpu")
         case .memory:
-            "内存"
+            String(localized: "kind.memory")
         case .storage:
-            "存储"
+            String(localized: "kind.storage")
         case .network:
-            "网络"
+            String(localized: "kind.network")
         case .battery:
-            "电源"
+            String(localized: "kind.battery")
         }
     }
 
@@ -95,18 +96,18 @@ struct MonitorModule: Identifiable {
     var severity: MonitorSeverity {
         switch kind {
         case .cpu, .gpu, .memory, .storage:
-            if value >= 88 { return .critical }
-            if value >= 72 { return .warning }
+            if value >= MonitorConstants.criticalThreshold { return .critical }
+            if value >= MonitorConstants.warningThreshold { return .warning }
             return .calm
         case .network:
-            if value >= 85 { return .warning }
+            if value >= MonitorConstants.networkWarningThreshold { return .warning }
             return .calm
         case .battery:
             if metrics.first(where: { $0.name == "类型" })?.value == "外接电源" {
                 return .calm
             }
-            if value <= 12 { return .critical }
-            if value <= 25 { return .warning }
+            if value <= MonitorConstants.batteryCriticalThreshold { return .critical }
+            if value <= MonitorConstants.batteryWarningThreshold { return .warning }
             return .calm
         }
     }
@@ -118,11 +119,11 @@ struct MonitorModule: Identifiable {
             value: 0,
             summary: "--",
             metrics: [
-                MonitorMetric(name: "当前", value: "--"),
-                MonitorMetric(name: "平均", value: "--"),
-                MonitorMetric(name: "峰值", value: "--")
+                MonitorMetric(name: String(localized: "metric.current"), value: "--"),
+                MonitorMetric(name: String(localized: "metric.average"), value: "--"),
+                MonitorMetric(name: String(localized: "metric.peak"), value: "--")
             ],
-            samples: Array(repeating: 0, count: 24)
+            samples: Array(repeating: 0, count: 28)
         )
     }
 }
@@ -136,8 +137,8 @@ final class MonitorStore: ObservableObject {
 
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
-    private var timer: Timer?
-    private var animationTimer: Timer?
+    private var timerCancellable: AnyCancellable?
+    private var animationTimerCancellable: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private var cancellables: Set<AnyCancellable> = []
 
@@ -150,25 +151,30 @@ final class MonitorStore: ObservableObject {
         advance(kinds: MonitorKind.allCases)
         refreshSchedule.markRefreshed(MonitorKind.allCases, at: Date())
         settings.objectWillChange
+            .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                DispatchQueue.main.async {
-                    guard let self else { return }
-                    self.modules = self.visibleModules(from: self.allModules)
-                    self.objectWillChange.send()
-                }
+                guard let self else { return }
+                self.modules = self.visibleModules(from: self.allModules)
+                self.objectWillChange.send()
             }
             .store(in: &cancellables)
-        timer = Timer.scheduledTimer(withTimeInterval: refreshSchedule.tickInterval, repeats: true) { [weak self] _ in
-            self?.advance()
-        }
-        animationTimer = Timer.scheduledTimer(withTimeInterval: 0.16, repeats: true) { [weak self] _ in
-            self?.advanceAnimation()
-        }
+        timerCancellable = Timer.publish(every: refreshSchedule.tickInterval, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                AppLogger.ui.debug("Timer tick triggered")
+                self?.advance()
+            }
+        animationTimerCancellable = Timer.publish(every: MonitorConstants.animationInterval, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.advanceAnimation()
+            }
     }
 
     deinit {
-        timer?.invalidate()
-        animationTimer?.invalidate()
+        timerCancellable?.cancel()
+        animationTimerCancellable?.cancel()
+        cancellables.removeAll()
     }
 
     var selectedModule: MonitorModule {
@@ -191,12 +197,20 @@ final class MonitorStore: ObservableObject {
         guard !kinds.isEmpty else {
             return
         }
+        let kindNames = kinds.map { $0.rawValue }.joined(separator: ", ")
+        AppLogger.ui.debug("Advancing modules: \(kindNames, privacy: .public)")
         advance(kinds: kinds)
     }
 
     private func advance(kinds: some Sequence<MonitorKind>) {
-        allModules = sampler.sample(kinds: kinds, previousModules: allModules).modules
-        modules = visibleModules(from: allModules)
+        let result = sampler.sample(kinds: kinds, previousModules: allModules)
+        switch result {
+        case .success(let snapshot):
+            allModules = snapshot.modules
+            modules = visibleModules(from: allModules)
+        case .failure(let error):
+            AppLogger.sampler.error("Sampling failed: \(error.description, privacy: .public)")
+        }
     }
 
     private func advanceAnimation() {
@@ -204,6 +218,7 @@ final class MonitorStore: ObservableObject {
         let stride = cpuValue >= 75 ? 2 : 1
         if cpuValue >= 8 {
             menuBarFrame = (menuBarFrame + stride) % 5
+            AppLogger.ui.debug("Animation frame advanced to \(self.menuBarFrame), stride: \(stride)")
         }
     }
 
@@ -229,7 +244,7 @@ final class MonitorStore: ObservableObject {
     }
 }
 
-private final class MonitorRefreshSchedule {
+final class MonitorRefreshSchedule {
     let tickInterval: TimeInterval
 
     private let intervals: [MonitorKind: TimeInterval]
@@ -271,24 +286,24 @@ enum CatDialogueEngine {
         guard module.severity != .calm else {
             let average = modules.isEmpty ? 0 : modules.map(\.value).reduce(0, +) / Double(modules.count)
             if average > 35 {
-                return "我在盯着这些数字，今天机器有点忙。"
+                return String(localized: "dialogue.calm.busy")
             }
-            return "现在很安静，我可以趴在菜单栏晒太阳。"
+            return String(localized: "dialogue.calm.quiet")
         }
 
         switch module.kind {
         case .cpu:
-            return "你在搞什么，我感觉我在飞速运转。"
+            return String(localized: "dialogue.cpu")
         case .gpu:
-            return "画面那边有点烫，我的尾巴都在冒电光。"
+            return String(localized: "dialogue.gpu")
         case .memory:
-            return "我的脑袋要被塞满了，先关两个东西吧。"
+            return String(localized: "dialogue.memory")
         case .storage:
-            return "我的肚子快塞不下了，嗝。"
+            return String(localized: "dialogue.storage")
         case .network:
-            return "网线在狂奔，我的胡须都被风吹歪了。"
+            return String(localized: "dialogue.network")
         case .battery:
-            return "我好饿，需要充电，不然要趴下了。"
+            return String(localized: "dialogue.battery")
         }
     }
 }

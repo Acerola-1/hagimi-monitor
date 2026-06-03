@@ -34,59 +34,18 @@ enum AppThemePreference: String, CaseIterable, Identifiable {
 }
 
 final class MonitorSettings: ObservableObject {
-    @Published var launchAtLogin: Bool {
-        didSet {
-            guard !isUpdatingLaunchAtLogin else { return }
-            guard oldValue != launchAtLogin else { return }
-            updateLaunchAtLogin()
-        }
-    }
-
-    @Published var themePreference: AppThemePreference {
-        didSet {
-            defaults.set(themePreference.rawValue, forKey: Keys.themePreference)
-        }
-    }
-
-    @Published var showBuiltInDisplays: Bool {
-        didSet {
-            defaults.set(showBuiltInDisplays, forKey: Keys.showBuiltInDisplays)
-        }
-    }
-
-    @Published var displayModuleVisible: Bool {
-        didSet {
-            defaults.set(displayModuleVisible, forKey: Keys.displayModuleVisible)
-        }
-    }
-
-    @Published var displayBrightnessControlEnabled: Bool {
-        didSet {
-            defaults.set(displayBrightnessControlEnabled, forKey: Keys.displayBrightnessControlEnabled)
-        }
-    }
-
-    @Published var displayVolumeControlEnabled: Bool {
-        didSet {
-            defaults.set(displayVolumeControlEnabled, forKey: Keys.displayVolumeControlEnabled)
-        }
-    }
-
-    @Published var displayContrastControlEnabled: Bool {
-        didSet {
-            defaults.set(displayContrastControlEnabled, forKey: Keys.displayContrastControlEnabled)
-        }
-    }
-
-    @Published private(set) var visibleKinds: Set<MonitorKind> {
-        didSet {
-            let values = visibleKinds.map(\.rawValue)
-            defaults.set(values, forKey: Keys.visibleKinds)
-        }
-    }
+    @Published var launchAtLogin: Bool = false
+    @Published var themePreference: AppThemePreference = .system
+    @Published var showBuiltInDisplays: Bool = true
+    @Published var displayModuleVisible: Bool = true
+    @Published var displayBrightnessControlEnabled: Bool = true
+    @Published var displayVolumeControlEnabled: Bool = true
+    @Published var displayContrastControlEnabled: Bool = false
+    @Published private(set) var visibleKinds: Set<MonitorKind> = []
 
     private let defaults: UserDefaults
     private var isUpdatingLaunchAtLogin = false
+    private var cancellables = Set<AnyCancellable>()
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -108,6 +67,8 @@ final class MonitorSettings: ObservableObject {
         }
 
         launchAtLogin = SMAppService.mainApp.status == .enabled
+
+        setupBindings()
     }
 
     func isVisible(_ kind: MonitorKind) -> Bool {
@@ -122,9 +83,77 @@ final class MonitorSettings: ObservableObject {
         }
     }
 
-    private func updateLaunchAtLogin() {
+    private func setupBindings() {
+        $launchAtLogin
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persistLaunchAtLogin(newValue)
+            }
+            .store(in: &cancellables)
+
+        $themePreference
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.themePreference)
+            }
+            .store(in: &cancellables)
+
+        $showBuiltInDisplays
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showBuiltInDisplays)
+            }
+            .store(in: &cancellables)
+
+        $displayModuleVisible
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.displayModuleVisible)
+            }
+            .store(in: &cancellables)
+
+        $displayBrightnessControlEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.displayBrightnessControlEnabled)
+            }
+            .store(in: &cancellables)
+
+        $displayVolumeControlEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.displayVolumeControlEnabled)
+            }
+            .store(in: &cancellables)
+
+        $displayContrastControlEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.displayContrastControlEnabled)
+            }
+            .store(in: &cancellables)
+
+        $visibleKinds
+            .dropFirst()
+            .sink { [weak self] newValue in
+                let values = newValue.map(\.rawValue)
+                self?.persist(values, forKey: Keys.visibleKinds)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func persist<T>(_ value: T, forKey key: String) {
+        defaults.set(value, forKey: key)
+    }
+
+    private func persistLaunchAtLogin(_ newValue: Bool) {
+        guard !isUpdatingLaunchAtLogin else { return }
+        updateLaunchAtLogin(newValue)
+    }
+
+    private func updateLaunchAtLogin(_ newValue: Bool) {
         do {
-            if launchAtLogin {
+            if newValue {
                 if SMAppService.mainApp.status != .enabled {
                     try SMAppService.mainApp.register()
                 }

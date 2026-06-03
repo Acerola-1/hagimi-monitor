@@ -1,43 +1,37 @@
 import AppKit
 import SwiftUI
+import OSLog
 
 @MainActor
 enum SettingsWindowPresenter {
     private static weak var settingsWindow: NSWindow?
+    private static var pendingFocus = false
 
     static func open(_ openSettings: OpenSettingsAction) {
-        NSApp.activate(ignoringOtherApps: true)
-        openSettings()
-
-        focusRegisteredWindow()
-        focusRegisteredWindow(after: 0.1)
-        focusRegisteredWindow(after: 0.35)
-    }
-
-    static func register(_ window: NSWindow) {
-        settingsWindow = window
-        window.title = "HagimiMonitor 设置"
-        focus(window)
-    }
-
-    private static func focusRegisteredWindow() {
-        guard let settingsWindow else {
-            NSApp.activate(ignoringOtherApps: true)
+        AppLogger.settings.info("Opening settings window")
+        if let window = settingsWindow {
+            focus(window)
             return
         }
 
-        focus(settingsWindow)
+        pendingFocus = true
+        NSApp.activate(ignoringOtherApps: true)
+        openSettings()
     }
 
-    private static func focusRegisteredWindow(after delay: TimeInterval) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            Task { @MainActor in
-                focusRegisteredWindow()
-            }
+    static func register(_ window: NSWindow) {
+        AppLogger.settings.info("Registering settings window")
+        settingsWindow = window
+        window.title = "HagimiMonitor 设置"
+
+        if pendingFocus {
+            pendingFocus = false
+            focus(window)
         }
     }
 
     private static func focus(_ window: NSWindow) {
+        AppLogger.settings.debug("Focusing settings window")
         if window.isMiniaturized {
             window.deminiaturize(nil)
         }

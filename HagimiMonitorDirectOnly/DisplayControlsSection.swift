@@ -289,6 +289,7 @@ final class DisplayControlController: ObservableObject {
     func refreshAsync() {
         worker.refresh(service: service) { detectedDisplays in
             DispatchQueue.main.async {
+                AppLogger.ui.info("Display refresh completed, found \(detectedDisplays.count) displays")
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
                     self.seedFallbackValues(for: display)
@@ -312,9 +313,11 @@ final class DisplayControlController: ObservableObject {
     func setValueAsync(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) {
         let clampedValue = min(100, max(0, value))
         guard let display = displays.first(where: { $0.id == displayID }) else {
+            AppLogger.ui.error("Display not found for setValue: \(displayID)")
             return
         }
         guard display.supports(control) else {
+            AppLogger.ui.error("Display \(displayID) does not support control: \(control.storageKey, privacy: .public)")
             return
         }
 
@@ -350,8 +353,12 @@ final class DisplayControlController: ObservableObject {
         if result.success {
             updateLocalValue(result.value, for: result.key.control, displayID: result.key.displayID)
             fallbackValues[result.key.displayID, default: [:]][result.key.control] = result.value
-        } else if isCurrentResult {
-            markControlUnsupported(result.key.control, displayID: result.key.displayID)
+            AppLogger.ui.debug("Write succeeded for display \(result.key.displayID), control: \(result.key.control.storageKey, privacy: .public)")
+        } else {
+            AppLogger.ui.error("Write failed for display \(result.key.displayID), control: \(result.key.control.storageKey, privacy: .public)")
+            if isCurrentResult {
+                markControlUnsupported(result.key.control, displayID: result.key.displayID)
+            }
         }
 
         guard isCurrentResult else {
@@ -516,10 +523,12 @@ private final class DisplayControlService {
         var ids = [CGDirectDisplayID](repeating: 0, count: 16)
         var count: UInt32 = 0
         guard CGGetOnlineDisplayList(UInt32(ids.count), &ids, &count) == .success else {
+            AppLogger.ui.error("CGGetOnlineDisplayList failed")
             return []
         }
 
         let displayIDs = Array(ids.prefix(Int(count)))
+        AppLogger.ui.info("Detected \(displayIDs.count) online displays")
         ddc.refresh(displayIDs: displayIDs)
 
         return displayIDs.map { id in

@@ -10,10 +10,37 @@ import Testing
 
 struct HagimiMonitorTests {
 
-    @Test func example() async throws {
-        // Write your test here and use APIs like `#expect(...)` to check expected conditions.
-        // Swift Testing Documentation
-        // https://developer.apple.com/documentation/testing
+    @Test func monitorSeverityCalculation() {
+        #expect(MonitorSeverity.calm.title == "正常")
+        #expect(MonitorSeverity.warning.title == "接近阈值")
+        #expect(MonitorSeverity.critical.title == "需要注意")
     }
 
+    @Test func monitorKindIdentification() {
+        #expect(MonitorKind.cpu.title == "CPU")
+        #expect(MonitorKind.gpu.title == "GPU")
+        #expect(MonitorKind.memory.title == "内存")
+    }
+
+    @Test func monitorModuleSeverityForCPU() {
+        let module = MonitorModule(
+            kind: .cpu,
+            value: 90,
+            summary: "90%",
+            metrics: [],
+            samples: []
+        )
+        #expect(module.severity == .critical)
+    }
+
+    @Test func catDialogueEngineReturnsNonEmpty() {
+        let module = MonitorModule.placeholder(kind: .cpu)
+        let line = CatDialogueEngine.line(for: module, modules: [module])
+        #expect(!line.isEmpty)
+    }
+
+    @Test func monitorRefreshScheduleTickInterval() {
+        let schedule = MonitorRefreshSchedule()
+        #expect(schedule.tickInterval == 1.0)
+    }
 }

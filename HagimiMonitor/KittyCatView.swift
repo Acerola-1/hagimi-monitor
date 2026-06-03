@@ -294,13 +294,13 @@ struct KittyCatView: View {
     private var animationDuration: Double {
         switch module.kind {
         case .cpu where module.severity != .calm:
-            0.30
+            MonitorConstants.cpuAnimationDuration
         case .battery where module.severity != .calm:
-            2.20
+            MonitorConstants.batteryAnimationDuration
         case .gpu:
-            0.85
+            MonitorConstants.gpuAnimationDuration
         default:
-            1.65
+            MonitorConstants.defaultAnimationDuration
         }
     }
 }
