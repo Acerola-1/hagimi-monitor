@@ -12,7 +12,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
       - name: Build
         run: |
