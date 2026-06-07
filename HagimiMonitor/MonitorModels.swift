@@ -143,7 +143,7 @@ final class MonitorStore: ObservableObject {
     private let sampler = SystemMonitorSampler()
     private var cancellables: Set<AnyCancellable> = []
     private var menuBarTargetComputeLoad = 0.0
-    private var lastMenuBarTargetUpdateDate = Date.distantPast
+    private var framesSinceLastMenuBarTargetUpdate = MonitorConstants.menuBarLoadUpdateFrameInterval
 
     init() {
         let settings = MonitorSettings()
@@ -224,19 +224,20 @@ final class MonitorStore: ObservableObject {
 
     private func advanceAnimation() {
         menuBarFrame = (menuBarFrame + 1) % 48
-        updateMenuBarTargetComputeLoadIfNeeded(at: Date())
+        updateMenuBarTargetComputeLoadIfNeeded()
         displayedComputeLoad = ComputeLoadModel.smoothedDisplayValue(
             current: displayedComputeLoad,
             target: menuBarTargetComputeLoad
         )
     }
 
-    private func updateMenuBarTargetComputeLoadIfNeeded(at date: Date) {
-        guard date.timeIntervalSince(lastMenuBarTargetUpdateDate) >= MonitorConstants.menuBarLoadUpdateInterval else {
+    private func updateMenuBarTargetComputeLoadIfNeeded() {
+        framesSinceLastMenuBarTargetUpdate += 1
+        guard framesSinceLastMenuBarTargetUpdate >= MonitorConstants.menuBarLoadUpdateFrameInterval else {
             return
         }
 
-        lastMenuBarTargetUpdateDate = date
+        framesSinceLastMenuBarTargetUpdate = 0
         let currentLoad = combinedComputeLoad
         guard ComputeLoadModel.shouldUpdateMenuBarTarget(
             currentTarget: menuBarTargetComputeLoad,
@@ -277,7 +278,11 @@ enum ComputeLoadModel {
         return cpu * 0.6 + gpu * 0.4
     }
 
-    static func smoothedDisplayValue(current: Double, target: Double, maxStep: Double = 1.25) -> Double {
+    static func smoothedDisplayValue(
+        current: Double,
+        target: Double,
+        maxStep: Double = MonitorConstants.menuBarLoadSmoothStep
+    ) -> Double {
         let clampedCurrent = min(100, max(0, current))
         let clampedTarget = min(100, max(0, target))
         let delta = clampedTarget - clampedCurrent

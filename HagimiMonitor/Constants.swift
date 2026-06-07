@@ -11,7 +11,9 @@ enum MonitorConstants {
     // MARK: Animation
     static let animationInterval = 0.125
     static let menuBarLoadUpdateInterval: TimeInterval = 3
+    static let menuBarLoadUpdateFrameInterval = 24
     static let menuBarLoadChangeThreshold = 5.0
+    static let menuBarLoadSmoothStep = 1.25
 
     // MARK: Panel Dimensions
     static let panelWidth = 320.0
