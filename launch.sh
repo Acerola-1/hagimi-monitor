@@ -28,7 +28,7 @@ case "$VERSION" in
     ;;
 esac
 
-mkdir -p "$BUILD_DIR"
+mkdir -p "$BUILD_DIR/$BRANCH"
 
 # 切换分支
 if [ "$BRANCH" != "$CURRENT" ]; then
@@ -38,9 +38,17 @@ fi
 
 # 构建
 echo "构建 $BRANCH 分支 ($SCHEME)..."
-xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
+BUILD_LOG="$BUILD_DIR/$BRANCH/xcodebuild.log"
+if xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
     CONFIGURATION_BUILD_DIR="$BUILD_DIR/$BRANCH" \
-    build 2>&1 | grep -E "(BUILD|error:)" | tail -5
+    -derivedDataPath "$BUILD_DIR/$BRANCH/DerivedData" \
+    build >"$BUILD_LOG" 2>&1; then
+    grep -E "\\*\\* BUILD SUCCEEDED \\*\\*" "$BUILD_LOG" | tail -1
+else
+    echo "构建失败，最近日志如下: $BUILD_LOG"
+    tail -80 "$BUILD_LOG"
+    exit 1
+fi
 
 # 启动
 APP_PATH="$BUILD_DIR/$BRANCH/$APP_NAME.app"

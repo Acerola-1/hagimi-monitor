@@ -192,6 +192,12 @@ final class MonitorStore: ObservableObject {
         CatDialogueEngine.line(for: catModule, modules: allModules)
     }
 
+    var combinedComputeLoad: Double {
+        let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
+        let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
+        return ComputeLoadModel.combined(cpuValue: cpuValue, gpuValue: gpuValue)
+    }
+
     private func advance() {
         let kinds = refreshSchedule.dueKinds(at: Date())
         guard !kinds.isEmpty else {
@@ -214,12 +220,7 @@ final class MonitorStore: ObservableObject {
     }
 
     private func advanceAnimation() {
-        let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
-        let stride = cpuValue >= 75 ? 2 : 1
-        if cpuValue >= 8 {
-            menuBarFrame = (menuBarFrame + stride) % 5
-            AppLogger.ui.debug("Animation frame advanced to \(self.menuBarFrame), stride: \(stride)")
-        }
+        menuBarFrame = (menuBarFrame + 1) % 24
     }
 
     private func catPriority(_ module: MonitorModule) -> Double {
@@ -241,6 +242,14 @@ final class MonitorStore: ObservableObject {
 
     private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
         modules.filter { settings.isVisible($0.kind) }
+    }
+}
+
+enum ComputeLoadModel {
+    static func combined(cpuValue: Double, gpuValue: Double) -> Double {
+        let cpu = min(100, max(0, cpuValue))
+        let gpu = min(100, max(0, gpuValue))
+        return cpu * 0.6 + gpu * 0.4
     }
 }
 

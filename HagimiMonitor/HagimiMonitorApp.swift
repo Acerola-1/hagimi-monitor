@@ -17,10 +17,14 @@ struct HagimiMonitorApp: App {
             MonitorPanelView(store: monitorStore)
                 .preferredColorScheme(effectiveColorScheme)
         } label: {
-            Image(nsImage: MenuBarCatIcon.image(for: monitorStore.catModule, frame: monitorStore.menuBarFrame, darkMode: colorScheme == .dark))
-                .resizable()
-                .frame(width: 28, height: 18)
-                .help("HagimiMonitor")
+            Image(nsImage: MenuBarComputeRingIcon.image(
+                load: monitorStore.combinedComputeLoad,
+                frame: monitorStore.menuBarFrame,
+                darkMode: colorScheme == .dark
+            ))
+            .resizable()
+            .frame(width: 18, height: 18)
+            .help("HagimiMonitor")
         }
         .menuBarExtraStyle(.window)
 

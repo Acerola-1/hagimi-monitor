@@ -39,6 +39,11 @@ struct HagimiMonitorTests {
         #expect(!line.isEmpty)
     }
 
+    @Test func computeLoadCombinesCPUAndGPU() {
+        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25) == 40)
+        #expect(ComputeLoadModel.combined(cpuValue: 140, gpuValue: -20) == 60)
+    }
+
     @Test func monitorRefreshScheduleTickInterval() {
         let schedule = MonitorRefreshSchedule()
         #expect(schedule.tickInterval == 1.0)

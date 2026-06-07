@@ -1,6 +1,7 @@
 import AppKit
 import Combine
 import CoreGraphics
+import OSLog
 import SwiftUI
 
 struct DisplayControlsSection: View {
