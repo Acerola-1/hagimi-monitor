@@ -4,11 +4,17 @@ import OSLog
 
 @MainActor
 enum SettingsWindowPresenter {
+    static let selectedTabDefaultsKey = "settings.selectedTab"
+
     private static weak var settingsWindow: NSWindow?
     private static var pendingFocus = false
 
-    static func open(_ openSettings: OpenSettingsAction) {
+    static func open(_ openSettings: OpenSettingsAction, tab: SettingsTab? = nil) {
         AppLogger.settings.info("Opening settings window")
+        if let tab {
+            UserDefaults.standard.set(tab.rawValue, forKey: selectedTabDefaultsKey)
+        }
+
         if let window = settingsWindow {
             focus(window)
             return

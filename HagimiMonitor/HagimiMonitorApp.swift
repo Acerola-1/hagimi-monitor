@@ -56,10 +56,12 @@ struct HagimiMonitorApp: App {
 // MARK: - Menu Commands
 
 struct AppMenuCommands: Commands {
+    @Environment(\.openSettings) private var openSettings
+
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
             Button("关于 HagimiMonitor") {
-                NSApp.orderFrontStandardAboutPanel(nil)
+                SettingsWindowPresenter.open(openSettings, tab: .about)
             }
 
             Divider()
