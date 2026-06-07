@@ -134,6 +134,7 @@ final class MonitorStore: ObservableObject {
     @Published private(set) var modules: [MonitorModule]
     @Published var selectedKind: MonitorKind = .cpu
     @Published private(set) var menuBarFrame = 0
+    @Published private(set) var displayedComputeLoad = 0.0
 
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
@@ -141,6 +142,8 @@ final class MonitorStore: ObservableObject {
     private var animationTimerCancellable: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private var cancellables: Set<AnyCancellable> = []
+    private var menuBarTargetComputeLoad = 0.0
+    private var lastMenuBarTargetUpdateDate = Date.distantPast
 
     init() {
         let settings = MonitorSettings()
@@ -220,7 +223,29 @@ final class MonitorStore: ObservableObject {
     }
 
     private func advanceAnimation() {
-        menuBarFrame = (menuBarFrame + 1) % 24
+        menuBarFrame = (menuBarFrame + 1) % 48
+        updateMenuBarTargetComputeLoadIfNeeded(at: Date())
+        displayedComputeLoad = ComputeLoadModel.smoothedDisplayValue(
+            current: displayedComputeLoad,
+            target: menuBarTargetComputeLoad
+        )
+    }
+
+    private func updateMenuBarTargetComputeLoadIfNeeded(at date: Date) {
+        guard date.timeIntervalSince(lastMenuBarTargetUpdateDate) >= MonitorConstants.menuBarLoadUpdateInterval else {
+            return
+        }
+
+        lastMenuBarTargetUpdateDate = date
+        let currentLoad = combinedComputeLoad
+        guard ComputeLoadModel.shouldUpdateMenuBarTarget(
+            currentTarget: menuBarTargetComputeLoad,
+            nextTarget: currentLoad
+        ) else {
+            return
+        }
+
+        menuBarTargetComputeLoad = currentLoad
     }
 
     private func catPriority(_ module: MonitorModule) -> Double {
@@ -250,6 +275,26 @@ enum ComputeLoadModel {
         let cpu = min(100, max(0, cpuValue))
         let gpu = min(100, max(0, gpuValue))
         return cpu * 0.6 + gpu * 0.4
+    }
+
+    static func smoothedDisplayValue(current: Double, target: Double, maxStep: Double = 1.25) -> Double {
+        let clampedCurrent = min(100, max(0, current))
+        let clampedTarget = min(100, max(0, target))
+        let delta = clampedTarget - clampedCurrent
+
+        if abs(delta) <= maxStep {
+            return clampedTarget
+        }
+
+        return clampedCurrent + (delta > 0 ? maxStep : -maxStep)
+    }
+
+    static func shouldUpdateMenuBarTarget(
+        currentTarget: Double,
+        nextTarget: Double,
+        threshold: Double = MonitorConstants.menuBarLoadChangeThreshold
+    ) -> Bool {
+        abs(min(100, max(0, nextTarget)) - min(100, max(0, currentTarget))) >= threshold
     }
 }
 

@@ -9,7 +9,9 @@ enum MonitorConstants {
     static let batteryWarningThreshold = 25.0
 
     // MARK: Animation
-    static let animationInterval = 0.25
+    static let animationInterval = 0.125
+    static let menuBarLoadUpdateInterval: TimeInterval = 3
+    static let menuBarLoadChangeThreshold = 5.0
 
     // MARK: Panel Dimensions
     static let panelWidth = 320.0

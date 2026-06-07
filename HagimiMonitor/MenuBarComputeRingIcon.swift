@@ -84,7 +84,7 @@ private struct MenuBarComputeRingImageStyle {
     }
 
     private var linearPulse: Double {
-        let phase = Double(frame % 24) / 24
+        let phase = Double(frame % 48) / 48
         return phase < 0.5 ? phase * 2 : (1 - phase) * 2
     }
 
@@ -93,39 +93,21 @@ private struct MenuBarComputeRingImageStyle {
     }
 
     var tint: NSColor {
-        if darkMode {
-            switch load {
-            case ..<45:
-                return NSColor(red: 0.34, green: 0.86, blue: 0.66, alpha: 1)
-            case ..<75:
-                return NSColor(red: 1.00, green: 0.72, blue: 0.34, alpha: 1)
-            default:
-                return NSColor(red: 1.00, green: 0.38, blue: 0.34, alpha: 1)
-            }
-        } else {
-            switch load {
-            case ..<45:
-                return NSColor(red: 0.08, green: 0.50, blue: 0.34, alpha: 1)
-            case ..<75:
-                return NSColor(red: 0.76, green: 0.43, blue: 0.08, alpha: 1)
-            default:
-                return NSColor(red: 0.72, green: 0.14, blue: 0.12, alpha: 1)
-            }
-        }
+        let alpha = 0.72 + normalizedLoad * 0.24
+        return ink.withAlphaComponent(alpha)
     }
 
     var trackColor: NSColor {
-        darkMode
-            ? NSColor.white.withAlphaComponent(0.28)
-            : NSColor.black.withAlphaComponent(0.20)
+        ink.withAlphaComponent(darkMode ? 0.28 : 0.22)
     }
 
     var glowColor: NSColor {
-        tint.withAlphaComponent((darkMode ? 0.18 : 0.10) + normalizedLoad * 0.18 + linearPulse * normalizedLoad * 0.08)
+        ink.withAlphaComponent((darkMode ? 0.16 : 0.08) + normalizedLoad * 0.14 + linearPulse * normalizedLoad * 0.06)
     }
 
     var coreColor: NSColor {
-        tint.withAlphaComponent((darkMode ? 0.58 : 0.68) + normalizedLoad * 0.18 + linearPulse * 0.05)
+        loadLevel.coreColor(darkMode: darkMode)
+            .withAlphaComponent((darkMode ? 0.68 : 0.82) + normalizedLoad * 0.12 + linearPulse * 0.04)
     }
 
     var lineWidth: CGFloat {
@@ -146,5 +128,50 @@ private struct MenuBarComputeRingImageStyle {
 
     var trackWidth: CGFloat {
         darkMode ? 1.45 : 1.35
+    }
+
+    private var ink: NSColor {
+        darkMode ? .white : .black
+    }
+
+    private var loadLevel: MenuBarComputeLoadLevel {
+        switch load {
+        case ..<35:
+            return .idle
+        case ..<65:
+            return .working
+        case ..<85:
+            return .busy
+        default:
+            return .stressed
+        }
+    }
+}
+
+private enum MenuBarComputeLoadLevel {
+    case idle
+    case working
+    case busy
+    case stressed
+
+    func coreColor(darkMode: Bool) -> NSColor {
+        switch self {
+        case .idle:
+            return darkMode
+                ? NSColor.white.withAlphaComponent(0.72)
+                : NSColor.black.withAlphaComponent(0.62)
+        case .working:
+            return darkMode
+                ? NSColor(red: 0.32, green: 0.88, blue: 0.72, alpha: 1)
+                : NSColor(red: 0.00, green: 0.55, blue: 0.42, alpha: 1)
+        case .busy:
+            return darkMode
+                ? NSColor(red: 1.00, green: 0.74, blue: 0.32, alpha: 1)
+                : NSColor(red: 0.80, green: 0.44, blue: 0.06, alpha: 1)
+        case .stressed:
+            return darkMode
+                ? NSColor(red: 1.00, green: 0.38, blue: 0.34, alpha: 1)
+                : NSColor(red: 0.78, green: 0.12, blue: 0.10, alpha: 1)
+        }
     }
 }

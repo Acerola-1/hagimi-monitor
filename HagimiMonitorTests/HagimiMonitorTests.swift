@@ -44,6 +44,18 @@ struct HagimiMonitorTests {
         #expect(ComputeLoadModel.combined(cpuValue: 140, gpuValue: -20) == 60)
     }
 
+    @Test func computeLoadDisplayValueMovesTowardTarget() {
+        #expect(ComputeLoadModel.smoothedDisplayValue(current: 10, target: 50) == 11.25)
+        #expect(ComputeLoadModel.smoothedDisplayValue(current: 50, target: 10) == 48.75)
+        #expect(ComputeLoadModel.smoothedDisplayValue(current: 49, target: 50) == 50)
+    }
+
+    @Test func menuBarTargetIgnoresSmallComputeLoadChanges() {
+        #expect(!ComputeLoadModel.shouldUpdateMenuBarTarget(currentTarget: 30, nextTarget: 34.9))
+        #expect(ComputeLoadModel.shouldUpdateMenuBarTarget(currentTarget: 30, nextTarget: 35))
+        #expect(ComputeLoadModel.shouldUpdateMenuBarTarget(currentTarget: 35, nextTarget: 30))
+    }
+
     @Test func monitorRefreshScheduleTickInterval() {
         let schedule = MonitorRefreshSchedule()
         #expect(schedule.tickInterval == 1.0)

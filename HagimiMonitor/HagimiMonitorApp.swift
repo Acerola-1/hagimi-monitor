@@ -18,7 +18,7 @@ struct HagimiMonitorApp: App {
                 .preferredColorScheme(effectiveColorScheme)
         } label: {
             Image(nsImage: MenuBarComputeRingIcon.image(
-                load: monitorStore.combinedComputeLoad,
+                load: monitorStore.displayedComputeLoad,
                 frame: monitorStore.menuBarFrame,
                 darkMode: colorScheme == .dark
             ))
