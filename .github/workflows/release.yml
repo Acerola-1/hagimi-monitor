@@ -1,0 +1,45 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.app/Contents/Developer
+
+      - name: Build
+        run: |
+          xcodebuild -project hagimi-monitor.xcodeproj \
+            -scheme HagimiMonitor \
+            -configuration Release \
+            -arch arm64 \
+            -archivePath build/HagimiMonitor.xcarchive \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            archive
+
+      - name: Package .dmg
+        run: |
+          mkdir -p dmg-temp
+          cp -R build/HagimiMonitor.xcarchive/Products/Applications/HagimiMonitor.app dmg-temp/
+          ln -s /Applications dmg-temp/Applications
+          hdiutil create -volname HagimiMonitor \
+            -srcfolder dmg-temp \
+            -ov -format UDZO \
+            build/HagimiMonitor.dmg
+
+      - name: Create Release & Upload
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/HagimiMonitor.dmg
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

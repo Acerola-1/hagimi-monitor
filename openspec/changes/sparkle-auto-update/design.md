@@ -1,93 +1,122 @@
 ## Context
 
-HagimiMonitor 是一个 macOS 26+ 菜单栏系统监控应用，使用 SwiftUI 构建，当前无任何第三方依赖。项目有两个 build target：
-- **HagimiMonitor**（沙盒，`ENABLE_APP_SANDBOX = YES`，Bundle ID: `com.acerola.hagimi-monitor`）
-- **HagimiMonitorDirect**（非沙盒，Bundle ID: `com.acerola.hagimi-monitor.direct`）
+HagimiMonitor 是 macOS 26+ Apple Silicon 菜单栏应用，目前没有更新检查能力。当前仓库没有第三方依赖，也没有完整 Developer ID 签名、公证、Sparkle appcast 和 CI 发布配置。
 
-当前没有任何更新机制，SettingsView 中版本号硬编码为 `"版本 1.0.0"`。项目无 entitlements 文件，无 Info.plist 文件（自动生成），无 SPM/CocoaPods 依赖。
+完整自动更新的真实链路如下：
+
+```
+Sparkle 自动更新
+  ├─ Sparkle SPM/framework
+  ├─ EdDSA 更新签名私钥
+  ├─ appcast.xml
+  ├─ Developer ID 签名
+  ├─ Apple notarization
+  ├─ 沙盒 XPC helper entitlement
+  └─ 端到端安装重启验证
+```
+
+这些适合正式分发阶段，但当前目标是先让用户知道有新版本，并能去下载。
 
 ## Goals / Non-Goals
 
 **Goals:**
-- 用户可在应用内一键检查更新、下载、安装并自动重启到新版本
-- 通过 GitHub Release 分发更新，appcast.xml 作为 Sparkle 的更新源
-- 沙盒 target 完整支持（通过 Sparkle XPC 辅助进程替换 app bundle）
-- GitHub Actions 自动化：tag push → build → sign → notarize → generate_appcast → create release
-- 遵循项目现有代码风格（@Observable、4 空格缩进、Swift API Design Guidelines）
+
+- 用户可在应用内手动检查 GitHub 上是否有新版本
+- 有新版本时展示版本号、发布时间和下载入口
+- 下载和安装由用户手动完成
+- 不引入 Sparkle，不要求 EdDSA 私钥
+- 不要求 Developer ID 证书、公证或自动发布 CI
+- 保持 App Sandbox 开启，仅增加必要网络权限
 
 **Non-Goals:**
-- 不做增量更新（delta updates），初版只用全量 zip
-- 不做更新频道（beta/nightly），初版只用 stable channel
-- 不做 Mac App Store 分发（App Store 有自己的更新机制）
-- 不做后台自动下载安装（初版只做用户手动触发检查）
-- 不处理 Direct target 的更新（先只做沙盒 target，验证通过后再扩展）
+
+- 不自动下载并替换 app bundle
+- 不自动重启应用
+- 不生成 appcast.xml
+- 不签名更新包
+- 不处理差分更新、更新频道、后台自动检查
 
 ## Decisions
 
-### 1. 选择 Sparkle 2.x 而非自定义实现
+### 1. 使用 GitHub Releases latest API
 
-**选择**: Sparkle 2.9.x（SPM 集成）
+**选择**: 请求 `https://api.github.com/repos/acerola/hagimi-monitor/releases/latest`
 
-**理由**: 
-- 沙盒应用无法写入 `/Applications/`，自定义实现只能提示用户手动下载
-- Sparkle 通过 XPC 辅助进程突破沙盒限制，实现真正的自动安装重启
-- 业界标准（Ghostty、Boring Notch、DockDoor、Maccy 等均使用）
-- 支持 EdDSA 签名验证、原子替换 app bundle、launchd 自动重启
+**理由**:
+
+- 不需要额外服务器
+- GitHub Release 已经是当前分发入口
+- JSON 响应包含 `tag_name`、`html_url`、`assets`、`published_at`、release notes
+- 可以先做到“提示 + 下载”，不承担安装安全链路
 
 **替代方案**:
-- AutoUpdate (TopScrech): 直接调 GitHub API，不需 appcast，但生态不成熟，无沙盒 XPC
-- 自定义 GitHub API + 手动下载: 沙盒内无法替换 app，体验差
-- Apple Mac App Store: 不在本次范围内
 
-### 2. appcast.xml 托管在 GitHub Release asset
+- Sparkle: 体验更完整，但当前缺少私钥、签名、公证和 CI 条件
+- GitHub raw/version 文件: 简单但需要额外维护版本文件
+- GitHub Pages: 对当前目标过重
 
-**选择**: 创建专用 "appcast" release，将 appcast.xml 作为 asset 上传
+### 2. 手动下载，不自动安装
 
-**理由**:
-- 无需额外服务器或 GitHub Pages
-- 一条 `gh release upload appcast appcast.xml --clobber` 即可更新
-- URL 格式: `https://github.com/acerola/hagimi-monitor/releases/download/appcast/appcast.xml`
-
-**替代方案**:
-- GitHub Pages 托管: 需要额外分支/Actions 部署，增加复杂度
-- repo 内文件 + raw.githubusercontent.com: 受 CDN 缓存影响，更新不及时
-
-### 3. UpdaterBridge 使用 @Observable 模式
-
-**选择**: 使用 Swift Observation 框架的 `@Observable` 宏
+**选择**: 打开 release 页面或首个匹配的 `.dmg`/`.zip` asset 链接。
 
 **理由**:
-- 项目 target 是 macOS 26+，完全支持 @Observable
-- 比 ObservableObject 更轻量，与 SwiftUI 的 @Environment 集成更自然
-- 参考 TablePro 的 UpdaterBridge 模式，已在生产环境验证
 
-**替代方案**:
-- ObservableObject + @Published: 旧模式，功能等价但更冗余
-- 直接暴露 SPUStandardUpdaterController: 违反封装原则
+- 沙盒应用不需要写入 `/Applications`
+- 不需要 XPC helper
+- 不需要替换正在运行的 app bundle
+- 失败模式清晰：用户只是去浏览器下载
 
-### 4. 先在沙盒 target 实现
+```
+Settings About
+      │
+      ▼
+检查更新
+      │
+      ▼
+GitHub latest release
+      │
+      ├── 当前已是最新版
+      │
+      ├── 有新版本 ──► 下载更新 ──► 浏览器打开 GitHub Release/asset
+      │
+      └── 请求失败 ──► 显示错误状态
+```
 
-**选择**: 仅在 HagimiMonitor（沙盒）target 上实现 Sparkle
+### 3. 版本比较以 SemVer 为主，容忍 `v` 前缀
+
+**选择**: 将 release `tag_name` 中的 `v` 前缀去掉后，与 `CFBundleShortVersionString` 做数字段比较。
 
 **理由**:
-- 沙盒 target 是主要分发版本，更新需求更迫切
-- 沙盒配置更复杂（需要 XPC entitlements），验证通过后 Direct target 只是子集
-- Direct target 以后只需去掉 XPC 配置即可
 
-### 5. 签名顺序：由内到外，不用 --deep
+- 常见 tag 格式是 `v1.2.3`
+- Bundle 版本通常是 `1.2.3`
+- 字符串比较会把 `1.10.0` 错判为小于 `1.9.0`
 
-**选择**: XPC Services → Helper Tools → Framework → App，严格按顺序签名
+初版只需要支持稳定版本号，例如：
+
+- `1.0.0`
+- `v1.0.0`
+- `1.2`
+- `v1.2.3`
+
+预发布 tag 如 `v1.2.0-beta.1` 初版可忽略，除非 GitHub latest 返回它。
+
+### 4. About 页面承载更新入口
+
+**选择**: 先只在 Settings → About 添加检查更新，不改 App 菜单。
 
 **理由**:
-- `codesign --deep` 会破坏 XPC Services 的 entitlement，导致沙盒更新失败
-- Peter Steinberger 的实战经验验证了这一点
-- Sparkle 官方文档明确禁止使用 --deep
+
+- About 页面已有版本信息，语义最自然
+- 不需要引入全局 command 状态
+- 降低首版实现范围
+
+未来如果用户需要，也可以把同一个服务注入到 App menu。
 
 ## Risks / Trade-offs
 
-- **[风险] Apple 证书配置复杂** → 缓解: GitHub Actions 中使用 base64 编码的 P12 证书 + notarytool API key，参考 boring.notch 的 workflow
-- **[风险] 签名顺序错误导致沙盒更新失败** → 缓解: CI 中签名脚本严格按顺序执行，添加 `codesign --verify` 验证步骤
-- **[风险] EdDSA 私钥泄露** → 缓解: 私钥存 GitHub Secrets，CI 中通过 stdin 传入，不写入磁盘
-- **[风险] appcast.xml 更新延迟** → 缓解: 使用 GitHub Release asset 托管，CDN 缓存时间短（~5min）
-- **[权衡] 引入 Sparkle 作为首个第三方依赖** → 项目迟早需要更新机制，Sparkle 是最小必要依赖
-- **[权衡] 初版不做自动下载** → 减少复杂度，用户手动检查更新即可，后续可启用 `automaticallyChecksForUpdates`
+- **[权衡] 不是自动更新**: 用户仍需手动安装，但当前没有签名/公证条件，这是合理边界
+- **[风险] GitHub API 网络失败或限流**: 手动触发频率低，直接显示失败状态即可
+- **[风险] release asset 命名不稳定**: 优先打开 `html_url` 最稳；如果直接下载 asset，需要约定 `.dmg`/`.zip` 命名
+- **[风险] 未签名/未公证下载包会被 Gatekeeper 拦截**: 本变更不解决分发可信问题，只提供发现和下载入口
+- **[后续] 正式自动更新**: 等 Developer ID、公证、Sparkle EdDSA key 和 CI secrets 准备好后，另起 Sparkle 变更

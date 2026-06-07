@@ -1,57 +1,43 @@
-## 1. Sparkle SPM 集成与项目配置
+## 1. 变更范围收窄
 
-- [ ] 1.1 在 Xcode 项目中添加 Sparkle 2.x SPM 依赖（package URL: `https://github.com/sparkle-project/Sparkle`），仅链接到 HagimiMonitor target
-- [ ] 1.2 使用 Sparkle 的 `generate_keys` 工具生成 EdDSA 密钥对，导出公钥备用
-- [ ] 1.3 在 HagimiMonitor target 的 Info.plist 中添加 `SUFeedURL`（指向 `https://github.com/acerola/hagimi-monitor/releases/download/appcast/appcast.xml`）、`SUPublicEDKey`（EdDSA 公钥）、`SUEnableInstallerLauncherService`（true）
+- [ ] 1.1 确认本变更不集成 Sparkle、不生成 appcast、不做自动安装
+- [ ] 1.2 确认更新入口只负责检查 GitHub Release 并打开下载页面
 
-## 2. Entitlements 配置
+## 2. 沙盒网络权限
 
-- [ ] 2.1 为 HagimiMonitor（沙盒）target 创建 entitlements 文件 `HagimiMonitor/HagimiMonitor.entitlements`
-- [ ] 2.2 在 entitlements 中添加 `com.apple.security.app-sandbox`（true）、`com.apple.security.network.client`（true）
-- [ ] 2.3 在 entitlements 中添加 `com.apple.security.temporary-exception.mach-lookup.global-name` 数组，包含 `$(PRODUCT_BUNDLE_IDENTIFIER)-spks` 和 `$(PRODUCT_BUNDLE_IDENTIFIER)-spki`
-- [ ] 2.4 在 Xcode project build settings 中将 `CODE_SIGN_ENTITLEMENTS` 指向新创建的 entitlements 文件
-- [ ] 2.5 构建验证：沙盒 target 编译通过，entitlements 正确嵌入
+- [ ] 2.1 为 HagimiMonitor target 创建或更新 entitlements 文件
+- [ ] 2.2 保持 `com.apple.security.app-sandbox` 为 true
+- [ ] 2.3 添加 `com.apple.security.network.client` 为 true
+- [ ] 2.4 在 Xcode project build settings 中配置 `CODE_SIGN_ENTITLEMENTS`
 
-## 3. UpdaterBridge 实现
+## 3. 版本显示
 
-- [ ] 3.1 创建 `HagimiMonitor/UpdaterBridge.swift`，实现 `@Observable @MainActor final class UpdaterBridge`
-- [ ] 3.2 在 UpdaterBridge 中创建 `SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)`
-- [ ] 3.3 通过 KVO 观察 `controller.updater.canCheckForUpdates`，同步到 `canCheckForUpdates` 属性
-- [ ] 3.4 实现 `checkForUpdates()` 方法，调用 `controller.updater.checkForUpdates()`
-- [ ] 3.5 编译验证：UpdaterBridge 可被正确实例化
+- [ ] 3.1 将 About 页面硬编码的 `Text("版本 1.0.0")` 改为读取 `CFBundleShortVersionString`
+- [ ] 3.2 当 Bundle 版本为空时显示 `版本 未知`
+- [ ] 3.3 如有 build number，可选择在调试信息中读取 `CFBundleVersion`，但不作为首版 UI 必需项
 
-## 4. App 入口集成
+## 4. GitHub Release 更新检查服务
 
-- [ ] 4.1 在 `HagimiMonitorApp.swift` 中添加 `@StateObject private var updaterBridge = UpdaterBridge()`
-- [ ] 4.2 在 MenuBarExtra 的内容视图中注入 `.environment(updaterBridge)`
-- [ ] 4.3 修改 `AppMenuCommands` 接收 UpdaterBridge 参数，在 CommandGroup(after: .appInfo) 中添加 "检查更新…" 按钮
-- [ ] 4.4 编译验证：App 启动正常，菜单中出现 "检查更新…" 项
+- [ ] 4.1 新增轻量更新检查模型，表示 idle/checking/up-to-date/update-available/failed 状态
+- [ ] 4.2 新增 GitHub latest release 响应模型，解析 `tag_name`、`html_url`、`published_at`、`name`、`body`、`assets`
+- [ ] 4.3 实现更新检查服务，请求 `https://api.github.com/repos/acerola/hagimi-monitor/releases/latest`
+- [ ] 4.4 实现版本规范化，支持去除 `v` 前缀
+- [ ] 4.5 实现数字段版本比较，避免字符串比较误判
+- [ ] 4.6 选择下载 URL：优先使用匹配 `.dmg`/`.zip` 的 asset，否则回退到 release `html_url`
 
-## 5. Settings About 页面更新
+## 5. About 页面交互
 
-- [ ] 5.1 将 `SettingsView.swift` 第 249 行硬编码的 `Text("版本 1.0.0")` 改为读取 `Bundle.main.infoDictionary?["CFBundleShortVersionString"]`，nil 时显示 "版本 未知"
-- [ ] 5.2 在 About 页面添加 "检查更新" 按钮，通过 `@Environment(UpdaterBridge.self)` 调用 `checkForUpdates()`
-- [ ] 5.3 编译验证：Settings About 页面显示正确的 Bundle 版本号
+- [ ] 5.1 在 Settings → About 添加“检查更新”按钮
+- [ ] 5.2 检查中禁用按钮并显示进行中状态
+- [ ] 5.3 当前已是最新版时显示简洁状态
+- [ ] 5.4 有新版本时显示最新版本号和“下载更新”按钮
+- [ ] 5.5 点击“下载更新”使用系统浏览器打开下载 URL
+- [ ] 5.6 请求失败时显示可恢复错误状态，并允许用户再次检查
 
-## 6. appcast.xml 模板
+## 6. 测试与验证
 
-- [ ] 6.1 在项目根目录创建 `appcast.xml` 模板文件，包含 Sparkle RSS 格式骨架
-- [ ] 6.2 模板中设置 `sparkle:minimumSystemVersion` 为 `26.0`，`sparkle:hardwareRequirements` 为 `arm64`
-- [ ] 6.3 创建 `scripts/generate_appcast.sh` 辅助脚本，封装 `generate_appcast` 工具调用
-
-## 7. GitHub Actions Release Workflow
-
-- [ ] 7.1 创建 `.github/workflows/release.yml`，触发条件为 `push tags: v*`
-- [ ] 7.2 添加 Build 步骤：`xcodebuild archive` 构建 HagimiMonitor target
-- [ ] 7.3 添加 Code Sign 步骤：按 XPC → Helper Tools → Framework → App 顺序签名，不使用 `--deep`
-- [ ] 7.4 添加 Notarize 步骤：`xcrun notarytool submit` + `xcrun stapler staple`
-- [ ] 7.5 添加 Generate Appcast 步骤：下载 Sparkle 工具，用 `generate_appcast --ed-key-file -` 从 stdin 读取私钥签名
-- [ ] 7.6 添加 Create Release 步骤：`gh release create` 上传 app artifact + `gh release upload appcast appcast.xml --clobber`
-- [ ] 7.7 配置 GitHub Secrets: `APPLE_SIGNING_CERT_P12`、`APPLE_SIGNING_CERT_PASSWORD`、`NOTARY_API_KEY_PATH`、`NOTARY_API_KEY_ID`、`NOTARY_API_ISSUER`、`SPARKLE_EDDSA_PRIVATE_KEY`
-
-## 8. 端到端验证
-
-- [ ] 8.1 本地构建沙盒 target，验证 Sparkle 初始化成功，"检查更新…" 菜单项可点击
-- [ ] 8.2 手动创建测试 Release + appcast.xml，验证应用能检测到更新
-- [ ] 8.3 验证更新下载、安装、重启流程在沙盒环境下正常工作
-- [ ] 8.4 验证 Settings About 页面版本号显示正确
+- [ ] 6.1 为版本规范化和版本比较添加单元测试
+- [ ] 6.2 为 GitHub release 响应解析添加单元测试
+- [ ] 6.3 本地构建沙盒 target，验证 entitlements 正确嵌入
+- [ ] 6.4 手动验证 About 页面版本显示、检查更新、下载按钮打开 URL
+- [ ] 6.5 验证网络失败时 UI 不崩溃且可重试

@@ -1,35 +1,37 @@
 ## Why
 
-HagimiMonitor 当前没有自动更新机制，用户需要手动检查 GitHub Release 下载新版本。对于菜单栏常驻应用，用户往往不会主动关注版本更新，导致长期运行旧版本。需要实现应用内检测更新、下载、安装并重启的完整自动更新流程。
+HagimiMonitor 当前没有更新提示机制，用户需要主动打开 GitHub Release 页面确认是否有新版本。完整 Sparkle 自动更新需要 EdDSA 更新签名、Developer ID 签名、公证和更复杂的发布流水线；这些前置条件当前尚未准备好。
+
+本变更先实现轻量更新检查：应用内查询 GitHub Releases，发现新版本后引导用户手动下载并安装。该方案不自动替换 app bundle，不引入 Sparkle，也不要求 Apple Developer ID、公证或 Sparkle 私钥。
 
 ## What Changes
 
-- 集成 Sparkle 2.x 框架作为 SPM 依赖，实现 macOS 应用内自动更新
-- 在 App 入口（HagimiMonitorApp）初始化 SPUStandardUpdaterController
-- 创建 UpdaterBridge（@Observable）桥接 Sparkle 与 SwiftUI
-- 在菜单栏面板和 App 菜单中添加"检查更新"入口
-- 修复 SettingsView 中硬编码的版本号，改为读取 Bundle.main
-- 为沙盒 target 创建 entitlements 文件，添加 Sparkle XPC 所需的 mach-lookup 例外
-- 配置 Info.plist 中的 SUFeedURL、SUPublicEDKey、SUEnableInstallerLauncherService
-- 创建 appcast.xml 模板，下载 URL 指向 GitHub Release assets
-- 搭建 GitHub Actions workflow：build → sign → notarize → generate_appcast → create release
+- 在 About 页面显示真实 Bundle 版本号，替换硬编码版本文本
+- 增加“检查更新”入口，手动触发 GitHub Release 检查
+- 请求 GitHub latest release API，解析最新版本、发布时间、说明和下载地址
+- 将当前 `CFBundleShortVersionString` 与最新 release tag/version 比较
+- 有新版本时展示版本信息，并提供“下载更新”按钮
+- 下载按钮打开 GitHub Release 页面或 release asset 下载链接，由用户手动安装
+- 网络失败、无 release、版本解析失败时展示清晰状态
+- 为沙盒 target 增加 outbound network entitlement
 
 ## Capabilities
 
 ### New Capabilities
-- `sparkle-updater`: Sparkle 2 框架集成，包含 UpdaterBridge、SPUStandardUpdaterController 初始化、SwiftUI 环境注入、检查更新 UI 入口
-- `appcast-feed`: appcast.xml 生成与托管方案，GitHub Release 作为下载源，EdDSA 签名流程
-- `release-ci`: GitHub Actions 自动化发布 workflow，包含 Apple 代码签名、公证、appcast 生成与上传
-- `sandbox-entitlements`: 沙盒 target 的 entitlements 配置，包含 Sparkle XPC mach-lookup 例外和网络访问权限
+
+- `github-release-update-check`: 从 GitHub Releases 检查最新版本，比较当前版本，并展示可下载更新
+- `manual-update-download`: 打开 GitHub Release 页面或下载链接，由用户自行下载并安装
+- `update-network-entitlement`: 为沙盒 target 配置网络访问权限
 
 ### Modified Capabilities
-<!-- 无现有 specs，无需修改 -->
+
+- `settings-about`: About 页面读取 Bundle 版本号，并提供更新检查入口
 
 ## Impact
 
-- **新增依赖**: Sparkle 2.x（SPM），项目首个第三方依赖
-- **修改文件**: HagimiMonitorApp.swift（注入 updater）、SettingsView.swift（修复硬编码版本号）、AppMenuCommands（添加检查更新菜单项）
-- **新增文件**: UpdaterBridge.swift、entitlements 文件（沙盒 target）、appcast.xml、GitHub Actions workflow
-- **构建配置**: Xcode project 需添加 Sparkle SPM、Info.plist 需添加 Sparkle 相关 key、entitlements 需添加 XPC 例外
-- **两个 target**: HagimiMonitor（沙盒）需完整 XPC 配置；HagimiMonitorDirect（非沙盒）配置更简单
-- **CI/CD**: 需要 Apple Developer ID 证书和 notarytool API 密钥配置到 GitHub Secrets
+- **不新增第三方依赖**: 不使用 Sparkle
+- **不需要发布私钥**: 不需要 Sparkle EdDSA key
+- **不需要 Apple 公证链路**: 本变更不负责自动安装和 app bundle 替换
+- **修改文件**: `SettingsView.swift`、可能新增 `UpdateChecker`/`UpdateModels` 等轻量服务
+- **构建配置**: HagimiMonitor 沙盒 target 需要 `com.apple.security.network.client = true`
+- **后续升级路径**: 未来准备好 Developer ID、公证和 CI secrets 后，可新建 Sparkle 自动更新变更
