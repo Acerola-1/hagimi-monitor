@@ -25,7 +25,7 @@
 
 /* Begin PBXFileReference section */
 		2E0C71892FB19C2D00908371 /* HagimiMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		2E0C71B52FB1A10000908371 /* HagimiMonitorDirect.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitorDirect.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E0C71B52FB1A10000908371 /* HagimiMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E0C71982FB19C2E00908371 /* HagimiMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HagimiMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E0C71A22FB19C2E00908371 /* HagimiMonitorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HagimiMonitorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -100,7 +100,7 @@
 			isa = PBXGroup;
 			children = (
 				2E0C71892FB19C2D00908371 /* HagimiMonitor.app */,
-				2E0C71B52FB1A10000908371 /* HagimiMonitorDirect.app */,
+				2E0C71B52FB1A10000908371 /* HagimiMonitor.app */,
 				2E0C71982FB19C2E00908371 /* HagimiMonitorTests.xctest */,
 				2E0C71A22FB19C2E00908371 /* HagimiMonitorUITests.xctest */,
 			);
@@ -151,8 +151,8 @@
 			name = HagimiMonitorDirect;
 			packageProductDependencies = (
 			);
-			productName = HagimiMonitorDirect;
-			productReference = 2E0C71B52FB1A10000908371 /* HagimiMonitorDirect.app */;
+			productName = HagimiMonitor;
+			productReference = 2E0C71B52FB1A10000908371 /* HagimiMonitor.app */;
 			productType = "com.apple.product-type.application";
 		};
 		2E0C71972FB19C2E00908371 /* HagimiMonitorTests */ = {
@@ -524,6 +524,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -532,26 +534,26 @@
 				);
 				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = HagimiMonitor;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DIRECT_DISTRIBUTION DISPLAY_CONTROL";
-					SWIFT_OBJC_BRIDGING_HEADER = "HagimiMonitorDirectOnly/DisplayBridgingHeader.h";
-					FRAMEWORK_SEARCH_PATHS = (
-						"",
-						"/System/Library/PrivateFrameworks",
-					);
-					OTHER_LDFLAGS = (
-						"-framework",
-						CoreDisplay,
-						"-framework",
-						DisplayServices,
-					);
-					SWIFT_APPROACHABLE_CONCURRENCY = YES;
-					SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-					SWIFT_EMIT_LOC_STRINGS = YES;
-					SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-					SWIFT_VERSION = 5.0;
+				SWIFT_OBJC_BRIDGING_HEADER = "HagimiMonitorDirectOnly/DisplayBridgingHeader.h";
+				FRAMEWORK_SEARCH_PATHS = (
+					"",
+					"/System/Library/PrivateFrameworks",
+				);
+				OTHER_LDFLAGS = (
+					"-framework",
+					CoreDisplay,
+					"-framework",
+					DisplayServices,
+				);
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
 				};
 				name = Debug;
 			};
@@ -568,6 +570,8 @@
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -576,21 +580,21 @@
 				);
 				MARKETING_VERSION = 0.2.0;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = HagimiMonitor;
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DIRECT_DISTRIBUTION DISPLAY_CONTROL";
-					SWIFT_OBJC_BRIDGING_HEADER = "HagimiMonitorDirectOnly/DisplayBridgingHeader.h";
-					FRAMEWORK_SEARCH_PATHS = (
-						"",
-						"/System/Library/PrivateFrameworks",
-					);
-					OTHER_LDFLAGS = (
-						"-framework",
-						CoreDisplay,
-						"-framework",
-						DisplayServices,
-					);
+				SWIFT_OBJC_BRIDGING_HEADER = "HagimiMonitorDirectOnly/DisplayBridgingHeader.h";
+				FRAMEWORK_SEARCH_PATHS = (
+					"",
+					"/System/Library/PrivateFrameworks",
+				);
+				OTHER_LDFLAGS = (
+					"-framework",
+					CoreDisplay,
+					"-framework",
+					DisplayServices,
+				);
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;

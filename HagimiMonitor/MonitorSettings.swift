@@ -37,7 +37,7 @@ final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false
     @Published var themePreference: AppThemePreference = .system
     @Published var showBuiltInDisplays: Bool = true
-    @Published var displayModuleVisible: Bool = true
+    @Published var displayModuleVisible: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
     @Published var displayVolumeControlEnabled: Bool = true
     @Published var displayContrastControlEnabled: Bool = false
@@ -54,7 +54,7 @@ final class MonitorSettings: ObservableObject {
         themePreference = AppThemePreference(rawValue: themeRawValue) ?? .system
 
         showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
-        displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? true
+        displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? false
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false

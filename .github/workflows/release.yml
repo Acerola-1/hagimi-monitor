@@ -19,7 +19,7 @@ jobs:
       - name: Build
         run: |
           xcodebuild -project hagimi-monitor.xcodeproj \
-            -scheme HagimiMonitor \
+            -scheme HagimiMonitorDirect \
             -configuration Release \
             -arch arm64 \
             -archivePath build/HagimiMonitor.xcarchive \
