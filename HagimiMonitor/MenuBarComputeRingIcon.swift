@@ -158,8 +158,8 @@ private enum MenuBarComputeLoadLevel {
         switch self {
         case .idle:
             return darkMode
-                ? NSColor.white.withAlphaComponent(0.72)
-                : NSColor.black.withAlphaComponent(0.62)
+                ? NSColor(red: 0.34, green: 0.86, blue: 0.66, alpha: 1)
+                : NSColor(red: 0.08, green: 0.50, blue: 0.34, alpha: 1)
         case .working:
             return darkMode
                 ? NSColor(red: 0.32, green: 0.88, blue: 0.72, alpha: 1)

@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+extension NSAppearance {
+    var isDark: Bool {
+        bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+    }
+}
+
 @main
 struct HagimiMonitorApp: App {
     @StateObject private var monitorStore = MonitorStore()
@@ -20,7 +26,7 @@ struct HagimiMonitorApp: App {
             Image(nsImage: MenuBarComputeRingIcon.image(
                 load: monitorStore.displayedComputeLoad,
                 frame: monitorStore.menuBarFrame,
-                darkMode: colorScheme == .dark
+                darkMode: NSApp.effectiveAppearance.isDark
             ))
             .resizable()
             .frame(width: 18, height: 18)
