@@ -19,7 +19,6 @@ final class NetworkSampler: MonitorSampler {
                 value: 0,
                 summary: bytes.interface,
                 metrics: [
-                    MonitorMetric(name: "接口", value: bytes.interface),
                     MonitorMetric(name: "IP 地址", value: networkAddressSummary(bytes.addresses)),
                     MonitorMetric(name: "上传", value: "--"),
                     MonitorMetric(name: "下载", value: "--")
@@ -38,7 +37,6 @@ final class NetworkSampler: MonitorSampler {
             value: value,
             summary: bytes.interface,
             metrics: [
-                MonitorMetric(name: "接口", value: bytes.interface),
                 MonitorMetric(name: "IP 地址", value: networkAddressSummary(bytes.addresses)),
                 MonitorMetric(name: "上传", value: bytesPerSecond(upload)),
                 MonitorMetric(name: "下载", value: bytesPerSecond(download))

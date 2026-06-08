@@ -54,7 +54,11 @@ fi
 APP_PATH="$BUILD_DIR/$BRANCH/$APP_NAME.app"
 if [ -d "$APP_PATH" ]; then
     echo "启动 $BRANCH 版本 ($SCHEME): $APP_PATH"
-    open "$APP_PATH"
+    echo "关闭正在运行的 HagimiMonitor 实例..."
+    killall HagimiMonitor >/dev/null 2>&1 || true
+    killall HagimiMonitorDirect >/dev/null 2>&1 || true
+    sleep 0.3
+    open -n "$APP_PATH"
 else
     echo "错误: 找不到构建产物 $APP_PATH"
     exit 1

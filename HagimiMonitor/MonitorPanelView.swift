@@ -506,7 +506,7 @@ private struct NetworkGlassRow: View {
     }
 
     private var detailMetrics: [MonitorMetric] {
-        module.metrics.filter { $0.name == "接口" || $0.name == "IP 地址" }
+        module.metrics.filter { $0.name == "IP 地址" }
     }
 
     private func value(_ name: String) -> String {
