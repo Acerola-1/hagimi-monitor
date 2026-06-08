@@ -186,15 +186,6 @@ final class MonitorStore: ObservableObject {
             ?? MonitorModule.placeholder(kind: selectedKind)
     }
 
-    var catModule: MonitorModule {
-        allModules.max { catPriority($0) < catPriority($1) }
-            ?? MonitorModule.placeholder(kind: .cpu)
-    }
-
-    var catLine: String {
-        CatDialogueEngine.line(for: catModule, modules: allModules)
-    }
-
     var combinedComputeLoad: Double {
         let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
         let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
@@ -247,23 +238,6 @@ final class MonitorStore: ObservableObject {
         }
 
         menuBarTargetComputeLoad = currentLoad
-    }
-
-    private func catPriority(_ module: MonitorModule) -> Double {
-        let base: Double
-        switch module.severity {
-        case .calm:
-            base = 0
-        case .warning:
-            base = 100
-        case .critical:
-            base = 200
-        }
-
-        if module.kind == .battery {
-            return base + (100 - module.value)
-        }
-        return base + module.value
     }
 
     private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
@@ -336,33 +310,6 @@ final class MonitorRefreshSchedule {
     func markRefreshed(_ kinds: some Sequence<MonitorKind>, at date: Date) {
         for kind in kinds {
             lastRefreshDates[kind] = date
-        }
-    }
-}
-
-enum CatDialogueEngine {
-    static func line(for module: MonitorModule, modules: [MonitorModule]) -> String {
-        guard module.severity != .calm else {
-            let average = modules.isEmpty ? 0 : modules.map(\.value).reduce(0, +) / Double(modules.count)
-            if average > 35 {
-                return String(localized: "dialogue.calm.busy")
-            }
-            return String(localized: "dialogue.calm.quiet")
-        }
-
-        switch module.kind {
-        case .cpu:
-            return String(localized: "dialogue.cpu")
-        case .gpu:
-            return String(localized: "dialogue.gpu")
-        case .memory:
-            return String(localized: "dialogue.memory")
-        case .storage:
-            return String(localized: "dialogue.storage")
-        case .network:
-            return String(localized: "dialogue.network")
-        case .battery:
-            return String(localized: "dialogue.battery")
         }
     }
 }

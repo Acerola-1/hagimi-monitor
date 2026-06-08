@@ -33,12 +33,6 @@ struct HagimiMonitorTests {
         #expect(module.severity == .critical)
     }
 
-    @Test func catDialogueEngineReturnsNonEmpty() {
-        let module = MonitorModule.placeholder(kind: .cpu)
-        let line = CatDialogueEngine.line(for: module, modules: [module])
-        #expect(!line.isEmpty)
-    }
-
     @Test func computeLoadCombinesCPUAndGPU() {
         #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25) == 40)
         #expect(ComputeLoadModel.combined(cpuValue: 140, gpuValue: -20) == 60)
@@ -59,5 +53,11 @@ struct HagimiMonitorTests {
     @Test func monitorRefreshScheduleTickInterval() {
         let schedule = MonitorRefreshSchedule()
         #expect(schedule.tickInterval == 1.0)
+    }
+
+    @Test func networkAddressSummaryFormatsAddresses() {
+        #expect(networkAddressSummary(["192.168.1.8"]) == "192.168.1.8")
+        #expect(networkAddressSummary(["192.168.1.8", "2001:db8::8"]) == "192.168.1.8, 2001:db8::8")
+        #expect(networkAddressSummary([]) == "--")
     }
 }

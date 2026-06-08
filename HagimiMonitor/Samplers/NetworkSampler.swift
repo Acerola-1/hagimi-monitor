@@ -19,6 +19,8 @@ final class NetworkSampler: MonitorSampler {
                 value: 0,
                 summary: bytes.interface,
                 metrics: [
+                    MonitorMetric(name: "接口", value: bytes.interface),
+                    MonitorMetric(name: "IP 地址", value: networkAddressSummary(bytes.addresses)),
                     MonitorMetric(name: "上传", value: "--"),
                     MonitorMetric(name: "下载", value: "--")
                 ],
@@ -36,6 +38,8 @@ final class NetworkSampler: MonitorSampler {
             value: value,
             summary: bytes.interface,
             metrics: [
+                MonitorMetric(name: "接口", value: bytes.interface),
+                MonitorMetric(name: "IP 地址", value: networkAddressSummary(bytes.addresses)),
                 MonitorMetric(name: "上传", value: bytesPerSecond(upload)),
                 MonitorMetric(name: "下载", value: bytesPerSecond(download))
             ],
@@ -43,32 +47,53 @@ final class NetworkSampler: MonitorSampler {
         )
     }
 
-    private func networkBytes() -> (input: UInt64, output: UInt64, interface: String) {
+    private func networkBytes() -> NetworkInterfaceSnapshot {
         var addressList: UnsafeMutablePointer<ifaddrs>?
         var totalsByInterface: [String: (input: UInt64, output: UInt64)] = [:]
+        var addressesByInterface: [String: [String]] = [:]
 
         guard getifaddrs(&addressList) == 0, let firstAddress = addressList else {
             AppLogger.sampler.error("getifaddrs failed, errno: \(errno)")
-            return (0, 0, "网络")
+            return NetworkInterfaceSnapshot(input: 0, output: 0, interface: "网络", addresses: [])
         }
         defer { freeifaddrs(addressList) }
 
         for pointer in sequence(first: firstAddress, next: { $0.pointee.ifa_next }) {
             let interface = pointer.pointee
-            guard interface.ifa_addr.pointee.sa_family == UInt8(AF_LINK),
-                  let data = interface.ifa_data?.assumingMemoryBound(to: if_data.self).pointee else {
+            guard let address = interface.ifa_addr else {
                 continue
             }
 
             let name = String(cString: interface.ifa_name)
-            if name == "lo0" || name.hasPrefix("utun") || name.hasPrefix("awdl") {
+            guard !shouldIgnoreInterface(name) else {
                 continue
             }
 
-            var current = totalsByInterface[name] ?? (0, 0)
-            current.input += UInt64(data.ifi_ibytes)
-            current.output += UInt64(data.ifi_obytes)
-            totalsByInterface[name] = current
+            switch Int32(address.pointee.sa_family) {
+            case AF_LINK:
+                guard let data = interface.ifa_data?.assumingMemoryBound(to: if_data.self).pointee else {
+                    continue
+                }
+
+                var current = totalsByInterface[name] ?? (0, 0)
+                current.input += UInt64(data.ifi_ibytes)
+                current.output += UInt64(data.ifi_obytes)
+                totalsByInterface[name] = current
+
+            case AF_INET, AF_INET6:
+                guard let addressText = ipAddress(from: address) else {
+                    continue
+                }
+
+                var addresses = addressesByInterface[name] ?? []
+                if !addresses.contains(addressText) {
+                    addresses.append(addressText)
+                    addressesByInterface[name] = addresses
+                }
+
+            default:
+                continue
+            }
         }
 
         let active = totalsByInterface.max {
@@ -82,7 +107,12 @@ final class NetworkSampler: MonitorSampler {
 
         AppLogger.sampler.info("Network active interface: \(active?.key ?? "none", privacy: .public)")
 
-        return (total.input, total.output, networkInterfaceTitle(active?.key))
+        return NetworkInterfaceSnapshot(
+            input: total.input,
+            output: total.output,
+            interface: networkInterfaceTitle(active?.key),
+            addresses: active.flatMap { addressesByInterface[$0.key] } ?? []
+        )
     }
 
     private func networkInterfaceTitle(_ name: String?) -> String {
@@ -104,4 +134,59 @@ final class NetworkSampler: MonitorSampler {
         }
         return name
     }
+
+    private func shouldIgnoreInterface(_ name: String) -> Bool {
+        name == "lo0" || name.hasPrefix("utun") || name.hasPrefix("awdl")
+    }
+
+    private func ipAddress(from socketAddress: UnsafePointer<sockaddr>) -> String? {
+        let family = Int32(socketAddress.pointee.sa_family)
+        let maxLength = Int(NI_MAXHOST)
+        var host = [CChar](repeating: 0, count: maxLength)
+        let length: socklen_t
+
+        switch family {
+        case AF_INET:
+            length = socklen_t(MemoryLayout<sockaddr_in>.size)
+        case AF_INET6:
+            length = socklen_t(MemoryLayout<sockaddr_in6>.size)
+        default:
+            return nil
+        }
+
+        let result = getnameinfo(
+            socketAddress,
+            length,
+            &host,
+            socklen_t(maxLength),
+            nil,
+            0,
+            NI_NUMERICHOST
+        )
+
+        guard result == 0 else {
+            return nil
+        }
+
+        let address = String(cString: host)
+        guard !address.isEmpty, !address.hasPrefix("fe80:") else {
+            return nil
+        }
+        return address
+    }
+}
+
+struct NetworkInterfaceSnapshot {
+    let input: UInt64
+    let output: UInt64
+    let interface: String
+    let addresses: [String]
+}
+
+func networkAddressSummary(_ addresses: [String]) -> String {
+    guard !addresses.isEmpty else {
+        return "--"
+    }
+
+    return addresses.joined(separator: ", ")
 }

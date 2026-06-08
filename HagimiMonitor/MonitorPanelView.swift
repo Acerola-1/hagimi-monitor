@@ -126,7 +126,12 @@ struct MonitorPanelView: View {
                 toggleExpansion(for: module.kind)
             }
         case .network:
-            NetworkGlassRow(module: module)
+            NetworkGlassRow(
+                module: module,
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
         case .battery:
             BatteryGlassRow(
                 module: module,
@@ -449,6 +454,8 @@ struct StorageVolumeInfo: Identifiable {
 
 private struct NetworkGlassRow: View {
     let module: MonitorModule
+    var isExpanded = false
+    var toggleExpansion: (() -> Void)?
     @Environment(\.colorScheme) private var colorScheme
 
     private var tint: Color {
@@ -458,31 +465,48 @@ private struct NetworkGlassRow: View {
     var body: some View {
         let theme = MonitorPanelTheme(colorScheme: colorScheme)
 
-        HStack(spacing: 10) {
-            Image(systemName: "wifi")
-                .font(.system(size: 13, weight: .semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
-                .frame(width: 18)
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "wifi")
+                    .font(.system(size: 13, weight: .semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(tint)
+                    .frame(width: 18)
 
-            Text("网络:")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.primaryText)
-                .lineLimit(1)
+                Text("网络:")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
 
-            Text(module.summary)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(theme.valueText)
-                .lineLimit(1)
+                Text(module.summary)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.valueText)
+                    .lineLimit(1)
 
-            Spacer(minLength: 8)
+                Spacer(minLength: 8)
 
-            MetricPill(systemImage: "arrow.up", text: value("上传"))
-            MetricPill(systemImage: "arrow.down", text: value("下载"))
+                MetricPill(systemImage: "arrow.up", text: value("上传"))
+                MetricPill(systemImage: "arrow.down", text: value("下载"))
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+
+            if isExpanded {
+                MetricDetailGrid(metrics: detailMetrics, tint: tint)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 9)
+                    .transition(.detailDisclosure)
+            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            toggleExpansion?()
+        }
         .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+    }
+
+    private var detailMetrics: [MonitorMetric] {
+        module.metrics.filter { $0.name == "接口" || $0.name == "IP 地址" }
     }
 
     private func value(_ name: String) -> String {
