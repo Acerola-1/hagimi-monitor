@@ -1,7 +1,7 @@
 # HagimiMonitor
 
 <p align="center">
-  <img src="resources/icon.png" width="132" alt="HagimiMonitor icon">
+  <img src="docs/images/icon.png" width="132" alt="HagimiMonitor icon">
 </p>
 
 <p align="center">
@@ -27,11 +27,11 @@ HagimiMonitor 内置语义化配色系统，所有模块色、玻璃背景、分
 
 | 平衡 · 深色 | 平衡 · 浅色 |
 | --- | --- |
-| ![平衡深色主题](resources/平衡-dark.png) | ![平衡浅色主题](resources/平衡-light.png) |
+| ![平衡深色主题](docs/images/balance-dark.png) | ![平衡浅色主题](docs/images/balance-light.png) |
 
 | 活力 · 深色 | 活力 · 浅色 |
 | --- | --- |
-| ![活力深色主题](resources/活力-dark.png) | ![活力浅色主题](resources/活力-light.png) |
+| ![活力深色主题](docs/images/vitality-dark.png) | ![活力浅色主题](docs/images/vitality-light.png) |
 
 后续会继续增加更多预设配色，并开放自定义色彩方案配置，让你可以按自己的桌面风格调整监控面板。
 
@@ -40,7 +40,7 @@ HagimiMonitor 内置语义化配色系统，所有模块色、玻璃背景、分
 默认状态保持紧凑，展开后可以查看 CPU、GPU、内存、存储等模块的更完整细节，既能快速扫一眼，也能在需要时深入确认。
 
 <p align="center">
-  <img src="resources/丰富数据.png" width="430" alt="HagimiMonitor expanded rich metrics">
+  <img src="docs/images/detailed-data.png" width="430" alt="HagimiMonitor expanded rich metrics">
 </p>
 
 ## 功能亮点

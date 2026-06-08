@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hagimi Monitor - macOS 菜单栏系统监控</title>
+    <meta name="description" content="Hagimi Monitor 是一款面向 Apple Silicon 的 macOS 菜单栏系统监控工具。">
+    <link rel="icon" type="image/png" href="images/icon.png">
+    <style>
+        :root {
+            --page: #f2f0ea;
+            --paper: #fbfaf6;
+            --ink: #171817;
+            --muted: #686a63;
+            --line: rgba(28, 30, 26, 0.12);
+            --line-strong: rgba(28, 30, 26, 0.22);
+            --green: #238649;
+            --amber: #d8891d;
+            --red: #d84736;
+            --shadow: 0 28px 80px rgba(31, 30, 24, 0.14);
+            --radius: 8px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --page: #111311;
+                --paper: #191b18;
+                --ink: #f1efe6;
+                --muted: #a6a398;
+                --line: rgba(241, 239, 230, 0.13);
+                --line-strong: rgba(241, 239, 230, 0.24);
+                --green: #5ac878;
+                --amber: #e2a442;
+                --red: #ee6a5b;
+                --shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            background:
+                linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 88px 88px,
+                linear-gradient(0deg, var(--line) 1px, transparent 1px) 0 0 / 88px 88px,
+                var(--page);
+            color: var(--ink);
+            font-family: ui-serif, "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        img {
+            display: block;
+            max-width: 100%;
+        }
+
+        figure {
+            margin: 0;
+        }
+
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            border-bottom: 1px solid var(--line);
+            background: color-mix(in srgb, var(--page) 88%, transparent);
+            backdrop-filter: blur(18px);
+        }
+
+        .nav {
+            width: min(1160px, calc(100% - 40px));
+            height: 64px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 11px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        .brand img {
+            width: 30px;
+            height: 30px;
+            border-radius: 7px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .nav-links a {
+            padding: 8px 10px;
+            border-radius: 7px;
+        }
+
+        .nav-links a:hover {
+            background: color-mix(in srgb, var(--ink) 7%, transparent);
+            color: var(--ink);
+        }
+
+        .github-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border: 1px solid var(--line-strong);
+            background: color-mix(in srgb, var(--paper) 76%, transparent);
+        }
+
+        .github-stars {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 2px;
+            padding-left: 8px;
+            border-left: 1px solid var(--line);
+            color: var(--ink);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .github-stars svg {
+            width: 13px;
+            height: 13px;
+            fill: var(--amber);
+        }
+
+        .github-pill > svg {
+            width: 15px;
+            height: 15px;
+            fill: currentColor;
+        }
+
+        .hero {
+            width: min(1160px, calc(100% - 40px));
+            min-height: calc(100svh - 64px);
+            margin: 0 auto;
+            padding: clamp(46px, 7vw, 92px) 0 56px;
+            display: grid;
+            grid-template-columns: minmax(0, 0.94fr) minmax(340px, 0.86fr);
+            gap: clamp(36px, 7vw, 88px);
+            align-items: center;
+        }
+
+        .eyebrow {
+            margin: 0 0 18px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--green);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            max-width: 680px;
+            margin: 0;
+            font-size: clamp(42px, 7vw, 82px);
+            line-height: 0.98;
+            letter-spacing: 0;
+            font-weight: 760;
+        }
+
+        .lead {
+            max-width: 560px;
+            margin: 26px 0 0;
+            color: var(--muted);
+            font-size: clamp(17px, 2.2vw, 21px);
+            line-height: 1.78;
+        }
+
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 34px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 44px;
+            padding: 0 18px;
+            border-radius: var(--radius);
+            border: 1px solid var(--ink);
+            background: var(--ink);
+            color: var(--page);
+            font-size: 14px;
+            font-weight: 750;
+        }
+
+        .button.secondary {
+            border-color: var(--line-strong);
+            background: color-mix(in srgb, var(--paper) 74%, transparent);
+            color: var(--ink);
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+        }
+
+        .button svg {
+            width: 17px;
+            height: 17px;
+        }
+
+        .spec-row {
+            margin-top: 32px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        }
+
+        .spec-row div {
+            padding: 14px 16px 14px 0;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 650;
+        }
+
+        .spec-row div + div {
+            padding-left: 16px;
+            border-left: 1px solid var(--line);
+        }
+
+        .product-frame {
+            justify-self: end;
+            width: min(100%, 480px);
+            position: relative;
+        }
+
+        .menubar-strip {
+            height: 38px;
+            margin: 0 12px -3px;
+            border: 1px solid var(--line-strong);
+            border-bottom: 0;
+            border-radius: 10px 10px 0 0;
+            background: color-mix(in srgb, var(--paper) 84%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 8px;
+            padding: 0 14px;
+            color: var(--muted);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 12px;
+        }
+
+        .ring-mark {
+            width: 18px;
+            height: 18px;
+            border: 3px solid var(--green);
+            border-right-color: var(--amber);
+            border-bottom-color: var(--red);
+            border-radius: 50%;
+        }
+
+        .screen-shot {
+            border: 1px solid var(--line-strong);
+            border-radius: 14px;
+            background: var(--paper);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        .screen-shot .dark {
+            display: none;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            .screen-shot .light {
+                display: none;
+            }
+
+            .screen-shot .dark {
+                display: block;
+            }
+        }
+
+        .section {
+            width: min(1160px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: 88px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .section-head {
+            display: grid;
+            grid-template-columns: minmax(0, 0.72fr) minmax(260px, 0.46fr);
+            gap: 48px;
+            align-items: end;
+            margin-bottom: 34px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: clamp(29px, 4.6vw, 54px);
+            line-height: 1.04;
+            letter-spacing: 0;
+        }
+
+        .section-head p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.75;
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border: 1px solid var(--line-strong);
+            background: var(--paper);
+        }
+
+        .feature {
+            min-height: 210px;
+            padding: 26px;
+            border-right: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .feature:nth-child(3n) {
+            border-right: 0;
+        }
+
+        .feature:nth-last-child(-n + 3) {
+            border-bottom: 0;
+        }
+
+        .feature code {
+            display: inline-block;
+            margin-bottom: 34px;
+            color: var(--green);
+            font-family: ui-monospace, "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            font-weight: 800;
+            letter-spacing: 0;
+        }
+
+        .feature h3 {
+            margin: 0 0 10px;
+            font-family: ui-sans-serif, "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+            font-size: 19px;
+            letter-spacing: 0;
+        }
+
+        .feature p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        .showcase-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 22px;
+        }
+
+        .shot-card {
+            border: 1px solid var(--line-strong);
+            background: var(--paper);
+            border-radius: var(--radius);
+            padding: 14px;
+        }
+
+        .shot-card img {
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            background: var(--page);
+        }
+
+        .shot-caption {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 2px 2px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        }
+
+        .shot-caption strong {
+            font-size: 14px;
+        }
+
+        .shot-caption span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .detail-layout {
+            display: grid;
+            grid-template-columns: minmax(280px, 0.38fr) minmax(0, 0.62fr);
+            gap: 42px;
+            align-items: start;
+        }
+
+        .detail-copy {
+            position: sticky;
+            top: 96px;
+        }
+
+        .detail-copy p {
+            margin: 22px 0 0;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .detail-list {
+            margin: 28px 0 0;
+            padding: 0;
+            list-style: none;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .detail-list li {
+            padding: 12px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .detail-image {
+            padding: 14px;
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius);
+            background: var(--paper);
+        }
+
+        .detail-image img {
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+        }
+
+        .footer {
+            width: min(1160px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: 42px 0 56px;
+            border-top: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            color: var(--muted);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 13px;
+        }
+
+        .footer a {
+            color: var(--ink);
+            font-weight: 700;
+        }
+
+        @media (max-width: 860px) {
+            .nav {
+                width: min(100% - 28px, 1160px);
+            }
+
+            .nav-links a:not(.github-pill) {
+                display: none;
+            }
+
+            .hero,
+            .section,
+            .footer {
+                width: min(100% - 28px, 1160px);
+            }
+
+            .hero {
+                min-height: auto;
+                grid-template-columns: 1fr;
+                padding-top: 42px;
+            }
+
+            .product-frame {
+                justify-self: stretch;
+                width: min(100%, 520px);
+                margin: 0 auto;
+            }
+
+            .section-head,
+            .detail-layout {
+                grid-template-columns: 1fr;
+                gap: 22px;
+            }
+
+            .feature-grid,
+            .showcase-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feature,
+            .feature:nth-child(3n),
+            .feature:nth-last-child(-n + 3) {
+                border-right: 0;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .feature:last-child {
+                border-bottom: 0;
+            }
+
+            .detail-copy {
+                position: static;
+            }
+        }
+
+        @media (max-width: 560px) {
+            body {
+                background-size: 54px 54px;
+            }
+
+            .brand span {
+                max-width: 150px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            h1 {
+                font-size: clamp(38px, 14vw, 58px);
+            }
+
+            .lead {
+                font-size: 16px;
+            }
+
+            .hero-actions {
+                align-items: stretch;
+            }
+
+            .button {
+                width: 100%;
+            }
+
+            .spec-row {
+                grid-template-columns: 1fr;
+            }
+
+            .spec-row div + div {
+                padding-left: 0;
+                border-left: 0;
+                border-top: 1px solid var(--line);
+            }
+
+            .section {
+                padding: 62px 0;
+            }
+
+            .feature {
+                min-height: 0;
+            }
+
+            .footer {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <nav class="nav" aria-label="主导航">
+            <a class="brand" href="#">
+                <img src="images/icon.png" alt="">
+                <span>Hagimi Monitor</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">功能</a>
+                <a href="#themes">截图</a>
+                <a href="#details">详情</a>
+                <a class="github-pill" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.04c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.08 1.85 1.24 1.85 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.31-5.47-1.34-5.47-5.94 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23A11.5 11.5 0 0 1 12 5.78c1.02 0 2.05.14 3.01.4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.22.69.82.58A12 12 0 0 0 12 .3Z"/></svg>
+                    GitHub
+                    <span class="github-stars" aria-label="GitHub stars">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.92 6.26 6.83.83-5.05 4.68 1.34 6.76L12 17.14l-6.04 3.39 1.34-6.76-5.05-4.68 6.83-.83L12 2Z"/></svg>
+                        <span id="star-count">--</span>
+                    </span>
+                </a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div>
+                <p class="eyebrow">macOS 26+ / Apple Silicon</p>
+                <h1>菜单栏里的系统状态，不必铺满桌面。</h1>
+                <p class="lead">Hagimi Monitor 把 CPU、GPU、内存、存储、网络和电池收进一个紧凑面板。常看负载环，想确认时再点开细节。</p>
+                <div class="hero-actions">
+                    <a class="button" href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+                        下载最新版
+                    </a>
+                    <a class="button secondary" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">查看源码</a>
+                </div>
+                <div class="spec-row" aria-label="基础信息">
+                    <div>原生 SwiftUI</div>
+                    <div>菜单栏常驻</div>
+                    <div>免费开源</div>
+                </div>
+            </div>
+
+            <div class="product-frame" aria-label="产品截图">
+                <div class="menubar-strip">
+                    <span>Mon 22:30</span>
+                    <span class="ring-mark" aria-hidden="true"></span>
+                </div>
+                <div class="screen-shot">
+                    <img class="light" src="images/vitality-light.png" alt="Hagimi Monitor 活力浅色界面截图">
+                    <img class="dark" src="images/vitality-dark.png" alt="Hagimi Monitor 活力深色界面截图">
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="section">
+            <div class="section-head">
+                <h2>状态变化，抬眼就能确认。</h2>
+                <p>从菜单栏负载到展开后的详细指标，Hagimi Monitor 适合长时间常驻，也适合在风扇升速、卡顿或外接设备异常时快速排查。</p>
+            </div>
+            <div class="feature-grid">
+                <article class="feature">
+                    <code>01</code>
+                    <h3>负载环</h3>
+                    <p>菜单栏图标用颜色和环形进度提示综合压力，轻载、忙碌、高压能直接区分。</p>
+                </article>
+                <article class="feature">
+                    <code>02</code>
+                    <h3>核心指标</h3>
+                    <p>CPU、GPU、内存、存储、网络、电池各自独立采样，状态变化不用打开活动监视器。</p>
+                </article>
+                <article class="feature">
+                    <code>03</code>
+                    <h3>趋势图</h3>
+                    <p>CPU 与 GPU 使用率配有小型趋势图，短时间尖峰和持续高负载不会混在一起。</p>
+                </article>
+                <article class="feature">
+                    <code>04</code>
+                    <h3>展开详情</h3>
+                    <p>需要追原因时，可以展开查看核心分布、显存、内存压力、卷信息、IP 和电池健康。</p>
+                </article>
+                <article class="feature">
+                    <code>05</code>
+                    <h3>两套配色</h3>
+                    <p>平衡模式更安静，活力模式更醒目。两者都分别适配浅色和深色外观。</p>
+                </article>
+                <article class="feature">
+                    <code>06</code>
+                    <h3>Direct 构建</h3>
+                    <p>非 App Store 构建可加入外接显示器亮度、音量和对比度控制，显示控制不进入沙盒版。</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="themes" class="section">
+            <div class="section-head">
+                <h2>浅色、深色，各有两套面板风格。</h2>
+                <p>平衡模式更安静，活力模式更醒目。系统外观切换时，面板会跟随当前环境保持清晰可读。</p>
+            </div>
+            <div class="showcase-grid">
+                <figure class="shot-card">
+                    <img src="images/balance-light.png" alt="平衡主题浅色模式截图">
+                    <figcaption class="shot-caption">
+                        <strong>平衡 / 浅色</strong>
+                        <span>更接近系统面板</span>
+                    </figcaption>
+                </figure>
+                <figure class="shot-card">
+                    <img src="images/vitality-light.png" alt="活力主题浅色模式截图">
+                    <figcaption class="shot-caption">
+                        <strong>活力 / 浅色</strong>
+                        <span>状态色更明确</span>
+                    </figcaption>
+                </figure>
+                <figure class="shot-card">
+                    <img src="images/balance-dark.png" alt="平衡主题深色模式截图">
+                    <figcaption class="shot-caption">
+                        <strong>平衡 / 深色</strong>
+                        <span>低干扰常驻</span>
+                    </figcaption>
+                </figure>
+                <figure class="shot-card">
+                    <img src="images/vitality-dark.png" alt="活力主题深色模式截图">
+                    <figcaption class="shot-caption">
+                        <strong>活力 / 深色</strong>
+                        <span>高对比查看</span>
+                    </figcaption>
+                </figure>
+            </div>
+        </section>
+
+        <section id="details" class="section">
+            <div class="detail-layout">
+                <div class="detail-copy">
+                    <p class="eyebrow">Details</p>
+                    <h2>常驻时收敛，需要时展开。</h2>
+                    <p>默认视图保留高频信息；点开模块后，再展示更细的排查数据。日常不占注意力，遇到问题时不用临时翻工具。</p>
+                    <ul class="detail-list">
+                        <li>CPU 核心分布与实时频率</li>
+                        <li>GPU 使用率、显存与图形状态</li>
+                        <li>内存压力、交换空间和存储卷详情</li>
+                        <li>网络地址、电池健康度与循环数</li>
+                    </ul>
+                </div>
+                <div class="detail-image">
+                    <img src="images/detailed-data.png" alt="详细数据展开截图">
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <span>Hagimi Monitor · MIT License</span>
+        <span>Made by <a href="https://github.com/Acerola-1" target="_blank" rel="noopener">Acerola</a></span>
+    </footer>
+    <script>
+        const starCount = document.getElementById("star-count");
+
+        fetch("https://api.github.com/repos/Acerola-1/hagimi-monitor")
+            .then((response) => response.ok ? response.json() : Promise.reject())
+            .then((repo) => {
+                if (typeof repo.stargazers_count === "number") {
+                    starCount.textContent = repo.stargazers_count.toLocaleString("en-US");
+                }
+            })
+            .catch(() => {
+                starCount.textContent = "-";
+            });
+    </script>
+</body>
+</html>
