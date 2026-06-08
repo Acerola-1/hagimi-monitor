@@ -497,7 +497,7 @@ private struct NetworkGlassRow: View {
             .padding(.vertical, 8)
 
             if isExpanded {
-                MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
+                networkDetail
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
                     .transition(.detailDisclosure)
@@ -508,6 +508,34 @@ private struct NetworkGlassRow: View {
             toggleExpansion?()
         }
         .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+    }
+
+    private var networkDetail: some View {
+        VStack(spacing: 7) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: module.kind))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            ForEach(detailMetrics) { metric in
+                HStack(spacing: 6) {
+                    Text(metric.name)
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.captionText)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 4)
+
+                    Text(metric.value)
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .padding(.leading, 28)
+            }
+        }
     }
 
     private var detailMetrics: [MonitorMetric] {
