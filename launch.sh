@@ -16,7 +16,7 @@ BUILD_DIR="/tmp/hagimi-builds"
 case "$VERSION" in
   direct|full|pro)
     SCHEME="HagimiMonitorDirect"
-    APP_NAME="HagimiMonitorDirect"
+    APP_NAME="HagimiMonitor"
     ;;
   appstore|store|sandbox)
     SCHEME="HagimiMonitor"
@@ -24,7 +24,7 @@ case "$VERSION" in
     ;;
   *)
     SCHEME="HagimiMonitorDirect"
-    APP_NAME="HagimiMonitorDirect"
+    APP_NAME="HagimiMonitor"
     ;;
 esac
 
