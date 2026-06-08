@@ -53,6 +53,7 @@ final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false
     @Published var themePreference: AppThemePreference = .system
     @Published var colorSchemePreference: MonitorColorSchemePreference = .balanced
+    @Published var ringSource: HaloRingSource = .combined
     @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
@@ -72,6 +73,9 @@ final class MonitorSettings: ObservableObject {
 
         let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.balanced.rawValue
         colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .balanced
+
+        let ringSourceRawValue = defaults.string(forKey: Keys.ringSource) ?? HaloRingSource.combined.rawValue
+        ringSource = HaloRingSource(rawValue: ringSourceRawValue) ?? .combined
 
         showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
         displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? false
@@ -122,6 +126,13 @@ final class MonitorSettings: ObservableObject {
             .dropFirst()
             .sink { [weak self] newValue in
                 self?.persist(newValue.rawValue, forKey: Keys.colorSchemePreference)
+            }
+            .store(in: &cancellables)
+
+        $ringSource
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.ringSource)
             }
             .store(in: &cancellables)
 
@@ -198,6 +209,7 @@ final class MonitorSettings: ObservableObject {
 private enum Keys {
     static let themePreference = "settings.themePreference"
     static let colorSchemePreference = "settings.colorSchemePreference"
+    static let ringSource = "settings.ringSource"
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"

@@ -45,7 +45,8 @@ final class MemorySampler: MonitorSampler {
                 MonitorMetric(name: "交换已用", value: swapUsedText(swap)),
                 MonitorMetric(name: "总量", value: memoryBytes(total))
             ],
-            samples: seedSamples(percentage)
+            samples: seedSamples(percentage),
+            pressure: pressure.level
         )
     }
 
@@ -121,6 +122,15 @@ private enum MemoryPressureState {
             "严重"
         case .unknown:
             "--"
+        }
+    }
+
+    var level: MemoryPressureLevel {
+        switch self {
+        case .normal: .normal
+        case .warning: .warning
+        case .critical: .critical
+        case .unknown: .unknown
         }
     }
 }

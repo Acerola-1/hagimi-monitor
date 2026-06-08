@@ -62,6 +62,14 @@ private struct GeneralSettingsPane: View {
                 }
                 .pickerStyle(.inline)
             }
+
+            Section("负载环") {
+                Picker("监测项目", selection: $settings.ringSource) {
+                    ForEach(HaloRingSource.allCases) { source in
+                        Text(source.title).tag(source)
+                    }
+                }
+            }
         }
         .formStyle(.grouped)
         .padding(20)

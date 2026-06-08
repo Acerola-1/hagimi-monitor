@@ -3,6 +3,31 @@ import SwiftUI
 import Combine
 import OSLog
 
+enum HaloRingSource: String, CaseIterable, Identifiable {
+    case combined
+    case cpu
+    case gpu
+    case memory
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .combined: "综合"
+        case .cpu: "CPU"
+        case .gpu: "GPU"
+        case .memory: "内存"
+        }
+    }
+}
+
+enum MemoryPressureLevel {
+    case normal
+    case warning
+    case critical
+    case unknown
+}
+
 enum MonitorSeverity {
     case calm
     case warning
@@ -79,6 +104,7 @@ struct MonitorModule: Identifiable {
     var summary: String
     var metrics: [MonitorMetric]
     var samples: [Double]
+    var pressure: MemoryPressureLevel? = nil
 
     var id: MonitorKind { kind }
 
@@ -176,9 +202,33 @@ final class MonitorStore: ObservableObject {
     }
 
     var combinedComputeLoad: Double {
-        let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
-        let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
-        return ComputeLoadModel.combined(cpuValue: cpuValue, gpuValue: gpuValue)
+        switch settings.ringSource {
+        case .combined:
+            let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
+            let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
+            return ComputeLoadModel.combined(cpuValue: cpuValue, gpuValue: gpuValue)
+        case .cpu:
+            return allModules.first { $0.kind == .cpu }?.value ?? 0
+        case .gpu:
+            return allModules.first { $0.kind == .gpu }?.value ?? 0
+        case .memory:
+            return allModules.first { $0.kind == .memory }?.value ?? 0
+        }
+    }
+
+    var haloRingLoadLevel: MenuBarComputeLoadLevel {
+        switch settings.ringSource {
+        case .combined, .cpu, .gpu:
+            return ComputeLoadModel.loadLevel(for: combinedComputeLoad)
+        case .memory:
+            let pressure = allModules.first { $0.kind == .memory }?.pressure ?? .unknown
+            switch pressure {
+            case .normal: return .idle
+            case .warning: return .busy
+            case .critical: return .stressed
+            case .unknown: return .working
+            }
+        }
     }
 
     private func advance() {
@@ -239,6 +289,15 @@ enum ComputeLoadModel {
         let cpu = min(100, max(0, cpuValue))
         let gpu = min(100, max(0, gpuValue))
         return cpu * 0.6 + gpu * 0.4
+    }
+
+    static func loadLevel(for load: Double) -> MenuBarComputeLoadLevel {
+        switch load {
+        case ..<35: return .idle
+        case ..<65: return .working
+        case ..<85: return .busy
+        default: return .stressed
+        }
     }
 
     static func smoothedDisplayValue(

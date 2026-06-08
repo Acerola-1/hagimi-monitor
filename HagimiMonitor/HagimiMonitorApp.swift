@@ -26,7 +26,8 @@ struct HagimiMonitorApp: App {
             Image(nsImage: MenuBarComputeRingIcon.image(
                 load: monitorStore.displayedComputeLoad,
                 frame: monitorStore.menuBarFrame,
-                darkMode: NSApp.effectiveAppearance.isDark
+                darkMode: NSApp.effectiveAppearance.isDark,
+                loadLevel: monitorStore.haloRingLoadLevel
             ))
             .resizable()
             .frame(width: 18, height: 18)

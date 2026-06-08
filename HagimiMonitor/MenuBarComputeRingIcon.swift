@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 
 enum MenuBarComputeRingIcon {
-    static func image(load: Double, frame: Int, darkMode: Bool) -> NSImage {
+    static func image(load: Double, frame: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18))
         image.lockFocus()
 
@@ -10,7 +10,7 @@ enum MenuBarComputeRingIcon {
         NSColor.clear.setFill()
         NSRect(x: 0, y: 0, width: 18, height: 18).fill()
 
-        let style = MenuBarComputeRingImageStyle(load: load, frame: frame, darkMode: darkMode)
+        let style = MenuBarComputeRingImageStyle(load: load, frame: frame, darkMode: darkMode, loadLevel: loadLevel)
         drawRing(style: style)
 
         image.unlockFocus()
@@ -82,6 +82,7 @@ private struct MenuBarComputeRingImageStyle {
     let load: Double
     let frame: Int
     let darkMode: Bool
+    let loadLevel: MenuBarComputeLoadLevel
 
     private var normalizedLoad: Double {
         min(1, max(0, load / 100))
@@ -143,22 +144,9 @@ private struct MenuBarComputeRingImageStyle {
     private var ink: NSColor {
         darkMode ? .white : .black
     }
-
-    private var loadLevel: MenuBarComputeLoadLevel {
-        switch load {
-        case ..<35:
-            return .idle
-        case ..<65:
-            return .working
-        case ..<85:
-            return .busy
-        default:
-            return .stressed
-        }
-    }
 }
 
-private enum MenuBarComputeLoadLevel {
+enum MenuBarComputeLoadLevel {
     case idle
     case working
     case busy
