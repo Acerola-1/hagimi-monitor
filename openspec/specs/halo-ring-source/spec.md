@@ -1,12 +1,20 @@
 ## ADDED Requirements
 
 ### Requirement: Halo Ring Source Configuration
-The system SHALL allow users to select which metric the menu bar halo ring monitors, from four options: Combined (CPU 60% + GPU 40%), CPU, GPU, and Memory. The default SHALL be Combined.
+The system SHALL allow users to select which metric the menu bar halo ring monitors, from four options: Combined (CPU 40% + GPU 40% + memory pressure 20%), CPU, GPU, and Memory. The default SHALL be Combined.
 
 #### Scenario: Default configuration
 - **WHEN** the app is launched for the first time
 - **THEN** the halo ring source is set to "Combined"
-- **AND** the ring displays the weighted average of CPU (60%) and GPU (40%)
+- **AND** the ring displays the weighted average of CPU (40%), GPU (40%), and memory pressure (20%)
+
+#### Scenario: Combined source uses memory pressure
+- **WHEN** the halo ring source is Combined
+- **THEN** the memory contribution is based on system memory pressure, not memory used/total percentage
+- **AND** normal pressure contributes 0
+- **AND** warning pressure contributes 70
+- **AND** critical pressure contributes 100
+- **AND** unknown pressure contributes 0
 
 #### Scenario: User selects CPU
 - **WHEN** user changes halo ring source to "CPU"

@@ -206,7 +206,12 @@ final class MonitorStore: ObservableObject {
         case .combined:
             let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
             let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
-            return ComputeLoadModel.combined(cpuValue: cpuValue, gpuValue: gpuValue)
+            let memoryPressure = allModules.first { $0.kind == .memory }?.pressure ?? .unknown
+            return ComputeLoadModel.combined(
+                cpuValue: cpuValue,
+                gpuValue: gpuValue,
+                memoryPressure: memoryPressure
+            )
         case .cpu:
             return allModules.first { $0.kind == .cpu }?.value ?? 0
         case .gpu:
@@ -285,10 +290,28 @@ final class MonitorStore: ObservableObject {
 }
 
 enum ComputeLoadModel {
-    static func combined(cpuValue: Double, gpuValue: Double) -> Double {
+    static func combined(
+        cpuValue: Double,
+        gpuValue: Double,
+        memoryPressure: MemoryPressureLevel = .normal
+    ) -> Double {
         let cpu = min(100, max(0, cpuValue))
         let gpu = min(100, max(0, gpuValue))
-        return cpu * 0.6 + gpu * 0.4
+        let memory = memoryPressureScore(memoryPressure)
+        return cpu * 0.4 + gpu * 0.4 + memory * 0.2
+    }
+
+    static func memoryPressureScore(_ pressure: MemoryPressureLevel) -> Double {
+        switch pressure {
+        case .normal:
+            return 0
+        case .warning:
+            return 70
+        case .critical:
+            return 100
+        case .unknown:
+            return 0
+        }
     }
 
     static func loadLevel(for load: Double) -> MenuBarComputeLoadLevel {

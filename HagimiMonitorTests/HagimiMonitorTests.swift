@@ -35,8 +35,17 @@ struct HagimiMonitorTests {
     }
 
     @Test func computeLoadCombinesCPUAndGPU() {
-        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25) == 40)
-        #expect(ComputeLoadModel.combined(cpuValue: 140, gpuValue: -20) == 60)
+        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25) == 30)
+        #expect(ComputeLoadModel.combined(cpuValue: 140, gpuValue: -20) == 40)
+    }
+
+    @Test func computeLoadIncludesMemoryPressure() {
+        #expect(ComputeLoadModel.memoryPressureScore(.normal) == 0)
+        #expect(ComputeLoadModel.memoryPressureScore(.warning) == 70)
+        #expect(ComputeLoadModel.memoryPressureScore(.critical) == 100)
+        #expect(ComputeLoadModel.memoryPressureScore(.unknown) == 0)
+        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .warning) == 44)
+        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .critical) == 50)
     }
 
     @Test func computeLoadDisplayValueMovesTowardTarget() {
