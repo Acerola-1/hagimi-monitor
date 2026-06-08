@@ -54,6 +54,13 @@ private struct GeneralSettingsPane: View {
                     }
                 }
                 .pickerStyle(.inline)
+
+                Picker("配色", selection: $settings.colorSchemePreference) {
+                    ForEach(MonitorColorSchemePreference.allCases) { colorScheme in
+                        Text(colorScheme.title).tag(colorScheme)
+                    }
+                }
+                .pickerStyle(.inline)
             }
         }
         .formStyle(.grouped)

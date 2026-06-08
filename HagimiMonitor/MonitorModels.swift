@@ -18,17 +18,6 @@ enum MonitorSeverity {
             String(localized: "severity.critical")
         }
     }
-
-    var tint: Color {
-        switch self {
-        case .calm:
-            Color(hex: 0x2F9E64)
-        case .warning:
-            Color(hex: 0xB8872E)
-        case .critical:
-            Color(hex: 0xD94848)
-        }
-    }
 }
 
 enum MonitorKind: String, CaseIterable, Identifiable {

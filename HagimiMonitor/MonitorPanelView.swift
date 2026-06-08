@@ -10,7 +10,12 @@ struct MonitorPanelView: View {
     @State private var expandedKinds: Set<MonitorKind> = []
 
     var body: some View {
-        let theme = MonitorPanelTheme(colorScheme: colorScheme)
+        let theme = MonitorPanelTheme(
+            palette: MonitorPalette(
+                preference: store.settings.colorSchemePreference,
+                colorScheme: colorScheme
+            )
+        )
 
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 6) {
@@ -18,7 +23,7 @@ struct MonitorPanelView: View {
                 header(theme: theme)
 
                 ForEach(store.modules) { module in
-                    row(for: module)
+                    row(for: module, theme: theme)
                         .glassEffectID("metric-\(module.kind.id)", in: glassNamespace)
                 }
 
@@ -85,11 +90,12 @@ struct MonitorPanelView: View {
     }
 
     @ViewBuilder
-    private func row(for module: MonitorModule) -> some View {
+    private func row(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
         switch module.kind {
         case .cpu:
             MetricGlassRow(
                 module: module,
+                theme: theme,
                 detail: module.summary,
                 samples: module.samples,
                 details: module.metrics,
@@ -100,6 +106,7 @@ struct MonitorPanelView: View {
         case .gpu:
             MetricGlassRow(
                 module: module,
+                theme: theme,
                 detail: module.summary,
                 samples: module.samples,
                 details: module.metrics,
@@ -110,6 +117,7 @@ struct MonitorPanelView: View {
         case .memory:
             MetricGlassRow(
                 module: module,
+                theme: theme,
                 detail: module.summary,
                 details: module.metrics,
                 isExpanded: expandedKinds.contains(module.kind)
@@ -119,6 +127,7 @@ struct MonitorPanelView: View {
         case .storage:
             MetricGlassRow(
                 module: module,
+                theme: theme,
                 detail: module.summary,
                 details: module.metrics,
                 isExpanded: expandedKinds.contains(module.kind)
@@ -128,6 +137,7 @@ struct MonitorPanelView: View {
         case .network:
             NetworkGlassRow(
                 module: module,
+                theme: theme,
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
@@ -135,6 +145,7 @@ struct MonitorPanelView: View {
         case .battery:
             BatteryGlassRow(
                 module: module,
+                theme: theme,
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
@@ -168,20 +179,18 @@ struct MonitorPanelView: View {
 
 private struct MetricGlassRow: View {
     let module: MonitorModule
+    let theme: MonitorPanelTheme
     let detail: String
     var samples: [Double] = []
     var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
-    @Environment(\.colorScheme) private var colorScheme
 
     private var tint: Color {
-        module.kind.paletteTint
+        theme.moduleTint(for: module.kind)
     }
 
     var body: some View {
-        let theme = MonitorPanelTheme(colorScheme: colorScheme)
-
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 // 图标：保持原版紧凑 18px
@@ -214,9 +223,9 @@ private struct MetricGlassRow: View {
             if isExpanded, !details.isEmpty {
                 Group {
                     if let storageVolumes {
-                        StorageVolumeDetailList(volumes: storageVolumes, tint: tint)
+                        StorageVolumeDetailList(volumes: storageVolumes, kind: module.kind, tint: tint, theme: theme)
                     } else {
-                        MetricDetailGrid(metrics: details, tint: tint)
+                        MetricDetailGrid(metrics: details, kind: module.kind, theme: theme)
                     }
                 }
                 .padding(.horizontal, 10)
@@ -228,7 +237,7 @@ private struct MetricGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     @ViewBuilder
@@ -281,8 +290,8 @@ private struct MetricGlassRow: View {
 
 private struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
-    let tint: Color
-    @Environment(\.colorScheme) private var colorScheme
+    let kind: MonitorKind
+    let theme: MonitorPanelTheme
 
     private let columns = [
         GridItem(.flexible(), spacing: 8),
@@ -290,11 +299,9 @@ private struct MetricDetailGrid: View {
     ]
 
     var body: some View {
-        let theme = MonitorPanelTheme(colorScheme: colorScheme)
-
         VStack(spacing: 7) {
             Rectangle()
-                .fill(theme.separator)
+                .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
                 .padding(.leading, 28)
 
@@ -328,15 +335,14 @@ private struct MetricDetailGrid: View {
 
 private struct StorageVolumeDetailList: View {
     let volumes: [StorageVolumeInfo]
+    let kind: MonitorKind
     let tint: Color
-    @Environment(\.colorScheme) private var colorScheme
+    let theme: MonitorPanelTheme
 
     var body: some View {
-        let theme = MonitorPanelTheme(colorScheme: colorScheme)
-
         VStack(spacing: 8) {
             Rectangle()
-                .fill(theme.separator)
+                .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
                 .padding(.leading, 28)
 
@@ -344,12 +350,12 @@ private struct StorageVolumeDetailList: View {
                 ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                     if index > 0 {
                         Rectangle()
-                            .fill(theme.separator.opacity(0.72))
+                            .fill(theme.rowSeparator(for: kind).opacity(0.72))
                             .frame(height: 1)
                             .padding(.leading, 22)
                     }
 
-                    StorageVolumeRow(volume: volume, tint: tint, theme: theme)
+                    StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
                 }
             }
             .padding(.leading, 28)
@@ -359,6 +365,7 @@ private struct StorageVolumeDetailList: View {
 
 private struct StorageVolumeRow: View {
     let volume: StorageVolumeInfo
+    let kind: MonitorKind
     let tint: Color
     let theme: MonitorPanelTheme
 
@@ -391,7 +398,7 @@ private struct StorageVolumeRow: View {
                         .padding(.vertical, 2)
                         .background {
                             Capsule()
-                                .fill(tint.opacity(theme.isDark ? 0.18 : 0.10))
+                                .fill(theme.badgeFill(for: kind))
                         }
                 }
 
@@ -454,17 +461,15 @@ struct StorageVolumeInfo: Identifiable {
 
 private struct NetworkGlassRow: View {
     let module: MonitorModule
+    let theme: MonitorPanelTheme
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
-    @Environment(\.colorScheme) private var colorScheme
 
     private var tint: Color {
-        module.kind.paletteTint
+        theme.moduleTint(for: module.kind)
     }
 
     var body: some View {
-        let theme = MonitorPanelTheme(colorScheme: colorScheme)
-
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "wifi")
@@ -485,14 +490,14 @@ private struct NetworkGlassRow: View {
 
                 Spacer(minLength: 8)
 
-                MetricPill(systemImage: "arrow.up", text: value("上传"))
-                MetricPill(systemImage: "arrow.down", text: value("下载"))
+                MetricPill(systemImage: "arrow.up", text: value("上传"), theme: theme)
+                MetricPill(systemImage: "arrow.down", text: value("下载"), theme: theme)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
             if isExpanded {
-                MetricDetailGrid(metrics: detailMetrics, tint: tint)
+                MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
                     .transition(.detailDisclosure)
@@ -502,7 +507,7 @@ private struct NetworkGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     private var detailMetrics: [MonitorMetric] {
@@ -518,17 +523,15 @@ private struct NetworkGlassRow: View {
 
 private struct BatteryGlassRow: View {
     let module: MonitorModule
+    let theme: MonitorPanelTheme
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
-    @Environment(\.colorScheme) private var colorScheme
 
     private var tint: Color {
-        module.kind.paletteTint
+        theme.moduleTint(for: module.kind)
     }
 
     var body: some View {
-        let theme = MonitorPanelTheme(colorScheme: colorScheme)
-
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: powerSymbol)
@@ -552,17 +555,17 @@ private struct BatteryGlassRow: View {
                 Spacer(minLength: 8)
 
                 if hasBattery {
-                    MetricPill(systemImage: powerPillIcon, text: powerPillValue)
+                    MetricPill(systemImage: powerPillIcon, text: powerPillValue, theme: theme)
                 } else {
-                    MetricPill(systemImage: "powerplug", text: value("适配器"))
-                    MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("功耗"))
+                    MetricPill(systemImage: "powerplug", text: value("适配器"), theme: theme)
+                    MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("功耗"), theme: theme)
                 }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
             if hasBattery && isExpanded {
-                MetricDetailGrid(metrics: detailMetrics, tint: tint)
+                MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
                     .transition(.detailDisclosure)
@@ -574,7 +577,7 @@ private struct BatteryGlassRow: View {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     private var hasBattery: Bool {
@@ -764,11 +767,9 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
 private struct MetricPill: View {
     let systemImage: String
     let text: String
-    @Environment(\.colorScheme) private var colorScheme
+    let theme: MonitorPanelTheme
 
     var body: some View {
-        let theme = MonitorPanelTheme(colorScheme: colorScheme)
-
         Label(text, systemImage: systemImage)
             .labelStyle(.titleAndIcon)
             .font(.system(size: 11, weight: .medium, design: .rounded))
@@ -782,42 +783,46 @@ private struct MetricPill: View {
 // MARK: - Theme
 
 struct MonitorPanelTheme {
-    let colorScheme: ColorScheme
-
-    var isDark: Bool {
-        colorScheme == .dark
-    }
+    let palette: MonitorPalette
 
     var primaryText: Color {
-        isDark ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
+        palette.primaryText
     }
 
     var valueText: Color {
-        isDark ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
+        palette.valueText
     }
 
     var secondaryText: Color {
-        isDark ? Color.white.opacity(0.82) : Color(hex: 0x465164)
+        palette.secondaryText
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.68) : Color(hex: 0x5A6475)
-    }
-
-    var glassTint: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
-    }
-
-    var separator: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.22 : 0.14)
+        palette.captionText
     }
 
     var trackFill: Color {
-        isDark ? Color.white.opacity(0.08) : Color(hex: 0x3C485A).opacity(0.08)
+        palette.trackFill
     }
 
     var liveDot: Color {
-        Color(hex: 0x3DDC97)
+        palette.liveDot
+    }
+
+    func moduleTint(for kind: MonitorKind) -> Color {
+        palette.moduleTint(for: kind)
+    }
+
+    func rowGlassTint(for kind: MonitorKind) -> Color {
+        palette.rowGlassTint(for: kind)
+    }
+
+    func rowSeparator(for kind: MonitorKind) -> Color {
+        palette.rowSeparator(for: kind)
+    }
+
+    func badgeFill(for kind: MonitorKind) -> Color {
+        palette.badgeFill(for: kind)
     }
 }
 
@@ -826,38 +831,6 @@ private extension AnyTransition {
         .asymmetric(
             insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
             removal: .opacity
-        )
-    }
-}
-
-// MARK: - Color Extensions
-
-private extension MonitorKind {
-    var paletteTint: Color {
-        switch self {
-        case .cpu:
-            return Color(hex: 0xD27A4A)
-        case .gpu:
-            return Color(hex: 0x5D8CF0)
-        case .memory:
-            return Color(hex: 0x42A39A)
-        case .storage:
-            return Color(hex: 0x9A865E)
-        case .network:
-            return Color(hex: 0x43A6A0)
-        case .battery:
-            return Color(hex: 0x65AF52)
-        }
-    }
-}
-
-extension Color {
-    init(hex: UInt32) {
-        self.init(
-            .sRGB,
-            red: Double((hex >> 16) & 0xFF) / 255,
-            green: Double((hex >> 8) & 0xFF) / 255,
-            blue: Double(hex & 0xFF) / 255
         )
     }
 }

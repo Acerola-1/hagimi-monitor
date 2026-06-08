@@ -10,11 +10,14 @@ struct DisplayControlsSection: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
 
-    private let tint = Color(hex: 0x4E7FD9)
     private let expansionAnimation = Animation.smooth(duration: 0.22)
 
     var body: some View {
-        let theme = DisplayControlTheme(colorScheme: colorScheme)
+        let palette = MonitorPalette(
+            preference: settings.colorSchemePreference,
+            colorScheme: colorScheme
+        )
+        let tint = palette.displayTint
         let visibleDisplays = controller.displays
                 .filter { settings.showBuiltInDisplays || !$0.isBuiltIn }
                 .sorted { $0.isBuiltIn && !$1.isBuiltIn }
@@ -32,19 +35,19 @@ struct DisplayControlsSection: View {
 
                 Text("显示器:")
                     .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(theme.primaryText)
+                    .foregroundStyle(palette.primaryText)
                     .lineLimit(1)
 
                 Text(summary(for: visibleDisplays, hasControls: hasControls))
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(theme.valueText)
+                    .foregroundStyle(palette.valueText)
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
 
                 Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .bold))
-                    .foregroundStyle(theme.captionText)
+                    .foregroundStyle(palette.captionText)
                     .frame(width: 18, height: 18)
                     .rotationEffect(.degrees(isExpanded ? 0 : -90))
                     .animation(expansionAnimation, value: isExpanded)
@@ -62,7 +65,8 @@ struct DisplayControlsSection: View {
                 detailContent(
                     visibleDisplays: visibleDisplays,
                     hasControls: hasControls,
-                    theme: theme
+                    palette: palette,
+                    tint: tint
                 )
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
@@ -73,30 +77,31 @@ struct DisplayControlsSection: View {
             controller.refreshAsync()
         }
         .animation(expansionAnimation, value: isExpanded)
-        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(palette.displayGlassTint), in: .rect(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder
     private func detailContent(
         visibleDisplays: [ControlledDisplay],
         hasControls: Bool,
-        theme: DisplayControlTheme
+        palette: MonitorPalette,
+        tint: Color
     ) -> some View {
         if !hasControls {
-            DisplayEmptyState(text: "设置中未启用控制项", theme: theme, tint: tint)
+            DisplayEmptyState(text: "设置中未启用控制项", palette: palette)
         } else if visibleDisplays.isEmpty {
-            DisplayEmptyState(text: settings.showBuiltInDisplays ? "未发现显示器" : "未发现外接显示器", theme: theme, tint: tint)
+            DisplayEmptyState(text: settings.showBuiltInDisplays ? "未发现显示器" : "未发现外接显示器", palette: palette)
         } else {
             VStack(spacing: 8) {
                 Rectangle()
-                    .fill(theme.separator)
+                    .fill(palette.displaySeparator)
                     .frame(height: 1)
                     .padding(.leading, 28)
 
                 ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
                     if index > 0 {
                         Rectangle()
-                            .fill(theme.separator.opacity(0.72))
+                            .fill(palette.displaySeparator.opacity(0.72))
                             .frame(height: 1)
                             .padding(.leading, 28)
                     }
@@ -105,7 +110,7 @@ struct DisplayControlsSection: View {
                         display: display,
                         settings: settings,
                         controller: controller,
-                        theme: theme,
+                        palette: palette,
                         tint: tint
                     )
                 }
@@ -139,7 +144,7 @@ private struct DisplayControlGroup: View {
     let display: ControlledDisplay
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var controller: DisplayControlController
-    let theme: DisplayControlTheme
+    let palette: MonitorPalette
     let tint: Color
 
     var body: some View {
@@ -155,7 +160,7 @@ private struct DisplayControlGroup: View {
                 HStack(spacing: 8) {
                     Text(display.name)
                         .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(theme.primaryText)
+                        .foregroundStyle(palette.primaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
                         .help(display.name)
@@ -164,13 +169,13 @@ private struct DisplayControlGroup: View {
 
                     Text(display.isBuiltIn ? "内置" : "外接")
                         .font(.system(size: 9, weight: .semibold, design: .rounded))
-                        .foregroundStyle(theme.secondaryText)
+                        .foregroundStyle(palette.secondaryText)
                         .lineLimit(1)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
                         .background {
                             Capsule()
-                                .fill(theme.controlBadgeFill)
+                                .fill(palette.displayBadgeFill)
                         }
                 }
 
@@ -181,7 +186,7 @@ private struct DisplayControlGroup: View {
                             systemImage: "sun.max",
                             value: binding(for: .brightness),
                             isEnabled: display.supports(.brightness),
-                            theme: theme,
+                            palette: palette,
                             tint: tint
                         )
                     }
@@ -192,7 +197,7 @@ private struct DisplayControlGroup: View {
                             systemImage: "speaker.wave.2",
                             value: binding(for: .volume),
                             isEnabled: display.supports(.volume),
-                            theme: theme,
+                            palette: palette,
                             tint: tint
                         )
                     }
@@ -203,7 +208,7 @@ private struct DisplayControlGroup: View {
                             systemImage: "circle.lefthalf.filled",
                             value: binding(for: .contrast),
                             isEnabled: display.supports(.contrast),
-                            theme: theme,
+                            palette: palette,
                             tint: tint
                         )
                     }
@@ -226,7 +231,7 @@ private struct DisplayControlSlider: View {
     let systemImage: String
     @Binding var value: Double
     let isEnabled: Bool
-    let theme: DisplayControlTheme
+    let palette: MonitorPalette
     let tint: Color
 
     var body: some View {
@@ -234,12 +239,12 @@ private struct DisplayControlSlider: View {
             Image(systemName: systemImage)
                 .font(.system(size: 10, weight: .semibold))
                 .symbolRenderingMode(.monochrome)
-                .foregroundStyle(isEnabled ? tint : theme.captionText)
+                .foregroundStyle(isEnabled ? tint : palette.captionText)
                 .frame(width: 14)
 
             Text(label)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(isEnabled ? theme.secondaryText : theme.captionText)
+                .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
                 .frame(width: 34, alignment: .leading)
 
             Slider(value: $value, in: 0...100, step: 1)
@@ -250,7 +255,7 @@ private struct DisplayControlSlider: View {
             Text("\(Int(value.rounded()))%")
                 .font(.system(size: 10, weight: .semibold, design: .rounded))
                 .monospacedDigit()
-                .foregroundStyle(isEnabled ? theme.secondaryText : theme.captionText)
+                .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
                 .frame(width: 34, alignment: .trailing)
         }
         .opacity(isEnabled ? 1 : 0.48)
@@ -259,19 +264,18 @@ private struct DisplayControlSlider: View {
 
 private struct DisplayEmptyState: View {
     let text: String
-    let theme: DisplayControlTheme
-    let tint: Color
+    let palette: MonitorPalette
 
     var body: some View {
         VStack(spacing: 7) {
             Rectangle()
-                .fill(theme.separator)
+                .fill(palette.displaySeparator)
                 .frame(height: 1)
                 .padding(.leading, 28)
 
             Text(text)
                 .font(.system(size: 10, weight: .medium))
-                .foregroundStyle(theme.captionText)
+                .foregroundStyle(palette.captionText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 28)
         }
@@ -650,41 +654,5 @@ private final class DisplayServicesBridge {
     func setBrightness(displayID: CGDirectDisplayID, value: Float) -> Bool {
         let clampedValue = min(1, max(0, value))
         return DisplayServicesSetBrightness(displayID, clampedValue) == 0
-    }
-}
-
-private struct DisplayControlTheme {
-    let colorScheme: ColorScheme
-
-    var isDark: Bool {
-        colorScheme == .dark
-    }
-
-    var primaryText: Color {
-        isDark ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
-    }
-
-    var valueText: Color {
-        isDark ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
-    }
-
-    var secondaryText: Color {
-        isDark ? Color.white.opacity(0.82) : Color(hex: 0x465164)
-    }
-
-    var captionText: Color {
-        isDark ? Color.white.opacity(0.68) : Color(hex: 0x5A6475)
-    }
-
-    var glassTint: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
-    }
-
-    var separator: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.22 : 0.14)
-    }
-
-    var controlBadgeFill: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.16 : 0.10)
     }
 }

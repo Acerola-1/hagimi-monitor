@@ -5,6 +5,7 @@
 //  Created by Acerola on 2026/5/11.
 //
 
+import Foundation
 import Testing
 @testable import HagimiMonitor
 
@@ -59,5 +60,34 @@ struct HagimiMonitorTests {
         #expect(networkAddressSummary(["192.168.1.8"]) == "192.168.1.8")
         #expect(networkAddressSummary(["192.168.1.8", "2001:db8::8"]) == "192.168.1.8, 2001:db8::8")
         #expect(networkAddressSummary([]) == "--")
+    }
+
+    @Test func monitorColorSchemeDefaultsToBalanced() {
+        let defaults = UserDefaults(suiteName: "HagimiMonitorTests.colorScheme.default")!
+        defaults.removePersistentDomain(forName: "HagimiMonitorTests.colorScheme.default")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(settings.colorSchemePreference == .balanced)
+    }
+
+    @Test func monitorColorSchemeLoadsPersistedValue() {
+        let defaults = UserDefaults(suiteName: "HagimiMonitorTests.colorScheme.persisted")!
+        defaults.removePersistentDomain(forName: "HagimiMonitorTests.colorScheme.persisted")
+        defaults.set(MonitorColorSchemePreference.vibrant.rawValue, forKey: "settings.colorSchemePreference")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(settings.colorSchemePreference == .vibrant)
+    }
+
+    @Test func monitorColorSchemeFallsBackForUnknownValue() {
+        let defaults = UserDefaults(suiteName: "HagimiMonitorTests.colorScheme.unknown")!
+        defaults.removePersistentDomain(forName: "HagimiMonitorTests.colorScheme.unknown")
+        defaults.set("unknown", forKey: "settings.colorSchemePreference")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(settings.colorSchemePreference == .balanced)
     }
 }

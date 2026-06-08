@@ -33,9 +33,26 @@ enum AppThemePreference: String, CaseIterable, Identifiable {
     }
 }
 
+enum MonitorColorSchemePreference: String, CaseIterable, Identifiable {
+    case balanced
+    case vibrant
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .balanced:
+            "平衡"
+        case .vibrant:
+            "活力"
+        }
+    }
+}
+
 final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false
     @Published var themePreference: AppThemePreference = .system
+    @Published var colorSchemePreference: MonitorColorSchemePreference = .balanced
     @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
@@ -52,6 +69,9 @@ final class MonitorSettings: ObservableObject {
 
         let themeRawValue = defaults.string(forKey: Keys.themePreference) ?? AppThemePreference.system.rawValue
         themePreference = AppThemePreference(rawValue: themeRawValue) ?? .system
+
+        let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.balanced.rawValue
+        colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .balanced
 
         showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
         displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? false
@@ -95,6 +115,13 @@ final class MonitorSettings: ObservableObject {
             .dropFirst()
             .sink { [weak self] newValue in
                 self?.persist(newValue.rawValue, forKey: Keys.themePreference)
+            }
+            .store(in: &cancellables)
+
+        $colorSchemePreference
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.colorSchemePreference)
             }
             .store(in: &cancellables)
 
@@ -170,6 +197,7 @@ final class MonitorSettings: ObservableObject {
 
 private enum Keys {
     static let themePreference = "settings.themePreference"
+    static let colorSchemePreference = "settings.colorSchemePreference"
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
