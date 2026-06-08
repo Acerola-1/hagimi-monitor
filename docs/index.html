@@ -748,15 +748,19 @@
     <script>
         const starCount = document.getElementById("star-count");
 
-        fetch("https://api.github.com/repos/Acerola-1/hagimi-monitor")
-            .then((response) => response.ok ? response.json() : Promise.reject())
-            .then((repo) => {
-                if (typeof repo.stargazers_count === "number") {
-                    starCount.textContent = repo.stargazers_count.toLocaleString("en-US");
+        // shields.io 不受 GitHub API 匿名限流影响
+        fetch("https://img.shields.io/github/stars/Acerola-1/hagimi-monitor.json")
+            .then((r) => r.ok ? r.json() : Promise.reject())
+            .then((data) => {
+                const val = data?.value;
+                if (val && val !== "0") {
+                    starCount.textContent = val;
+                } else {
+                    starCount.textContent = "0";
                 }
             })
             .catch(() => {
-                starCount.textContent = "-";
+                // shields.io 也失败时静默保留 "--"
             });
     </script>
 </body>
