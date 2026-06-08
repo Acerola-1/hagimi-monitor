@@ -29,7 +29,8 @@ enum MenuBarComputeRingIcon {
 
         style.trackColor.setStroke()
         let trackInset = (18 - style.trackSize) / 2
-        let track = NSBezierPath(ovalIn: NSRect(x: trackInset, y: trackInset, width: style.trackSize, height: style.trackSize))
+        let trackRect = NSRect(x: trackInset, y: trackInset, width: style.trackSize, height: style.trackSize)
+        let track = NSBezierPath(ovalIn: trackRect)
         track.lineWidth = style.trackWidth
         track.stroke()
 
@@ -37,15 +38,18 @@ enum MenuBarComputeRingIcon {
             in: ringRect,
             progress: style.progress,
             lineWidth: style.lineWidth,
-            color: style.glowColor
-        )
-
-        drawArc(
-            in: ringRect,
-            progress: style.progress,
-            lineWidth: style.lineWidth,
             color: style.tint
         )
+
+        style.coreBackplateColor.setFill()
+        NSBezierPath(
+            ovalIn: NSRect(
+                x: center.x - style.coreBackplateSize / 2,
+                y: center.y - style.coreBackplateSize / 2,
+                width: style.coreBackplateSize,
+                height: style.coreBackplateSize
+            )
+        ).fill()
 
         style.coreColor.setFill()
         NSBezierPath(
@@ -98,28 +102,28 @@ private struct MenuBarComputeRingImageStyle {
     }
 
     var trackColor: NSColor {
-        ink.withAlphaComponent(darkMode ? 0.28 : 0.22)
-    }
-
-    var glowColor: NSColor {
-        ink.withAlphaComponent((darkMode ? 0.16 : 0.08) + normalizedLoad * 0.14 + linearPulse * normalizedLoad * 0.06)
+        ink.withAlphaComponent(darkMode ? 0.34 : 0.28)
     }
 
     var coreColor: NSColor {
         loadLevel.coreColor(darkMode: darkMode)
-            .withAlphaComponent((darkMode ? 0.68 : 0.82) + normalizedLoad * 0.12 + linearPulse * 0.04)
+            .withAlphaComponent((darkMode ? 0.76 : 0.88) + normalizedLoad * 0.10 + linearPulse * 0.03)
     }
 
     var lineWidth: CGFloat {
-        CGFloat(1.8 + normalizedLoad * 0.75 + linearPulse * normalizedLoad * 0.10)
+        CGFloat(1.9 + normalizedLoad * 0.55)
     }
 
     var ringSize: CGFloat {
-        CGFloat(13.0 + linearPulse * (0.30 + normalizedLoad * 0.50))
+        13.0
     }
 
     var coreSize: CGFloat {
-        CGFloat(2.1 + normalizedLoad * 2.0 + linearPulse * normalizedLoad * 0.25)
+        CGFloat(3.0 + normalizedLoad * 1.9)
+    }
+
+    var coreBackplateSize: CGFloat {
+        coreSize + 1.8
     }
 
     var trackSize: CGFloat {
@@ -127,7 +131,13 @@ private struct MenuBarComputeRingImageStyle {
     }
 
     var trackWidth: CGFloat {
-        darkMode ? 1.45 : 1.35
+        1.35
+    }
+
+    var coreBackplateColor: NSColor {
+        darkMode
+            ? NSColor.black.withAlphaComponent(0.48)
+            : NSColor.white.withAlphaComponent(0.76)
     }
 
     private var ink: NSColor {
