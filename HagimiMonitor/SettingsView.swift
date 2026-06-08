@@ -262,7 +262,7 @@ private struct AboutPane: View {
     var body: some View {
         VStack(spacing: 22) {
             VStack(spacing: 12) {
-                Image(nsImage: NSImage(named: "AppIcon") ?? NSImage())
+                Image("AboutIcon")
                     .resizable()
                     .frame(width: 82, height: 82)
                     .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
