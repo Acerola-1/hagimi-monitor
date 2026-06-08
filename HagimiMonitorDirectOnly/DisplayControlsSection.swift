@@ -10,7 +10,7 @@ struct DisplayControlsSection: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
 
-    private let tint = Color(hex: 0xFF7EB6)
+    private let tint = Color(hex: 0x4E7FD9)
     private let expansionAnimation = Animation.smooth(duration: 0.22)
 
     var body: some View {
@@ -73,7 +73,7 @@ struct DisplayControlsSection: View {
             controller.refreshAsync()
         }
         .animation(expansionAnimation, value: isExpanded)
-        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: 14, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: 14, style: .continuous))
     }
 
     @ViewBuilder
@@ -89,14 +89,14 @@ struct DisplayControlsSection: View {
         } else {
             VStack(spacing: 8) {
                 Rectangle()
-                    .fill(theme.separator(for: tint))
+                    .fill(theme.separator)
                     .frame(height: 1)
                     .padding(.leading, 28)
 
                 ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
                     if index > 0 {
                         Rectangle()
-                            .fill(theme.separator(for: tint).opacity(0.72))
+                            .fill(theme.separator.opacity(0.72))
                             .frame(height: 1)
                             .padding(.leading, 28)
                     }
@@ -170,7 +170,7 @@ private struct DisplayControlGroup: View {
                         .padding(.vertical, 2)
                         .background {
                             Capsule()
-                                .fill(tint.opacity(theme.isDark ? 0.18 : 0.10))
+                                .fill(theme.controlBadgeFill)
                         }
                 }
 
@@ -265,7 +265,7 @@ private struct DisplayEmptyState: View {
     var body: some View {
         VStack(spacing: 7) {
             Rectangle()
-                .fill(theme.separator(for: tint))
+                .fill(theme.separator)
                 .frame(height: 1)
                 .padding(.leading, 28)
 
@@ -661,37 +661,30 @@ private struct DisplayControlTheme {
     }
 
     var primaryText: Color {
-        isDark ? Color.white.opacity(0.94) : Color.primary
+        isDark ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
     }
 
     var valueText: Color {
-        isDark ? Color.white.opacity(0.82) : Color.secondary
+        isDark ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
     }
 
     var secondaryText: Color {
-        isDark ? Color.white.opacity(0.72) : Color.secondary
+        isDark ? Color.white.opacity(0.82) : Color(hex: 0x465164)
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.52) : Color.black.opacity(0.36)
+        isDark ? Color.white.opacity(0.68) : Color(hex: 0x5A6475)
     }
 
-    func glassTint(for tint: Color) -> Color {
-        tint.opacity(isDark ? 0.16 : 0.08)
+    var glassTint: Color {
+        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
     }
 
-    func separator(for tint: Color) -> Color {
-        tint.opacity(isDark ? 0.28 : 0.18)
+    var separator: Color {
+        Color(hex: 0x7A91B4).opacity(isDark ? 0.22 : 0.14)
     }
-}
 
-private extension Color {
-    init(hex: UInt32) {
-        self.init(
-            .sRGB,
-            red: Double((hex >> 16) & 0xFF) / 255,
-            green: Double((hex >> 8) & 0xFF) / 255,
-            blue: Double(hex & 0xFF) / 255
-        )
+    var controlBadgeFill: Color {
+        Color(hex: 0x7A91B4).opacity(isDark ? 0.16 : 0.10)
     }
 }

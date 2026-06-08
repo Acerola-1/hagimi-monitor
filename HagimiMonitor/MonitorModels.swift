@@ -22,11 +22,11 @@ enum MonitorSeverity {
     var tint: Color {
         switch self {
         case .calm:
-            Color(red: 0.18, green: 0.55, blue: 0.36)
+            Color(hex: 0x2F9E64)
         case .warning:
-            Color(red: 0.86, green: 0.54, blue: 0.12)
+            Color(hex: 0xB8872E)
         case .critical:
-            Color(red: 0.82, green: 0.20, blue: 0.18)
+            Color(hex: 0xD94848)
         }
     }
 }

@@ -228,7 +228,7 @@ private struct MetricGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     @ViewBuilder
@@ -294,7 +294,7 @@ private struct MetricDetailGrid: View {
 
         VStack(spacing: 7) {
             Rectangle()
-                .fill(theme.separator(for: tint))
+                .fill(theme.separator)
                 .frame(height: 1)
                 .padding(.leading, 28)
 
@@ -336,7 +336,7 @@ private struct StorageVolumeDetailList: View {
 
         VStack(spacing: 8) {
             Rectangle()
-                .fill(theme.separator(for: tint))
+                .fill(theme.separator)
                 .frame(height: 1)
                 .padding(.leading, 28)
 
@@ -344,7 +344,7 @@ private struct StorageVolumeDetailList: View {
                 ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
                     if index > 0 {
                         Rectangle()
-                            .fill(theme.separator(for: tint).opacity(0.72))
+                            .fill(theme.separator.opacity(0.72))
                             .frame(height: 1)
                             .padding(.leading, 22)
                     }
@@ -502,7 +502,7 @@ private struct NetworkGlassRow: View {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     private var detailMetrics: [MonitorMetric] {
@@ -574,7 +574,7 @@ private struct BatteryGlassRow: View {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(theme.glassTint(for: tint)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .glassEffect(.regular.tint(theme.glassTint), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
     private var hasBattery: Bool {
@@ -789,35 +789,35 @@ struct MonitorPanelTheme {
     }
 
     var primaryText: Color {
-        isDark ? Color.white.opacity(0.94) : Color.primary
+        isDark ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
     }
 
     var valueText: Color {
-        isDark ? Color.white.opacity(0.82) : Color.secondary
+        isDark ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
     }
 
     var secondaryText: Color {
-        isDark ? Color.white.opacity(0.72) : Color.secondary
+        isDark ? Color.white.opacity(0.82) : Color(hex: 0x465164)
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.52) : Color.black.opacity(0.36)
+        isDark ? Color.white.opacity(0.68) : Color(hex: 0x5A6475)
     }
 
-    func glassTint(for tint: Color) -> Color {
-        tint.opacity(isDark ? 0.16 : 0.08)
+    var glassTint: Color {
+        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
     }
 
-    func separator(for tint: Color) -> Color {
-        tint.opacity(isDark ? 0.28 : 0.18)
+    var separator: Color {
+        Color(hex: 0x7A91B4).opacity(isDark ? 0.22 : 0.14)
     }
 
     var trackFill: Color {
-        isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+        isDark ? Color.white.opacity(0.08) : Color(hex: 0x3C485A).opacity(0.08)
     }
 
     var liveDot: Color {
-        Color(red: 0.30, green: 0.85, blue: 0.50)
+        Color(hex: 0x3DDC97)
     }
 }
 
@@ -836,22 +836,22 @@ private extension MonitorKind {
     var paletteTint: Color {
         switch self {
         case .cpu:
-            return Color(hex: 0xFA4D56)
+            return Color(hex: 0xD27A4A)
         case .gpu:
-            return Color(hex: 0xA855F7)
+            return Color(hex: 0x5D8CF0)
         case .memory:
-            return Color(hex: 0x1192E8)
+            return Color(hex: 0x42A39A)
         case .storage:
-            return Color(hex: 0xB28600)
+            return Color(hex: 0x9A865E)
         case .network:
-            return Color(hex: 0x009D9A)
+            return Color(hex: 0x43A6A0)
         case .battery:
-            return Color(hex: 0x198038)
+            return Color(hex: 0x65AF52)
         }
     }
 }
 
-private extension Color {
+extension Color {
     init(hex: UInt32) {
         self.init(
             .sRGB,
