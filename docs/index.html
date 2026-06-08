@@ -6,6 +6,23 @@
     <title>Hagimi Monitor - macOS 菜单栏系统监控</title>
     <meta name="description" content="Hagimi Monitor 是一款面向 Apple Silicon 的 macOS 菜单栏系统监控工具。">
     <link rel="icon" type="image/png" href="images/icon.png">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Hagimi Monitor",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS 26",
+        "description": "macOS 菜单栏系统监控工具，实时显示 CPU、GPU、内存、存储、网络和电池状态。",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "CNY"
+        },
+        "programmingLanguage": "Swift",
+        "processorRequirements": "Apple Silicon"
+    }
+    </script>
     <style>
         :root {
             --page: #f2f0ea;
@@ -21,8 +38,21 @@
             --radius: 8px;
         }
 
+        [data-theme="dark"] {
+            --page: #111311;
+            --paper: #191b18;
+            --ink: #f1efe6;
+            --muted: #a6a398;
+            --line: rgba(241, 239, 230, 0.13);
+            --line-strong: rgba(241, 239, 230, 0.24);
+            --green: #5ac878;
+            --amber: #e2a442;
+            --red: #ee6a5b;
+            --shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+        }
+
         @media (prefers-color-scheme: dark) {
-            :root {
+            :root:not([data-theme]) {
                 --page: #111311;
                 --paper: #191b18;
                 --ink: #f1efe6;
@@ -71,6 +101,14 @@
             margin: 0;
         }
 
+        /* Focus styles */
+        a:focus-visible,
+        button:focus-visible {
+            outline: 2px solid var(--green);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
         .site-header {
             position: sticky;
             top: 0;
@@ -100,6 +138,7 @@
             letter-spacing: 0;
         }
 
+        /* brand icon: src image is 1254x1254 but displayed at 30x30 — consider providing a smaller web-optimized version */
         .brand img {
             width: 30px;
             height: 30px;
@@ -156,6 +195,7 @@
             fill: currentColor;
         }
 
+        /* Hero */
         .hero {
             width: min(1160px, calc(100% - 40px));
             min-height: calc(100svh - 64px);
@@ -254,14 +294,15 @@
             border-left: 1px solid var(--line);
         }
 
+        /* Product frame with macOS menu bar simulation */
         .product-frame {
             justify-self: end;
             width: min(100%, 480px);
             position: relative;
         }
 
-        .menubar-strip {
-            height: 38px;
+        .menubar-sim {
+            height: 32px;
             margin: 0 12px -3px;
             border: 1px solid var(--line-strong);
             border-bottom: 0;
@@ -269,21 +310,42 @@
             background: color-mix(in srgb, var(--paper) 84%, transparent);
             display: flex;
             align-items: center;
-            justify-content: flex-end;
-            gap: 8px;
-            padding: 0 14px;
+            justify-content: space-between;
+            padding: 0 12px 0 14px;
             color: var(--muted);
             font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
             font-size: 12px;
+            font-weight: 600;
         }
 
-        .ring-mark {
-            width: 18px;
-            height: 18px;
+        .menubar-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .menubar-left svg {
+            fill: currentColor;
+        }
+
+        .menubar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .menubar-right svg {
+            fill: currentColor;
+        }
+
+        .ring-icon {
+            width: 16px;
+            height: 16px;
             border: 3px solid var(--green);
             border-right-color: var(--amber);
             border-bottom-color: var(--red);
             border-radius: 50%;
+            flex-shrink: 0;
         }
 
         .screen-shot {
@@ -294,20 +356,42 @@
             overflow: hidden;
         }
 
+        /* Theme-aware screenshot switching for hero */
         .screen-shot .dark {
             display: none;
         }
 
+        :root:not([data-theme]) .screen-shot .dark {
+            display: none;
+        }
+
         @media (prefers-color-scheme: dark) {
-            .screen-shot .light {
+            :root:not([data-theme]) .screen-shot .light {
                 display: none;
             }
 
-            .screen-shot .dark {
+            :root:not([data-theme]) .screen-shot .dark {
                 display: block;
             }
         }
 
+        [data-theme="light"] .screen-shot .light {
+            display: block;
+        }
+
+        [data-theme="light"] .screen-shot .dark {
+            display: none;
+        }
+
+        [data-theme="dark"] .screen-shot .light {
+            display: none;
+        }
+
+        [data-theme="dark"] .screen-shot .dark {
+            display: block;
+        }
+
+        /* Sections */
         .section {
             width: min(1160px, calc(100% - 40px));
             margin: 0 auto;
@@ -337,6 +421,7 @@
             line-height: 1.75;
         }
 
+        /* Feature grid */
         .feature-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
@@ -359,14 +444,25 @@
             border-bottom: 0;
         }
 
-        .feature code {
-            display: inline-block;
-            margin-bottom: 34px;
-            color: var(--green);
-            font-family: ui-monospace, "SF Mono", Menlo, monospace;
-            font-size: 12px;
-            font-weight: 800;
-            letter-spacing: 0;
+        .feature-icon {
+            width: 36px;
+            height: 36px;
+            margin-bottom: 18px;
+            border-radius: 8px;
+            background: color-mix(in srgb, var(--green) 10%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .feature-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke: var(--green);
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
 
         .feature h3 {
@@ -382,6 +478,69 @@
             font-size: 15px;
         }
 
+        /* Theme toggle */
+        .section-head-row {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 34px;
+        }
+
+        .section-head-row .section-head-text {
+            display: grid;
+            grid-template-columns: minmax(0, 0.72fr) minmax(260px, 0.46fr);
+            gap: 48px;
+            align-items: end;
+            flex: 1;
+        }
+
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--line-strong);
+            border-radius: 7px;
+            background: color-mix(in srgb, var(--paper) 74%, transparent);
+            cursor: pointer;
+            flex-shrink: 0;
+            padding: 0;
+            color: var(--ink);
+        }
+
+        .theme-toggle:hover {
+            background: color-mix(in srgb, var(--ink) 7%, transparent);
+        }
+
+        .theme-toggle svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .theme-toggle .icon-sun {
+            display: block;
+        }
+
+        .theme-toggle .icon-moon {
+            display: none;
+        }
+
+        [data-theme="dark"] .theme-toggle .icon-sun {
+            display: none;
+        }
+
+        [data-theme="dark"] .theme-toggle .icon-moon {
+            display: block;
+        }
+
+        /* Showcase grid with theme-aware screenshots */
         .showcase-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -402,6 +561,41 @@
             background: var(--page);
         }
 
+        /* Theme-aware screenshot visibility in showcase */
+        .shot-card .dark {
+            display: none;
+        }
+
+        :root:not([data-theme]) .shot-card .dark {
+            display: none;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme]) .shot-card .light {
+                display: none;
+            }
+
+            :root:not([data-theme]) .shot-card .dark {
+                display: block;
+            }
+        }
+
+        [data-theme="light"] .shot-card .light {
+            display: block;
+        }
+
+        [data-theme="light"] .shot-card .dark {
+            display: none;
+        }
+
+        [data-theme="dark"] .shot-card .light {
+            display: none;
+        }
+
+        [data-theme="dark"] .shot-card .dark {
+            display: block;
+        }
+
         .shot-caption {
             display: flex;
             align-items: baseline;
@@ -420,6 +614,7 @@
             font-size: 12px;
         }
 
+        /* Detail section */
         .detail-layout {
             display: grid;
             grid-template-columns: minmax(280px, 0.38fr) minmax(0, 0.62fr);
@@ -464,8 +659,20 @@
             width: 100%;
             border-radius: 6px;
             border: 1px solid var(--line);
+            max-height: 800px;
+            object-fit: contain;
+            object-position: top;
         }
 
+        .detail-image-note {
+            margin: 10px 0 0;
+            text-align: center;
+            color: var(--muted);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 11px;
+        }
+
+        /* Footer */
         .footer {
             width: min(1160px, calc(100% - 40px));
             margin: 0 auto;
@@ -484,6 +691,7 @@
             font-weight: 700;
         }
 
+        /* Responsive */
         @media (max-width: 860px) {
             .nav {
                 width: min(100% - 28px, 1160px);
@@ -512,6 +720,7 @@
             }
 
             .section-head,
+            .section-head-row .section-head-text,
             .detail-layout {
                 grid-template-columns: 1fr;
                 gap: 22px;
@@ -587,6 +796,14 @@
             .footer {
                 flex-direction: column;
             }
+
+            .menubar-sim {
+                display: none;
+            }
+
+            .screen-shot {
+                border-radius: 14px;
+            }
         }
     </style>
 </head>
@@ -594,7 +811,8 @@
     <header class="site-header">
         <nav class="nav" aria-label="主导航">
             <a class="brand" href="#">
-                <img src="images/icon.png" alt="">
+                <!-- icon.png is 1254x1254 — consider providing a smaller web-optimized version (e.g. 60x60) -->
+                <img src="images/icon.png" alt="" width="30" height="30">
                 <span>Hagimi Monitor</span>
             </a>
             <div class="nav-links">
@@ -617,8 +835,8 @@
         <section class="hero">
             <div>
                 <p class="eyebrow">macOS 26+ / Apple Silicon</p>
-                <h1>菜单栏里的系统状态，不必铺满桌面。</h1>
-                <p class="lead">Hagimi Monitor 把 CPU、GPU、内存、存储、网络和电池收进一个紧凑面板。常看负载环，想确认时再点开细节。</p>
+                <h1>系统状态，一眼可见。</h1>
+                <p class="lead">菜单栏图标实时显示负载，点击展开 CPU、GPU、内存、存储、网络、电池详情。常驻不到 30 MB，不占桌面空间。</p>
                 <div class="hero-actions">
                     <a class="button" href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
@@ -627,16 +845,29 @@
                     <a class="button secondary" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">查看源码</a>
                 </div>
                 <div class="spec-row" aria-label="基础信息">
-                    <div>原生 SwiftUI</div>
-                    <div>菜单栏常驻</div>
+                    <div>macOS 26+</div>
+                    <div>Apple Silicon 优化</div>
                     <div>免费开源</div>
                 </div>
             </div>
 
             <div class="product-frame" aria-label="产品截图">
-                <div class="menubar-strip">
-                    <span>Mon 22:30</span>
-                    <span class="ring-mark" aria-hidden="true"></span>
+                <div class="menubar-sim" aria-hidden="true">
+                    <div class="menubar-left">
+                        <!-- Apple logo -->
+                        <svg width="13" height="16" viewBox="0 0 170 200" aria-hidden="true"><path d="M150 62.5c-1.4-7.2-4.1-13.3-8.2-18.3-4.1-5-9.6-9-16.5-12 3.4-4.8 5.8-9.5 7.2-14.2 1.4-4.7 1.8-9.1 1.2-13.2-5.8 1.3-10.8 3.6-15 6.9-4.2 3.3-8.3 7.7-12.2 13.2-4.3-1.4-9.4-2.1-15.3-2.1-5.6 0-10.6.6-15 1.9-3.9-5.4-8-9.7-12.2-13-4.2-3.3-9.2-5.6-15-6.9-.6 4.1-.2 8.5 1.2 13.2 1.4 4.7 3.8 9.4 7.2 14.2-6.9 3-12.4 7-16.5 12-4.1 5-6.9 11.1-8.2 18.3-6.8 3-12 7.1-15.7 12.2-3.7 5.1-5.5 10.8-5.5 17.2 0 8.2 2.9 15.1 8.6 20.6 5.7 5.5 12.9 8.8 21.6 9.8 5.4.8 10.4.8 15 0 4.6-.8 8.8-2.2 12.5-4.3 3.1-1.7 5.7-3.7 7.8-6 1.6-1.7 2.9-3.5 3.9-5.4h.7c1 1.9 2.3 3.7 3.9 5.4 2.1 2.3 4.7 4.3 7.8 6 3.7 2.1 7.9 3.5 12.5 4.3 4.6.8 9.6.8 15 0 8.7-1 15.9-4.3 21.6-9.8 5.7-5.5 8.6-12.4 8.6-20.6 0-6.4-1.8-12.1-5.5-17.2-3.7-5.1-8.9-9.2-15.8-12.2Z" fill="currentColor"/></svg>
+                        <span>Hagimi Monitor</span>
+                    </div>
+                    <div class="menubar-right">
+                        <!-- WiFi icon -->
+                        <svg width="15" height="12" viewBox="0 0 24 18" aria-hidden="true"><path d="M12 16a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-4.95-3.54a7.03 7.03 0 0 1 9.9 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M3.51 8.16a11.05 11.05 0 0 1 16.98 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+                        <!-- Battery icon -->
+                        <svg width="20" height="11" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="1" width="22" height="12" rx="2.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="3.5" y="3.5" width="14" height="7" rx="1" fill="currentColor" opacity="0.7"/><path d="M25 5v4a2 2 0 0 0 0-4Z" fill="currentColor" opacity="0.5"/></svg>
+                        <!-- Control Center icon -->
+                        <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="5" r="2.5" fill="currentColor"/><circle cx="15" cy="5" r="2.5" fill="currentColor"/><circle cx="5" cy="15" r="2.5" fill="currentColor"/><circle cx="15" cy="15" r="2.5" fill="currentColor"/></svg>
+                        <!-- Hagimi Monitor ring icon -->
+                        <div class="ring-icon"></div>
+                    </div>
                 </div>
                 <div class="screen-shot">
                     <img class="light" src="images/vitality-light.png" alt="Hagimi Monitor 活力浅色界面截图">
@@ -652,70 +883,100 @@
             </div>
             <div class="feature-grid">
                 <article class="feature">
-                    <code>01</code>
+                    <div class="feature-icon">
+                        <!-- Ring/circle icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 6.36 2.64" style="stroke:var(--amber)"/><path d="M12 3a9 9 0 0 0-6.36 15.36" style="stroke:var(--red)"/></svg>
+                    </div>
                     <h3>负载环</h3>
-                    <p>菜单栏图标用颜色和环形进度提示综合压力，轻载、忙碌、高压能直接区分。</p>
+                    <p>菜单栏图标实时反映系统压力，颜色从绿到橙到红，轻载、忙碌、高压一眼区分。</p>
                 </article>
                 <article class="feature">
-                    <code>02</code>
+                    <div class="feature-icon">
+                        <!-- CPU/chip icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
+                    </div>
                     <h3>核心指标</h3>
                     <p>CPU、GPU、内存、存储、网络、电池各自独立采样，状态变化不用打开活动监视器。</p>
                 </article>
                 <article class="feature">
-                    <code>03</code>
+                    <div class="feature-icon">
+                        <!-- Chart/trend icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20L8 13L13 16L21 6"/><path d="M17 6h4v4"/></svg>
+                    </div>
                     <h3>趋势图</h3>
                     <p>CPU 与 GPU 使用率配有小型趋势图，短时间尖峰和持续高负载不会混在一起。</p>
                 </article>
                 <article class="feature">
-                    <code>04</code>
+                    <div class="feature-icon">
+                        <!-- Expand/chevrons icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></svg>
+                    </div>
                     <h3>展开详情</h3>
                     <p>需要追原因时，可以展开查看核心分布、显存、内存压力、卷信息、IP 和电池健康。</p>
                 </article>
                 <article class="feature">
-                    <code>05</code>
+                    <div class="feature-icon">
+                        <!-- Palette/swatch icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.5" fill="var(--green)" stroke="none"/><circle cx="12" cy="7.5" r="1.5" fill="var(--amber)" stroke="none"/><circle cx="16" cy="10" r="1.5" fill="var(--red)" stroke="none"/></svg>
+                    </div>
                     <h3>两套配色</h3>
                     <p>平衡模式更安静，活力模式更醒目。两者都分别适配浅色和深色外观。</p>
                 </article>
                 <article class="feature">
-                    <code>06</code>
-                    <h3>Direct 构建</h3>
-                    <p>非 App Store 构建可加入外接显示器亮度、音量和对比度控制，显示控制不进入沙盒版。</p>
+                    <div class="feature-icon">
+                        <!-- Display/monitor icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    </div>
+                    <h3>显示器控制</h3>
+                    <p>非 App Store 版本支持外接显示器亮度、音量、对比度调节，适配 DDC/CI 协议设备。</p>
                 </article>
             </div>
         </section>
 
         <section id="themes" class="section">
-            <div class="section-head">
-                <h2>浅色、深色，各有两套面板风格。</h2>
-                <p>平衡模式更安静，活力模式更醒目。系统外观切换时，面板会跟随当前环境保持清晰可读。</p>
+            <div class="section-head-row">
+                <div class="section-head-text">
+                    <h2>浅色、深色，各有两套面板风格。</h2>
+                    <p>平衡模式更安静，活力模式更醒目。系统外观切换时，面板会跟随当前环境保持清晰可读。</p>
+                </div>
+                <button class="theme-toggle" id="theme-toggle" aria-label="切换浅色/深色预览" type="button">
+                    <!-- Sun icon (shown in dark mode, click to go light) -->
+                    <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    <!-- Moon icon (shown in light mode, click to go dark) -->
+                    <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+                </button>
             </div>
             <div class="showcase-grid">
                 <figure class="shot-card">
-                    <img src="images/balance-light.png" alt="平衡主题浅色模式截图">
+                    <img class="light" src="images/balance-light.png" alt="平衡主题浅色模式截图" loading="lazy">
+                    <img class="dark" src="images/balance-dark.png" alt="平衡主题深色模式截图" loading="lazy">
                     <figcaption class="shot-caption">
-                        <strong>平衡 / 浅色</strong>
+                        <strong>平衡</strong>
                         <span>更接近系统面板</span>
                     </figcaption>
                 </figure>
                 <figure class="shot-card">
-                    <img src="images/vitality-light.png" alt="活力主题浅色模式截图">
+                    <img class="light" src="images/vitality-light.png" alt="活力主题浅色模式截图" loading="lazy">
+                    <img class="dark" src="images/vitality-dark.png" alt="活力主题深色模式截图" loading="lazy">
                     <figcaption class="shot-caption">
-                        <strong>活力 / 浅色</strong>
+                        <strong>活力</strong>
                         <span>状态色更明确</span>
                     </figcaption>
                 </figure>
                 <figure class="shot-card">
-                    <img src="images/balance-dark.png" alt="平衡主题深色模式截图">
+                    <img class="light" src="images/balance-dark.png" alt="平衡主题浅色模式截图（深色面板）" loading="lazy">
+                    <img class="dark" src="images/balance-light.png" alt="平衡主题深色模式截图（浅色面板）" loading="lazy">
                     <figcaption class="shot-caption">
-                        <strong>平衡 / 深色</strong>
-                        <span>低干扰常驻</span>
+                        <strong>平衡 / 反色预览</strong>
+                        <span>当前外观下的另一面板</span>
                     </figcaption>
                 </figure>
                 <figure class="shot-card">
-                    <img src="images/vitality-dark.png" alt="活力主题深色模式截图">
+                    <img class="light" src="images/vitality-dark.png" alt="活力主题浅色模式截图（深色面板）" loading="lazy">
+                    <img class="dark" src="images/vitality-light.png" alt="活力主题深色模式截图（浅色面板）" loading="lazy">
                     <figcaption class="shot-caption">
-                        <strong>活力 / 深色</strong>
-                        <span>高对比查看</span>
+                        <strong>活力 / 反色预览</strong>
+                        <span>当前外观下的另一面板</span>
                     </figcaption>
                 </figure>
             </div>
@@ -735,7 +996,8 @@
                     </ul>
                 </div>
                 <div class="detail-image">
-                    <img src="images/detailed-data.png" alt="详细数据展开截图">
+                    <img src="images/detailed-data.png" alt="详细数据展开截图" loading="lazy">
+                    <p class="detail-image-note">截图可能需要滚动查看完整内容</p>
                 </div>
             </div>
         </section>
@@ -746,9 +1008,35 @@
         <span>Made by <a href="https://github.com/Acerola-1" target="_blank" rel="noopener">Acerola</a></span>
     </footer>
     <script>
+        // Theme toggle: persist to localStorage, respect prefers-color-scheme on first load
+        (function () {
+            const root = document.documentElement;
+            const toggle = document.getElementById("theme-toggle");
+            const stored = localStorage.getItem("theme");
+
+            if (stored === "light" || stored === "dark") {
+                root.setAttribute("data-theme", stored);
+            }
+
+            toggle.addEventListener("click", function () {
+                const current = root.getAttribute("data-theme");
+                let next;
+                if (current === "dark") {
+                    next = "light";
+                } else if (current === "light") {
+                    next = "dark";
+                } else {
+                    // No explicit theme yet — infer from system preference
+                    next = window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
+                }
+                root.setAttribute("data-theme", next);
+                localStorage.setItem("theme", next);
+            });
+        })();
+
+        // GitHub star count via shields.io
         const starCount = document.getElementById("star-count");
 
-        // shields.io 不受 GitHub API 匿名限流影响
         fetch("https://img.shields.io/github/stars/Acerola-1/hagimi-monitor.json")
             .then((r) => r.ok ? r.json() : Promise.reject())
             .then((data) => {
