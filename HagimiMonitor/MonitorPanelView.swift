@@ -57,10 +57,16 @@ struct MonitorPanelView: View {
             }
             .padding(10)
             .frame(width: MonitorConstants.panelWidth)
-            .background(.clear)
+            .background(panelBackgroundColor)
         }
         .containerBackground(.clear, for: .window)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
+    }
+
+    private var panelBackgroundColor: Color {
+        colorScheme == .dark
+            ? Color.black.opacity(0.35)
+            : Color.white.opacity(0.45)
     }
 
     private func header(theme: MonitorPanelTheme) -> some View {
