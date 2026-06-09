@@ -28,8 +28,8 @@ struct MonitorPalette {
         isDark ? Color.white.opacity(0.08) : Color(hex: 0x3C485A).opacity(0.08)
     }
 
-    var liveDot: Color {
-        Color(hex: 0x3DDC97)
+    func liveDot(for loadLevel: MenuBarComputeLoadLevel) -> Color {
+        Color(nsColor: loadLevel.coreColor(darkMode: isDark))
     }
 
     var displayTint: Color {

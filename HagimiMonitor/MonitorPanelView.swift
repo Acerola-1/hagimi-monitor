@@ -73,9 +73,10 @@ struct MonitorPanelView: View {
         HStack {
             HStack(spacing: 5) {
                 Circle()
-                    .fill(theme.liveDot)
+                    .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
                     .symbolEffect(.pulse, options: .repeating.speed(0.8))
+                    .animation(.easeInOut(duration: 0.6), value: store.haloRingLoadLevel)
 
                 Text("SYSTEM · LIVE")
                     .font(.system(size: 9, weight: .semibold, design: .rounded))
@@ -840,8 +841,8 @@ struct MonitorPanelTheme {
         palette.trackFill
     }
 
-    var liveDot: Color {
-        palette.liveDot
+    func liveDot(for loadLevel: MenuBarComputeLoadLevel) -> Color {
+        palette.liveDot(for: loadLevel)
     }
 
     func moduleTint(for kind: MonitorKind) -> Color {
