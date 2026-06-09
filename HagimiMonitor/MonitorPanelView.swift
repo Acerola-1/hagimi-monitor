@@ -59,8 +59,7 @@ struct MonitorPanelView: View {
             .frame(width: MonitorConstants.panelWidth)
             .background(.clear)
         }
-        .glassEffect(.regular, in: .rect(cornerRadius: MonitorConstants.panelCornerRadius, style: .continuous))
-        .glassEffectID("monitor-panel", in: glassNamespace)
+        .containerBackground(.clear, for: .window)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
     }
 
@@ -731,6 +730,8 @@ private final class TransparentBackgroundView: NSView {
         window.backgroundColor = .clear
         window.contentView?.wantsLayer = true
         window.contentView?.layer?.backgroundColor = NSColor.clear.cgColor
+        window.contentView?.superview?.wantsLayer = true
+        window.contentView?.superview?.layer?.backgroundColor = NSColor.clear.cgColor
 
         var parent = superview
         while let current = parent {

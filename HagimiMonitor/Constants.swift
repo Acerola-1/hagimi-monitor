@@ -17,7 +17,6 @@ enum MonitorConstants {
 
     // MARK: Panel Dimensions
     static let panelWidth = 320.0
-    static let panelCornerRadius = 22.0
     static let rowCornerRadius = 14.0
 
     // MARK: Animation Durations
