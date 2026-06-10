@@ -19,6 +19,22 @@
   <a href="#系统要求">系统要求</a>
 </p>
 
+## Star History
+
+<p align="center">
+  <a href="https://star-history.com/#Acerola-1/hagimi-monitor&Date">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=Acerola-1/hagimi-monitor&type=Date&theme=dark" />
+      <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=Acerola-1/hagimi-monitor&type=Date" />
+      <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=Acerola-1/hagimi-monitor&type=Date" width="720" />
+    </picture>
+  </a>
+</p>
+
+<p align="center">
+  如果这个项目对你有帮助，欢迎点一个 ⭐ 支持持续维护。
+</p>
+
 ## 截图
 
 ### 多主题配色
