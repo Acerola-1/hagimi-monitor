@@ -1159,19 +1159,22 @@
 
         // GitHub star count via shields.io
         const starCount = document.getElementById("star-count");
+        // shields.io 合法返回示例: "0", "42", "1.2k", "10k", "1M"
+        const STAR_VALUE_PATTERN = /^\d+(\.\d+)?[kM]?$/;
 
         fetch("https://img.shields.io/github/stars/Acerola-1/hagimi-monitor.json")
             .then((r) => r.ok ? r.json() : Promise.reject())
             .then((data) => {
-                const val = data?.value;
-                if (val && val !== "0") {
+                const val = typeof data?.value === "string" ? data.value.trim() : "";
+                if (STAR_VALUE_PATTERN.test(val)) {
                     starCount.textContent = val;
                 } else {
-                    starCount.textContent = "0";
+                    // shields.io 偶尔会返回类似 "Unable to select next GitHub token from pool" 的错误消息
+                    starCount.textContent = "-";
                 }
             })
             .catch(() => {
-                // shields.io 也失败时静默保留 "--"
+                starCount.textContent = "-";
             });
     </script>
 </body>
