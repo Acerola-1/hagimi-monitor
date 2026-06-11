@@ -122,8 +122,6 @@ enum MonitorKind: String, CaseIterable, Identifiable {
         case .network:
             return [
                 MetricSwitch(id: "IP 地址", title: "IP 地址", isDefault: true),
-                MetricSwitch(id: "上传", title: "上传", isDefault: true),
-                MetricSwitch(id: "下载", title: "下载", isDefault: true),
             ]
         case .battery:
             return [
