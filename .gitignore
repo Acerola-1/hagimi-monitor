@@ -63,3 +63,8 @@ fastlane/test_output
 docs/stats
 docs/MonitorControl-main
 .omo/
+
+# AI IDE configs
+.claude/
+.codex/
+.opencode/
