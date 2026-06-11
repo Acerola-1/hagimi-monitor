@@ -19,11 +19,11 @@
 ## 3. 详情页重写
 
 - [x] 3.1 `GeneralSettingsView`：用 `Form .grouped` + `LabeledContent` 重构 `开机自启`/`主题`/`配色`/`负载环` 四项；`Toggle`/`Picker` 直接绑 `settings.*`
-- [x] 3.2 `ModuleSettingsView`：第一个 Section「显示」放 `Toggle("在面板中显示", isOn:)`；第二个 Section「检测项目」`ForEach(kind.availableMetrics)` 渲染 checkmark 选择行
+- [x] 3.2 `ModuleSettingsView`：顶部放 `Toggle("在面板中显示", isOn:)`，不显示冗余「显示」分组标题；第二组「检测项目」`ForEach(kind.availableMetrics)` 渲染 checkmark 选择行
 - [x] 3.2a 将「检测项目」从 switch 改为整行 checkmark 选择器，并限制每个模块最多选中 4 项
 - [x] 3.3 `ModuleSettingsView`：底部加一个 `Button("重置默认值") { ... }`，`.buttonStyle(.glass)`；点击后把该 kind 的 `enabledMetrics` 恢复为 `availableMetrics.filter { $0.isDefault }.map(\.id)`
-- [x] 3.4 `DisplayModuleSettingsView`（DISPLAY_CONTROL）：迁移现有 4 个 Toggle 到 `Form .grouped`，保持字段绑定不变
-- [x] 3.5 `AboutSettingsView`：顶部 App 信息块包在 `GlassEffectContainer` 内并加 `glassEffect(.regular, in: .rect(cornerRadius: 14))`；"检查更新"/"下载更新" 用 `.buttonStyle(.glassProminent)`；GitHub / Releases 链接用 `.buttonStyle(.glass)`
+- [x] 3.4 `DisplayModuleSettingsView`（DISPLAY_CONTROL）：迁移现有 4 个 Toggle 到非滚动分组布局，保持字段绑定不变，并移除冗余「显示」分组标题
+- [x] 3.5 `AboutSettingsView`：顶部 App 信息块包在 `GlassEffectContainer` 内并加 `glassEffect(.regular, in: .rect(cornerRadius: 14))`；"检查更新"/"下载更新" 合并到信息块右侧并用 `.buttonStyle(.glassProminent)`；只保留 Releases 发布版本链接
 - [x] 3.6 `AboutSettingsView`：把所有手拼的 `HStack { Text, Spacer, Button }` 替换为 `LabeledContent`
 
 ## 4. 入口与桥接
@@ -36,6 +36,7 @@
 ## 5. 构建与可视验证
 
 - [x] 5.0 收紧设置窗口视觉密度：固定 164pt 侧栏、窗口 ideal 600×382，并统一无页面标题、无滚动条的 `SettingsPage` / `SettingsGroup` / `SettingsRow` 布局
+- [x] 5.0a 进一步收紧详情页顶部留白，并移除所有监控模块顶部「显示」标题
 - [x] 5.1 `xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitor -configuration Debug build` 通过
 - [x] 5.2 `xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitorDirect -configuration Debug build` 通过
 - [ ] 5.3 浅色 / 深色 / 跟随系统三种主题切换，逐页（常规 / 各模块 / 关于）目视检查

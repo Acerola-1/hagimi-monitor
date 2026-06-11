@@ -38,7 +38,7 @@ macOS 26+ 引入 Liquid Glass，但 [[adapt-macos27-glass-appearance]] 已经识
 - `List(selection:)` 的选中态高亮覆盖 Toggle，视觉混乱
 - VoiceOver 无法清晰播报「这是一个导航条目」还是「这是一个开关」
 
-新方案：侧栏 row 只是 `Label(kind.title, systemImage: kind.symbol)`，模块的「在面板中显示」开关移到该模块详情页的第一个 Section。
+新方案：侧栏 row 只是 `Label(kind.title, systemImage: kind.symbol)`，模块的「在面板中显示」开关移到该模块详情页顶部。该开关不再显示额外「显示」分组标题，避免少量内容页面出现重复标签和上方空白。
 
 ### 用 `Form .grouped` + `LabeledContent` 作为详情页基底
 
@@ -51,8 +51,8 @@ macOS 26+ 引入 Liquid Glass，但 [[adapt-macos27-glass-appearance]] 已经识
 仅在以下三处使用 `glassEffect` / `.glass*` button style：
 
 1. **About 页顶部的 App 信息卡片** —— `glassEffect(.regular, in: .rect(cornerRadius: 14))`，作为视觉锚点
-2. **主操作按钮** —— 「检查更新」/「下载更新」用 `.buttonStyle(.glassProminent)`
-3. **次操作按钮** —— GitHub 链接、重置按钮用 `.buttonStyle(.glass)`
+2. **主操作按钮** —— About 信息卡片右侧的「检查更新」/「下载更新」用 `.buttonStyle(.glassProminent)`
+3. **次操作按钮** —— 发布版本链接、重置按钮用 `.buttonStyle(.glass)`
 
 所有 glass 元素包在 `GlassEffectContainer` 中以获得统一高光。
 
@@ -92,9 +92,9 @@ func setMetric(_ id: String, enabled: Bool, for kind: MonitorKind)
 
 视觉目标从「照搬 System Settings」调整为「macOS 原生偏好窗口 + Xcode/Finder/CleanShot X/Raycast 式工具密度」。保留 sidebar `List` 与原生 Form 语义，但不让详情页无限铺宽。
 
-侧栏固定 164pt；窗口本体通过 `.frame(minWidth: 560, idealWidth: 600, minHeight: 360, idealHeight: 382)`。`SettingsWindowPresenter.register(_:)` 会把历史上被异常拉大的设置窗口恢复到 600×382，避免用户继续看到坏掉的旧窗口状态。详情内容额外包在统一 `SettingsPage` 容器内，不显示页面级标题/副标题，直接呈现设置组，让内容占据真正有价值的空间。
+侧栏固定 164pt；窗口本体通过 `.frame(minWidth: 560, idealWidth: 600, minHeight: 360, idealHeight: 382)`。`SettingsWindowPresenter.register(_:)` 会把历史上被异常拉大的设置窗口恢复到 600×382，避免用户继续看到坏掉的旧窗口状态。详情内容额外包在统一 `SettingsPage` 容器内，不显示页面级标题/副标题，并使用更紧凑的顶部留白，直接呈现设置组，让内容占据真正有价值的空间。
 
-右侧不再使用滚动 `Form` 作为根容器，因为内容较少时滚动条会显得突兀且靠近中部。改为 `SettingsGroup` + `SettingsRow` 的非滚动分组布局：组间距 24pt、页面内边距 34/36/28pt，分组随详情区展开，行内 label 与控件两端对齐。各页面统一使用 `.controlSize(.small)` 的密度。About 图标卡片压缩到 46pt 图标与 12/14pt 内边距，保留 glass 作为唯一视觉锚点，但降低视觉重量。
+右侧不再使用滚动 `Form` 作为根容器，因为内容较少时滚动条会显得突兀且靠近中部。改为 `SettingsGroup` + `SettingsRow` 的非滚动分组布局：组间距 24pt、页面内边距 22/36/28pt，分组随详情区展开，行内 label 与控件两端对齐。各页面统一使用 `.controlSize(.small)` 的密度。About 图标卡片压缩到 46pt 图标与 12/14pt 内边距，保留 glass 作为唯一视觉锚点，但降低视觉重量；发布版本入口与版权文字放在页面底部，避免次要链接占据中部视觉重心。
 
 ### 删除死代码
 

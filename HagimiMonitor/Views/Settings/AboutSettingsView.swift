@@ -5,7 +5,6 @@ struct AboutSettingsView: View {
     @State private var updateChecker = UpdateChecker()
 
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
-    private let repoURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor")!
 
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
@@ -22,28 +21,9 @@ struct AboutSettingsView: View {
                 aboutHeader
             }
 
-            SettingsGroup {
-                updateCheckView
-            }
+            Spacer(minLength: 0)
 
             SettingsGroup {
-                SettingsRow(title: "源代码仓库") {
-                    if #available(macOS 26, *) {
-                        Button {
-                            NSWorkspace.shared.open(repoURL)
-                        } label: {
-                            Label("GitHub", systemImage: "link")
-                        }
-                        .buttonStyle(.glass)
-                    } else {
-                        Link(destination: repoURL) {
-                            Label("GitHub", systemImage: "link")
-                        }
-                    }
-                }
-
-                SettingsDivider()
-
                 SettingsRow(title: "发布版本") {
                     if #available(macOS 26, *) {
                         Button {
@@ -74,17 +54,17 @@ struct AboutSettingsView: View {
             subtitle: "版本 \(appVersion)",
             footnote: "macOS 菜单栏硬件监控",
             imageName: "AboutIcon"
-        )
+        ) {
+            updateAccessory
+        }
     }
 
     @ViewBuilder
-    private var updateCheckView: some View {
+    private var updateAccessory: some View {
         switch updateChecker.state {
         case .idle:
-            SettingsRow(title: "检查更新", subtitle: "从 GitHub Releases 获取最新版本") {
-                primaryButton(title: "检查更新") {
-                    Task { await updateChecker.checkForUpdates() }
-                }
+            primaryButton(title: "检查更新") {
+                Task { await updateChecker.checkForUpdates() }
             }
 
         case .checking:
@@ -92,12 +72,15 @@ struct AboutSettingsView: View {
                 ProgressView()
                     .controlSize(.small)
                 Text("正在检查...")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
-                Spacer()
             }
 
         case .upToDate:
-            SettingsRow(title: "已是最新版本", subtitle: "当前版本 \(appVersion)") {
+            HStack(spacing: 8) {
+                Text("已是最新")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 if #available(macOS 26, *) {
                     Button("再次检查") {
                         Task { await updateChecker.checkForUpdates() }
@@ -110,15 +93,22 @@ struct AboutSettingsView: View {
                 }
             }
 
-        case .updateAvailable(let latestVersion, let publishedAt, let downloadURL, _):
-            SettingsRow(title: "发现新版本 \(latestVersion)", subtitle: releaseMessage(publishedAt: publishedAt)) {
+        case .updateAvailable(let latestVersion, _, let downloadURL, _):
+            VStack(alignment: .trailing, spacing: 5) {
+                Text("发现 \(latestVersion)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 primaryButton(title: "下载更新") {
                     NSWorkspace.shared.open(downloadURL)
                 }
             }
 
         case .failed(let message):
-            SettingsRow(title: "无法检查更新", subtitle: message) {
+            HStack(spacing: 8) {
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 if #available(macOS 26, *) {
                     Button("重试") {
                         Task { await updateChecker.checkForUpdates() }
@@ -142,14 +132,5 @@ struct AboutSettingsView: View {
             Button(title, action: action)
                 .buttonStyle(.borderedProminent)
         }
-    }
-
-    private func releaseMessage(publishedAt: String?) -> String {
-        guard let publishedAt,
-              let date = ISO8601DateFormatter().date(from: publishedAt) else {
-            return "可以前往 GitHub 下载并手动安装"
-        }
-
-        return "发布于 \(date.formatted(date: .abbreviated, time: .omitted))"
     }
 }

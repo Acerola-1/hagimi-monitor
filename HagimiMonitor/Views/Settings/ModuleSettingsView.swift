@@ -6,7 +6,7 @@ struct ModuleSettingsView: View {
 
     var body: some View {
         SettingsPage {
-            SettingsGroup("显示") {
+            SettingsGroup {
                 SettingsRow(title: "在面板中显示") {
                     Toggle("", isOn: Binding(
                         get: { settings.isVisible(kind) },
@@ -87,7 +87,7 @@ struct DisplayModuleSettingsView: View {
 
     var body: some View {
         SettingsPage {
-            SettingsGroup("显示") {
+            SettingsGroup {
                 SettingsRow(title: "在面板中显示") {
                     Toggle("", isOn: $settings.displayModuleVisible)
                         .toggleStyle(.switch)

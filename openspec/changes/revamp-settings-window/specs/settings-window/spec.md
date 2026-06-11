@@ -47,14 +47,15 @@
 - **AND** label + 控件对使用 `LabeledContent` 而非手拼 HStack
 - **AND** 配色、行高、分隔线随系统外观自动适配
 
-### Requirement: 模块详情包含"显示"与"检测项目"两个 Section
-每个 `MonitorKind` 的详情页 SHALL 至少包含两个 Section：「显示」与「检测项目」。
+### Requirement: 模块详情包含可见性开关与"检测项目"设置组
+每个 `MonitorKind` 的详情页 SHALL 包含可见性开关与「检测项目」设置组。
 
 #### Scenario: 打开任一模块详情
 - **WHEN** 用户在侧栏选中任一监控模块
-- **THEN** 详情页第一个 Section 名为"显示"，包含"在面板中显示"开关
-- **AND** 详情页第二个 Section 名为"检测项目"，由 `ForEach(kind.availableMetrics)` 动态渲染为对勾选择行
-- **AND** 该 Section 至少展示一项（即使是占位）
+- **THEN** 详情页顶部包含"在面板中显示"开关
+- **AND** 该顶部开关不得显示额外"显示"分组标题
+- **AND** 详情页包含名为"检测项目"的设置组，由 `ForEach(kind.availableMetrics)` 动态渲染为对勾选择行
+- **AND** 该设置组至少展示一项（即使是占位）
 - **AND** 检测项目不得使用 switch 样式
 
 ### Requirement: 可置换检测项目数据模型
@@ -88,6 +89,7 @@
 - **WHEN** 用户进入"关于"页
 - **THEN** 顶部 App 信息块包裹在 `GlassEffectContainer` 内
 - **AND** 该卡片应用 `glassEffect(.regular, in: .rect(cornerRadius: 14))`
+- **AND** "检查更新"或"下载更新"按钮显示在该信息块右侧
 - **AND** 其他 Section 不使用任何 `glassEffect`
 
 #### Scenario: 主操作按钮
@@ -95,8 +97,14 @@
 - **THEN** 按钮使用 `.buttonStyle(.glassProminent)`
 
 #### Scenario: 次操作按钮
-- **WHEN** 详情页中出现 GitHub 链接、发布版本链接或"重置默认值"按钮
+- **WHEN** 详情页中出现发布版本链接或"重置默认值"按钮
 - **THEN** 按钮使用 `.buttonStyle(.glass)`
+
+#### Scenario: About 链接精简
+- **WHEN** 用户进入"关于"页
+- **THEN** 详情页不显示"源代码仓库"行
+- **AND** 详情页保留"发布版本"行
+- **AND** "发布版本"行与版权文字位于页面底部区域
 
 #### Scenario: Form 内部禁用 glass
 - **WHEN** 任何 Section 内部渲染 `LabeledContent`、`Toggle`、`Picker`

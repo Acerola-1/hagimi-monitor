@@ -13,7 +13,7 @@ struct SettingsPage<Content: View>: View {
             content
         }
         .controlSize(.small)
-        .padding(.top, 34)
+        .padding(.top, 22)
         .padding(.horizontal, 36)
         .padding(.bottom, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -88,11 +88,26 @@ struct SettingsDivider: View {
     }
 }
 
-struct SettingsIconHeader: View {
+struct SettingsIconHeader<Accessory: View>: View {
     let title: String
     let subtitle: String
     let footnote: String
     let imageName: String
+    let accessory: Accessory
+
+    init(
+        title: String,
+        subtitle: String,
+        footnote: String,
+        imageName: String,
+        @ViewBuilder accessory: () -> Accessory = { EmptyView() }
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.footnote = footnote
+        self.imageName = imageName
+        self.accessory = accessory()
+    }
 
     var body: some View {
         let header = HStack(spacing: 12) {
@@ -115,6 +130,8 @@ struct SettingsIconHeader: View {
             }
 
             Spacer(minLength: 0)
+
+            accessory
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
