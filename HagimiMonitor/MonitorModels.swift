@@ -92,17 +92,45 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     var availableMetrics: [MetricSwitch] {
         switch self {
         case .cpu:
-            return [MetricSwitch(id: "cpu.overall", title: "整体使用率", isDefault: true)]
+            return [
+                MetricSwitch(id: "系统", title: "系统", isDefault: true),
+                MetricSwitch(id: "用户", title: "用户", isDefault: true),
+                MetricSwitch(id: "闲置", title: "闲置", isDefault: true),
+                MetricSwitch(id: "启动时间", title: "启动时间", isDefault: true),
+            ]
         case .gpu:
-            return [MetricSwitch(id: "gpu.overall", title: "整体使用率", isDefault: true)]
+            return [
+                MetricSwitch(id: "GPU内存", title: "GPU内存", isDefault: true),
+                MetricSwitch(id: "已分配", title: "已分配", isDefault: true),
+                MetricSwitch(id: "渲染", title: "渲染", isDefault: true),
+                MetricSwitch(id: "分块", title: "分块", isDefault: true),
+            ]
         case .memory:
-            return [MetricSwitch(id: "memory.overall", title: "内存使用率", isDefault: true)]
+            return [
+                MetricSwitch(id: "已用", title: "已用", isDefault: true),
+                MetricSwitch(id: "压力", title: "压力", isDefault: true),
+                MetricSwitch(id: "交换已用", title: "交换已用", isDefault: true),
+                MetricSwitch(id: "总量", title: "总量", isDefault: true),
+            ]
         case .storage:
-            return [MetricSwitch(id: "storage.overall", title: "存储使用率", isDefault: true)]
+            return [
+                MetricSwitch(id: "已用", title: "已用", isDefault: true),
+                MetricSwitch(id: "可用", title: "可用", isDefault: true),
+                MetricSwitch(id: "总量", title: "总量", isDefault: true),
+            ]
         case .network:
-            return [MetricSwitch(id: "network.overall", title: "网络流量", isDefault: true)]
+            return [
+                MetricSwitch(id: "IP 地址", title: "IP 地址", isDefault: true),
+                MetricSwitch(id: "上传", title: "上传", isDefault: true),
+                MetricSwitch(id: "下载", title: "下载", isDefault: true),
+            ]
         case .battery:
-            return [MetricSwitch(id: "battery.overall", title: "电池状态", isDefault: true)]
+            return [
+                MetricSwitch(id: "充电功率", title: "充电功率", isDefault: true),
+                MetricSwitch(id: "健康度", title: "健康度", isDefault: true),
+                MetricSwitch(id: "循环数", title: "循环数", isDefault: true),
+                MetricSwitch(id: "温度", title: "温度", isDefault: true),
+            ]
         }
     }
 }

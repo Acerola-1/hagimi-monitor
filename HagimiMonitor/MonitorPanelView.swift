@@ -104,7 +104,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 detail: module.summary,
                 samples: module.samples,
-                details: module.metrics,
+                details: enabledMetrics(for: module),
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
@@ -115,7 +115,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 detail: module.summary,
                 samples: module.samples,
-                details: module.metrics,
+                details: enabledMetrics(for: module),
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
@@ -125,7 +125,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
-                details: module.metrics,
+                details: enabledMetrics(for: module),
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
@@ -135,7 +135,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
-                details: module.metrics,
+                details: enabledMetrics(for: module),
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
@@ -144,6 +144,7 @@ struct MonitorPanelView: View {
             NetworkGlassRow(
                 module: module,
                 theme: theme,
+                details: enabledMetrics(for: module),
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
@@ -152,11 +153,17 @@ struct MonitorPanelView: View {
             BatteryGlassRow(
                 module: module,
                 theme: theme,
+                details: enabledMetrics(for: module),
                 isExpanded: expandedKinds.contains(module.kind)
             ) {
                 toggleExpansion(for: module.kind)
             }
         }
+    }
+
+    private func enabledMetrics(for module: MonitorModule) -> [MonitorMetric] {
+        let enabledIds = store.settings.enabledMetrics[module.kind] ?? Set(module.kind.availableMetrics.map(\.id))
+        return module.metrics.filter { enabledIds.contains($0.name) }
     }
 
     private func toggleExpansion(for kind: MonitorKind) {
@@ -468,6 +475,7 @@ struct StorageVolumeInfo: Identifiable {
 private struct NetworkGlassRow: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
+    var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
 
@@ -545,7 +553,7 @@ private struct NetworkGlassRow: View {
     }
 
     private var detailMetrics: [MonitorMetric] {
-        module.metrics.filter { $0.name == "IP 地址" }
+        details
     }
 
     private func value(_ name: String) -> String {
@@ -558,6 +566,7 @@ private struct NetworkGlassRow: View {
 private struct BatteryGlassRow: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
+    var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
 
@@ -656,11 +665,11 @@ private struct BatteryGlassRow: View {
             ? ["充电功率", "健康度", "循环数", "温度"]
             : ["健康度", "循环数", "温度"]
 
+        let enabledNames = Set(details.map(\.name))
+
         return names.compactMap { name in
-            guard let metric = module.metrics.first(where: { $0.name == name }) else {
-                return nil
-            }
-            return metric
+            guard enabledNames.contains(name) else { return nil }
+            return module.metrics.first(where: { $0.name == name })
         }
     }
 
