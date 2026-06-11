@@ -68,3 +68,5 @@ docs/MonitorControl-main
 .claude/
 .codex/
 .opencode/
+AGENTS.md
+CLAUDE.md
