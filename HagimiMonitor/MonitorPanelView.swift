@@ -333,7 +333,7 @@ private struct MetricDetailGrid: View {
 
     private func metricCell(_ metric: MonitorMetric, theme: MonitorPanelTheme) -> some View {
         HStack(spacing: 6) {
-            Text(metric.name)
+            Text(localizedMetricName(kind: kind, id: metric.name))
                 .font(.system(size: 10, weight: .medium))
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
@@ -348,6 +348,12 @@ private struct MetricDetailGrid: View {
                 .minimumScaleFactor(0.82)
         }
     }
+}
+
+private func localizedMetricName(kind: MonitorKind, id: String) -> String {
+    let key = "metric.\(kind.rawValue).\(id)"
+    let localized = String(localized: String.LocalizationValue(key))
+    return localized == key ? id : localized
 }
 
 private struct StorageVolumeDetailList: View {
@@ -537,7 +543,7 @@ private struct NetworkGlassRow: View {
 
             ForEach(detailMetrics) { metric in
                 HStack(spacing: 6) {
-                    Text(metric.name)
+                    Text(localizedMetricName(kind: module.kind, id: metric.name))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundStyle(theme.captionText)
                         .lineLimit(1)
@@ -628,11 +634,11 @@ private struct BatteryGlassRow: View {
     }
 
     private var hasBattery: Bool {
-        value("type") == "battery"
+        rawValue("type") == "battery"
     }
 
     private var isCharging: Bool {
-        value("status") == "charging"
+        rawValue("status") == "charging"
     }
 
     private var powerSymbol: String {
@@ -678,12 +684,28 @@ private struct BatteryGlassRow: View {
     }
 
     private func value(_ name: String) -> String {
+        let raw = rawValue(name)
+        switch name {
+        case "type", "status":
+            return localizedBatteryState(raw)
+        default:
+            return raw
+        }
+    }
+
+    private func rawValue(_ name: String) -> String {
         module.metrics.first { $0.name == name }?.value ?? "--"
     }
 
     private var isConnectedToPower: Bool {
-        value("status") != "on-battery"
+        rawValue("status") != "on-battery"
     }
+}
+
+private func localizedBatteryState(_ id: String) -> String {
+    let key = "battery-state.\(id)"
+    let localized = String(localized: String.LocalizationValue(key))
+    return localized == key ? id : localized
 }
 
 // MARK: - Transparent Window Background

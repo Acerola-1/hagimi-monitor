@@ -228,11 +228,12 @@
 				};
 			};
 			buildConfigurationList = 2E0C71842FB19C2D00908371 /* Build configuration list for PBXProject "hagimi-monitor" */;
-			developmentRegion = en;
+			developmentRegion = zh-Hans;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
+					zh-Hans,
 			);
 			mainGroup = 2E0C71802FB19C2D00908371;
 			minimizedProjectReferenceProxies = 1;

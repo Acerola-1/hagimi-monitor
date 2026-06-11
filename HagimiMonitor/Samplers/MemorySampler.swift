@@ -115,11 +115,11 @@ private enum MemoryPressureState {
     var title: String {
         switch self {
         case .normal:
-            "normal"
+            String(localized: "memory-pressure.normal")
         case .warning:
-            "warning"
+            String(localized: "memory-pressure.warning")
         case .critical:
-            "critical"
+            String(localized: "memory-pressure.critical")
         case .unknown:
             "--"
         }

@@ -74,6 +74,48 @@
         "en": { "stringUnit": { "state": "translated", "value": "Peak" } }
       }
     },
+    "battery-state.battery": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "电池" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Battery" } }
+      }
+    },
+    "battery-state.charging": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "充电中" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Charging" } }
+      }
+    },
+    "battery-state.ac-power": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "电源供电" } },
+        "en": { "stringUnit": { "state": "translated", "value": "AC Power" } }
+      }
+    },
+    "battery-state.on-battery": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "电池供电" } },
+        "en": { "stringUnit": { "state": "translated", "value": "On Battery" } }
+      }
+    },
+    "memory-pressure.normal": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正常" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Normal" } }
+      }
+    },
+    "memory-pressure.warning": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "警告" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Warning" } }
+      }
+    },
+    "memory-pressure.critical": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "严重" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Critical" } }
+      }
+    },
     "ring-source.combined": {
       "localizations": {
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "综合" } },
@@ -224,10 +266,46 @@
         "en": { "stringUnit": { "state": "translated", "value": "IP Address" } }
       }
     },
+    "metric.network.upload": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "上传" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Upload" } }
+      }
+    },
+    "metric.network.download": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "下载" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Download" } }
+      }
+    },
+    "metric.battery.type": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "类型" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Type" } }
+      }
+    },
+    "metric.battery.status": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "状态" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Status" } }
+      }
+    },
+    "metric.battery.adapter": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "适配器" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Adapter" } }
+      }
+    },
     "metric.battery.charging-power": {
       "localizations": {
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "充电功率" } },
         "en": { "stringUnit": { "state": "translated", "value": "Charging Power" } }
+      }
+    },
+    "metric.battery.power": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "功率" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Power" } }
       }
     },
     "metric.battery.health": {
