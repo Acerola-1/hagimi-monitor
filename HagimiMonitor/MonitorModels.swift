@@ -184,9 +184,9 @@ struct MonitorModule: Identifiable {
             value: 0,
             summary: "--",
             metrics: [
-                MonitorMetric(name: String(localized: "metric.current"), value: "--"),
-                MonitorMetric(name: String(localized: "metric.average"), value: "--"),
-                MonitorMetric(name: String(localized: "metric.peak"), value: "--")
+                MonitorMetric(name: "current", value: "--"),
+                MonitorMetric(name: "average", value: "--"),
+                MonitorMetric(name: "peak", value: "--")
             ],
             samples: Array(repeating: 0, count: 28)
         )

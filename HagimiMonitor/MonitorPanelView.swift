@@ -340,7 +340,7 @@ private struct MetricDetailGrid: View {
 
             Spacer(minLength: 4)
 
-            Text(metric.value)
+            Text(localizedMetricValue(kind: kind, metric: metric))
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .monospacedDigit()
                 .foregroundStyle(theme.secondaryText)
@@ -352,6 +352,21 @@ private struct MetricDetailGrid: View {
 
 private func localizedMetricName(kind: MonitorKind, id: String) -> String {
     let key = "metric.\(kind.rawValue).\(id)"
+    let localized = String(localized: String.LocalizationValue(key))
+    return localized == key ? id : localized
+}
+
+private func localizedMetricValue(kind: MonitorKind, metric: MonitorMetric) -> String {
+    switch (kind, metric.name) {
+    case (.memory, "pressure"):
+        return localizedMemoryPressure(metric.value)
+    default:
+        return metric.value
+    }
+}
+
+private func localizedMemoryPressure(_ id: String) -> String {
+    let key = "memory-pressure.\(id)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? id : localized
 }
@@ -599,7 +614,7 @@ private struct BatteryGlassRow: View {
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
-                Text(module.summary)
+                Text(summaryText)
                     .font(.system(size: 12, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(theme.valueText)
@@ -617,7 +632,7 @@ private struct BatteryGlassRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            if hasBattery && isExpanded {
+            if canExpand && isExpanded {
                 MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
@@ -626,7 +641,7 @@ private struct BatteryGlassRow: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            if hasBattery {
+            if canExpand {
                 toggleExpansion?()
             }
         }
@@ -670,6 +685,10 @@ private struct BatteryGlassRow: View {
         return value("power")
     }
 
+    private var summaryText: String {
+        localizedBatteryState(module.summary)
+    }
+
     private var detailMetrics: [MonitorMetric] {
         let names = isConnectedToPower
             ? ["charging-power", "health", "cycle-count", "temperature"]
@@ -681,6 +700,10 @@ private struct BatteryGlassRow: View {
             guard enabledNames.contains(name) else { return nil }
             return module.metrics.first(where: { $0.name == name })
         }
+    }
+
+    private var canExpand: Bool {
+        !detailMetrics.isEmpty
     }
 
     private func value(_ name: String) -> String {

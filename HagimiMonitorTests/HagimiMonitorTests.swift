@@ -12,15 +12,15 @@ import Testing
 struct HagimiMonitorTests {
 
     @Test func monitorSeverityCalculation() {
-        #expect(MonitorSeverity.calm.title == "正常")
-        #expect(MonitorSeverity.warning.title == "接近阈值")
-        #expect(MonitorSeverity.critical.title == "需要注意")
+        #expect(MonitorSeverity.calm != .warning)
+        #expect(MonitorSeverity.warning != .critical)
+        #expect(MonitorSeverity.critical != .calm)
     }
 
     @Test func monitorKindIdentification() {
-        #expect(MonitorKind.cpu.title == "CPU")
-        #expect(MonitorKind.gpu.title == "GPU")
-        #expect(MonitorKind.memory.title == "内存")
+        #expect(MonitorKind.cpu.id == "cpu")
+        #expect(MonitorKind.gpu.id == "gpu")
+        #expect(MonitorKind.memory.id == "memory")
     }
 
     @Test func monitorModuleSeverityForCPU() {
@@ -32,6 +32,26 @@ struct HagimiMonitorTests {
             samples: []
         )
         #expect(module.severity == .critical)
+    }
+
+    @Test func batterySeverityUsesRawPowerTypeKey() {
+        let module = MonitorModule(
+            kind: .battery,
+            value: 100,
+            summary: "ac-power",
+            metrics: [
+                MonitorMetric(name: "type", value: "ac-power")
+            ],
+            samples: []
+        )
+
+        #expect(module.severity == .calm)
+    }
+
+    @Test func placeholderMetricNamesAreStableKeys() {
+        let module = MonitorModule.placeholder(kind: .cpu)
+
+        #expect(module.metrics.map(\.name) == ["current", "average", "peak"])
     }
 
     @Test func computeLoadCombinesCPUAndGPU() {

@@ -63,7 +63,7 @@ final class BatterySampler: MonitorSampler {
         return MonitorModule(
             kind: .battery,
             value: 100,
-            summary: batteryStateTitle("ac-power"),
+            summary: "ac-power",
             metrics: [
                 MonitorMetric(name: "type", value: "ac-power"),
                 MonitorMetric(name: "status", value: "ac-power"),
@@ -234,12 +234,6 @@ final class BatterySampler: MonitorSampler {
         }
         return doubleValue(value)
     }
-}
-
-private func batteryStateTitle(_ id: String) -> String {
-    let key = "battery-state.\(id)"
-    let localized = String(localized: String.LocalizationValue(key))
-    return localized == key ? id : localized
 }
 
 private struct SmartBatteryInfo {
