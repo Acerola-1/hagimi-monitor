@@ -58,14 +58,54 @@ CPU, GPU, memory, and storage rows SHALL reveal additional details below the pri
 #### Scenario: Resource row expands
 - **WHEN** the user clicks the CPU, GPU, memory, or storage row
 - **THEN** a compact secondary details area is shown below that row
-- **AND** the primary row keeps the same icon, title, summary, and chart placement.
+- **AND** the primary row keeps the same icon, title, summary, and chart placement
+- **AND** only metrics enabled in settings are displayed
 
 #### Scenario: Detailed metrics render
 - **WHEN** expanded details are visible
-- **THEN** CPU includes system, user, idle, and boot time values
-- **AND** GPU includes GPU memory usage
-- **AND** memory includes memory pressure
-- **AND** storage includes accurate used storage and total capacity.
+- **THEN** CPU shows only enabled metrics from: system, user, idle, boot time
+- **AND** GPU shows only enabled metrics from: GPU memory, allocated, render, tiler
+- **AND** memory shows only enabled metrics from: used, pressure, swap, total
+- **AND** storage shows only enabled metrics from: used, free, total
+
+### Requirement: Configurable Expanded Metrics
+Each module's expanded metrics SHALL be configurable through settings.
+
+#### Scenario: CPU metrics configuration
+- **WHEN** the user opens CPU module settings
+- **THEN** the following metrics are available for selection: system, user, idle, boot time
+- **AND** all metrics are checked by default
+
+#### Scenario: GPU metrics configuration
+- **WHEN** the user opens GPU module settings
+- **THEN** the following metrics are available for selection: GPU memory, allocated, render, tiler
+- **AND** all metrics are checked by default
+
+#### Scenario: Memory metrics configuration
+- **WHEN** the user opens memory module settings
+- **THEN** the following metrics are available for selection: used, pressure, swap, total
+- **AND** all metrics are checked by default
+
+#### Scenario: Storage metrics configuration
+- **WHEN** the user opens storage module settings
+- **THEN** the following metrics are available for selection: used, free, total
+- **AND** all metrics are checked by default
+
+#### Scenario: Network metrics configuration
+- **WHEN** the user opens network module settings
+- **THEN** the following metrics are available for selection: IP address, upload, download
+- **AND** all metrics are checked by default
+
+#### Scenario: Battery metrics configuration
+- **WHEN** the user opens battery module settings
+- **THEN** the following metrics are available for selection: charging power, health, cycle count, temperature
+- **AND** all metrics are checked by default
+
+#### Scenario: Battery panel with charging power hidden
+- **WHEN** the battery module is expanded
+- **AND** charging power is enabled in settings
+- **AND** the device is on battery power
+- **THEN** charging power is not shown because it has no meaningful value
 
 ### Requirement: Automatic Appearance Adaptation
 The popover SHALL automatically adapt to the system light or dark appearance.

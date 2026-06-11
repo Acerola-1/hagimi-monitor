@@ -17,15 +17,20 @@ struct ModuleSettingsView: View {
                 }
             }
 
-            SettingsGroup("检测项目") {
-                ForEach(kind.availableMetrics) { metric in
-                    let isSelected = settings.isMetricEnabled(metric.id, for: kind)
-                    MetricSelectionRow(
-                        title: metric.title,
-                        isSelected: isSelected,
-                        isEnabled: settings.canEnableMetric(metric.id, for: kind)
-                    ) {
-                        settings.setMetric(metric.id, enabled: !isSelected, for: kind)
+            SettingsGroup("监测项目") {
+                LazyVGrid(columns: [
+                    GridItem(.flexible(), spacing: 8),
+                    GridItem(.flexible(), spacing: 8)
+                ], spacing: 0) {
+                    ForEach(kind.availableMetrics) { metric in
+                        let isSelected = settings.isMetricEnabled(metric.id, for: kind)
+                        MetricSelectionRow(
+                            title: metric.title,
+                            isSelected: isSelected,
+                            isEnabled: settings.canEnableMetric(metric.id, for: kind)
+                        ) {
+                            settings.setMetric(metric.id, enabled: !isSelected, for: kind)
+                        }
                     }
                 }
             }
