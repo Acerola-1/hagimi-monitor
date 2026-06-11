@@ -7,7 +7,7 @@ struct ModuleSettingsView: View {
     var body: some View {
         SettingsPage {
             SettingsGroup {
-                SettingsRow(title: "在面板中显示") {
+                SettingsRow(title: String(localized: "settings.show-in-panel")) {
                     Toggle("", isOn: Binding(
                         get: { settings.isVisible(kind) },
                         set: { settings.setVisible($0, for: kind) }
@@ -17,7 +17,7 @@ struct ModuleSettingsView: View {
                 }
             }
 
-            SettingsGroup("监测项目") {
+            SettingsGroup(String(localized: "settings.metrics")) {
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 8),
                     GridItem(.flexible(), spacing: 8)
@@ -34,7 +34,7 @@ struct ModuleSettingsView: View {
                     }
                 }
             }
-            Text("最多选择 \(MonitorSettings.maximumEnabledMetricsPerKind) 项用于主面板展示。")
+            Text(String(localized: "settings.metrics-limit") + " \(MonitorSettings.maximumEnabledMetricsPerKind) " + String(localized: "settings.metrics-limit-suffix"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 2)
@@ -42,12 +42,12 @@ struct ModuleSettingsView: View {
             HStack {
                 Spacer()
                 if #available(macOS 26, *) {
-                    Button("重置默认值") {
+                    Button(String(localized: "settings.reset-defaults")) {
                         settings.resetMetrics(for: kind)
                     }
                     .buttonStyle(.glass)
                 } else {
-                    Button("重置默认值") {
+                    Button(String(localized: "settings.reset-defaults")) {
                         settings.resetMetrics(for: kind)
                     }
                 }
@@ -93,7 +93,7 @@ struct DisplayModuleSettingsView: View {
     var body: some View {
         SettingsPage {
             SettingsGroup {
-                SettingsRow(title: "在面板中显示") {
+                SettingsRow(title: String(localized: "settings.show-in-panel")) {
                     Toggle("", isOn: $settings.displayModuleVisible)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -101,15 +101,15 @@ struct DisplayModuleSettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "包含内置显示器") {
+                SettingsRow(title: String(localized: "settings.include-built-in")) {
                     Toggle("", isOn: $settings.showBuiltInDisplays)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
             }
 
-            SettingsGroup("控制项") {
-                SettingsRow(title: "亮度") {
+            SettingsGroup(String(localized: "settings.controls")) {
+                SettingsRow(title: String(localized: "settings.brightness")) {
                     Toggle("", isOn: $settings.displayBrightnessControlEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -117,7 +117,7 @@ struct DisplayModuleSettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "音量") {
+                SettingsRow(title: String(localized: "settings.volume")) {
                     Toggle("", isOn: $settings.displayVolumeControlEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()
@@ -125,7 +125,7 @@ struct DisplayModuleSettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "对比度") {
+                SettingsRow(title: String(localized: "settings.contrast")) {
                     Toggle("", isOn: $settings.displayContrastControlEnabled)
                         .toggleStyle(.switch)
                         .labelsHidden()

@@ -129,9 +129,9 @@ func placeholderModule(_ kind: MonitorKind, summary: String) -> MonitorModule {
         value: 0,
         summary: summary,
         metrics: [
-            MonitorMetric(name: "状态", value: "未知"),
-            MonitorMetric(name: "数据", value: "--"),
-            MonitorMetric(name: "更新", value: "--")
+            MonitorMetric(name: "status", value: "unknown"),
+            MonitorMetric(name: "data", value: "--"),
+            MonitorMetric(name: "update", value: "--")
         ],
         samples: seedSamples(0)
     )

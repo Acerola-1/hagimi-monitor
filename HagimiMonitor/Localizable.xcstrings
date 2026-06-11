@@ -4,122 +4,518 @@
   "strings": {
     "severity.calm": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正常"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正常" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Normal" } }
       }
     },
     "severity.warning": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "接近阈值"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "接近阈值" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Warning" } }
       }
     },
     "severity.critical": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "需要注意"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "需要注意" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Critical" } }
       }
     },
     "kind.cpu": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "CPU" } },
+        "en": { "stringUnit": { "state": "translated", "value": "CPU" } }
       }
     },
     "kind.gpu": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "GPU" } },
+        "en": { "stringUnit": { "state": "translated", "value": "GPU" } }
       }
     },
     "kind.memory": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内存"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "内存" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Memory" } }
       }
     },
     "kind.storage": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "存储"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "存储" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Storage" } }
       }
     },
     "kind.network": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网络"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "网络" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Network" } }
       }
     },
     "kind.battery": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电源"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "电源" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Power" } }
       }
     },
     "metric.current": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "当前" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Current" } }
       }
     },
     "metric.average": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "平均" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Average" } }
       }
     },
     "metric.peak": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "峰值"
-          }
-        }
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "峰值" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Peak" } }
+      }
+    },
+    "ring-source.combined": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "综合" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Combined" } }
+      }
+    },
+    "ring-source.memory": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "内存" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Memory" } }
+      }
+    },
+    "theme.system": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "跟随系统" } },
+        "en": { "stringUnit": { "state": "translated", "value": "System" } }
+      }
+    },
+    "theme.light": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "浅色" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Light" } }
+      }
+    },
+    "theme.dark": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "深色" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Dark" } }
+      }
+    },
+    "color-scheme.balanced": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "平衡" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Balanced" } }
+      }
+    },
+    "color-scheme.vibrant": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "活力" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Vibrant" } }
+      }
+    },
+    "metric.cpu.system": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统" } },
+        "en": { "stringUnit": { "state": "translated", "value": "System" } }
+      }
+    },
+    "metric.cpu.user": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "用户" } },
+        "en": { "stringUnit": { "state": "translated", "value": "User" } }
+      }
+    },
+    "metric.cpu.idle": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "闲置" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Idle" } }
+      }
+    },
+    "metric.cpu.uptime": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "启动时间" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Uptime" } }
+      }
+    },
+    "metric.cpu.temperature": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "温度" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Temperature" } }
+      }
+    },
+    "metric.gpu.gpu-memory": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "GPU内存" } },
+        "en": { "stringUnit": { "state": "translated", "value": "GPU Memory" } }
+      }
+    },
+    "metric.gpu.allocated": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已分配" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Allocated" } }
+      }
+    },
+    "metric.gpu.render": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "渲染" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Render" } }
+      }
+    },
+    "metric.gpu.tiler": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "分块" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Tiler" } }
+      }
+    },
+    "metric.gpu.temperature": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "温度" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Temperature" } }
+      }
+    },
+    "metric.memory.used": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已用" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Used" } }
+      }
+    },
+    "metric.memory.pressure": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "压力" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Pressure" } }
+      }
+    },
+    "metric.memory.swap-used": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "交换已用" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Swap Used" } }
+      }
+    },
+    "metric.memory.total": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "总量" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Total" } }
+      }
+    },
+    "metric.storage.used": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已用" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Used" } }
+      }
+    },
+    "metric.storage.free": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "可用" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Free" } }
+      }
+    },
+    "metric.storage.total": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "总量" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Total" } }
+      }
+    },
+    "metric.network.ip-address": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "IP 地址" } },
+        "en": { "stringUnit": { "state": "translated", "value": "IP Address" } }
+      }
+    },
+    "metric.battery.charging-power": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "充电功率" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Charging Power" } }
+      }
+    },
+    "metric.battery.health": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "健康度" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Health" } }
+      }
+    },
+    "metric.battery.cycle-count": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "循环数" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Cycle Count" } }
+      }
+    },
+    "metric.battery.temperature": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "温度" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Temperature" } }
+      }
+    },
+    "panel.activity-monitor": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "活动监视器" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Activity Monitor" } }
+      }
+    },
+    "panel.settings": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "设置" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Settings" } }
+      }
+    },
+    "panel.system-volume": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "系统盘" } },
+        "en": { "stringUnit": { "state": "translated", "value": "System" } }
+      }
+    },
+    "menu.about": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "关于 HagimiMonitor" } },
+        "en": { "stringUnit": { "state": "translated", "value": "About HagimiMonitor" } }
+      }
+    },
+    "menu.quit": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "退出 HagimiMonitor" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Quit HagimiMonitor" } }
+      }
+    },
+    "settings.sidebar.general": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "常规" } },
+        "en": { "stringUnit": { "state": "translated", "value": "General" } }
+      }
+    },
+    "settings.sidebar.modules": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "监控模块" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Modules" } }
+      }
+    },
+    "settings.sidebar.display": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "显示器" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Display" } }
+      }
+    },
+    "settings.sidebar.about": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "关于" } },
+        "en": { "stringUnit": { "state": "translated", "value": "About" } }
+      }
+    },
+    "settings.launch-at-login": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "开机自启" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Launch at Login" } }
+      }
+    },
+    "settings.launch-at-login.subtitle": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "登录后自动打开 HagimiMonitor" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Automatically open HagimiMonitor after login" } }
+      }
+    },
+    "settings.appearance": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "外观" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Appearance" } }
+      }
+    },
+    "settings.theme": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "主题" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Theme" } }
+      }
+    },
+    "settings.color-scheme": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "配色" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Color Scheme" } }
+      }
+    },
+    "settings.menu-bar": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "菜单栏" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Menu Bar" } }
+      }
+    },
+    "settings.halo-ring": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "负载环" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Halo Ring" } }
+      }
+    },
+    "settings.show-in-panel": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "在面板中显示" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Show in Panel" } }
+      }
+    },
+    "settings.metrics": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "监测项目" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Metrics" } }
+      }
+    },
+    "settings.metrics-limit": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "最多选择 " } },
+        "en": { "stringUnit": { "state": "translated", "value": "Select up to " } }
+      }
+    },
+    "settings.metrics-limit-suffix": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": " 项用于主面板展示。" } },
+        "en": { "stringUnit": { "state": "translated", "value": " metrics to display in the panel." } }
+      }
+    },
+    "settings.reset-defaults": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重置默认值" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Reset Defaults" } }
+      }
+    },
+    "settings.include-built-in": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "包含内置显示器" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Include Built-in Display" } }
+      }
+    },
+    "settings.controls": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "控制项" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Controls" } }
+      }
+    },
+    "settings.brightness": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "亮度" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Brightness" } }
+      }
+    },
+    "settings.volume": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "音量" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Volume" } }
+      }
+    },
+    "settings.contrast": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "对比度" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Contrast" } }
+      }
+    },
+    "about.release-version": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "发布版本" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Release Version" } }
+      }
+    },
+    "about.version": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "版本 " } },
+        "en": { "stringUnit": { "state": "translated", "value": "Version " } }
+      }
+    },
+    "about.footnote": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "macOS 菜单栏硬件监控" } },
+        "en": { "stringUnit": { "state": "translated", "value": "macOS Menu Bar Hardware Monitor" } }
+      }
+    },
+    "about.unknown": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "未知" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Unknown" } }
+      }
+    },
+    "about.check-updates": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "检查更新" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Check for Updates" } }
+      }
+    },
+    "about.checking": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "正在检查..." } },
+        "en": { "stringUnit": { "state": "translated", "value": "Checking..." } }
+      }
+    },
+    "about.up-to-date": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "已是最新" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Up to Date" } }
+      }
+    },
+    "about.check-again": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "再次检查" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Check Again" } }
+      }
+    },
+    "about.found": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "发现 " } },
+        "en": { "stringUnit": { "state": "translated", "value": "Found " } }
+      }
+    },
+    "about.download-update": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "下载更新" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Download Update" } }
+      }
+    },
+    "about.retry": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "重试" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Retry" } }
+      }
+    },
+    "update.parse-failed": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法解析更新信息" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Unable to parse update info" } }
+      }
+    },
+    "update.version-parse-failed": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法解析版本号" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Unable to parse version" } }
+      }
+    },
+    "update.network-error": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "网络错误" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Network Error" } }
+      }
+    },
+    "update.temp-unavailable": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "暂时无法检查更新" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Temporarily unable to check for updates" } }
+      }
+    },
+    "update.rate-limited": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "检查更新过于频繁，请稍后再试" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Rate limited. Please try again later." } }
+      }
+    },
+    "update.no-release": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "暂时没有可用的发布版本" } },
+        "en": { "stringUnit": { "state": "translated", "value": "No release available" } }
+      }
+    },
+    "update.github-unavailable": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "GitHub 暂时不可用，请稍后再试" } },
+        "en": { "stringUnit": { "state": "translated", "value": "GitHub temporarily unavailable" } }
+      }
+    },
+    "update.check-failed": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "无法检查更新：" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Update check failed: " } }
       }
     }
   }

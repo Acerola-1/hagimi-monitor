@@ -44,14 +44,14 @@ final class BatterySampler: MonitorSampler {
             value: percentage,
             summary: percent(percentage),
             metrics: [
-                MonitorMetric(name: "类型", value: "电池"),
-                MonitorMetric(name: "状态", value: isCharging ? "充电中" : (connected ? "外接电源" : "电池供电")),
-                MonitorMetric(name: "适配器", value: wattString(adapterWatts, rounded: true)),
-                MonitorMetric(name: "充电功率", value: connected ? wattStringAllowZero(chargingPower) : "--"),
-                MonitorMetric(name: "功耗", value: wattString(systemPower)),
-                MonitorMetric(name: "健康度", value: smart.healthPercent.map(percent) ?? "--"),
-                MonitorMetric(name: "循环数", value: smart.cycleCount.map { "\($0)" } ?? "--"),
-                MonitorMetric(name: "温度", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--")
+                MonitorMetric(name: "type", value: "battery"),
+                MonitorMetric(name: "status", value: isCharging ? "charging" : (connected ? "ac-power" : "on-battery")),
+                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
+                MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--"),
+                MonitorMetric(name: "power", value: wattString(systemPower)),
+                MonitorMetric(name: "health", value: smart.healthPercent.map(percent) ?? "--"),
+                MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--"),
+                MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--")
             ],
             samples: seedSamples(percentage)
         )
@@ -63,12 +63,12 @@ final class BatterySampler: MonitorSampler {
         return MonitorModule(
             kind: .battery,
             value: 100,
-            summary: "外接电源",
+            summary: "ac-power",
             metrics: [
-                MonitorMetric(name: "类型", value: "外接电源"),
-                MonitorMetric(name: "状态", value: "外接电源"),
-                MonitorMetric(name: "适配器", value: wattString(adapterWatts, rounded: true)),
-                MonitorMetric(name: "功耗", value: wattString(powerWatts))
+                MonitorMetric(name: "type", value: "ac-power"),
+                MonitorMetric(name: "status", value: "ac-power"),
+                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
+                MonitorMetric(name: "power", value: wattString(powerWatts))
             ],
             samples: seedSamples(100)
         )

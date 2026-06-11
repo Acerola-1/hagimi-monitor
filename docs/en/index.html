@@ -1,0 +1,1181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hagimi Monitor - macOS Menu Bar System Monitor</title>
+    <meta name="description" content="Hagimi Monitor is a macOS menu bar system monitor for Apple Silicon.">
+    <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "Hagimi Monitor",
+        "applicationCategory": "UtilitiesApplication",
+        "operatingSystem": "macOS 26",
+        "description": "macOS 菜单栏系统监控工具，实时显示 CPU、GPU、内存、存储、网络和电池状态。",
+        "offers": {
+            "@type": "Offer",
+            "price": "0",
+            "priceCurrency": "USD"
+        },
+        "programmingLanguage": "Swift",
+        "processorRequirements": "Apple Silicon"
+    }
+    </script>
+    <style>
+        :root {
+            --page: #f2f0ea;
+            --paper: #fbfaf6;
+            --ink: #171817;
+            --muted: #686a63;
+            --line: rgba(28, 30, 26, 0.12);
+            --line-strong: rgba(28, 30, 26, 0.22);
+            --green: #238649;
+            --amber: #d8891d;
+            --red: #d84736;
+            --shadow: 0 28px 80px rgba(31, 30, 24, 0.14);
+            --radius: 8px;
+        }
+
+        [data-theme="dark"] {
+            --page: #111311;
+            --paper: #191b18;
+            --ink: #f1efe6;
+            --muted: #a6a398;
+            --line: rgba(241, 239, 230, 0.13);
+            --line-strong: rgba(241, 239, 230, 0.24);
+            --green: #5ac878;
+            --amber: #e2a442;
+            --red: #ee6a5b;
+            --shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme]) {
+                --page: #111311;
+                --paper: #191b18;
+                --ink: #f1efe6;
+                --muted: #a6a398;
+                --line: rgba(241, 239, 230, 0.13);
+                --line-strong: rgba(241, 239, 230, 0.24);
+                --green: #5ac878;
+                --amber: #e2a442;
+                --red: #ee6a5b;
+                --shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+            }
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            background:
+                linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 88px 88px,
+                linear-gradient(0deg, var(--line) 1px, transparent 1px) 0 0 / 88px 88px,
+                var(--page);
+            color: var(--ink);
+            font-family: ui-serif, "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", Georgia, serif;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+            text-rendering: optimizeLegibility;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        img {
+            display: block;
+            max-width: 100%;
+        }
+
+        figure {
+            margin: 0;
+        }
+
+        /* Focus styles */
+        a:focus-visible,
+        button:focus-visible {
+            outline: 2px solid var(--green);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
+
+        .site-header {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            border-bottom: 1px solid var(--line);
+            background: color-mix(in srgb, var(--page) 88%, transparent);
+            backdrop-filter: blur(18px);
+        }
+
+        .nav {
+            width: min(1160px, calc(100% - 40px));
+            height: 64px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 11px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0;
+        }
+
+        /* brand icon: src image is 1254x1254 but displayed at 30x30 — consider providing a smaller web-optimized version */
+        .brand img {
+            width: 30px;
+            height: 30px;
+            border-radius: 7px;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 13px;
+            color: var(--muted);
+        }
+
+        .nav-links a {
+            padding: 8px 10px;
+            border-radius: 7px;
+        }
+
+        .nav-links a:hover {
+            background: color-mix(in srgb, var(--ink) 7%, transparent);
+            color: var(--ink);
+        }
+
+        .github-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border: 1px solid var(--line-strong);
+            background: color-mix(in srgb, var(--paper) 76%, transparent);
+        }
+
+        .github-stars {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 2px;
+            padding-left: 8px;
+            border-left: 1px solid var(--line);
+            color: var(--ink);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .github-stars svg {
+            width: 13px;
+            height: 13px;
+            fill: var(--amber);
+        }
+
+        .github-pill > svg {
+            width: 15px;
+            height: 15px;
+            fill: currentColor;
+        }
+
+        /* Hero */
+        .hero {
+            width: min(1160px, calc(100% - 40px));
+            min-height: calc(100svh - 64px);
+            margin: 0 auto;
+            padding: clamp(46px, 7vw, 92px) 0 56px;
+            display: grid;
+            grid-template-columns: minmax(0, 0.94fr) minmax(340px, 0.86fr);
+            gap: clamp(36px, 7vw, 88px);
+            align-items: center;
+        }
+
+        .eyebrow {
+            margin: 0 0 18px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 12px;
+            font-weight: 800;
+            color: var(--green);
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        h1 {
+            max-width: 680px;
+            margin: 0;
+            font-size: clamp(42px, 7vw, 82px);
+            line-height: 0.98;
+            letter-spacing: 0;
+            font-weight: 760;
+        }
+
+        .lead {
+            max-width: 560px;
+            margin: 26px 0 0;
+            color: var(--muted);
+            font-size: clamp(17px, 2.2vw, 21px);
+            line-height: 1.78;
+        }
+
+        .hero-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 34px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        }
+
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 9px;
+            min-height: 44px;
+            padding: 0 18px;
+            border-radius: var(--radius);
+            border: 1px solid var(--ink);
+            background: var(--ink);
+            color: var(--page);
+            font-size: 14px;
+            font-weight: 750;
+        }
+
+        .button.secondary {
+            border-color: var(--line-strong);
+            background: color-mix(in srgb, var(--paper) 74%, transparent);
+            color: var(--ink);
+        }
+
+        .button:hover {
+            transform: translateY(-1px);
+        }
+
+        .button svg {
+            width: 17px;
+            height: 17px;
+        }
+
+        .spec-row {
+            margin-top: 32px;
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            border-top: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        }
+
+        .spec-row div {
+            padding: 14px 16px 14px 0;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 650;
+        }
+
+        .spec-row div + div {
+            padding-left: 16px;
+            border-left: 1px solid var(--line);
+        }
+
+        /* Product frame with macOS menu bar simulation */
+        .product-frame {
+            justify-self: end;
+            width: min(100%, 480px);
+            position: relative;
+        }
+
+        .menubar-sim {
+            height: 32px;
+            margin: 0 12px -3px;
+            border: 1px solid var(--line-strong);
+            border-bottom: 0;
+            border-radius: 10px 10px 0 0;
+            background: color-mix(in srgb, var(--paper) 84%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 12px 0 14px;
+            color: var(--muted);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .menubar-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .menubar-left svg {
+            fill: currentColor;
+        }
+
+        .menubar-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .menubar-right svg {
+            fill: currentColor;
+        }
+
+        .ring-icon {
+            width: 16px;
+            height: 16px;
+            border: 3px solid var(--green);
+            border-right-color: var(--amber);
+            border-bottom-color: var(--red);
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        .screen-shot {
+            border: 1px solid var(--line-strong);
+            border-radius: 14px;
+            background: var(--paper);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+        }
+
+        /* Theme-aware screenshot switching for hero */
+        .screen-shot .dark {
+            display: none;
+        }
+
+        :root:not([data-theme]) .screen-shot .dark {
+            display: none;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme]) .screen-shot .light {
+                display: none;
+            }
+
+            :root:not([data-theme]) .screen-shot .dark {
+                display: block;
+            }
+        }
+
+        [data-theme="light"] .screen-shot .light {
+            display: block;
+        }
+
+        [data-theme="light"] .screen-shot .dark {
+            display: none;
+        }
+
+        [data-theme="dark"] .screen-shot .light {
+            display: none;
+        }
+
+        [data-theme="dark"] .screen-shot .dark {
+            display: block;
+        }
+
+        /* Sections */
+        .section {
+            width: min(1160px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: 88px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .section-head {
+            display: grid;
+            grid-template-columns: minmax(0, 0.72fr) minmax(260px, 0.46fr);
+            gap: 48px;
+            align-items: end;
+            margin-bottom: 34px;
+        }
+
+        h2 {
+            margin: 0;
+            font-size: clamp(29px, 4.6vw, 54px);
+            line-height: 1.04;
+            letter-spacing: 0;
+        }
+
+        .section-head p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.75;
+        }
+
+        /* Feature grid */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            border: 1px solid var(--line-strong);
+            background: var(--paper);
+        }
+
+        .feature {
+            min-height: 210px;
+            padding: 26px;
+            border-right: 1px solid var(--line);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .feature:nth-child(3n) {
+            border-right: 0;
+        }
+
+        .feature:nth-last-child(-n + 3) {
+            border-bottom: 0;
+        }
+
+        .feature-icon {
+            width: 36px;
+            height: 36px;
+            margin-bottom: 18px;
+            border-radius: 8px;
+            background: color-mix(in srgb, var(--green) 10%, transparent);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .feature-icon svg {
+            width: 20px;
+            height: 20px;
+            stroke: var(--green);
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .feature h3 {
+            margin: 0 0 10px;
+            font-family: ui-sans-serif, "SF Pro Display", "PingFang SC", system-ui, sans-serif;
+            font-size: 19px;
+            letter-spacing: 0;
+        }
+
+        .feature p {
+            margin: 0;
+            color: var(--muted);
+            font-size: 15px;
+        }
+
+        /* Theme toggle */
+        .section-head-row {
+            display: flex;
+            align-items: end;
+            justify-content: space-between;
+            gap: 20px;
+            margin-bottom: 34px;
+        }
+
+        .section-head-row .section-head-text {
+            display: grid;
+            grid-template-columns: minmax(0, 0.72fr) minmax(260px, 0.46fr);
+            gap: 48px;
+            align-items: end;
+            flex: 1;
+        }
+
+        .theme-toggle {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--line-strong);
+            border-radius: 7px;
+            background: color-mix(in srgb, var(--paper) 74%, transparent);
+            cursor: pointer;
+            flex-shrink: 0;
+            padding: 0;
+            color: var(--ink);
+        }
+
+        .theme-toggle:hover {
+            background: color-mix(in srgb, var(--ink) 7%, transparent);
+        }
+
+        .theme-toggle svg {
+            width: 18px;
+            height: 18px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
+        .theme-toggle .icon-sun {
+            display: block;
+        }
+
+        .theme-toggle .icon-moon {
+            display: none;
+        }
+
+        [data-theme="dark"] .theme-toggle .icon-sun {
+            display: none;
+        }
+
+        [data-theme="dark"] .theme-toggle .icon-moon {
+            display: block;
+        }
+
+        /* Showcase grid with theme-aware screenshots */
+        .showcase-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 22px;
+        }
+
+        .shot-card {
+            border: 1px solid var(--line-strong);
+            background: var(--paper);
+            border-radius: var(--radius);
+            padding: 14px;
+        }
+
+        .shot-card img {
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            background: var(--page);
+        }
+
+        /* Theme-aware screenshot visibility in showcase */
+        .shot-card .dark {
+            display: none;
+        }
+
+        :root:not([data-theme]) .shot-card .dark {
+            display: none;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme]) .shot-card .light {
+                display: none;
+            }
+
+            :root:not([data-theme]) .shot-card .dark {
+                display: block;
+            }
+        }
+
+        [data-theme="light"] .shot-card .light {
+            display: block;
+        }
+
+        [data-theme="light"] .shot-card .dark {
+            display: none;
+        }
+
+        [data-theme="dark"] .shot-card .light {
+            display: none;
+        }
+
+        [data-theme="dark"] .shot-card .dark {
+            display: block;
+        }
+
+        .shot-caption {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 14px 2px 2px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        }
+
+        .shot-caption strong {
+            font-size: 14px;
+        }
+
+        .shot-caption span {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        /* Detail section */
+        .detail-layout {
+            display: grid;
+            grid-template-columns: minmax(280px, 0.38fr) minmax(0, 0.62fr);
+            gap: 42px;
+            align-items: start;
+        }
+
+        .detail-copy {
+            position: sticky;
+            top: 96px;
+        }
+
+        .detail-copy p {
+            margin: 22px 0 0;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .detail-list {
+            margin: 28px 0 0;
+            padding: 0;
+            list-style: none;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            color: var(--muted);
+            font-size: 14px;
+        }
+
+        .detail-list li {
+            padding: 12px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .detail-image {
+            padding: 14px;
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius);
+            background: var(--paper);
+        }
+
+        .detail-image img {
+            width: 100%;
+            border-radius: 6px;
+            border: 1px solid var(--line);
+            max-height: 800px;
+            object-fit: contain;
+            object-position: top;
+        }
+
+        .detail-image-note {
+            margin: 10px 0 0;
+            text-align: center;
+            color: var(--muted);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 11px;
+        }
+
+        /* Star history section */
+        .stars-layout {
+            display: grid;
+            grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.66fr);
+            gap: 42px;
+            align-items: stretch;
+        }
+
+        .stars-copy {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .stars-copy h2 {
+            margin: 0;
+        }
+
+        .stars-copy p {
+            margin: 22px 0 0;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.8;
+        }
+
+        .stars-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-top: 26px;
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        }
+
+        .stars-chart {
+            padding: 14px;
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius);
+            background: var(--paper);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stars-chart .star-link {
+            display: block;
+            line-height: 0;
+            border-radius: 6px;
+            overflow: hidden;
+            border: 1px solid var(--line);
+            background: var(--page);
+        }
+
+        .stars-chart img {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .stars-chart .light {
+            display: block;
+        }
+
+        .stars-chart .dark {
+            display: none;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme]) .stars-chart .light {
+                display: none;
+            }
+
+            :root:not([data-theme]) .stars-chart .dark {
+                display: block;
+            }
+        }
+
+        [data-theme="light"] .stars-chart .light {
+            display: block;
+        }
+
+        [data-theme="light"] .stars-chart .dark {
+            display: none;
+        }
+
+        [data-theme="dark"] .stars-chart .light {
+            display: none;
+        }
+
+        [data-theme="dark"] .stars-chart .dark {
+            display: block;
+        }
+
+        .stars-caption {
+            margin: 10px 0 0;
+            text-align: center;
+            color: var(--muted);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 11px;
+        }
+
+        /* Footer */
+        .footer {
+            width: min(1160px, calc(100% - 40px));
+            margin: 0 auto;
+            padding: 42px 0 56px;
+            border-top: 1px solid var(--line);
+            display: flex;
+            justify-content: space-between;
+            gap: 18px;
+            color: var(--muted);
+            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            font-size: 13px;
+        }
+
+        .footer a {
+            color: var(--ink);
+            font-weight: 700;
+        }
+
+        /* Responsive */
+        @media (max-width: 860px) {
+            .nav {
+                width: min(100% - 28px, 1160px);
+            }
+
+            .nav-links a:not(.github-pill) {
+                display: none;
+            }
+
+            .hero,
+            .section,
+            .footer {
+                width: min(100% - 28px, 1160px);
+            }
+
+            .hero {
+                min-height: auto;
+                grid-template-columns: 1fr;
+                padding-top: 42px;
+            }
+
+            .product-frame {
+                justify-self: stretch;
+                width: min(100%, 520px);
+                margin: 0 auto;
+            }
+
+            .section-head,
+            .section-head-row .section-head-text,
+            .detail-layout,
+            .stars-layout {
+                grid-template-columns: 1fr;
+                gap: 22px;
+            }
+
+            .feature-grid,
+            .showcase-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feature,
+            .feature:nth-child(3n),
+            .feature:nth-last-child(-n + 3) {
+                border-right: 0;
+                border-bottom: 1px solid var(--line);
+            }
+
+            .feature:last-child {
+                border-bottom: 0;
+            }
+
+            .detail-copy {
+                position: static;
+            }
+        }
+
+        @media (max-width: 560px) {
+            body {
+                background-size: 54px 54px;
+            }
+
+            .brand span {
+                max-width: 150px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            h1 {
+                font-size: clamp(38px, 14vw, 58px);
+            }
+
+            .lead {
+                font-size: 16px;
+            }
+
+            .hero-actions {
+                align-items: stretch;
+            }
+
+            .button {
+                width: 100%;
+            }
+
+            .spec-row {
+                grid-template-columns: 1fr;
+            }
+
+            .spec-row div + div {
+                padding-left: 0;
+                border-left: 0;
+                border-top: 1px solid var(--line);
+            }
+
+            .section {
+                padding: 62px 0;
+            }
+
+            .feature {
+                min-height: 0;
+            }
+
+            .footer {
+                flex-direction: column;
+            }
+
+            .menubar-sim {
+                display: none;
+            }
+
+            .screen-shot {
+                border-radius: 14px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="site-header">
+        <nav class="nav" aria-label="主导航">
+            <a class="brand" href="#">
+                <img src="../images/icon-128.png" alt="" width="30" height="30">
+                <span>Hagimi Monitor</span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#themes">Screenshots</a>
+                <a href="#details">Details</a>
+                <a href="#stars">Stars</a>
+                <a class="github-pill" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.04c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.08 1.85 1.24 1.85 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.31-5.47-1.34-5.47-5.94 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23A11.5 11.5 0 0 1 12 5.78c1.02 0 2.05.14 3.01.4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.22.69.82.58A12 12 0 0 0 12 .3Z"/></svg>
+                    GitHub
+                    <span class="github-stars" aria-label="GitHub stars">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.92 6.26 6.83.83-5.05 4.68 1.34 6.76L12 17.14l-6.04 3.39 1.34-6.76-5.05-4.68 6.83-.83L12 2Z"/></svg>
+                        <span id="star-count">--</span>
+                    </span>
+                </a>
+            </div>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero">
+            <div>
+                <p class="eyebrow">macOS 26+ / Apple Silicon</p>
+                <h1>System status at a glance.</h1>
+                <p class="lead">The menu bar icon shows real-time system load. Click to expand CPU, GPU, memory, storage, network, and battery details. Stays under 30 MB, no desktop clutter.</p>
+                <div class="hero-actions">
+                    <a class="button" href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+                        Download Latest
+                    </a>
+                    <a class="button secondary" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">View Source</a>
+                </div>
+                <div class="spec-row" aria-label="基础信息">
+                    <div>macOS 26+</div>
+                    <div>Apple Silicon Optimized</div>
+                    <div>Free <div>免费开源</div> Open Source</div>
+                </div>
+            </div>
+
+            <div class="product-frame" aria-label="产品截图">
+                <div class="menubar-sim" aria-hidden="true">
+                    <div class="menubar-left">
+                        <!-- Apple logo -->
+                        <svg width="13" height="16" viewBox="0 0 170 200" aria-hidden="true"><path d="M150 62.5c-1.4-7.2-4.1-13.3-8.2-18.3-4.1-5-9.6-9-16.5-12 3.4-4.8 5.8-9.5 7.2-14.2 1.4-4.7 1.8-9.1 1.2-13.2-5.8 1.3-10.8 3.6-15 6.9-4.2 3.3-8.3 7.7-12.2 13.2-4.3-1.4-9.4-2.1-15.3-2.1-5.6 0-10.6.6-15 1.9-3.9-5.4-8-9.7-12.2-13-4.2-3.3-9.2-5.6-15-6.9-.6 4.1-.2 8.5 1.2 13.2 1.4 4.7 3.8 9.4 7.2 14.2-6.9 3-12.4 7-16.5 12-4.1 5-6.9 11.1-8.2 18.3-6.8 3-12 7.1-15.7 12.2-3.7 5.1-5.5 10.8-5.5 17.2 0 8.2 2.9 15.1 8.6 20.6 5.7 5.5 12.9 8.8 21.6 9.8 5.4.8 10.4.8 15 0 4.6-.8 8.8-2.2 12.5-4.3 3.1-1.7 5.7-3.7 7.8-6 1.6-1.7 2.9-3.5 3.9-5.4h.7c1 1.9 2.3 3.7 3.9 5.4 2.1 2.3 4.7 4.3 7.8 6 3.7 2.1 7.9 3.5 12.5 4.3 4.6.8 9.6.8 15 0 8.7-1 15.9-4.3 21.6-9.8 5.7-5.5 8.6-12.4 8.6-20.6 0-6.4-1.8-12.1-5.5-17.2-3.7-5.1-8.9-9.2-15.8-12.2Z" fill="currentColor"/></svg>
+                        <span>Hagimi Monitor</span>
+                    </div>
+                    <div class="menubar-right">
+                        <!-- WiFi icon -->
+                        <svg width="15" height="12" viewBox="0 0 24 18" aria-hidden="true"><path d="M12 16a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-4.95-3.54a7.03 7.03 0 0 1 9.9 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M3.51 8.16a11.05 11.05 0 0 1 16.98 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
+                        <!-- Battery icon -->
+                        <svg width="20" height="11" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="1" width="22" height="12" rx="2.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="3.5" y="3.5" width="14" height="7" rx="1" fill="currentColor" opacity="0.7"/><path d="M25 5v4a2 2 0 0 0 0-4Z" fill="currentColor" opacity="0.5"/></svg>
+                        <!-- Control Center icon -->
+                        <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="5" r="2.5" fill="currentColor"/><circle cx="15" cy="5" r="2.5" fill="currentColor"/><circle cx="5" cy="15" r="2.5" fill="currentColor"/><circle cx="15" cy="15" r="2.5" fill="currentColor"/></svg>
+                        <!-- Hagimi Monitor ring icon -->
+                        <div class="ring-icon"></div>
+                    </div>
+                </div>
+                <div class="screen-shot">
+                    <img class="light" src="../images/vitality-light.png" alt="Hagimi Monitor 活力浅色界面截图">
+                    <img class="dark" src="../images/vitality-dark.png" alt="Hagimi Monitor 活力深色界面截图">
+                </div>
+            </div>
+        </section>
+
+        <section id="features" class="section">
+            <div class="section-head">
+                <h2>Status changes, visible at a glance.</h2>
+                <p>From menu bar load to expanded detailed metrics, Hagimi Monitor is designed for long-term residence and quick troubleshooting when fans spin up, lag occurs, or external devices act up.</p>
+            </div>
+            <div class="feature-grid">
+                <article class="feature">
+                    <div class="feature-icon">
+                        <!-- Ring/circle icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 6.36 2.64" style="stroke:var(--amber)"/><path d="M12 3a9 9 0 0 0-6.36 15.36" style="stroke:var(--red)"/></svg>
+                    </div>
+                    <h3>Load Ring</h3>
+                    <p>The menu bar icon reflects system pressure in real time. Colors shift from green to orange to red — light load, busy, or high pressure at a glance.</p>
+                </article>
+                <article class="feature">
+                    <div class="feature-icon">
+                        <!-- CPU/chip icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
+                    </div>
+                    <h3>Core Metrics</h3>
+                    <p>CPU, GPU, memory, storage, network, and battery are sampled independently. No need to open Activity Monitor for status changes.</p>
+                </article>
+                <article class="feature">
+                    <div class="feature-icon">
+                        <!-- Chart/trend icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20L8 13L13 16L21 6"/><path d="M17 6h4v4"/></svg>
+                    </div>
+                    <h3>Trend Charts</h3>
+                    <p>CPU and GPU usage come with mini trend charts. Brief spikes and sustained high load are not conflated.</p>
+                </article>
+                <article class="feature">
+                    <div class="feature-icon">
+                        <!-- Expand/chevrons icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></svg>
+                    </div>
+                    <h3>Expand Details</h3>
+                    <p>When you need to dig deeper, expand to see core distribution, VRAM, memory pressure, volume info, IP, and battery health.</p>
+                </article>
+                <article class="feature">
+                    <div class="feature-icon">
+                        <!-- Palette/swatch icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.5" fill="var(--green)" stroke="none"/><circle cx="12" cy="7.5" r="1.5" fill="var(--amber)" stroke="none"/><circle cx="16" cy="10" r="1.5" fill="var(--red)" stroke="none"/></svg>
+                    </div>
+                    <h3>Two Color Schemes</h3>
+                    <p>Balanced mode is calmer; Vibrant mode is more striking. Both adapt to light and dark appearances.</p>
+                </article>
+                <article class="feature">
+                    <div class="feature-icon">
+                        <!-- Display/monitor icon -->
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                    </div>
+                    <h3>Display Controls</h3>
+                    <p>The non-App Store version supports brightness, volume, and contrast adjustment for external displays via DDC/CI protocol.</p>
+                </article>
+            </div>
+        </section>
+
+        <section id="themes" class="section">
+            <div class="section-head-row">
+                <div class="section-head-text">
+                    <h2>Light and dark, each with two panel styles.</h2>
+                    <p>Balanced mode is calmer; Vibrant mode is more striking. When the system appearance switches, the panel follows to stay clearly readable.</p>
+                </div>
+                <button class="theme-toggle" id="theme-toggle" aria-label="切换浅色/深色预览" type="button">
+                    <!-- Sun icon (shown in dark mode, click to go light) -->
+                    <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+                    <!-- Moon icon (shown in light mode, click to go dark) -->
+                    <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
+                </button>
+            </div>
+            <div class="showcase-grid">
+                <figure class="shot-card">
+                    <img class="light" src="../images/balance-light.png" alt="平衡主题浅色模式截图" loading="lazy">
+                    <img class="dark" src="../images/balance-dark.png" alt="平衡主题深色模式截图" loading="lazy">
+                    <figcaption class="shot-caption">
+                        <strong>Balanced</strong>
+                        <span>Closer to system panels</span>
+                    </figcaption>
+                </figure>
+                <figure class="shot-card">
+                    <img class="light" src="../images/vitality-light.png" alt="活力主题浅色模式截图" loading="lazy">
+                    <img class="dark" src="../images/vitality-dark.png" alt="活力主题深色模式截图" loading="lazy">
+                    <figcaption class="shot-caption">
+                        <strong>Vibrant</strong>
+                        <span>More distinct status colors</span>
+                    </figcaption>
+                </figure>
+                <figure class="shot-card">
+                    <img class="light" src="../images/balance-dark.png" alt="平衡主题深色面板" loading="lazy">
+                    <img class="dark" src="../images/balance-light.png" alt="平衡主题浅色面板" loading="lazy">
+                    <figcaption class="shot-caption">
+                        <strong>Balanced</strong>
+                        <span>Dark / light panel comparison</span>
+                    </figcaption>
+                </figure>
+                <figure class="shot-card">
+                    <img class="light" src="../images/vitality-dark.png" alt="活力主题深色面板" loading="lazy">
+                    <img class="dark" src="../images/vitality-light.png" alt="活力主题浅色面板" loading="lazy">
+                    <figcaption class="shot-caption">
+                        <strong>Vibrant</strong>
+                        <span>Dark / light panel comparison</span>
+                    </figcaption>
+                </figure>
+            </div>
+        </section>
+
+        <section id="details" class="section">
+            <div class="detail-layout">
+                <div class="detail-copy">
+                    <p class="eyebrow">Details</p>
+                    <h2>Stays minimal, expands when needed.</h2>
+                    <p>The default view keeps high-frequency info; clicking a module reveals finer diagnostic data. Stays out of the way daily, no need to scramble for tools when issues arise.</p>
+                    <ul class="detail-list">
+                        <li>CPU core distribution and real-time frequency</li>
+                        <li>GPU usage, VRAM, and graphics state</li>
+                        <li>Memory pressure, swap space, and storage volume details</li>
+                        <li>Network address, battery health, and cycle count</li>
+                    </ul>
+                </div>
+                <div class="detail-image">
+                    <img src="../images/detailed-data.png" alt="详细数据展开截图" loading="lazy">
+                    <p class="detail-image-note">Screenshot may require scrolling to view full content</p>
+                </div>
+            </div>
+        </section>
+        <section id="stars" class="section">
+            <div class="stars-layout">
+                <div class="stars-copy">
+                    <p class="eyebrow">Star History</p>
+                    <h2>Your Star matters.</h2>
+                    <p>This project is independently maintained long-term. Every Star is a reason to keep refining details. If Hagimi Monitor is useful to you, consider leaving a star on GitHub.</p>
+                    <div class="stars-actions">
+                        <a class="button" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 2.92 6.26 6.83.83-5.05 4.68 1.34 6.76L12 17.14l-6.04 3.39 1.34-6.76-5.05-4.68 6.83-.83L12 2Z"/></svg>
+                            Star on GitHub
+                        </a>
+                    </div>
+                </div>
+                <figure class="stars-chart">
+                    <a class="star-link" href="https://star-history.com/#Acerola-1/hagimi-monitor&Date" target="_blank" rel="noopener" aria-label="查看完整 Star 增长曲线">
+                        <img class="light" src="https://api.star-history.com/svg?repos=Acerola-1/hagimi-monitor&type=Date" alt="Hagimi Monitor Star 增长曲线（浅色）" loading="lazy">
+                        <img class="dark" src="https://api.star-history.com/svg?repos=Acerola-1/hagimi-monitor&type=Date&theme=dark" alt="Hagimi Monitor Star 增长曲线（深色）" loading="lazy">
+                    </a>
+                    <figcaption class="stars-caption">Data source: star-history.com</figcaption>
+                </figure>
+            </div>
+        </section>
+    </main>
+
+    <footer class="footer">
+        <span>Hagimi Monitor · MIT License</span>
+        <span>Made by <a href="https://github.com/Acerola-1" target="_blank" rel="noopener">Acerola</a></span>
+    </footer>
+    <script>
+        // Theme toggle: persist to localStorage, respect prefers-color-scheme on first load
+        (function () {
+            const root = document.documentElement;
+            const toggle = document.getElementById("theme-toggle");
+            const stored = localStorage.getItem("theme");
+
+            if (stored === "light" || stored === "dark") {
+                root.setAttribute("data-theme", stored);
+            }
+
+            toggle.addEventListener("click", function () {
+                const current = root.getAttribute("data-theme");
+                let next;
+                if (current === "dark") {
+                    next = "light";
+                } else if (current === "light") {
+                    next = "dark";
+                } else {
+                    // No explicit theme yet — infer from system preference
+                    next = window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
+                }
+                root.setAttribute("data-theme", next);
+                localStorage.setItem("theme", next);
+            });
+        })();
+
+        // GitHub star count via shields.io
+        const starCount = document.getElementById("star-count");
+        // shields.io 合法返回示例: "0", "42", "1.2k", "10k", "1M"
+        const STAR_VALUE_PATTERN = /^\d+(\.\d+)?[kM]?$/;
+
+        fetch("https://img.shields.io/github/stars/Acerola-1/hagimi-monitor.json")
+            .then((r) => r.ok ? r.json() : Promise.reject())
+            .then((data) => {
+                const val = typeof data?.value === "string" ? data.value.trim() : "";
+                if (STAR_VALUE_PATTERN.test(val)) {
+                    starCount.textContent = val;
+                } else {
+                    // shields.io 偶尔会返回类似 "Unable to select next GitHub token from pool" 的错误消息
+                    starCount.textContent = "-";
+                }
+            })
+            .catch(() => {
+                starCount.textContent = "-";
+            });
+    </script>
+</body>
+</html>

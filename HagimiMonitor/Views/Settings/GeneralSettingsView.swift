@@ -6,16 +6,16 @@ struct GeneralSettingsView: View {
     var body: some View {
         SettingsPage {
             SettingsGroup {
-                SettingsRow(title: "开机自启", subtitle: "登录后自动打开 HagimiMonitor") {
+                SettingsRow(title: String(localized: "settings.launch-at-login"), subtitle: String(localized: "settings.launch-at-login.subtitle")) {
                     Toggle("", isOn: $settings.launchAtLogin)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
             }
 
-            SettingsGroup("外观") {
-                SettingsRow(title: "主题") {
-                    Picker("主题", selection: $settings.themePreference) {
+            SettingsGroup(String(localized: "settings.appearance")) {
+                SettingsRow(title: String(localized: "settings.theme")) {
+                    Picker(String(localized: "settings.theme"), selection: $settings.themePreference) {
                         ForEach(AppThemePreference.allCases) { theme in
                             Text(theme.title).tag(theme)
                         }
@@ -27,8 +27,8 @@ struct GeneralSettingsView: View {
 
                 SettingsDivider()
 
-                SettingsRow(title: "配色") {
-                    Picker("配色", selection: $settings.colorSchemePreference) {
+                SettingsRow(title: String(localized: "settings.color-scheme")) {
+                    Picker(String(localized: "settings.color-scheme"), selection: $settings.colorSchemePreference) {
                         ForEach(MonitorColorSchemePreference.allCases) { colorScheme in
                             Text(colorScheme.title).tag(colorScheme)
                         }
@@ -39,9 +39,9 @@ struct GeneralSettingsView: View {
                 }
             }
 
-            SettingsGroup("菜单栏") {
-                SettingsRow(title: "负载环") {
-                    Picker("负载环", selection: $settings.ringSource) {
+            SettingsGroup(String(localized: "settings.menu-bar")) {
+                SettingsRow(title: String(localized: "settings.halo-ring")) {
+                    Picker(String(localized: "settings.halo-ring"), selection: $settings.ringSource) {
                         ForEach(HaloRingSource.allCases) { source in
                             Text(source.title).tag(source)
                         }

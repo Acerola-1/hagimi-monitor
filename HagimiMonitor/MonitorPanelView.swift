@@ -38,7 +38,7 @@ struct MonitorPanelView: View {
                     Button {
                         openActivityMonitor()
                     } label: {
-                        Label("活动监视器", systemImage: "waveform.path.ecg")
+                        Label(String(localized: "panel.activity-monitor"), systemImage: "waveform.path.ecg")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glass)
@@ -46,7 +46,7 @@ struct MonitorPanelView: View {
                     Button {
                         SettingsWindowPresenter.open(openSettings)
                     } label: {
-                        Label("设置", systemImage: "gearshape")
+                        Label(String(localized: "panel.settings"), systemImage: "gearshape")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glass)
@@ -289,10 +289,10 @@ private struct MetricGlassRow: View {
     private var systemVolumeInfo: StorageVolumeInfo {
         StorageVolumeInfo(
             id: "system",
-            name: "系统盘",
-            used: metricValue("已用"),
-            free: metricValue("可用"),
-            total: metricValue("总量"),
+            name: String(localized: "panel.system-volume"),
+            used: metricValue("used"),
+            free: metricValue("free"),
+            total: metricValue("total"),
             percentage: Int(module.value.rounded()),
             isExternal: false
         )
@@ -423,9 +423,9 @@ private struct StorageVolumeRow: View {
                     .frame(height: 3)
 
                 HStack(spacing: 8) {
-                    StorageVolumeStat(label: "已用", value: volume.used, theme: theme)
-                    StorageVolumeStat(label: "可用", value: volume.free, theme: theme)
-                    StorageVolumeStat(label: "总量", value: volume.total, theme: theme)
+                    StorageVolumeStat(label: String(localized: "metric.storage.used"), value: volume.used, theme: theme)
+                    StorageVolumeStat(label: String(localized: "metric.storage.free"), value: volume.free, theme: theme)
+                    StorageVolumeStat(label: String(localized: "metric.storage.total"), value: volume.total, theme: theme)
                 }
             }
         }
@@ -496,7 +496,7 @@ private struct NetworkGlassRow: View {
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                Text("网络:")
+                Text(String(localized: "kind.network") + ":")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
@@ -508,8 +508,8 @@ private struct NetworkGlassRow: View {
 
                 Spacer(minLength: 8)
 
-                MetricPill(systemImage: "arrow.up", text: value("上传"), theme: theme)
-                MetricPill(systemImage: "arrow.down", text: value("下载"), theme: theme)
+                MetricPill(systemImage: "arrow.up", text: value("upload"), theme: theme)
+                MetricPill(systemImage: "arrow.down", text: value("download"), theme: theme)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -588,7 +588,7 @@ private struct BatteryGlassRow: View {
                     .frame(width: 18)
                     .symbolEffect(.variableColor.iterative, isActive: isCharging)
 
-                Text("电源:")
+                Text(String(localized: "kind.battery") + ":")
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
@@ -604,8 +604,8 @@ private struct BatteryGlassRow: View {
                 if hasBattery {
                     MetricPill(systemImage: powerPillIcon, text: powerPillValue, theme: theme)
                 } else {
-                    MetricPill(systemImage: "powerplug", text: value("适配器"), theme: theme)
-                    MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("功耗"), theme: theme)
+                    MetricPill(systemImage: "powerplug", text: value("adapter"), theme: theme)
+                    MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("power"), theme: theme)
                 }
             }
             .padding(.horizontal, 10)
@@ -628,11 +628,11 @@ private struct BatteryGlassRow: View {
     }
 
     private var hasBattery: Bool {
-        value("类型") == "电池"
+        value("type") == "battery"
     }
 
     private var isCharging: Bool {
-        value("状态") == "充电中"
+        value("status") == "charging"
     }
 
     private var powerSymbol: String {
@@ -661,13 +661,13 @@ private struct BatteryGlassRow: View {
     }
 
     private var powerPillValue: String {
-        return value("功耗")
+        return value("power")
     }
 
     private var detailMetrics: [MonitorMetric] {
         let names = isConnectedToPower
-            ? ["充电功率", "健康度", "循环数", "温度"]
-            : ["健康度", "循环数", "温度"]
+            ? ["charging-power", "health", "cycle-count", "temperature"]
+            : ["health", "cycle-count", "temperature"]
 
         let enabledNames = Set(details.map(\.name))
 
@@ -682,7 +682,7 @@ private struct BatteryGlassRow: View {
     }
 
     private var isConnectedToPower: Bool {
-        value("状态") != "电池供电"
+        value("status") != "on-battery"
     }
 }
 

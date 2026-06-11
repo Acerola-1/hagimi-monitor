@@ -1,5 +1,7 @@
 # HagimiMonitor
 
+> [English](README.en.md)
+
 <p align="center">
   <img src="docs/images/icon.png" width="132" alt="HagimiMonitor icon">
 </p>

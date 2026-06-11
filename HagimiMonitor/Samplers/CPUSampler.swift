@@ -37,18 +37,18 @@ final class CPUSampler: MonitorSampler {
             let idle = all > 0 ? (idleDiff / all) * 100 : 100
             total = min(100, max(0, system + user))
             metrics = [
-                MonitorMetric(name: "系统", value: percent(system)),
-                MonitorMetric(name: "用户", value: percent(user)),
-                MonitorMetric(name: "闲置", value: percent(idle)),
-                MonitorMetric(name: "启动时间", value: systemUptime())
+                MonitorMetric(name: "system", value: percent(system)),
+                MonitorMetric(name: "user", value: percent(user)),
+                MonitorMetric(name: "idle", value: percent(idle)),
+                MonitorMetric(name: "uptime", value: systemUptime())
             ]
         } else {
             total = 0
             metrics = [
-                MonitorMetric(name: "系统", value: "--"),
-                MonitorMetric(name: "用户", value: "--"),
-                MonitorMetric(name: "闲置", value: "--"),
-                MonitorMetric(name: "启动时间", value: systemUptime())
+                MonitorMetric(name: "system", value: "--"),
+                MonitorMetric(name: "user", value: "--"),
+                MonitorMetric(name: "idle", value: "--"),
+                MonitorMetric(name: "uptime", value: systemUptime())
             ]
         }
 
@@ -59,7 +59,7 @@ final class CPUSampler: MonitorSampler {
         var resultMetrics = metrics
         #if DISPLAY_CONTROL
         let temperatureValue = smcReader?.cpuTemperature().map { "\(String(format: "%.0f", $0))°C" } ?? "--"
-        resultMetrics.append(MonitorMetric(name: "温度", value: temperatureValue))
+        resultMetrics.append(MonitorMetric(name: "temperature", value: temperatureValue))
         #endif
 
         return MonitorModule(

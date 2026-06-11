@@ -9,7 +9,7 @@ struct AboutSettingsView: View {
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
               !version.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            return "未知"
+            return String(localized: "about.unknown")
         }
 
         return version
@@ -24,7 +24,7 @@ struct AboutSettingsView: View {
             Spacer(minLength: 0)
 
             SettingsGroup {
-                SettingsRow(title: "发布版本") {
+                SettingsRow(title: String(localized: "about.release-version")) {
                     if #available(macOS 26, *) {
                         Button {
                             NSWorkspace.shared.open(releasesURL)
@@ -51,8 +51,8 @@ struct AboutSettingsView: View {
     private var aboutHeader: some View {
         SettingsIconHeader(
             title: "HagimiMonitor",
-            subtitle: "版本 \(appVersion)",
-            footnote: "macOS 菜单栏硬件监控",
+            subtitle: String(localized: "about.version") + " \(appVersion)",
+            footnote: String(localized: "about.footnote"),
             imageName: "AboutIcon"
         ) {
             updateAccessory
@@ -63,7 +63,7 @@ struct AboutSettingsView: View {
     private var updateAccessory: some View {
         switch updateChecker.state {
         case .idle:
-            primaryButton(title: "检查更新") {
+            primaryButton(title: String(localized: "about.check-updates")) {
                 Task { await updateChecker.checkForUpdates() }
             }
 
@@ -71,23 +71,23 @@ struct AboutSettingsView: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .controlSize(.small)
-                Text("正在检查...")
+                Text(String(localized: "about.checking"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
         case .upToDate:
             HStack(spacing: 8) {
-                Text("已是最新")
+                Text(String(localized: "about.up-to-date"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if #available(macOS 26, *) {
-                    Button("再次检查") {
+                    Button(String(localized: "about.check-again")) {
                         Task { await updateChecker.checkForUpdates() }
                     }
                     .buttonStyle(.glass)
                 } else {
-                    Button("再次检查") {
+                    Button(String(localized: "about.check-again")) {
                         Task { await updateChecker.checkForUpdates() }
                     }
                 }
@@ -95,10 +95,10 @@ struct AboutSettingsView: View {
 
         case .updateAvailable(let latestVersion, _, let downloadURL, _):
             VStack(alignment: .trailing, spacing: 5) {
-                Text("发现 \(latestVersion)")
+                Text(String(localized: "about.found") + " \(latestVersion)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                primaryButton(title: "下载更新") {
+                primaryButton(title: String(localized: "about.download-update")) {
                     NSWorkspace.shared.open(downloadURL)
                 }
             }
@@ -110,12 +110,12 @@ struct AboutSettingsView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 if #available(macOS 26, *) {
-                    Button("重试") {
+                    Button(String(localized: "about.retry")) {
                         Task { await updateChecker.checkForUpdates() }
                     }
                     .buttonStyle(.glass)
                 } else {
-                    Button("重试") {
+                    Button(String(localized: "about.retry")) {
                         Task { await updateChecker.checkForUpdates() }
                     }
                 }

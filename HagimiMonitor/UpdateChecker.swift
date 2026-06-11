@@ -50,13 +50,13 @@ final class UpdateChecker {
             do {
                 release = try JSONDecoder().decode(GitHubRelease.self, from: data)
             } catch {
-                state = .failed("无法解析更新信息")
+                state = .failed(String(localized: "update.parse-failed"))
                 return
             }
             let latestVersion = VersionParser.normalize(release.tagName)
 
             guard !latestVersion.isEmpty else {
-                state = .failed("无法解析版本号")
+                state = .failed(String(localized: "update.version-parse-failed"))
                 return
             }
 
@@ -72,7 +72,7 @@ final class UpdateChecker {
                 state = .upToDate
             }
         } catch {
-            state = .failed("网络错误")
+            state = .failed(String(localized: "update.network-error"))
         }
     }
 
@@ -98,23 +98,23 @@ final class UpdateChecker {
 
     private func failureMessage(for response: URLResponse, data: Data) -> String {
         guard let httpResponse = response as? HTTPURLResponse else {
-            return "暂时无法检查更新"
+            return String(localized: "update.temp-unavailable")
         }
 
         switch httpResponse.statusCode {
         case 403, 429:
-            return "检查更新过于频繁，请稍后再试"
+            return String(localized: "update.rate-limited")
         case 404:
-            return "暂时没有可用的发布版本"
+            return String(localized: "update.no-release")
         case 500...599:
-            return "GitHub 暂时不可用，请稍后再试"
+            return String(localized: "update.github-unavailable")
         default:
             if let githubError = try? JSONDecoder().decode(GitHubErrorResponse.self, from: data),
                let message = githubError.message,
                !message.isEmpty {
-                return "无法检查更新：\(message)"
+                return String(localized: "update.check-failed") + "\(message)"
             }
-            return "暂时无法检查更新"
+            return String(localized: "update.temp-unavailable")
         }
     }
 }

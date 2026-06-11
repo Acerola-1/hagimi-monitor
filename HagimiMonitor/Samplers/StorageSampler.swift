@@ -23,9 +23,9 @@ final class StorageSampler: MonitorSampler {
                 value: percentage,
                 summary: percent(percentage),
                 metrics: [
-                    MonitorMetric(name: "已用", value: bytes(used)),
-                    MonitorMetric(name: "可用", value: bytes(free)),
-                    MonitorMetric(name: "总量", value: bytes(total))
+                    MonitorMetric(name: "used", value: bytes(used)),
+                    MonitorMetric(name: "free", value: bytes(free)),
+                    MonitorMetric(name: "total", value: bytes(total))
                 ],
                 samples: seedSamples(percentage)
             )

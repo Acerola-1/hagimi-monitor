@@ -21,12 +21,12 @@
 #### Scenario: CPU 模块采样
 - **WHEN** CPUSampler 执行采样
 - **THEN** 返回的指标 name 为英文 key（"system", "user", "idle", "uptime", "temperature"）
-- **AND** 展示层通过 `metric.cpu.system` / `metric.cpu.temperature` 等 key 翻译为 "系统" 或 "System"
+- **AND** 展示层通过 `metric.cpu.system` / `metric.cpu.temperature` 等 key 翻译为 "系统" / "System"
 
 #### Scenario: GPU 模块采样
 - **WHEN** GPUSampler 执行采样
 - **THEN** 返回的指标 name 为英文 key（"gpu-memory", "allocated", "render", "tiler", "temperature"）
-- **AND** 展示层通过 `String(localized: "metric.gpu.gpu-memory")` 翻译为 "GPU内存" 或 "GPU Memory"
+- **AND** 展示层通过 `metric.gpu.gpu-memory` / `metric.gpu.temperature` 等 key 翻译为 "GPU内存" / "GPU Memory"
 
 #### Scenario: Memory 模块采样
 - **WHEN** MemorySampler 执行采样

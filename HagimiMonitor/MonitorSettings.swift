@@ -13,11 +13,11 @@ enum AppThemePreference: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .system:
-            "跟随系统"
+            String(localized: "theme.system")
         case .light:
-            "浅色"
+            String(localized: "theme.light")
         case .dark:
-            "深色"
+            String(localized: "theme.dark")
         }
     }
 
@@ -42,9 +42,9 @@ enum MonitorColorSchemePreference: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .balanced:
-            "平衡"
+            String(localized: "color-scheme.balanced")
         case .vibrant:
-            "活力"
+            String(localized: "color-scheme.vibrant")
         }
     }
 }
@@ -97,7 +97,8 @@ final class MonitorSettings: ObservableObject {
         for kind in MonitorKind.allCases {
             let key = Keys.enabledMetricsPrefix + kind.rawValue
             if let stored = defaults.array(forKey: key) as? [String] {
-                loadedMetrics[kind] = Set(stored)
+                let migrated = migrateMetrics(stored, for: kind)
+                loadedMetrics[kind] = Set(migrated)
             }
         }
         enabledMetrics = loadedMetrics
@@ -146,6 +147,43 @@ final class MonitorSettings: ObservableObject {
 
     func resetMetrics(for kind: MonitorKind) {
         enabledMetrics[kind] = defaultMetricIds(for: kind)
+    }
+
+    private func migrateMetrics(_ ids: [String], for kind: MonitorKind) -> [String] {
+        let mapping: [String: String] = {
+            switch kind {
+            case .cpu:
+                return ["系统": "system", "用户": "user", "闲置": "idle", "启动时间": "uptime", "温度": "temperature"]
+            case .gpu:
+                return ["GPU内存": "gpu-memory", "已分配": "allocated", "渲染": "render", "分块": "tiler", "温度": "temperature"]
+            case .memory:
+                return ["已用": "used", "压力": "pressure", "交换已用": "swap-used", "总量": "total"]
+            case .storage:
+                return ["已用": "used", "可用": "free", "总量": "total"]
+            case .network:
+                return ["IP 地址": "ip-address", "上传": "upload", "下载": "download"]
+            case .battery:
+                return ["充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power"]
+            }
+        }()
+
+        var result = Set<String>()
+        for id in ids {
+            if let mapped = mapping[id] {
+                result.insert(mapped)
+            } else {
+                result.insert(id)
+            }
+        }
+
+        let availableIds = Set(kind.availableMetrics.map { $0.id })
+        let filtered = result.intersection(availableIds)
+
+        if filtered.isEmpty {
+            return Array(defaultMetricIds(for: kind))
+        }
+
+        return Array(filtered.prefix(Self.maximumEnabledMetricsPerKind))
     }
 
     private func defaultMetricIds(for kind: MonitorKind) -> Set<String> {

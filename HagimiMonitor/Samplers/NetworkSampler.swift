@@ -19,9 +19,9 @@ final class NetworkSampler: MonitorSampler {
                 value: 0,
                 summary: bytes.interface,
                 metrics: [
-                    MonitorMetric(name: "IP 地址", value: networkAddressSummary(bytes.addresses)),
-                    MonitorMetric(name: "上传", value: "--"),
-                    MonitorMetric(name: "下载", value: "--")
+                    MonitorMetric(name: "ip-address", value: networkAddressSummary(bytes.addresses)),
+                    MonitorMetric(name: "upload", value: "--"),
+                    MonitorMetric(name: "download", value: "--")
                 ],
                 samples: seedSamples(0)
             )
@@ -37,9 +37,9 @@ final class NetworkSampler: MonitorSampler {
             value: value,
             summary: bytes.interface,
             metrics: [
-                MonitorMetric(name: "IP 地址", value: networkAddressSummary(bytes.addresses)),
-                MonitorMetric(name: "上传", value: bytesPerSecond(upload)),
-                MonitorMetric(name: "下载", value: bytesPerSecond(download))
+                MonitorMetric(name: "ip-address", value: networkAddressSummary(bytes.addresses)),
+                MonitorMetric(name: "upload", value: bytesPerSecond(upload)),
+                MonitorMetric(name: "download", value: bytesPerSecond(download))
             ],
             samples: seedSamples(value)
         )
@@ -52,7 +52,7 @@ final class NetworkSampler: MonitorSampler {
 
         guard getifaddrs(&addressList) == 0, let firstAddress = addressList else {
             AppLogger.sampler.error("getifaddrs failed, errno: \(errno)")
-            return NetworkInterfaceSnapshot(input: 0, output: 0, interface: "网络", addresses: [])
+            return NetworkInterfaceSnapshot(input: 0, output: 0, interface: "network", addresses: [])
         }
         defer { freeifaddrs(addressList) }
 
@@ -115,20 +115,20 @@ final class NetworkSampler: MonitorSampler {
 
     private func networkInterfaceTitle(_ name: String?) -> String {
         guard let name else {
-            return "网络"
+            return "network"
         }
 
         if name == "en0" {
             return "Wi-Fi"
         }
         if name.hasPrefix("en") {
-            return "以太网"
+            return "ethernet"
         }
         if name.hasPrefix("bridge") {
-            return "桥接"
+            return "bridge"
         }
         if name.hasPrefix("pdp_ip") {
-            return "蜂窝"
+            return "cellular"
         }
         return name
     }

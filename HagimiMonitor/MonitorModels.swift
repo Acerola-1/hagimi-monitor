@@ -13,10 +13,10 @@ enum HaloRingSource: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .combined: "综合"
+        case .combined: String(localized: "ring-source.combined")
         case .cpu: "CPU"
         case .gpu: "GPU"
-        case .memory: "内存"
+        case .memory: String(localized: "ring-source.memory")
         }
     }
 }
@@ -93,42 +93,42 @@ enum MonitorKind: String, CaseIterable, Identifiable {
         switch self {
         case .cpu:
             return [
-                MetricSwitch(id: "系统", title: "系统", isDefault: true),
-                MetricSwitch(id: "用户", title: "用户", isDefault: true),
-                MetricSwitch(id: "闲置", title: "闲置", isDefault: true),
-                MetricSwitch(id: "启动时间", title: "启动时间", isDefault: true),
-                MetricSwitch(id: "温度", title: "温度", isDefault: false),
+                MetricSwitch(id: "system", title: String(localized: "metric.cpu.system"), isDefault: true),
+                MetricSwitch(id: "user", title: String(localized: "metric.cpu.user"), isDefault: true),
+                MetricSwitch(id: "idle", title: String(localized: "metric.cpu.idle"), isDefault: true),
+                MetricSwitch(id: "uptime", title: String(localized: "metric.cpu.uptime"), isDefault: true),
+                MetricSwitch(id: "temperature", title: String(localized: "metric.cpu.temperature"), isDefault: false),
             ]
         case .gpu:
             return [
-                MetricSwitch(id: "GPU内存", title: "GPU内存", isDefault: true),
-                MetricSwitch(id: "已分配", title: "已分配", isDefault: true),
-                MetricSwitch(id: "渲染", title: "渲染", isDefault: true),
-                MetricSwitch(id: "分块", title: "分块", isDefault: true),
+                MetricSwitch(id: "gpu-memory", title: String(localized: "metric.gpu.gpu-memory"), isDefault: true),
+                MetricSwitch(id: "allocated", title: String(localized: "metric.gpu.allocated"), isDefault: true),
+                MetricSwitch(id: "render", title: String(localized: "metric.gpu.render"), isDefault: true),
+                MetricSwitch(id: "tiler", title: String(localized: "metric.gpu.tiler"), isDefault: true),
             ]
         case .memory:
             return [
-                MetricSwitch(id: "已用", title: "已用", isDefault: true),
-                MetricSwitch(id: "压力", title: "压力", isDefault: true),
-                MetricSwitch(id: "交换已用", title: "交换已用", isDefault: true),
-                MetricSwitch(id: "总量", title: "总量", isDefault: true),
+                MetricSwitch(id: "used", title: String(localized: "metric.memory.used"), isDefault: true),
+                MetricSwitch(id: "pressure", title: String(localized: "metric.memory.pressure"), isDefault: true),
+                MetricSwitch(id: "swap-used", title: String(localized: "metric.memory.swap-used"), isDefault: true),
+                MetricSwitch(id: "total", title: String(localized: "metric.memory.total"), isDefault: true),
             ]
         case .storage:
             return [
-                MetricSwitch(id: "已用", title: "已用", isDefault: true),
-                MetricSwitch(id: "可用", title: "可用", isDefault: true),
-                MetricSwitch(id: "总量", title: "总量", isDefault: true),
+                MetricSwitch(id: "used", title: String(localized: "metric.storage.used"), isDefault: true),
+                MetricSwitch(id: "free", title: String(localized: "metric.storage.free"), isDefault: true),
+                MetricSwitch(id: "total", title: String(localized: "metric.storage.total"), isDefault: true),
             ]
         case .network:
             return [
-                MetricSwitch(id: "IP 地址", title: "IP 地址", isDefault: true),
+                MetricSwitch(id: "ip-address", title: String(localized: "metric.network.ip-address"), isDefault: true),
             ]
         case .battery:
             return [
-                MetricSwitch(id: "充电功率", title: "充电功率", isDefault: true),
-                MetricSwitch(id: "健康度", title: "健康度", isDefault: true),
-                MetricSwitch(id: "循环数", title: "循环数", isDefault: true),
-                MetricSwitch(id: "温度", title: "温度", isDefault: true),
+                MetricSwitch(id: "charging-power", title: String(localized: "metric.battery.charging-power"), isDefault: true),
+                MetricSwitch(id: "health", title: String(localized: "metric.battery.health"), isDefault: true),
+                MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
+                MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
             ]
         }
     }
@@ -168,7 +168,7 @@ struct MonitorModule: Identifiable {
             if value >= MonitorConstants.networkWarningThreshold { return .warning }
             return .calm
         case .battery:
-            if metrics.first(where: { $0.name == "类型" })?.value == "外接电源" {
+            if metrics.first(where: { $0.name == "type" })?.value == "ac-power" {
                 return .calm
             }
             if value <= MonitorConstants.batteryCriticalThreshold { return .critical }

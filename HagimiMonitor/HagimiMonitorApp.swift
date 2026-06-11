@@ -61,13 +61,13 @@ struct AppMenuCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button("关于 HagimiMonitor") {
+            Button(String(localized: "menu.about")) {
                 SettingsWindowPresenter.open(openSettings, tab: .about)
             }
 
             Divider()
 
-            Button("退出 HagimiMonitor") {
+            Button(String(localized: "menu.quit")) {
                 NSApp.terminate(nil)
             }
             .keyboardShortcut("q", modifiers: .command)

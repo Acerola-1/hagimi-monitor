@@ -16,24 +16,24 @@ struct SettingsSidebar: View {
     var body: some View {
         List(selection: $selection) {
             Section {
-                Label("常规", systemImage: "gearshape")
+                Label(String(localized: "settings.sidebar.general"), systemImage: "gearshape")
                     .tag(SettingsRoute.general)
             }
 
-            Section("监控模块") {
+            Section(String(localized: "settings.sidebar.modules")) {
                 ForEach(MonitorKind.allCases) { kind in
                     Label(kind.title, systemImage: kind.symbol)
                         .tag(SettingsRoute.module(kind))
                 }
 
                 #if DISPLAY_CONTROL
-                Label("显示器", systemImage: "display")
+                Label(String(localized: "settings.sidebar.display"), systemImage: "display")
                     .tag(SettingsRoute.displayModule)
                 #endif
             }
 
             Section {
-                Label("关于", systemImage: "info.circle")
+                Label(String(localized: "settings.sidebar.about"), systemImage: "info.circle")
                     .tag(SettingsRoute.about)
             }
         }
