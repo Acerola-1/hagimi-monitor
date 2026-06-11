@@ -38,6 +38,7 @@ struct SettingsSidebar: View {
             }
         }
         .listStyle(.sidebar)
-        .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 220)
+        .controlSize(.small)
+        .font(.callout)
     }
 }

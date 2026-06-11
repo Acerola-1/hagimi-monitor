@@ -5,6 +5,7 @@ struct AboutSettingsView: View {
     @State private var updateChecker = UpdateChecker()
 
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
+    private let repoURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor")!
 
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
@@ -16,70 +17,78 @@ struct AboutSettingsView: View {
     }
 
     var body: some View {
-        Form {
-            Section {
-                HStack(spacing: 12) {
-                    Image("AboutIcon")
-                        .resizable()
-                        .frame(width: 48, height: 48)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("HagimiMonitor")
-                            .font(.headline)
-
-                        Text("版本 \(appVersion)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-                }
+        SettingsPage {
+            SettingsGroup {
+                aboutHeader
             }
 
-            Section {
+            SettingsGroup {
                 updateCheckView
             }
 
-            Section {
-                Link(destination: URL(string: "https://github.com/Acerola-1/hagimi-monitor")!) {
-                    Label("GitHub", systemImage: "link")
+            SettingsGroup {
+                SettingsRow(title: "源代码仓库") {
+                    if #available(macOS 26, *) {
+                        Button {
+                            NSWorkspace.shared.open(repoURL)
+                        } label: {
+                            Label("GitHub", systemImage: "link")
+                        }
+                        .buttonStyle(.glass)
+                    } else {
+                        Link(destination: repoURL) {
+                            Label("GitHub", systemImage: "link")
+                        }
+                    }
                 }
 
-                Link(destination: releasesURL) {
-                    Label("发布版本", systemImage: "shippingbox")
+                SettingsDivider()
+
+                SettingsRow(title: "发布版本") {
+                    if #available(macOS 26, *) {
+                        Button {
+                            NSWorkspace.shared.open(releasesURL)
+                        } label: {
+                            Label("Releases", systemImage: "shippingbox")
+                        }
+                        .buttonStyle(.glass)
+                    } else {
+                        Link(destination: releasesURL) {
+                            Label("Releases", systemImage: "shippingbox")
+                        }
+                    }
                 }
             }
 
-            Section {
-                Text("© 2026 Acerola")
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-            }
+            Text("© 2026 Acerola")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
         }
-        .formStyle(.grouped)
+    }
+
+    @ViewBuilder
+    private var aboutHeader: some View {
+        SettingsIconHeader(
+            title: "HagimiMonitor",
+            subtitle: "版本 \(appVersion)",
+            footnote: "macOS 菜单栏硬件监控",
+            imageName: "AboutIcon"
+        )
     }
 
     @ViewBuilder
     private var updateCheckView: some View {
         switch updateChecker.state {
         case .idle:
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("检查更新")
-                        .font(.body)
-                    Text("从 GitHub Releases 获取最新版本")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("检查更新") {
+            SettingsRow(title: "检查更新", subtitle: "从 GitHub Releases 获取最新版本") {
+                primaryButton(title: "检查更新") {
                     Task { await updateChecker.checkForUpdates() }
                 }
             }
 
         case .checking:
-            HStack {
+            HStack(spacing: 8) {
                 ProgressView()
                     .controlSize(.small)
                 Text("正在检查...")
@@ -88,56 +97,50 @@ struct AboutSettingsView: View {
             }
 
         case .upToDate:
-            HStack {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("已是最新版本")
-                        .font(.body)
-                    Text("当前版本 \(appVersion)")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("再次检查") {
-                    Task { await updateChecker.checkForUpdates() }
+            SettingsRow(title: "已是最新版本", subtitle: "当前版本 \(appVersion)") {
+                if #available(macOS 26, *) {
+                    Button("再次检查") {
+                        Task { await updateChecker.checkForUpdates() }
+                    }
+                    .buttonStyle(.glass)
+                } else {
+                    Button("再次检查") {
+                        Task { await updateChecker.checkForUpdates() }
+                    }
                 }
             }
 
         case .updateAvailable(let latestVersion, let publishedAt, let downloadURL, _):
-            HStack {
-                Image(systemName: "sparkles")
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("发现新版本 \(latestVersion)")
-                        .font(.body)
-                    Text(releaseMessage(publishedAt: publishedAt))
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("下载更新") {
+            SettingsRow(title: "发现新版本 \(latestVersion)", subtitle: releaseMessage(publishedAt: publishedAt)) {
+                primaryButton(title: "下载更新") {
                     NSWorkspace.shared.open(downloadURL)
                 }
-                .buttonStyle(.borderedProminent)
             }
 
         case .failed(let message):
-            HStack {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.orange)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("无法检查更新")
-                        .font(.body)
-                    Text(message)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button("重试") {
-                    Task { await updateChecker.checkForUpdates() }
+            SettingsRow(title: "无法检查更新", subtitle: message) {
+                if #available(macOS 26, *) {
+                    Button("重试") {
+                        Task { await updateChecker.checkForUpdates() }
+                    }
+                    .buttonStyle(.glass)
+                } else {
+                    Button("重试") {
+                        Task { await updateChecker.checkForUpdates() }
+                    }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func primaryButton(title: String, action: @escaping () -> Void) -> some View {
+        if #available(macOS 26, *) {
+            Button(title, action: action)
+                .buttonStyle(.glassProminent)
+        } else {
+            Button(title, action: action)
+                .buttonStyle(.borderedProminent)
         }
     }
 

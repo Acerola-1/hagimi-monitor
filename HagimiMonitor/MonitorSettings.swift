@@ -60,6 +60,9 @@ final class MonitorSettings: ObservableObject {
     @Published var displayVolumeControlEnabled: Bool = true
     @Published var displayContrastControlEnabled: Bool = false
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
+    @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
+
+    static let maximumEnabledMetricsPerKind = 4
 
     private let defaults: UserDefaults
     private var isUpdatingLaunchAtLogin = false
@@ -90,6 +93,15 @@ final class MonitorSettings: ObservableObject {
             visibleKinds = Set(MonitorKind.allCases)
         }
 
+        var loadedMetrics: [MonitorKind: Set<String>] = [:]
+        for kind in MonitorKind.allCases {
+            let key = Keys.enabledMetricsPrefix + kind.rawValue
+            if let stored = defaults.array(forKey: key) as? [String] {
+                loadedMetrics[kind] = Set(stored)
+            }
+        }
+        enabledMetrics = loadedMetrics
+
         launchAtLogin = SMAppService.mainApp.status == .enabled
 
         setupBindings()
@@ -105,6 +117,39 @@ final class MonitorSettings: ObservableObject {
         } else {
             visibleKinds.remove(kind)
         }
+    }
+
+    func isMetricEnabled(_ id: String, for kind: MonitorKind) -> Bool {
+        if let stored = enabledMetrics[kind] {
+            return stored.contains(id)
+        }
+        return kind.availableMetrics.first(where: { $0.id == id })?.isDefault ?? false
+    }
+
+    func canEnableMetric(_ id: String, for kind: MonitorKind) -> Bool {
+        let current = enabledMetrics[kind] ?? defaultMetricIds(for: kind)
+        return current.contains(id) || current.count < Self.maximumEnabledMetricsPerKind
+    }
+
+    func setMetric(_ id: String, enabled: Bool, for kind: MonitorKind) {
+        var current = enabledMetrics[kind] ?? defaultMetricIds(for: kind)
+        if enabled {
+            guard current.contains(id) || current.count < Self.maximumEnabledMetricsPerKind else {
+                return
+            }
+            current.insert(id)
+        } else {
+            current.remove(id)
+        }
+        enabledMetrics[kind] = current
+    }
+
+    func resetMetrics(for kind: MonitorKind) {
+        enabledMetrics[kind] = defaultMetricIds(for: kind)
+    }
+
+    private func defaultMetricIds(for kind: MonitorKind) -> Set<String> {
+        Set(kind.availableMetrics.filter { $0.isDefault }.map { $0.id })
     }
 
     private func setupBindings() {
@@ -178,6 +223,17 @@ final class MonitorSettings: ObservableObject {
                 self?.persist(values, forKey: Keys.visibleKinds)
             }
             .store(in: &cancellables)
+
+        $enabledMetrics
+            .dropFirst()
+            .sink { [weak self] newValue in
+                guard let self else { return }
+                for (kind, ids) in newValue {
+                    let key = Keys.enabledMetricsPrefix + kind.rawValue
+                    self.persist(Array(ids), forKey: key)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     private func persist<T>(_ value: T, forKey key: String) {
@@ -216,4 +272,5 @@ private enum Keys {
     static let displayVolumeControlEnabled = "settings.display.volumeControlEnabled"
     static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"
     static let visibleKinds = "settings.visibleKinds"
+    static let enabledMetricsPrefix = "settings.enabledMetrics."
 }

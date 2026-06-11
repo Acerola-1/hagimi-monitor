@@ -88,6 +88,29 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             "powerplug"
         }
     }
+
+    var availableMetrics: [MetricSwitch] {
+        switch self {
+        case .cpu:
+            return [MetricSwitch(id: "cpu.overall", title: "整体使用率", isDefault: true)]
+        case .gpu:
+            return [MetricSwitch(id: "gpu.overall", title: "整体使用率", isDefault: true)]
+        case .memory:
+            return [MetricSwitch(id: "memory.overall", title: "内存使用率", isDefault: true)]
+        case .storage:
+            return [MetricSwitch(id: "storage.overall", title: "存储使用率", isDefault: true)]
+        case .network:
+            return [MetricSwitch(id: "network.overall", title: "网络流量", isDefault: true)]
+        case .battery:
+            return [MetricSwitch(id: "battery.overall", title: "电池状态", isDefault: true)]
+        }
+    }
+}
+
+struct MetricSwitch: Identifiable, Hashable {
+    let id: String
+    let title: String
+    let isDefault: Bool
 }
 
 struct MonitorMetric: Identifiable {
