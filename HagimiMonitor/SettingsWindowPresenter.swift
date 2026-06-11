@@ -28,7 +28,7 @@ enum SettingsWindowPresenter {
     static func register(_ window: NSWindow) {
         AppLogger.settings.info("Registering settings window")
         settingsWindow = window
-        window.title = "HagimiMonitor 设置"
+        window.title = ""
 
         if pendingFocus {
             pendingFocus = false

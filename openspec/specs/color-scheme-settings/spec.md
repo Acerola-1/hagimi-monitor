@@ -1,11 +1,12 @@
 ## ADDED Requirements
 
 ### Requirement: Color scheme setting
-The settings window SHALL provide a monitor panel color scheme setting in the General Appearance section.
+The settings window SHALL provide a monitor panel color scheme setting in the General detail view, accessible from the sidebar's "General" entry.
 
-#### Scenario: Settings appearance section renders
-- **WHEN** the user opens Settings and views the General pane
-- **THEN** the Appearance section includes a color scheme control
+#### Scenario: Settings General detail renders color scheme control
+- **WHEN** the user opens Settings and selects "General" in the sidebar
+- **THEN** the right-hand detail view shows the Appearance section
+- **AND** the Appearance section includes a color scheme control
 - **AND** the available options include Balanced and Vibrant.
 
 ### Requirement: Balanced default
