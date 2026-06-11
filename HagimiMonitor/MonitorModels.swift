@@ -97,6 +97,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "用户", title: "用户", isDefault: true),
                 MetricSwitch(id: "闲置", title: "闲置", isDefault: true),
                 MetricSwitch(id: "启动时间", title: "启动时间", isDefault: true),
+                MetricSwitch(id: "温度", title: "温度", isDefault: false),
             ]
         case .gpu:
             return [

@@ -1,11 +1,17 @@
 import Darwin
 import Foundation
 import OSLog
+#if DISPLAY_CONTROL
+import IOKit
+#endif
 
 final class CPUSampler: MonitorSampler {
     var kind: MonitorKind { .cpu }
 
     private var previousCPUInfo: host_cpu_load_info?
+    #if DISPLAY_CONTROL
+    private let smcReader: SMCReader? = SMCReader()
+    #endif
     private let uptimeFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
         formatter.maximumUnitCount = 2
@@ -50,11 +56,17 @@ final class CPUSampler: MonitorSampler {
             self.previousCPUInfo = info
         }
 
+        var resultMetrics = metrics
+        #if DISPLAY_CONTROL
+        let temperatureValue = smcReader?.cpuTemperature().map { "\(String(format: "%.0f", $0))°C" } ?? "--"
+        resultMetrics.append(MonitorMetric(name: "温度", value: temperatureValue))
+        #endif
+
         return MonitorModule(
             kind: .cpu,
             value: total,
             summary: percent(total),
-            metrics: metrics,
+            metrics: resultMetrics,
             samples: seedSamples(total)
         )
     }

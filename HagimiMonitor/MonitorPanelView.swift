@@ -162,8 +162,12 @@ struct MonitorPanelView: View {
     }
 
     private func enabledMetrics(for module: MonitorModule) -> [MonitorMetric] {
-        let enabledIds = store.settings.enabledMetrics[module.kind] ?? Set(module.kind.availableMetrics.map(\.id))
+        let enabledIds = store.settings.enabledMetrics[module.kind] ?? defaultMetricIds(for: module.kind)
         return module.metrics.filter { enabledIds.contains($0.name) }
+    }
+
+    private func defaultMetricIds(for kind: MonitorKind) -> Set<String> {
+        Set(kind.availableMetrics.filter { $0.isDefault }.map { $0.id })
     }
 
     private func toggleExpansion(for kind: MonitorKind) {

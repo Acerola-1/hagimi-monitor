@@ -63,7 +63,7 @@ CPU, GPU, memory, and storage rows SHALL reveal additional details below the pri
 
 #### Scenario: Detailed metrics render
 - **WHEN** expanded details are visible
-- **THEN** CPU shows only enabled metrics from: system, user, idle, boot time
+- **THEN** CPU shows only enabled metrics from: system, user, idle, boot time, temperature
 - **AND** GPU shows only enabled metrics from: GPU memory, allocated, render, tiler
 - **AND** memory shows only enabled metrics from: used, pressure, swap, total
 - **AND** storage shows only enabled metrics from: used, free, total

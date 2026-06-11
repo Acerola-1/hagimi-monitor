@@ -57,7 +57,6 @@ final class GPUSampler: MonitorSampler {
                 ?? 0
             let render = doubleValue(stats["Renderer Utilization %"])
             let tiler = doubleValue(stats["Tiler Utilization %"])
-            let temperature = doubleValue(stats["Temperature(C)"])
             let usedMemory = doubleValue(stats["In use system memory"])
             let allocatedMemory = doubleValue(stats["Alloc system memory"])
             let model = registryStringValue(accelerator, "model")
@@ -69,7 +68,6 @@ final class GPUSampler: MonitorSampler {
                 utilization: utilization,
                 renderUtilization: render,
                 tilerUtilization: tiler,
-                temperature: temperature,
                 usedMemory: usedMemory,
                 allocatedMemory: allocatedMemory
             )
@@ -108,7 +106,6 @@ private struct GPUReading {
     let utilization: Double
     let renderUtilization: Double?
     let tilerUtilization: Double?
-    let temperature: Double?
     let usedMemory: Double?
     let allocatedMemory: Double?
 }
