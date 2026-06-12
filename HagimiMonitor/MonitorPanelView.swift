@@ -42,6 +42,7 @@ struct MonitorPanelView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
 
                     Button {
                         SettingsWindowPresenter.open(openSettings)
@@ -50,6 +51,7 @@ struct MonitorPanelView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.glass)
+                    .buttonBorderShape(.capsule)
                 }
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(theme.primaryText)
