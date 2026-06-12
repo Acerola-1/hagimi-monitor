@@ -20,7 +20,7 @@ struct SettingsSidebar: View {
                     .tag(SettingsRoute.general)
             }
 
-            Section(String(localized: "settings.sidebar.modules")) {
+            Section {
                 ForEach(MonitorKind.allCases) { kind in
                     Label(kind.title, systemImage: kind.symbol)
                         .tag(SettingsRoute.module(kind))
