@@ -88,6 +88,25 @@ struct SettingsDivider: View {
     }
 }
 
+struct SettingsTip: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Spacer(minLength: 0)
+            Image(systemName: "info.circle")
+                .font(.caption2.weight(.medium))
+            Text(text)
+                .font(.caption2)
+        }
+        .foregroundStyle(.tertiary)
+    }
+}
+
 struct SettingsIconHeader<Accessory: View>: View {
     let title: String
     let subtitle: String

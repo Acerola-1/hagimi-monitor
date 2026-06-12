@@ -1777,6 +1777,22 @@
           }
         }
       }
+    },
+    "settings.display.ddc-note": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外接显示器需支持 DDC/CI 协议方可控制亮度、音量与对比度"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "External displays must support DDC/CI to control brightness, volume, and contrast",
+            "value": "External displays must support DDC/CI to control brightness, volume, and contrast"
+          }
+        }
+      }
     }
   }
 }

@@ -131,6 +131,8 @@ struct DisplayModuleSettingsView: View {
                         .labelsHidden()
                 }
             }
+
+            SettingsTip(String(localized: "settings.display.ddc-note"))
         }
     }
 }
