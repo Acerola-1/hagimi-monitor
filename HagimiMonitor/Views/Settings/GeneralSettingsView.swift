@@ -21,8 +21,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    .pickerStyle(.segmented)
                 }
 
                 SettingsDivider()
@@ -34,8 +33,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    .pickerStyle(.segmented)
                 }
             }
 
@@ -47,8 +45,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.menu)
-                    .fixedSize()
+                    .pickerStyle(.segmented)
                 }
             }
         }
