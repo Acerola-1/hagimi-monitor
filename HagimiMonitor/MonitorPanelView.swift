@@ -352,7 +352,8 @@ private struct MetricDetailGrid: View {
                 .monitorPanelCaptionFont(.footnote)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
-                .fixedSize(horizontal: true, vertical: false)
+                .minimumScaleFactor(0.7)
+                .layoutPriority(1)
 
             Spacer(minLength: 4)
 
@@ -360,7 +361,8 @@ private struct MetricDetailGrid: View {
                 .monitorPanelMonoFont(.footnote, weight: .semibold)
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
-                .truncationMode(.middle)
+                .minimumScaleFactor(0.7)
+                .layoutPriority(2)
                 .help(localizedMetricValue(kind: kind, metric: metric))
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -637,8 +639,6 @@ private struct BatteryGlassRow: View {
                     MetricPill(systemImage: powerPillIcon, text: powerPillValue, theme: theme)
                         .layoutPriority(0)
                 } else {
-                    MetricPill(systemImage: "powerplug", text: value("adapter"), theme: theme)
-                        .layoutPriority(0)
                     MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("power"), theme: theme)
                         .layoutPriority(0)
                 }
@@ -700,7 +700,11 @@ private struct BatteryGlassRow: View {
     }
 
     private var summaryText: String {
-        localizedBatteryState(module.summary)
+        if hasBattery {
+            localizedBatteryState(module.summary)
+        } else {
+            value("adapter")
+        }
     }
 
     private var detailMetrics: [MonitorMetric] {

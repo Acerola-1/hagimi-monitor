@@ -33,7 +33,7 @@ struct DisplayControlsSection: View {
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                Text("显示器:")
+                Text(String(localized: "kind.display") + ":")
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(palette.primaryText)
                     .lineLimit(1)
@@ -88,9 +88,9 @@ struct DisplayControlsSection: View {
         tint: Color
     ) -> some View {
         if !hasControls {
-            DisplayEmptyState(text: "设置中未启用控制项", palette: palette)
+            DisplayEmptyState(text: String(localized: "display.no-controls"), palette: palette)
         } else if visibleDisplays.isEmpty {
-            DisplayEmptyState(text: settings.showBuiltInDisplays ? "未发现显示器" : "未发现外接显示器", palette: palette)
+            DisplayEmptyState(text: settings.showBuiltInDisplays ? String(localized: "display.no-displays") : String(localized: "display.no-external-displays"), palette: palette)
         } else {
             VStack(spacing: 8) {
                 Rectangle()
@@ -120,14 +120,17 @@ struct DisplayControlsSection: View {
 
     private func summary(for displays: [ControlledDisplay], hasControls: Bool) -> String {
         guard hasControls else {
-            return "已关闭"
+            return String(localized: "display.controls-disabled")
         }
 
         let externalCount = displays.filter { !$0.isBuiltIn }.count
+        let unitCount = String(localized: "display.unit-count")
+        let countPart = unitCount.isEmpty ? "\(displays.count)" : "\(displays.count) \(unitCount)"
         if externalCount > 0 {
-            return "\(displays.count) 台 · 外接 \(externalCount)"
+            let unitExternal = String(localized: "display.unit-external")
+            return "\(countPart) · \(unitExternal) \(externalCount)"
         }
-        return "\(displays.count) 台"
+        return countPart
     }
 }
 
@@ -168,7 +171,7 @@ private struct DisplayControlGroup: View {
 
                     Spacer(minLength: 8)
 
-                    Text(display.isBuiltIn ? "内置" : "外接")
+                    Text(display.isBuiltIn ? String(localized: "display.built-in") : String(localized: "display.external"))
                         .monitorPanelRoundedFont(.caption2, weight: .semibold)
                         .foregroundStyle(palette.secondaryText)
                         .lineLimit(1)
@@ -183,7 +186,7 @@ private struct DisplayControlGroup: View {
                 VStack(spacing: 7) {
                     if settings.displayBrightnessControlEnabled {
                         DisplayControlSlider(
-                            label: "亮度",
+                            label: String(localized: "settings.brightness"),
                             systemImage: "sun.max",
                             value: binding(for: .brightness),
                             isEnabled: display.supports(.brightness),
@@ -194,7 +197,7 @@ private struct DisplayControlGroup: View {
 
                     if settings.displayVolumeControlEnabled {
                         DisplayControlSlider(
-                            label: "音量",
+                            label: String(localized: "settings.volume"),
                             systemImage: "speaker.wave.2",
                             value: binding(for: .volume),
                             isEnabled: display.supports(.volume),
@@ -205,7 +208,7 @@ private struct DisplayControlGroup: View {
 
                     if settings.displayContrastControlEnabled {
                         DisplayControlSlider(
-                            label: "对比度",
+                            label: String(localized: "settings.contrast"),
                             systemImage: "circle.lefthalf.filled",
                             value: binding(for: .contrast),
                             isEnabled: display.supports(.contrast),
@@ -606,11 +609,12 @@ private final class DisplayControlService {
         }
 
         if isBuiltIn {
-            return "内置显示器"
+            return String(localized: "display.built-in-display")
         }
 
         let model = CGDisplayModelNumber(id)
-        return model == 0 ? "外接显示器" : "外接显示器 \(model)"
+        let externalDisplay = String(localized: "display.external-display")
+        return model == 0 ? externalDisplay : "\(externalDisplay) \(model)"
     }
 
     private func displayStorageID(for id: CGDirectDisplayID, name: String, isBuiltIn: Bool) -> String {
