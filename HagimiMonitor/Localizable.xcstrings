@@ -260,6 +260,12 @@
         "en": { "stringUnit": { "state": "translated", "value": "Total" } }
       }
     },
+    "metric.network.public-ip": {
+      "localizations": {
+        "zh-Hans": { "stringUnit": { "state": "translated", "value": "公网 IP" } },
+        "en": { "stringUnit": { "state": "translated", "value": "Public IP" } }
+      }
+    },
     "metric.network.ip-address": {
       "localizations": {
         "zh-Hans": { "stringUnit": { "state": "translated", "value": "IP 地址" } },

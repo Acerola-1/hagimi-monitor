@@ -344,6 +344,10 @@ private struct MetricDetailGrid: View {
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    copyToPasteboard(metric.value)
+                }
         }
     }
 }
@@ -543,7 +547,7 @@ private struct NetworkGlassRow: View {
             .padding(.vertical, 8)
 
             if isExpanded {
-                networkDetail
+                MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
                     .transition(.detailDisclosure)
@@ -556,35 +560,13 @@ private struct NetworkGlassRow: View {
         .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
 
-    private var networkDetail: some View {
-        VStack(spacing: 7) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: module.kind))
-                .frame(height: 1)
-                .padding(.leading, 28)
-
-            ForEach(detailMetrics) { metric in
-                HStack(spacing: 6) {
-                    Text(localizedMetricName(kind: module.kind, id: metric.name))
-                        .panelCaptionFont(size: 10)
-                        .foregroundStyle(theme.captionText)
-                        .lineLimit(1)
-
-                    Spacer(minLength: 4)
-
-                    Text(metric.value)
-                        .panelMonoFont(size: 11, weight: .semibold)
-                        .foregroundStyle(theme.secondaryText)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-                .padding(.leading, 28)
-            }
-        }
-    }
-
     private var detailMetrics: [MonitorMetric] {
-        details
+        let names = ["ip-address", "public-ip"]
+        let enabledNames = Set(details.map(\.name))
+        return names.compactMap { name in
+            guard enabledNames.contains(name) else { return nil }
+            return module.metrics.first(where: { $0.name == name })
+        }
     }
 
     private func value(_ name: String) -> String {
@@ -1000,6 +982,11 @@ struct MonitorPanelTheme {
     func badgeFill(for kind: MonitorKind) -> Color {
         palette.badgeFill(for: kind)
     }
+}
+
+private func copyToPasteboard(_ string: String) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(string, forType: .string)
 }
 
 private extension AnyTransition {

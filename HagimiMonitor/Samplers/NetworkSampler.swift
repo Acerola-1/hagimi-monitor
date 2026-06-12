@@ -6,12 +6,16 @@ final class NetworkSampler: MonitorSampler {
     var kind: MonitorKind { .network }
 
     private var previousNetworkBytes: (input: UInt64, output: UInt64, timestamp: Date)?
+    private var publicIPCache: (ip: String, timestamp: Date)?
+    private let publicIPRefreshInterval: TimeInterval = 30
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         let now = Date()
         let bytes = networkBytes()
         let previousBytes = previousNetworkBytes
         previousNetworkBytes = (bytes.input, bytes.output, now)
+
+        let publicIP = fetchPublicIP()
 
         guard let previousBytes else {
             return MonitorModule(
@@ -20,6 +24,7 @@ final class NetworkSampler: MonitorSampler {
                 summary: bytes.interface,
                 metrics: [
                     MonitorMetric(name: "ip-address", value: networkAddressSummary(bytes.addresses)),
+                    MonitorMetric(name: "public-ip", value: publicIP),
                     MonitorMetric(name: "upload", value: "--"),
                     MonitorMetric(name: "download", value: "--")
                 ],
@@ -38,6 +43,7 @@ final class NetworkSampler: MonitorSampler {
             summary: bytes.interface,
             metrics: [
                 MonitorMetric(name: "ip-address", value: networkAddressSummary(bytes.addresses)),
+                MonitorMetric(name: "public-ip", value: publicIP),
                 MonitorMetric(name: "upload", value: bytesPerSecond(upload)),
                 MonitorMetric(name: "download", value: bytesPerSecond(download))
             ],
@@ -111,6 +117,29 @@ final class NetworkSampler: MonitorSampler {
             interface: networkInterfaceTitle(active?.key),
             addresses: active.flatMap { addressesByInterface[$0.key] } ?? []
         )
+    }
+
+    private func fetchPublicIP() -> String {
+        let now = Date()
+        if let cache = publicIPCache, now.timeIntervalSince(cache.timestamp) < publicIPRefreshInterval {
+            return cache.ip
+        }
+
+        let semaphore = DispatchSemaphore(value: 0)
+        var result = "--"
+
+        let url = URL(string: "https://api.ipify.org")!
+        let task = URLSession.shared.dataTask(with: url) { data, _, _ in
+            if let data = data, let ip = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !ip.isEmpty {
+                result = ip
+            }
+            semaphore.signal()
+        }
+        task.resume()
+        semaphore.wait()
+
+        publicIPCache = (result, now)
+        return result
     }
 
     private func networkInterfaceTitle(_ name: String?) -> String {
