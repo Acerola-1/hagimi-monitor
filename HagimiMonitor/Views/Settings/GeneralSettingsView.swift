@@ -6,7 +6,7 @@ struct GeneralSettingsView: View {
     var body: some View {
         SettingsPage {
             SettingsGroup {
-                SettingsRow(title: String(localized: "settings.launch-at-login"), subtitle: String(localized: "settings.launch-at-login.subtitle")) {
+                SettingsRow(title: String(localized: "settings.launch-at-login")) {
                     Toggle("", isOn: $settings.launchAtLogin)
                         .toggleStyle(.switch)
                         .labelsHidden()
