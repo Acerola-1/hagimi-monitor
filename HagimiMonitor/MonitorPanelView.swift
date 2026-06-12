@@ -79,16 +79,14 @@ struct MonitorPanelView: View {
                     .animation(.easeInOut(duration: 0.6), value: store.haloRingLoadLevel)
 
                 Text("SYSTEM · LIVE")
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .kerning(0.6)
+                    .panelLabelFont(size: 9, tracking: 1.1)
                     .foregroundStyle(theme.captionText)
             }
 
             Spacer()
 
             Text(timeString)
-                .font(.system(size: 9, weight: .medium, design: .rounded))
-                .monospacedDigit()
+                .panelMonoFont(size: 9, weight: .medium)
                 .foregroundStyle(theme.captionText)
         }
         .padding(.horizontal, 4)
@@ -219,13 +217,12 @@ private struct MetricGlassRow: View {
 
                 // 标签 + 数值紧随其后（用户反馈：CPU: 37%）
                 Text("\(module.kind.title):")
-                    .font(.system(size: 12, weight: .medium))
+                    .panelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
                 Text(detail)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                    .panelMonoFont(size: 12, weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
 
@@ -334,15 +331,14 @@ private struct MetricDetailGrid: View {
     private func metricCell(_ metric: MonitorMetric, theme: MonitorPanelTheme) -> some View {
         HStack(spacing: 6) {
             Text(localizedMetricName(kind: kind, id: metric.name))
-                .font(.system(size: 10, weight: .medium))
+                .panelCaptionFont(size: 10)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
 
             Spacer(minLength: 4)
 
             Text(localizedMetricValue(kind: kind, metric: metric))
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .monospacedDigit()
+                .panelMonoFont(size: 11, weight: .semibold)
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.82)
@@ -419,7 +415,7 @@ private struct StorageVolumeRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(volume.name)
-                        .font(.system(size: 10, weight: .semibold))
+                        .panelCaptionFont(size: 10, weight: .semibold)
                         .foregroundStyle(theme.primaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -428,8 +424,7 @@ private struct StorageVolumeRow: View {
                     Spacer(minLength: 8)
 
                     Text("\(volume.clampedPercentage)%")
-                        .font(.system(size: 10, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
+                        .panelMonoFont(size: 10, weight: .semibold)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
                         .padding(.horizontal, 6)
@@ -461,13 +456,12 @@ private struct StorageVolumeStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label)
-                .font(.system(size: 9, weight: .medium))
+                .panelCaptionFont(size: 9)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
 
             Text(value)
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
-                .monospacedDigit()
+                .panelMonoFont(size: 10, weight: .semibold)
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
                 .minimumScaleFactor(0.78)
@@ -517,20 +511,31 @@ private struct NetworkGlassRow: View {
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                Text(String(localized: "kind.network") + ":")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    HStack(spacing: 6) {
+                        Text(String(localized: "kind.network") + ":")
+                            .panelMetricLabelFont()
+                            .foregroundStyle(theme.primaryText)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
 
-                Text(module.summary)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(theme.valueText)
-                    .lineLimit(1)
+                        Text(module.summary)
+                            .panelMonoFont(size: 12, weight: .semibold)
+                            .foregroundStyle(theme.valueText)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.82)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
 
-                Spacer(minLength: 8)
+                    Spacer(minLength: 2)
 
-                MetricPill(systemImage: "arrow.up", text: value("upload"), theme: theme)
-                MetricPill(systemImage: "arrow.down", text: value("download"), theme: theme)
+                    HStack(spacing: 6) {
+                        NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
+                        NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
+                    }
+                    .layoutPriority(1)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -559,15 +564,14 @@ private struct NetworkGlassRow: View {
             ForEach(detailMetrics) { metric in
                 HStack(spacing: 6) {
                     Text(localizedMetricName(kind: module.kind, id: metric.name))
-                        .font(.system(size: 10, weight: .medium))
+                        .panelCaptionFont(size: 10)
                         .foregroundStyle(theme.captionText)
                         .lineLimit(1)
 
                     Spacer(minLength: 4)
 
                     Text(metric.value)
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .monospacedDigit()
+                        .panelMonoFont(size: 11, weight: .semibold)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
@@ -610,23 +614,27 @@ private struct BatteryGlassRow: View {
                     .symbolEffect(.variableColor.iterative, isActive: isCharging)
 
                 Text(String(localized: "kind.battery") + ":")
-                    .font(.system(size: 12, weight: .medium))
+                    .panelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
                 Text(summaryText)
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
+                    .panelMonoFont(size: 12, weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .layoutPriority(2)
 
                 Spacer(minLength: 8)
 
                 if hasBattery {
                     MetricPill(systemImage: powerPillIcon, text: powerPillValue, theme: theme)
+                        .layoutPriority(0)
                 } else {
                     MetricPill(systemImage: "powerplug", text: value("adapter"), theme: theme)
+                        .layoutPriority(0)
                     MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("power"), theme: theme)
+                        .layoutPriority(0)
                 }
             }
             .padding(.horizontal, 10)
@@ -866,11 +874,80 @@ private struct MetricPill: View {
     var body: some View {
         Label(text, systemImage: systemImage)
             .labelStyle(.titleAndIcon)
-            .font(.system(size: 11, weight: .medium, design: .rounded))
+            .font(.system(size: 11, weight: .medium, design: .monospaced))
             .monospacedDigit()
             .foregroundStyle(theme.secondaryText)
             .lineLimit(1)
+            .minimumScaleFactor(0.75)
             .frame(width: 72, alignment: .trailing)
+    }
+}
+
+private struct NetworkRatePill: View {
+    let systemImage: String
+    let text: String
+    let theme: MonitorPanelTheme
+
+    private var parts: (value: String, unit: String) {
+        guard let split = text.lastIndex(of: " ") else {
+            return (text, "")
+        }
+
+        return (
+            String(text[..<split]),
+            String(text[text.index(after: split)...])
+        )
+    }
+
+    var body: some View {
+        let parts = parts
+
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .semibold))
+                .frame(width: 9)
+
+            Text(parts.value)
+                .font(.system(size: 10.5, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.68)
+                .frame(width: 30, alignment: .trailing)
+
+            Text(parts.unit)
+                .font(.system(size: 9.5, weight: .medium, design: .monospaced))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .frame(width: 26, alignment: .leading)
+        }
+        .foregroundStyle(theme.secondaryText)
+        .frame(width: 68, alignment: .trailing)
+    }
+}
+
+private extension Text {
+    func panelLabelFont(size: CGFloat, tracking: CGFloat) -> some View {
+        self
+            .font(.system(size: size, weight: .semibold))
+            .kerning(tracking)
+    }
+
+    func panelMetricLabelFont() -> some View {
+        self
+            .font(.system(size: 12, weight: .medium))
+            .kerning(0.15)
+    }
+
+    func panelCaptionFont(size: CGFloat, weight: Font.Weight = .medium) -> some View {
+        self
+            .font(.system(size: size, weight: weight))
+            .kerning(0.1)
+    }
+
+    func panelMonoFont(size: CGFloat, weight: Font.Weight) -> some View {
+        self
+            .font(.system(size: size, weight: weight, design: .monospaced))
+            .monospacedDigit()
     }
 }
 
