@@ -86,14 +86,14 @@ struct MonitorPanelView: View {
                     .animation(.easeInOut(duration: 0.6), value: store.haloRingLoadLevel)
 
                 Text("SYSTEM · LIVE")
-                    .panelLabelFont(tracking: 1.1)
+                    .monitorPanelLabelFont(tracking: 1.1)
                     .foregroundStyle(theme.captionText)
             }
 
             Spacer()
 
             Text(timeString)
-                .panelMonoFont(.caption2, weight: .medium)
+                .monitorPanelMonoFont(.caption2, weight: .medium)
                 .foregroundStyle(theme.captionText)
         }
         .padding(.horizontal, 4)
@@ -215,27 +215,24 @@ private struct MetricGlassRow: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                // 图标：保持原版紧凑 18px
                 Image(systemName: module.kind.symbol)
                     .font(.callout.weight(.semibold))
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                // 标签 + 数值紧随其后（用户反馈：CPU: 37%）
                 Text("\(module.kind.title):")
-                    .panelMetricLabelFont()
+                    .monitorPanelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
                 Text(detail)
-                    .panelMonoFont(weight: .semibold)
+                    .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
 
-                // 右侧：趋势图 / 进度条
                 trailingView(theme: theme)
             }
             .padding(.horizontal, 10)
@@ -352,7 +349,7 @@ private struct MetricDetailGrid: View {
     private func metricCell(_ metric: MonitorMetric, theme: MonitorPanelTheme) -> some View {
         HStack(spacing: 6) {
             Text(localizedMetricName(kind: kind, id: metric.name))
-                .panelCaptionFont(.footnote)
+                .monitorPanelCaptionFont(.footnote)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -360,10 +357,11 @@ private struct MetricDetailGrid: View {
             Spacer(minLength: 4)
 
             Text(localizedMetricValue(kind: kind, metric: metric))
-                .panelMonoFont(.footnote, weight: .semibold)
+                .monitorPanelMonoFont(.footnote, weight: .semibold)
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
                 .truncationMode(.middle)
+                .help(localizedMetricValue(kind: kind, metric: metric))
                 .contentShape(Rectangle())
                 .onTapGesture {
                     copyToPasteboard(metric.value)
@@ -441,7 +439,7 @@ private struct StorageVolumeRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     Text(volume.name)
-                        .panelCaptionFont(.footnote, weight: .semibold)
+                        .monitorPanelCaptionFont(.footnote, weight: .semibold)
                         .foregroundStyle(theme.primaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -450,7 +448,7 @@ private struct StorageVolumeRow: View {
                     Spacer(minLength: 8)
 
                     Text("\(volume.clampedPercentage)%")
-                        .panelMonoFont(.footnote, weight: .semibold)
+                        .monitorPanelMonoFont(.footnote, weight: .semibold)
                         .foregroundStyle(theme.secondaryText)
                         .lineLimit(1)
                         .padding(.horizontal, 6)
@@ -482,15 +480,17 @@ private struct StorageVolumeStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label)
-                .panelCaptionFont(.caption2)
+                .monitorPanelCaptionFont(.caption2)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
 
             Text(value)
-                .panelMonoFont(.footnote, weight: .semibold)
+                .monitorPanelMonoFont(.footnote, weight: .semibold)
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
+                .truncationMode(.middle)
                 .minimumScaleFactor(0.78)
+                .help(value)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -540,13 +540,13 @@ private struct NetworkGlassRow: View {
                 HStack(spacing: 6) {
                     HStack(spacing: 6) {
                         Text(String(localized: "kind.network") + ":")
-                            .panelMetricLabelFont()
+                            .monitorPanelMetricLabelFont()
                             .foregroundStyle(theme.primaryText)
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
 
                         Text(module.summary)
-                            .panelMonoFont(weight: .semibold)
+                            .monitorPanelMonoFont(weight: .semibold)
                             .foregroundStyle(theme.valueText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.82)
@@ -618,14 +618,14 @@ private struct BatteryGlassRow: View {
                     .symbolEffect(.variableColor.iterative, isActive: isCharging)
 
                 Text(String(localized: "kind.battery") + ":")
-                    .panelMetricLabelFont()
+                    .monitorPanelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
                     .layoutPriority(2)
 
                 Text(summaryText)
-                    .panelMonoFont(weight: .semibold)
+                    .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
@@ -885,6 +885,7 @@ private struct MetricPill: View {
             .foregroundStyle(theme.secondaryText)
             .lineLimit(1)
             .minimumScaleFactor(0.75)
+            // Compact status pill: fixed width keeps battery row controls from shifting during live updates.
             .frame(width: 72, alignment: .trailing)
     }
 }
@@ -914,47 +915,52 @@ private struct NetworkRatePill: View {
                 .frame(width: 10)
 
             Text(parts.value)
-                .font(.system(.caption2, design: .monospaced).weight(.medium))
-                .monospacedDigit()
+                .monitorPanelMonoFont(.caption2, weight: .medium)
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
                 .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
 
             Text(parts.unit)
-                .font(.system(.caption2, design: .monospaced).weight(.medium))
+                .monitorPanelMonoFont(.caption2, weight: .medium)
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
                 .frame(width: 26, alignment: .leading)
         }
         .foregroundStyle(theme.secondaryText)
         .fixedSize(horizontal: true, vertical: false)
+        // Compact network rate pill: bounded width preserves room for both upload and download rates.
         .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
     }
 }
 
-private extension Text {
-    func panelLabelFont(tracking: CGFloat) -> some View {
+extension Text {
+    func monitorPanelLabelFont(tracking: CGFloat) -> some View {
         self
             .font(.caption2.weight(.semibold))
             .kerning(tracking)
     }
 
-    func panelMetricLabelFont() -> some View {
+    func monitorPanelMetricLabelFont() -> some View {
         self
             .font(.callout.weight(.medium))
             .kerning(0.15)
     }
 
-    func panelCaptionFont(_ style: Font.TextStyle = .caption2, weight: Font.Weight = .medium) -> some View {
+    func monitorPanelCaptionFont(_ style: Font.TextStyle = .caption2, weight: Font.Weight = .medium) -> some View {
         self
             .font(.system(style).weight(weight))
             .kerning(0.1)
     }
 
-    func panelMonoFont(_ style: Font.TextStyle = .callout, weight: Font.Weight = .semibold) -> some View {
+    func monitorPanelMonoFont(_ style: Font.TextStyle = .callout, weight: Font.Weight = .semibold) -> some View {
         self
             .font(.system(style, design: .monospaced).weight(weight))
             .monospacedDigit()
+    }
+
+    func monitorPanelRoundedFont(_ style: Font.TextStyle = .callout, weight: Font.Weight = .semibold) -> some View {
+        self
+            .font(.system(style, design: .rounded).weight(weight))
     }
 }
 

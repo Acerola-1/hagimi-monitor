@@ -28,25 +28,25 @@ struct DisplayControlsSection: View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "display")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.callout.weight(.semibold))
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
                 Text("显示器:")
-                    .font(.system(size: 12, weight: .medium))
+                    .monitorPanelMetricLabelFont()
                     .foregroundStyle(palette.primaryText)
                     .lineLimit(1)
 
                 Text(summary(for: visibleDisplays, hasControls: hasControls))
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .monitorPanelRoundedFont(weight: .semibold)
                     .foregroundStyle(palette.valueText)
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
 
                 Image(systemName: "chevron.down")
-                    .font(.system(size: 10, weight: .bold))
+                    .font(.caption2.weight(.bold))
                     .foregroundStyle(palette.captionText)
                     .frame(width: 18, height: 18)
                     .rotationEffect(.degrees(isExpanded ? 0 : -90))
@@ -150,7 +150,7 @@ private struct DisplayControlGroup: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.subheadline.weight(.semibold))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(tint)
                 .frame(width: 14)
@@ -159,16 +159,17 @@ private struct DisplayControlGroup: View {
             VStack(alignment: .leading, spacing: 7) {
                 HStack(spacing: 8) {
                     Text(display.name)
-                        .font(.system(size: 10, weight: .semibold))
+                        .monitorPanelCaptionFont(.footnote, weight: .semibold)
                         .foregroundStyle(palette.primaryText)
                         .lineLimit(1)
                         .truncationMode(.middle)
+                        .layoutPriority(1)
                         .help(display.name)
 
                     Spacer(minLength: 8)
 
                     Text(display.isBuiltIn ? "内置" : "外接")
-                        .font(.system(size: 9, weight: .semibold, design: .rounded))
+                        .monitorPanelRoundedFont(.caption2, weight: .semibold)
                         .foregroundStyle(palette.secondaryText)
                         .lineLimit(1)
                         .padding(.horizontal, 6)
@@ -237,13 +238,13 @@ private struct DisplayControlSlider: View {
     var body: some View {
         HStack(spacing: 8) {
             Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .semibold))
+                .font(.caption2.weight(.semibold))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(isEnabled ? tint : palette.captionText)
                 .frame(width: 14)
 
             Text(label)
-                .font(.system(size: 10, weight: .medium))
+                .monitorPanelCaptionFont(.caption2)
                 .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
                 .frame(width: 34, alignment: .leading)
 
@@ -253,7 +254,7 @@ private struct DisplayControlSlider: View {
                 .disabled(!isEnabled)
 
             Text("\(Int(value.rounded()))%")
-                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .monitorPanelRoundedFont(.caption2, weight: .semibold)
                 .monospacedDigit()
                 .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
                 .frame(width: 34, alignment: .trailing)
@@ -274,7 +275,7 @@ private struct DisplayEmptyState: View {
                 .padding(.leading, 28)
 
             Text(text)
-                .font(.system(size: 10, weight: .medium))
+                .monitorPanelCaptionFont(.caption2)
                 .foregroundStyle(palette.captionText)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.leading, 28)
