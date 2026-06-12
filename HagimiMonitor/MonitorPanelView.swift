@@ -619,15 +619,17 @@ private struct BatteryGlassRow: View {
                     .panelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
+                    .layoutPriority(2)
 
                 Text(summaryText)
                     .panelMonoFont(size: 12, weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                    .layoutPriority(2)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(3)
 
-                Spacer(minLength: 8)
+                Spacer(minLength: 4)
 
                 if hasBattery {
                     MetricPill(systemImage: powerPillIcon, text: powerPillValue, theme: theme)
@@ -907,14 +909,14 @@ private struct NetworkRatePill: View {
         HStack(spacing: 3) {
             Image(systemName: systemImage)
                 .font(.system(size: 10, weight: .semibold))
-                .frame(width: 9)
+                .frame(width: 10)
 
             Text(parts.value)
                 .font(.system(size: 10.5, weight: .medium, design: .monospaced))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.68)
-                .frame(width: 30, alignment: .trailing)
+                .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
 
             Text(parts.unit)
                 .font(.system(size: 9.5, weight: .medium, design: .monospaced))
@@ -923,7 +925,8 @@ private struct NetworkRatePill: View {
                 .frame(width: 26, alignment: .leading)
         }
         .foregroundStyle(theme.secondaryText)
-        .frame(width: 68, alignment: .trailing)
+        .fixedSize(horizontal: true, vertical: false)
+        .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
     }
 }
 
