@@ -16,7 +16,9 @@ enum MonitorConstants {
     static let menuBarLoadSmoothStep = 1.25
 
     // MARK: Panel Dimensions
-    static let panelWidth = 320.0
+    static let panelMinWidth: Double = 300
+    static let panelIdealWidth: Double = 340
+    static let panelMaxWidth: Double = 460
     static let rowCornerRadius = 14.0
 
     // MARK: Animation Durations
