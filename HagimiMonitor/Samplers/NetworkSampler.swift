@@ -8,6 +8,8 @@ final class NetworkSampler: MonitorSampler {
     private var previousNetworkBytes: (input: UInt64, output: UInt64, timestamp: Date)?
     private var publicIPCache: (ip: String, timestamp: Date)?
     private let publicIPRefreshInterval: TimeInterval = 30
+    private let publicIPLock = NSLock()
+    private var isRefreshingPublicIP = false
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         let now = Date()
@@ -15,7 +17,7 @@ final class NetworkSampler: MonitorSampler {
         let previousBytes = previousNetworkBytes
         previousNetworkBytes = (bytes.input, bytes.output, now)
 
-        let publicIP = fetchPublicIP()
+        let publicIP = cachedPublicIP()
 
         guard let previousBytes else {
             return MonitorModule(
@@ -119,27 +121,55 @@ final class NetworkSampler: MonitorSampler {
         )
     }
 
-    private func fetchPublicIP() -> String {
+    private func cachedPublicIP() -> String {
         let now = Date()
+
+        publicIPLock.lock()
         if let cache = publicIPCache, now.timeIntervalSince(cache.timestamp) < publicIPRefreshInterval {
+            publicIPLock.unlock()
             return cache.ip
         }
 
-        let semaphore = DispatchSemaphore(value: 0)
-        var result = "--"
+        let cachedValue = publicIPCache?.ip ?? "--"
+        let shouldRefresh = !isRefreshingPublicIP
+        if shouldRefresh {
+            isRefreshingPublicIP = true
+        }
+        publicIPLock.unlock()
 
+        if shouldRefresh {
+            refreshPublicIP(startedAt: now)
+        }
+
+        return cachedValue
+    }
+
+    private func refreshPublicIP(startedAt: Date) {
         let url = URL(string: "https://api.ipify.org")!
-        let task = URLSession.shared.dataTask(with: url) { data, _, _ in
-            if let data = data, let ip = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines), !ip.isEmpty {
-                result = ip
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 5
+
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, _, error in
+            guard let self else { return }
+
+            let ip = data
+                .flatMap { String(data: $0, encoding: .utf8) }?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+            if let error {
+                AppLogger.sampler.error("Public IP refresh failed: \(error.localizedDescription, privacy: .public)")
             }
-            semaphore.signal()
+
+            publicIPLock.lock()
+            if let ip, !ip.isEmpty {
+                publicIPCache = (ip, Date())
+            } else {
+                publicIPCache = (publicIPCache?.ip ?? "--", startedAt)
+            }
+            isRefreshingPublicIP = false
+            publicIPLock.unlock()
         }
         task.resume()
-        semaphore.wait()
-
-        publicIPCache = (result, now)
-        return result
     }
 
     private func networkInterfaceTitle(_ name: String?) -> String {

@@ -58,6 +58,21 @@ final class SystemMonitorSampler {
         }
     }
 
+    func sampleAsync(
+        kinds: Set<MonitorKind>,
+        previousModules: [MonitorModule],
+        on queue: DispatchQueue,
+        completion: @escaping (Result<SystemMonitorSnapshot, SamplingError>) -> Void
+    ) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let result = self.sample(kinds: kinds, previousModules: previousModules)
+            DispatchQueue.main.async {
+                completion(result)
+            }
+        }
+    }
+
     private func samplingError(for kind: MonitorKind) -> SamplingError {
         switch kind {
         case .cpu: return .cpuUnavailable

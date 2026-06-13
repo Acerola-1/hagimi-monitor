@@ -25,7 +25,6 @@ struct HagimiMonitorApp: App {
         } label: {
             Image(nsImage: MenuBarComputeRingIcon.image(
                 load: monitorStore.displayedComputeLoad,
-                frame: monitorStore.menuBarFrame,
                 darkMode: NSApp.effectiveAppearance.isDark,
                 loadLevel: monitorStore.haloRingLoadLevel
             ))

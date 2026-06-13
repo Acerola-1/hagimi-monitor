@@ -62,8 +62,6 @@ final class MonitorSettings: ObservableObject {
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
-    static let maximumEnabledMetricsPerKind = 4
-
     private let defaults: UserDefaults
     private var isUpdatingLaunchAtLogin = false
     private var cancellables = Set<AnyCancellable>()
@@ -128,16 +126,12 @@ final class MonitorSettings: ObservableObject {
     }
 
     func canEnableMetric(_ id: String, for kind: MonitorKind) -> Bool {
-        let current = enabledMetrics[kind] ?? defaultMetricIds(for: kind)
-        return current.contains(id) || current.count < Self.maximumEnabledMetricsPerKind
+        return true
     }
 
     func setMetric(_ id: String, enabled: Bool, for kind: MonitorKind) {
         var current = enabledMetrics[kind] ?? defaultMetricIds(for: kind)
         if enabled {
-            guard current.contains(id) || current.count < Self.maximumEnabledMetricsPerKind else {
-                return
-            }
             current.insert(id)
         } else {
             current.remove(id)
@@ -183,7 +177,7 @@ final class MonitorSettings: ObservableObject {
             return Array(defaultMetricIds(for: kind))
         }
 
-        return Array(filtered.prefix(Self.maximumEnabledMetricsPerKind))
+        return Array(filtered)
     }
 
     private func defaultMetricIds(for kind: MonitorKind) -> Set<String> {

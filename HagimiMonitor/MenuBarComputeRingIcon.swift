@@ -2,7 +2,28 @@ import AppKit
 import Foundation
 
 enum MenuBarComputeRingIcon {
-    static func image(load: Double, frame: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSImage {
+    private static let cache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 120
+        return cache
+    }()
+
+    private static func loadBucket(for load: Double) -> Int {
+        Int((min(100.0, max(0.0, load)) / 2.0).rounded())
+    }
+
+    private static func cacheKey(loadBucket: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSString {
+        "\(loadBucket)|\(darkMode ? 1 : 0)|\(loadLevel.cacheIndex)" as NSString
+    }
+
+    static func image(load: Double, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSImage {
+        let loadBucket = loadBucket(for: load)
+        let canonicalLoad = Double(loadBucket) * 2.0
+        let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel)
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
+
         let image = NSImage(size: NSSize(width: 18, height: 18))
         image.lockFocus()
 
@@ -10,11 +31,13 @@ enum MenuBarComputeRingIcon {
         NSColor.clear.setFill()
         NSRect(x: 0, y: 0, width: 18, height: 18).fill()
 
-        let style = MenuBarComputeRingImageStyle(load: load, frame: frame, darkMode: darkMode, loadLevel: loadLevel)
+        let style = MenuBarComputeRingImageStyle(load: canonicalLoad, darkMode: darkMode, loadLevel: loadLevel)
         drawRing(style: style)
 
         image.unlockFocus()
         image.isTemplate = false
+
+        cache.setObject(image, forKey: key)
         return image
     }
 
@@ -80,17 +103,11 @@ enum MenuBarComputeRingIcon {
 
 private struct MenuBarComputeRingImageStyle {
     let load: Double
-    let frame: Int
     let darkMode: Bool
     let loadLevel: MenuBarComputeLoadLevel
 
     private var normalizedLoad: Double {
         min(1, max(0, load / 100))
-    }
-
-    private var linearPulse: Double {
-        let phase = Double(frame % 48) / 48
-        return phase < 0.5 ? phase * 2 : (1 - phase) * 2
     }
 
     var progress: Double {
@@ -108,7 +125,7 @@ private struct MenuBarComputeRingImageStyle {
 
     var coreColor: NSColor {
         loadLevel.coreColor(darkMode: darkMode)
-            .withAlphaComponent((darkMode ? 0.76 : 0.88) + normalizedLoad * 0.10 + linearPulse * 0.03)
+            .withAlphaComponent((darkMode ? 0.76 : 0.88) + normalizedLoad * 0.10)
     }
 
     var lineWidth: CGFloat {
@@ -151,6 +168,15 @@ enum MenuBarComputeLoadLevel {
     case working
     case busy
     case stressed
+
+    var cacheIndex: Int {
+        switch self {
+        case .idle: return 0
+        case .working: return 1
+        case .busy: return 2
+        case .stressed: return 3
+        }
+    }
 
     func coreColor(darkMode: Bool) -> NSColor {
         switch self {
