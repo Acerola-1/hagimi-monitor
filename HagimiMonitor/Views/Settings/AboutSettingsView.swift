@@ -5,6 +5,7 @@ struct AboutSettingsView: View {
     @State private var updateChecker = UpdateChecker()
 
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
+    private let issuesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/issues")!
 
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
@@ -30,11 +31,30 @@ struct AboutSettingsView: View {
                             NSWorkspace.shared.open(releasesURL)
                         } label: {
                             Label("Releases", systemImage: "shippingbox")
+                                .frame(minWidth: 80)
                         }
                         .buttonStyle(.glass)
                     } else {
                         Link(destination: releasesURL) {
                             Label("Releases", systemImage: "shippingbox")
+                                .frame(minWidth: 80)
+                        }
+                    }
+                }
+
+                SettingsRow(title: String(localized: "about.feedback")) {
+                    if #available(macOS 26, *) {
+                        Button {
+                            NSWorkspace.shared.open(issuesURL)
+                        } label: {
+                            Label("Issue", systemImage: "exclamationmark.bubble")
+                                .frame(minWidth: 80)
+                        }
+                        .buttonStyle(.glass)
+                    } else {
+                        Link(destination: issuesURL) {
+                            Label("Issue", systemImage: "exclamationmark.bubble")
+                                .frame(minWidth: 80)
                         }
                     }
                 }

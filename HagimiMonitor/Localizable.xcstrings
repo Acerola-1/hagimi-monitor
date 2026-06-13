@@ -1789,19 +1789,19 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "发布版本"
+            "value": "发行说明"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Release Version"
+            "value": "Release Notes"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "リリースバージョン"
+            "value": "リリースノート"
           }
         }
       }
@@ -1868,6 +1868,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "不明"
+          }
+        }
+      }
+    },
+    "about.feedback": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "反馈建议"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feedback"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フィードバック"
+          }
+        }
+      }
+    },
+    "about.feedback-button": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交 Issue"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Issue"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue を開く"
           }
         }
       }
