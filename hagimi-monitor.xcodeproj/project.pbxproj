@@ -233,6 +233,7 @@
 			knownRegions = (
 				en,
 				Base,
+				ja,
 					zh-Hans,
 			);
 			mainGroup = 2E0C71802FB19C2D00908371;
@@ -460,6 +461,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleLocalizations = (
 					en,
+					ja,
 					"zh-Hans",
 				);
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
@@ -498,6 +500,7 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleLocalizations = (
 					en,
+					ja,
 					"zh-Hans",
 				);
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
@@ -536,6 +539,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
 				INFOPLIST_KEY_CFBundleLocalizations = (
 					en,
+					ja,
 					"zh-Hans",
 				);
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
@@ -586,6 +590,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
 				INFOPLIST_KEY_CFBundleLocalizations = (
 					en,
+					ja,
 					"zh-Hans",
 				);
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
