@@ -311,6 +311,8 @@ private struct MetricDetailGrid: View {
     let kind: MonitorKind
     let theme: MonitorPanelTheme
 
+    @State private var containerWidth: CGFloat = 0
+
     var body: some View {
         VStack(spacing: 7) {
             Rectangle()
@@ -320,6 +322,17 @@ private struct MetricDetailGrid: View {
 
             content
                 .padding(.leading, 28)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: MetricGridWidthPreferenceKey.self,
+                            value: proxy.size.width
+                        )
+                    }
+                )
+                .onPreferenceChange(MetricGridWidthPreferenceKey.self) { width in
+                    containerWidth = width
+                }
         }
     }
 
@@ -329,39 +342,93 @@ private struct MetricDetailGrid: View {
         if kind == .network {
             VStack(spacing: 6) {
                 ForEach(metrics) { metric in
-                    metricCell(metric, theme: theme)
+                    metricCell(metric, isFullRow: false, theme: theme)
                 }
             }
         } else {
+            let isFullRowFlags = computeIsFullRowFlags(width: containerWidth)
             MetricFlowLayout(columnSpacing: 8, rowSpacing: 6) {
-                ForEach(metrics) { metric in
-                    metricCell(metric, theme: theme)
+                ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
+                    metricCell(
+                        metric,
+                        isFullRow: isFullRowFlags[index],
+                        theme: theme
+                    )
                 }
             }
         }
     }
 
-    private func metricCell(_ metric: MonitorMetric, theme: MonitorPanelTheme) -> some View {
-        HStack(spacing: 6) {
-            Text(localizedMetricName(kind: kind, id: metric.name))
-                .monitorPanelCaptionFont(.footnote)
-                .foregroundStyle(theme.captionText)
-                .lineLimit(1)
-                .layoutPriority(1)
+    /// 父视图集中决策：用 AppKit 预测量得到每个 cell 自然尺寸，
+    /// 调 `MetricFlowPlacer` 跑一次相同算法，frame.width ≥ containerWidth - 1
+    /// 即视为整行槽。`MetricFlowLayout` 内部会再跑一次摆位，输入相同，结果一致。
+    private func computeIsFullRowFlags(width: CGFloat) -> [Bool] {
+        guard width > 0 else { return Array(repeating: false, count: metrics.count) }
 
-            Spacer(minLength: 4)
-
-            Text(localizedMetricValue(kind: kind, metric: metric))
-                .monitorPanelMonoFont(.footnote, weight: .semibold)
-                .foregroundStyle(theme.secondaryText)
-                .lineLimit(1)
-                .layoutPriority(2)
-                .help(localizedMetricValue(kind: kind, metric: metric))
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    copyToPasteboard(metric.value)
-                }
+        let sizes = metrics.map { metric in
+            MetricCellSizing.naturalSize(
+                label: localizedMetricName(kind: kind, id: metric.name),
+                value: localizedMetricValue(kind: kind, metric: metric)
+            )
         }
+        let result = MetricFlowPlacer.place(
+            sizes: sizes,
+            containerWidth: width,
+            columnSpacing: 8,
+            rowSpacing: 6
+        )
+        return result.frames.map { $0.width >= width - 1 }
+    }
+
+    private func metricCell(
+        _ metric: MonitorMetric,
+        isFullRow: Bool,
+        theme: MonitorPanelTheme
+    ) -> some View {
+        let labelText = localizedMetricName(kind: kind, id: metric.name)
+        let valueText = localizedMetricValue(kind: kind, metric: metric)
+
+        let label = Text(labelText)
+            .monitorPanelCaptionFont(.footnote)
+            .foregroundStyle(theme.captionText)
+            .lineLimit(1)
+            .layoutPriority(1)
+
+        let value = Text(valueText)
+            .monitorPanelMonoFont(.footnote, weight: .semibold)
+            .foregroundStyle(theme.secondaryText)
+            .lineLimit(1)
+            .layoutPriority(2)
+            .help(valueText)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                copyToPasteboard(metric.value)
+            }
+
+        return Group {
+            if isFullRow {
+                // detail row 形态：label 紧贴 value，整体偏左，右侧留空。
+                HStack(spacing: 6) {
+                    label
+                    value
+                    Spacer(minLength: 0)
+                }
+            } else {
+                // 半行形态：label 左 + Spacer 撑开 + value 贴右。
+                HStack(spacing: 6) {
+                    label
+                    Spacer(minLength: 4)
+                    value
+                }
+            }
+        }
+    }
+}
+
+private struct MetricGridWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }
 
