@@ -34,10 +34,6 @@ struct ModuleSettingsView: View {
                     }
                 }
             }
-            Text(String(localized: "settings.metrics-limit") + " \(MonitorSettings.maximumEnabledMetricsPerKind) " + String(localized: "settings.metrics-limit-suffix"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .padding(.horizontal, 2)
 
             HStack {
                 Spacer()
