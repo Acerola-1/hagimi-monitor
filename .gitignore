@@ -64,6 +64,9 @@ docs/stats
 docs/MonitorControl-main
 .omo/
 
+# Build output
+build/
+
 # AI IDE configs
 .claude/
 .codex/

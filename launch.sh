@@ -1,31 +1,50 @@
 #!/bin/bash
 # 构建并启动指定分支的 HagimiMonitor
 # 用法: ./launch.sh [分支名] [版本]
+#       ./launch.sh -p          构建并打包到项目 build/ 目录
 # 示例: ./launch.sh dev
 #       ./launch.sh dev direct
-#       ./launch.sh feature/liquid-glass-refactor
+#       ./launch.sh -p
 
 set -e
+
+# 解析 -p 标志
+PACKAGE=false
+POSITIONAL=()
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        -p|--package)
+            PACKAGE=true
+            shift
+            ;;
+        *)
+            POSITIONAL+=("$1")
+            shift
+            ;;
+    esac
+done
+set -- "${POSITIONAL[@]}"
 
 BRANCH="${1:-$(git branch --show-current)}"
 VERSION="${2:-direct}"
 CURRENT=$(git branch --show-current)
 PROJECT="hagimi-monitor.xcodeproj"
 BUILD_DIR="/tmp/hagimi-builds"
+PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)/build"
 
 case "$VERSION" in
-  direct|full|pro)
-    SCHEME="HagimiMonitorDirect"
-    APP_NAME="HagimiMonitor"
-    ;;
-  appstore|store|sandbox)
-    SCHEME="HagimiMonitor"
-    APP_NAME="HagimiMonitor"
-    ;;
-  *)
-    SCHEME="HagimiMonitorDirect"
-    APP_NAME="HagimiMonitor"
-    ;;
+    direct|full|pro)
+        SCHEME="HagimiMonitorDirect"
+        APP_NAME="HagimiMonitor"
+        ;;
+    appstore|store|sandbox)
+        SCHEME="HagimiMonitor"
+        APP_NAME="HagimiMonitor"
+        ;;
+    *)
+        SCHEME="HagimiMonitorDirect"
+        APP_NAME="HagimiMonitor"
+        ;;
 esac
 
 mkdir -p "$BUILD_DIR/$BRANCH"
@@ -68,4 +87,17 @@ fi
 if [ "$BRANCH" != "$CURRENT" ]; then
     git checkout "$CURRENT"
     echo "已切回 $CURRENT"
+fi
+
+# 异步打包到 build/ 目录
+if $PACKAGE; then
+    (
+        mkdir -p "$PACKAGE_DIR"
+        ZIP_NAME="HagimiMonitor-$(git branch --show-current)-$(date +%Y%m%d%H%M%S).zip"
+        ZIP_PATH="$PACKAGE_DIR/$ZIP_NAME"
+        cd "$BUILD_DIR/$BRANCH"
+        zip -r -q "$ZIP_PATH" "$APP_NAME.app"
+        echo "已打包: $ZIP_PATH"
+    ) &
+    echo "后台打包中..."
 fi
