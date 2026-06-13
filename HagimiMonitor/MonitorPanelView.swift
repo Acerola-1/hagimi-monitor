@@ -311,11 +311,6 @@ private struct MetricDetailGrid: View {
     let kind: MonitorKind
     let theme: MonitorPanelTheme
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 8),
-        GridItem(.flexible(), spacing: 8)
-    ]
-
     var body: some View {
         VStack(spacing: 7) {
             Rectangle()
@@ -338,7 +333,7 @@ private struct MetricDetailGrid: View {
                 }
             }
         } else {
-            LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
+            MetricFlowLayout(columnSpacing: 8, rowSpacing: 6) {
                 ForEach(metrics) { metric in
                     metricCell(metric, theme: theme)
                 }
@@ -352,7 +347,6 @@ private struct MetricDetailGrid: View {
                 .monitorPanelCaptionFont(.footnote)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
                 .layoutPriority(1)
 
             Spacer(minLength: 4)
@@ -361,7 +355,6 @@ private struct MetricDetailGrid: View {
                 .monitorPanelMonoFont(.footnote, weight: .semibold)
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.7)
                 .layoutPriority(2)
                 .help(localizedMetricValue(kind: kind, metric: metric))
                 .contentShape(Rectangle())
