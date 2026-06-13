@@ -15,6 +15,12 @@
             "state": "translated",
             "value": "Normal"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
         }
       }
     },
@@ -30,6 +36,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warning"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
           }
         }
       }
@@ -47,6 +59,12 @@
             "state": "translated",
             "value": "Critical"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注意が必要"
+          }
         }
       }
     },
@@ -59,6 +77,12 @@
           }
         },
         "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "CPU"
@@ -79,6 +103,12 @@
             "state": "translated",
             "value": "GPU"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
         }
       }
     },
@@ -94,6 +124,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Memory"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリ"
           }
         }
       }
@@ -111,6 +147,12 @@
             "state": "translated",
             "value": "Storage"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ストレージ"
+          }
         }
       }
     },
@@ -126,6 +168,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Network"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワーク"
           }
         }
       }
@@ -143,6 +191,12 @@
             "state": "translated",
             "value": "Power"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電源"
+          }
         }
       }
     },
@@ -158,6 +212,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Current"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在"
           }
         }
       }
@@ -175,6 +235,12 @@
             "state": "translated",
             "value": "Average"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均"
+          }
         }
       }
     },
@@ -190,6 +256,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Peak"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ピーク"
           }
         }
       }
@@ -207,6 +279,12 @@
             "state": "translated",
             "value": "Battery"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バッテリー"
+          }
         }
       }
     },
@@ -222,6 +300,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Charging"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充電中"
           }
         }
       }
@@ -239,6 +323,12 @@
             "state": "translated",
             "value": "AC Power"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電源接続中"
+          }
         }
       }
     },
@@ -254,6 +344,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "On Battery"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バッテリー駆動"
           }
         }
       }
@@ -271,6 +367,12 @@
             "state": "translated",
             "value": "Normal"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
         }
       }
     },
@@ -286,6 +388,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Warning"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
           }
         }
       }
@@ -303,6 +411,12 @@
             "state": "translated",
             "value": "Critical"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "危険"
+          }
         }
       }
     },
@@ -318,6 +432,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Combined"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "総合"
           }
         }
       }
@@ -335,6 +455,12 @@
             "state": "translated",
             "value": "Memory"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリ"
+          }
         }
       }
     },
@@ -350,6 +476,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "System"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムに従う"
           }
         }
       }
@@ -367,6 +499,12 @@
             "state": "translated",
             "value": "Light"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライト"
+          }
         }
       }
     },
@@ -382,6 +520,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Dark"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダーク"
           }
         }
       }
@@ -399,6 +543,12 @@
             "state": "translated",
             "value": "Balanced"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バランス"
+          }
         }
       }
     },
@@ -414,6 +564,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Vibrant"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ビビッド"
           }
         }
       }
@@ -431,6 +587,12 @@
             "state": "translated",
             "value": "System"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システム"
+          }
         }
       }
     },
@@ -446,6 +608,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "User"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ユーザー"
           }
         }
       }
@@ -463,6 +631,12 @@
             "state": "translated",
             "value": "Idle"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アイドル"
+          }
         }
       }
     },
@@ -478,6 +652,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Uptime"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稼働時間"
           }
         }
       }
@@ -495,6 +675,12 @@
             "state": "translated",
             "value": "Temperature"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
         }
       }
     },
@@ -510,6 +696,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "GPU Mem"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPUメモリ"
           }
         }
       }
@@ -527,6 +719,12 @@
             "state": "translated",
             "value": "Allocated"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "割り当て済み"
+          }
         }
       }
     },
@@ -542,6 +740,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Render"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レンダー"
           }
         }
       }
@@ -559,6 +763,12 @@
             "state": "translated",
             "value": "Tiler"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タイラー"
+          }
         }
       }
     },
@@ -574,6 +784,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Temperature"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
           }
         }
       }
@@ -591,6 +807,12 @@
             "state": "translated",
             "value": "Used"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用中"
+          }
         }
       }
     },
@@ -606,6 +828,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Pressure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圧力"
           }
         }
       }
@@ -623,6 +851,12 @@
             "state": "translated",
             "value": "Swap Used"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用中のスワップ"
+          }
         }
       }
     },
@@ -638,6 +872,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Total"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合計"
           }
         }
       }
@@ -655,6 +895,12 @@
             "state": "translated",
             "value": "Used"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用中"
+          }
         }
       }
     },
@@ -670,6 +916,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Free"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空き"
           }
         }
       }
@@ -687,6 +939,12 @@
             "state": "translated",
             "value": "Total"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合計"
+          }
         }
       }
     },
@@ -702,6 +960,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Public IP"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パブリックIP"
           }
         }
       }
@@ -719,6 +983,12 @@
             "state": "translated",
             "value": "IP Address"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPアドレス"
+          }
         }
       }
     },
@@ -734,6 +1004,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Upload"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップロード"
           }
         }
       }
@@ -751,6 +1027,12 @@
             "state": "translated",
             "value": "Download"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード"
+          }
         }
       }
     },
@@ -766,6 +1048,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Type"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "種類"
           }
         }
       }
@@ -783,6 +1071,12 @@
             "state": "translated",
             "value": "Status"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状態"
+          }
         }
       }
     },
@@ -798,6 +1092,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Adapter"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アダプタ"
           }
         }
       }
@@ -815,6 +1115,12 @@
             "state": "translated",
             "value": "Charging Power"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充電電力"
+          }
         }
       }
     },
@@ -830,6 +1136,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Power"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電力"
           }
         }
       }
@@ -847,6 +1159,12 @@
             "state": "translated",
             "value": "Health"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状態"
+          }
         }
       }
     },
@@ -862,6 +1180,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Cycle Count"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充放電回数"
           }
         }
       }
@@ -879,6 +1203,12 @@
             "state": "translated",
             "value": "Temperature"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
         }
       }
     },
@@ -894,6 +1224,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Activity Monitor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクティビティモニタ"
           }
         }
       }
@@ -911,6 +1247,12 @@
             "state": "translated",
             "value": "Settings"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
+          }
         }
       }
     },
@@ -926,6 +1268,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "System"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システム"
           }
         }
       }
@@ -943,6 +1291,12 @@
             "state": "translated",
             "value": "About HagimiMonitor"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HagimiMonitorについて"
+          }
         }
       }
     },
@@ -958,6 +1312,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Quit HagimiMonitor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HagimiMonitorを終了"
           }
         }
       }
@@ -975,6 +1335,12 @@
             "state": "translated",
             "value": "General"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般"
+          }
         }
       }
     },
@@ -990,6 +1356,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Modules"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監視モジュール"
           }
         }
       }
@@ -1007,6 +1379,12 @@
             "state": "translated",
             "value": "Display"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ディスプレイ"
+          }
         }
       }
     },
@@ -1022,6 +1400,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "About"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情報"
           }
         }
       }
@@ -1039,6 +1423,12 @@
             "state": "translated",
             "value": "Launch at Login"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン時に起動"
+          }
         }
       }
     },
@@ -1054,6 +1444,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Automatically open HagimiMonitor after login"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン後にHagimiMonitorを自動で開く"
           }
         }
       }
@@ -1071,6 +1467,12 @@
             "state": "translated",
             "value": "Appearance"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外観"
+          }
         }
       }
     },
@@ -1086,6 +1488,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Theme"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テーマ"
           }
         }
       }
@@ -1103,6 +1511,12 @@
             "state": "translated",
             "value": "Color Scheme"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配色"
+          }
         }
       }
     },
@@ -1118,6 +1532,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Menu Bar"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メニューバー"
           }
         }
       }
@@ -1135,6 +1555,12 @@
             "state": "translated",
             "value": "Halo Ring"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "負荷リング"
+          }
         }
       }
     },
@@ -1150,6 +1576,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Show in Panel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パネルに表示"
           }
         }
       }
@@ -1167,6 +1599,12 @@
             "state": "translated",
             "value": "Metrics"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監視項目"
+          }
         }
       }
     },
@@ -1182,6 +1620,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Select up to "
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最大 "
           }
         }
       }
@@ -1199,6 +1643,12 @@
             "state": "translated",
             "value": " metrics to display in the panel."
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": " 件をメインパネルに表示できます。"
+          }
         }
       }
     },
@@ -1214,6 +1664,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Reset Defaults"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デフォルトに戻す"
           }
         }
       }
@@ -1231,6 +1687,12 @@
             "state": "translated",
             "value": "Include Built-in Display"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内蔵ディスプレイを含める"
+          }
         }
       }
     },
@@ -1246,6 +1708,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Controls"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール"
           }
         }
       }
@@ -1263,6 +1731,12 @@
             "state": "translated",
             "value": "Brightness"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明るさ"
+          }
         }
       }
     },
@@ -1278,6 +1752,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Volume"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音量"
           }
         }
       }
@@ -1295,6 +1775,12 @@
             "state": "translated",
             "value": "Contrast"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントラスト"
+          }
         }
       }
     },
@@ -1310,6 +1796,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Release Version"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リリースバージョン"
           }
         }
       }
@@ -1327,6 +1819,12 @@
             "state": "translated",
             "value": "Version "
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バージョン "
+          }
         }
       }
     },
@@ -1342,6 +1840,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "macOS Menu Bar Hardware Monitor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOSメニューバー用ハードウェアモニター"
           }
         }
       }
@@ -1359,6 +1863,12 @@
             "state": "translated",
             "value": "Unknown"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不明"
+          }
         }
       }
     },
@@ -1374,6 +1884,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Check for Updates"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデートを確認"
           }
         }
       }
@@ -1391,6 +1907,12 @@
             "state": "translated",
             "value": "Checking..."
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認中..."
+          }
         }
       }
     },
@@ -1406,6 +1928,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Up to Date"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最新です"
           }
         }
       }
@@ -1423,6 +1951,12 @@
             "state": "translated",
             "value": "Check Again"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "もう一度確認"
+          }
         }
       }
     },
@@ -1438,6 +1972,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Found "
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "見つかりました "
           }
         }
       }
@@ -1455,6 +1995,12 @@
             "state": "translated",
             "value": "Download Update"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデートをダウンロード"
+          }
         }
       }
     },
@@ -1470,6 +2016,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Retry"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再試行"
           }
         }
       }
@@ -1487,6 +2039,12 @@
             "state": "translated",
             "value": "Unable to parse update info"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデート情報を解析できません"
+          }
         }
       }
     },
@@ -1502,6 +2060,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Unable to parse version"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バージョン番号を解析できません"
           }
         }
       }
@@ -1519,6 +2083,12 @@
             "state": "translated",
             "value": "Network Error"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワークエラー"
+          }
         }
       }
     },
@@ -1534,6 +2104,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Temporarily unable to check for updates"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在アップデートを確認できません"
           }
         }
       }
@@ -1551,6 +2127,12 @@
             "state": "translated",
             "value": "Rate limited. Please try again later."
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認回数が多すぎます。しばらくしてからもう一度お試しください。"
+          }
         }
       }
     },
@@ -1566,6 +2148,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "No release available"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利用可能なリリースはありません"
           }
         }
       }
@@ -1583,6 +2171,12 @@
             "state": "translated",
             "value": "GitHub temporarily unavailable"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHubを一時的に利用できません"
+          }
         }
       }
     },
@@ -1598,6 +2192,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Update check failed: "
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデートを確認できません: "
           }
         }
       }
@@ -1615,6 +2215,12 @@
             "state": "translated",
             "value": "Display"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ディスプレイ"
+          }
         }
       }
     },
@@ -1630,6 +2236,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Off"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフ"
           }
         }
       }
@@ -1647,6 +2259,12 @@
             "state": "translated",
             "value": "No controls enabled"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定で有効なコントロールがありません"
+          }
         }
       }
     },
@@ -1662,6 +2280,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "No displays found"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ディスプレイが見つかりません"
           }
         }
       }
@@ -1679,6 +2303,12 @@
             "state": "translated",
             "value": "No external displays found"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外部ディスプレイが見つかりません"
+          }
         }
       }
     },
@@ -1694,6 +2324,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Built-in"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内蔵"
           }
         }
       }
@@ -1711,6 +2347,12 @@
             "state": "translated",
             "value": "External"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外部"
+          }
         }
       }
     },
@@ -1726,6 +2368,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "Built-in Display"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内蔵ディスプレイ"
           }
         }
       }
@@ -1743,6 +2391,12 @@
             "state": "translated",
             "value": "External Display"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外部ディスプレイ"
+          }
         }
       }
     },
@@ -1758,6 +2412,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "display"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "台"
           }
         }
       }
@@ -1775,6 +2435,12 @@
             "state": "translated",
             "value": "external"
           }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外部"
+          }
         }
       }
     },
@@ -1790,6 +2456,12 @@
           "stringUnit": {
             "state": "External displays must support DDC/CI to control brightness, volume, and contrast",
             "value": "External displays must support DDC/CI to control brightness, volume, and contrast"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外部ディスプレイの明るさ、音量、コントラストを制御するにはDDC/CI対応が必要です"
           }
         }
       }
