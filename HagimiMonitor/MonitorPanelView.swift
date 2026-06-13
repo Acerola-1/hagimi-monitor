@@ -321,7 +321,6 @@ private struct MetricDetailGrid: View {
                 .padding(.leading, 28)
 
             content
-                .padding(.leading, 28)
                 .background(
                     GeometryReader { proxy in
                         Color.clear.preference(
@@ -330,6 +329,7 @@ private struct MetricDetailGrid: View {
                         )
                     }
                 )
+                .padding(.leading, 28)
                 .onPreferenceChange(MetricGridWidthPreferenceKey.self) { width in
                     containerWidth = width
                 }
@@ -340,14 +340,17 @@ private struct MetricDetailGrid: View {
     private var content: some View {
         // 网络模块：长字符串（IP）改用单列 VStack，让内容主动声明宽度推动面板撑宽。
         if kind == .network {
-            VStack(spacing: 6) {
+            VStack(spacing: MetricGridMetrics.rowSpacing) {
                 ForEach(metrics) { metric in
                     metricCell(metric, isFullRow: false, theme: theme)
                 }
             }
         } else {
             let isFullRowFlags = computeIsFullRowFlags(width: containerWidth)
-            MetricFlowLayout(columnSpacing: 8, rowSpacing: 6) {
+            MetricFlowLayout(
+                columnSpacing: MetricGridMetrics.columnSpacing,
+                rowSpacing: MetricGridMetrics.rowSpacing
+            ) {
                 ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
                     metricCell(
                         metric,
@@ -374,8 +377,8 @@ private struct MetricDetailGrid: View {
         let result = MetricFlowPlacer.place(
             sizes: sizes,
             containerWidth: width,
-            columnSpacing: 8,
-            rowSpacing: 6
+            columnSpacing: MetricGridMetrics.columnSpacing,
+            rowSpacing: MetricGridMetrics.rowSpacing
         )
         return result.frames.map { $0.width >= width - 1 }
     }
@@ -408,16 +411,16 @@ private struct MetricDetailGrid: View {
         return Group {
             if isFullRow {
                 // detail row 形态：label 紧贴 value，整体偏左，右侧留空。
-                HStack(spacing: 6) {
+                HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
                     label
                     value
                     Spacer(minLength: 0)
                 }
             } else {
                 // 半行形态：label 左 + Spacer 撑开 + value 贴右。
-                HStack(spacing: 6) {
+                HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
                     label
-                    Spacer(minLength: 4)
+                    Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
                     value
                 }
             }
