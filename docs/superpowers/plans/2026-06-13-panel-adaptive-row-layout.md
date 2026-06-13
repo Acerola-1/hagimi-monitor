@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 让 `MetricDetailGrid` 改为内容驱动的紧凑流式布局：长内容独占整行，短内容两两并排，紧凑回填，不缩字号。
+**Goal:** 让 `MetricDetailGrid` 改为内容驱动的紧凑流式布局：长内容独占整行（detail row 左对齐紧凑形态），短内容两两并排贴右，紧凑回填，不缩字号。
 
-**Architecture:** 把"自然尺寸 → 帧位置"的算法抽成一个纯函数 `MetricFlowPlacer.place(...)`（独立可测）。`MetricFlowLayout: Layout` 只负责对接 SwiftUI 的 `Layout` 协议，把 `Subviews` 的自然尺寸喂给纯函数，再用算法返回的帧来放置子视图。`MetricDetailGrid` 把原来的 `LazyVGrid` 替换成 `MetricFlowLayout`，并删掉 `minimumScaleFactor(0.7)`。
+**Architecture:** 把"自然尺寸 → 帧位置"的算法抽成纯函数 `MetricFlowPlacer.place(...)`（独立可测）。`MetricFlowLayout: Layout` 把 `Subviews` 的自然尺寸喂给纯函数，再放置子视图。`MetricDetailGrid` 把原 `LazyVGrid` 替换成 `MetricFlowLayout`，并删掉 `minimumScaleFactor(0.7)`。`metricCell` 用 `ViewThatFits` 根据分配宽度自适应切换两种形态：半行→贴右，整行→detail row 左对齐紧凑。
 
 **Tech Stack:** SwiftUI `Layout` 协议（macOS 13+）、Swift Testing（`@Test` / `#expect`）。
 
@@ -498,7 +498,120 @@ EOF
 
 ---
 
-### Task 4: 真机/本地运行手工验证
+### Task 4: `metricCell` 双形态 — 短半行贴右 / 长 detail row 左对齐紧凑
+
+**背景修订（2026-06-13）：**
+Task 1-3 已上线后人工验证发现：长 cell 独占整行时仍沿用 `HStack { label, Spacer, value }` 形态，会在中间留出大段空白；同行/相邻行的 value 锚点又在 halfWidth、fullWidth 之间跳变，节奏不齐。
+
+修订思路（已写入 spec § 方案 § 3）：**双 cell 语法**——
+- 半行 cell（短指标）保持 `label + Spacer + value 贴右`，与现状一致。
+- 整行 cell（长指标）改为 `HStack(spacing: 6) { label, value, Spacer(minLength: 0) }`，label 紧贴 value 左对齐，右侧空白。
+- **不强求**长 detail row 与上下行的 value 锚点对齐——通过形态差异（左对齐紧凑 vs 贴右）让用户视觉识别它是"详情行"，而非"被拉宽的格子"。
+
+判定方式：cell 自己读取 SwiftUI 分配的宽度，与 cell 自身自然宽度比较。若分配宽度远大于自然宽度（差距 ≥ 24pt），即说明它被分到了整行，切换 detail row 形态；否则按半行形态渲染。这种"cell 内部自适应"实现与 `MetricFlowLayout` 完全解耦，不需要给 Layout 协议加额外环境值。
+
+**Files:**
+- Modify: `HagimiMonitor/MonitorPanelView.swift`，`MetricDetailGrid.metricCell`（约第 344-365 行）
+
+- [ ] **Step 1: 改 `metricCell` 为根据分配宽度切换形态**
+
+把 `MetricDetailGrid` 中的 `metricCell(_:theme:)` 整体替换为：
+
+```swift
+    private func metricCell(_ metric: MonitorMetric, theme: MonitorPanelTheme) -> some View {
+        let labelText = localizedMetricName(kind: kind, id: metric.name)
+        let valueText = localizedMetricValue(kind: kind, metric: metric)
+
+        let label = Text(labelText)
+            .monitorPanelCaptionFont(.footnote)
+            .foregroundStyle(theme.captionText)
+            .lineLimit(1)
+            .layoutPriority(1)
+
+        let value = Text(valueText)
+            .monitorPanelMonoFont(.footnote, weight: .semibold)
+            .foregroundStyle(theme.secondaryText)
+            .lineLimit(1)
+            .layoutPriority(2)
+            .help(valueText)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                copyToPasteboard(metric.value)
+            }
+
+        return ViewThatFits(in: .horizontal) {
+            // detail row 形态：要求 label/value 之外右侧再留 ≥24pt 空白；
+            // 半行槽（~120pt）通常容不下，会回退到下面的贴右形态。整行（~240pt）一般容得下。
+            HStack(spacing: 6) {
+                label
+                value
+                Spacer(minLength: 24)
+            }
+            // 半行贴右形态：label 左 + Spacer 撑开 + value 右
+            HStack(spacing: 6) {
+                label
+                Spacer(minLength: 4)
+                value
+            }
+        }
+    }
+```
+
+要点：
+- `ViewThatFits(in: .horizontal)` 按顺序尝试候选；第一个能放下就用第一个，否则尝试下一个。
+- 第一个候选（detail row）右侧 `Spacer(minLength: 24)` 等于 "label + 6 + value + 24 ≤ 分配宽度" 才视为放得下。
+- 半行槽宽度 ≈ 120pt，对短 label/value 一般容不下这 24pt 余量 → 回退到第二个候选（贴右形态）。
+- 整行宽度 ≈ 240pt，对长内容（uptime 这种）通常仍有 ≥24pt 余量 → 用 detail row 左对齐紧凑形态。
+- 如果实测发现短指标也意外切到了 detail row（或反之），调整阈值即可，先试 24，不行再尝试 32 / 48。
+
+
+- [ ] **Step 2: 编译验证**
+
+Run: `xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitorDirect -configuration Debug build`
+Expected: BUILD SUCCEEDED。
+
+- [ ] **Step 3: 跑测试确认无回归**
+
+Run: `xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitor -configuration Debug test`
+Expected: 全部测试 PASS（含 `MetricFlowPlacerTests` 6/6）。
+
+- [ ] **Step 4: 启动 dev 版手工核验**
+
+Run: `./launch.sh`，等应用就绪。
+
+操作：
+1. 展开 CPU 模块（启用了 uptime）。
+
+Expected:
+- uptime 这一行独占整行，**label 紧挨 value 左对齐**，右侧留空白；中间不再出现大段空洞。
+- 同模块内的短指标（如 `temperature`、`processes`）仍两两并排、value 贴右。
+- 落单短 cell 只占半行、value 贴 halfWidth 列。
+- 长 detail row 的 value 与上下行的 value 列**不对齐**——这是设计预期，通过形态差异区分两种行型。
+- 视觉读起来比修订前整齐：每行只有"两个贴右短 cell"或"一个左对齐 detail row"两种状态，节奏稳定。
+
+如果 uptime 仍然显示成"label 左 / value 右"贴边模式（中间空洞），说明 `ViewThatFits` 没按预期切到 detail row：
+- 把 detail row 候选里的 `Spacer(minLength: 24)` 阈值适当提高（比如 32 或 48），让它在半行槽里更容易被否决。
+- 用 Xcode View Debugger 看一下 cell 实际拿到的分配宽度。
+
+- [ ] **Step 5: 提交**
+
+```bash
+git add HagimiMonitor/MonitorPanelView.swift
+git commit -m "$(cat <<'EOF'
+[优化] 长指标 cell 改为左对齐紧凑 detail row 形态
+
+短指标保持 label 左 + value 右贴边；超过半行的 metric 切换为
+label 紧挨 value 左对齐、右侧留白的 detail row，避免整行 cell
+中间出现大段空白。
+
+Co-Authored-By: Claude Opus 4.7 <noreply@anthropic.com>
+EOF
+)"
+```
+
+---
+
+### Task 5: 真机/本地运行手工验证
 
 **Files:** 无修改，仅运行验证。
 
@@ -507,47 +620,51 @@ EOF
 Run: `./launch.sh`
 Expected: 菜单栏出现 HagimiMonitor 图标，点击展开面板。
 
-- [ ] **Step 2: 验证 CPU 模块 uptime**
+- [ ] **Step 2: 验证 CPU 模块 uptime（detail row 形态）**
 
 操作：
 1. 在面板里点击 CPU 行展开。
 2. 在设置里启用 `uptime`（如未启用），重新观察。
 
 Expected:
-- `uptime` 这一行在面板里独占整行（因长文本超过半行宽度）。
-- 文本不再被压成 70% 字号，也不再以省略号结尾（除非容器整行宽度都装不下，那种极端情况下才允许 tooltip 兜底）。
+- `uptime` 独占整行，且为 **左对齐紧凑形态**：label 紧贴 value，右侧留空。
+- 文本不再被压成 70% 字号，也不再以省略号结尾。
+- 与上下行短 cell 的 value **不强求列对齐**，但因为形态差异（贴右 vs 左对齐紧凑），整体读起来仍然整齐。
 
-- [ ] **Step 3: 验证短指标仍两两并排**
+- [ ] **Step 3: 验证短指标仍两两并排贴右**
 
 操作：在 GPU 或 Memory 模块展开短指标（如 `usage`、`free`、`total`、`used`）。
 
 Expected:
-- 短指标继续两两并排在同一行。
-- 落单的短指标只占半行（不强制拉满）。
-- 整体行高、间距与改动前视觉差异最小。
+- 短指标继续两两并排，value 贴右。
+- 落单的短指标只占半行，value 贴 halfWidth 列。
+- 行高、间距与改动前差异最小。
 
 - [ ] **Step 4: 验证 Network / Storage 未受影响**
 
 操作：分别展开 Network 和 Storage 模块。
 
 Expected:
-- Network 详情仍是单列竖排，未变。
-- Storage 详情仍是 `StorageVolumeDetailList` 的卷信息样式，未变。
+- Network 详情仍是单列竖排，value 贴右，未变。
+- Storage 详情仍是 `StorageVolumeDetailList` 卷信息样式，未变。
 
-- [ ] **Step 5: 关闭面板、改窗口宽度（如适用），再次打开**
+- [ ] **Step 5: 重新打开面板**
+
+操作：关闭并重新展开面板，多次切换不同模块。
 
 Expected:
-- 重排后短/长内容仍按规则分布；不出现错位、重叠、空洞过大的问题。
+- 重排后短/长内容仍按规则分布。
+- 不出现错位、重叠、长 cell 中间空洞的问题。
 
-- [ ] **Step 6: 如果以上任意一项失败**
+- [ ] **Step 6: 如以上任一项失败**
 
-不要"修一下样式糊弄过去"。回到 Task 1 / Task 3，把测试或算法补上，再重跑。修好后再回到本任务从 Step 1 开始走一遍。
+不要"调样式糊弄"。回到 Task 4，把 `ViewThatFits` 阈值或形态结构调对再重测。
 
-- [ ] **Step 7: 全部通过后写一行验证记录到 PR / commit 描述里**
+- [ ] **Step 7: 全部通过后在 PR 描述写验证记录**
 
-例：`已手工验证：CPU uptime 独占整行无缩字号；短指标两两并排；Network/Storage 未变。`
+例：`已手工验证：CPU uptime 独占整行 detail row 左对齐无空洞；短指标两两并排贴右；Network/Storage 未变。`
 
-无需额外提交（无代码改动）。
+无需额外提交。
 
 ---
 

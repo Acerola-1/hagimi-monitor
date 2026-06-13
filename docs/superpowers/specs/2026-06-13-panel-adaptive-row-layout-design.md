@@ -1,7 +1,7 @@
 # 展开面板自适应行布局
 
-日期：2026-06-13
-状态：待实现
+日期：2026-06-13（2026-06-13 修订：新增长 cell detail row 形态）
+状态：待实现（Task 1-3 初版已实现，UI 验证后回炉补 cell 双形态）
 
 ## 背景与问题
 
@@ -24,6 +24,8 @@
 
 ## 方案
 
+> **更新（2026-06-13 修订）**：初版方案上线后发现，长 cell 独占整行时仍沿用"label + Spacer + value 贴右"语法，会在中间留出大段空白；同行/相邻行 value 锚点又在 halfWidth 与 fullWidth 之间跳变，节奏不齐。修订后采用**双 cell 语法**：短 cell 贴右两两并排，长 cell 改为"detail row"左对齐紧凑形态，承认它是另一种行型，不强求 value 锚点对齐。`MetricFlowLayout` 与 `MetricFlowPlacer` 算法不变，只在 cell 内部按宽度自适应切换形态。
+
 ### 1. 新增 `MetricFlowLayout`
 
 实现 SwiftUI `Layout` 协议（macOS 26+ 已可用），文件位置：`HagimiMonitor/Views/Panel/MetricFlowLayout.swift`。
@@ -43,8 +45,8 @@
 要点：
 
 - 不强行把"落单的半行 cell"拉成整行——它就只占半行（用户已确认）。
-- 半行槽的 cell 渲染宽度统一给 `halfWidth`，整行 cell 渲染宽度给 `containerWidth`。这样 cell 内的 `Spacer(minLength: 4)` 自然把 label 和 value 推开。
-- `placeSubviews` 用 `.proposal(.init(width: assignedWidth, height: nil))` 把分配宽度回喂给 cell，再调 `dimensions(in:)` 取实际高度。
+- 半行槽的 cell 渲染宽度统一给 `halfWidth`，整行 cell 渲染宽度给 `containerWidth`。
+- `placeSubviews` 用 `.proposal(.init(width: assignedWidth, height: nil))` 把分配宽度回喂给 cell，cell 内部再按拿到的宽度自适应渲染（见 §3）。
 
 ### 2. 修改 `MetricDetailGrid`
 
@@ -59,18 +61,30 @@
       }
   }
   ```
-- 网络分支保持单列 `VStack`，不动。
+- 网络分支保持单列 `VStack`，不动（它本身就是单列右对齐，已经满足"detail row"语义）。
 
-### 3. 修改 `metricCell`
+### 3. `metricCell`：按分配宽度自适应切换两种形态
 
-`MonitorPanelView.swift:349-372`：
+`metricCell` 不再是单一的 `HStack { label, Spacer, value }`，而是用 `GeometryReader` 拿到分配宽度，与该 cell 自然宽度（`label + 6pt + value`）比较：
 
+- **半行 cell（短指标）**：渲染为 `HStack(spacing: 6) { label, Spacer(minLength: 4), value }`，value 贴右——保持现有视觉。
+- **整行 detail row（长指标）**：渲染为 `HStack(spacing: 6) { label, value, Spacer(minLength: 0) }`，label 与 value 紧贴左对齐，右侧留空。**不要求** value 锚点与上下行对齐——通过形态差异（左对齐紧凑）让用户视觉上识别它是"详情行"，而非"被拉宽的格子"。
+
+判定方式：cell 内部预估自然宽度 `naturalCellWidth = label 自然宽 + 6 + value 自然宽`；若分配宽度 ≥ `naturalCellWidth + 阈值` 视为整行模式（即 SwiftUI 给了远比内容多得多的水平空间，意味着这是 `MetricFlowLayout` 分配的整行）。阈值取一个保守值（如 24pt）以容忍轻微的字号渲染差异。
+
+实现选项：
+- **首选** `ViewThatFits` 或 `GeometryReader`：cell 自己根据 SwiftUI 给的宽度做判断，与 `MetricFlowLayout` 解耦。
+- **次选** 在 `MetricFlowLayout` 里把"自然宽 vs 半行宽"的判定结果以 `LayoutValueKey` / 环境值形式回传给子视图，cell 直接读取。两种实现都可，最终选一种简单的。
+
+视觉上：
+- 短半行 cell 与现状一致：label 左、value 右、value 落在 halfWidth 或 fullWidth 列。
+- 长 detail row：label 紧挨 value，整体偏左，右侧空白。和上下半行 cell 不强求列对齐——用"形态差异"替代"位置对齐"。
+
+其他保留项：
 - 删除 label 的 `minimumScaleFactor(0.7)`。
 - 删除 value 的 `minimumScaleFactor(0.7)`。
-- `lineLimit(1)` 保留：极端兜底——单个 cell 自然宽度 > 整行宽度时仍会用省略号 + `.help` tooltip。这种情况在新布局里很罕见（容器宽度由面板宽度决定，整行通常足够）。
+- `lineLimit(1)` 保留：极端兜底——单个 cell 自然宽度 > 整行宽度时仍会用省略号 + `.help` tooltip。
 - `layoutPriority`、`.contentShape`、点击复制、`.help`：保持不动。
-
-测量上，`HStack` 自带的内禀尺寸就是 label + spacer 最小值（4pt）+ value 的总宽，能正确反映"实际需要多宽"。
 
 ### 4. 不变项
 
@@ -95,7 +109,10 @@
 3. 落单短 cell → 只占半行，不拉满。
 4. 容器宽度变化 → 半行宽度跟着变。
 
-UI 层目测验证：CPU 模块展开，含 uptime 的实际显示是独占整行、不再省略号。
+UI 层目测验证：
+- CPU 模块展开（含 uptime）→ uptime 独占整行且为左对齐紧凑形态，label 紧贴 value，右侧留空，**不再出现中间大块空白**。
+- 短指标仍两两并排、value 贴右；落单短 cell 只占半行。
+- 长 detail row 与上下半行 cell **不强求 value 列对齐**，但形态差异让视觉读起来仍然整齐。
 
 ## 影响面
 
