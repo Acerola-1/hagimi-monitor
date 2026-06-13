@@ -1,7 +1,23 @@
 ## 更新内容
 
-感谢 @glyzinie 的代码贡献，现版本新增了日语本地化支持。各位更新软件后重启即可生效。
+优化内存占用。
 
-Many thanks to @glyzinie for the code contribution. This version adds Japanese localization support. Update the app and restart to apply.
+  Optimized memory usage.
 
-@glyzinie のコード贡献に感謝します。このバージョンでは日本語ローカライゼーションサポートを追加しました。アプリを更新して再起動してください。
+  メモリ使用量を最適化しました。
+
+---
+
+## 安装说明 / Installation
+
+HagimiMonitor 尚未通过 Apple 公证（notarization），macOS 首次启动时可能会阻止运行。将 HagimiMonitor 安装到  后，请执行以下命令：
+
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/HagimiMonitor.app
+```
+
+HagimiMonitor is not notarized by Apple. macOS may block it on first launch. After installing to , run:
+
+```bash
+sudo xattr -rd com.apple.quarantine /Applications/HagimiMonitor.app
+```
