@@ -342,25 +342,37 @@ private struct MetricDetailGrid: View {
     }
 
     private func metricCell(_ metric: MonitorMetric, theme: MonitorPanelTheme) -> some View {
-        HStack(spacing: 6) {
-            Text(localizedMetricName(kind: kind, id: metric.name))
-                .monitorPanelCaptionFont(.footnote)
-                .foregroundStyle(theme.captionText)
-                .lineLimit(1)
-                .layoutPriority(1)
+        let labelText = localizedMetricName(kind: kind, id: metric.name)
+        let valueText = localizedMetricValue(kind: kind, metric: metric)
 
-            Spacer(minLength: 4)
+        let label = Text(labelText)
+            .monitorPanelCaptionFont(.footnote)
+            .foregroundStyle(theme.captionText)
+            .lineLimit(1)
+            .layoutPriority(1)
 
-            Text(localizedMetricValue(kind: kind, metric: metric))
-                .monitorPanelMonoFont(.footnote, weight: .semibold)
-                .foregroundStyle(theme.secondaryText)
-                .lineLimit(1)
-                .layoutPriority(2)
-                .help(localizedMetricValue(kind: kind, metric: metric))
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    copyToPasteboard(metric.value)
-                }
+        let value = Text(valueText)
+            .monitorPanelMonoFont(.footnote, weight: .semibold)
+            .foregroundStyle(theme.secondaryText)
+            .lineLimit(1)
+            .layoutPriority(2)
+            .help(valueText)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                copyToPasteboard(metric.value)
+            }
+
+        return ViewThatFits(in: .horizontal) {
+            HStack(spacing: 6) {
+                label
+                value
+                Spacer(minLength: 24)
+            }
+            HStack(spacing: 6) {
+                label
+                Spacer(minLength: 4)
+                value
+            }
         }
     }
 }
