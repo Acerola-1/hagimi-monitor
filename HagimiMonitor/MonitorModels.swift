@@ -207,9 +207,12 @@ final class MonitorStore: ObservableObject {
     private var timerCancellable: AnyCancellable?
     private var animationTimerCancellable: AnyCancellable?
     private let sampler = SystemMonitorSampler()
+    private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var menuBarTargetComputeLoad = 0.0
     private var framesSinceLastMenuBarTargetUpdate = MonitorConstants.menuBarLoadUpdateFrameInterval
+    private var isSampling = false
+    private var pendingSampleKinds: Set<MonitorKind> = []
 
     init() {
         let settings = MonitorSettings()
@@ -298,13 +301,43 @@ final class MonitorStore: ObservableObject {
     }
 
     private func advance(kinds: some Sequence<MonitorKind>) {
-        let result = sampler.sample(kinds: kinds, previousModules: allModules)
+        let requestedKinds = Set(kinds)
+        guard !requestedKinds.isEmpty else {
+            return
+        }
+
+        if isSampling {
+            pendingSampleKinds.formUnion(requestedKinds)
+            return
+        }
+
+        isSampling = true
+        runSampling(kinds: requestedKinds)
+    }
+
+    private func runSampling(kinds: Set<MonitorKind>) {
+        let previousModules = allModules
+        sampler.sampleAsync(kinds: kinds, previousModules: previousModules, on: samplingQueue) { [weak self] result in
+            guard let self else { return }
+            self.applySamplingResult(result)
+        }
+    }
+
+    private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
         switch result {
         case .success(let snapshot):
             allModules = snapshot.modules
             modules = visibleModules(from: allModules)
         case .failure(let error):
             AppLogger.sampler.error("Sampling failed: \(error.description, privacy: .public)")
+        }
+
+        if pendingSampleKinds.isEmpty {
+            isSampling = false
+        } else {
+            let kinds = pendingSampleKinds
+            pendingSampleKinds.removeAll()
+            runSampling(kinds: kinds)
         }
     }
 
