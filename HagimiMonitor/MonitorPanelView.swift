@@ -2,6 +2,12 @@ import AppKit
 import SwiftUI
 import Charts
 
+private let panelTimeFormatter: DateFormatter = {
+    let formatter = DateFormatter()
+    formatter.dateFormat = "HH:mm"
+    return formatter
+}()
+
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
     @Environment(\.colorScheme) private var colorScheme
@@ -186,9 +192,7 @@ struct MonitorPanelView: View {
     }
 
     private var timeString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: Date())
+        panelTimeFormatter.string(from: Date())
     }
 
     private func openActivityMonitor() {

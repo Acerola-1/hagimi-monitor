@@ -198,19 +198,17 @@ final class MonitorStore: ObservableObject {
     let settings: MonitorSettings
 
     @Published private(set) var modules: [MonitorModule]
-    @Published var selectedKind: MonitorKind = .cpu
-    @Published private(set) var menuBarFrame = 0
+    var selectedKind: MonitorKind = .cpu
     @Published private(set) var displayedComputeLoad = 0.0
 
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
-    private var animationTimerCancellable: AnyCancellable?
+    private var smoothingTimerCancellable: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var menuBarTargetComputeLoad = 0.0
-    private var framesSinceLastMenuBarTargetUpdate = MonitorConstants.menuBarLoadUpdateFrameInterval
     private var isSampling = false
     private var pendingSampleKinds: Set<MonitorKind> = []
 
@@ -236,16 +234,11 @@ final class MonitorStore: ObservableObject {
                 AppLogger.ui.debug("Timer tick triggered")
                 self?.advance()
             }
-        animationTimerCancellable = Timer.publish(every: MonitorConstants.animationInterval, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.advanceAnimation()
-            }
     }
 
     deinit {
         timerCancellable?.cancel()
-        animationTimerCancellable?.cancel()
+        smoothingTimerCancellable?.cancel()
         cancellables.removeAll()
     }
 
@@ -328,6 +321,7 @@ final class MonitorStore: ObservableObject {
         case .success(let snapshot):
             allModules = snapshot.modules
             modules = visibleModules(from: allModules)
+            updateMenuBarTargetComputeLoad()
         case .failure(let error):
             AppLogger.sampler.error("Sampling failed: \(error.description, privacy: .public)")
         }
@@ -341,22 +335,40 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    private func advanceAnimation() {
-        menuBarFrame = (menuBarFrame + 1) % 48
-        updateMenuBarTargetComputeLoadIfNeeded()
-        displayedComputeLoad = ComputeLoadModel.smoothedDisplayValue(
+    private func advanceSmoothing() {
+        let next = ComputeLoadModel.smoothedDisplayValue(
             current: displayedComputeLoad,
             target: menuBarTargetComputeLoad
         )
+        let quantized = MonitorStore.quantizeLoad(next)
+        if quantized != displayedComputeLoad {
+            displayedComputeLoad = quantized
+        }
+        let quantizedTarget = MonitorStore.quantizeLoad(menuBarTargetComputeLoad)
+        if abs(displayedComputeLoad - quantizedTarget) <= MonitorConstants.menuBarLoadSmoothStopThreshold {
+            if displayedComputeLoad != quantizedTarget {
+                displayedComputeLoad = quantizedTarget
+            }
+            smoothingTimerCancellable?.cancel()
+            smoothingTimerCancellable = nil
+        }
     }
 
-    private func updateMenuBarTargetComputeLoadIfNeeded() {
-        framesSinceLastMenuBarTargetUpdate += 1
-        guard framesSinceLastMenuBarTargetUpdate >= MonitorConstants.menuBarLoadUpdateFrameInterval else {
-            return
-        }
+    private static func quantizeLoad(_ load: Double) -> Double {
+        let clamped = min(100.0, max(0.0, load))
+        return (clamped / 2.0).rounded() * 2.0
+    }
 
-        framesSinceLastMenuBarTargetUpdate = 0
+    private func ensureSmoothingTimer() {
+        guard smoothingTimerCancellable == nil else { return }
+        smoothingTimerCancellable = Timer.publish(every: 0.5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.advanceSmoothing()
+            }
+    }
+
+    private func updateMenuBarTargetComputeLoad() {
         let currentLoad = combinedComputeLoad
         guard ComputeLoadModel.shouldUpdateMenuBarTarget(
             currentTarget: menuBarTargetComputeLoad,
@@ -364,8 +376,8 @@ final class MonitorStore: ObservableObject {
         ) else {
             return
         }
-
         menuBarTargetComputeLoad = currentLoad
+        ensureSmoothingTimer()
     }
 
     private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
