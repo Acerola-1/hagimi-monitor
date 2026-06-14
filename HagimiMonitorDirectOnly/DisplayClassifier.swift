@@ -52,7 +52,7 @@ struct DisplayClassifier {
         return false
     }
 
-    static func defaultProbe(_ id: CGDirectDisplayID) -> Bool {
+    nonisolated static func defaultProbe(_ id: CGDirectDisplayID) -> Bool {
         var brightness: Float = -1
         let result = DisplayServicesGetBrightness(id, &brightness)
         return result == 0 && brightness >= 0

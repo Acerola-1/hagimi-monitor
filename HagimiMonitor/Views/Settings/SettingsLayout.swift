@@ -9,13 +9,16 @@ struct SettingsPage<Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            content
+        ScrollView(.vertical, showsIndicators: true) {
+            VStack(alignment: .leading, spacing: 24) {
+                content
+            }
+            .controlSize(.small)
+            .padding(.top, 22)
+            .padding(.horizontal, 36)
+            .padding(.bottom, 28)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .controlSize(.small)
-        .padding(.top, 22)
-        .padding(.horizontal, 36)
-        .padding(.bottom, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }

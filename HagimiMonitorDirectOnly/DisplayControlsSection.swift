@@ -325,9 +325,16 @@ final class DisplayControlController: ObservableObject {
     }
 
     func refreshAsync() {
+        let previousIDs = Set(displays.map { $0.id })
         worker.refresh(service: service) { detectedDisplays in
             DispatchQueue.main.async {
                 AppLogger.ui.info("Display refresh completed, found \(detectedDisplays.count) displays")
+                let detectedIDs = Set(detectedDisplays.map { $0.id })
+                // 已移除的显示器:清理 worker 去重状态,避免同 ID 重新接入时
+                // lastWrittenValues 残留导致首次写入被误跳过。
+                for removedID in previousIDs.subtracting(detectedIDs) {
+                    self.worker.clearLastValues(displayID: removedID)
+                }
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
                     self.seedFallbackValues(for: display)
@@ -475,8 +482,12 @@ private final class DisplayControlWorker {
             for key in self.pendingWrites.keys where key.displayID == displayID {
                 self.pendingWrites.removeValue(forKey: key)
             }
-            self.debounceTimers.values.forEach { $0.cancel() }
-            self.debounceTimers.removeAll()
+            // 只取消该显示器的 debounce timer,避免误伤其它正在拖动的显示器。
+            let keysToCancel = self.debounceTimers.keys.filter { $0.displayID == displayID }
+            for key in keysToCancel {
+                self.debounceTimers[key]?.cancel()
+                self.debounceTimers.removeValue(forKey: key)
+            }
         }
     }
 }

@@ -82,6 +82,12 @@ final class MediaKeyTapBridge {
             return Unmanaged.passUnretained(cgEvent)
         }
 
+        // NX_SYSDEFINED 系统事件的解析。常量来源:
+        //   - CGEventType.systemDefined rawValue == 14(kCGSystemDefined,
+        //     该 case 在当前 SDK 对 Swift 不公开,故用裸数字)。
+        //   - NSEvent.subtype == 8 即 NX_SUBTYPE_AUX_CONTROL_BUTTONS,
+        //     覆盖亮度/音量/静音/Eject 等辅助控制键。
+        // 解析格式参考 the0neyouseek/MediaKeyTap 与 MonitorControl 的实现。
         guard type == CGEventType(rawValue: 14),
               let nsEvent = NSEvent(cgEvent: cgEvent),
               nsEvent.subtype.rawValue == 8
@@ -89,6 +95,10 @@ final class MediaKeyTapBridge {
             return Unmanaged.passUnretained(cgEvent)
         }
 
+        // systemDefined 事件的 data1 编码:
+        //   [31:16] keyCode(NX_KEYTYPE_*)
+        //   [15:8]  keyState(0x0A = keyDown, 0x0B = keyUp)
+        //   [0]     isRepeat 标志位
         let data1 = nsEvent.data1
         let keyCode = Int32((data1 & 0xFFFF_0000) >> 16)
         let keyFlags = data1 & 0x0000_FFFF
@@ -96,6 +106,7 @@ final class MediaKeyTapBridge {
         let isPressed = keyState == 0x0A
         let isRepeat = (keyFlags & 0x1) == 1
 
+        // NX_KEYTYPE_* 来自 <IOKit/hidsystem/ev_keymap.h>,由 bridging header 引入。
         let key: MediaKey?
         switch keyCode {
         case Int32(NX_KEYTYPE_BRIGHTNESS_UP): key = .brightnessUp

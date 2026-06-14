@@ -1,12 +1,17 @@
 import CoreGraphics
 import Foundation
 
-struct ControlKey: Hashable {
+// ControlKey 是纯值类型,作为 DDC 写入队列与 fault registry 的字典 key,
+// 在后台队列上使用;标 nonisolated 以脱离 MainActor 默认隔离,避免 Swift 6
+// 严格并发下 Hashable conformance 跨上下文使用的告警/错误。
+nonisolated struct ControlKey: Hashable {
     let displayID: CGDirectDisplayID
     let control: DisplayControlKind
 }
 
-final class DDCFaultRegistry {
+// DDCFaultRegistry 在 DDC 读写后台队列与 UI 间共享;线程安全由内部 NSLock 保证,
+// 不依赖 actor 隔离。标 nonisolated 脱离项目默认的 MainActor 隔离。
+nonisolated final class DDCFaultRegistry {
     static let readFaultDisableThreshold = 5
     static let readFaultLongerDelayThreshold = 3
     static let writeFaultDisableThreshold = 10
