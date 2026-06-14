@@ -874,22 +874,6 @@
         }
       }
     },
-    "mediaKey.options-title": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "细化选项"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Options"
-          }
-        }
-      }
-    },
     "mediaKey.permission-explanation": {
       "localizations": {
         "zh-Hans": {

@@ -1,11 +1,10 @@
 import SwiftUI
 
-/// 媒体键接管设置区。
-///
-/// 拆成三个视觉单元,每个都小而克制,与同页 SettingsGroup 的呼吸节奏一致:
-/// ① 主开关 group(亮度/音量接管)—— 始终显示
-/// ② 权限提示条 —— 仅在开启接管且未授权时出现,扁平 inline 样式
-/// ③ 细化选项 group(OSD/精细步进)—— 仅在开启接管时出现
+/// 媒体键接管设置区,单一 group 容器:
+/// ① 两个主开关(亮度/音量接管)—— 始终显示
+/// ② 权限提示条 —— 仅开启接管且未授权时出现(独立于 group 的扁平块)
+/// ③ 开关下属选项(OSD/精细步进)—— 勾选任一接管后,在同一 group 内
+///    用 SettingsDivider 接着展开,不另起独立板块
 struct MediaKeySettingsSection: View {
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var permission: AccessibilityPermissionService
@@ -15,7 +14,6 @@ struct MediaKeySettingsSection: View {
     }
 
     var body: some View {
-        // ① 主开关:与上方 controls group 对等的精简单元
         SettingsGroup(String(localized: "mediaKey.section-title")) {
             SettingsRow(title: String(localized: "mediaKey.brightness-toggle")) {
                 Toggle("", isOn: $settings.mediaKeyBrightnessEnabled)
@@ -23,29 +21,8 @@ struct MediaKeySettingsSection: View {
                     .labelsHidden()
             }
 
-            SettingsDivider()
-
-            SettingsRow(title: String(localized: "mediaKey.volume-toggle")) {
-                Toggle("", isOn: $settings.mediaKeyVolumeEnabled)
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-            }
-        }
-
-        // ② 权限提示:只在需要引导时出现,扁平样式不占用 group 容器
-        if anyTakeoverEnabled, !permission.isTrusted {
-            permissionHint
-        }
-
-        // ③ 细化选项:只在已开启接管时出现
-        if anyTakeoverEnabled {
-            SettingsGroup(String(localized: "mediaKey.options-title")) {
-                SettingsRow(title: String(localized: "mediaKey.show-osd")) {
-                    Toggle("", isOn: $settings.mediaKeyShowOSD)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-
+            // 接管亮度键后,正下方展开亮度专属的精细步进,位置紧邻体现从属
+            if settings.mediaKeyBrightnessEnabled {
                 SettingsDivider()
 
                 SettingsRow(
@@ -56,7 +33,18 @@ struct MediaKeySettingsSection: View {
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
+            }
 
+            SettingsDivider()
+
+            SettingsRow(title: String(localized: "mediaKey.volume-toggle")) {
+                Toggle("", isOn: $settings.mediaKeyVolumeEnabled)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
+
+            // 接管音量键后,正下方展开音量专属的精细步进
+            if settings.mediaKeyVolumeEnabled {
                 SettingsDivider()
 
                 SettingsRow(
@@ -68,6 +56,22 @@ struct MediaKeySettingsSection: View {
                         .labelsHidden()
                 }
             }
+
+            // OSD 是亮度+音量共用的全局选项,任一接管开启时出现在板块末尾
+            if anyTakeoverEnabled {
+                SettingsDivider()
+
+                SettingsRow(title: String(localized: "mediaKey.show-osd")) {
+                    Toggle("", isOn: $settings.mediaKeyShowOSD)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+            }
+        }
+
+        // 权限提示:只在需要引导时出现,扁平样式不占用 group 容器
+        if anyTakeoverEnabled, !permission.isTrusted {
+            permissionHint
         }
     }
 
