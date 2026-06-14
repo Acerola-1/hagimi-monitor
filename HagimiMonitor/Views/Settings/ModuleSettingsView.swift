@@ -35,6 +35,24 @@ struct ModuleSettingsView: View {
                 }
             }
 
+            if kind == .memory {
+                SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.show-memory-processes")) {
+                        Toggle("", isOn: $settings.showMemoryProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.memory.show-system-processes")) {
+                        Toggle("", isOn: $settings.memoryShowSystemProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+            }
+
             HStack {
                 Spacer()
                 if #available(macOS 26, *) {
