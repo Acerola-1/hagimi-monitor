@@ -292,7 +292,7 @@ final class DisplayControlController: ObservableObject {
     @Published private var pendingValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
     private let service = DisplayControlService()
-    private let worker = DisplayControlWorker()
+    private let worker = DisplayControlWorker.shared
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
     func refreshAsync() {
@@ -390,8 +390,11 @@ final class DisplayControlController: ObservableObject {
 }
 
 private final class DisplayControlWorker {
-    private let queue = DispatchQueue(label: "hagimi.ddc", qos: .userInitiated)
+    static let shared = DisplayControlWorker()
+
+    private let queue = DispatchQueue(label: "hagimi.ddc.global", qos: .userInitiated)
     private var pendingWrites: [ControlKey: Double] = [:]
+    private var lastWrittenValues: [ControlKey: Double] = [:]
     private var debounceTimers: [ControlKey: DispatchWorkItem] = [:]
     private let debounceInterval: DispatchTimeInterval = .milliseconds(150)
 
@@ -418,11 +421,32 @@ private final class DisplayControlWorker {
                 }
                 self.debounceTimers.removeValue(forKey: key)
 
+                if let last = self.lastWrittenValues[key], abs(last - latestValue) < 0.001 {
+                    completion(DisplayWriteResult(key: key, value: latestValue, success: true))
+                    return
+                }
+
                 let success = service.setValue(latestValue, for: key.control, display: display)
+                if success {
+                    self.lastWrittenValues[key] = latestValue
+                }
                 completion(DisplayWriteResult(key: key, value: latestValue, success: success))
             }
             self.debounceTimers[key] = timer
             self.queue.asyncAfter(deadline: .now() + self.debounceInterval, execute: timer)
+        }
+    }
+
+    func clearLastValues(displayID: CGDirectDisplayID) {
+        queue.async {
+            for key in self.lastWrittenValues.keys where key.displayID == displayID {
+                self.lastWrittenValues.removeValue(forKey: key)
+            }
+            for key in self.pendingWrites.keys where key.displayID == displayID {
+                self.pendingWrites.removeValue(forKey: key)
+            }
+            self.debounceTimers.values.forEach { $0.cancel() }
+            self.debounceTimers.removeAll()
         }
     }
 }
