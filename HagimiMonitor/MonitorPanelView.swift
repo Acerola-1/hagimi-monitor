@@ -137,7 +137,8 @@ struct MonitorPanelView: View {
                 theme: theme,
                 detail: module.summary,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: expandedKinds.contains(module.kind),
+                topMemoryProcesses: store.topMemoryProcesses
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -210,6 +211,7 @@ private struct MetricGlassRow: View {
     var samples: [Double] = []
     var details: [MonitorMetric] = []
     var isExpanded = false
+    var topMemoryProcesses: [TopMemoryProcess] = []
     var toggleExpansion: (() -> Void)?
 
     private var tint: Color {
@@ -242,10 +244,15 @@ private struct MetricGlassRow: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            if isExpanded, !details.isEmpty {
+            if isExpanded, !details.isEmpty || (module.kind == .memory && !topMemoryProcesses.isEmpty) {
                 Group {
                     if let storageVolumes {
                         StorageVolumeDetailList(volumes: storageVolumes, kind: module.kind, tint: tint, theme: theme)
+                    } else if module.kind == .memory {
+                        VStack(spacing: 9) {
+                            MetricDetailGrid(metrics: details, kind: module.kind, theme: theme)
+                            MemoryProcessList(processes: topMemoryProcesses, theme: theme)
+                        }
                     } else {
                         MetricDetailGrid(metrics: details, kind: module.kind, theme: theme)
                     }
@@ -1084,6 +1091,52 @@ struct MonitorPanelTheme {
 private func copyToPasteboard(_ string: String) {
     NSPasteboard.general.clearContents()
     NSPasteboard.general.setString(string, forType: .string)
+}
+
+// MARK: - Top Memory Processes
+
+private struct MemoryProcessList: View {
+    let processes: [TopMemoryProcess]
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .memory))
+                .frame(height: 1)
+
+            HStack {
+                Text(String(localized: "top-memory-processes"))
+                    .monitorPanelCaptionFont(weight: .semibold)
+                    .foregroundStyle(theme.primaryText)
+                Spacer()
+            }
+            .padding(.leading, 2)
+
+            ForEach(Array(processes.enumerated()), id: \.element.id) { i, proc in
+                HStack(spacing: 6) {
+                    Text("\(i + 1).")
+                        .monitorPanelMonoFont(.caption2, weight: .medium)
+                        .foregroundStyle(theme.captionText)
+                        .frame(width: 16, alignment: .trailing)
+
+                    Text(proc.name)
+                        .monitorPanelCaptionFont(.footnote)
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .layoutPriority(1)
+
+                    Spacer(minLength: 4)
+
+                    Text(ByteCountFormatter.string(fromByteCount: Int64(proc.memoryUsage), countStyle: .memory))
+                        .monitorPanelMonoFont(.caption2, weight: .medium)
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
 }
 
 private extension AnyTransition {
