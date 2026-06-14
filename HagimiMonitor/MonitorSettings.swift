@@ -64,6 +64,8 @@ final class MonitorSettings: ObservableObject {
     @Published var mediaKeyShowOSD: Bool = true
     @Published var mediaKeyFineScaleBrightness: Bool = false
     @Published var mediaKeyFineScaleVolume: Bool = false
+    @Published var showMemoryProcesses: Bool = true
+    @Published var memoryShowSystemProcesses: Bool = false
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
@@ -88,6 +90,8 @@ final class MonitorSettings: ObservableObject {
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
+        showMemoryProcesses = defaults.object(forKey: Keys.showMemoryProcesses) as? Bool ?? true
+        memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? false
 
         mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
         mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
@@ -294,6 +298,20 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $showMemoryProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showMemoryProcesses)
+            }
+            .store(in: &cancellables)
+
+        $memoryShowSystemProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.memoryShowSystemProcesses)
+            }
+            .store(in: &cancellables)
+
         $visibleKinds
             .dropFirst()
             .sink { [weak self] newValue in
@@ -354,6 +372,8 @@ private enum Keys {
     static let mediaKeyShowOSD = "settings.mediaKey.showOSD"
     static let mediaKeyFineScaleBrightness = "settings.mediaKey.fineScaleBrightness"
     static let mediaKeyFineScaleVolume = "settings.mediaKey.fineScaleVolume"
+    static let showMemoryProcesses = "settings.memory.showProcesses"
+    static let memoryShowSystemProcesses = "settings.memory.showSystemProcesses"
     static let visibleKinds = "settings.visibleKinds"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
 }
