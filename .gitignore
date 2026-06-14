@@ -62,6 +62,7 @@ fastlane/screenshots/**/*.png
 fastlane/test_output
 docs/stats
 docs/MonitorControl-main
+docs/Lunar-main
 .omo/
 
 # Build output

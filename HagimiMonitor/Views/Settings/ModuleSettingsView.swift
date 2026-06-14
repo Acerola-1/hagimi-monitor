@@ -128,6 +128,11 @@ struct DisplayModuleSettingsView: View {
                 }
             }
 
+            MediaKeySettingsSection(
+                settings: settings,
+                permission: AccessibilityPermissionService.shared
+            )
+
             SettingsTip(String(localized: "settings.display.ddc-note"))
         }
     }

@@ -30,9 +30,9 @@ struct SettingsTests {
         #expect(settings.isVisible(.cpu))
     }
 
-    @Test func metricSelectionCapsAtFourItems() {
-        let defaults = UserDefaults(suiteName: "metricSelectionCapsAtFourItems")!
-        defaults.removePersistentDomain(forName: "metricSelectionCapsAtFourItems")
+    @Test func metricSelectionAllowsMoreThanFourItems() {
+        let defaults = UserDefaults(suiteName: "metricSelectionAllowsMoreThanFourItems")!
+        defaults.removePersistentDomain(forName: "metricSelectionAllowsMoreThanFourItems")
         let settings = MonitorSettings(defaults: defaults)
 
         settings.setMetric("system", enabled: true, for: .cpu)
@@ -45,7 +45,7 @@ struct SettingsTests {
         #expect(settings.isMetricEnabled("user", for: .cpu))
         #expect(settings.isMetricEnabled("idle", for: .cpu))
         #expect(settings.isMetricEnabled("uptime", for: .cpu))
-        #expect(!settings.isMetricEnabled("temperature", for: .cpu))
-        #expect(!settings.canEnableMetric("temperature", for: .cpu))
+        #expect(settings.isMetricEnabled("temperature", for: .cpu))
+        #expect(settings.canEnableMetric("temperature", for: .cpu))
     }
 }
