@@ -229,7 +229,7 @@ private struct MetricGlassRow: View {
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                Text("\(module.kind.title):")
+                Text(module.kind.title + ":")
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)

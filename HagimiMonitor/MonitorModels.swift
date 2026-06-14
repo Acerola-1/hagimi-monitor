@@ -56,19 +56,25 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 
     var title: String {
+        let key = "kind.\(rawValue)"
+        let localized = String(localized: String.LocalizationValue(key))
+        return localized == key ? fallbackTitle : localized
+    }
+
+    private var fallbackTitle: String {
         switch self {
         case .cpu:
-            String(localized: "kind.cpu")
+            "CPU"
         case .gpu:
-            String(localized: "kind.gpu")
+            "GPU"
         case .memory:
-            String(localized: "kind.memory")
+            "Memory"
         case .storage:
-            String(localized: "kind.storage")
+            "Storage"
         case .network:
-            String(localized: "kind.network")
+            "Network"
         case .battery:
-            String(localized: "kind.battery")
+            "Power"
         }
     }
 
