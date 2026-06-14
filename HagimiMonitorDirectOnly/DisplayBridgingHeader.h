@@ -12,3 +12,14 @@ extern CFDictionaryRef CoreDisplay_DisplayCreateInfoDictionary(CGDirectDisplayID
 
 extern int DisplayServicesGetBrightness(CGDirectDisplayID display, float *brightness);
 extern int DisplayServicesSetBrightness(CGDirectDisplayID display, float brightness);
+
+@interface OSDManager : NSObject
++ (id _Nullable)sharedManager;
+- (void)showImage:(long long)image
+        onDisplayID:(unsigned int)displayID
+        priority:(unsigned int)priority
+        msecUntilFade:(unsigned int)msec
+        filledChiclets:(unsigned int)filled
+        totalChiclets:(unsigned int)total
+        locked:(BOOL)locked;
+@end

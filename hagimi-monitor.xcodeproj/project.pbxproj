@@ -565,6 +565,8 @@
 					CoreDisplay,
 					"-framework",
 					DisplayServices,
+					"-framework",
+					OSD,
 				);
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
@@ -616,6 +618,8 @@
 					CoreDisplay,
 					"-framework",
 					DisplayServices,
+					"-framework",
+					OSD,
 				);
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
