@@ -521,6 +521,7 @@ nonisolated enum DisplayControlKind: Hashable {
 private final class DisplayControlService {
     private let displayServices = DisplayServicesBridge()
     private let ddc = DisplayDDCBridge()
+    private let classifier = DisplayClassifier()
     private let defaults = UserDefaults.standard
 
     func displays() -> [ControlledDisplay] {
@@ -535,15 +536,24 @@ private final class DisplayControlService {
         AppLogger.ui.info("Detected \(displayIDs.count) online displays")
         ddc.refresh(displayIDs: displayIDs)
 
-        return displayIDs.map { id in
-            let isBuiltIn = CGDisplayIsBuiltin(id) != 0
+        return displayIDs.compactMap { id -> ControlledDisplay? in
+            let kind = classifier.classify(displayID: id)
+
+            if kind == .virtual || kind == .dummy || kind == .unsupported {
+                return nil
+            }
+
+            let isBuiltIn = (kind == .builtIn)
+            let useDisplayServices = (kind == .builtIn || kind == .appleNative)
             let name = displayName(for: id, isBuiltIn: isBuiltIn)
             let storageID = displayStorageID(for: id, name: name, isBuiltIn: isBuiltIn)
-            let appleBrightness = isBuiltIn ? displayServices.getBrightness(displayID: id) : nil
-            let hasDDCService = !isBuiltIn && ddc.hasService(for: id)
-            let ddcBrightness = isBuiltIn ? nil : ddc.read(.brightness, displayID: id)
-            let ddcVolume = isBuiltIn ? nil : ddc.read(.volume, displayID: id)
-            let ddcContrast = isBuiltIn ? nil : ddc.read(.contrast, displayID: id)
+
+            let nativeBrightness = useDisplayServices ? displayServices.getBrightness(displayID: id) : nil
+            let hasDDCService = (kind == .externalDDC) && ddc.hasService(for: id)
+            let ddcBrightness = (kind == .externalDDC) ? ddc.read(.brightness, displayID: id) : nil
+            let ddcVolume = (kind == .externalDDC) ? ddc.read(.volume, displayID: id) : nil
+            let ddcContrast = (kind == .externalDDC) ? ddc.read(.contrast, displayID: id) : nil
+
             let storedBrightness = storedValue(for: .brightness, displayStorageID: storageID)
             let storedVolume = storedValue(for: .volume, displayStorageID: storageID)
             let storedContrast = storedValue(for: .contrast, displayStorageID: storageID)
@@ -553,10 +563,12 @@ private final class DisplayControlService {
                 storageID: storageID,
                 name: name,
                 isBuiltIn: isBuiltIn,
-                supportsBrightness: isBuiltIn ? appleBrightness != nil : (ddcBrightness != nil || storedBrightness != nil || hasDDCService),
-                supportsVolume: !isBuiltIn && (ddcVolume != nil || storedVolume != nil),
-                supportsContrast: !isBuiltIn && (ddcContrast != nil || storedContrast != nil),
-                brightness: appleBrightness.map { Double($0 * 100) }
+                supportsBrightness: useDisplayServices
+                    ? (nativeBrightness != nil)
+                    : (ddcBrightness != nil || storedBrightness != nil || hasDDCService),
+                supportsVolume: !useDisplayServices && (ddcVolume != nil || storedVolume != nil),
+                supportsContrast: !useDisplayServices && (ddcContrast != nil || storedContrast != nil),
+                brightness: nativeBrightness.map { Double($0 * 100) }
                     ?? ddcBrightness
                     ?? storedBrightness
                     ?? DisplayControlKind.brightness.defaultValue,
@@ -571,11 +583,12 @@ private final class DisplayControlService {
     }
 
     func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> Bool {
-        guard display.supports(control) else {
-            return false
-        }
+        guard display.supports(control) else { return false }
 
-        if display.isBuiltIn {
+        let kind = classifier.classify(displayID: display.id)
+        let useDisplayServices = (kind == .builtIn || kind == .appleNative)
+
+        if useDisplayServices {
             switch control {
             case .brightness:
                 return displayServices.setBrightness(displayID: display.id, value: Float(value / 100))
