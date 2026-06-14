@@ -518,11 +518,6 @@ nonisolated enum DisplayControlKind: Hashable {
     }
 }
 
-private nonisolated struct ControlKey: Hashable {
-    let displayID: CGDirectDisplayID
-    let control: DisplayControlKind
-}
-
 private final class DisplayControlService {
     private let displayServices = DisplayServicesBridge()
     private let ddc = DisplayDDCBridge()

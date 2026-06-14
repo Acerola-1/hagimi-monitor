@@ -13,8 +13,13 @@ final class DisplayDDCBridge {
     private var servicesByDisplayID: [CGDirectDisplayID: DDCService] = [:]
     private var maxValues: [ControlKey: UInt16] = [:]
     private var controlCodes: [ControlKey: DDCVCPCode] = [:]
+    private let registry = DDCFaultRegistry()
 
     func refresh(displayIDs: [CGDirectDisplayID]) {
+        let knownIDs = Set(servicesByDisplayID.keys)
+        for id in knownIDs.subtracting(displayIDs) {
+            registry.reset(displayID: id)
+        }
         servicesByDisplayID = Arm64DDCMatcher().matchedServices(for: displayIDs)
     }
 
@@ -29,8 +34,13 @@ final class DisplayDDCBridge {
         }
 
         let key = ControlKey(displayID: displayID, control: control)
+        if registry.isDisabled(key) {
+            return nil
+        }
+
         for vcp in orderedCandidates(for: key) {
-            guard let values = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue),
+            let useLongDelay = registry.shouldUseLongerDelay(key)
+            guard let values = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, longerDelay: useLongDelay),
                   values.max > 0
             else {
                 continue
@@ -40,6 +50,7 @@ final class DisplayDDCBridge {
             let safeCurrent = min(values.current, safeMax)
             maxValues[key] = safeMax
             controlCodes[key] = vcp
+            registry.recordReadSuccess(key)
 
             let percentage = DDCRawConversion.percent(raw: safeCurrent, max: safeMax)
 
@@ -50,6 +61,7 @@ final class DisplayDDCBridge {
         }
 
         displayDDCLog.warning("Failed to read DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public)")
+        registry.recordReadFailure(key)
         return nil
     }
 
@@ -60,6 +72,10 @@ final class DisplayDDCBridge {
         }
 
         let key = ControlKey(displayID: displayID, control: control)
+        if registry.isDisabled(key) {
+            return false
+        }
+
         let maxValue = maxValues[key] ?? 100
         var ddcValue = DDCRawConversion.ddcRaw(percent: value, max: maxValue)
         if control == .volume, value > 0 {
@@ -75,6 +91,7 @@ final class DisplayDDCBridge {
             )
             if value <= 0, muteSuccess {
                 displayDDCLog.notice("Wrote DDC mute display \(displayID, privacy: .public)")
+                registry.recordWriteSuccess(key)
                 return true
             }
         }
@@ -86,10 +103,12 @@ final class DisplayDDCBridge {
             )
             if success {
                 controlCodes[key] = vcp
+                registry.recordWriteSuccess(key)
                 return true
             }
         }
 
+        registry.recordWriteFailure(key)
         return false
     }
 
@@ -100,11 +119,6 @@ final class DisplayDDCBridge {
         }
         return [preferred] + candidates.filter { $0 != preferred }
     }
-}
-
-private struct ControlKey: Hashable {
-    let displayID: CGDirectDisplayID
-    let control: DisplayControlKind
 }
 
 private enum DDCVCPCode: UInt8 {
@@ -130,10 +144,10 @@ private enum DDCTransport {
     private static let sevenBitAddress: UInt8 = 0x37
     private static let dataAddress: UInt8 = 0x51
 
-    static func read(service: IOAVService, vcpCode: UInt8) -> (current: UInt16, max: UInt16)? {
+    static func read(service: IOAVService, vcpCode: UInt8, longerDelay: Bool = false) -> (current: UInt16, max: UInt16)? {
         var send = [vcpCode]
         var reply = [UInt8](repeating: 0, count: 11)
-        guard communicate(service: service, send: &send, reply: &reply) else {
+        guard communicate(service: service, send: &send, reply: &reply, longerDelay: longerDelay) else {
             return nil
         }
         let maxValue = (UInt16(reply[6]) << 8) + UInt16(reply[7])
@@ -147,7 +161,7 @@ private enum DDCTransport {
         return communicate(service: service, send: &send, reply: &reply)
     }
 
-    private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8]) -> Bool {
+    private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], longerDelay: Bool = false) -> Bool {
         let dataAddress = Self.dataAddress
         var success = false
         var packet = [UInt8(0x80 | (send.count + 1)), UInt8(send.count)] + send + [0]
@@ -179,7 +193,7 @@ private enum DDCTransport {
                     return true
                 }
             } else {
-                usleep(50_000)
+                usleep(longerDelay ? 150_000 : 50_000)
                 let replyCount = UInt32(reply.count)
                 success = reply.withUnsafeMutableBufferPointer { buffer in
                     guard let baseAddress = buffer.baseAddress else {
