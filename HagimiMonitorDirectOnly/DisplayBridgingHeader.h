@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <IOKit/i2c/IOI2CInterface.h>
+#import <IOKit/hidsystem/ev_keymap.h>
 #import <CoreGraphics/CoreGraphics.h>
 
 typedef CFTypeRef IOAVService;
