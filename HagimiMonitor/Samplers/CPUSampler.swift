@@ -8,6 +8,7 @@ import IOKit
 final class CPUSampler: MonitorSampler {
     var kind: MonitorKind { .cpu }
 
+    private let componentName = CPUSampler.cpuBrandName()
     private var previousCPUInfo: host_cpu_load_info?
     #if DISPLAY_CONTROL
     private let smcReader: SMCReader? = SMCReader()
@@ -64,11 +65,16 @@ final class CPUSampler: MonitorSampler {
 
         return MonitorModule(
             kind: .cpu,
+            componentName: componentName,
             value: total,
             summary: percent(total),
             metrics: resultMetrics,
             samples: seedSamples(total)
         )
+    }
+
+    private static func cpuBrandName() -> String? {
+        sysctlString("machdep.cpu.brand_string") ?? sysctlString("hw.model")
     }
 
     private func hostCPULoadInfo() -> host_cpu_load_info? {
@@ -106,4 +112,19 @@ final class CPUSampler: MonitorSampler {
 
         return Date(timeIntervalSince1970: TimeInterval(bootTime.tv_sec) + TimeInterval(bootTime.tv_usec) / 1_000_000)
     }
+}
+
+private func sysctlString(_ name: String) -> String? {
+    var size = 0
+    guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else {
+        return nil
+    }
+
+    var buffer = [CChar](repeating: 0, count: size)
+    guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else {
+        return nil
+    }
+
+    let value = String(cString: buffer).trimmingCharacters(in: .whitespacesAndNewlines)
+    return value.isEmpty ? nil : value
 }

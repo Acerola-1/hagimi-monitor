@@ -229,15 +229,26 @@ private struct MetricGlassRow: View {
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                Text(module.kind.title + ":")
-                    .monitorPanelMetricLabelFont()
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(module.kind.title + ":")
+                        .monitorPanelMetricLabelFont()
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+
+                    if let componentName = module.componentName {
+                        Text(componentName)
+                            .monitorPanelCaptionFont(.caption2)
+                            .foregroundStyle(theme.captionText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                }
 
                 Text(detail)
                     .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
+                    .layoutPriority(2)
 
                 Spacer(minLength: 8)
 

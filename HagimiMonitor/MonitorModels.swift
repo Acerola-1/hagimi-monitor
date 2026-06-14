@@ -157,6 +157,7 @@ struct MonitorMetric: Identifiable {
 struct MonitorModule: Identifiable {
     let kind: MonitorKind
     var context: String? = nil
+    var componentName: String? = nil
     var value: Double
     var summary: String
     var metrics: [MonitorMetric]

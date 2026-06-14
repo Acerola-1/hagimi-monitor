@@ -28,11 +28,25 @@ final class GPUSampler: MonitorSampler {
 
         return MonitorModule(
             kind: .gpu,
+            componentName: componentName(from: reading.model),
             value: utilization,
             summary: percent(utilization),
             metrics: metrics,
             samples: seedSamples(utilization)
         )
+    }
+
+    private func componentName(from model: String) -> String? {
+        let cleaned = model
+            .trimmingCharacters(in: .controlCharacters.union(.whitespacesAndNewlines))
+            .replacingOccurrences(of: "\0", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !cleaned.isEmpty, cleaned != "GPU" else {
+            return nil
+        }
+
+        return cleaned
     }
 
     private func gpuReading() -> GPUReading? {
@@ -59,9 +73,7 @@ final class GPUSampler: MonitorSampler {
             let tiler = doubleValue(stats["Tiler Utilization %"])
             let usedMemory = doubleValue(stats["In use system memory"])
             let allocatedMemory = doubleValue(stats["Alloc system memory"])
-            let model = registryStringValue(accelerator, "model")
-                ?? registryStringValue(accelerator, "IOClass")
-                ?? "GPU"
+            let model = registryStringValue(accelerator, "model") ?? "GPU"
 
             let reading = GPUReading(
                 model: model,
