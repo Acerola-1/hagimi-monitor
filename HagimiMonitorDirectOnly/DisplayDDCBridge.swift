@@ -82,18 +82,19 @@ final class DisplayDDCBridge {
             ddcValue = Swift.max(1, ddcValue)
         }
 
-        if control == .volume {
-            let muteValue: UInt16 = value > 0 ? 2 : 1
+        if control == .volume, value <= 0 {
             let muteSuccess = DDCTransport.write(
                 service: service.service,
                 vcpCode: DDCVCPCode.audioMuteScreenBlank.rawValue,
-                value: muteValue
+                value: 1
             )
-            if value <= 0, muteSuccess {
+            if muteSuccess {
                 displayDDCLog.notice("Wrote DDC mute display \(displayID, privacy: .public)")
                 registry.recordWriteSuccess(key)
                 return true
             }
+            registry.recordWriteFailure(key)
+            return false
         }
 
         for vcp in orderedCandidates(for: key) {
