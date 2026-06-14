@@ -198,6 +198,7 @@ final class MonitorStore: ObservableObject {
     let settings: MonitorSettings
 
     @Published private(set) var modules: [MonitorModule]
+    @Published var topMemoryProcesses: [TopMemoryProcess] = []
     var selectedKind: MonitorKind = .cpu
     @Published private(set) var displayedComputeLoad = 0.0
 
@@ -205,6 +206,7 @@ final class MonitorStore: ObservableObject {
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
     private var smoothingTimerCancellable: AnyCancellable?
+    private var memoryProcTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
@@ -234,11 +236,36 @@ final class MonitorStore: ObservableObject {
                 AppLogger.ui.debug("Timer tick triggered")
                 self?.advance()
             }
+
+        // 每 5 秒刷新内存占用最高的进程;设置变化时立即重采样
+        refreshTopMemoryProcesses()
+        memoryProcTimer = Timer.publish(every: 5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refreshTopMemoryProcesses()
+            }
+
+        // 用户切换"显示系统进程"时立即刷新一次,不必等下个周期
+        settings.$memoryShowSystemProcesses
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshTopMemoryProcesses()
+            }
+            .store(in: &cancellables)
+    }
+
+    /// 按当前设置采样内存占用最高的进程。
+    private func refreshTopMemoryProcesses() {
+        topMemoryProcesses = sampleTopMemoryProcesses(
+            includeSystemProcesses: settings.memoryShowSystemProcesses
+        )
     }
 
     deinit {
         timerCancellable?.cancel()
         smoothingTimerCancellable?.cancel()
+        memoryProcTimer?.cancel()
         cancellables.removeAll()
     }
 
