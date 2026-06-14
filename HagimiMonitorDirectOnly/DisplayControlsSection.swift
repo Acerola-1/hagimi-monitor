@@ -74,6 +74,7 @@ struct DisplayControlsSection: View {
             }
         }
         .onAppear {
+            controller.attach(settings: settings)
             controller.refreshAsync()
         }
         .animation(expansionAnimation, value: isExpanded)
@@ -294,12 +295,33 @@ final class DisplayControlController: ObservableObject {
     private let service = DisplayControlService()
     private let worker = DisplayControlWorker.shared
     private let changeObserver = DisplayChangeObserver()
+    private lazy var mediaKeyController = MediaKeyController()
+    private var settingsObservation: AnyCancellable?
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
     init() {
         changeObserver.start { [weak self] in
             self?.refreshAsync()
         }
+    }
+
+    func attach(settings: MonitorSettings) {
+        mediaKeyController.attach(controller: self, settings: settings)
+
+        let merged = Publishers.Merge5(
+            settings.$mediaKeyBrightnessEnabled.map { _ in () },
+            settings.$mediaKeyVolumeEnabled.map { _ in () },
+            settings.$mediaKeyShowOSD.map { _ in () },
+            settings.$mediaKeyFineScaleBrightness.map { _ in () },
+            settings.$mediaKeyFineScaleVolume.map { _ in () }
+        )
+        .merge(with: mediaKeyController.permission.$isTrusted.map { _ in () })
+
+        settingsObservation = merged
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.mediaKeyController.refresh()
+            }
     }
 
     func refreshAsync() {
@@ -310,6 +332,7 @@ final class DisplayControlController: ObservableObject {
                 for display in detectedDisplays {
                     self.seedFallbackValues(for: display)
                 }
+                self.mediaKeyController.refresh()
             }
         }
     }
