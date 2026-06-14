@@ -59,6 +59,7 @@ final class MonitorSettings: ObservableObject {
     @Published var displayBrightnessControlEnabled: Bool = true
     @Published var displayVolumeControlEnabled: Bool = true
     @Published var displayContrastControlEnabled: Bool = false
+    @Published var showMemoryProcesses: Bool = true
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
@@ -83,6 +84,7 @@ final class MonitorSettings: ObservableObject {
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
+        showMemoryProcesses = defaults.object(forKey: Keys.showMemoryProcesses) as? Bool ?? true
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
             let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
@@ -248,6 +250,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $showMemoryProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showMemoryProcesses)
+            }
+            .store(in: &cancellables)
+
         $visibleKinds
             .dropFirst()
             .sink { [weak self] newValue in
@@ -303,6 +312,7 @@ private enum Keys {
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
     static let displayVolumeControlEnabled = "settings.display.volumeControlEnabled"
     static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"
+    static let showMemoryProcesses = "settings.memory.showProcesses"
     static let visibleKinds = "settings.visibleKinds"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
 }

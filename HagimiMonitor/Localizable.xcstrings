@@ -2364,6 +2364,28 @@
         }
       }
     },
+    "settings.show-memory-processes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show Top Processes by Memory"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "メモリ使用量TOPを表示"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "显示内存占用排行"
+          }
+        }
+      }
+    },
     "update.check-failed" : {
       "localizations" : {
         "en" : {
