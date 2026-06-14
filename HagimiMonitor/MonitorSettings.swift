@@ -59,6 +59,11 @@ final class MonitorSettings: ObservableObject {
     @Published var displayBrightnessControlEnabled: Bool = true
     @Published var displayVolumeControlEnabled: Bool = true
     @Published var displayContrastControlEnabled: Bool = false
+    @Published var mediaKeyBrightnessEnabled: Bool = false
+    @Published var mediaKeyVolumeEnabled: Bool = false
+    @Published var mediaKeyShowOSD: Bool = true
+    @Published var mediaKeyFineScaleBrightness: Bool = false
+    @Published var mediaKeyFineScaleVolume: Bool = false
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
@@ -83,6 +88,12 @@ final class MonitorSettings: ObservableObject {
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
+
+        mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
+        mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
+        mediaKeyShowOSD = defaults.object(forKey: Keys.mediaKeyShowOSD) as? Bool ?? true
+        mediaKeyFineScaleBrightness = defaults.object(forKey: Keys.mediaKeyFineScaleBrightness) as? Bool ?? false
+        mediaKeyFineScaleVolume = defaults.object(forKey: Keys.mediaKeyFineScaleVolume) as? Bool ?? false
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
             let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
@@ -248,6 +259,41 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $mediaKeyBrightnessEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.mediaKeyBrightnessEnabled)
+            }
+            .store(in: &cancellables)
+
+        $mediaKeyVolumeEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.mediaKeyVolumeEnabled)
+            }
+            .store(in: &cancellables)
+
+        $mediaKeyShowOSD
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.mediaKeyShowOSD)
+            }
+            .store(in: &cancellables)
+
+        $mediaKeyFineScaleBrightness
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.mediaKeyFineScaleBrightness)
+            }
+            .store(in: &cancellables)
+
+        $mediaKeyFineScaleVolume
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.mediaKeyFineScaleVolume)
+            }
+            .store(in: &cancellables)
+
         $visibleKinds
             .dropFirst()
             .sink { [weak self] newValue in
@@ -303,6 +349,11 @@ private enum Keys {
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
     static let displayVolumeControlEnabled = "settings.display.volumeControlEnabled"
     static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"
+    static let mediaKeyBrightnessEnabled = "settings.mediaKey.brightnessEnabled"
+    static let mediaKeyVolumeEnabled = "settings.mediaKey.volumeEnabled"
+    static let mediaKeyShowOSD = "settings.mediaKey.showOSD"
+    static let mediaKeyFineScaleBrightness = "settings.mediaKey.fineScaleBrightness"
+    static let mediaKeyFineScaleVolume = "settings.mediaKey.fineScaleVolume"
     static let visibleKinds = "settings.visibleKinds"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
 }
