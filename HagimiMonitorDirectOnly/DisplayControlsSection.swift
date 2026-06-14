@@ -293,7 +293,14 @@ final class DisplayControlController: ObservableObject {
 
     private let service = DisplayControlService()
     private let worker = DisplayControlWorker.shared
+    private let changeObserver = DisplayChangeObserver()
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
+
+    init() {
+        changeObserver.start { [weak self] in
+            self?.refreshAsync()
+        }
+    }
 
     func refreshAsync() {
         worker.refresh(service: service) { detectedDisplays in
