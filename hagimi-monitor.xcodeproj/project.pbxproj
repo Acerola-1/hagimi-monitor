@@ -11,8 +11,8 @@
 			isa = PBXContainerItemProxy;
 			containerPortal = 2E0C71812FB19C2D00908371 /* Project object */;
 			proxyType = 1;
-			remoteGlobalIDString = 2E0C71882FB19C2D00908371;
-			remoteInfo = HagimiMonitor;
+			remoteGlobalIDString = 2E0C71B92FB1A10000908371;
+			remoteInfo = HagimiMonitorDirect;
 		};
 		2E0C71A32FB19C2E00908371 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -219,7 +219,7 @@
 					};
 					2E0C71972FB19C2E00908371 = {
 						CreatedOnToolsVersion = 26.4.1;
-						TestTargetID = 2E0C71882FB19C2D00908371;
+						TestTargetID = 2E0C71B92FB1A10000908371;
 					};
 					2E0C71A12FB19C2E00908371 = {
 						CreatedOnToolsVersion = 26.4.1;
@@ -316,7 +316,7 @@
 /* Begin PBXTargetDependency section */
 		2E0C719A2FB19C2E00908371 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 2E0C71882FB19C2D00908371 /* HagimiMonitor */;
+			target = 2E0C71B92FB1A10000908371 /* HagimiMonitorDirect */;
 			targetProxy = 2E0C71992FB19C2E00908371 /* PBXContainerItemProxy */;
 		};
 		2E0C71A42FB19C2E00908371 /* PBXTargetDependency */ = {

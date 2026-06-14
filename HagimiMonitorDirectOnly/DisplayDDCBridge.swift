@@ -13,7 +13,6 @@ final class DisplayDDCBridge {
     private var servicesByDisplayID: [CGDirectDisplayID: DDCService] = [:]
     private var maxValues: [ControlKey: UInt16] = [:]
     private var controlCodes: [ControlKey: DDCVCPCode] = [:]
-    private let maxDetectLimit: UInt16 = 100
 
     func refresh(displayIDs: [CGDirectDisplayID]) {
         servicesByDisplayID = Arm64DDCMatcher().matchedServices(for: displayIDs)
@@ -37,17 +36,17 @@ final class DisplayDDCBridge {
                 continue
             }
 
-            let effectiveMax = min(values.max, maxDetectLimit)
-            let effectiveCurrent = min(values.current, effectiveMax)
-            maxValues[key] = effectiveMax
+            let safeMax = DDCRawConversion.sanitize(max: values.max)
+            let safeCurrent = min(values.current, safeMax)
+            maxValues[key] = safeMax
             controlCodes[key] = vcp
 
-            let percentage = Double(effectiveCurrent) / Double(effectiveMax) * 100
+            let percentage = DDCRawConversion.percent(raw: safeCurrent, max: safeMax)
 
             displayDDCLog.notice(
-                "Read DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) raw \(values.current, privacy: .public)/\(values.max, privacy: .public) effective \(effectiveCurrent, privacy: .public)/\(effectiveMax, privacy: .public)"
+                "Read DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) raw \(values.current, privacy: .public)/\(values.max, privacy: .public) safe \(safeCurrent, privacy: .public)/\(safeMax, privacy: .public) percentage \(percentage, privacy: .public)"
             )
-            return min(100, max(0, percentage))
+            return percentage
         }
 
         displayDDCLog.warning("Failed to read DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public)")
@@ -61,10 +60,10 @@ final class DisplayDDCBridge {
         }
 
         let key = ControlKey(displayID: displayID, control: control)
-        let maxValue = maxValues[key] ?? maxDetectLimit
-        var ddcValue = UInt16((min(100, max(0, value)) / 100 * Double(maxValue)).rounded())
+        let maxValue = maxValues[key] ?? 100
+        var ddcValue = DDCRawConversion.ddcRaw(percent: value, max: maxValue)
         if control == .volume, value > 0 {
-            ddcValue = max(1, ddcValue)
+            ddcValue = Swift.max(1, ddcValue)
         }
 
         if control == .volume {
