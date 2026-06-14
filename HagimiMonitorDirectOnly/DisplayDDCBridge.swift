@@ -27,7 +27,7 @@ final class DisplayDDCBridge {
         servicesByDisplayID[displayID] != nil
     }
 
-    func read(_ control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
+    func read(_ control: DisplayControlKind, displayID: CGDirectDisplayID, fastFail: Bool = false) -> Double? {
         guard let service = servicesByDisplayID[displayID] else {
             displayDDCLog.debug("No DDC service for display \(displayID, privacy: .public)")
             return nil
@@ -40,7 +40,8 @@ final class DisplayDDCBridge {
 
         for vcp in orderedCandidates(for: key) {
             let useLongDelay = registry.shouldUseLongerDelay(key)
-            guard let values = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, longerDelay: useLongDelay),
+            let retries = fastFail ? 2 : 5
+            guard let values = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, longerDelay: useLongDelay, maxRetries: retries),
                   values.max > 0
             else {
                 continue
@@ -145,10 +146,10 @@ private enum DDCTransport {
     private static let sevenBitAddress: UInt8 = 0x37
     private static let dataAddress: UInt8 = 0x51
 
-    static func read(service: IOAVService, vcpCode: UInt8, longerDelay: Bool = false) -> (current: UInt16, max: UInt16)? {
+    static func read(service: IOAVService, vcpCode: UInt8, longerDelay: Bool = false, maxRetries: Int = 5) -> (current: UInt16, max: UInt16)? {
         var send = [vcpCode]
         var reply = [UInt8](repeating: 0, count: 11)
-        guard communicate(service: service, send: &send, reply: &reply, longerDelay: longerDelay) else {
+        guard communicate(service: service, send: &send, reply: &reply, longerDelay: longerDelay, maxRetries: maxRetries) else {
             return nil
         }
         let maxValue = (UInt16(reply[6]) << 8) + UInt16(reply[7])
@@ -156,13 +157,13 @@ private enum DDCTransport {
         return (currentValue, maxValue)
     }
 
-    static func write(service: IOAVService, vcpCode: UInt8, value: UInt16) -> Bool {
+    static func write(service: IOAVService, vcpCode: UInt8, value: UInt16, maxRetries: Int = 5) -> Bool {
         var send = [vcpCode, UInt8(value >> 8), UInt8(value & 0xFF)]
         var reply: [UInt8] = []
-        return communicate(service: service, send: &send, reply: &reply)
+        return communicate(service: service, send: &send, reply: &reply, maxRetries: maxRetries)
     }
 
-    private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], longerDelay: Bool = false) -> Bool {
+    private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], longerDelay: Bool = false, maxRetries: Int = 5) -> Bool {
         let dataAddress = Self.dataAddress
         var success = false
         var packet = [UInt8(0x80 | (send.count + 1)), UInt8(send.count)] + send + [0]
@@ -171,7 +172,7 @@ private enum DDCTransport {
             : Self.sevenBitAddress << 1 ^ dataAddress
         packet[packet.count - 1] = checksum(seed: checksumSeed, data: packet, start: 0, end: packet.count - 2)
 
-        for _ in 0..<5 {
+        for _ in 0..<maxRetries {
             for _ in 0..<2 {
                 usleep(10_000)
                 let packetCount = UInt32(packet.count)

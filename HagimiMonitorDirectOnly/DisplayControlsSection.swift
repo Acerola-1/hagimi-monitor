@@ -581,9 +581,9 @@ private final class DisplayControlService {
 
             let nativeBrightness = useDisplayServices ? displayServices.getBrightness(displayID: id) : nil
             let hasDDCService = (kind == .externalDDC) && ddc.hasService(for: id)
-            let ddcBrightness = (kind == .externalDDC) ? ddc.read(.brightness, displayID: id) : nil
-            let ddcVolume = (kind == .externalDDC) ? ddc.read(.volume, displayID: id) : nil
-            let ddcContrast = (kind == .externalDDC) ? ddc.read(.contrast, displayID: id) : nil
+            let ddcBrightness = (kind == .externalDDC) ? ddc.read(.brightness, displayID: id, fastFail: true) : nil
+            let ddcVolume: Double? = nil
+            let ddcContrast: Double? = nil
 
             let storedBrightness = storedValue(for: .brightness, displayStorageID: storageID)
             let storedVolume = storedValue(for: .volume, displayStorageID: storageID)
@@ -597,8 +597,8 @@ private final class DisplayControlService {
                 supportsBrightness: useDisplayServices
                     ? (nativeBrightness != nil)
                     : (ddcBrightness != nil || storedBrightness != nil || hasDDCService),
-                supportsVolume: !useDisplayServices && (ddcVolume != nil || storedVolume != nil),
-                supportsContrast: !useDisplayServices && (ddcContrast != nil || storedContrast != nil),
+                supportsVolume: !useDisplayServices && hasDDCService,
+                supportsContrast: !useDisplayServices && hasDDCService,
                 brightness: nativeBrightness.map { Double($0 * 100) }
                     ?? ddcBrightness
                     ?? storedBrightness
