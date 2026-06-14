@@ -2,1872 +2,24 @@
   "version": "1.0",
   "sourceLanguage": "zh-Hans",
   "strings": {
-    "severity.calm": {
+    "about.check-again": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "正常"
+            "value": "再次检查"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Normal"
+            "value": "Check Again"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "正常"
-          }
-        }
-      }
-    },
-    "severity.warning": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "接近阈值"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Warning"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "警告"
-          }
-        }
-      }
-    },
-    "severity.critical": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "需要注意"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Critical"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "注意が必要"
-          }
-        }
-      }
-    },
-    "kind.cpu": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        }
-      }
-    },
-    "kind.gpu": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        }
-      }
-    },
-    "kind.memory": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内存"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Memory"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メモリ"
-          }
-        }
-      }
-    },
-    "kind.storage": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "存储"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Storage"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ストレージ"
-          }
-        }
-      }
-    },
-    "kind.network": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网络"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Network"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ネットワーク"
-          }
-        }
-      }
-    },
-    "kind.battery": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电源"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Power"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "電源"
-          }
-        }
-      }
-    },
-    "metric.current": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Current"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "現在"
-          }
-        }
-      }
-    },
-    "metric.average": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Average"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均"
-          }
-        }
-      }
-    },
-    "metric.peak": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "峰值"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Peak"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ピーク"
-          }
-        }
-      }
-    },
-    "battery-state.battery": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电池"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Battery"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "バッテリー"
-          }
-        }
-      }
-    },
-    "battery-state.charging": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充电中"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Charging"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充電中"
-          }
-        }
-      }
-    },
-    "battery-state.ac-power": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电源供电"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "AC Power"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "電源接続中"
-          }
-        }
-      }
-    },
-    "battery-state.on-battery": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电池供电"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On Battery"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "バッテリー駆動"
-          }
-        }
-      }
-    },
-    "memory-pressure.normal": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正常"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Normal"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正常"
-          }
-        }
-      }
-    },
-    "memory-pressure.warning": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "警告"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Warning"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "警告"
-          }
-        }
-      }
-    },
-    "memory-pressure.critical": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "严重"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Critical"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "危険"
-          }
-        }
-      }
-    },
-    "ring-source.combined": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "综合"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Combined"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "総合"
-          }
-        }
-      }
-    },
-    "ring-source.memory": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内存"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Memory"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メモリ"
-          }
-        }
-      }
-    },
-    "theme.system": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跟随系统"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "System"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "システムに従う"
-          }
-        }
-      }
-    },
-    "theme.light": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "浅色"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Light"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ライト"
-          }
-        }
-      }
-    },
-    "theme.dark": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "深色"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Dark"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダーク"
-          }
-        }
-      }
-    },
-    "color-scheme.balanced": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平衡"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Balanced"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "バランス"
-          }
-        }
-      }
-    },
-    "color-scheme.vibrant": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "活力"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Vibrant"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ビビッド"
-          }
-        }
-      }
-    },
-    "metric.cpu.system": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "系统"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "System"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "システム"
-          }
-        }
-      }
-    },
-    "metric.cpu.user": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "用户"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "User"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ユーザー"
-          }
-        }
-      }
-    },
-    "metric.cpu.idle": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "闲置"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Idle"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アイドル"
-          }
-        }
-      }
-    },
-    "metric.cpu.uptime": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "启动时间"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uptime"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "稼働時間"
-          }
-        }
-      }
-    },
-    "metric.cpu.temperature": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Temperature"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        }
-      }
-    },
-    "metric.gpu.gpu-memory": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU内存"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU Mem"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPUメモリ"
-          }
-        }
-      }
-    },
-    "metric.gpu.allocated": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已分配"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Allocated"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "割り当て済み"
-          }
-        }
-      }
-    },
-    "metric.gpu.render": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "渲染"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Render"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "レンダー"
-          }
-        }
-      }
-    },
-    "metric.gpu.tiler": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "分块"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tiler"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "タイラー"
-          }
-        }
-      }
-    },
-    "metric.gpu.temperature": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Temperature"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        }
-      }
-    },
-    "metric.memory.used": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已用"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Used"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "使用中"
-          }
-        }
-      }
-    },
-    "metric.memory.pressure": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "压力"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pressure"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "圧力"
-          }
-        }
-      }
-    },
-    "metric.memory.swap-used": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "交换已用"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Swap Used"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "使用中のスワップ"
-          }
-        }
-      }
-    },
-    "metric.memory.total": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "总量"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Total"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "合計"
-          }
-        }
-      }
-    },
-    "metric.storage.used": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已用"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Used"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "使用中"
-          }
-        }
-      }
-    },
-    "metric.storage.free": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可用"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Free"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "空き"
-          }
-        }
-      }
-    },
-    "metric.storage.total": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "总量"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Total"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "合計"
-          }
-        }
-      }
-    },
-    "metric.network.public-ip": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "公网 IP"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Public IP"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パブリックIP"
-          }
-        }
-      }
-    },
-    "metric.network.ip-address": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "IP 地址"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "IP Address"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "IPアドレス"
-          }
-        }
-      }
-    },
-    "metric.network.upload": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上传"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Upload"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アップロード"
-          }
-        }
-      }
-    },
-    "metric.network.download": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下载"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Download"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウンロード"
-          }
-        }
-      }
-    },
-    "metric.battery.type": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "类型"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Type"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "種類"
-          }
-        }
-      }
-    },
-    "metric.battery.status": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "状态"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Status"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "状態"
-          }
-        }
-      }
-    },
-    "metric.battery.adapter": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "适配器"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adapter"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アダプタ"
-          }
-        }
-      }
-    },
-    "metric.battery.charging-power": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充电功率"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Charging Power"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充電電力"
-          }
-        }
-      }
-    },
-    "metric.battery.power": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "功率"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Power"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "電力"
-          }
-        }
-      }
-    },
-    "metric.battery.health": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "健康度"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Health"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "状態"
-          }
-        }
-      }
-    },
-    "metric.battery.cycle-count": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "循环数"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cycle Count"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充放電回数"
-          }
-        }
-      }
-    },
-    "metric.battery.temperature": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Temperature"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        }
-      }
-    },
-    "panel.activity-monitor": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "活动监视器"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Activity Monitor"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アクティビティモニタ"
-          }
-        }
-      }
-    },
-    "panel.settings": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设置"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Settings"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "設定"
-          }
-        }
-      }
-    },
-    "panel.system-volume": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "系统盘"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "System"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "システム"
-          }
-        }
-      }
-    },
-    "menu.about": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关于 HagimiMonitor"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "About HagimiMonitor"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HagimiMonitorについて"
-          }
-        }
-      }
-    },
-    "menu.quit": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出 HagimiMonitor"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quit HagimiMonitor"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HagimiMonitorを終了"
-          }
-        }
-      }
-    },
-    "settings.sidebar.general": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "常规"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "General"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一般"
-          }
-        }
-      }
-    },
-    "settings.sidebar.modules": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "监控模块"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Modules"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "監視モジュール"
-          }
-        }
-      }
-    },
-    "settings.sidebar.display": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示器"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Display"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ディスプレイ"
-          }
-        }
-      }
-    },
-    "settings.sidebar.about": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关于"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "About"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "情報"
-          }
-        }
-      }
-    },
-    "settings.launch-at-login": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "开机自启"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Launch at Login"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ログイン時に起動"
-          }
-        }
-      }
-    },
-    "settings.launch-at-login.subtitle": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "登录后自动打开 HagimiMonitor"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Automatically open HagimiMonitor after login"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ログイン後にHagimiMonitorを自動で開く"
-          }
-        }
-      }
-    },
-    "settings.appearance": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "外观"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Appearance"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "外観"
-          }
-        }
-      }
-    },
-    "settings.theme": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "主题"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Theme"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "テーマ"
-          }
-        }
-      }
-    },
-    "settings.color-scheme": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "配色"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Color Scheme"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "配色"
-          }
-        }
-      }
-    },
-    "settings.menu-bar": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "菜单栏"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Menu Bar"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "メニューバー"
-          }
-        }
-      }
-    },
-    "settings.halo-ring": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "负载环"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Halo Ring"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "負荷リング"
-          }
-        }
-      }
-    },
-    "settings.show-in-panel": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "在面板中显示"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show in Panel"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パネルに表示"
-          }
-        }
-      }
-    },
-    "settings.metrics": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "监测项目"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Metrics"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "監視項目"
-          }
-        }
-      }
-    },
-    "settings.reset-defaults": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重置默认值"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reset Defaults"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "デフォルトに戻す"
-          }
-        }
-      }
-    },
-    "settings.include-built-in": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "包含内置显示器"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Include Built-in Display"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内蔵ディスプレイを含める"
-          }
-        }
-      }
-    },
-    "settings.controls": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "控制项"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Controls"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コントロール"
-          }
-        }
-      }
-    },
-    "settings.brightness": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "亮度"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Brightness"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "明るさ"
-          }
-        }
-      }
-    },
-    "settings.volume": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "音量"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Volume"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "音量"
-          }
-        }
-      }
-    },
-    "settings.contrast": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "对比度"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contrast"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "コントラスト"
-          }
-        }
-      }
-    },
-    "about.release-version": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "发行说明"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Release Notes"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "リリースノート"
-          }
-        }
-      }
-    },
-    "about.version": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "版本 "
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Version "
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "バージョン "
-          }
-        }
-      }
-    },
-    "about.footnote": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS 菜单栏硬件监控"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS Menu Bar Hardware Monitor"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOSメニューバー用ハードウェアモニター"
-          }
-        }
-      }
-    },
-    "about.unknown": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未知"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unknown"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "不明"
-          }
-        }
-      }
-    },
-    "about.feedback": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "反馈建议"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Feedback"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フィードバック"
-          }
-        }
-      }
-    },
-    "about.feedback-button": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "提交 Issue"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Open Issue"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Issue を開く"
+            "value": "もう一度確認"
           }
         }
       }
@@ -1916,46 +68,90 @@
         }
       }
     },
-    "about.up-to-date": {
+    "about.download-update": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "已是最新"
+            "value": "下载更新"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Up to Date"
+            "value": "Download Update"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "最新です"
+            "value": "アップデートをダウンロード"
           }
         }
       }
     },
-    "about.check-again": {
+    "about.feedback": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "再次检查"
+            "value": "反馈建议"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Check Again"
+            "value": "Feedback"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "もう一度確認"
+            "value": "フィードバック"
+          }
+        }
+      }
+    },
+    "about.feedback-button": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "提交 Issue"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Issue"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue を開く"
+          }
+        }
+      }
+    },
+    "about.footnote": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS 菜单栏硬件监控"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOS Menu Bar Hardware Monitor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "macOSメニューバー用ハードウェアモニター"
           }
         }
       }
@@ -1982,24 +178,24 @@
         }
       }
     },
-    "about.download-update": {
+    "about.release-version": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "下载更新"
+            "value": "发行说明"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Download Update"
+            "value": "Release Notes"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アップデートをダウンロード"
+            "value": "リリースノート"
           }
         }
       }
@@ -2026,200 +222,244 @@
         }
       }
     },
-    "update.parse-failed": {
+    "about.unknown": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法解析更新信息"
+            "value": "未知"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unable to parse update info"
+            "value": "Unknown"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アップデート情報を解析できません"
+            "value": "不明"
           }
         }
       }
     },
-    "update.version-parse-failed": {
+    "about.up-to-date": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法解析版本号"
+            "value": "已是最新"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Unable to parse version"
+            "value": "Up to Date"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "バージョン番号を解析できません"
+            "value": "最新です"
           }
         }
       }
     },
-    "update.network-error": {
+    "about.version": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "网络错误"
+            "value": "版本 "
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Network Error"
+            "value": "Version "
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ネットワークエラー"
+            "value": "バージョン "
           }
         }
       }
     },
-    "update.temp-unavailable": {
+    "battery-state.ac-power": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "暂时无法检查更新"
+            "value": "电源供电"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Temporarily unable to check for updates"
+            "value": "AC Power"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "現在アップデートを確認できません"
+            "value": "電源接続中"
           }
         }
       }
     },
-    "update.rate-limited": {
+    "battery-state.battery": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "检查更新过于频繁，请稍后再试"
+            "value": "电池"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Rate limited. Please try again later."
+            "value": "Battery"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "確認回数が多すぎます。しばらくしてからもう一度お試しください。"
+            "value": "バッテリー"
           }
         }
       }
     },
-    "update.no-release": {
+    "battery-state.charging": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "暂时没有可用的发布版本"
+            "value": "充电中"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "No release available"
+            "value": "Charging"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "利用可能なリリースはありません"
+            "value": "充電中"
           }
         }
       }
     },
-    "update.github-unavailable": {
+    "battery-state.on-battery": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "GitHub 暂时不可用，请稍后再试"
+            "value": "电池供电"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "GitHub temporarily unavailable"
+            "value": "On Battery"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "GitHubを一時的に利用できません"
+            "value": "バッテリー駆動"
           }
         }
       }
     },
-    "update.check-failed": {
+    "color-scheme.balanced": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "无法检查更新："
+            "value": "平衡"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Update check failed: "
+            "value": "Balanced"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "アップデートを確認できません: "
+            "value": "バランス"
           }
         }
       }
     },
-    "kind.display": {
+    "color-scheme.vibrant": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "显示器"
+            "value": "活力"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Display"
+            "value": "Vibrant"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "ディスプレイ"
+            "value": "ビビッド"
+          }
+        }
+      }
+    },
+    "display.built-in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内蔵"
+          }
+        }
+      }
+    },
+    "display.built-in-display": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置显示器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in Display"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内蔵ディスプレイ"
           }
         }
       }
@@ -2242,6 +482,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "オフ"
+          }
+        }
+      }
+    },
+    "display.external": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外接"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外部"
+          }
+        }
+      }
+    },
+    "display.external-display": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外接显示器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External Display"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外部ディスプレイ"
           }
         }
       }
@@ -2312,94 +596,6 @@
         }
       }
     },
-    "display.built-in": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内置"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Built-in"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内蔵"
-          }
-        }
-      }
-    },
-    "display.external": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "外接"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "External"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "外部"
-          }
-        }
-      }
-    },
-    "display.built-in-display": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内置显示器"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Built-in Display"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内蔵ディスプレイ"
-          }
-        }
-      }
-    },
-    "display.external-display": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "外接显示器"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "External Display"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "外部ディスプレイ"
-          }
-        }
-      }
-    },
     "display.unit-count": {
       "localizations": {
         "zh-Hans": {
@@ -2444,6 +640,1418 @@
         }
       }
     },
+    "kind.battery": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電源"
+          }
+        }
+      }
+    },
+    "kind.cpu": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        }
+      }
+    },
+    "kind.display": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ディスプレイ"
+          }
+        }
+      }
+    },
+    "kind.gpu": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        }
+      }
+    },
+    "kind.memory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリ"
+          }
+        }
+      }
+    },
+    "kind.network": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワーク"
+          }
+        }
+      }
+    },
+    "kind.storage": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存储"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ストレージ"
+          }
+        }
+      }
+    },
+    "mediaKey.brightness-toggle": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接管亮度键（F1/F2）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take over Brightness Keys (F1/F2)"
+          }
+        }
+      }
+    },
+    "mediaKey.fine-scale-brightness": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮度精细步进"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine brightness step"
+          }
+        }
+      }
+    },
+    "mediaKey.fine-scale-hint": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认 Shift+Option 触发精细步进;开启后反转"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shift+Option triggers fine steps by default; invert when on"
+          }
+        }
+      }
+    },
+    "mediaKey.fine-scale-volume": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音量精细步进"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fine volume step"
+          }
+        }
+      }
+    },
+    "mediaKey.open-system-settings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开系统设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open System Settings"
+          }
+        }
+      }
+    },
+    "mediaKey.options-title": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "细化选项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Options"
+          }
+        }
+      }
+    },
+    "mediaKey.permission-explanation": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅用于拦截亮度/音量按键事件，不会读取键盘输入或其他按键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used only to intercept brightness/volume key events. Other keystrokes are not read."
+          }
+        }
+      }
+    },
+    "mediaKey.permission-title": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辅助功能权限"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessibility"
+          }
+        }
+      }
+    },
+    "mediaKey.refresh-permission": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新权限状态"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh Permission"
+          }
+        }
+      }
+    },
+    "mediaKey.section-title": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "媒体键接管"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Media Key Takeover"
+          }
+        }
+      }
+    },
+    "mediaKey.show-osd": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示原生 OSD 提示"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Native OSD"
+          }
+        }
+      }
+    },
+    "mediaKey.status-authorized": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已授权"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authorized"
+          }
+        }
+      }
+    },
+    "mediaKey.status-not-authorized": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未授权"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not Authorized"
+          }
+        }
+      }
+    },
+    "mediaKey.volume-toggle": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接管音量键（F10/F11/F12）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Take over Volume Keys (F10/F11/F12)"
+          }
+        }
+      }
+    },
+    "memory-pressure.critical": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "严重"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Critical"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "危険"
+          }
+        }
+      }
+    },
+    "memory-pressure.normal": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        }
+      }
+    },
+    "memory-pressure.warning": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warning"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
+          }
+        }
+      }
+    },
+    "menu.about": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于 HagimiMonitor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About HagimiMonitor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HagimiMonitorについて"
+          }
+        }
+      }
+    },
+    "menu.quit": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出 HagimiMonitor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit HagimiMonitor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "HagimiMonitorを終了"
+          }
+        }
+      }
+    },
+    "metric.average": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均"
+          }
+        }
+      }
+    },
+    "metric.battery.adapter": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适配器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adapter"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アダプタ"
+          }
+        }
+      }
+    },
+    "metric.battery.charging-power": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充电功率"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charging Power"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充電電力"
+          }
+        }
+      }
+    },
+    "metric.battery.cycle-count": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "循环数"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cycle Count"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充放電回数"
+          }
+        }
+      }
+    },
+    "metric.battery.health": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康度"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状態"
+          }
+        }
+      }
+    },
+    "metric.battery.power": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功率"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電力"
+          }
+        }
+      }
+    },
+    "metric.battery.status": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状态"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Status"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状態"
+          }
+        }
+      }
+    },
+    "metric.battery.temperature": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperature"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
+        }
+      }
+    },
+    "metric.battery.type": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "类型"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "種類"
+          }
+        }
+      }
+    },
+    "metric.cpu.idle": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "闲置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Idle"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アイドル"
+          }
+        }
+      }
+    },
+    "metric.cpu.system": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システム"
+          }
+        }
+      }
+    },
+    "metric.cpu.temperature": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperature"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
+        }
+      }
+    },
+    "metric.cpu.uptime": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动时间"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uptime"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稼働時間"
+          }
+        }
+      }
+    },
+    "metric.cpu.user": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "User"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ユーザー"
+          }
+        }
+      }
+    },
+    "metric.current": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在"
+          }
+        }
+      }
+    },
+    "metric.gpu.allocated": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已分配"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allocated"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "割り当て済み"
+          }
+        }
+      }
+    },
+    "metric.gpu.gpu-memory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU内存"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU Mem"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPUメモリ"
+          }
+        }
+      }
+    },
+    "metric.gpu.render": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "渲染"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Render"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "レンダー"
+          }
+        }
+      }
+    },
+    "metric.gpu.temperature": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temperature"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
+        }
+      }
+    },
+    "metric.gpu.tiler": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分块"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiler"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "タイラー"
+          }
+        }
+      }
+    },
+    "metric.memory.pressure": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压力"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pressure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圧力"
+          }
+        }
+      }
+    },
+    "metric.memory.swap-used": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交换已用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap Used"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用中のスワップ"
+          }
+        }
+      }
+    },
+    "metric.memory.total": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "总量"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合計"
+          }
+        }
+      }
+    },
+    "metric.memory.used": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用中"
+          }
+        }
+      }
+    },
+    "metric.network.download": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Download"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウンロード"
+          }
+        }
+      }
+    },
+    "metric.network.ip-address": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IP 地址"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IP Address"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPアドレス"
+          }
+        }
+      }
+    },
+    "metric.network.public-ip": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公网 IP"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public IP"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パブリックIP"
+          }
+        }
+      }
+    },
+    "metric.network.upload": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上传"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップロード"
+          }
+        }
+      }
+    },
+    "metric.peak": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peak"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ピーク"
+          }
+        }
+      }
+    },
+    "metric.storage.free": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空き"
+          }
+        }
+      }
+    },
+    "metric.storage.total": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "总量"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "合計"
+          }
+        }
+      }
+    },
+    "metric.storage.used": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Used"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用中"
+          }
+        }
+      }
+    },
+    "panel.activity-monitor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "活动监视器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Activity Monitor"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アクティビティモニタ"
+          }
+        }
+      }
+    },
+    "panel.settings": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
+          }
+        }
+      }
+    },
+    "panel.system-volume": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统盘"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システム"
+          }
+        }
+      }
+    },
+    "ring-source.combined": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "综合"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combined"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "総合"
+          }
+        }
+      }
+    },
+    "ring-source.memory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリ"
+          }
+        }
+      }
+    },
+    "settings.appearance": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外观"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Appearance"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外観"
+          }
+        }
+      }
+    },
+    "settings.brightness": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮度"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brightness"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明るさ"
+          }
+        }
+      }
+    },
+    "settings.color-scheme": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配色"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Color Scheme"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "配色"
+          }
+        }
+      }
+    },
+    "settings.contrast": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比度"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrast"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントラスト"
+          }
+        }
+      }
+    },
+    "settings.controls": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "控制项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controls"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コントロール"
+          }
+        }
+      }
+    },
     "settings.display.ddc-note": {
       "localizations": {
         "zh-Hans": {
@@ -2462,6 +2070,622 @@
           "stringUnit": {
             "state": "translated",
             "value": "外部ディスプレイの明るさ、音量、コントラストを制御するにはDDC/CI対応が必要です"
+          }
+        }
+      }
+    },
+    "settings.halo-ring": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "负载环"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Halo Ring"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "負荷リング"
+          }
+        }
+      }
+    },
+    "settings.include-built-in": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含内置显示器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include Built-in Display"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内蔵ディスプレイを含める"
+          }
+        }
+      }
+    },
+    "settings.launch-at-login": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开机自启"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Launch at Login"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン時に起動"
+          }
+        }
+      }
+    },
+    "settings.launch-at-login.subtitle": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录后自动打开 HagimiMonitor"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatically open HagimiMonitor after login"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ログイン後にHagimiMonitorを自動で開く"
+          }
+        }
+      }
+    },
+    "settings.menu-bar": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "菜单栏"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menu Bar"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メニューバー"
+          }
+        }
+      }
+    },
+    "settings.metrics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "监测项目"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metrics"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監視項目"
+          }
+        }
+      }
+    },
+    "settings.reset-defaults": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置默认值"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset Defaults"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "デフォルトに戻す"
+          }
+        }
+      }
+    },
+    "settings.show-in-panel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在面板中显示"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in Panel"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "パネルに表示"
+          }
+        }
+      }
+    },
+    "settings.sidebar.about": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关于"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情報"
+          }
+        }
+      }
+    },
+    "settings.sidebar.display": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ディスプレイ"
+          }
+        }
+      }
+    },
+    "settings.sidebar.general": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常规"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般"
+          }
+        }
+      }
+    },
+    "settings.sidebar.modules": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "监控模块"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Modules"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "監視モジュール"
+          }
+        }
+      }
+    },
+    "settings.theme": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主题"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "テーマ"
+          }
+        }
+      }
+    },
+    "settings.volume": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音量"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音量"
+          }
+        }
+      }
+    },
+    "severity.calm": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        }
+      }
+    },
+    "severity.critical": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要注意"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Critical"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注意が必要"
+          }
+        }
+      }
+    },
+    "severity.warning": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接近阈值"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warning"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
+          }
+        }
+      }
+    },
+    "theme.dark": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深色"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダーク"
+          }
+        }
+      }
+    },
+    "theme.light": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浅色"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ライト"
+          }
+        }
+      }
+    },
+    "theme.system": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随系统"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムに従う"
+          }
+        }
+      }
+    },
+    "update.check-failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法检查更新："
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update check failed: "
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデートを確認できません: "
+          }
+        }
+      }
+    },
+    "update.github-unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub 暂时不可用，请稍后再试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHub temporarily unavailable"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GitHubを一時的に利用できません"
+          }
+        }
+      }
+    },
+    "update.network-error": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络错误"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network Error"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ネットワークエラー"
+          }
+        }
+      }
+    },
+    "update.no-release": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时没有可用的发布版本"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No release available"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "利用可能なリリースはありません"
+          }
+        }
+      }
+    },
+    "update.parse-failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法解析更新信息"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to parse update info"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップデート情報を解析できません"
+          }
+        }
+      }
+    },
+    "update.rate-limited": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查更新过于频繁，请稍后再试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rate limited. Please try again later."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認回数が多すぎます。しばらくしてからもう一度お試しください。"
+          }
+        }
+      }
+    },
+    "update.temp-unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法检查更新"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporarily unable to check for updates"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "現在アップデートを確認できません"
+          }
+        }
+      }
+    },
+    "update.version-parse-failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法解析版本号"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to parse version"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "バージョン番号を解析できません"
           }
         }
       }

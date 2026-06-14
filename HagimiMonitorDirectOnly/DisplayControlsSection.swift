@@ -74,6 +74,7 @@ struct DisplayControlsSection: View {
             }
         }
         .onAppear {
+            controller.attach(settings: settings)
             controller.refreshAsync()
         }
         .animation(expansionAnimation, value: isExpanded)
@@ -292,17 +293,53 @@ final class DisplayControlController: ObservableObject {
     @Published private var pendingValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
     private let service = DisplayControlService()
-    private let worker = DisplayControlWorker()
+    private let worker = DisplayControlWorker.shared
+    private let changeObserver = DisplayChangeObserver()
+    private lazy var mediaKeyController = MediaKeyController()
+    private var settingsObservation: AnyCancellable?
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
+    init() {
+        changeObserver.start { [weak self] in
+            self?.refreshAsync()
+        }
+    }
+
+    func attach(settings: MonitorSettings) {
+        mediaKeyController.attach(controller: self, settings: settings)
+
+        let merged = Publishers.Merge5(
+            settings.$mediaKeyBrightnessEnabled.map { _ in () },
+            settings.$mediaKeyVolumeEnabled.map { _ in () },
+            settings.$mediaKeyShowOSD.map { _ in () },
+            settings.$mediaKeyFineScaleBrightness.map { _ in () },
+            settings.$mediaKeyFineScaleVolume.map { _ in () }
+        )
+        .merge(with: mediaKeyController.permission.$isTrusted.map { _ in () })
+
+        settingsObservation = merged
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.mediaKeyController.refresh()
+            }
+    }
+
     func refreshAsync() {
+        let previousIDs = Set(displays.map { $0.id })
         worker.refresh(service: service) { detectedDisplays in
             DispatchQueue.main.async {
                 AppLogger.ui.info("Display refresh completed, found \(detectedDisplays.count) displays")
+                let detectedIDs = Set(detectedDisplays.map { $0.id })
+                // 已移除的显示器:清理 worker 去重状态,避免同 ID 重新接入时
+                // lastWrittenValues 残留导致首次写入被误跳过。
+                for removedID in previousIDs.subtracting(detectedIDs) {
+                    self.worker.clearLastValues(displayID: removedID)
+                }
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
                     self.seedFallbackValues(for: display)
                 }
+                self.mediaKeyController.refresh()
             }
         }
     }
@@ -390,8 +427,11 @@ final class DisplayControlController: ObservableObject {
 }
 
 private final class DisplayControlWorker {
-    private let queue = DispatchQueue(label: "hagimi.ddc", qos: .userInitiated)
+    static let shared = DisplayControlWorker()
+
+    private let queue = DispatchQueue(label: "hagimi.ddc.global", qos: .userInitiated)
     private var pendingWrites: [ControlKey: Double] = [:]
+    private var lastWrittenValues: [ControlKey: Double] = [:]
     private var debounceTimers: [ControlKey: DispatchWorkItem] = [:]
     private let debounceInterval: DispatchTimeInterval = .milliseconds(150)
 
@@ -418,11 +458,36 @@ private final class DisplayControlWorker {
                 }
                 self.debounceTimers.removeValue(forKey: key)
 
+                if let last = self.lastWrittenValues[key], abs(last - latestValue) < 0.001 {
+                    completion(DisplayWriteResult(key: key, value: latestValue, success: true))
+                    return
+                }
+
                 let success = service.setValue(latestValue, for: key.control, display: display)
+                if success {
+                    self.lastWrittenValues[key] = latestValue
+                }
                 completion(DisplayWriteResult(key: key, value: latestValue, success: success))
             }
             self.debounceTimers[key] = timer
             self.queue.asyncAfter(deadline: .now() + self.debounceInterval, execute: timer)
+        }
+    }
+
+    func clearLastValues(displayID: CGDirectDisplayID) {
+        queue.async {
+            for key in self.lastWrittenValues.keys where key.displayID == displayID {
+                self.lastWrittenValues.removeValue(forKey: key)
+            }
+            for key in self.pendingWrites.keys where key.displayID == displayID {
+                self.pendingWrites.removeValue(forKey: key)
+            }
+            // 只取消该显示器的 debounce timer,避免误伤其它正在拖动的显示器。
+            let keysToCancel = self.debounceTimers.keys.filter { $0.displayID == displayID }
+            for key in keysToCancel {
+                self.debounceTimers[key]?.cancel()
+                self.debounceTimers.removeValue(forKey: key)
+            }
         }
     }
 }
@@ -518,14 +583,10 @@ nonisolated enum DisplayControlKind: Hashable {
     }
 }
 
-private nonisolated struct ControlKey: Hashable {
-    let displayID: CGDirectDisplayID
-    let control: DisplayControlKind
-}
-
 private final class DisplayControlService {
     private let displayServices = DisplayServicesBridge()
     private let ddc = DisplayDDCBridge()
+    private let classifier = DisplayClassifier()
     private let defaults = UserDefaults.standard
 
     func displays() -> [ControlledDisplay] {
@@ -540,15 +601,24 @@ private final class DisplayControlService {
         AppLogger.ui.info("Detected \(displayIDs.count) online displays")
         ddc.refresh(displayIDs: displayIDs)
 
-        return displayIDs.map { id in
-            let isBuiltIn = CGDisplayIsBuiltin(id) != 0
+        return displayIDs.compactMap { id -> ControlledDisplay? in
+            let kind = classifier.classify(displayID: id)
+
+            if kind == .virtual || kind == .dummy || kind == .unsupported {
+                return nil
+            }
+
+            let isBuiltIn = (kind == .builtIn)
+            let useDisplayServices = (kind == .builtIn || kind == .appleNative)
             let name = displayName(for: id, isBuiltIn: isBuiltIn)
             let storageID = displayStorageID(for: id, name: name, isBuiltIn: isBuiltIn)
-            let appleBrightness = isBuiltIn ? displayServices.getBrightness(displayID: id) : nil
-            let hasDDCService = !isBuiltIn && ddc.hasService(for: id)
-            let ddcBrightness = isBuiltIn ? nil : ddc.read(.brightness, displayID: id)
-            let ddcVolume = isBuiltIn ? nil : ddc.read(.volume, displayID: id)
-            let ddcContrast = isBuiltIn ? nil : ddc.read(.contrast, displayID: id)
+
+            let nativeBrightness = useDisplayServices ? displayServices.getBrightness(displayID: id) : nil
+            let hasDDCService = (kind == .externalDDC) && ddc.hasService(for: id)
+            let ddcBrightness = (kind == .externalDDC) ? ddc.read(.brightness, displayID: id, fastFail: true) : nil
+            let ddcVolume: Double? = nil
+            let ddcContrast: Double? = nil
+
             let storedBrightness = storedValue(for: .brightness, displayStorageID: storageID)
             let storedVolume = storedValue(for: .volume, displayStorageID: storageID)
             let storedContrast = storedValue(for: .contrast, displayStorageID: storageID)
@@ -558,10 +628,12 @@ private final class DisplayControlService {
                 storageID: storageID,
                 name: name,
                 isBuiltIn: isBuiltIn,
-                supportsBrightness: isBuiltIn ? appleBrightness != nil : (ddcBrightness != nil || storedBrightness != nil || hasDDCService),
-                supportsVolume: !isBuiltIn && (ddcVolume != nil || storedVolume != nil),
-                supportsContrast: !isBuiltIn && (ddcContrast != nil || storedContrast != nil),
-                brightness: appleBrightness.map { Double($0 * 100) }
+                supportsBrightness: useDisplayServices
+                    ? (nativeBrightness != nil)
+                    : (ddcBrightness != nil || storedBrightness != nil || hasDDCService),
+                supportsVolume: !useDisplayServices && hasDDCService,
+                supportsContrast: !useDisplayServices && hasDDCService,
+                brightness: nativeBrightness.map { Double($0 * 100) }
                     ?? ddcBrightness
                     ?? storedBrightness
                     ?? DisplayControlKind.brightness.defaultValue,
@@ -576,11 +648,12 @@ private final class DisplayControlService {
     }
 
     func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> Bool {
-        guard display.supports(control) else {
-            return false
-        }
+        guard display.supports(control) else { return false }
 
-        if display.isBuiltIn {
+        let kind = classifier.classify(displayID: display.id)
+        let useDisplayServices = (kind == .builtIn || kind == .appleNative)
+
+        if useDisplayServices {
             switch control {
             case .brightness:
                 return displayServices.setBrightness(displayID: display.id, value: Float(value / 100))
