@@ -83,21 +83,11 @@ final class DisplayDDCBridge {
             ddcValue = Swift.max(1, ddcValue)
         }
 
-        if control == .volume, value <= 0 {
-            let muteSuccess = DDCTransport.write(
-                service: service.service,
-                vcpCode: DDCVCPCode.audioMuteScreenBlank.rawValue,
-                value: 1
-            )
-            if muteSuccess {
-                displayDDCLog.notice("Wrote DDC mute display \(displayID, privacy: .public)")
-                registry.recordWriteSuccess(key)
-                return true
-            }
-            registry.recordWriteFailure(key)
-            return false
-        }
-
+        // 音量降到 0 时不再写 0x8D(audioMuteScreenBlank):很多显示器不支持
+        // 这条 VCP,写失败会让本次 mute 完全失效,且后续 markControlUnsupported
+        // 会把整个音量控制禁用掉。
+        // 对齐 MonitorControl 默认行为(prefs.enableMuteUnmute = false):
+        // mute 直接写 audioSpeakerVolume(0x62) = 0,绝大多数显示器都支持。
         for vcp in orderedCandidates(for: key) {
             let success = DDCTransport.write(service: service.service, vcpCode: vcp.rawValue, value: ddcValue)
             displayDDCLog.notice(

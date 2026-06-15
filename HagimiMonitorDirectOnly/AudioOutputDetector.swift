@@ -1,3 +1,4 @@
+import AudioToolbox
 import CoreAudio
 import Foundation
 import OSLog
@@ -18,29 +19,54 @@ private let audioDetectorLog = Logger(subsystem: "com.acerola.hagimi-monitor.dir
 /// 显示器刷新、权限变化等事件里重新调用即可覆盖多数场景。
 enum AudioOutputDetector {
     /// 返回当前默认输出设备是否可以被系统直接调节音量。
-    /// - true  → 设备可控(如 AirPods),音量键应交给系统
+    /// - true  → 设备可控(如 AirPods、内建扬声器),音量键应交给系统
     /// - false → 设备不可控(如外接显示器音频),音量键可被 App 接管
+    ///
+    /// 检测顺序对齐 SimplyCoreAudio `canSetVirtualMainVolume`:
+    /// 1. `kAudioDevicePropertyVolumeScalar`(main element)settable
+    /// 2. `kAudioHardwareServiceDeviceProperty_VirtualMainVolume` settable
+    ///    ← MacBook 内建扬声器只满足这一项;漏掉它会导致音量键被错误接管。
     static func defaultOutputDeviceIsControllable() -> Bool {
         guard let deviceID = defaultOutputDeviceID() else {
             audioDetectorLog.notice("No default output device; treating as not controllable")
             return false
         }
 
-        // 设备存在可写的 VolumeScalar 属性(element 0 = master/main channel)
-        // → 系统可直接调音量,不需要 App 接管。
-        var volumeProperty = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyVolumeScalar,
-            mScope: kAudioDevicePropertyScopeOutput,
+        if isPropertySettable(
+            deviceID: deviceID,
+            selector: kAudioDevicePropertyVolumeScalar,
+            scope: kAudioDevicePropertyScopeOutput
+        ) {
+            return true
+        }
+
+        // Fallback: virtual main volume(MacBook 内建扬声器的实际可写属性)。
+        if isPropertySettable(
+            deviceID: deviceID,
+            selector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
+            scope: kAudioDevicePropertyScopeOutput
+        ) {
+            return true
+        }
+
+        return false
+    }
+
+    private static func isPropertySettable(
+        deviceID: AudioDeviceID,
+        selector: AudioObjectPropertySelector,
+        scope: AudioObjectPropertyScope
+    ) -> Bool {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: scope,
             mElement: kAudioObjectPropertyElementMain
         )
-        guard AudioObjectHasProperty(deviceID, &volumeProperty) else {
+        guard AudioObjectHasProperty(deviceID, &address) else {
             return false
         }
         var isSettable: DarwinBoolean = false
-        var size = UInt32(MemoryLayout<DarwinBoolean>.size)
-        let status = withUnsafeMutablePointer(to: &isSettable) { ptr in
-            AudioObjectGetPropertyData(deviceID, &volumeProperty, 0, nil, &size, ptr)
-        }
+        let status = AudioObjectIsPropertySettable(deviceID, &address, &isSettable)
         return status == noErr && isSettable.boolValue
     }
 

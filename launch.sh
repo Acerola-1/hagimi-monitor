@@ -10,11 +10,16 @@ set -e
 
 # 解析 -p 标志
 PACKAGE=false
+REVEAL=false
 POSITIONAL=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         -p|--package)
             PACKAGE=true
+            shift
+            ;;
+        -r|--reveal)
+            REVEAL=true
             shift
             ;;
         *)
@@ -72,12 +77,22 @@ fi
 # 启动
 APP_PATH="$BUILD_DIR/$BRANCH/$APP_NAME.app"
 if [ -d "$APP_PATH" ]; then
-    echo "启动 $BRANCH 版本 ($SCHEME): $APP_PATH"
+    echo ""
+    echo "================================================================"
+    echo "  App 路径 (用于系统设置授权):"
+    echo "  $APP_PATH"
+    echo "================================================================"
+    echo ""
+    echo "启动 $BRANCH 版本 ($SCHEME)"
     echo "关闭正在运行的 HagimiMonitor 实例..."
     killall HagimiMonitor >/dev/null 2>&1 || true
     killall HagimiMonitorDirect >/dev/null 2>&1 || true
     sleep 0.3
     open -n "$APP_PATH"
+    # 仅当传入 -r/--reveal 时在 Finder 中显示,方便拖到系统设置授权列表
+    if $REVEAL; then
+        open -R "$APP_PATH"
+    fi
 else
     echo "错误: 找不到构建产物 $APP_PATH"
     exit 1
