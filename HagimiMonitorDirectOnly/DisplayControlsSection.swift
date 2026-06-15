@@ -295,6 +295,7 @@ final class DisplayControlController: ObservableObject {
     private let service = DisplayControlService()
     private let worker = DisplayControlWorker.shared
     private let changeObserver = DisplayChangeObserver()
+    private let audioOutputObserver = AudioOutputChangeObserver()
     private lazy var mediaKeyController = MediaKeyController()
     private var settingsObservation: AnyCancellable?
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
@@ -302,6 +303,11 @@ final class DisplayControlController: ObservableObject {
     init() {
         changeObserver.start { [weak self] in
             self?.refreshAsync()
+        }
+        // 默认音频输出设备变化(切 AirPods/内建扬声器/外接屏喇叭等)时,
+        // 重新评估音量键接管策略。轻量刷新,不做全量 DDC 重扫。
+        audioOutputObserver.start { [weak self] in
+            self?.mediaKeyController.refresh()
         }
     }
 
