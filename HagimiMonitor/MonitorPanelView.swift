@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import Charts
 
 private let panelTimeFormatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -16,11 +15,11 @@ struct MonitorPanelView: View {
     @State private var expandedKinds: Set<MonitorKind> = []
 
     var body: some View {
-        let theme = MonitorPanelTheme(
-            palette: MonitorPalette(
-                preference: store.settings.colorSchemePreference,
-                colorScheme: colorScheme
-            )
+        // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
+        // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
+        let theme = ThemeCache.theme(
+            preference: store.settings.colorSchemePreference,
+            scheme: colorScheme
         )
 
         GlassEffectContainer(spacing: 8) {
@@ -120,6 +119,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .gpu:
             MetricGlassRow(
                 module: module,
@@ -131,6 +131,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .memory:
             MetricGlassRow(
                 module: module,
@@ -143,6 +144,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .storage:
             MetricGlassRow(
                 module: module,
@@ -153,6 +155,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .network:
             NetworkGlassRow(
                 module: module,
@@ -162,6 +165,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .battery:
             BatteryGlassRow(
                 module: module,
@@ -171,6 +175,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         }
     }
 
@@ -205,7 +210,7 @@ struct MonitorPanelView: View {
 
 // MARK: - Metric Row
 
-private struct MetricGlassRow: View {
+private struct MetricGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let detail: String
@@ -215,6 +220,20 @@ private struct MetricGlassRow: View {
     var topMemoryProcesses: [TopMemoryProcess] = []
     var showMemoryProcesses = true
     var toggleExpansion: (() -> Void)?
+
+    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
+    // 闭包不参与相等判定。未变化的行 == 成立时 SwiftUI 跳过整行重绘。
+    static func == (lhs: MetricGlassRow, rhs: MetricGlassRow) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.detail == rhs.detail
+            && lhs.samples == rhs.samples
+            && lhs.details == rhs.details
+            && lhs.isExpanded == rhs.isExpanded
+            && lhs.topMemoryProcesses == rhs.topMemoryProcesses
+            && lhs.showMemoryProcesses == rhs.showMemoryProcesses
+    }
 
     private var tint: Color {
         theme.moduleTint(for: module.kind)
@@ -595,12 +614,20 @@ struct StorageVolumeInfo: Identifiable {
 
 // MARK: - Network Row
 
-private struct NetworkGlassRow: View {
+private struct NetworkGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
+
+    static func == (lhs: NetworkGlassRow, rhs: NetworkGlassRow) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.details == rhs.details
+            && lhs.isExpanded == rhs.isExpanded
+    }
 
     private var tint: Color {
         theme.moduleTint(for: module.kind)
@@ -674,12 +701,20 @@ private struct NetworkGlassRow: View {
 
 // MARK: - Battery Row
 
-private struct BatteryGlassRow: View {
+private struct BatteryGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
+
+    static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.details == rhs.details
+            && lhs.isExpanded == rhs.isExpanded
+    }
 
     private var tint: Color {
         theme.moduleTint(for: module.kind)
@@ -1087,6 +1122,32 @@ struct MonitorPanelTheme {
 
     func badgeFill(for kind: MonitorKind) -> Color {
         palette.badgeFill(for: kind)
+    }
+}
+
+/// 按 `(偏好, 外观)` 缓存 MonitorPanelTheme。preference 只有 balanced/vibrant 两个值,
+/// colorScheme 只有 light/dark,最多 4 个组合,命中率近乎 100%,避免每帧重建整棵
+/// Color 树。访问仅发生在 MainActor(body 求值),无需加锁。
+@MainActor
+private enum ThemeCache {
+    private struct Key: Hashable {
+        let preference: MonitorColorSchemePreference
+        let scheme: ColorScheme
+    }
+
+    private static var cache: [Key: MonitorPanelTheme] = [:]
+
+    static func theme(
+        preference: MonitorColorSchemePreference,
+        scheme: ColorScheme
+    ) -> MonitorPanelTheme {
+        let key = Key(preference: preference, scheme: scheme)
+        if let cached = cache[key] {
+            return cached
+        }
+        let theme = MonitorPanelTheme(palette: MonitorPalette(preference: preference, colorScheme: scheme))
+        cache[key] = theme
+        return theme
     }
 }
 

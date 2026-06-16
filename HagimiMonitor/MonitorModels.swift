@@ -21,7 +21,7 @@ enum HaloRingSource: String, CaseIterable, Identifiable {
     }
 }
 
-enum MemoryPressureLevel {
+enum MemoryPressureLevel: Equatable {
     case normal
     case warning
     case critical
@@ -141,14 +141,14 @@ struct MetricSwitch: Identifiable, Hashable {
     let isDefault: Bool
 }
 
-struct MonitorMetric: Identifiable {
+struct MonitorMetric: Identifiable, Equatable {
     let name: String
     let value: String
 
     var id: String { name }
 }
 
-struct MonitorModule: Identifiable {
+struct MonitorModule: Identifiable, Equatable {
     let kind: MonitorKind
     var context: String? = nil
     var value: Double
@@ -209,6 +209,7 @@ final class MonitorStore: ObservableObject {
     private var memoryProcTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
+    private let memoryProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.memory-proc", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var menuBarTargetComputeLoad = 0.0
     private var isSampling = false
@@ -256,10 +257,16 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 按当前设置采样内存占用最高的进程。
+    // 进程枚举 + proc_pid_rusage 耗时可达上百毫秒,放后台采样、回主线程赋值,避免卡 UI。
+    // 用独立队列而非 samplingQueue,以免和主采样串行排队拖慢刷新节奏。
     private func refreshTopMemoryProcesses() {
-        topMemoryProcesses = sampleTopMemoryProcesses(
-            includeSystemProcesses: settings.memoryShowSystemProcesses
-        )
+        let includeSystem = settings.memoryShowSystemProcesses
+        memoryProcQueue.async { [weak self] in
+            let processes = sampleTopMemoryProcesses(includeSystemProcesses: includeSystem)
+            DispatchQueue.main.async {
+                self?.topMemoryProcesses = processes
+            }
+        }
     }
 
     deinit {

@@ -2,7 +2,7 @@ import AppKit
 import Darwin
 import Foundation
 
-struct TopMemoryProcess: Identifiable {
+struct TopMemoryProcess: Identifiable, Equatable {
     let pid: pid_t
     let name: String
     /// 进程真实内存占用(phys_footprint),与活动监视器"内存"列口径一致。

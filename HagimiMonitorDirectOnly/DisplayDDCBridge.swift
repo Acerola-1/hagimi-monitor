@@ -154,6 +154,81 @@ private enum DDCTransport {
     }
 
     private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], longerDelay: Bool = false, maxRetries: Int = 5) -> Bool {
+        // IOAVServiceReadI2C 是阻塞内核调用,异常时(热插拔/唤醒)可能长时间不返回。
+        // 派到 serial ioQueue 执行 + semaphore 超时保护,避免拖死调用方的 hagimi.ddc.global 队列连累 UI。
+        // 超时后开启熔断(circuit breaker):冷却期内直接 fast-fail,不再往可能已被 hang 任务
+        // 占死的 ioQueue 派活,把"后续每次调用都白等到超时"降为"每个冷却周期仅探测一次"。
+        if circuitIsOpen() {
+            return false
+        }
+
+        // escaping 闭包不能捕获 inout,故拷贝 send/reply 后异步、完成回写(报文仅十几字节)。
+        var sendCopy = send
+        var replyCopy = reply
+        let semaphore = DispatchSemaphore(value: 0)
+        var result = false
+        Self.ioQueue.async {
+            result = communicateUnlocked(
+                service: service,
+                send: &sendCopy,
+                reply: &replyCopy,
+                longerDelay: longerDelay,
+                maxRetries: maxRetries
+            )
+            semaphore.signal()
+        }
+        if semaphore.wait(timeout: .now() + Self.communicateTimeout) == .timedOut {
+            tripCircuit()
+            displayDDCLog.error("DDC communicate timed out after \(Self.communicateTimeoutSeconds, privacy: .public)s; circuit opened for \(Self.circuitCooldownSeconds, privacy: .public)s to avoid queue starvation")
+            return false
+        }
+        resetCircuit()
+        send = sendCopy
+        reply = replyCopy
+        return result
+    }
+
+    // MARK: - Circuit Breaker
+
+    private static let circuitLock = NSLock()
+    /// 熔断打开的截止时刻(monotonic);nil 表示闭合。访问受 circuitLock 保护。
+    private nonisolated(unsafe) static var circuitOpenUntil: DispatchTime?
+
+    /// 熔断冷却时长。> communicateTimeout,确保上一个 hang 任务大概率已退出再放行探测。
+    private static let circuitCooldownSeconds: Int = 10
+
+    private static func circuitIsOpen() -> Bool {
+        circuitLock.lock()
+        defer { circuitLock.unlock() }
+        guard let until = circuitOpenUntil else { return false }
+        // 冷却到期则闭合,放行一次探测;若探测再超时会重新打开。
+        if DispatchTime.now() >= until {
+            circuitOpenUntil = nil
+            return false
+        }
+        return true
+    }
+
+    private static func tripCircuit() {
+        circuitLock.lock()
+        circuitOpenUntil = .now() + .seconds(circuitCooldownSeconds)
+        circuitLock.unlock()
+    }
+
+    private static func resetCircuit() {
+        circuitLock.lock()
+        circuitOpenUntil = nil
+        circuitLock.unlock()
+    }
+
+    /// 专用 serial I/O 队列,保证一次只跑一个 I/O(被遗弃的超时 I/O 不会与下次并发)。
+    private static let ioQueue = DispatchQueue(label: "hagimi.ddc.io")
+
+    /// 超时熔断阈值。覆盖正常最坏情况(多 VCP 候选码 × maxRetries ≈ 0.95s)留足余量。
+    private static let communicateTimeoutSeconds: Int = 3
+    private static var communicateTimeout: DispatchTimeInterval { .seconds(communicateTimeoutSeconds) }
+
+    private static func communicateUnlocked(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], longerDelay: Bool, maxRetries: Int) -> Bool {
         let dataAddress = Self.dataAddress
         var success = false
         var packet = [UInt8(0x80 | (send.count + 1)), UInt8(send.count)] + send + [0]
