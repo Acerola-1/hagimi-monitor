@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import Charts
 
 private let panelTimeFormatter: DateFormatter = {
     let formatter = DateFormatter()
@@ -16,11 +15,11 @@ struct MonitorPanelView: View {
     @State private var expandedKinds: Set<MonitorKind> = []
 
     var body: some View {
-        let theme = MonitorPanelTheme(
-            palette: MonitorPalette(
-                preference: store.settings.colorSchemePreference,
-                colorScheme: colorScheme
-            )
+        // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
+        // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
+        let theme = ThemeCache.theme(
+            preference: store.settings.colorSchemePreference,
+            scheme: colorScheme
         )
 
         GlassEffectContainer(spacing: 8) {
@@ -120,6 +119,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .gpu:
             MetricGlassRow(
                 module: module,
@@ -131,6 +131,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .memory:
             MetricGlassRow(
                 module: module,
@@ -143,6 +144,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .storage:
             MetricGlassRow(
                 module: module,
@@ -153,6 +155,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .network:
             NetworkGlassRow(
                 module: module,
@@ -162,6 +165,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         case .battery:
             BatteryGlassRow(
                 module: module,
@@ -171,6 +175,7 @@ struct MonitorPanelView: View {
             ) {
                 toggleExpansion(for: module.kind)
             }
+            .equatable()
         }
     }
 
@@ -205,7 +210,7 @@ struct MonitorPanelView: View {
 
 // MARK: - Metric Row
 
-private struct MetricGlassRow: View {
+private struct MetricGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let detail: String
@@ -215,6 +220,20 @@ private struct MetricGlassRow: View {
     var topMemoryProcesses: [TopMemoryProcess] = []
     var showMemoryProcesses = true
     var toggleExpansion: (() -> Void)?
+
+    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
+    // 闭包不参与相等判定。未变化的行 == 成立时 SwiftUI 跳过整行重绘。
+    static func == (lhs: MetricGlassRow, rhs: MetricGlassRow) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.detail == rhs.detail
+            && lhs.samples == rhs.samples
+            && lhs.details == rhs.details
+            && lhs.isExpanded == rhs.isExpanded
+            && lhs.topMemoryProcesses == rhs.topMemoryProcesses
+            && lhs.showMemoryProcesses == rhs.showMemoryProcesses
+    }
 
     private var tint: Color {
         theme.moduleTint(for: module.kind)
@@ -324,7 +343,19 @@ private struct MetricDetailGrid: View {
     let kind: MonitorKind
     let theme: MonitorPanelTheme
 
-    @State private var containerWidth: CGFloat = 0
+    /// 需要占满整行的长值字段(IP、启动时间等):它们的 value 太长,
+    /// 塞进两列会撑破列宽或触发不可控换行,故显式整行、排到网格末尾。
+    private static let fullRowMetricIDs: Set<String> = [
+        "ip-address", "public-ip", "uptime", "adapter"
+    ]
+
+    private var shortMetrics: [MonitorMetric] {
+        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) }
+    }
+
+    private var fullRowMetrics: [MonitorMetric] {
+        metrics.filter { Self.fullRowMetricIDs.contains($0.name) }
+    }
 
     var body: some View {
         VStack(spacing: 7) {
@@ -334,117 +365,72 @@ private struct MetricDetailGrid: View {
                 .padding(.leading, 28)
 
             content
-                .background(
-                    GeometryReader { proxy in
-                        Color.clear.preference(
-                            key: MetricGridWidthPreferenceKey.self,
-                            value: proxy.size.width
-                        )
-                    }
-                )
                 .padding(.leading, 28)
-                .onPreferenceChange(MetricGridWidthPreferenceKey.self) { width in
-                    containerWidth = width
-                }
         }
     }
 
-    @ViewBuilder
+    // 固定两列 Grid:每列 label 左对齐、value 右对齐到列右边界,
+    // 短值因此落在两条稳定竖直轴上,眼睛可顺列下扫;长值统一在下方整行区。
     private var content: some View {
-        // 网络模块：长字符串（IP）改用单列 VStack，让内容主动声明宽度推动面板撑宽。
-        if kind == .network {
-            VStack(spacing: MetricGridMetrics.rowSpacing) {
-                ForEach(metrics) { metric in
-                    metricCell(metric, isFullRow: false, theme: theme)
+        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: MetricGridMetrics.rowSpacing) {
+                ForEach(Array(rowPairs.enumerated()), id: \.offset) { _, pair in
+                    GridRow {
+                        metricCell(pair.0)
+                        if let right = pair.1 {
+                            metricCell(right)
+                        } else {
+                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                        }
+                    }
                 }
             }
-        } else {
-            let isFullRowFlags = computeIsFullRowFlags(width: containerWidth)
-            MetricFlowLayout(
-                columnSpacing: MetricGridMetrics.columnSpacing,
-                rowSpacing: MetricGridMetrics.rowSpacing
-            ) {
-                ForEach(Array(metrics.enumerated()), id: \.element.id) { index, metric in
-                    metricCell(
-                        metric,
-                        isFullRow: isFullRowFlags[index],
-                        theme: theme
-                    )
-                }
+
+            ForEach(fullRowMetrics) { metric in
+                metricCell(metric)
             }
         }
     }
 
-    /// 父视图集中决策：用 AppKit 预测量得到每个 cell 自然尺寸，
-    /// 调 `MetricFlowPlacer` 跑一次相同算法，frame.width ≥ containerWidth - 1
-    /// 即视为整行槽。`MetricFlowLayout` 内部会再跑一次摆位，输入相同，结果一致。
-    private func computeIsFullRowFlags(width: CGFloat) -> [Bool] {
-        guard width > 0 else { return Array(repeating: false, count: metrics.count) }
-
-        let sizes = metrics.map { metric in
-            MetricCellSizing.naturalSize(
-                label: localizedMetricName(kind: kind, id: metric.name),
-                value: localizedMetricValue(kind: kind, metric: metric)
-            )
+    /// 把短值两两配对成 Grid 行;奇数个时最后一项右槽为 nil。
+    private var rowPairs: [(MonitorMetric, MonitorMetric?)] {
+        let items = shortMetrics
+        var pairs: [(MonitorMetric, MonitorMetric?)] = []
+        var index = 0
+        while index < items.count {
+            let left = items[index]
+            let right = index + 1 < items.count ? items[index + 1] : nil
+            pairs.append((left, right))
+            index += 2
         }
-        let result = MetricFlowPlacer.place(
-            sizes: sizes,
-            containerWidth: width,
-            columnSpacing: MetricGridMetrics.columnSpacing,
-            rowSpacing: MetricGridMetrics.rowSpacing
-        )
-        return result.frames.map { $0.width >= width - 1 }
+        return pairs
     }
 
-    private func metricCell(
-        _ metric: MonitorMetric,
-        isFullRow: Bool,
-        theme: MonitorPanelTheme
-    ) -> some View {
+    private func metricCell(_ metric: MonitorMetric) -> some View {
         let labelText = localizedMetricName(kind: kind, id: metric.name)
         let valueText = localizedMetricValue(kind: kind, metric: metric)
 
-        let label = Text(labelText)
-            .monitorPanelCaptionFont(.footnote)
-            .foregroundStyle(theme.captionText)
-            .lineLimit(1)
-            .layoutPriority(1)
+        return HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
+            Text(labelText)
+                .monitorPanelCaptionFont(.footnote)
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+                .layoutPriority(1)
 
-        let value = Text(valueText)
-            .monitorPanelMonoFont(.footnote, weight: .semibold)
-            .foregroundStyle(theme.secondaryText)
-            .lineLimit(1)
-            .layoutPriority(2)
-            .help(valueText)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                copyToPasteboard(metric.value)
-            }
+            Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
-        return Group {
-            if isFullRow {
-                // detail row 形态：label 紧贴 value，整体偏左，右侧留空。
-                HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-                    label
-                    value
-                    Spacer(minLength: 0)
+            Text(valueText)
+                .monitorPanelMonoFont(.footnote, weight: .semibold)
+                .foregroundStyle(theme.secondaryText)
+                .lineLimit(1)
+                .layoutPriority(2)
+                .help(valueText)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    copyToPasteboard(metric.value)
                 }
-            } else {
-                // 半行形态：label 左 + Spacer 撑开 + value 贴右。
-                HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-                    label
-                    Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
-                    value
-                }
-            }
         }
-    }
-}
-
-private struct MetricGridWidthPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -595,12 +581,20 @@ struct StorageVolumeInfo: Identifiable {
 
 // MARK: - Network Row
 
-private struct NetworkGlassRow: View {
+private struct NetworkGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
+
+    static func == (lhs: NetworkGlassRow, rhs: NetworkGlassRow) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.details == rhs.details
+            && lhs.isExpanded == rhs.isExpanded
+    }
 
     private var tint: Color {
         theme.moduleTint(for: module.kind)
@@ -674,12 +668,20 @@ private struct NetworkGlassRow: View {
 
 // MARK: - Battery Row
 
-private struct BatteryGlassRow: View {
+private struct BatteryGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
+
+    static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.details == rhs.details
+            && lhs.isExpanded == rhs.isExpanded
+    }
 
     private var tint: Color {
         theme.moduleTint(for: module.kind)
@@ -1087,6 +1089,32 @@ struct MonitorPanelTheme {
 
     func badgeFill(for kind: MonitorKind) -> Color {
         palette.badgeFill(for: kind)
+    }
+}
+
+/// 按 `(偏好, 外观)` 缓存 MonitorPanelTheme。preference 只有 balanced/vibrant 两个值,
+/// colorScheme 只有 light/dark,最多 4 个组合,命中率近乎 100%,避免每帧重建整棵
+/// Color 树。访问仅发生在 MainActor(body 求值),无需加锁。
+@MainActor
+private enum ThemeCache {
+    private struct Key: Hashable {
+        let preference: MonitorColorSchemePreference
+        let scheme: ColorScheme
+    }
+
+    private static var cache: [Key: MonitorPanelTheme] = [:]
+
+    static func theme(
+        preference: MonitorColorSchemePreference,
+        scheme: ColorScheme
+    ) -> MonitorPanelTheme {
+        let key = Key(preference: preference, scheme: scheme)
+        if let cached = cache[key] {
+            return cached
+        }
+        let theme = MonitorPanelTheme(palette: MonitorPalette(preference: preference, colorScheme: scheme))
+        cache[key] = theme
+        return theme
     }
 }
 

@@ -33,6 +33,8 @@ final class MediaKeyTapBridge {
         self.enabledKeys = keys
         self.handler = handler
 
+        // passUnretained:bridge 的生命周期由外部 owner(MediaKeyController)管理;
+        // deinit 调用 stop() 同步移除 runLoopSource,移除完成后 in-flight 回调已退出。
         let mask = (1 << 14)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,

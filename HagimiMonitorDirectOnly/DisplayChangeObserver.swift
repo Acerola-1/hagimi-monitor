@@ -10,6 +10,9 @@ final class DisplayChangeObserver {
     // 方法里发生,但 deinit 在非隔离上下文执行,为避免 Swift 6 严格并发告警,
     // 标记为 nonisolated(unsafe);重复 CGDisplayRemoveReconfigurationCallback 是安全的。
     private nonisolated(unsafe) var registered = false
+    // NSWorkspace 通知注册的幂等性标志。理由同 `registered`:deinit 为非隔离上下文,
+    // 重复 removeObserver 是安全的(NotificationCenter 文档保证)。
+    private nonisolated(unsafe) var workspaceRegistered = false
 
     func start(onChange: @escaping () -> Void) {
         callback = onChange
@@ -17,12 +20,15 @@ final class DisplayChangeObserver {
             CGDisplayRegisterReconfigurationCallback(Self.cgCallback, Unmanaged.passUnretained(self).toOpaque())
             registered = true
         }
-        NSWorkspace.shared.notificationCenter.addObserver(
-            self,
-            selector: #selector(systemDidWake(_:)),
-            name: NSWorkspace.didWakeNotification,
-            object: nil
-        )
+        if !workspaceRegistered {
+            NSWorkspace.shared.notificationCenter.addObserver(
+                self,
+                selector: #selector(systemDidWake(_:)),
+                name: NSWorkspace.didWakeNotification,
+                object: nil
+            )
+            workspaceRegistered = true
+        }
     }
 
     func stop() {
@@ -30,15 +36,22 @@ final class DisplayChangeObserver {
             CGDisplayRemoveReconfigurationCallback(Self.cgCallback, Unmanaged.passUnretained(self).toOpaque())
             registered = false
         }
-        NSWorkspace.shared.notificationCenter.removeObserver(self)
+        if workspaceRegistered {
+            NSWorkspace.shared.notificationCenter.removeObserver(self)
+            workspaceRegistered = false
+        }
         debounceTimer?.cancel()
         debounceTimer = nil
     }
 
     deinit {
-        // deinit 为非隔离上下文。CG 回调注销不依赖 actor 状态,且重复注销安全。
+        // deinit 为非隔离上下文。CG 回调注销与 NSWorkspace removeObserver 均不依赖
+        // actor 状态,且重复注销安全;缺失则对象释放后通知可能向已 dealloc 对象发消息。
         if registered {
             CGDisplayRemoveReconfigurationCallback(Self.cgCallback, Unmanaged.passUnretained(self).toOpaque())
+        }
+        if workspaceRegistered {
+            NSWorkspace.shared.notificationCenter.removeObserver(self)
         }
     }
 
