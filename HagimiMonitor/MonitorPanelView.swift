@@ -1137,13 +1137,6 @@ private struct MemoryProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                HStack {
-                    Text(String(localized: "top-memory-processes"))
-                        .monitorPanelCaptionFont(weight: .semibold)
-                        .foregroundStyle(theme.primaryText)
-                    Spacer()
-                }
-
                 ForEach(Array(processes.enumerated()), id: \.element.id) { i, proc in
                     HStack(spacing: 6) {
                         Text("\(i + 1).")
@@ -1156,7 +1149,6 @@ private struct MemoryProcessList: View {
                             .foregroundStyle(theme.primaryText)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .layoutPriority(1)
 
                         Spacer(minLength: 4)
 
@@ -1164,6 +1156,8 @@ private struct MemoryProcessList: View {
                             .monitorPanelMonoFont(.caption2, weight: .medium)
                             .foregroundStyle(theme.secondaryText)
                             .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .layoutPriority(1)
                     }
                 }
             }
