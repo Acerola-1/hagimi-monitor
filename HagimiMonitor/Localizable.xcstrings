@@ -2520,6 +2520,28 @@
         }
       }
     },
+    "settings.sidebar.statistics": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "统计"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistics"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "統計"
+          }
+        }
+      }
+    },
     "settings.theme": {
       "localizations": {
         "zh-Hans": {

@@ -37,6 +37,8 @@ struct SettingsRootView: View {
         case .displayModule:
             DisplayModuleSettingsView(settings: settings)
         #endif
+        case .statistics:
+            Text("Statistics Placeholder")
         case .about:
             AboutSettingsView()
         }
@@ -126,6 +128,8 @@ extension SettingsTab {
             return nil
         case .about:
             return .about
+        case .statistics:
+            return .statistics
         }
     }
 }
