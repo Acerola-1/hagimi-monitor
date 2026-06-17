@@ -12,11 +12,18 @@ struct MenuBarComputeRingIconCacheTests {
         #expect(a === b)
     }
 
-    @Test("Loads inside same 2% bucket hit same cache entry")
+    @Test("Loads inside same 1% bucket hit same cache entry")
     func quantizedBucketCollapsesNeighbors() {
         let a = MenuBarComputeRingIcon.image(load: 50.0, darkMode: false, loadLevel: .idle)
-        let b = MenuBarComputeRingIcon.image(load: 50.9, darkMode: false, loadLevel: .idle)
+        let b = MenuBarComputeRingIcon.image(load: 50.4, darkMode: false, loadLevel: .idle)
         #expect(a === b)
+    }
+
+    @Test("Loads in adjacent 1% buckets get different NSImages")
+    func adjacentBucketsMiss() {
+        let a = MenuBarComputeRingIcon.image(load: 50.0, darkMode: false, loadLevel: .idle)
+        let b = MenuBarComputeRingIcon.image(load: 50.9, darkMode: false, loadLevel: .idle)
+        #expect(a !== b)
     }
 
     @Test("Loads in different buckets get different NSImages")

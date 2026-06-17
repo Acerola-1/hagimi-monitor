@@ -389,13 +389,12 @@ final class MonitorStore: ObservableObject {
     }
 
     private static func quantizeLoad(_ load: Double) -> Double {
-        let clamped = min(100.0, max(0.0, load))
-        return (clamped / 2.0).rounded() * 2.0
+        min(100.0, max(0.0, load)).rounded()
     }
 
     private func ensureSmoothingTimer() {
         guard smoothingTimerCancellable == nil else { return }
-        smoothingTimerCancellable = Timer.publish(every: 0.5, on: .main, in: .common)
+        smoothingTimerCancellable = Timer.publish(every: MonitorConstants.menuBarLoadSmoothFrameInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 self?.advanceSmoothing()
@@ -423,12 +422,27 @@ enum ComputeLoadModel {
     static func combined(
         cpuValue: Double,
         gpuValue: Double,
-        memoryPressure: MemoryPressureLevel = .normal
+        memoryPressure: MemoryPressureLevel = .normal,
+        sharpness: Double = MonitorConstants.computeLoadSoftmaxSharpness
     ) -> Double {
         let cpu = min(100, max(0, cpuValue))
         let gpu = min(100, max(0, gpuValue))
         let memory = memoryPressureScore(memoryPressure)
-        return cpu * 0.4 + gpu * 0.4 + memory * 0.2
+        return softmaxAggregate([cpu, gpu, memory], sharpness: sharpness)
+    }
+
+    /// 归一化 LSE（softmax mean）：结果严格落在 [mean, max] 之间。
+    /// sharpness(k)→0 趋近均值，→∞ 趋近最大值；体现「多个子系统同时吃紧 = 整体更糟」。
+    /// 减去 max 做指数平移以避免溢出。
+    static func softmaxAggregate(_ values: [Double], sharpness k: Double) -> Double {
+        guard let maxValue = values.max(), !values.isEmpty else {
+            return 0
+        }
+        guard k > 0 else {
+            return values.reduce(0, +) / Double(values.count)
+        }
+        let expSum = values.reduce(0.0) { $0 + exp(k * ($1 - maxValue)) }
+        return maxValue + log(expSum / Double(values.count)) / k
     }
 
     static func memoryPressureScore(_ pressure: MemoryPressureLevel) -> Double {
@@ -445,10 +459,12 @@ enum ComputeLoadModel {
     }
 
     static func loadLevel(for load: Double) -> MenuBarComputeLoadLevel {
+        // 阈值按 softmax 聚合(k=0.08)的值分布校准：单瓶颈天花板≈86，
+        // 故 stressed 下探到 78 以让「单子系统近满/双高/内存critical」触红。
         switch load {
-        case ..<35: return .idle
-        case ..<65: return .working
-        case ..<85: return .busy
+        case ..<25: return .idle
+        case ..<50: return .working
+        case ..<78: return .busy
         default: return .stressed
         }
     }
@@ -456,17 +472,22 @@ enum ComputeLoadModel {
     static func smoothedDisplayValue(
         current: Double,
         target: Double,
-        maxStep: Double = MonitorConstants.menuBarLoadSmoothStep
+        factor: Double = MonitorConstants.menuBarLoadSmoothFactor,
+        minStep: Double = MonitorConstants.menuBarLoadSmoothMinStep
     ) -> Double {
         let clampedCurrent = min(100, max(0, current))
         let clampedTarget = min(100, max(0, target))
         let delta = clampedTarget - clampedCurrent
+        let distance = abs(delta)
 
-        if abs(delta) <= maxStep {
+        // 已足够接近，直接落定
+        if distance <= minStep {
             return clampedTarget
         }
 
-        return clampedCurrent + (delta > 0 ? maxStep : -maxStep)
+        // ease-out：按距离比例靠拢，起步快收尾缓；尾段用 minStep 兜底保证收敛
+        let step = max(minStep, distance * factor)
+        return clampedCurrent + (delta > 0 ? step : -step)
     }
 
     static func shouldUpdateMenuBarTarget(
