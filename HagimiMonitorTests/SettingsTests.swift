@@ -1,8 +1,3 @@
-//
-//  SettingsTests.swift
-//  HagimiMonitorTests
-//
-
 import Foundation
 import Testing
 @testable import HagimiMonitor

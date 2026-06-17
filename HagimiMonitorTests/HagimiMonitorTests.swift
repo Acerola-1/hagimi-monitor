@@ -1,10 +1,3 @@
-//
-//  HagimiMonitorTests.swift
-//  HagimiMonitorTests
-//
-//  Created by Acerola on 2026/5/11.
-//
-
 import Foundation
 import Testing
 @testable import HagimiMonitor
@@ -74,21 +67,17 @@ struct HagimiMonitorTests {
         let load = ComputeLoadModel.combined(cpuValue: 5, gpuValue: 5, memoryPressure: .critical)
         #expect(load >= 50)
         #expect(ComputeLoadModel.loadLevel(for: load) == .busy)
-        // 全部空闲时聚合值应接近 0，不误报
         #expect(ComputeLoadModel.combined(cpuValue: 5, gpuValue: 5, memoryPressure: .normal) < 10)
     }
 
     @Test func loadLevelThresholdsCalibratedForSoftmax() {
-        // 边界校准：25 / 50 / 78
         #expect(ComputeLoadModel.loadLevel(for: 24) == .idle)
         #expect(ComputeLoadModel.loadLevel(for: 25) == .working)
         #expect(ComputeLoadModel.loadLevel(for: 49) == .working)
         #expect(ComputeLoadModel.loadLevel(for: 50) == .busy)
         #expect(ComputeLoadModel.loadLevel(for: 77) == .busy)
         #expect(ComputeLoadModel.loadLevel(for: 78) == .stressed)
-        // 单 CPU 跑满(softmax≈86)应进 stressed
         #expect(ComputeLoadModel.loadLevel(for: ComputeLoadModel.combined(cpuValue: 100, gpuValue: 0)) == .stressed)
-        // 单 CPU 70%(softmax≈56)应是 busy
         #expect(ComputeLoadModel.loadLevel(for: ComputeLoadModel.combined(cpuValue: 70, gpuValue: 0)) == .busy)
     }
 
@@ -96,9 +85,7 @@ struct HagimiMonitorTests {
         // ease-out：每帧靠拢 distance×factor(0.10)，不小于 minStep(0.6)
         #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 10, target: 50) - 14) < 1e-9)
         #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 50, target: 10) - 46) < 1e-9)
-        // 尾段按 minStep 兜底推进
         #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 49, target: 50) - 49.6) < 1e-9)
-        // 距离已在 minStep 内，直接落定到目标
         #expect(ComputeLoadModel.smoothedDisplayValue(current: 49.7, target: 50) == 50)
     }
 

@@ -51,7 +51,6 @@ final class SystemMonitorSampler {
             } else if modulesByKind.isEmpty {
                 return .failure(errors[0])
             } else {
-                // Partial success: some modules sampled, some failed
                 AppLogger.sampler.error("Partial sampling failure: \(errors.map(\.description).joined(separator: ", "), privacy: .public)")
                 return .success(SystemMonitorSnapshot(modules: modules))
             }

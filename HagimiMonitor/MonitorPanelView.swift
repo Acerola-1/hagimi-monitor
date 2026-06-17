@@ -24,7 +24,6 @@ struct MonitorPanelView: View {
 
         GlassEffectContainer(spacing: 8) {
             VStack(spacing: 6) {
-                // Header: Live 脉冲点 + 时间
                 header(theme: theme)
 
                 ForEach(store.modules) { module in
@@ -216,10 +215,7 @@ struct MonitorPanelView: View {
         && visibleKinds.allSatisfy { expandedKinds.contains($0) }
     }
 
-    /// 切换"全展开 / 全收起"。
-    /// 已全展开 → 清空 expandedKinds(全收起);否则 → 写满 visibleKinds(全展开)。
-    /// 残留在 expandedKinds 里、当前不可见的 kind 不影响判定;全展开分支会用
-    /// 可见集合覆盖,残留也会被一同清掉。
+    /// 残留 expandedKinds 里的不可见 kind 不影响判定;全展开分支用可见集合覆盖,顺便清掉残留。
     private func toggleAllExpansion() {
         withAnimation(.smooth(duration: 0.18)) {
             if allVisibleRowsExpanded {
@@ -424,7 +420,7 @@ private struct MetricDetailGrid: View {
         }
     }
 
-    /// 把短值两两配对成 Grid 行;奇数个时最后一项右槽为 nil。
+    /// 奇数个时最后一项右槽为 nil。
     private var rowPairs: [(MonitorMetric, MonitorMetric?)] {
         let items = shortMetrics
         var pairs: [(MonitorMetric, MonitorMetric?)] = []
@@ -1202,8 +1198,7 @@ private struct MemoryProcessList: View {
     }
 }
 
-/// 进程行的 App 图标。取不到图标(命令行进程等)时回退到通用应用占位图标,
-/// 保证每行视觉对齐一致。
+/// 取不到图标(命令行进程等)时回退到通用应用占位图标,保证每行视觉对齐一致。
 private struct ProcessIcon: View {
     let icon: NSImage?
     let theme: MonitorPanelTheme

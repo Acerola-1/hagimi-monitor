@@ -1,10 +1,3 @@
-//
-//  HagimiMonitorApp.swift
-//  HagimiMonitor
-//
-//  Created by Acerola on 2026/5/11.
-//
-
 import SwiftUI
 
 extension NSAppearance {

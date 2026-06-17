@@ -13,7 +13,6 @@ struct SparklineChart: View {
             let stepX = size.width / CGFloat(points.count - 1)
             let height = size.height
 
-            // 折线路径:值域 0–100 满高度映射(顶=100,底=0)。
             var linePath = Path()
             for (i, v) in points.enumerated() {
                 let x = stepX * CGFloat(i)
@@ -26,7 +25,6 @@ struct SparklineChart: View {
                 }
             }
 
-            // 填充区域:复制折线,闭合到底边,用从顶到底的线性渐变。
             var areaPath = linePath
             areaPath.addLine(to: CGPoint(x: size.width, y: height))
             areaPath.addLine(to: CGPoint(x: 0, y: height))

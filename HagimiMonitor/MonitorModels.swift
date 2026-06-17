@@ -238,7 +238,6 @@ final class MonitorStore: ObservableObject {
                 self?.advance()
             }
 
-        // 每 5 秒刷新内存占用最高的进程;设置变化时立即重采样
         refreshTopMemoryProcesses()
         memoryProcTimer = Timer.publish(every: 5, on: .main, in: .common)
             .autoconnect()
@@ -246,7 +245,6 @@ final class MonitorStore: ObservableObject {
                 self?.refreshTopMemoryProcesses()
             }
 
-        // 用户切换"显示系统进程"时立即刷新一次,不必等下个周期
         settings.$memoryShowSystemProcesses
             .dropFirst()
             .receive(on: DispatchQueue.main)
@@ -481,12 +479,11 @@ enum ComputeLoadModel {
         let delta = clampedTarget - clampedCurrent
         let distance = abs(delta)
 
-        // 已足够接近，直接落定
         if distance <= minStep {
             return clampedTarget
         }
 
-        // ease-out：按距离比例靠拢，起步快收尾缓；尾段用 minStep 兜底保证收敛
+        // ease-out: proportional step, fast start, slow finish.
         let step = max(minStep, distance * factor)
         return clampedCurrent + (delta > 0 ? step : -step)
     }

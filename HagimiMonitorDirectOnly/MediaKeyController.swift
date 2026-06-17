@@ -13,14 +13,11 @@ final class MediaKeyController {
 
     /// 标准步进(对齐 macOS 系统行为:1/16)。
     private let standardStep: Double = 100.0 / 16.0
-    /// 精细步进(Shift+Option:1/64)。
     private let fineStep: Double = 100.0 / 64.0
     /// unmute 时的保底最小音量(对齐 MonitorControl:1 个 chiclet ≈ 1/16)。
     /// 避免上次保存值恰好为 0 时 unmute 又立刻静音。
     private let unmuteFallback: Double = 100.0 / 16.0
 
-    /// 记忆每个显示器在静音前的非零音量,unmute 时恢复。
-    /// key 为 displayID;仅在用户主动调节音量或 mute 时更新。
     private var lastNonZeroVolume: [CGDirectDisplayID: Double] = [:]
 
     init() {}
@@ -95,7 +92,6 @@ final class MediaKeyController {
             toggleMute(on: targetDisplayID)
             return true
         case .brightnessUp, .brightnessDown, .volumeUp, .volumeDown:
-            // 其它媒体键只在按下态(含 repeat)生效,keyUp 不触发。
             guard event.isPressed else { return true }
         }
 
@@ -126,7 +122,6 @@ final class MediaKeyController {
         let displayID = screenWithMouse.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
         guard let displayID,
               let controller,
-              // 仅当该屏是我们已知的外接可控屏时才接管;内建屏返回 nil 交给系统。
               let display = controller.displays.first(where: { $0.id == displayID }),
               !display.isBuiltIn
         else {
@@ -151,7 +146,6 @@ final class MediaKeyController {
         }
     }
 
-    /// 计算本次步进大小。Shift+Option = 精细;用户可在设置里反转该映射。
     private func stepSize(for key: MediaKey, modifiers: NSEvent.ModifierFlags) -> Double {
         let isFine = modifiers.contains(.shift) && modifiers.contains(.option)
         let invertFine: Bool
@@ -199,8 +193,6 @@ final class MediaKeyController {
               display.supportsVolume
         else { return }
         let current = controller.value(for: .volume, displayID: displayID)
-        // 当前 >0 → 静音(记忆当前值供 unmute 恢复);
-        // 当前 ==0 → 恢复到上次保存的非零值,没有则用保底值。
         let next: Double
         if current > 0 {
             next = 0
@@ -215,7 +207,6 @@ final class MediaKeyController {
         }
     }
 
-    /// 记忆非零音量供 unmute 恢复;0 不记录(静音态不该覆盖真实期望值)。
     private func rememberVolume(_ value: Double, for displayID: CGDirectDisplayID) {
         guard value > 0 else { return }
         lastNonZeroVolume[displayID] = value

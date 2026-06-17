@@ -1,10 +1,5 @@
 import SwiftUI
 
-/// 媒体键接管设置区,单一 group 容器:
-/// ① 两个主开关(亮度/音量接管)—— 始终显示
-/// ② 权限提示条 —— 仅开启接管且未授权时出现(独立于 group 的扁平块)
-/// ③ 开关下属选项(OSD/精细步进)—— 勾选任一接管后,在同一 group 内
-///    用 SettingsDivider 接着展开,不另起独立板块
 struct MediaKeySettingsSection: View {
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var permission: AccessibilityPermissionService
@@ -21,7 +16,6 @@ struct MediaKeySettingsSection: View {
                     .labelsHidden()
             }
 
-            // 接管亮度键后,正下方展开亮度专属的精细步进,位置紧邻体现从属
             if settings.mediaKeyBrightnessEnabled {
                 SettingsDivider()
 
@@ -43,7 +37,6 @@ struct MediaKeySettingsSection: View {
                     .labelsHidden()
             }
 
-            // 接管音量键后,正下方展开音量专属的精细步进
             if settings.mediaKeyVolumeEnabled {
                 SettingsDivider()
 
@@ -57,7 +50,6 @@ struct MediaKeySettingsSection: View {
                 }
             }
 
-            // OSD 是亮度+音量共用的全局选项,任一接管开启时出现在板块末尾
             if anyTakeoverEnabled {
                 SettingsDivider()
 
@@ -69,14 +61,11 @@ struct MediaKeySettingsSection: View {
             }
         }
 
-        // 权限提示:只在需要引导时出现,扁平样式不占用 group 容器
         if anyTakeoverEnabled, !permission.isTrusted {
             permissionHint
         }
     }
 
-    /// 权限提示条:扁平 inline 样式(不套 group 圆角容器),说明文案 + 行内按钮。
-    /// 配色克制(.secondary + 橙色点缀),与 SettingsTip 气质一致。
     private var permissionHint: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {

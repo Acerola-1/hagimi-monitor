@@ -4,8 +4,6 @@ import Testing
 
 struct VersionParserTests {
 
-    // MARK: - normalize
-
     @Test func normalizeStripsVPrefix() {
         #expect(VersionParser.normalize("v1.2.3") == "1.2.3")
     }
@@ -21,8 +19,6 @@ struct VersionParserTests {
     @Test func normalizeTrimsWhitespace() {
         #expect(VersionParser.normalize("  v1.2.3  ") == "1.2.3")
     }
-
-    // MARK: - isNewer
 
     @Test func newerVersionDetected() {
         #expect(VersionParser.isNewer("1.1.0", than: "1.0.0"))

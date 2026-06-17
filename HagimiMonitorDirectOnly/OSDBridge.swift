@@ -22,11 +22,6 @@ final class OSDBridge {
 
     private static let osdManagerClass: AnyClass? = NSClassFromString("OSDManager")
 
-    /// 显示 OSD 提示框。
-    /// - Parameters:
-    ///   - image: 图标种类(亮度/音量/静音)
-    ///   - displayID: OSD 应跟随的显示器
-    ///   - percent: 0...100,会换算为已填充的进度格
     func show(
         _ image: OSDImage,
         displayID: CGDirectDisplayID,
