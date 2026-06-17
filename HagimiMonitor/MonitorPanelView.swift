@@ -103,6 +103,10 @@ struct MonitorPanelView: View {
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 1)
+        .contentShape(Rectangle())
+        .onTapGesture(count: 2) {
+            toggleAllExpansion()
+        }
     }
 
     @ViewBuilder
@@ -194,6 +198,34 @@ struct MonitorPanelView: View {
                 expandedKinds.remove(kind)
             } else {
                 expandedKinds.insert(kind)
+            }
+        }
+    }
+
+    /// 当前可见 row 的 kind 集合,顺序与渲染顺序一致。
+    /// `store.modules` 已由 settings 过滤过,所以只取它即可。
+    /// `DisplayControlsSection` 不是 module,天然不在内。
+    private var visibleKinds: [MonitorKind] {
+        store.modules.map(\.kind)
+    }
+
+    /// 当前是否所有可见 row 都处于展开状态。
+    /// 空 modules 时为 false——没有 row 可展开,双击不应被视为"已全开"。
+    private var allVisibleRowsExpanded: Bool {
+        !visibleKinds.isEmpty
+        && visibleKinds.allSatisfy { expandedKinds.contains($0) }
+    }
+
+    /// 切换"全展开 / 全收起"。
+    /// 已全展开 → 清空 expandedKinds(全收起);否则 → 写满 visibleKinds(全展开)。
+    /// 残留在 expandedKinds 里、当前不可见的 kind 不影响判定;全展开分支会用
+    /// 可见集合覆盖,残留也会被一同清掉。
+    private func toggleAllExpansion() {
+        withAnimation(.smooth(duration: 0.18)) {
+            if allVisibleRowsExpanded {
+                expandedKinds.removeAll()
+            } else {
+                expandedKinds = Set(visibleKinds)
             }
         }
     }
