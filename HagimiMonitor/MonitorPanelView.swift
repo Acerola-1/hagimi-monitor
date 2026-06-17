@@ -1143,12 +1143,10 @@ private struct MemoryProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                ForEach(Array(processes.enumerated()), id: \.element.id) { i, proc in
+                ForEach(processes) { proc in
                     HStack(spacing: 6) {
-                        Text("\(i + 1).")
-                            .monitorPanelMonoFont(.caption2, weight: .medium)
-                            .foregroundStyle(theme.captionText)
-                            .frame(width: 16, alignment: .trailing)
+                        ProcessIcon(icon: proc.icon, theme: theme)
+                            .frame(width: 16, height: 16)
 
                         Text(proc.name)
                             .monitorPanelCaptionFont(.footnote)
@@ -1168,6 +1166,26 @@ private struct MemoryProcessList: View {
                 }
             }
             .padding(.leading, 28)
+        }
+    }
+}
+
+/// 进程行的 App 图标。取不到图标(命令行进程等)时回退到通用应用占位图标,
+/// 保证每行视觉对齐一致。
+private struct ProcessIcon: View {
+    let icon: NSImage?
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        if let icon {
+            Image(nsImage: icon)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+        } else {
+            Image(systemName: "app.dashed")
+                .font(.caption2)
+                .foregroundStyle(theme.captionText)
         }
     }
 }

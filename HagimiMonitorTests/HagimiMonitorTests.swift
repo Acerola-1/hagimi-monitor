@@ -62,18 +62,18 @@ struct HagimiMonitorTests {
 
     @Test func computeLoadIncludesMemoryPressure() {
         #expect(ComputeLoadModel.memoryPressureScore(.normal) == 0)
-        #expect(ComputeLoadModel.memoryPressureScore(.warning) == 70)
-        #expect(ComputeLoadModel.memoryPressureScore(.critical) == 100)
+        #expect(ComputeLoadModel.memoryPressureScore(.warning) == 50)
+        #expect(ComputeLoadModel.memoryPressureScore(.critical) == 85)
         #expect(ComputeLoadModel.memoryPressureScore(.unknown) == 0)
-        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .warning) - 58.847097) < 1e-4)
-        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .critical) - 86.524611) < 1e-4)
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .warning) - 43.640488) < 1e-4)
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .critical) - 67.943312) < 1e-4)
     }
 
     @Test func computeLoadSoftmaxSurfacesSingleBottleneck() {
-        // 内存 critical 但 CPU/GPU 空闲：聚合值仍应进入 stressed 区(≥85)，不被均值掩盖
+        // 内存 critical 但 CPU/GPU 空闲：聚合值应进入 busy 区(≥50)，不被均值掩盖
         let load = ComputeLoadModel.combined(cpuValue: 5, gpuValue: 5, memoryPressure: .critical)
-        #expect(load >= 85)
-        #expect(ComputeLoadModel.loadLevel(for: load) == .stressed)
+        #expect(load >= 50)
+        #expect(ComputeLoadModel.loadLevel(for: load) == .busy)
         // 全部空闲时聚合值应接近 0，不误报
         #expect(ComputeLoadModel.combined(cpuValue: 5, gpuValue: 5, memoryPressure: .normal) < 10)
     }
