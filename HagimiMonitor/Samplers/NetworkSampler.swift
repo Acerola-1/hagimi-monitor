@@ -62,7 +62,7 @@ final class NetworkSampler: MonitorSampler {
 
         guard getifaddrs(&addressList) == 0, let firstAddress = addressList else {
             AppLogger.sampler.error("getifaddrs failed, errno: \(errno)")
-            return NetworkInterfaceSnapshot(input: 0, output: 0, interface: "network", addresses: [])
+            return NetworkInterfaceSnapshot(input: 0, output: 0, interface: "disconnected", addresses: [])
         }
         defer { freeifaddrs(addressList) }
 
@@ -186,7 +186,7 @@ final class NetworkSampler: MonitorSampler {
 
     private func networkInterfaceTitle(_ name: String?) -> String {
         guard let name else {
-            return "network"
+            return "disconnected"
         }
 
         if let type = interfaceType(for: name) {

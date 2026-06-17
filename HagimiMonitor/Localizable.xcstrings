@@ -1926,6 +1926,28 @@
         }
       }
     },
+    "network-interface.disconnected": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未连接"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnected"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未接続"
+          }
+        }
+      }
+    },
     "network-interface.ethernet": {
       "localizations": {
         "zh-Hans": {
@@ -1944,28 +1966,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "イーサネット"
-          }
-        }
-      }
-    },
-    "network-interface.network": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网络"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Network"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ネットワーク"
           }
         }
       }
