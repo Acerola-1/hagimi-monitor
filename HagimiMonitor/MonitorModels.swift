@@ -257,14 +257,15 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 按当前设置采样内存占用最高的进程。
-    // 进程枚举 + proc_pid_rusage 耗时可达上百毫秒,放后台采样、回主线程赋值,避免卡 UI。
-    // 用独立队列而非 samplingQueue,以免和主采样串行排队拖慢刷新节奏。
+    // 进程枚举 + proc_pid_rusage 耗时可达上百毫秒,放后台采样;NSWorkspace 取图标/名称
+    // 不保证线程安全,须回主线程 enrich。用独立队列而非 samplingQueue,以免和主采样串行
+    // 排队拖慢刷新节奏。
     private func refreshTopMemoryProcesses() {
         let includeSystem = settings.memoryShowSystemProcesses
         memoryProcQueue.async { [weak self] in
-            let processes = sampleTopMemoryProcesses(includeSystemProcesses: includeSystem)
+            let raw = sampleTopMemoryProcesses(includeSystemProcesses: includeSystem)
             DispatchQueue.main.async {
-                self?.topMemoryProcesses = processes
+                self?.topMemoryProcesses = enrich(raw)
             }
         }
     }
