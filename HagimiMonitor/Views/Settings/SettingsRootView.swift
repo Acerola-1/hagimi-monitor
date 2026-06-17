@@ -38,7 +38,7 @@ struct SettingsRootView: View {
             DisplayModuleSettingsView(settings: settings)
         #endif
         case .statistics:
-            Text("Statistics Placeholder")
+            StatisticsView()
         case .about:
             AboutSettingsView()
         }
