@@ -450,9 +450,9 @@ enum ComputeLoadModel {
         case .normal:
             return 0
         case .warning:
-            return 70
+            return 50
         case .critical:
-            return 100
+            return 85
         case .unknown:
             return 0
         }
