@@ -1,4 +1,5 @@
 import Foundation
+import IOKit
 import OSLog
 
 final class StorageSampler: MonitorSampler {
@@ -17,22 +18,63 @@ final class StorageSampler: MonitorSampler {
             let used = max(0, total - free)
             let percentage = total > 0 ? (used / total) * 100 : 0
 
+            var metrics = [
+                MonitorMetric(name: "used", value: bytes(used)),
+                MonitorMetric(name: "free", value: bytes(free)),
+                MonitorMetric(name: "total", value: bytes(total))
+            ]
+
+            if let ioStats = readDiskIOStats() {
+                metrics.append(MonitorMetric(name: "cumulativeBytesRead", value: "\(ioStats.bytesRead)"))
+                metrics.append(MonitorMetric(name: "cumulativeBytesWritten", value: "\(ioStats.bytesWritten)"))
+            }
+
             return MonitorModule(
                 kind: .storage,
                 context: externalVolumesJSON(),
                 value: percentage,
                 summary: percent(percentage),
-                metrics: [
-                    MonitorMetric(name: "used", value: bytes(used)),
-                    MonitorMetric(name: "free", value: bytes(free)),
-                    MonitorMetric(name: "total", value: bytes(total))
-                ],
+                metrics: metrics,
                 samples: seedSamples(percentage)
             )
         } catch {
             AppLogger.sampler.error("StorageSampler failed to read storage info: \(error.localizedDescription, privacy: .public)")
             return placeholderModule(.storage, summary: "无法读取")
         }
+    }
+
+    /// 从 IOBlockStorageDriver 读取磁盘累计读写字节
+    private func readDiskIOStats() -> (bytesRead: Int64, bytesWritten: Int64)? {
+        var iterator: io_iterator_t = 0
+        let matching = IOServiceMatching("IOBlockStorageDriver")
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
+            return nil
+        }
+        defer { IOObjectRelease(iterator) }
+
+        var totalRead: Int64 = 0
+        var totalWritten: Int64 = 0
+
+        var service = IOIteratorNext(iterator)
+        while service != 0 {
+            defer { IOObjectRelease(service) }
+
+            if let properties = IORegistryEntryCreateCFProperty(service, "Statistics" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? [String: Any] {
+                if let read = properties["Bytes (Read)"] as? Int64 {
+                    totalRead += read
+                } else if let read = properties["Bytes (Read)"] as? NSNumber {
+                    totalRead += read.int64Value
+                }
+                if let written = properties["Bytes (Written)"] as? Int64 {
+                    totalWritten += written
+                } else if let written = properties["Bytes (Written)"] as? NSNumber {
+                    totalWritten += written.int64Value
+                }
+            }
+            service = IOIteratorNext(iterator)
+        }
+
+        return (bytesRead: totalRead, bytesWritten: totalWritten)
     }
 
     private func externalVolumesJSON() -> String? {
