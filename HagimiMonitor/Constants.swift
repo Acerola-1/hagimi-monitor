@@ -10,8 +10,14 @@ enum MonitorConstants {
 
     // MARK: Animation
     static let menuBarLoadChangeThreshold = 5.0
-    static let menuBarLoadSmoothStep = 1.25
+    // 缓动系数：每帧向目标靠拢的比例（0~1，越大越跟手、越小越柔和）
+    // 0.10 ⇒ 约 0.95s 缓缓到位；softmax 目标跳变更大，故取较柔和的值
+    static let menuBarLoadSmoothFactor = 0.10
+    // 每帧最小步进，保证大缓动尾段也能稳定收敛、不会无限逼近
+    static let menuBarLoadSmoothMinStep = 0.6
     static let menuBarLoadSmoothStopThreshold = 0.5
+    // 平滑动画帧间隔（约 30fps）；收敛后定时器停止，静止时零开销
+    static let menuBarLoadSmoothFrameInterval = 1.0 / 30.0
 
     // MARK: Panel Dimensions
     static let panelMinWidth: Double = 300
@@ -28,4 +34,9 @@ enum MonitorConstants {
     // MARK: Sampling
     static let maxSamples = 28
     static let sparklineMaxPoints = 24
+
+    // MARK: Compute Load Aggregation
+    // softmax(归一化 LSE)锐度 k：越大越接近 max(突出瓶颈)，越小越接近均值。
+    // 1/k≈12.5 ⇒ 子系统差距 >12 分时由瓶颈主导，<12 分时融合。
+    static let computeLoadSoftmaxSharpness = 0.08
 }

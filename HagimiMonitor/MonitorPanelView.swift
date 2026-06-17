@@ -617,7 +617,7 @@ private struct NetworkGlassRow: View, Equatable {
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
 
-                        Text(module.summary)
+                        Text(localizedNetworkInterface(module.summary))
                             .monitorPanelMonoFont(weight: .semibold)
                             .foregroundStyle(theme.valueText)
                             .lineLimit(1)
@@ -825,6 +825,12 @@ private func localizedBatteryState(_ id: String) -> String {
     let key = "battery-state.\(id)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? id : localized
+}
+
+private func localizedNetworkInterface(_ summary: String) -> String {
+    let key = "network-interface.\(summary)"
+    let localized = String(localized: String.LocalizationValue(key))
+    return localized == key ? summary : localized
 }
 
 // MARK: - Transparent Window Background
@@ -1137,13 +1143,6 @@ private struct MemoryProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                HStack {
-                    Text(String(localized: "top-memory-processes"))
-                        .monitorPanelCaptionFont(weight: .semibold)
-                        .foregroundStyle(theme.primaryText)
-                    Spacer()
-                }
-
                 ForEach(Array(processes.enumerated()), id: \.element.id) { i, proc in
                     HStack(spacing: 6) {
                         Text("\(i + 1).")
@@ -1156,7 +1155,6 @@ private struct MemoryProcessList: View {
                             .foregroundStyle(theme.primaryText)
                             .lineLimit(1)
                             .truncationMode(.tail)
-                            .layoutPriority(1)
 
                         Spacer(minLength: 4)
 
@@ -1164,6 +1162,8 @@ private struct MemoryProcessList: View {
                             .monitorPanelMonoFont(.caption2, weight: .medium)
                             .foregroundStyle(theme.secondaryText)
                             .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .layoutPriority(1)
                     }
                 }
             }

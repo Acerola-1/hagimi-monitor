@@ -4,12 +4,12 @@ import Foundation
 enum MenuBarComputeRingIcon {
     private static let cache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 120
+        cache.countLimit = 840
         return cache
     }()
 
     private static func loadBucket(for load: Double) -> Int {
-        Int((min(100.0, max(0.0, load)) / 2.0).rounded())
+        Int(min(100.0, max(0.0, load)).rounded())
     }
 
     private static func cacheKey(loadBucket: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSString {
@@ -18,7 +18,7 @@ enum MenuBarComputeRingIcon {
 
     static func image(load: Double, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSImage {
         let loadBucket = loadBucket(for: load)
-        let canonicalLoad = Double(loadBucket) * 2.0
+        let canonicalLoad = Double(loadBucket)
         let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel)
         if let cached = cache.object(forKey: key) {
             return cached

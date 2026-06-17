@@ -55,8 +55,9 @@ struct HagimiMonitorTests {
     }
 
     @Test func computeLoadCombinesCPUAndGPU() {
-        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25) == 30)
-        #expect(ComputeLoadModel.combined(cpuValue: 140, gpuValue: -20) == 40)
+        // softmax 聚合(k=0.08)：落在 [mean, max] 之间，偏向瓶颈
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25) - 38.053992) < 1e-4)
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 140, gpuValue: -20) - 86.275730) < 1e-4)
     }
 
     @Test func computeLoadIncludesMemoryPressure() {
@@ -64,14 +65,41 @@ struct HagimiMonitorTests {
         #expect(ComputeLoadModel.memoryPressureScore(.warning) == 70)
         #expect(ComputeLoadModel.memoryPressureScore(.critical) == 100)
         #expect(ComputeLoadModel.memoryPressureScore(.unknown) == 0)
-        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .warning) == 44)
-        #expect(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .critical) == 50)
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .warning) - 58.847097) < 1e-4)
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .critical) - 86.524611) < 1e-4)
+    }
+
+    @Test func computeLoadSoftmaxSurfacesSingleBottleneck() {
+        // 内存 critical 但 CPU/GPU 空闲：聚合值仍应进入 stressed 区(≥85)，不被均值掩盖
+        let load = ComputeLoadModel.combined(cpuValue: 5, gpuValue: 5, memoryPressure: .critical)
+        #expect(load >= 85)
+        #expect(ComputeLoadModel.loadLevel(for: load) == .stressed)
+        // 全部空闲时聚合值应接近 0，不误报
+        #expect(ComputeLoadModel.combined(cpuValue: 5, gpuValue: 5, memoryPressure: .normal) < 10)
+    }
+
+    @Test func loadLevelThresholdsCalibratedForSoftmax() {
+        // 边界校准：25 / 50 / 78
+        #expect(ComputeLoadModel.loadLevel(for: 24) == .idle)
+        #expect(ComputeLoadModel.loadLevel(for: 25) == .working)
+        #expect(ComputeLoadModel.loadLevel(for: 49) == .working)
+        #expect(ComputeLoadModel.loadLevel(for: 50) == .busy)
+        #expect(ComputeLoadModel.loadLevel(for: 77) == .busy)
+        #expect(ComputeLoadModel.loadLevel(for: 78) == .stressed)
+        // 单 CPU 跑满(softmax≈86)应进 stressed
+        #expect(ComputeLoadModel.loadLevel(for: ComputeLoadModel.combined(cpuValue: 100, gpuValue: 0)) == .stressed)
+        // 单 CPU 70%(softmax≈56)应是 busy
+        #expect(ComputeLoadModel.loadLevel(for: ComputeLoadModel.combined(cpuValue: 70, gpuValue: 0)) == .busy)
     }
 
     @Test func computeLoadDisplayValueMovesTowardTarget() {
-        #expect(ComputeLoadModel.smoothedDisplayValue(current: 10, target: 50) == 11.25)
-        #expect(ComputeLoadModel.smoothedDisplayValue(current: 50, target: 10) == 48.75)
-        #expect(ComputeLoadModel.smoothedDisplayValue(current: 49, target: 50) == 50)
+        // ease-out：每帧靠拢 distance×factor(0.10)，不小于 minStep(0.6)
+        #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 10, target: 50) - 14) < 1e-9)
+        #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 50, target: 10) - 46) < 1e-9)
+        // 尾段按 minStep 兜底推进
+        #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 49, target: 50) - 49.6) < 1e-9)
+        // 距离已在 minStep 内，直接落定到目标
+        #expect(ComputeLoadModel.smoothedDisplayValue(current: 49.7, target: 50) == 50)
     }
 
     @Test func menuBarTargetIgnoresSmallComputeLoadChanges() {
