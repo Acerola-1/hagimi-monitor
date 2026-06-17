@@ -662,6 +662,28 @@
         }
       }
     },
+    "kind.power": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功耗"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "電力"
+          }
+        }
+      }
+    },
     "kind.cpu": {
       "localizations": {
         "zh-Hans": {
@@ -1306,6 +1328,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "種類"
+          }
+        }
+      }
+    },
+    "metric.power.watts": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功率"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watts"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ワット"
           }
         }
       }

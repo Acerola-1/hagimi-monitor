@@ -179,6 +179,17 @@ struct MonitorPanelView: View {
                 toggleExpansion(for: module.kind)
             }
             .equatable()
+        case .power:
+            MetricGlassRow(
+                module: module,
+                theme: theme,
+                detail: module.summary,
+                details: enabledMetrics(for: module),
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
+            .equatable()
         }
     }
 
@@ -331,6 +342,11 @@ private struct MetricGlassRow: View, Equatable {
                 .frame(width: 56, height: 3)
         case .network, .battery:
             EmptyView()
+        case .power:
+            if !samples.isEmpty {
+                SparklineChart(samples: samples, tint: tint)
+                    .frame(width: 56, height: 18)
+            }
         }
     }
 

@@ -52,6 +52,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     case storage
     case network
     case battery
+    case power
 
     var id: String { rawValue }
 
@@ -69,6 +70,8 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             String(localized: "kind.network")
         case .battery:
             String(localized: "kind.battery")
+        case .power:
+            String(localized: "kind.power")
         }
     }
 
@@ -86,6 +89,8 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             "network"
         case .battery:
             "powerplug"
+        case .power:
+            "bolt.fill"
         }
     }
 
@@ -131,6 +136,10 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
             ]
+        case .power:
+            return [
+                MetricSwitch(id: "power-watts", title: String(localized: "metric.power.watts"), isDefault: true),
+            ]
         }
     }
 }
@@ -174,6 +183,10 @@ struct MonitorModule: Identifiable, Equatable {
             }
             if value <= MonitorConstants.batteryCriticalThreshold { return .critical }
             if value <= MonitorConstants.batteryWarningThreshold { return .warning }
+            return .calm
+        case .power:
+            if value >= MonitorConstants.criticalThreshold { return .critical }
+            if value >= MonitorConstants.warningThreshold { return .warning }
             return .calm
         }
     }
@@ -507,7 +520,8 @@ final class MonitorRefreshSchedule {
         tickInterval: TimeInterval = 1,
         intervals: [MonitorKind: TimeInterval] = [
             .cpu: 1, .gpu: 2, .memory: 3,
-            .storage: 10, .network: 1, .battery: 5
+            .storage: 10, .network: 1, .battery: 5,
+            .power: 2
         ]
     ) {
         self.tickInterval = tickInterval

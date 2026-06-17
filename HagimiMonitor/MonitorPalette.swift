@@ -137,6 +137,8 @@ struct MonitorPalette {
             Color(hex: 0x43A6A0)
         case .battery:
             Color(hex: 0x65AF52)
+        case .power:
+            Color(hex: 0xF1C21B)
         }
     }
 
@@ -154,6 +156,8 @@ struct MonitorPalette {
             Color(hex: 0x009D9A)
         case .battery:
             Color(hex: 0x198038)
+        case .power:
+            Color(hex: 0xF1C21B)
         }
     }
 }
