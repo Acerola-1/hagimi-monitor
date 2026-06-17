@@ -221,6 +221,7 @@ final class MonitorStore: ObservableObject {
     private var smoothingTimerCancellable: AnyCancellable?
     private var memoryProcTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
+    private let statisticsRecorder = StatisticsRecorder()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let memoryProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.memory-proc", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
@@ -368,6 +369,7 @@ final class MonitorStore: ObservableObject {
             allModules = snapshot.modules
             modules = visibleModules(from: allModules)
             updateMenuBarTargetComputeLoad()
+            statisticsRecorder.record(modules: snapshot.modules)
         case .failure(let error):
             AppLogger.sampler.error("Sampling failed: \(error.description, privacy: .public)")
         }
