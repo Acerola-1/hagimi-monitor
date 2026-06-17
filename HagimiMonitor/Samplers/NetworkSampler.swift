@@ -1,6 +1,7 @@
 import Darwin
 import Foundation
 import OSLog
+import SystemConfiguration
 
 final class NetworkSampler: MonitorSampler {
     var kind: MonitorKind { .network }
@@ -10,6 +11,7 @@ final class NetworkSampler: MonitorSampler {
     private let publicIPRefreshInterval: TimeInterval = 30
     private let publicIPLock = NSLock()
     private var isRefreshingPublicIP = false
+    private var interfaceTypeCache: [String: CFString] = [:]
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         let now = Date()
@@ -102,23 +104,33 @@ final class NetworkSampler: MonitorSampler {
             }
         }
 
-        let active = totalsByInterface.max {
-            ($0.value.input + $0.value.output) < ($1.value.input + $1.value.output)
-        }
+        let primaryName = primaryInterfaceName()
+        let activeKey = primaryName.flatMap { totalsByInterface[$0] != nil ? $0 : nil }
+
         let total = totalsByInterface.values.reduce((input: UInt64(0), output: UInt64(0))) { partial, next in
             (partial.input + next.input, partial.output + next.output)
         }
 
-        AppLogger.sampler.info("Network interfaces detected: \(totalsByInterface.keys.joined(separator: ", "), privacy: .public), active: \(active?.key ?? "none", privacy: .public)")
-
-        AppLogger.sampler.info("Network active interface: \(active?.key ?? "none", privacy: .public)")
+        AppLogger.sampler.info("Network interfaces detected: \(totalsByInterface.keys.joined(separator: ", "), privacy: .public), primary: \(primaryName ?? "none", privacy: .public), active: \(activeKey ?? "none", privacy: .public)")
 
         return NetworkInterfaceSnapshot(
             input: total.input,
             output: total.output,
-            interface: networkInterfaceTitle(active?.key),
-            addresses: active.flatMap { addressesByInterface[$0.key] } ?? []
+            interface: networkInterfaceTitle(activeKey),
+            addresses: activeKey.flatMap { addressesByInterface[$0] } ?? []
         )
+    }
+
+    private func primaryInterfaceName() -> String? {
+        guard let store = SCDynamicStoreCreate(nil, "HagimiMonitor.NetworkSampler" as CFString, nil, nil) else {
+            return nil
+        }
+        guard let global = SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString) as? [String: Any],
+              let name = global["PrimaryInterface"] as? String,
+              !name.isEmpty else {
+            return nil
+        }
+        return name
     }
 
     private func cachedPublicIP() -> String {
@@ -177,12 +189,23 @@ final class NetworkSampler: MonitorSampler {
             return "network"
         }
 
-        if name == "en0" {
-            return "Wi-Fi"
+        if let type = interfaceType(for: name) {
+            switch type {
+            case kSCNetworkInterfaceTypeIEEE80211:
+                return "Wi-Fi"
+            case kSCNetworkInterfaceTypeEthernet:
+                return "ethernet"
+            case kSCNetworkInterfaceTypeWWAN:
+                return "cellular"
+            case kSCNetworkInterfaceTypeBond:
+                return "bond"
+            case kSCNetworkInterfaceTypeFireWire:
+                return "FireWire"
+            default:
+                break
+            }
         }
-        if name.hasPrefix("en") {
-            return "ethernet"
-        }
+
         if name.hasPrefix("bridge") {
             return "bridge"
         }
@@ -190,6 +213,22 @@ final class NetworkSampler: MonitorSampler {
             return "cellular"
         }
         return name
+    }
+
+    private func interfaceType(for bsdName: String) -> CFString? {
+        if let cached = interfaceTypeCache[bsdName] {
+            return cached
+        }
+        guard let interfaces = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] else {
+            return nil
+        }
+        for interface in interfaces {
+            if let name = SCNetworkInterfaceGetBSDName(interface) as String?,
+               let type = SCNetworkInterfaceGetInterfaceType(interface) {
+                interfaceTypeCache[name] = type
+            }
+        }
+        return interfaceTypeCache[bsdName]
     }
 
     private func shouldIgnoreInterface(_ name: String) -> Bool {

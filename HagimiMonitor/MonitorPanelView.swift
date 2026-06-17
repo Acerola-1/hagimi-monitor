@@ -617,7 +617,7 @@ private struct NetworkGlassRow: View, Equatable {
                             .lineLimit(1)
                             .fixedSize(horizontal: true, vertical: false)
 
-                        Text(module.summary)
+                        Text(localizedNetworkInterface(module.summary))
                             .monitorPanelMonoFont(weight: .semibold)
                             .foregroundStyle(theme.valueText)
                             .lineLimit(1)
@@ -825,6 +825,12 @@ private func localizedBatteryState(_ id: String) -> String {
     let key = "battery-state.\(id)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? id : localized
+}
+
+private func localizedNetworkInterface(_ summary: String) -> String {
+    let key = "network-interface.\(summary)"
+    let localized = String(localized: String.LocalizationValue(key))
+    return localized == key ? summary : localized
 }
 
 // MARK: - Transparent Window Background
