@@ -2696,94 +2696,6 @@
         }
       }
     },
-    "stats.avg": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "均值"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Avg"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均"
-          }
-        }
-      }
-    },
-    "stats.median": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "中位"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Median"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "中央値"
-          }
-        }
-      }
-    },
-    "stats.net.up": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上行"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Upload"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "アップ"
-          }
-        }
-      }
-    },
-    "stats.net.down": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "下行"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Download"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ダウン"
-          }
-        }
-      }
-    },
     "stats.date.to": {
       "localizations": {
         "zh-Hans": {
@@ -3004,50 +2916,6 @@
         }
       }
     },
-    "stats.section.io": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网络与磁盘"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Network & Disk"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ネットワークとディスク"
-          }
-        }
-      }
-    },
-    "stats.section.performance": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "性能概览"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Performance"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "パフォーマンス"
-          }
-        }
-      }
-    },
     "stats.summary.title": {
       "localizations": {
         "zh-Hans": {
@@ -3075,19 +2943,19 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "轻量展示关键指标，详细图表可在浏览器中查看"
+            "value": "轻量展示关键指标，详细图表可在浏览器中查看。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A compact view of key metrics. Open the browser report for detailed charts"
+            "value": "A compact view of key metrics. Open the browser report for detailed charts."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "主要指標を簡潔に表示します。詳細グラフはブラウザで確認できます"
+            "value": "主要指標を簡潔に表示します。詳細グラフはブラウザで確認できます。"
           }
         }
       }
@@ -3097,19 +2965,19 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "详细报表会生成为本地 HTML 文件，不上传任何数据"
+            "value": "详细报表会生成为本地 HTML 文件，不上传任何数据。"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The detailed report is generated as a local HTML file. No data is uploaded"
+            "value": "The detailed report is generated as a local HTML file. No data is uploaded."
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "詳細レポートはローカルHTMLファイルとして生成され、データはアップロードされません"
+            "value": "詳細レポートはローカルHTMLファイルとして生成され、データはアップロードされません。"
           }
         }
       }
