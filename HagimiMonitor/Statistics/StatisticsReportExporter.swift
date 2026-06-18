@@ -4,7 +4,25 @@ import SwiftData
 struct StatisticsReportPayload: Codable {
     let generatedAt: Date
     let appName: String
+    let locale: String
+    let strings: StatisticsReportStrings
     let ranges: [StatisticsReportRangePayload]
+}
+
+struct StatisticsReportStrings: Codable {
+    let title: String
+    let subtitle: String
+    let footer: String
+    let avg: String
+    let peak: String
+    let low: String
+    let median: String
+    let download: String
+    let upload: String
+    let read: String
+    let write: String
+    let samples: String
+    let empty: String
 }
 
 struct StatisticsReportRangePayload: Codable {
@@ -66,6 +84,22 @@ struct StatisticsReportExporter {
         StatisticsReportPayload(
             generatedAt: now(),
             appName: "HagimiMonitor",
+            locale: Locale.preferredLanguages.first ?? Locale.current.identifier,
+            strings: StatisticsReportStrings(
+                title: String(localized: "stats.report.title"),
+                subtitle: String(localized: "stats.report.subtitle"),
+                footer: String(localized: "stats.report.footer"),
+                avg: String(localized: "stats.avg"),
+                peak: String(localized: "stats.peak"),
+                low: String(localized: "stats.low"),
+                median: String(localized: "stats.median"),
+                download: String(localized: "stats.net.down"),
+                upload: String(localized: "stats.net.up"),
+                read: String(localized: "stats.disk.read"),
+                write: String(localized: "stats.disk.write"),
+                samples: String(localized: "stats.report.samples"),
+                empty: String(localized: "stats.no-data")
+            ),
             ranges: Self.rangeSpecs.map { spec in
                 StatisticsReportRangePayload(
                     id: spec.id,
@@ -117,124 +151,184 @@ struct StatisticsReportHTMLBuilder {
             .replacingOccurrences(of: "<", with: "\\u003c")
             .replacingOccurrences(of: ">", with: "\\u003e")
             .replacingOccurrences(of: "&", with: "\\u0026")
+        let lang = htmlLang(from: payload.locale)
         return """
         <!doctype html>
-        <html lang="en">
+        <html lang="\(lang)">
         <head>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
-          <title>HagimiMonitor · Statistics</title>
+          <title>\(payload.strings.title) · HagimiMonitor</title>
           <style>
             :root {
               color-scheme: light dark;
-              --bg: #f5f5f7;
-              --bg-elev: rgba(255,255,255,.72);
-              --bg-inset: #ececef;
+              --bg: #fafafc;
+              --bg-elev: #ffffff;
+              --bg-inset: #f1f1f4;
+              --bg-soft: #f6f6f9;
               --text: #1d1d1f;
-              --text-dim: #6e6e73;
-              --text-faint: #a1a1a6;
-              --border: rgba(0,0,0,.08);
-              --hairline: rgba(0,0,0,.06);
-              --accent: #0a84ff;
-              --shadow: 0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(0,0,0,.06);
+              --text-dim: #86868b;
+              --text-faint: #b0b0b5;
+              --border: rgba(0,0,0,.06);
+              --hairline: rgba(0,0,0,.05);
+              --shadow-sm: 0 1px 2px rgba(0,0,0,.04);
+              --shadow-md: 0 1px 3px rgba(0,0,0,.04), 0 8px 24px rgba(0,0,0,.05);
               --c-cpu: #ff453a; --c-gpu: #30d158; --c-memory: #ff9f0a;
-              --c-storage: #0a84ff; --c-network: #64d2ff; --c-power: #bf5af2;
-              --c-default: #5e5ce6;
+              --c-storage: #007aff; --c-network: #5ac8fa; --c-power: #af52de;
+              --c-default: #5856d6;
             }
             @media (prefers-color-scheme: dark) {
               :root {
-                --bg: #0b0b0d; --bg-elev: rgba(28,28,30,.72); --bg-inset: #1c1c1e;
-                --text: #f5f5f7; --text-dim: #98989d; --text-faint: #6e6e73;
-                --border: rgba(255,255,255,.1); --hairline: rgba(255,255,255,.08);
-                --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px rgba(0,0,0,.4);
+                --bg: #000000; --bg-elev: #1c1c1e; --bg-inset: #2c2c2e; --bg-soft: #161618;
+                --text: #f5f5f7; --text-dim: #98989d; --text-faint: #636366;
+                --border: rgba(255,255,255,.08); --hairline: rgba(255,255,255,.06);
+                --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+                --shadow-md: 0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.4);
+                --c-cpu: #ff6961; --c-gpu: #5be17b; --c-memory: #ffb340;
+                --c-storage: #0a84ff; --c-network: #64d2ff; --c-power: #bf5af2;
               }
             }
             * { box-sizing: border-box; }
-            html { -webkit-font-smoothing: antialiased; }
+            html { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
             body {
               margin: 0; background: var(--bg); color: var(--text);
-              font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+              font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text",
+                "PingFang SC", "Hiragino Sans", "Helvetica Neue", system-ui, sans-serif;
               font-size: 14px; line-height: 1.5;
+              font-feature-settings: "ss01", "cv01";
             }
-            .wrap { max-width: 1240px; margin: 0 auto; padding: 40px 28px 64px; }
+            .wrap { max-width: 1280px; margin: 0 auto; padding: 56px 32px 80px; }
 
-            header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 16px 24px; margin-bottom: 28px; }
-            .brand { display: flex; align-items: center; gap: 13px; }
-            .glyph { width: 40px; height: 40px; border-radius: 11px; flex: none;
-              background: linear-gradient(135deg, var(--accent), #5e5ce6);
-              display: grid; place-items: center; color: #fff; box-shadow: 0 4px 12px rgba(10,132,255,.35); }
-            .glyph svg { width: 22px; height: 22px; }
-            h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -.022em; }
-            .sub { margin: 2px 0 0; color: var(--text-dim); font-size: 13px; }
+            /* ===== Header ===== */
+            .hero { display: flex; flex-wrap: wrap; align-items: flex-start;
+              gap: 20px 32px; margin-bottom: 36px; }
+            .hero-text { flex: 1; min-width: 240px; }
+            .eyebrow { display: inline-flex; align-items: center; gap: 6px; font-size: 12px;
+              color: var(--text-dim); font-weight: 600; letter-spacing: .04em;
+              text-transform: uppercase; margin-bottom: 10px; }
+            .eyebrow::before { content: ""; width: 6px; height: 6px; border-radius: 50%;
+              background: var(--c-network); box-shadow: 0 0 0 3px rgba(90,200,250,.18); }
+            h1 { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -.026em;
+              line-height: 1.15; }
+            .sub { margin: 8px 0 0; color: var(--text-dim); font-size: 15px; max-width: 540px; }
+            .meta { color: var(--text-faint); font-size: 12px; margin-top: 14px;
+              font-variant-numeric: tabular-nums; }
 
-            .segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: 11px;
-              background: var(--bg-inset); border: 1px solid var(--hairline); }
+            /* ===== Tabs ===== */
+            .segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: 12px;
+              background: var(--bg-inset); border: 1px solid var(--hairline);
+              align-self: flex-start; }
             .segmented button { appearance: none; border: 0; background: transparent; cursor: pointer;
-              padding: 7px 15px; border-radius: 8px; font-size: 13px; font-weight: 590; color: var(--text-dim);
-              font-family: inherit; letter-spacing: -.01em; transition: color .15s; white-space: nowrap; }
+              padding: 8px 16px; border-radius: 9px; font-size: 13px; font-weight: 590;
+              color: var(--text-dim); font-family: inherit; letter-spacing: -.005em;
+              transition: color .15s, background .15s; white-space: nowrap; }
             .segmented button:hover { color: var(--text); }
             .segmented button.active { background: var(--bg-elev); color: var(--text);
-              box-shadow: 0 1px 3px rgba(0,0,0,.12); }
-            @media (prefers-color-scheme: dark) { .segmented button.active { background: #48484a; } }
+              box-shadow: var(--shadow-sm); }
+            @media (prefers-color-scheme: dark) {
+              .segmented button.active { background: #48484a; }
+            }
 
-            .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
-            .card { background: var(--bg-elev); border: 1px solid var(--border); border-radius: 18px;
-              padding: 20px 20px 14px; box-shadow: var(--shadow);
-              backdrop-filter: saturate(180%) blur(20px); -webkit-backdrop-filter: saturate(180%) blur(20px); }
-            .card-head { display: flex; align-items: center; gap: 9px; margin-bottom: 16px; }
-            .dot { width: 9px; height: 9px; border-radius: 999px; flex: none; }
-            .card-head h2 { margin: 0; font-size: 15px; font-weight: 640; letter-spacing: -.01em; }
-            .card-head .badge { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--text-faint);
-              background: var(--bg-inset); padding: 3px 8px; border-radius: 6px; }
-
-            .metrics { display: flex; gap: 22px; margin-bottom: 14px; flex-wrap: wrap; }
-            .metric label { display: block; color: var(--text-faint); font-size: 11px; font-weight: 600;
-              text-transform: uppercase; letter-spacing: .04em; margin-bottom: 2px; }
-            .metric strong { font-size: 21px; font-weight: 600; letter-spacing: -.02em;
+            /* ===== Cards ===== */
+            .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 18px; }
+            .card { position: relative; background: var(--bg-elev); border: 1px solid var(--border);
+              border-radius: 18px; padding: 22px 22px 16px; box-shadow: var(--shadow-md);
+              overflow: hidden; }
+            .card::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px;
+              background: var(--accent-c); opacity: .9; }
+            .card-head { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
+            .card-icon { position: relative; width: 32px; height: 32px; border-radius: 9px; flex: none;
+              background: var(--accent-c);
+              display: grid; place-items: center; color: #fff;
+              box-shadow: 0 2px 6px rgba(0,0,0,.12); }
+            .card-icon::after { content: ""; position: absolute; inset: 0; border-radius: inherit;
+              background: linear-gradient(135deg, rgba(255,255,255,.18), rgba(0,0,0,.05));
+              pointer-events: none; }
+            .card-icon svg { width: 16px; height: 16px; stroke-width: 2.4; position: relative; z-index: 1; }
+            .card-head h2 { margin: 0; font-size: 16px; font-weight: 640;
+              letter-spacing: -.01em; flex: 1; }
+            .badge { font-size: 11px; font-weight: 600; color: var(--text-dim);
+              background: var(--bg-inset); padding: 4px 9px; border-radius: 7px;
               font-variant-numeric: tabular-nums; }
-            .metric.lead strong { color: var(--accent-c); }
 
-            .chart { position: relative; height: 150px; margin: 4px -4px 0; }
+            /* ===== Metrics ===== */
+            .metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;
+              margin: 0 -4px 16px; padding: 4px; }
+            .metric { padding: 6px 12px; position: relative; }
+            .metric + .metric::before { content: ""; position: absolute; left: 0; top: 12%;
+              bottom: 12%; width: 1px; background: var(--hairline); }
+            .metric label { display: block; color: var(--text-dim); font-size: 11px;
+              font-weight: 500; margin-bottom: 4px; letter-spacing: .01em; }
+            .metric strong { display: block; font-size: 22px; font-weight: 600;
+              letter-spacing: -.022em; font-variant-numeric: tabular-nums;
+              line-height: 1.1; }
+            .metric.lead strong { color: var(--accent-c); font-weight: 680; }
+            .metric .unit { font-size: 13px; font-weight: 500; color: var(--text-dim);
+              margin-left: 2px; letter-spacing: 0; }
+
+            /* Dual layout for net / storage */
+            .metrics.dual { grid-template-columns: 1fr 1fr; }
+            .metrics.dual .metric strong { font-size: 24px; }
+
+            /* ===== Chart ===== */
+            .chart { position: relative; height: 156px; margin: 6px -6px 0;
+              border-radius: 10px; padding: 6px 6px 4px; }
             .chart svg { width: 100%; height: 100%; display: block; overflow: visible; }
-            .chart .gridline { stroke: var(--hairline); stroke-width: 1; }
-            .chart .axis-label { fill: var(--text-faint); font-size: 9px; font-variant-numeric: tabular-nums; }
-            .cursor-line { stroke: var(--text-faint); stroke-width: 1; stroke-dasharray: 3 3; opacity: 0; }
+            .gridline { stroke: var(--hairline); stroke-width: 1; }
+            .axis-label { fill: var(--text-faint); font-size: 9.5px;
+              font-variant-numeric: tabular-nums; font-weight: 500; }
+            .cursor-line { stroke: var(--text-faint); stroke-width: 1;
+              stroke-dasharray: 2 3; opacity: 0; }
             .cursor-dot { opacity: 0; }
-            .tooltip { position: absolute; pointer-events: none; opacity: 0; transform: translate(-50%, -118%);
-              background: var(--text); color: var(--bg); padding: 6px 9px; border-radius: 8px;
-              font-size: 11px; line-height: 1.45; white-space: nowrap; box-shadow: 0 6px 18px rgba(0,0,0,.25);
-              transition: opacity .1s; z-index: 5; }
-            .tooltip b { font-variant-numeric: tabular-nums; font-weight: 700; }
-            .tooltip .t-date { color: var(--bg); opacity: .6; font-size: 10px; }
+            .tooltip { position: absolute; pointer-events: none; opacity: 0;
+              transform: translate(-50%, calc(-100% - 10px));
+              background: var(--text); color: var(--bg-elev);
+              padding: 8px 11px; border-radius: 9px;
+              font-size: 11.5px; line-height: 1.5; white-space: nowrap;
+              box-shadow: 0 8px 24px rgba(0,0,0,.25);
+              transition: opacity .12s; z-index: 5;
+              font-variant-numeric: tabular-nums; }
+            .tooltip b { font-weight: 700; }
+            .tooltip .t-date { opacity: .55; font-size: 10.5px;
+              margin-bottom: 2px; }
 
-            .legend { display: flex; gap: 14px; margin-top: 10px; padding-top: 10px;
+            .empty { height: 156px; display: grid; place-items: center;
+              color: var(--text-faint); background: var(--bg-soft);
+              border-radius: 12px; font-size: 13px; font-weight: 500; }
+
+            .legend { display: flex; gap: 16px; margin-top: 12px; padding-top: 12px;
               border-top: 1px solid var(--hairline); }
-            .legend span { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--text-dim); }
-            .legend i { width: 14px; height: 2px; border-radius: 2px; display: inline-block; }
-            .legend i.dashed { background: none !important; border-top: 2px dashed; }
+            .legend span { display: inline-flex; align-items: center; gap: 6px;
+              font-size: 11.5px; color: var(--text-dim); font-weight: 500; }
+            .legend i { width: 16px; height: 2px; border-radius: 2px;
+              display: inline-block; }
+            .legend i.dashed { background: none !important;
+              border-top: 2px dashed; }
 
-            .empty { height: 150px; display: grid; place-items: center; color: var(--text-faint);
-              background: var(--bg-inset); border-radius: 12px; font-size: 13px; }
+            /* ===== Footer ===== */
+            footer { margin-top: 56px; padding-top: 20px;
+              border-top: 1px solid var(--hairline);
+              text-align: center; color: var(--text-faint); font-size: 12px; }
 
-            footer { margin-top: 40px; text-align: center; color: var(--text-faint); font-size: 12px; }
-
-            @media (max-width: 560px) {
-              .wrap { padding: 28px 16px 48px; }
-              header { align-items: flex-start; }
-              .grid { grid-template-columns: 1fr; }
+            @media (max-width: 600px) {
+              .wrap { padding: 32px 16px 56px; }
+              h1 { font-size: 26px; }
+              .grid { grid-template-columns: 1fr; gap: 14px; }
               .segmented { overflow-x: auto; max-width: 100%; }
+              .metrics { grid-template-columns: 1fr 1fr; }
+              .metric:nth-child(3) { grid-column: span 2; padding-top: 10px; }
+              .metric:nth-child(3)::before { display: none; }
             }
           </style>
         </head>
         <body>
           <div class="wrap">
-            <header>
-              <div class="brand">
-                <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 16l5-7 4 5 3-4 6 8"/></svg></div>
-                <div>
-                  <h1>HagimiMonitor</h1>
-                  <p class="sub" id="generated"></p>
-                </div>
+            <header class="hero">
+              <div class="hero-text">
+                <div class="eyebrow">HagimiMonitor</div>
+                <h1 id="title"></h1>
+                <p class="sub" id="subtitle"></p>
+                <div class="meta" id="generated"></div>
               </div>
               <nav class="segmented" id="tabs" role="tablist"></nav>
             </header>
@@ -245,55 +339,89 @@ struct StatisticsReportHTMLBuilder {
           <script>
             "use strict";
             const payload = JSON.parse(document.getElementById('payload').textContent);
+            const L = payload.strings;
+            const locale = payload.locale || undefined;
             let active = payload.ranges[0] && payload.ranges[0].id;
 
-            const ACCENT = {
+            const ACCENT_LIGHT = {
               cpu: '#ff453a', gpu: '#30d158', memory: '#ff9f0a',
+              storage: '#007aff', network: '#5ac8fa', power: '#af52de'
+            };
+            const ACCENT_DARK = {
+              cpu: '#ff6961', gpu: '#5be17b', memory: '#ffb340',
               storage: '#0a84ff', network: '#64d2ff', power: '#bf5af2'
             };
-            const accentOf = k => ACCENT[k] || '#5e5ce6';
+            const isDark = matchMedia && matchMedia('(prefers-color-scheme: dark)').matches;
+            const ACCENTS = isDark ? ACCENT_DARK : ACCENT_LIGHT;
+            const accentOf = k => ACCENTS[k] || (isDark ? '#5856d6' : '#5e5ce6');
 
-            const L = {
-              avg: 'Average', peak: 'Peak', low: 'Low', median: 'Median',
-              up: 'Upload', down: 'Download', read: 'Read', write: 'Written',
-              empty: 'No data recorded for this range', samples: 'pts'
+            const ICON = {
+              cpu: '<rect x="4" y="4" width="16" height="16" rx="2.5"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/>',
+              gpu: '<rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="8" cy="12" r="2.4"/><circle cx="16" cy="12" r="2.4"/>',
+              memory: '<path d="M3 7h18M3 12h18M3 17h18"/><circle cx="6" cy="7" r="1" fill="currentColor"/><circle cx="6" cy="12" r="1" fill="currentColor"/><circle cx="6" cy="17" r="1" fill="currentColor"/>',
+              storage: '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="0.8" fill="currentColor"/>',
+              network: '<path d="M2 12c5-5 15-5 20 0M5 15c4-3 10-3 14 0M9 18c1.5-1 4.5-1 6 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/>',
+              power: '<path d="M13 2L4 14h7l-1 8 9-12h-7l1-8z"/>'
             };
+            const iconOf = k => ICON[k] || '<circle cx="12" cy="12" r="8"/>';
 
+            // ===== Header text =====
             const genDate = new Date(payload.generatedAt);
-            document.getElementById('generated').textContent =
-              'Statistics report · generated ' + genDate.toLocaleString();
-            document.getElementById('footer').textContent =
-              payload.appName + ' · report is read-only and reflects data captured up to ' + genDate.toLocaleString();
+            const fmtFull = genDate.toLocaleString(locale, {
+              year: 'numeric', month: 'short', day: 'numeric',
+              hour: '2-digit', minute: '2-digit'
+            });
+            document.title = L.title + ' · HagimiMonitor';
+            document.getElementById('title').textContent = L.title;
+            document.getElementById('subtitle').textContent = L.subtitle;
+            document.getElementById('generated').textContent = fmtFull;
+            document.getElementById('footer').textContent = L.footer;
 
+            // ===== Formatters =====
             function bytes(v) {
-              if (!v) return '0 B';
+              if (!v) return { num: '0', unit: 'B' };
               const u = ['B','KB','MB','GB','TB']; let n = v, i = 0;
               while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
-              return n.toFixed(i >= 3 ? 2 : (i === 0 ? 0 : 1)) + ' ' + u[i];
+              return { num: n.toFixed(i >= 3 ? 2 : (i === 0 ? 0 : 1)), unit: u[i] };
             }
-            function num(v, kind) {
-              if (!Number.isFinite(v)) return '--';
-              return kind === 'power' ? v.toFixed(1) + ' W' : v.toFixed(1) + '%';
+            function pct(v, kind) {
+              if (!Number.isFinite(v)) return { num: '--', unit: '' };
+              return { num: v.toFixed(1), unit: kind === 'power' ? 'W' : '%' };
+            }
+            function withUnit(o) {
+              if (!o.unit) return o.num;
+              return o.num + '<span class="unit"> ' + o.unit + '</span>';
             }
             function fmtPointDate(ts, rangeId) {
               const d = new Date(ts * 1000);
-              if (rangeId === 'last24Hours') return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-              return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+              if (rangeId === 'last24Hours') return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+              return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
             }
 
-            // Lead metric per kind: [label, value, isLead]
+            // ===== Per-card metrics =====
             function metricsOf(m) {
-              if (m.kind === 'network') return [
-                [L.down, bytes(m.totalBytesIn), true], [L.up, bytes(m.totalBytesOut), false], [L.peak, num(m.peak, m.kind), false]];
-              if (m.kind === 'storage') return [
-                [L.read, bytes(m.totalBytesRead), true], [L.write, bytes(m.totalBytesWritten), false], [L.peak, num(m.peak, m.kind), false]];
-              if (m.kind === 'power') return [
-                [L.avg, num(m.avgPower != null ? m.avgPower : m.avg, m.kind), true], [L.peak, num(m.peak, m.kind), false], [L.median, num(m.median, m.kind), false]];
-              return [
-                [L.avg, num(m.avg, m.kind), true], [L.peak, num(m.peak, m.kind), false], [L.median, num(m.median, m.kind), false]];
+              if (m.kind === 'network') return { dual: true, items: [
+                { label: L.download, val: bytes(m.totalBytesIn), lead: true },
+                { label: L.upload, val: bytes(m.totalBytesOut), lead: false }
+              ]};
+              if (m.kind === 'storage') return { dual: true, items: [
+                { label: L.read, val: bytes(m.totalBytesRead), lead: true },
+                { label: L.write, val: bytes(m.totalBytesWritten), lead: false }
+              ]};
+              if (m.kind === 'power') return { dual: false, items: [
+                { label: L.avg, val: pct(m.avgPower != null ? m.avgPower : m.avg, m.kind), lead: true },
+                { label: L.peak, val: pct(m.peak, m.kind), lead: false },
+                { label: L.median, val: pct(m.median, m.kind), lead: false }
+              ]};
+              return { dual: false, items: [
+                { label: L.avg, val: pct(m.avg, m.kind), lead: true },
+                { label: L.peak, val: pct(m.peak, m.kind), lead: false },
+                { label: L.median, val: pct(m.median, m.kind), lead: false }
+              ]};
             }
 
-            const W = 600, H = 150, PAD_L = 6, PAD_R = 6, PAD_T = 12, PAD_B = 18;
+            // ===== Chart =====
+            const W = 600, H = 156, PAD_L = 8, PAD_R = 8, PAD_T = 14, PAD_B = 18;
 
             function buildChart(card, m, rangeId) {
               const host = card.querySelector('.chart');
@@ -301,13 +429,13 @@ struct StatisticsReportHTMLBuilder {
                 host.outerHTML = '<div class="empty">' + L.empty + '</div>';
                 return;
               }
-              const color = accentOf(m.kind);
+              const color = card.style.getPropertyValue('--accent-c').trim() || accentOf(m.kind);
               const pts = m.points;
               const lows = pts.map(p => p.low), peaks = pts.map(p => p.peak);
               let lo = Math.min.apply(null, lows), hi = Math.max.apply(null, peaks);
               if (m.kind !== 'power') { lo = Math.min(lo, 0); hi = Math.max(hi, 1); }
               if (hi - lo < 1e-6) { hi = lo + 1; }
-              const pad = (hi - lo) * 0.08; lo -= pad; hi += pad;
+              const pad = (hi - lo) * 0.12; lo -= pad * 0.3; hi += pad;
 
               const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
               const X = i => PAD_L + (pts.length === 1 ? innerW / 2 : innerW * i / (pts.length - 1));
@@ -316,13 +444,12 @@ struct StatisticsReportHTMLBuilder {
               const line = key => pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p[key]).toFixed(1)).join(' ');
               const area = line('avg') + ' L' + X(pts.length - 1).toFixed(1) + ' ' + (PAD_T + innerH) + ' L' + X(0).toFixed(1) + ' ' + (PAD_T + innerH) + ' Z';
 
-              // horizontal gridlines + labels (3 ticks)
               let grid = '';
               for (let t = 0; t <= 2; t++) {
                 const val = lo + (hi - lo) * t / 2;
                 const y = Y(val).toFixed(1);
                 grid += '<line class="gridline" x1="' + PAD_L + '" y1="' + y + '" x2="' + (W - PAD_R) + '" y2="' + y + '"/>';
-                grid += '<text class="axis-label" x="' + PAD_L + '" y="' + (y - 3) + '">' +
+                grid += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (y - 4) + '" text-anchor="end">' +
                   (m.kind === 'power' ? val.toFixed(0) + 'W' : val.toFixed(0) + '%') + '</text>';
               }
 
@@ -330,15 +457,15 @@ struct StatisticsReportHTMLBuilder {
               host.innerHTML =
                 '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
                   '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
-                    '<stop offset="0" stop-color="' + color + '" stop-opacity="0.26"/>' +
+                    '<stop offset="0" stop-color="' + color + '" stop-opacity="0.22"/>' +
                     '<stop offset="1" stop-color="' + color + '" stop-opacity="0"/>' +
                   '</linearGradient></defs>' +
                   grid +
                   '<path d="' + area + '" fill="url(#' + gid + ')"/>' +
-                  '<path d="' + line('peak') + '" fill="none" stroke="' + color + '" stroke-width="1" stroke-opacity="0.4" stroke-dasharray="3 3"/>' +
+                  '<path d="' + line('peak') + '" fill="none" stroke="' + color + '" stroke-width="1.2" stroke-opacity="0.4" stroke-dasharray="3 3" stroke-linecap="round"/>' +
                   '<path d="' + line('avg') + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
                   '<line class="cursor-line" y1="' + PAD_T + '" y2="' + (PAD_T + innerH) + '"/>' +
-                  '<circle class="cursor-dot" r="3.5" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="2"/>' +
+                  '<circle class="cursor-dot" r="4" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="2.2"/>' +
                 '</svg>' +
                 '<div class="tooltip"></div>';
 
@@ -370,6 +497,7 @@ struct StatisticsReportHTMLBuilder {
               host.addEventListener('mouseleave', leave);
             }
 
+            // ===== Render =====
             function render() {
               const tabs = document.getElementById('tabs');
               tabs.innerHTML = payload.ranges.map(r =>
@@ -381,20 +509,28 @@ struct StatisticsReportHTMLBuilder {
               const cards = document.getElementById('cards');
               cards.innerHTML = range.modules.map(m => {
                 const color = accentOf(m.kind);
-                const mets = metricsOf(m).map(it =>
-                  '<div class="metric' + (it[2] ? ' lead' : '') + '" style="--accent-c:' + color + '">' +
-                    '<label>' + it[0] + '</label><strong>' + it[1] + '</strong></div>'
+                const mets = metricsOf(m);
+                const metsHTML = mets.items.map(it =>
+                  '<div class="metric' + (it.lead ? ' lead' : '') + '">' +
+                    '<label>' + it.label + '</label><strong>' + withUnit(it.val) + '</strong></div>'
                 ).join('');
-                const badge = m.points.length ? ('<span class="badge">' + m.points.length + ' ' + L.samples + '</span>') : '';
+                const badge = m.points.length
+                  ? ('<span class="badge">' + m.points.length + ' ' + L.samples + '</span>')
+                  : '';
                 const legend = m.points.length ?
                   '<div class="legend">' +
                     '<span><i style="background:' + color + '"></i>' + L.avg + '</span>' +
                     '<span><i class="dashed" style="border-color:' + color + '"></i>' + L.peak + '</span>' +
                   '</div>' : '';
-                return '<article class="card">' +
-                  '<div class="card-head"><span class="dot" style="background:' + color + '"></span>' +
-                    '<h2>' + m.title + '</h2>' + badge + '</div>' +
-                  '<div class="metrics">' + mets + '</div>' +
+                return '<article class="card" style="--accent-c:' + color + '">' +
+                  '<div class="card-head">' +
+                    '<div class="card-icon">' +
+                      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
+                        iconOf(m.kind) + '</svg>' +
+                    '</div>' +
+                    '<h2>' + m.title + '</h2>' + badge +
+                  '</div>' +
+                  '<div class="metrics' + (mets.dual ? ' dual' : '') + '">' + metsHTML + '</div>' +
                   '<div class="chart"></div>' + legend +
                 '</article>';
               }).join('');
@@ -408,5 +544,12 @@ struct StatisticsReportHTMLBuilder {
         </body>
         </html>
         """
+    }
+
+    private func htmlLang(from locale: String) -> String {
+        let normalized = locale.lowercased()
+        if normalized.hasPrefix("zh") { return "zh-Hans" }
+        if normalized.hasPrefix("ja") { return "ja" }
+        return "en"
     }
 }
