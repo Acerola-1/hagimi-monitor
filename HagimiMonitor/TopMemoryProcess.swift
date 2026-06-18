@@ -24,7 +24,7 @@ struct TopMemoryProcess: Identifiable, Equatable {
 
 /// 系统进程的可执行文件所在路径前缀。匹配这些前缀的视为系统进程,
 /// 在用户关闭"显示系统进程"时过滤掉。参考活动监视器的进程分类。
-private let systemProcessPathPrefixes: [String] = [
+let systemProcessPathPrefixes: [String] = [
     "/System/",
     "/usr/",
     "/sbin/",
@@ -40,18 +40,18 @@ private let systemProcessPathPrefixes: [String] = [
 /// 此处刻意只放行 Safari,而非用 activationPolicy 放行所有 .regular App——否则 Finder、
 /// SystemUIServer 等系统自带 GUI 也会涌入列表,这不符合产品意图(它们仍应受"显示系统
 /// 进程"开关控制)。新增白名单需求时在此追加路径片段即可。
-private let alwaysVisibleSystemAppMarkers: [String] = [
+let alwaysVisibleSystemAppMarkers: [String] = [
     "/Safari.app/Contents/MacOS/",
 ]
 
 /// `responsibility_get_pid_responsible_for_pid` 的 C 函数签名。
 /// 该 libsystem 私有 API 返回某进程的"负责进程"pid——即 Safari 的 WebContent、
 /// Chrome 的 Helper 等子进程真正归属的宿主 App。活动监视器用它做进程分组。
-private typealias ResponsiblePidFunction = @convention(c) (Int32) -> Int32
+typealias ResponsiblePidFunction = @convention(c) (Int32) -> Int32
 
 /// 进程 -> 负责进程 pid 的解析器。dlsym 拿不到符号时回退为「返回自身」,
 /// 退化成不合并的行为,保证功能不崩。
-private let responsiblePidResolver: ResponsiblePidFunction = {
+let responsiblePidResolver: ResponsiblePidFunction = {
     guard let handle = dlopen(nil, RTLD_NOW),
           let symbol = dlsym(handle, "responsibility_get_pid_responsible_for_pid")
     else {
@@ -62,7 +62,7 @@ private let responsiblePidResolver: ResponsiblePidFunction = {
 }()
 
 /// 读取进程可执行文件路径。失败返回空串。
-private func executablePath(for pid: pid_t) -> String {
+func executablePath(for pid: pid_t) -> String {
     var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
     let length = proc_pidpath(pid, &buffer, UInt32(MAXPATHLEN))
     return length > 0 ? String(cString: buffer) : ""

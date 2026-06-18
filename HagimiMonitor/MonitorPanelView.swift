@@ -118,7 +118,9 @@ struct MonitorPanelView: View {
                 detail: module.summary,
                 samples: module.samples,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: expandedKinds.contains(module.kind),
+                topCPUProcesses: store.topCPUProcesses,
+                showCPUProcesses: store.settings.showCPUProcesses
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -154,7 +156,9 @@ struct MonitorPanelView: View {
                 theme: theme,
                 detail: module.summary,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: expandedKinds.contains(module.kind),
+                topDiskProcesses: store.topDiskProcesses,
+                showDiskProcesses: store.settings.showDiskProcesses
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -164,7 +168,9 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: expandedKinds.contains(module.kind),
+                topNetworkProcesses: store.topNetworkProcesses,
+                showNetworkProcesses: store.settings.showNetworkProcesses
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -258,6 +264,10 @@ private struct MetricGlassRow: View, Equatable {
     var isExpanded = false
     var topMemoryProcesses: [TopMemoryProcess] = []
     var showMemoryProcesses = true
+    var topCPUProcesses: [TopCPUProcess] = []
+    var showCPUProcesses = true
+    var topDiskProcesses: [TopDiskProcess] = []
+    var showDiskProcesses = true
     var toggleExpansion: (() -> Void)?
 
     // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
@@ -272,6 +282,10 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.isExpanded == rhs.isExpanded
             && lhs.topMemoryProcesses == rhs.topMemoryProcesses
             && lhs.showMemoryProcesses == rhs.showMemoryProcesses
+            && lhs.topCPUProcesses == rhs.topCPUProcesses
+            && lhs.showCPUProcesses == rhs.showCPUProcesses
+            && lhs.topDiskProcesses == rhs.topDiskProcesses
+            && lhs.showDiskProcesses == rhs.showDiskProcesses
     }
 
     private var tint: Color {
@@ -313,6 +327,12 @@ private struct MetricGlassRow: View, Equatable {
                             MetricDetailGrid(metrics: details, kind: module.kind, theme: theme)
                             if module.kind == .memory, showMemoryProcesses, !topMemoryProcesses.isEmpty {
                                 MemoryProcessList(processes: topMemoryProcesses, theme: theme)
+                            }
+                            if module.kind == .cpu, showCPUProcesses, !topCPUProcesses.isEmpty {
+                                CPUProcessList(processes: topCPUProcesses, theme: theme)
+                            }
+                            if module.kind == .storage, showDiskProcesses, !topDiskProcesses.isEmpty {
+                                InlineDiskProcessList(processes: topDiskProcesses, theme: theme)
                             }
                         }
                     }
@@ -630,6 +650,8 @@ private struct NetworkGlassRow: View, Equatable {
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
     var isExpanded = false
+    var topNetworkProcesses: [TopNetworkProcess] = []
+    var showNetworkProcesses = true
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: NetworkGlassRow, rhs: NetworkGlassRow) -> Bool {
@@ -638,6 +660,8 @@ private struct NetworkGlassRow: View, Equatable {
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
+            && lhs.topNetworkProcesses == rhs.topNetworkProcesses
+            && lhs.showNetworkProcesses == rhs.showNetworkProcesses
     }
 
     private var tint: Color {
@@ -683,10 +707,15 @@ private struct NetworkGlassRow: View, Equatable {
             .padding(.vertical, 8)
 
             if isExpanded {
-                MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 9)
-                    .transition(.detailDisclosure)
+                VStack(spacing: 9) {
+                    MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
+                    if showNetworkProcesses, !topNetworkProcesses.isEmpty {
+                        InlineNetworkProcessList(processes: topNetworkProcesses, theme: theme)
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 9)
+                .transition(.detailDisclosure)
             }
         }
         .contentShape(Rectangle())
@@ -1210,6 +1239,160 @@ private struct MemoryProcessList: View {
                 }
             }
             .padding(.leading, 28)
+        }
+    }
+}
+
+// MARK: - Top CPU Processes
+
+private struct CPUProcessList: View {
+    let processes: [TopCPUProcess]
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .cpu))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(processes) { proc in
+                    HStack(spacing: 6) {
+                        ProcessIcon(icon: proc.icon, theme: theme)
+                            .frame(width: 16, height: 16)
+
+                        Text(proc.name)
+                            .monitorPanelCaptionFont(.footnote)
+                            .foregroundStyle(theme.primaryText)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+
+                        Spacer(minLength: 4)
+
+                        Text(String(format: "%.1f%%", proc.cpuUsage))
+                            .monitorPanelMonoFont(.caption2, weight: .medium)
+                            .foregroundStyle(theme.secondaryText)
+                            .lineLimit(1)
+                            .fixedSize(horizontal: true, vertical: false)
+                            .layoutPriority(1)
+                    }
+                }
+            }
+            .padding(.leading, 28)
+        }
+    }
+}
+
+// MARK: - Top Disk Processes
+
+// DiskProcessList and NetworkProcessList removed — inline rendering used instead
+
+/// 简单的进程行数据，用于 ForEach 渲染。避免跨文件类型的 SwiftUI 类型推断问题。
+private struct ProcessRowData: Identifiable {
+    let id: Int
+    let name: String
+    let icon: NSImage?
+    let primaryText: String
+    let secondaryText: String
+}
+
+/// 磁盘 I/O 进程列表。
+struct InlineDiskProcessList: View {
+    let processes: [TopDiskProcess]
+    let theme: MonitorPanelTheme
+
+    private var rows: [ProcessRowData] {
+        processes.enumerated().map { index, proc in
+            ProcessRowData(
+                id: Int(proc.pid),
+                name: proc.name,
+                icon: proc.icon,
+                primaryText: "↑\(ByteCountFormatter.string(fromByteCount: Int64(proc.bytesWritten), countStyle: .file))",
+                secondaryText: "↓\(ByteCountFormatter.string(fromByteCount: Int64(proc.bytesRead), countStyle: .file))"
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .storage))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(rows) { row in
+                    ProcessRowView(row: row, theme: theme)
+                }
+            }
+            .padding(.leading, 28)
+        }
+    }
+}
+
+/// 网络流量进程列表。
+struct InlineNetworkProcessList: View {
+    let processes: [TopNetworkProcess]
+    let theme: MonitorPanelTheme
+
+    private var rows: [ProcessRowData] {
+        processes.enumerated().map { index, proc in
+            ProcessRowData(
+                id: Int(proc.pid),
+                name: proc.name,
+                icon: proc.icon,
+                primaryText: "↑\(ByteCountFormatter.string(fromByteCount: Int64(proc.upload), countStyle: .file))",
+                secondaryText: "↓\(ByteCountFormatter.string(fromByteCount: Int64(proc.download), countStyle: .file))"
+            )
+        }
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .network))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(rows) { row in
+                    ProcessRowView(row: row, theme: theme)
+                }
+            }
+            .padding(.leading, 28)
+        }
+    }
+}
+
+/// 通用进程行渲染。
+private struct ProcessRowView: View {
+    let row: ProcessRowData
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        HStack(spacing: 6) {
+            ProcessIcon(icon: row.icon, theme: theme)
+                .frame(width: 16, height: 16)
+
+            Text(row.name)
+                .monitorPanelCaptionFont(.footnote)
+                .foregroundStyle(theme.primaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 4)
+
+            HStack(spacing: 4) {
+                Text(row.primaryText)
+                    .monitorPanelMonoFont(.caption2, weight: .medium)
+                Text(row.secondaryText)
+                    .monitorPanelMonoFont(.caption2, weight: .medium)
+            }
+            .foregroundStyle(theme.secondaryText)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .layoutPriority(1)
         }
     }
 }

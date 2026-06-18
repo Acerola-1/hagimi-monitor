@@ -215,6 +215,9 @@ final class MonitorStore: ObservableObject {
 
     @Published private(set) var modules: [MonitorModule]
     @Published var topMemoryProcesses: [TopMemoryProcess] = []
+    @Published var topCPUProcesses: [TopCPUProcess] = []
+    @Published var topDiskProcesses: [TopDiskProcess] = []
+    @Published var topNetworkProcesses: [TopNetworkProcess] = []
     var selectedKind: MonitorKind = .cpu
     @Published private(set) var displayedComputeLoad = 0.0
 
@@ -223,6 +226,9 @@ final class MonitorStore: ObservableObject {
     private var timerCancellable: AnyCancellable?
     private var smoothingTimerCancellable: AnyCancellable?
     private var memoryProcTimer: AnyCancellable?
+    private var cpuProcTimer: AnyCancellable?
+    private var diskProcTimer: AnyCancellable?
+    private var networkProcTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let statisticsRecorder = StatisticsRecorder()
 
@@ -230,6 +236,9 @@ final class MonitorStore: ObservableObject {
     var statisticsPendingSnapshot: [String: PendingBucket] { statisticsRecorder.pendingSnapshot() }
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let memoryProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.memory-proc", qos: .utility)
+    private let cpuProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.cpu-proc", qos: .utility)
+    private let diskProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.disk-proc", qos: .utility)
+    private let networkProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.network-proc", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var menuBarTargetComputeLoad = 0.0
     private var isSampling = false
@@ -265,11 +274,56 @@ final class MonitorStore: ObservableObject {
                 self?.refreshTopMemoryProcesses()
             }
 
+        refreshTopCPUProcesses()
+        cpuProcTimer = Timer.publish(every: 5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refreshTopCPUProcesses()
+            }
+
+        refreshTopDiskProcesses()
+        diskProcTimer = Timer.publish(every: 5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refreshTopDiskProcesses()
+            }
+
+        refreshTopNetworkProcesses()
+        networkProcTimer = Timer.publish(every: 5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refreshTopNetworkProcesses()
+            }
+
         settings.$memoryShowSystemProcesses
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.refreshTopMemoryProcesses()
+            }
+            .store(in: &cancellables)
+
+        settings.$cpuShowSystemProcesses
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshTopCPUProcesses()
+            }
+            .store(in: &cancellables)
+
+        settings.$diskShowSystemProcesses
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshTopDiskProcesses()
+            }
+            .store(in: &cancellables)
+
+        settings.$networkShowSystemProcesses
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshTopNetworkProcesses()
             }
             .store(in: &cancellables)
     }
@@ -288,10 +342,43 @@ final class MonitorStore: ObservableObject {
         }
     }
 
+    private func refreshTopCPUProcesses() {
+        let includeSystem = settings.cpuShowSystemProcesses
+        cpuProcQueue.async { [weak self] in
+            let raw = sampleTopCPUProcesses(includeSystemProcesses: includeSystem)
+            DispatchQueue.main.async {
+                self?.topCPUProcesses = enrichCPU(raw)
+            }
+        }
+    }
+
+    private func refreshTopDiskProcesses() {
+        let includeSystem = settings.diskShowSystemProcesses
+        diskProcQueue.async { [weak self] in
+            let raw = sampleTopDiskProcesses(includeSystemProcesses: includeSystem)
+            DispatchQueue.main.async {
+                self?.topDiskProcesses = enrichDisk(raw)
+            }
+        }
+    }
+
+    private func refreshTopNetworkProcesses() {
+        let includeSystem = settings.networkShowSystemProcesses
+        networkProcQueue.async { [weak self] in
+            let raw = sampleTopNetworkProcesses(includeSystemProcesses: includeSystem)
+            DispatchQueue.main.async {
+                self?.topNetworkProcesses = enrichNetwork(raw)
+            }
+        }
+    }
+
     deinit {
         timerCancellable?.cancel()
         smoothingTimerCancellable?.cancel()
         memoryProcTimer?.cancel()
+        cpuProcTimer?.cancel()
+        diskProcTimer?.cancel()
+        networkProcTimer?.cancel()
         cancellables.removeAll()
     }
 
