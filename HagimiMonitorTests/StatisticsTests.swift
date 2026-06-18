@@ -105,4 +105,52 @@ struct StatisticsTests {
         // 验证不会崩溃，title 非空
         #expect(!range.title.isEmpty)
     }
+
+    @Test("Report exporter builds payload for all ranges")
+    func testReportExporterBuildsAllRanges() async throws {
+        let container = makeTestContainer()
+        let context = ModelContext(container)
+        // Use a recent date within the last 24 hours so data is included in queries
+        let now = Date()
+        let hour = Calendar.current.dateInterval(of: .hour, for: now.addingTimeInterval(-3600))!.start
+
+        context.insert(HourlySample(hour: hour, kind: "cpu", avg: 25, peak: 70, low: 5, sampleCount: 4))
+        context.insert(HourlySample(hour: hour, kind: "network", avg: 0, peak: 0, low: 0, sampleCount: 1, bytesInDelta: 2048, bytesOutDelta: 1024))
+        try context.save()
+
+        let exporter = await StatisticsReportExporter(container: container, outputDirectory: FileManager.default.temporaryDirectory, now: { now })
+        let payload = await exporter.makePayload()
+
+        let rangeIds = payload.ranges.map { $0.id }
+        #expect(rangeIds == ["last24Hours", "lastWeek", "lastMonth", "lastYear"])
+
+        let firstRange = try #require(payload.ranges.first)
+        let cpuModule = firstRange.modules.first { $0.kind == "cpu" }
+        #expect(cpuModule?.avg == 25)
+
+        let networkModule = firstRange.modules.first { $0.kind == "network" }
+        #expect(networkModule?.totalBytesIn == 2048)
+        #expect(networkModule?.totalBytesOut == 1024)
+
+        #expect(payload.generatedAt == now)
+    }
+
+    @Test("Report exporter writes self-contained HTML file")
+    func testReportExporterWritesHTMLFile() async throws {
+        let container = makeTestContainer()
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("HagimiMonitorExporterTests")
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let exporter = await StatisticsReportExporter(container: container, outputDirectory: directory, now: { Date(timeIntervalSince1970: 1_800_000_000) })
+        let url = try await exporter.export()
+        let html = try String(contentsOf: url, encoding: .utf8)
+
+        #expect(url.pathExtension == "html")
+        #expect(html.contains("<!doctype html>"))
+        #expect(html.contains("application/json"))
+        #expect(html.contains("last24Hours"))
+    }
 }
