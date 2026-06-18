@@ -35,7 +35,7 @@ struct HagimiMonitorApp: App {
         .commands { AppMenuCommands() }
 
         Settings {
-            SettingsRootView(settings: monitorStore.settings)
+            SettingsRootView(settings: monitorStore.settings, store: monitorStore)
                 // 设置窗口始终跟随系统外观
         }
         .windowResizability(.contentSize)

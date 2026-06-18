@@ -2696,6 +2696,28 @@
         }
       }
     },
+    "stats.avg": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "均值"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avg"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均"
+          }
+        }
+      }
+    },
     "stats.date.to": {
       "localizations": {
         "zh-Hans": {
@@ -2802,6 +2824,94 @@
           "stringUnit": {
             "state": "translated",
             "value": "ピーク"
+          }
+        }
+      }
+    },
+    "stats.median": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中位数"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Median"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中央値"
+          }
+        }
+      }
+    },
+    "stats.low": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最低"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最低"
+          }
+        }
+      }
+    },
+    "stats.net.up": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上传"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アップ"
+          }
+        }
+      }
+    },
+    "stats.net.down": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下载"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Down"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ダウン"
           }
         }
       }
@@ -2987,13 +3097,13 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "打开详细报表"
+            "value": "详细报表"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open Detailed Report"
+            "value": "Detailed Report"
           }
         },
         "ja": {

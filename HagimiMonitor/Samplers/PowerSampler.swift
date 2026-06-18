@@ -9,23 +9,24 @@ final class PowerSampler: MonitorSampler {
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         let watts = readSystemPower()
-        let value = min(100, watts)
-        let summary = wattString(watts)
+        // value 保留真实瓦特用于统计；环形图等显示侧若需归一化自行处理。
+        let summary = watts > 0 ? wattString(watts) : "--"
 
         let metrics = [
-            MonitorMetric(name: "power-watts", value: wattString(watts))
+            MonitorMetric(name: "power-watts", value: String(format: "%.2f", watts))
         ]
 
         return MonitorModule(
             kind: .power,
-            value: value,
+            value: watts,
             summary: summary,
             metrics: metrics,
-            samples: seedSamples(value)
+            samples: seedSamples(watts)
         )
     }
 
-    /// 读取系统总功耗（瓦特）
+    /// 读取系统总功耗（瓦特）。无法读取（如无电池的台式机）时返回 0，
+    /// 由统计层据此判定为"无功耗数据"，而非记录伪造的固定值。
     private func readSystemPower() -> Double {
         // 优先从 AppleSmartBattery 读取 InstantAmperage * Voltage
         if let watts = smartBatteryPower() {
@@ -37,8 +38,7 @@ final class PowerSampler: MonitorSampler {
             return watts
         }
 
-        // 无法读取时返回基准值
-        return 3.0
+        return 0
     }
 
     /// 从 AppleSmartBattery 读取瞬时功耗

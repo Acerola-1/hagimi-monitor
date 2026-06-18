@@ -22,7 +22,7 @@ struct SettingsSidebar: View {
             }
 
             Section {
-                ForEach(MonitorKind.allCases) { kind in
+                ForEach(MonitorKind.userVisibleCases) { kind in
                     Label(kind.title, systemImage: kind.symbol)
                         .tag(SettingsRoute.module(kind))
                 }

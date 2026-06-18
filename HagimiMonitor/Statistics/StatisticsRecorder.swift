@@ -59,16 +59,9 @@ final class StatisticsRecorder {
         self.currentHour = StatisticsRecorder.startOfHour(Date())
     }
 
-    /// 从 ModelContainer 创建，默认使用共享容器
+    /// 使用全局共享容器创建。Recorder 与 Aggregator 必须共用同一容器。
     convenience init() {
-        let schema = Schema([HourlySample.self, DailyAggregate.self])
-        let config = ModelConfiguration(isStoredInMemoryOnly: false)
-        do {
-            let container = try ModelContainer(for: schema, configurations: [config])
-            self.init(container: container)
-        } catch {
-            fatalError("Failed to create ModelContainer for statistics: \(error)")
-        }
+        self.init(container: StatisticsStore.container)
     }
 
     /// 接收一批采样结果，累加到内存桶
@@ -125,6 +118,26 @@ final class StatisticsRecorder {
 
             buckets[kind] = bucket
         }
+    }
+
+    /// 当前小时尚未落库的内存桶快照（供「过去24小时」视图合并显示，避免整点前无数据）。
+    /// key 为 `MonitorKind.rawValue`。
+    func pendingSnapshot() -> [String: PendingBucket] {
+        var result: [String: PendingBucket] = [:]
+        for (kind, bucket) in buckets where bucket.count > 0 {
+            result[kind] = PendingBucket(
+                hour: currentHour,
+                avg: bucket.avg,
+                peak: bucket.peak,
+                low: bucket.low,
+                bytesIn: bucket.bytesInSum,
+                bytesOut: bucket.bytesOutSum,
+                bytesRead: bucket.bytesReadSum,
+                bytesWritten: bucket.bytesWrittenSum,
+                avgPower: bucket.avgPower
+            )
+        }
+        return result
     }
 
     // MARK: - Flush & Cleanup

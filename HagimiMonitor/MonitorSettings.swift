@@ -103,7 +103,7 @@ final class MonitorSettings: ObservableObject {
             let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
             visibleKinds = Set(kinds)
         } else {
-            visibleKinds = Set(MonitorKind.allCases)
+            visibleKinds = Set(MonitorKind.userVisibleCases)
         }
 
         var loadedMetrics: [MonitorKind: Set<String>] = [:]

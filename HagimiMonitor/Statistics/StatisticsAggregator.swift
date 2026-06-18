@@ -30,6 +30,19 @@ struct StatisticsDataPoint: Identifiable {
     let low: Double
 }
 
+/// 当前小时尚未落库的内存桶快照（由 StatisticsRecorder 导出，供 24h 视图合并）。
+struct PendingBucket {
+    let hour: Date
+    let avg: Double
+    let peak: Double
+    let low: Double
+    let bytesIn: Int64
+    let bytesOut: Int64
+    let bytesRead: Int64
+    let bytesWritten: Int64
+    let avgPower: Double?
+}
+
 /// 某个模块的统计摘要
 struct StatisticsSummary {
     let kind: MonitorKind
@@ -57,13 +70,19 @@ final class StatisticsAggregator {
         self.container = container
     }
 
-    /// 查询指定模块在指定时间范围内的统计数据
-    func query(kind: MonitorKind, range: StatisticsTimeRange) -> StatisticsSummary {
+    /// 使用全局共享容器创建。Recorder 与 Aggregator 必须共用同一容器。
+    convenience init() {
+        self.init(container: StatisticsStore.container)
+    }
+
+    /// 查询指定模块在指定时间范围内的统计数据。
+    /// - Parameter pending: 当前小时尚未落库的内存桶（仅 24h 视图使用），用于在整点前也能看到当前数据。
+    func query(kind: MonitorKind, range: StatisticsTimeRange, pending: PendingBucket? = nil) -> StatisticsSummary {
         let context = ModelContext(container)
 
         switch range {
         case .last24Hours:
-            return queryHourly(kind: kind, context: context)
+            return queryHourly(kind: kind, context: context, pending: pending)
         case .lastWeek:
             return queryDaily(kind: kind, days: 7, context: context)
         case .lastMonth:
@@ -78,7 +97,7 @@ final class StatisticsAggregator {
 
     // MARK: - Hourly Query
 
-    private func queryHourly(kind: MonitorKind, from: Date? = nil, to: Date? = nil, context: ModelContext) -> StatisticsSummary {
+    private func queryHourly(kind: MonitorKind, from: Date? = nil, to: Date? = nil, context: ModelContext, pending: PendingBucket? = nil) -> StatisticsSummary {
         let kindStr = kind.rawValue
         let startDate = from ?? Calendar.current.date(byAdding: .hour, value: -24, to: Date())!
         let endDate = to ?? Date()
@@ -90,12 +109,30 @@ final class StatisticsAggregator {
 
         do {
             let samples = try context.fetch(descriptor)
-            return buildSummary(kind: kind, samples: samples.map { ($0.hour, $0.avg, $0.peak, $0.low, $0.sampleCount) },
-                               totalIn: samples.compactMap(\.bytesInDelta).reduce(0, +),
-                               totalOut: samples.compactMap(\.bytesOutDelta).reduce(0, +),
-                               totalRead: samples.compactMap(\.bytesReadDelta).reduce(0, +),
-                               totalWritten: samples.compactMap(\.bytesWrittenDelta).reduce(0, +),
-                               avgPower: weightedAvgPower(samples.map(\.avgPower), counts: samples.map(\.sampleCount)))
+            var rows: [(date: Date, avg: Double, peak: Double, low: Double, count: Int)] =
+                samples.map { ($0.hour, $0.avg, $0.peak, $0.low, $0.sampleCount) }
+            var totalIn = samples.compactMap(\.bytesInDelta).reduce(0, +)
+            var totalOut = samples.compactMap(\.bytesOutDelta).reduce(0, +)
+            var totalRead = samples.compactMap(\.bytesReadDelta).reduce(0, +)
+            var totalWritten = samples.compactMap(\.bytesWrittenDelta).reduce(0, +)
+            var powers = samples.map(\.avgPower)
+            var powerCounts = samples.map(\.sampleCount)
+
+            // 合并当前小时未落库的内存桶（若该小时已有落库样本则跳过，避免重复）
+            if let pending, !samples.contains(where: { $0.hour == pending.hour }) {
+                rows.append((pending.hour, pending.avg, pending.peak, pending.low, 1))
+                totalIn += pending.bytesIn
+                totalOut += pending.bytesOut
+                totalRead += pending.bytesRead
+                totalWritten += pending.bytesWritten
+                powers.append(pending.avgPower)
+                powerCounts.append(1)
+            }
+
+            return buildSummary(kind: kind, samples: rows,
+                               totalIn: totalIn, totalOut: totalOut,
+                               totalRead: totalRead, totalWritten: totalWritten,
+                               avgPower: weightedAvgPower(powers, counts: powerCounts))
         } catch {
             logger.error("Failed to fetch hourly samples: \(error.localizedDescription, privacy: .public)")
             return emptySummary(kind: kind)

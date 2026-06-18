@@ -52,9 +52,12 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     case storage
     case network
     case battery
-    case power
+    case power // 仅用于统计数据采集，不在 UI 中显示为独立模块
 
     var id: String { rawValue }
+
+    /// 用户可见的模块（排除 .power 等仅用于内部采集的模块）
+    static let userVisibleCases: [MonitorKind] = allCases.filter { $0 != .power }
 
     var title: String {
         switch self {
@@ -222,6 +225,9 @@ final class MonitorStore: ObservableObject {
     private var memoryProcTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let statisticsRecorder = StatisticsRecorder()
+
+    /// 暴露给统计页，用于读取当前小时尚未落库的内存桶。
+    var statisticsPendingSnapshot: [String: PendingBucket] { statisticsRecorder.pendingSnapshot() }
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let memoryProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.memory-proc", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
