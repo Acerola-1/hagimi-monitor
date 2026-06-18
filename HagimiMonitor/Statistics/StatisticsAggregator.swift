@@ -28,6 +28,12 @@ struct StatisticsDataPoint: Identifiable {
     let avg: Double
     let peak: Double
     let low: Double
+    /// 网络字节增量（仅 network 模块有值）
+    let bytesIn: Int64?
+    let bytesOut: Int64?
+    /// 磁盘字节增量（仅 storage 模块有值）
+    let bytesRead: Int64?
+    let bytesWritten: Int64?
 }
 
 /// 当前小时尚未落库的内存桶快照（由 StatisticsRecorder 导出，供 24h 视图合并）。
@@ -109,8 +115,8 @@ final class StatisticsAggregator {
 
         do {
             let samples = try context.fetch(descriptor)
-            var rows: [(date: Date, avg: Double, peak: Double, low: Double, count: Int)] =
-                samples.map { ($0.hour, $0.avg, $0.peak, $0.low, $0.sampleCount) }
+            var rows: [(date: Date, avg: Double, peak: Double, low: Double, count: Int, bytesIn: Int64?, bytesOut: Int64?, bytesRead: Int64?, bytesWritten: Int64?)] =
+                samples.map { ($0.hour, $0.avg, $0.peak, $0.low, $0.sampleCount, $0.bytesInDelta, $0.bytesOutDelta, $0.bytesReadDelta, $0.bytesWrittenDelta) }
             var totalIn = samples.compactMap(\.bytesInDelta).reduce(0, +)
             var totalOut = samples.compactMap(\.bytesOutDelta).reduce(0, +)
             var totalRead = samples.compactMap(\.bytesReadDelta).reduce(0, +)
@@ -120,7 +126,7 @@ final class StatisticsAggregator {
 
             // 合并当前小时未落库的内存桶（若该小时已有落库样本则跳过，避免重复）
             if let pending, !samples.contains(where: { $0.hour == pending.hour }) {
-                rows.append((pending.hour, pending.avg, pending.peak, pending.low, 1))
+                rows.append((pending.hour, pending.avg, pending.peak, pending.low, 1, pending.bytesIn, pending.bytesOut, pending.bytesRead, pending.bytesWritten))
                 totalIn += pending.bytesIn
                 totalOut += pending.bytesOut
                 totalRead += pending.bytesRead
@@ -154,7 +160,7 @@ final class StatisticsAggregator {
 
         do {
             let aggregates = try context.fetch(descriptor)
-            return buildSummary(kind: kind, samples: aggregates.map { ($0.date, $0.avg, $0.peak, $0.low, $0.sampleCount) },
+            return buildSummary(kind: kind, samples: aggregates.map { ($0.date, $0.avg, $0.peak, $0.low, $0.sampleCount, $0.bytesInDelta, $0.bytesOutDelta, $0.bytesReadDelta, $0.bytesWrittenDelta) },
                                totalIn: aggregates.compactMap(\.bytesInDelta).reduce(0, +),
                                totalOut: aggregates.compactMap(\.bytesOutDelta).reduce(0, +),
                                totalRead: aggregates.compactMap(\.bytesReadDelta).reduce(0, +),
@@ -168,10 +174,10 @@ final class StatisticsAggregator {
 
     // MARK: - Helpers
 
-    private func buildSummary(kind: MonitorKind, samples: [(date: Date, avg: Double, peak: Double, low: Double, count: Int)],
+    private func buildSummary(kind: MonitorKind, samples: [(date: Date, avg: Double, peak: Double, low: Double, count: Int, bytesIn: Int64?, bytesOut: Int64?, bytesRead: Int64?, bytesWritten: Int64?)],
                               totalIn: Int64, totalOut: Int64, totalRead: Int64, totalWritten: Int64,
                               avgPower: Double?) -> StatisticsSummary {
-        let points = samples.map { StatisticsDataPoint(date: $0.date, avg: $0.avg, peak: $0.peak, low: $0.low) }
+        let points = samples.map { StatisticsDataPoint(date: $0.date, avg: $0.avg, peak: $0.peak, low: $0.low, bytesIn: $0.bytesIn, bytesOut: $0.bytesOut, bytesRead: $0.bytesRead, bytesWritten: $0.bytesWritten) }
         let allAvgs = samples.map(\.avg).sorted()
         let median = allAvgs.isEmpty ? 0 : (allAvgs.count % 2 == 0 ? (allAvgs[allAvgs.count / 2 - 1] + allAvgs[allAvgs.count / 2]) / 2 : allAvgs[allAvgs.count / 2])
         let overallAvg = samples.isEmpty ? 0 : samples.reduce(0.0) { $0 + $1.avg * Double($1.count) } / Double(samples.reduce(0) { $0 + $1.count })

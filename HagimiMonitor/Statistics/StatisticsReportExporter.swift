@@ -21,7 +21,6 @@ struct StatisticsReportStrings: Codable {
     let upload: String
     let read: String
     let write: String
-    let samples: String
     let empty: String
 }
 
@@ -52,6 +51,10 @@ struct StatisticsReportPointPayload: Codable {
     let avg: Double
     let peak: Double
     let low: Double
+    let bytesIn: Int64?
+    let bytesOut: Int64?
+    let bytesRead: Int64?
+    let bytesWritten: Int64?
 }
 
 @MainActor
@@ -97,7 +100,6 @@ struct StatisticsReportExporter {
                 upload: String(localized: "stats.net.up"),
                 read: String(localized: "stats.disk.read"),
                 write: String(localized: "stats.disk.write"),
-                samples: String(localized: "stats.report.samples"),
                 empty: String(localized: "stats.no-data")
             ),
             ranges: Self.rangeSpecs.map { spec in
@@ -137,7 +139,7 @@ struct StatisticsReportExporter {
             totalBytesWritten: summary.totalBytesWritten,
             avgPower: summary.avgPower,
             points: summary.points.map { point in
-                StatisticsReportPointPayload(timestamp: point.date.timeIntervalSince1970, avg: point.avg, peak: point.peak, low: point.low)
+                StatisticsReportPointPayload(timestamp: point.date.timeIntervalSince1970, avg: point.avg, peak: point.peak, low: point.low, bytesIn: point.bytesIn, bytesOut: point.bytesOut, bytesRead: point.bytesRead, bytesWritten: point.bytesWritten)
             }
         )
     }
@@ -247,9 +249,6 @@ struct StatisticsReportHTMLBuilder {
             .card-icon svg { width: 16px; height: 16px; stroke-width: 2.4; position: relative; z-index: 1; }
             .card-head h2 { margin: 0; font-size: 16px; font-weight: 640;
               letter-spacing: -.01em; flex: 1; }
-            .badge { font-size: 11px; font-weight: 600; color: var(--text-dim);
-              background: var(--bg-inset); padding: 4px 9px; border-radius: 7px;
-              font-variant-numeric: tabular-nums; }
 
             /* ===== Metrics ===== */
             .metrics { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0;
@@ -431,70 +430,150 @@ struct StatisticsReportHTMLBuilder {
               }
               const color = card.style.getPropertyValue('--accent-c').trim() || accentOf(m.kind);
               const pts = m.points;
-              const lows = pts.map(p => p.low), peaks = pts.map(p => p.peak);
-              let lo = Math.min.apply(null, lows), hi = Math.max.apply(null, peaks);
-              if (m.kind !== 'power') { lo = Math.min(lo, 0); hi = Math.max(hi, 1); }
-              if (hi - lo < 1e-6) { hi = lo + 1; }
-              const pad = (hi - lo) * 0.12; lo -= pad * 0.3; hi += pad;
+              const isDual = m.kind === 'network' || m.kind === 'storage';
 
-              const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
-              const X = i => PAD_L + (pts.length === 1 ? innerW / 2 : innerW * i / (pts.length - 1));
-              const Y = v => PAD_T + innerH * (1 - (v - lo) / (hi - lo));
+              if (isDual) {
+                // 双线图：网络(下载/上传) 或 存储(读取/写入) — 累计流量趋势
+                const key1 = m.kind === 'network' ? 'bytesIn' : 'bytesRead';
+                const key2 = m.kind === 'network' ? 'bytesOut' : 'bytesWritten';
+                const label1 = m.kind === 'network' ? L.download : L.read;
+                const label2 = m.kind === 'network' ? L.upload : L.write;
+                // 累加成累计值
+                const cum1 = [], cum2 = [];
+                let s1 = 0, s2 = 0;
+                for (let i = 0; i < pts.length; i++) {
+                  s1 += (pts[i][key1] || 0);
+                  s2 += (pts[i][key2] || 0);
+                  cum1.push(s1);
+                  cum2.push(s2);
+                }
+                let lo = 0, hi = Math.max(Math.max.apply(null, cum1), Math.max.apply(null, cum2));
+                if (hi < 1) hi = 1;
+                const pad = hi * 0.12; hi += pad;
 
-              const line = key => pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p[key]).toFixed(1)).join(' ');
-              const area = line('avg') + ' L' + X(pts.length - 1).toFixed(1) + ' ' + (PAD_T + innerH) + ' L' + X(0).toFixed(1) + ' ' + (PAD_T + innerH) + ' Z';
+                const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+                const X = i => PAD_L + (pts.length === 1 ? innerW / 2 : innerW * i / (pts.length - 1));
+                const Y = v => PAD_T + innerH * (1 - (v - lo) / (hi - lo));
 
-              let grid = '';
-              for (let t = 0; t <= 2; t++) {
-                const val = lo + (hi - lo) * t / 2;
-                const y = Y(val).toFixed(1);
-                grid += '<line class="gridline" x1="' + PAD_L + '" y1="' + y + '" x2="' + (W - PAD_R) + '" y2="' + y + '"/>';
-                grid += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (y - 4) + '" text-anchor="end">' +
-                  (m.kind === 'power' ? val.toFixed(0) + 'W' : val.toFixed(0) + '%') + '</text>';
+                const lineFromArr = arr => arr.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1)).join(' ');
+                const area1 = lineFromArr(cum1) + ' L' + X(pts.length - 1).toFixed(1) + ' ' + (PAD_T + innerH) + ' L' + X(0).toFixed(1) + ' ' + (PAD_T + innerH) + ' Z';
+
+                let grid = '';
+                for (let t = 0; t <= 2; t++) {
+                  const val = lo + (hi - lo) * t / 2;
+                  const y = Y(val).toFixed(1);
+                  grid += '<line class="gridline" x1="' + PAD_L + '" y1="' + y + '" x2="' + (W - PAD_R) + '" y2="' + y + '"/>';
+                  grid += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (y - 4) + '" text-anchor="end">' + withUnit(bytes(val)) + '</text>';
+                }
+
+                const gid = 'g_' + m.kind + '_' + rangeId;
+                const color2 = m.kind === 'network' ? '#34c759' : '#ff9500';
+                host.innerHTML =
+                  '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+                    '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+                      '<stop offset="0" stop-color="' + color + '" stop-opacity="0.18"/>' +
+                      '<stop offset="1" stop-color="' + color + '" stop-opacity="0"/>' +
+                    '</linearGradient></defs>' +
+                    grid +
+                    '<path d="' + area1 + '" fill="url(#' + gid + ')"/>' +
+                    '<path d="' + lineFromArr(cum2) + '" fill="none" stroke="' + color2 + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="' + lineFromArr(cum1) + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<line class="cursor-line" y1="' + PAD_T + '" y2="' + (PAD_T + innerH) + '"/>' +
+                    '<circle class="cursor-dot" r="4" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="2.2"/>' +
+                  '</svg>' +
+                  '<div class="tooltip"></div>';
+
+                const svg = host.querySelector('svg');
+                const cursor = host.querySelector('.cursor-line');
+                const cdot = host.querySelector('.cursor-dot');
+                const tip = host.querySelector('.tooltip');
+
+                function move(ev) {
+                  const r = svg.getBoundingClientRect();
+                  const rel = (ev.clientX - r.left) / r.width;
+                  let idx = pts.length === 1 ? 0 : Math.round(rel * (pts.length - 1));
+                  idx = Math.max(0, Math.min(pts.length - 1, idx));
+                  const xUser = X(idx), yUser = Y(cum1[idx]);
+                  cursor.setAttribute('x1', xUser); cursor.setAttribute('x2', xUser); cursor.style.opacity = 1;
+                  cdot.setAttribute('cx', xUser); cdot.setAttribute('cy', yUser); cdot.style.opacity = 1;
+                  tip.style.left = (xUser / W * 100) + '%';
+                  tip.style.top = (yUser / H * 100) + '%';
+                  tip.innerHTML =
+                    '<div class="t-date">' + fmtPointDate(pts[idx].timestamp, rangeId) + '</div>' +
+                    label1 + ' <b>' + withUnit(bytes(cum1[idx])) + '</b> · ' +
+                    label2 + ' <b>' + withUnit(bytes(cum2[idx])) + '</b>';
+                  tip.style.opacity = 1;
+                }
+                function leave() { cursor.style.opacity = 0; cdot.style.opacity = 0; tip.style.opacity = 0; }
+                host.addEventListener('mousemove', move);
+                host.addEventListener('mouseleave', leave);
+              } else {
+                // 单线图：avg/peak（CPU/GPU/内存/功耗）
+                const lows = pts.map(p => p.low), peaks = pts.map(p => p.peak);
+                let lo = Math.min.apply(null, lows), hi = Math.max.apply(null, peaks);
+                if (m.kind !== 'power') { lo = Math.min(lo, 0); hi = Math.max(hi, 1); }
+                if (hi - lo < 1e-6) { hi = lo + 1; }
+                const pad = (hi - lo) * 0.12; lo -= pad * 0.3; hi += pad;
+
+                const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+                const X = i => PAD_L + (pts.length === 1 ? innerW / 2 : innerW * i / (pts.length - 1));
+                const Y = v => PAD_T + innerH * (1 - (v - lo) / (hi - lo));
+
+                const line = key => pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p[key]).toFixed(1)).join(' ');
+                const area = line('avg') + ' L' + X(pts.length - 1).toFixed(1) + ' ' + (PAD_T + innerH) + ' L' + X(0).toFixed(1) + ' ' + (PAD_T + innerH) + ' Z';
+
+                let grid = '';
+                for (let t = 0; t <= 2; t++) {
+                  const val = lo + (hi - lo) * t / 2;
+                  const y = Y(val).toFixed(1);
+                  grid += '<line class="gridline" x1="' + PAD_L + '" y1="' + y + '" x2="' + (W - PAD_R) + '" y2="' + y + '"/>';
+                  grid += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (y - 4) + '" text-anchor="end">' +
+                    (m.kind === 'power' ? val.toFixed(0) + 'W' : val.toFixed(0) + '%') + '</text>';
+                }
+
+                const gid = 'g_' + m.kind + '_' + rangeId;
+                host.innerHTML =
+                  '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
+                    '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
+                      '<stop offset="0" stop-color="' + color + '" stop-opacity="0.22"/>' +
+                      '<stop offset="1" stop-color="' + color + '" stop-opacity="0"/>' +
+                    '</linearGradient></defs>' +
+                    grid +
+                    '<path d="' + area + '" fill="url(#' + gid + ')"/>' +
+                    '<path d="' + line('peak') + '" fill="none" stroke="' + color + '" stroke-width="1.2" stroke-opacity="0.4" stroke-dasharray="3 3" stroke-linecap="round"/>' +
+                    '<path d="' + line('avg') + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<line class="cursor-line" y1="' + PAD_T + '" y2="' + (PAD_T + innerH) + '"/>' +
+                    '<circle class="cursor-dot" r="4" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="2.2"/>' +
+                  '</svg>' +
+                  '<div class="tooltip"></div>';
+
+                const svg = host.querySelector('svg');
+                const cursor = host.querySelector('.cursor-line');
+                const cdot = host.querySelector('.cursor-dot');
+                const tip = host.querySelector('.tooltip');
+
+                function move(ev) {
+                  const r = svg.getBoundingClientRect();
+                  const rel = (ev.clientX - r.left) / r.width;
+                  let idx = pts.length === 1 ? 0 : Math.round(rel * (pts.length - 1));
+                  idx = Math.max(0, Math.min(pts.length - 1, idx));
+                  const p = pts[idx];
+                  const xUser = X(idx), yUser = Y(p.avg);
+                  cursor.setAttribute('x1', xUser); cursor.setAttribute('x2', xUser); cursor.style.opacity = 1;
+                  cdot.setAttribute('cx', xUser); cdot.setAttribute('cy', yUser); cdot.style.opacity = 1;
+                  const suffix = m.kind === 'power' ? ' W' : '%';
+                  tip.style.left = (xUser / W * 100) + '%';
+                  tip.style.top = (yUser / H * 100) + '%';
+                  tip.innerHTML =
+                    '<div class="t-date">' + fmtPointDate(p.timestamp, rangeId) + '</div>' +
+                    L.avg + ' <b>' + p.avg.toFixed(1) + suffix + '</b> · ' +
+                    L.peak + ' <b>' + p.peak.toFixed(1) + suffix + '</b>';
+                  tip.style.opacity = 1;
+                }
+                function leave() { cursor.style.opacity = 0; cdot.style.opacity = 0; tip.style.opacity = 0; }
+                host.addEventListener('mousemove', move);
+                host.addEventListener('mouseleave', leave);
               }
-
-              const gid = 'g_' + m.kind + '_' + rangeId;
-              host.innerHTML =
-                '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
-                  '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
-                    '<stop offset="0" stop-color="' + color + '" stop-opacity="0.22"/>' +
-                    '<stop offset="1" stop-color="' + color + '" stop-opacity="0"/>' +
-                  '</linearGradient></defs>' +
-                  grid +
-                  '<path d="' + area + '" fill="url(#' + gid + ')"/>' +
-                  '<path d="' + line('peak') + '" fill="none" stroke="' + color + '" stroke-width="1.2" stroke-opacity="0.4" stroke-dasharray="3 3" stroke-linecap="round"/>' +
-                  '<path d="' + line('avg') + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
-                  '<line class="cursor-line" y1="' + PAD_T + '" y2="' + (PAD_T + innerH) + '"/>' +
-                  '<circle class="cursor-dot" r="4" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="2.2"/>' +
-                '</svg>' +
-                '<div class="tooltip"></div>';
-
-              const svg = host.querySelector('svg');
-              const cursor = host.querySelector('.cursor-line');
-              const cdot = host.querySelector('.cursor-dot');
-              const tip = host.querySelector('.tooltip');
-
-              function move(ev) {
-                const r = svg.getBoundingClientRect();
-                const rel = (ev.clientX - r.left) / r.width;
-                let idx = pts.length === 1 ? 0 : Math.round(rel * (pts.length - 1));
-                idx = Math.max(0, Math.min(pts.length - 1, idx));
-                const p = pts[idx];
-                const xUser = X(idx), yUser = Y(p.avg);
-                cursor.setAttribute('x1', xUser); cursor.setAttribute('x2', xUser); cursor.style.opacity = 1;
-                cdot.setAttribute('cx', xUser); cdot.setAttribute('cy', yUser); cdot.style.opacity = 1;
-                const suffix = m.kind === 'power' ? ' W' : '%';
-                tip.style.left = (xUser / W * 100) + '%';
-                tip.style.top = (yUser / H * 100) + '%';
-                tip.innerHTML =
-                  '<div class="t-date">' + fmtPointDate(p.timestamp, rangeId) + '</div>' +
-                  L.avg + ' <b>' + p.avg.toFixed(1) + suffix + '</b> · ' +
-                  L.peak + ' <b>' + p.peak.toFixed(1) + suffix + '</b>';
-                tip.style.opacity = 1;
-              }
-              function leave() { cursor.style.opacity = 0; cdot.style.opacity = 0; tip.style.opacity = 0; }
-              host.addEventListener('mousemove', move);
-              host.addEventListener('mouseleave', leave);
             }
 
             // ===== Render =====
@@ -514,13 +593,15 @@ struct StatisticsReportHTMLBuilder {
                   '<div class="metric' + (it.lead ? ' lead' : '') + '">' +
                     '<label>' + it.label + '</label><strong>' + withUnit(it.val) + '</strong></div>'
                 ).join('');
-                const badge = m.points.length
-                  ? ('<span class="badge">' + m.points.length + ' ' + L.samples + '</span>')
-                  : '';
+                const isDual = m.kind === 'network' || m.kind === 'storage';
                 const legend = m.points.length ?
                   '<div class="legend">' +
-                    '<span><i style="background:' + color + '"></i>' + L.avg + '</span>' +
-                    '<span><i class="dashed" style="border-color:' + color + '"></i>' + L.peak + '</span>' +
+                    (isDual
+                      ? '<span><i style="background:' + color + '"></i>' + (m.kind === 'network' ? L.download : L.read) + '</span>' +
+                        '<span><i style="background:' + (m.kind === 'network' ? '#34c759' : '#ff9500') + '"></i>' + (m.kind === 'network' ? L.upload : L.write) + '</span>'
+                      : '<span><i style="background:' + color + '"></i>' + L.avg + '</span>' +
+                        '<span><i class="dashed" style="border-color:' + color + '"></i>' + L.peak + '</span>'
+                    ) +
                   '</div>' : '';
                 return '<article class="card" style="--accent-c:' + color + '">' +
                   '<div class="card-head">' +
@@ -528,7 +609,7 @@ struct StatisticsReportHTMLBuilder {
                       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">' +
                         iconOf(m.kind) + '</svg>' +
                     '</div>' +
-                    '<h2>' + m.title + '</h2>' + badge +
+                    '<h2>' + m.title + '</h2>' +
                   '</div>' +
                   '<div class="metrics' + (mets.dual ? ' dual' : '') + '">' + metsHTML + '</div>' +
                   '<div class="chart"></div>' + legend +

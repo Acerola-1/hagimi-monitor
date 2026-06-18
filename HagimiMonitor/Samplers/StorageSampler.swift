@@ -25,8 +25,11 @@ final class StorageSampler: MonitorSampler {
             ]
 
             if let ioStats = readDiskIOStats() {
+                AppLogger.sampler.info("StorageSampler diskIO: read=\(ioStats.bytesRead), written=\(ioStats.bytesWritten)")
                 metrics.append(MonitorMetric(name: "cumulativeBytesRead", value: "\(ioStats.bytesRead)"))
                 metrics.append(MonitorMetric(name: "cumulativeBytesWritten", value: "\(ioStats.bytesWritten)"))
+            } else {
+                AppLogger.sampler.warning("StorageSampler readDiskIOStats returned nil")
             }
 
             return MonitorModule(

@@ -106,6 +106,8 @@ final class StatisticsRecorder {
                                             bytesOut: prev?.bytesOut ?? 0,
                                             bytesRead: bytesRead,
                                             bytesWritten: bytesWritten)
+                } else {
+                    AppLogger.sampler.warning("Storage metricInt64 failed: cumulativeBytesRead/cumulativeBytesWritten not found in module metrics")
                 }
             }
 
