@@ -15,6 +15,8 @@ struct HagimiMonitorApp: App {
         MenuBarExtra {
             MonitorPanelView(store: monitorStore)
                 .preferredColorScheme(effectiveColorScheme)
+                .onAppear { monitorStore.panelDidAppear() }
+                .onDisappear { monitorStore.panelDidDisappear() }
         } label: {
             Image(nsImage: MenuBarComputeRingIcon.image(
                 load: monitorStore.displayedComputeLoad,

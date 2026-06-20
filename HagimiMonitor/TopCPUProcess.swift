@@ -110,16 +110,11 @@ func sampleTopCPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false)
     return Array(result.sorted { $0.cpuUsage > $1.cpuUsage }.prefix(limit))
 }
 
-/// 【必须主线程调用】用 NSWorkspace 为 CPU 采样结果补齐本地化名与 App 图标。
-@MainActor
+/// 用 NSRunningApplication(pid:) 为 CPU 采样结果补齐本地化名与 App 图标。
+/// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
 func enrichCPU(_ rawProcesses: [RawCPUProcess]) -> [TopCPUProcess] {
-    let appsByPid = Dictionary(
-        NSWorkspace.shared.runningApplications.map { ($0.processIdentifier, $0) },
-        uniquingKeysWith: { first, _ in first }
-    )
-
     return rawProcesses.map { raw in
-        let app = appsByPid[raw.pid]
+        let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 
         let name: String
         if let localized = app?.localizedName, !localized.isEmpty {

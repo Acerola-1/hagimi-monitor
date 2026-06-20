@@ -133,16 +133,11 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
     }.prefix(limit))
 }
 
-/// 【必须主线程调用】用 NSWorkspace 为网络采样结果补齐本地化名与 App 图标。
-@MainActor
+/// 用 NSRunningApplication(pid:) 为网络采样结果补齐本地化名与 App 图标。
+/// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
 func enrichNetwork(_ rawProcesses: [RawNetworkProcess]) -> [TopNetworkProcess] {
-    let appsByPid = Dictionary(
-        NSWorkspace.shared.runningApplications.map { ($0.processIdentifier, $0) },
-        uniquingKeysWith: { first, _ in first }
-    )
-
     return rawProcesses.map { raw in
-        let app = appsByPid[raw.pid]
+        let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 
         let name: String
         if let localized = app?.localizedName, !localized.isEmpty {

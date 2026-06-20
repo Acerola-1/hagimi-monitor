@@ -221,24 +221,21 @@ final class MonitorStore: ObservableObject {
     var selectedKind: MonitorKind = .cpu
     @Published private(set) var displayedComputeLoad = 0.0
 
+    /// 面板是否可见,用于按需启停进程采样。
+    @Published private(set) var isPanelVisible = false
+
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
     private var smoothingTimerCancellable: AnyCancellable?
-    private var memoryProcTimer: AnyCancellable?
-    private var cpuProcTimer: AnyCancellable?
-    private var diskProcTimer: AnyCancellable?
-    private var networkProcTimer: AnyCancellable?
+    private var procSampleTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let statisticsRecorder = StatisticsRecorder()
 
     /// 暴露给统计页，用于读取当前小时尚未落库的内存桶。
     var statisticsPendingSnapshot: [String: PendingBucket] { statisticsRecorder.pendingSnapshot() }
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
-    private let memoryProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.memory-proc", qos: .utility)
-    private let cpuProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.cpu-proc", qos: .utility)
-    private let diskProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.disk-proc", qos: .utility)
-    private let networkProcQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.network-proc", qos: .utility)
+    private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var menuBarTargetComputeLoad = 0.0
     private var isSampling = false
@@ -267,39 +264,15 @@ final class MonitorStore: ObservableObject {
                 self?.advance()
             }
 
-        refreshTopMemoryProcesses()
-        memoryProcTimer = Timer.publish(every: 5, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.refreshTopMemoryProcesses()
-            }
-
-        refreshTopCPUProcesses()
-        cpuProcTimer = Timer.publish(every: 5, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.refreshTopCPUProcesses()
-            }
-
-        refreshTopDiskProcesses()
-        diskProcTimer = Timer.publish(every: 5, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.refreshTopDiskProcesses()
-            }
-
-        refreshTopNetworkProcesses()
-        networkProcTimer = Timer.publish(every: 5, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.refreshTopNetworkProcesses()
-            }
+        // 进程采样定时器:面板可见时启动,不可见时暂停。
+        // 统一为单个定时器,并行执行 4 类采样,避免多个独立定时器导致的密集触发。
+        // init 时不采样,首次采样在 panelDidAppear() 中触发。
 
         settings.$memoryShowSystemProcesses
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.refreshTopMemoryProcesses()
+                self?.refreshAllProcessesIfNeeded()
             }
             .store(in: &cancellables)
 
@@ -307,7 +280,7 @@ final class MonitorStore: ObservableObject {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.refreshTopCPUProcesses()
+                self?.refreshAllProcessesIfNeeded()
             }
             .store(in: &cancellables)
 
@@ -315,7 +288,7 @@ final class MonitorStore: ObservableObject {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.refreshTopDiskProcesses()
+                self?.refreshAllProcessesIfNeeded()
             }
             .store(in: &cancellables)
 
@@ -323,62 +296,104 @@ final class MonitorStore: ObservableObject {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                self?.refreshTopNetworkProcesses()
+                self?.refreshAllProcessesIfNeeded()
             }
             .store(in: &cancellables)
     }
 
-    /// 按当前设置采样内存占用最高的进程。
-    // 进程枚举 + proc_pid_rusage 耗时可达上百毫秒,放后台采样;NSWorkspace 取图标/名称
-    // 不保证线程安全,须回主线程 enrich。用独立队列而非 samplingQueue,以免和主采样串行
-    // 排队拖慢刷新节奏。
-    private func refreshTopMemoryProcesses() {
-        let includeSystem = settings.memoryShowSystemProcesses
-        memoryProcQueue.async { [weak self] in
-            let raw = sampleTopMemoryProcesses(includeSystemProcesses: includeSystem)
-            DispatchQueue.main.async {
-                self?.topMemoryProcesses = enrich(raw)
+    /// 面板出现时调用:启动进程采样定时器,立即刷新一次。
+    func panelDidAppear() {
+        isPanelVisible = true
+        refreshAllProcesses()
+        startProcSampleTimer()
+    }
+
+    /// 面板消失时调用:暂停进程采样定时器,保留缓存数据。
+    func panelDidDisappear() {
+        isPanelVisible = false
+        stopProcSampleTimer()
+    }
+
+    /// 启动进程采样定时器(5 秒间隔)。
+    private func startProcSampleTimer() {
+        guard procSampleTimer == nil else { return }
+        procSampleTimer = Timer.publish(every: 5, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refreshAllProcesses()
             }
+    }
+
+    /// 暂停进程采样定时器。
+    private func stopProcSampleTimer() {
+        procSampleTimer?.cancel()
+        procSampleTimer = nil
+    }
+
+    /// 统一刷新所有进程采样:并行执行 4 类采样,避免多个独立定时器导致的密集触发。
+    /// 使用 DispatchGroup 并行采样,全部完成后回主线程更新 @Published 属性。
+    private func refreshAllProcesses() {
+        let memoryIncludeSystem = settings.memoryShowSystemProcesses
+        let cpuIncludeSystem = settings.cpuShowSystemProcesses
+        let diskIncludeSystem = settings.diskShowSystemProcesses
+        let networkIncludeSystem = settings.networkShowSystemProcesses
+
+        let group = DispatchGroup()
+        var memoryProcesses: [TopMemoryProcess]?
+        var cpuProcesses: [TopCPUProcess]?
+        var diskProcesses: [TopDiskProcess]?
+        var networkProcesses: [TopNetworkProcess]?
+
+        // 并行执行 4 类采样,各自独立互不阻塞。
+        group.enter()
+        procSampleQueue.async {
+            let raw = sampleTopMemoryProcesses(includeSystemProcesses: memoryIncludeSystem)
+            // enrich 使用 NSRunningApplication(pid:) 初始化,只读属性,后台线程安全。
+            memoryProcesses = enrich(raw)
+            group.leave()
+        }
+
+        group.enter()
+        procSampleQueue.async {
+            let raw = sampleTopCPUProcesses(includeSystemProcesses: cpuIncludeSystem)
+            cpuProcesses = enrichCPU(raw)
+            group.leave()
+        }
+
+        group.enter()
+        procSampleQueue.async {
+            let raw = sampleTopDiskProcesses(includeSystemProcesses: diskIncludeSystem)
+            diskProcesses = enrichDisk(raw)
+            group.leave()
+        }
+
+        group.enter()
+        procSampleQueue.async {
+            let raw = sampleTopNetworkProcesses(includeSystemProcesses: networkIncludeSystem)
+            networkProcesses = enrichNetwork(raw)
+            group.leave()
+        }
+
+        // 全部采样完成后,在主线程更新 @Published 属性。
+        group.notify(queue: .main) { [weak self] in
+            guard let self else { return }
+            if let m = memoryProcesses { self.topMemoryProcesses = m }
+            if let c = cpuProcesses { self.topCPUProcesses = c }
+            if let d = diskProcesses { self.topDiskProcesses = d }
+            if let n = networkProcesses { self.topNetworkProcesses = n }
         }
     }
 
-    private func refreshTopCPUProcesses() {
-        let includeSystem = settings.cpuShowSystemProcesses
-        cpuProcQueue.async { [weak self] in
-            let raw = sampleTopCPUProcesses(includeSystemProcesses: includeSystem)
-            DispatchQueue.main.async {
-                self?.topCPUProcesses = enrichCPU(raw)
-            }
-        }
-    }
-
-    private func refreshTopDiskProcesses() {
-        let includeSystem = settings.diskShowSystemProcesses
-        diskProcQueue.async { [weak self] in
-            let raw = sampleTopDiskProcesses(includeSystemProcesses: includeSystem)
-            DispatchQueue.main.async {
-                self?.topDiskProcesses = enrichDisk(raw)
-            }
-        }
-    }
-
-    private func refreshTopNetworkProcesses() {
-        let includeSystem = settings.networkShowSystemProcesses
-        networkProcQueue.async { [weak self] in
-            let raw = sampleTopNetworkProcesses(includeSystemProcesses: includeSystem)
-            DispatchQueue.main.async {
-                self?.topNetworkProcesses = enrichNetwork(raw)
-            }
-        }
+    /// 设置变化时刷新(仅面板可见时)。
+    private func refreshAllProcessesIfNeeded() {
+        guard isPanelVisible else { return }
+        refreshAllProcesses()
     }
 
     deinit {
         timerCancellable?.cancel()
         smoothingTimerCancellable?.cancel()
-        memoryProcTimer?.cancel()
-        cpuProcTimer?.cancel()
-        diskProcTimer?.cancel()
-        networkProcTimer?.cancel()
+        procSampleTimer?.cancel()
         cancellables.removeAll()
     }
 
