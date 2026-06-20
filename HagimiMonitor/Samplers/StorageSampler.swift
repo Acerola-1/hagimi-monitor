@@ -68,9 +68,9 @@ final class StorageSampler: MonitorSampler {
                 } else if let read = properties["Bytes (Read)"] as? NSNumber {
                     totalRead += read.int64Value
                 }
-                if let written = properties["Bytes (Written)"] as? Int64 {
+                if let written = properties["Bytes (Write)"] as? Int64 {
                     totalWritten += written
-                } else if let written = properties["Bytes (Written)"] as? NSNumber {
+                } else if let written = properties["Bytes (Write)"] as? NSNumber {
                     totalWritten += written.int64Value
                 }
             }
