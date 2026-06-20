@@ -462,24 +462,26 @@ struct StatisticsReportHTMLBuilder {
                 for (let t = 0; t <= 2; t++) {
                   const val = lo + (hi - lo) * t / 2;
                   const y = Y(val).toFixed(1);
+                  const b = bytes(val);
                   grid += '<line class="gridline" x1="' + PAD_L + '" y1="' + y + '" x2="' + (W - PAD_R) + '" y2="' + y + '"/>';
-                  grid += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (y - 4) + '" text-anchor="end">' + withUnit(bytes(val)) + '</text>';
+                  grid += '<text class="axis-label" x="' + (W - PAD_R) + '" y="' + (y - 4) + '" text-anchor="end">' + b.num + ' ' + b.unit + '</text>';
                 }
 
                 const gid = 'g_' + m.kind + '_' + rangeId;
-                const color2 = m.kind === 'network' ? '#34c759' : '#ff9500';
+                const strokeColor1 = m.kind === 'network' ? '#0a84ff' : '#0a84ff';
+                const strokeColor2 = m.kind === 'network' ? '#30d158' : '#ff9500';
                 host.innerHTML =
                   '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
                     '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
-                      '<stop offset="0" stop-color="' + color + '" stop-opacity="0.18"/>' +
-                      '<stop offset="1" stop-color="' + color + '" stop-opacity="0"/>' +
+                      '<stop offset="0" stop-color="' + strokeColor1 + '" stop-opacity="0.18"/>' +
+                      '<stop offset="1" stop-color="' + strokeColor1 + '" stop-opacity="0"/>' +
                     '</linearGradient></defs>' +
                     grid +
                     '<path d="' + area1 + '" fill="url(#' + gid + ')"/>' +
-                    '<path d="' + lineFromArr(cum2) + '" fill="none" stroke="' + color2 + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
-                    '<path d="' + lineFromArr(cum1) + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="' + lineFromArr(cum2) + '" fill="none" stroke="' + strokeColor2 + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    '<path d="' + lineFromArr(cum1) + '" fill="none" stroke="' + strokeColor1 + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
                     '<line class="cursor-line" y1="' + PAD_T + '" y2="' + (PAD_T + innerH) + '"/>' +
-                    '<circle class="cursor-dot" r="4" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="2.2"/>' +
+                    '<circle class="cursor-dot" r="4" fill="' + strokeColor1 + '" stroke="var(--bg-elev)" stroke-width="2.2"/>' +
                   '</svg>' +
                   '<div class="tooltip"></div>';
 
@@ -597,8 +599,8 @@ struct StatisticsReportHTMLBuilder {
                 const legend = m.points.length ?
                   '<div class="legend">' +
                     (isDual
-                      ? '<span><i style="background:' + color + '"></i>' + (m.kind === 'network' ? L.download : L.read) + '</span>' +
-                        '<span><i style="background:' + (m.kind === 'network' ? '#34c759' : '#ff9500') + '"></i>' + (m.kind === 'network' ? L.upload : L.write) + '</span>'
+                      ? '<span><i style="background:#0a84ff"></i>' + (m.kind === 'network' ? L.download : L.read) + '</span>' +
+                        '<span><i style="background:' + (m.kind === 'network' ? '#30d158' : '#ff9500') + '"></i>' + (m.kind === 'network' ? L.upload : L.write) + '</span>'
                       : '<span><i style="background:' + color + '"></i>' + L.avg + '</span>' +
                         '<span><i class="dashed" style="border-color:' + color + '"></i>' + L.peak + '</span>'
                     ) +
