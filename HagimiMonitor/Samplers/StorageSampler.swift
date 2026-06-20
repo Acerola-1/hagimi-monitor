@@ -5,6 +5,8 @@ import OSLog
 final class StorageSampler: MonitorSampler {
     var kind: MonitorKind { .storage }
 
+    private var previousDiskIO: (bytesRead: Int64, bytesWritten: Int64, timestamp: Date)?
+
     func sample(previous: MonitorModule?) -> MonitorModule {
         do {
             let rootURL = URL(fileURLWithPath: "/")
@@ -20,7 +22,7 @@ final class StorageSampler: MonitorSampler {
 
             var metrics = [
                 MonitorMetric(name: "used", value: bytes(used)),
-                MonitorMetric(name: "free", value: bytes(free)),
+                MonitorMetric(name: "free", value: bytes(free), numericValue: free),
                 MonitorMetric(name: "total", value: bytes(total))
             ]
 
@@ -28,6 +30,17 @@ final class StorageSampler: MonitorSampler {
                 AppLogger.sampler.info("StorageSampler diskIO: read=\(ioStats.bytesRead), written=\(ioStats.bytesWritten)")
                 metrics.append(MonitorMetric(name: "cumulativeBytesRead", value: "\(ioStats.bytesRead)"))
                 metrics.append(MonitorMetric(name: "cumulativeBytesWritten", value: "\(ioStats.bytesWritten)"))
+
+                // 瞬时读写速率（bytes/sec）
+                let now = Date()
+                if let prev = previousDiskIO {
+                    let dt = max(0.1, now.timeIntervalSince(prev.timestamp))
+                    let readRate = max(0, Double(ioStats.bytesRead - prev.bytesRead) / dt)
+                    let writeRate = max(0, Double(ioStats.bytesWritten - prev.bytesWritten) / dt)
+                    metrics.append(MonitorMetric(name: "disk-read-rate", value: bytesPerSecond(readRate), numericValue: readRate))
+                    metrics.append(MonitorMetric(name: "disk-write-rate", value: bytesPerSecond(writeRate), numericValue: writeRate))
+                }
+                previousDiskIO = (ioStats.bytesRead, ioStats.bytesWritten, now)
             } else {
                 AppLogger.sampler.warning("StorageSampler readDiskIOStats returned nil")
             }

@@ -50,8 +50,8 @@ final class NetworkSampler: MonitorSampler {
             metrics: [
                 MonitorMetric(name: "ip-address", value: networkAddressSummary(bytes.addresses)),
                 MonitorMetric(name: "public-ip", value: publicIP),
-                MonitorMetric(name: "upload", value: bytesPerSecond(upload)),
-                MonitorMetric(name: "download", value: bytesPerSecond(download)),
+                MonitorMetric(name: "upload", value: bytesPerSecond(upload), numericValue: upload),
+                MonitorMetric(name: "download", value: bytesPerSecond(download), numericValue: download),
                 MonitorMetric(name: "cumulativeBytesIn", value: "\(bytes.input)"),
                 MonitorMetric(name: "cumulativeBytesOut", value: "\(bytes.output)")
             ],

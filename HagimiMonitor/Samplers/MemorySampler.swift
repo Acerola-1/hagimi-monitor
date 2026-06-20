@@ -35,15 +35,22 @@ final class MemorySampler: MonitorSampler {
         let swap = swapUsage()
         let pressure = memoryPressure()
 
+        // 提取 swapins/swapouts（累计页面计数）
+        let swapins = Int64(stats.swapins)
+        let swapouts = Int64(stats.swapouts)
+
         return MonitorModule(
             kind: .memory,
             value: percentage,
             summary: percent(percentage),
             metrics: [
-                MonitorMetric(name: "used", value: memoryBytes(used)),
+                MonitorMetric(name: "used", value: memoryBytes(used), numericValue: used),
                 MonitorMetric(name: "pressure", value: pressure.title),
-                MonitorMetric(name: "swap-used", value: swapUsedText(swap)),
-                MonitorMetric(name: "total", value: memoryBytes(total))
+                MonitorMetric(name: "swap-used", value: swapUsedText(swap), numericValue: swap?.used),
+                MonitorMetric(name: "total", value: memoryBytes(total)),
+                MonitorMetric(name: "pressure-level", value: pressure.title, numericValue: Double(pressure.level.rawValue)),
+                MonitorMetric(name: "swapins", value: String(swapins), numericValue: Double(swapins)),
+                MonitorMetric(name: "swapouts", value: String(swapouts), numericValue: Double(swapouts))
             ],
             samples: seedSamples(percentage),
             pressure: pressure.level

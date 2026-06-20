@@ -7,6 +7,33 @@ struct StatisticsReportPayload: Codable {
     let locale: String
     let strings: StatisticsReportStrings
     let ranges: [StatisticsReportRangePayload]
+    let events: [StatisticsReportEventPayload]
+}
+
+struct StatisticsReportEventPayload: Codable {
+    let timestamp: TimeInterval
+    let eventType: String
+    let severity: Int16
+    let title: String
+    let detail: String
+    let topProcesses: [String]?
+    let value: Double?
+    let duration: Double?
+}
+
+struct HealthScoreReportPayload: Codable {
+    let score: Double
+    let level: String
+    let thermalCapped: Bool
+    let dimensions: [DimensionScoreReportPayload]
+}
+
+struct DimensionScoreReportPayload: Codable {
+    let name: String
+    let rawValue: Double
+    let healthValue: Double
+    let weight: Double
+    let level: String
 }
 
 struct StatisticsReportStrings: Codable {
@@ -22,11 +49,24 @@ struct StatisticsReportStrings: Codable {
     let read: String
     let write: String
     let empty: String
+    // Health score
+    let healthTitle: String
+    let healthExcellent: String
+    let healthGood: String
+    let healthFair: String
+    let healthPoor: String
+    let healthCritical: String
+    let healthThermalCapped: String
+    // Event timeline
+    let eventTitle: String
+    let eventTopProcesses: String
+    let eventDuration: String
 }
 
 struct StatisticsReportRangePayload: Codable {
     let id: String
     let title: String
+    let healthScore: HealthScoreReportPayload?
     let modules: [StatisticsReportModulePayload]
 }
 
@@ -84,7 +124,8 @@ struct StatisticsReportExporter {
     }
 
     func makePayload(pending: [String: PendingBucket] = [:]) -> StatisticsReportPayload {
-        StatisticsReportPayload(
+        let events = aggregator.queryEvents(range: .lastMonth, limit: 200)
+        return StatisticsReportPayload(
             generatedAt: now(),
             appName: "HagimiMonitor",
             locale: Locale.preferredLanguages.first ?? Locale.current.identifier,
@@ -100,16 +141,46 @@ struct StatisticsReportExporter {
                 upload: String(localized: "stats.net.up"),
                 read: String(localized: "stats.disk.read"),
                 write: String(localized: "stats.disk.write"),
-                empty: String(localized: "stats.no-data")
+                empty: String(localized: "stats.no-data"),
+                healthTitle: String(localized: "health.title"),
+                healthExcellent: String(localized: "health.level.excellent"),
+                healthGood: String(localized: "health.level.good"),
+                healthFair: String(localized: "health.level.fair"),
+                healthPoor: String(localized: "health.level.poor"),
+                healthCritical: String(localized: "health.level.critical"),
+                healthThermalCapped: String(localized: "health.thermal-capped"),
+                eventTitle: String(localized: "event.title"),
+                eventTopProcesses: String(localized: "event.top-processes"),
+                eventDuration: String(localized: "event.duration")
             ),
             ranges: Self.rangeSpecs.map { spec in
-                StatisticsReportRangePayload(
+                let pendingBucket = spec.range == .last24Hours ? pending.first?.value : nil
+                let health = aggregator.queryHealthScore(range: spec.range, pending: pendingBucket)
+                return StatisticsReportRangePayload(
                     id: spec.id,
                     title: spec.range.title,
+                    healthScore: healthScorePayload(from: health),
                     modules: Self.kinds.map { kind in
-                        let pendingBucket = spec.range == .last24Hours ? pending[kind.rawValue] : nil
-                        return modulePayload(from: aggregator.query(kind: kind, range: spec.range, pending: pendingBucket))
+                        let modulePending = spec.range == .last24Hours ? pending[kind.rawValue] : nil
+                        return modulePayload(from: aggregator.query(kind: kind, range: spec.range, pending: modulePending))
                     }
+                )
+            },
+            events: events.map { event in
+                let processes: [String]? = event.topProcesses.flatMap { json in
+                    guard let data = json.data(using: .utf8),
+                          let arr = try? JSONDecoder().decode([String].self, from: data) else { return nil }
+                    return arr.isEmpty ? nil : arr
+                }
+                return StatisticsReportEventPayload(
+                    timestamp: event.timestamp.timeIntervalSince1970,
+                    eventType: event.eventType,
+                    severity: event.severity,
+                    title: event.title,
+                    detail: event.detail,
+                    topProcesses: processes,
+                    value: event.value,
+                    duration: event.duration
                 )
             }
         )
@@ -122,6 +193,23 @@ struct StatisticsReportExporter {
         let fileURL = outputDirectory.appendingPathComponent("hagimi-statistics-\(Int(payload.generatedAt.timeIntervalSince1970 * 1000)).html")
         try html.write(to: fileURL, atomically: true, encoding: .utf8)
         return fileURL
+    }
+
+    private func healthScorePayload(from health: HealthScore) -> HealthScoreReportPayload {
+        HealthScoreReportPayload(
+            score: health.score,
+            level: health.level.rawValue,
+            thermalCapped: health.thermalCapped,
+            dimensions: health.dimensions.map { dim in
+                DimensionScoreReportPayload(
+                    name: dim.name,
+                    rawValue: dim.rawValue,
+                    healthValue: dim.healthValue,
+                    weight: dim.weight,
+                    level: dim.level.rawValue
+                )
+            }
+        )
     }
 
     private func modulePayload(from summary: StatisticsSummary) -> StatisticsReportModulePayload {
@@ -304,6 +392,61 @@ struct StatisticsReportHTMLBuilder {
             .legend i.dashed { background: none !important;
               border-top: 2px dashed; }
 
+            /* ===== Health Score ===== */
+            .health-card { background: var(--bg-elev); border: 1px solid var(--border);
+              border-radius: 18px; padding: 28px; box-shadow: var(--shadow-md);
+              margin-bottom: 24px; display: flex; align-items: center; gap: 32px;
+              flex-wrap: wrap; }
+            .health-ring-wrap { position: relative; width: 140px; height: 140px; flex: none; }
+            .health-ring-wrap svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+            .health-ring-bg { fill: none; stroke: var(--bg-inset); stroke-width: 10; }
+            .health-ring-fg { fill: none; stroke-width: 10; stroke-linecap: round;
+              transition: stroke-dashoffset .6s ease; }
+            .health-ring-text { position: absolute; inset: 0; display: flex; flex-direction: column;
+              align-items: center; justify-content: center; }
+            .health-ring-text .score { font-size: 32px; font-weight: 700; letter-spacing: -.02em;
+              font-variant-numeric: tabular-nums; line-height: 1; }
+            .health-ring-text .level { font-size: 12px; font-weight: 600; margin-top: 4px;
+              letter-spacing: .02em; }
+            .health-ring-text .capped { font-size: 10px; color: #d94848; margin-top: 2px; font-weight: 500; }
+            .health-dims { flex: 1; min-width: 240px; }
+            .health-dim-row { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+            .health-dim-row .dim-name { width: 90px; font-size: 12.5px; color: var(--text-dim);
+              font-weight: 500; flex: none; }
+            .health-dim-row .dim-bar { flex: 1; height: 8px; background: var(--bg-inset);
+              border-radius: 4px; overflow: hidden; }
+            .health-dim-row .dim-bar-fill { height: 100%; border-radius: 4px; transition: width .4s ease; }
+            .health-dim-row .dim-val { width: 36px; text-align: right; font-size: 12px;
+              font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+
+            /* ===== Event Timeline ===== */
+            .timeline-section { background: var(--bg-elev); border: 1px solid var(--border);
+              border-radius: 18px; padding: 24px; box-shadow: var(--shadow-md); margin-bottom: 24px; }
+            .timeline-section h2 { margin: 0 0 4px; font-size: 16px; font-weight: 640;
+              letter-spacing: -.01em; }
+            .timeline-section .event-count { color: var(--text-dim); font-size: 12px;
+              font-weight: 500; margin-bottom: 18px; }
+            .timeline-day { margin-bottom: 16px; }
+            .timeline-day-label { font-size: 12px; font-weight: 600; color: var(--text-dim);
+              margin-bottom: 8px; letter-spacing: .01em; }
+            .timeline-events { position: relative; padding-left: 28px; }
+            .timeline-events::before { content: ""; position: absolute; left: 8px; top: 4px;
+              bottom: 4px; width: 2px; background: var(--hairline); border-radius: 1px; }
+            .timeline-row { position: relative; padding: 6px 0; }
+            .timeline-row::before { content: ""; position: absolute; left: -24px; top: 12px;
+              width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--bg-elev); z-index: 1; }
+            .timeline-row.severity-2::before { background: #ff453a; box-shadow: 0 0 0 2px rgba(255,69,58,.25); }
+            .timeline-row.severity-1::before { background: #ff9f0a; box-shadow: 0 0 0 2px rgba(255,159,10,.25); }
+            .timeline-row.severity-0::before { background: var(--text-faint); }
+            .timeline-row .event-time { font-size: 11px; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+            .timeline-row .event-title { font-size: 13px; font-weight: 600; margin: 2px 0; }
+            .timeline-row .event-detail { font-size: 12px; color: var(--text-dim); }
+            .timeline-row .event-processes { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+            @media (prefers-color-scheme: dark) {
+              .timeline-row.severity-2::before { background: #ff6961; }
+              .timeline-row.severity-1::before { background: #ffb340; }
+            }
+
             /* ===== Footer ===== */
             footer { margin-top: 56px; padding-top: 20px;
               border-top: 1px solid var(--hairline);
@@ -331,7 +474,9 @@ struct StatisticsReportHTMLBuilder {
               </div>
               <nav class="segmented" id="tabs" role="tablist"></nav>
             </header>
+            <section id="health"></section>
             <section class="grid" id="cards"></section>
+            <section id="timeline"></section>
             <footer id="footer"></footer>
           </div>
           <script id="payload" type="application/json">\(payloadJSON)</script>
@@ -578,6 +723,62 @@ struct StatisticsReportHTMLBuilder {
               }
             }
 
+            // ===== Health Score =====
+            const LEVEL_COLORS = {
+              excellent: isDark ? '#34c759' : '#2f9e64',
+              good: isDark ? '#64d2ff' : '#3bafda',
+              fair: isDark ? '#ffd60a' : '#d4a843',
+              poor: isDark ? '#ff9f0a' : '#e08e45',
+              critical: isDark ? '#ff6961' : '#d94848'
+            };
+            const LEVEL_LABELS = {
+              excellent: L.healthExcellent, good: L.healthGood,
+              fair: L.healthFair, poor: L.healthPoor, critical: L.healthCritical
+            };
+            function levelOf(score) {
+              if (score >= 85) return 'excellent';
+              if (score >= 70) return 'good';
+              if (score >= 50) return 'fair';
+              if (score >= 30) return 'poor';
+              return 'critical';
+            }
+            function renderHealth(range) {
+              const el = document.getElementById('health');
+              const hs = range.healthScore;
+              if (!hs) { el.innerHTML = ''; return; }
+              const level = hs.level || levelOf(hs.score);
+              const color = LEVEL_COLORS[level] || LEVEL_COLORS.good;
+              const circumference = 2 * Math.PI * 54;
+              const offset = circumference * (1 - Math.min(hs.score, 100) / 100);
+              let dimsHTML = '';
+              (hs.dimensions || []).forEach(d => {
+                if (!d.isAvailable) return;
+                const dc = LEVEL_COLORS[d.level] || LEVEL_COLORS.good;
+                const pct = Math.round(d.healthValue * 100);
+                dimsHTML += '<div class="health-dim-row">' +
+                  '<span class="dim-name">' + d.name + '</span>' +
+                  '<span class="dim-bar"><span class="dim-bar-fill" style="width:' + pct + '%;background:' + dc + '"></span></span>' +
+                  '<span class="dim-val" style="color:' + dc + '">' + pct + '%</span>' +
+                '</div>';
+              });
+              const cappedText = hs.thermalCapped ? '<div class="capped">' + L.healthThermalCapped + '</div>' : '';
+              el.innerHTML = '<div class="health-card">' +
+                '<div class="health-ring-wrap">' +
+                  '<svg viewBox="0 0 120 120">' +
+                    '<circle class="health-ring-bg" cx="60" cy="60" r="54"/>' +
+                    '<circle class="health-ring-fg" cx="60" cy="60" r="54" stroke="' + color + '" ' +
+                      'stroke-dasharray="' + circumference.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '"/>' +
+                  '</svg>' +
+                  '<div class="health-ring-text">' +
+                    '<span class="score" style="color:' + color + '">' + Math.round(hs.score) + '</span>' +
+                    '<span class="level" style="color:' + color + '">' + (LEVEL_LABELS[level] || level) + '</span>' +
+                    cappedText +
+                  '</div>' +
+                '</div>' +
+                '<div class="health-dims">' + dimsHTML + '</div>' +
+              '</div>';
+            }
+
             // ===== Render =====
             function render() {
               const tabs = document.getElementById('tabs');
@@ -587,6 +788,7 @@ struct StatisticsReportHTMLBuilder {
               tabs.querySelectorAll('button').forEach(b => b.onclick = () => { active = b.dataset.id; render(); });
 
               const range = payload.ranges.find(r => r.id === active) || payload.ranges[0];
+              renderHealth(range);
               const cards = document.getElementById('cards');
               cards.innerHTML = range.modules.map(m => {
                 const color = accentOf(m.kind);
@@ -620,6 +822,78 @@ struct StatisticsReportHTMLBuilder {
 
               const cardEls = cards.querySelectorAll('.card');
               range.modules.forEach((m, i) => buildChart(cardEls[i], m, range.id));
+
+              // ===== Event Timeline =====
+              renderTimeline();
+            }
+
+            // ===== Event Timeline Rendering =====
+            function renderTimeline() {
+              const el = document.getElementById('timeline');
+              const events = payload.events;
+              if (!events || !events.length) { el.innerHTML = ''; return; }
+
+              const SEVERITY_ICON = {
+                2: '&#9888;', // exclamationmark.triangle
+                1: '&#9888;', // exclamationmark.circle
+                0: '&#8505;'  // info.circle
+              };
+
+              // Group events by day
+              const now = new Date();
+              const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+              const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1);
+
+              const groups = {};
+              events.forEach(ev => {
+                const d = new Date(ev.timestamp * 1000);
+                let dayKey;
+                if (d >= todayStart) {
+                  dayKey = L.today || 'Today';
+                } else if (d >= yesterdayStart) {
+                  dayKey = L.yesterday || 'Yesterday';
+                } else {
+                  dayKey = d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+                }
+                if (!groups[dayKey]) groups[dayKey] = [];
+                groups[dayKey].push(ev);
+              });
+
+              let html = '<div class="timeline-section">';
+              html += '<h2>' + L.eventTitle + '</h2>';
+              html += '<div class="event-count">' + events.length + ' ' + (L.eventTitle || 'events') + '</div>';
+
+              for (const [day, dayEvents] of Object.entries(groups)) {
+                html += '<div class="timeline-day">';
+                html += '<div class="timeline-day-label">' + day + '</div>';
+                html += '<div class="timeline-events">';
+                dayEvents.forEach(ev => {
+                  const d = new Date(ev.timestamp * 1000);
+                  const timeStr = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+                  const sev = ev.severity || 0;
+                  html += '<div class="timeline-row severity-' + sev + '">';
+                  html += '<span class="event-time">' + timeStr + '</span>';
+                  html += '<div class="event-title">' + escapeHtml(ev.title) + '</div>';
+                  html += '<div class="event-detail">' + escapeHtml(ev.detail) + '</div>';
+                  if (ev.topProcesses && ev.topProcesses.length) {
+                    html += '<div class="event-processes">' + L.eventTopProcesses + ': ' + ev.topProcesses.map(escapeHtml).join(', ') + '</div>';
+                  }
+                  if (ev.duration) {
+                    const mins = Math.round(ev.duration / 60);
+                    html += '<div class="event-processes">' + (L.eventDuration || 'Duration: {value}').replace('{value}', mins + ' min') + '</div>';
+                  }
+                  html += '</div>';
+                });
+                html += '</div></div>';
+              }
+
+              html += '</div>';
+              el.innerHTML = html;
+            }
+
+            function escapeHtml(s) {
+              if (!s) return '';
+              return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
             }
 
             render();

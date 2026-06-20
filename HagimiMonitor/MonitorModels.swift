@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import OSLog
+import SwiftData
 
 enum HaloRingSource: String, CaseIterable, Identifiable {
     case combined
@@ -21,11 +22,11 @@ enum HaloRingSource: String, CaseIterable, Identifiable {
     }
 }
 
-enum MemoryPressureLevel: Equatable {
-    case normal
-    case warning
-    case critical
-    case unknown
+enum MemoryPressureLevel: Int, Equatable {
+    case normal = 0
+    case warning = 1
+    case critical = 2
+    case unknown = 3
 }
 
 enum MonitorSeverity {
@@ -156,6 +157,7 @@ struct MetricSwitch: Identifiable, Hashable {
 struct MonitorMetric: Identifiable, Equatable {
     let name: String
     let value: String
+    var numericValue: Double?
 
     var id: String { name }
 }
@@ -231,6 +233,25 @@ final class MonitorStore: ObservableObject {
     private var procSampleTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let statisticsRecorder = StatisticsRecorder()
+
+    // MARK: - Event Detection State
+
+    /// 上一次内存压力等级（用于检测压力等级变化）
+    private var previousPressureLevel: MemoryPressureLevel = .unknown
+    /// 上一次热压力状态（用于检测热压力变化）
+    private var previousThermalState: ProcessInfo.ThermalState = .nominal
+    /// CPU 持续高负载开始时间（用于检测 CPU 持续高负载）
+    private var cpuHighLoadStartTime: Date?
+    /// 上一次电池是否处于过热状态（用于去重：降回正常后才能再次触发）
+    private var batteryWasOverheating = false
+    /// 上一次电源类型（用于检测电源切换）
+    private var previousPowerSourceType: String?
+    /// 上一次记录的 CPU 持续高负载结束时间（用于去重）
+    private var lastCPUHighLoadEventTime: Date?
+
+    private let cpuHighLoadThreshold: Double = 85.0
+    private let cpuHighLoadMinDuration: TimeInterval = 300 // 5 分钟
+    private let batteryOverheatThreshold: Double = 40.0 // 40°C
 
     /// 暴露给统计页，用于读取当前小时尚未落库的内存桶。
     var statisticsPendingSnapshot: [String: PendingBucket] { statisticsRecorder.pendingSnapshot() }
@@ -478,6 +499,7 @@ final class MonitorStore: ObservableObject {
             modules = visibleModules(from: allModules)
             updateMenuBarTargetComputeLoad()
             statisticsRecorder.record(modules: snapshot.modules)
+            detectEvents(modules: snapshot.modules)
         case .failure(let error):
             AppLogger.sampler.error("Sampling failed: \(error.description, privacy: .public)")
         }
@@ -488,6 +510,199 @@ final class MonitorStore: ObservableObject {
             let kinds = pendingSampleKinds
             pendingSampleKinds.removeAll()
             runSampling(kinds: kinds)
+        }
+    }
+
+    // MARK: - Event Detection
+
+    /// 对采样结果进行实时事件检测
+    private func detectEvents(modules: [MonitorModule]) {
+        for module in modules {
+            switch module.kind {
+            case .memory:
+                checkMemoryPressureChange(module: module)
+            case .cpu:
+                checkCPUHighLoad(module: module)
+            case .battery:
+                checkBatteryOverheat(module: module)
+                checkPowerSourceChange(module: module)
+            default:
+                break
+            }
+        }
+        checkThermalStateChange()
+    }
+
+    /// 检测内存压力等级变化
+    private func checkMemoryPressureChange(module: MonitorModule) {
+        guard let currentLevel = module.pressure, currentLevel != .unknown else { return }
+        let prev = previousPressureLevel
+        guard prev != .unknown, currentLevel != prev else {
+            if previousPressureLevel == .unknown { previousPressureLevel = currentLevel }
+            return
+        }
+
+        let isUpgrade = currentLevel.rawValue > prev.rawValue
+        let eventType: SystemEventType = isUpgrade ? .memoryPressureUpgrade : .memoryPressureDowngrade
+        let severity: Int16
+        switch currentLevel {
+        case .critical: severity = 2
+        case .warning: severity = 1
+        default: severity = 0
+        }
+
+        let pressureNames: [MemoryPressureLevel: String] = [
+            .normal: String(localized: "event.pressure.normal"),
+            .warning: String(localized: "event.pressure.warning"),
+            .critical: String(localized: "event.pressure.critical"),
+            .unknown: ""
+        ]
+        let detail = "\(pressureNames[prev] ?? "") → \(pressureNames[currentLevel] ?? "")"
+
+        recordEvent(eventType, severity: severity, title: eventType.title,
+                    detail: detail, value: Double(currentLevel.rawValue),
+                    previousValue: Double(prev.rawValue))
+        previousPressureLevel = currentLevel
+    }
+
+    /// 检测热压力状态变化
+    private func checkThermalStateChange() {
+        let current = ProcessInfo.processInfo.thermalState
+        let prev = previousThermalState
+        guard current != prev else { return }
+
+        let isUpgrade = current.rawValue > prev.rawValue
+        let eventType: SystemEventType = isUpgrade ? .thermalUpgrade : .thermalDowngrade
+        let severity: Int16
+        switch current {
+        case .critical: severity = 2
+        case .serious: severity = 1
+        default: severity = 0
+        }
+
+        let thermalNames: [ProcessInfo.ThermalState: String] = [
+            .nominal: String(localized: "event.thermal.nominal"),
+            .fair: String(localized: "event.thermal.fair"),
+            .serious: String(localized: "event.thermal.serious"),
+            .critical: String(localized: "event.thermal.critical")
+        ]
+        let detail = "\(thermalNames[prev] ?? "") → \(thermalNames[current] ?? "")"
+
+        recordEvent(eventType, severity: severity, title: eventType.title,
+                    detail: detail, value: Double(current.rawValue),
+                    previousValue: Double(prev.rawValue))
+        previousThermalState = current
+    }
+
+    /// 检测 CPU 持续高负载（85% 超过 5 分钟）
+    private func checkCPUHighLoad(module: MonitorModule) {
+        let cpuValue = module.value
+        if cpuValue >= cpuHighLoadThreshold {
+            if cpuHighLoadStartTime == nil {
+                cpuHighLoadStartTime = Date()
+            }
+            let duration = Date().timeIntervalSince(cpuHighLoadStartTime!)
+            if duration >= cpuHighLoadMinDuration {
+                // 去重：上次记录后需重新积累
+                if let lastTime = lastCPUHighLoadEventTime,
+                   Date().timeIntervalSince(lastTime) < cpuHighLoadMinDuration {
+                    return
+                }
+                let topProcess = topCPUProcesses.first?.name
+                let detail: String
+                if let proc = topProcess {
+                    detail = String(localized: "event.cpu-sustained-high") + " (\(proc))"
+                } else {
+                    detail = String(localized: "event.cpu-sustained-high")
+                }
+                recordEvent(.cpuSustainedHigh, severity: 1, title: SystemEventType.cpuSustainedHigh.title,
+                            detail: detail, value: cpuValue, duration: duration,
+                            topProcesses: topProcess.map { [$0] })
+                cpuHighLoadStartTime = nil
+                lastCPUHighLoadEventTime = Date()
+            }
+        } else {
+            cpuHighLoadStartTime = nil
+        }
+    }
+
+    /// 检测电池过热（>40°C）
+    private func checkBatteryOverheat(module: MonitorModule) {
+        guard let tempStr = module.metrics.first(where: { $0.name == "temperature" })?.value,
+              let temp = Double(tempStr) else { return }
+
+        let isOverheating = temp > batteryOverheatThreshold
+        if isOverheating && !batteryWasOverheating {
+            let detail = String(format: "%.1f°C", temp)
+            recordEvent(.batteryOverheat, severity: 2, title: SystemEventType.batteryOverheat.title,
+                        detail: detail, value: temp)
+        }
+        batteryWasOverheating = isOverheating
+    }
+
+    /// 检测电源切换（AC ↔ 电池）
+    private func checkPowerSourceChange(module: MonitorModule) {
+        guard let typeMetric = module.metrics.first(where: { $0.name == "type" }) else { return }
+        let currentType = typeMetric.value
+        if let prev = previousPowerSourceType, prev != currentType {
+            let detail: String
+            if currentType == "battery" {
+                detail = String(localized: "event.power-source-change") + " → Battery"
+            } else {
+                detail = String(localized: "event.power-source-change") + " → AC"
+            }
+            recordEvent(.powerSourceChange, severity: 0, title: SystemEventType.powerSourceChange.title,
+                        detail: detail)
+        }
+        previousPowerSourceType = currentType
+    }
+
+    // MARK: - Event Recording
+
+    /// 记录系统事件到 SwiftData
+    private func recordEvent(_ eventType: SystemEventType, severity: Int16,
+                             title: String, detail: String,
+                             value: Double? = nil, previousValue: Double? = nil,
+                             duration: Double? = nil, topProcesses: [String]? = nil) {
+        // 尽力而为获取 top processes
+        var processes = topProcesses
+        if processes == nil {
+            if !topCPUProcesses.isEmpty {
+                processes = Array(topCPUProcesses.prefix(3).map(\.name))
+            } else if !topMemoryProcesses.isEmpty {
+                processes = Array(topMemoryProcesses.prefix(3).map(\.name))
+            }
+        }
+
+        let topProcessesJSON: String?
+        if let procs = processes, !procs.isEmpty {
+            if let data = try? JSONEncoder().encode(procs) {
+                topProcessesJSON = String(data: data, encoding: .utf8)
+            } else {
+                topProcessesJSON = nil
+            }
+        } else {
+            topProcessesJSON = nil
+        }
+
+        let event = SystemEvent(
+            timestamp: Date(),
+            eventType: eventType.rawValue,
+            severity: severity,
+            title: title,
+            detail: detail,
+            topProcesses: topProcessesJSON,
+            value: value,
+            previousValue: previousValue,
+            duration: duration
+        )
+
+        let context = ModelContext(StatisticsStore.container)
+        context.insert(event)
+        do {
+            try context.save()
+        } catch {
+            AppLogger.sampler.error("Failed to record event: \(error.localizedDescription, privacy: .public)")
         }
     }
 

@@ -14,16 +14,16 @@ final class GPUSampler: MonitorSampler {
 
         let utilization = min(100, max(0, reading.utilization))
         var metrics = [
-            MonitorMetric(name: "gpu-memory", value: reading.usedMemory.map(bytes) ?? "--"),
+            MonitorMetric(name: "gpu-memory", value: reading.usedMemory.map(bytes) ?? "--", numericValue: reading.usedMemory),
             MonitorMetric(name: "allocated", value: reading.allocatedMemory.map(bytes) ?? "--")
         ]
 
         if let renderUtilization = reading.renderUtilization {
-            metrics.append(MonitorMetric(name: "render", value: percent(renderUtilization)))
+            metrics.append(MonitorMetric(name: "render", value: percent(renderUtilization), numericValue: renderUtilization))
         }
 
         if let tilerUtilization = reading.tilerUtilization {
-            metrics.append(MonitorMetric(name: "tiler", value: percent(tilerUtilization)))
+            metrics.append(MonitorMetric(name: "tiler", value: percent(tilerUtilization), numericValue: tilerUtilization))
         }
 
         return MonitorModule(
