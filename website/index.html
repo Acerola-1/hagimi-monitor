@@ -1,0 +1,2179 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HagimiMonitor — 你的 Mac，一眼即懂</title>
+    <meta name="description" content="HagimiMonitor 是一款优雅的 macOS 菜单栏系统监控工具，实时追踪 CPU、GPU、内存、存储、网络和电池状态。">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* ========================================
+           CSS VARIABLES & RESET
+           ======================================== */
+        :root {
+            /* Dark theme (default) */
+            --page: #0a0a0f;
+            --page-2: #0f0f1a;
+            --paper: rgba(255, 255, 255, 0.03);
+            --paper-2: rgba(255, 255, 255, 0.06);
+            --ink: #f0f0f5;
+            --ink-secondary: #a0a0b0;
+            --ink-tertiary: #606070;
+            --line: rgba(255, 255, 255, 0.08);
+            --line-strong: rgba(255, 255, 255, 0.15);
+
+            /* Brand */
+            --brand-purple: #2ECC71;
+            --brand-purple-light: #4ade80;
+            --brand-purple-dark: #22c55e;
+            --brand-glow: rgba(46, 204, 113, 0.3);
+
+            /* Module colors */
+            --c-cpu: #ff6b6b;
+            --c-gpu: #a855f7;
+            --c-memory: #3b82f6;
+            --c-storage: #f59e0b;
+            --c-network: #06b6d4;
+            --c-battery: #22c55e;
+            --c-power: #f97316;
+
+            /* Health */
+            --c-excellent: #22c55e;
+            --c-good: #3b82f6;
+            --c-fair: #f59e0b;
+            --c-poor: #f97316;
+            --c-critical: #ef4444;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
+            --shadow-glow: 0 0 60px rgba(46, 204, 113, 0.15);
+
+            /* Radius */
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 28px;
+
+            /* Typography */
+            --font-display: 'Noto Serif SC', Georgia, serif;
+            --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: var(--font-body);
+            background: var(--page);
+            color: var(--ink);
+            line-height: 1.6;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* ========================================
+           UTILITIES
+           ======================================== */
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+        }
+
+        .glass-strong {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(24px) saturate(200%);
+            -webkit-backdrop-filter: blur(24px) saturate(200%);
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius-md);
+        }
+
+        /* ========================================
+           BACKGROUND EFFECTS
+           ======================================== */
+        .bg-gradient {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46, 204, 113, 0.12), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(34, 197, 94, 0.08), transparent),
+                radial-gradient(ellipse 50% 50% at 20% 60%, rgba(46, 204, 113, 0.05), transparent);
+            pointer-events: none;
+        }
+
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+        }
+
+        /* ========================================
+           NAVIGATION
+           ======================================== */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 16px 0;
+            transition: all 0.3s ease;
+        }
+
+        .nav.scrolled {
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .nav-inner {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--ink);
+            font-weight: 600;
+            font-size: 18px;
+        }
+
+        .nav-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: #2C2C2E;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-shadow: 0 0 12px rgba(46, 204, 113, 0.2);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 32px;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--ink-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s ease;
+            position: relative;
+        }
+
+        .nav-links a:hover {
+            color: var(--ink);
+        }
+
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--brand-purple);
+            border-radius: 1px;
+            transition: width 0.3s ease;
+        }
+
+        .nav-links a:hover::after {
+            width: 100%;
+        }
+
+        .nav-cta {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 20px;
+            background: linear-gradient(135deg, var(--brand-purple), var(--brand-purple-dark));
+            color: white;
+            text-decoration: none;
+            border-radius: 100px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
+        }
+
+        .nav-cta:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
+        }
+
+        .nav-cta svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* ========================================
+           HERO SECTION
+           ======================================== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            padding: 120px 0 80px;
+            position: relative;
+        }
+
+        .hero-inner {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid rgba(46, 204, 113, 0.2);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--brand-purple-light);
+            margin-bottom: 24px;
+            width: fit-content;
+        }
+
+        .hero-badge .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--brand-purple-light);
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .hero-title {
+            font-family: var(--font-display);
+            font-size: clamp(42px, 6vw, 72px);
+            font-weight: 700;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            margin-bottom: 20px;
+        }
+
+        .hero-title .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, var(--brand-purple-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(16px, 2vw, 20px);
+            color: var(--ink-secondary);
+            line-height: 1.7;
+            max-width: 480px;
+            margin-bottom: 32px;
+        }
+
+        .hero-actions {
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, var(--brand-purple), var(--brand-purple-dark));
+            color: white;
+            text-decoration: none;
+            border-radius: 100px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(46, 204, 113, 0.3);
+            border: none;
+            cursor: pointer;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(46, 204, 113, 0.4);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: transparent;
+            color: var(--ink);
+            text-decoration: none;
+            border-radius: 100px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            border: 1px solid var(--line-strong);
+            cursor: pointer;
+        }
+
+        .btn-secondary:hover {
+            background: var(--paper-2);
+            border-color: var(--line-strong);
+        }
+
+        /* Hero mockup */
+        .hero-mockup {
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .mockup-panel {
+            background: rgba(20, 20, 30, 0.8);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow:
+                0 25px 60px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+                0 0 80px rgba(46, 204, 113, 0.1);
+            transform: rotateX(5deg) rotateY(-5deg);
+            animation: float-mockup 6s ease-in-out infinite;
+            max-width: 380px;
+            margin: 0 auto;
+        }
+
+        @keyframes float-mockup {
+            0%, 100% { transform: rotateX(5deg) rotateY(-5deg) translateY(0); }
+            50% { transform: rotateX(5deg) rotateY(-5deg) translateY(-12px); }
+        }
+
+        .mockup-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .mockup-header-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            color: var(--ink-secondary);
+            text-transform: uppercase;
+        }
+
+        .mockup-live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--c-excellent);
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        .mockup-time {
+            font-size: 12px;
+            color: var(--ink-tertiary);
+            font-family: var(--font-mono);
+        }
+
+        .mockup-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            border-radius: var(--radius-sm);
+            background: rgba(255, 255, 255, 0.04);
+            transition: background 0.2s ease;
+        }
+
+        .mockup-row:hover {
+            background: rgba(255, 255, 255, 0.07);
+        }
+
+        .mockup-row-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .mockup-row-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .mockup-row-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--ink-secondary);
+            min-width: 50px;
+        }
+
+        .mockup-row-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+            font-family: var(--font-mono);
+            min-width: 40px;
+        }
+
+        .mockup-row-graph {
+            flex: 1;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .mockup-sparkline {
+            width: 60px;
+            height: 18px;
+        }
+
+        .mockup-progress {
+            width: 60px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
+            overflow: hidden;
+        }
+
+        .mockup-progress-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
+        }
+
+        .mockup-row-detail {
+            font-size: 11px;
+            color: var(--ink-tertiary);
+            margin-left: auto;
+            font-family: var(--font-mono);
+        }
+
+        /* ========================================
+           FEATURES SECTION
+           ======================================== */
+        .features {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+
+        .section-eyebrow {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid rgba(46, 204, 113, 0.2);
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--brand-purple-light);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(32px, 4vw, 48px);
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 16px;
+        }
+
+        .section-desc {
+            font-size: 18px;
+            color: var(--ink-secondary);
+            max-width: 560px;
+            margin: 0 auto;
+            line-height: 1.7;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+
+        .feature-card {
+            padding: 32px;
+            border-radius: var(--radius-lg);
+            background: var(--paper);
+            border: 1px solid var(--line);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-color);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--line-strong);
+            box-shadow: var(--shadow-md);
+        }
+
+        .feature-card:hover::before {
+            opacity: 1;
+        }
+
+        .feature-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-sm);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .feature-icon::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.05));
+            pointer-events: none;
+        }
+
+        .feature-icon svg {
+            width: 24px;
+            height: 24px;
+            color: white;
+        }
+
+        .feature-card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p {
+            font-size: 14px;
+            color: var(--ink-secondary);
+            line-height: 1.6;
+        }
+
+        /* ========================================
+           MONITORING SHOWCASE
+           ======================================== */
+        .showcase {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .showcase-inner {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
+            align-items: center;
+        }
+
+        .showcase-text {
+            order: 1;
+        }
+
+        .showcase-visual {
+            order: 2;
+        }
+
+        .showcase-visual-left {
+            order: 1;
+        }
+
+        .showcase-visual-right {
+            order: 2;
+        }
+
+        .showcase-text .section-eyebrow {
+            margin-bottom: 20px;
+        }
+
+        .showcase-text .section-title {
+            text-align: left;
+            margin-bottom: 16px;
+        }
+
+        .showcase-text .section-desc {
+            text-align: left;
+            margin: 0 0 24px 0;
+        }
+
+        .showcase-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .showcase-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            color: var(--ink-secondary);
+        }
+
+        .showcase-list li::before {
+            content: '✓';
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--c-excellent);
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
+        }
+
+        /* Mockup window */
+        .mockup-window {
+            background: rgba(20, 20, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+        }
+
+        .mockup-window-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .mockup-window-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .mockup-window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .mockup-window-dot.red { background: #ff5f57; }
+        .mockup-window-dot.yellow { background: #febc2e; }
+        .mockup-window-dot.green { background: #28c840; }
+
+        .mockup-window-title {
+            font-size: 13px;
+            color: var(--ink-tertiary);
+            margin-left: 8px;
+        }
+
+        .mockup-window-body {
+            padding: 20px;
+        }
+
+        /* Process list mockup */
+        .process-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .process-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: var(--radius-sm);
+        }
+
+        .process-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .process-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .process-value {
+            font-size: 13px;
+            font-family: var(--font-mono);
+            color: var(--ink-secondary);
+        }
+
+        /* Health score mockup */
+        .health-mockup {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            padding: 32px;
+        }
+
+        .health-ring-container {
+            position: relative;
+            width: 160px;
+            height: 160px;
+        }
+
+        .health-ring-svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .health-ring-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.06);
+            stroke-width: 10;
+        }
+
+        .health-ring-fg {
+            fill: none;
+            stroke: url(#healthGradient);
+            stroke-width: 10;
+            stroke-linecap: round;
+            stroke-dasharray: 440;
+            stroke-dashoffset: 110;
+            transition: stroke-dashoffset 1.5s ease;
+        }
+
+        .health-ring-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .health-score {
+            font-size: 48px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--c-excellent);
+            line-height: 1;
+        }
+
+        .health-label {
+            font-size: 14px;
+            color: var(--c-excellent);
+            margin-top: 4px;
+            font-weight: 600;
+        }
+
+        .health-dims {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .health-dim {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .health-dim-name {
+            font-size: 13px;
+            color: var(--ink-secondary);
+            min-width: 60px;
+        }
+
+        .health-dim-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .health-dim-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 1s ease;
+        }
+
+        .health-dim-value {
+            font-size: 13px;
+            font-family: var(--font-mono);
+            color: var(--ink-secondary);
+            min-width: 40px;
+            text-align: right;
+        }
+
+        /* Stats cards mockup */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .stat-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .stat-card-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stat-card-icon svg {
+            width: 18px;
+            height: 18px;
+            color: white;
+        }
+
+        .stat-card-title {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .stat-card-subtitle {
+            font-size: 11px;
+            color: var(--ink-tertiary);
+        }
+
+        .stat-card-value {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            margin-bottom: 8px;
+        }
+
+        .stat-card-meta {
+            display: flex;
+            gap: 16px;
+        }
+
+        .stat-card-meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-card-meta-label {
+            font-size: 11px;
+            color: var(--ink-tertiary);
+        }
+
+        .stat-card-meta-value {
+            font-size: 13px;
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+
+        /* ========================================
+           STATISTICS SECTION
+           ======================================== */
+        .statistics {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .stats-showcase {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-xl);
+            padding: 48px;
+            margin-top: 64px;
+        }
+
+        .stats-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .stats-tab {
+            padding: 8px 20px;
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--ink-secondary);
+        }
+
+        .stats-tab.active {
+            background: rgba(46, 204, 113, 0.15);
+            color: var(--brand-purple-light);
+            border-color: rgba(46, 204, 113, 0.3);
+        }
+
+        .stats-tab:hover:not(.active) {
+            background: var(--paper-2);
+        }
+
+        .stats-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 32px;
+        }
+
+        .stats-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stats-summary-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: var(--radius-sm);
+        }
+
+        .stats-summary-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .stats-summary-icon svg {
+            width: 20px;
+            height: 20px;
+            color: white;
+        }
+
+        .stats-summary-info {
+            flex: 1;
+        }
+
+        .stats-summary-label {
+            font-size: 12px;
+            color: var(--ink-tertiary);
+            margin-bottom: 2px;
+        }
+
+        .stats-summary-value {
+            font-size: 18px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+
+        /* Heatmap */
+        .heatmap-container {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-sm);
+            padding: 24px;
+        }
+
+        .heatmap-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            gap: 3px;
+        }
+
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.3);
+            z-index: 1;
+            position: relative;
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 11px;
+            color: var(--ink-tertiary);
+        }
+
+        .heatmap-legend-bar {
+            display: flex;
+            gap: 2px;
+        }
+
+        .heatmap-legend-cell {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        /* ========================================
+           EVENTS SECTION
+           ======================================== */
+        .events {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .events-showcase {
+            max-width: 800px;
+            margin: 64px auto 0;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 32px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 8px;
+            bottom: 8px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 1px;
+        }
+
+        .timeline-day {
+            margin-bottom: 32px;
+        }
+
+        .timeline-day-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--ink-secondary);
+            margin-bottom: 16px;
+            margin-left: -32px;
+            padding-left: 32px;
+        }
+
+        .timeline-event {
+            position: relative;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+        }
+
+        .timeline-event:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -25px;
+            top: 18px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid var(--page);
+        }
+
+        .timeline-event.warning::before {
+            background: var(--c-fair);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+        }
+
+        .timeline-event.critical::before {
+            background: var(--c-critical);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+
+        .timeline-event.info::before {
+            background: var(--c-good);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .timeline-event-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .timeline-event-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .timeline-event-time {
+            font-size: 12px;
+            color: var(--ink-tertiary);
+            font-family: var(--font-mono);
+        }
+
+        .timeline-event-detail {
+            font-size: 13px;
+            color: var(--ink-secondary);
+        }
+
+        /* ========================================
+           DOWNLOAD CTA
+           ======================================== */
+        .download {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .download-card {
+            text-align: center;
+            padding: 80px 48px;
+            background: linear-gradient(135deg, rgba(46, 204, 113, 0.08), rgba(34, 197, 94, 0.05));
+            border: 1px solid rgba(46, 204, 113, 0.15);
+            border-radius: var(--radius-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .download-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(46, 204, 113, 0.1) 0%, transparent 70%);
+            animation: rotate-glow 20s linear infinite;
+        }
+
+        @keyframes rotate-glow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .download-card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .download-card .section-title {
+            margin-bottom: 16px;
+        }
+
+        .download-card .section-desc {
+            margin-bottom: 32px;
+        }
+
+        .download-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--ink-secondary);
+            margin-bottom: 32px;
+        }
+
+        .download-badge svg {
+            width: 18px;
+            height: 18px;
+            color: var(--ink-secondary);
+        }
+
+        .download-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .download-note {
+            margin-top: 24px;
+            font-size: 13px;
+            color: var(--ink-tertiary);
+        }
+
+        /* ========================================
+           FOOTER
+           ======================================== */
+        .footer {
+            padding: 48px 0;
+            border-top: 1px solid var(--line);
+        }
+
+        .footer-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
+        }
+
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--ink);
+            font-weight: 600;
+            font-size: 16px;
+            text-decoration: none;
+        }
+
+        .footer-brand-icon {
+            width: 28px;
+            height: 28px;
+            background: #2C2C2E;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            color: var(--ink-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--ink);
+        }
+
+        .footer-copy {
+            font-size: 13px;
+            color: var(--ink-tertiary);
+        }
+
+        /* ========================================
+           ANIMATIONS
+           ======================================== */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ========================================
+           RESPONSIVE
+           ======================================== */
+        @media (max-width: 1024px) {
+            .hero-inner {
+                grid-template-columns: 1fr;
+                text-align: center;
+            }
+
+            .hero-title {
+                font-size: clamp(36px, 8vw, 56px);
+            }
+
+            .hero-subtitle {
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .hero-actions {
+                justify-content: center;
+            }
+
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .showcase-inner {
+                grid-template-columns: 1fr;
+                gap: 48px;
+            }
+
+            .showcase-text .section-title,
+            .showcase-text .section-desc {
+                text-align: center;
+            }
+
+            .showcase-text .section-eyebrow {
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .showcase-list {
+                align-items: center;
+            }
+
+            .stats-content {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 640px) {
+            .nav-links {
+                display: none;
+            }
+
+            .hero {
+                padding: 100px 0 60px;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-tabs {
+                justify-content: center;
+            }
+
+            .stats-showcase {
+                padding: 24px;
+            }
+
+            .download-card {
+                padding: 48px 24px;
+            }
+
+            .footer-inner {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Background effects -->
+    <div class="bg-gradient"></div>
+    <div class="bg-grid"></div>
+
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="nav-inner">
+            <a href="#" class="nav-logo">
+                <div class="nav-logo-icon" style="background: #2C2C2E; box-shadow: 0 0 12px rgba(46, 204, 113, 0.3);">
+                    <svg viewBox="0 0 32 32" width="20" height="20">
+                        <defs>
+                            <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <circle cx="16" cy="16" r="14" fill="none" stroke="#2ECC71" stroke-width="3" stroke-linecap="round" stroke-dasharray="55 30" transform="rotate(-90 16 16)" filter="url(#glow)"/>
+                        <circle cx="16" cy="16" r="3.5" fill="#2ECC71" filter="url(#glow)"/>
+                    </svg>
+                </div>
+                HagimiMonitor
+            </a>
+            <ul class="nav-links">
+                <li><a href="#features">功能</a></li>
+                <li><a href="#showcase">监控</a></li>
+                <li><a href="#statistics">统计</a></li>
+                <li><a href="#events">事件</a></li>
+                <li><a href="#download">下载</a></li>
+            </ul>
+            <a href="#download" class="nav-cta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                免费下载
+            </a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero" id="hero">
+        <div class="hero-inner">
+            <div class="hero-text">
+                <div class="hero-badge">
+                    <span class="dot"></span>
+                    macOS 专属 · 免费下载
+                </div>
+                <h1 class="hero-title">
+                    你的 Mac，<br>
+                    <span class="gradient-text">一眼即懂。</span>
+                </h1>
+                <p class="hero-subtitle">
+                    HagimiMonitor 将 CPU、GPU、内存、存储与网络的实时状态，以最优雅的方式呈现在你的菜单栏。
+                </p>
+                <div class="hero-actions">
+                    <a href="#download" class="btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        免费下载
+                    </a>
+                    <a href="#features" class="btn-secondary">
+                        了解更多
+                    </a>
+                </div>
+            </div>
+            <div class="hero-mockup">
+                <div class="mockup-panel">
+                    <div class="mockup-header">
+                        <div class="mockup-header-left">
+                            <span class="mockup-live-dot"></span>
+                            <span>SYSTEM · LIVE</span>
+                        </div>
+                        <span class="mockup-time">18:06</span>
+                    </div>
+
+                    <!-- CPU -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-cpu)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                <rect x="9" y="9" width="6" height="6"/>
+                                <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">CPU:</span>
+                        <span class="mockup-row-value">17%</span>
+                        <div class="mockup-row-graph">
+                            <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="var(--c-cpu)" stroke-width="1.5" opacity="0.8"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- GPU -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-gpu)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">GPU:</span>
+                        <span class="mockup-row-value">11%</span>
+                        <div class="mockup-row-graph">
+                            <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="var(--c-gpu)" stroke-width="1.5" opacity="0.8"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Memory -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-memory)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">内存:</span>
+                        <span class="mockup-row-value">78%</span>
+                        <div class="mockup-row-graph">
+                            <div class="mockup-progress">
+                                <div class="mockup-progress-fill" style="width: 78%; background: var(--c-memory)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Storage -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-storage)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                                <circle cx="12" cy="15" r="2"/>
+                                <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">存储:</span>
+                        <span class="mockup-row-value">41%</span>
+                        <div class="mockup-row-graph">
+                            <div class="mockup-progress">
+                                <div class="mockup-progress-fill" style="width: 41%; background: var(--c-storage)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Network -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-network)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                                <line x1="12" y1="20" x2="12.01" y2="20"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">网络:</span>
+                        <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
+                        <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
+                    </div>
+
+                    <!-- Battery -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-battery)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="7" width="16" height="10" rx="2"/>
+                                <line x1="22" y1="11" x2="22" y2="13"/>
+                                <line x1="6" y1="11" x2="6.01" y2="11"/>
+                                <line x1="10" y1="11" x2="10.01" y2="11"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">电源:</span>
+                        <span class="mockup-row-value">90%</span>
+                        <span class="mockup-row-detail">○ 14.7 W</span>
+                    </div>
+
+                    <!-- Display -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--ink-secondary)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">显示器:</span>
+                        <span class="mockup-row-value" style="font-size: 12px">2台 · 外接1</span>
+                        <span class="mockup-row-detail">›</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header fade-in">
+                <span class="section-eyebrow">核心功能</span>
+                <h2 class="section-title">全方位掌控你的 Mac</h2>
+                <p class="section-desc">七大监控模块，从菜单栏到详细面板，每一个数据都触手可及。</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card fade-in" style="--accent-color: var(--c-cpu)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-cpu), #ff8a8a)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="4" width="16" height="16" rx="2"/>
+                            <rect x="9" y="9" width="6" height="6"/>
+                            <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                        </svg>
+                    </div>
+                    <h3>CPU 监控</h3>
+                    <p>实时追踪系统、用户、空闲 CPU 使用率，支持温度读取与进程级分析。</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-gpu)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-gpu), #c084fc)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <h3>GPU 监控</h3>
+                    <p>通过 IOKit 查询 GPU 利用率、渲染与分块性能，掌握图形负载。</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-memory)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-memory), #60a5fa)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="6" width="20" height="12" rx="2"/>
+                            <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                        </svg>
+                    </div>
+                    <h3>内存监控</h3>
+                    <p>追踪内存压力、交换分区使用，智能检测内存压力等级变化。</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-storage)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-storage), #fbbf24)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                            <circle cx="12" cy="15" r="2"/>
+                            <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </div>
+                    <h3>存储监控</h3>
+                    <p>实时磁盘容量与 I/O 统计，支持外部卷检测与读写速率追踪。</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-network)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-network), #22d3ee)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                            <line x1="12" y1="20" x2="12.01" y2="20"/>
+                        </svg>
+                    </div>
+                    <h3>网络监控</h3>
+                    <p>追踪上传下载速率，检测网络接口类型，获取公网 IP 地址。</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-battery)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-battery), #4ade80)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="7" width="16" height="10" rx="2"/>
+                            <line x1="22" y1="11" x2="22" y2="13"/>
+                            <line x1="6" y1="11" x2="6.01" y2="11"/>
+                            <line x1="10" y1="11" x2="10.01" y2="11"/>
+                        </svg>
+                    </div>
+                    <h3>电池与电源</h3>
+                    <p>电池健康度、充电功率、循环次数、温度全方位监控。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Showcase: Real-time Monitoring -->
+    <section class="showcase" id="showcase">
+        <div class="container">
+            <div class="showcase-inner">
+                <div class="showcase-text">
+                    <span class="section-eyebrow">实时监控</span>
+                    <h2 class="section-title">菜单栏一眼可见<br>展开即见详情</h2>
+                    <p class="section-desc">动态环形图标实时反映系统负载，点击展开即可查看 CPU、GPU、内存等七大模块的详细数据。</p>
+                    <ul class="showcase-list">
+                        <li>动态菜单栏环形图标，四色负载指示</li>
+                        <li>玻璃拟态 UI，支持平衡/活力双主题</li>
+                        <li>展开行查看进程级详细信息</li>
+                        <li>Sparkline 迷你图表实时趋势</li>
+                    </ul>
+                </div>
+                <div class="showcase-visual showcase-visual-right">
+                    <div class="mockup-window">
+                        <div class="mockup-window-header">
+                            <div class="mockup-window-dots">
+                                <span class="mockup-window-dot red"></span>
+                                <span class="mockup-window-dot yellow"></span>
+                                <span class="mockup-window-dot green"></span>
+                            </div>
+                            <span class="mockup-window-title">HagimiMonitor</span>
+                        </div>
+                        <div class="mockup-window-body">
+                            <div class="process-list">
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #ff6b6b, #ff8a8a)">⚡</div>
+                                    <span class="process-name">Zed</span>
+                                    <span class="process-value">100.6%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #a855f7, #c084fc)">🖥</div>
+                                    <span class="process-name">WindowServer</span>
+                                    <span class="process-value">60.3%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #3b82f6, #60a5fa)">📊</div>
+                                    <span class="process-name">HagimiMonitor</span>
+                                    <span class="process-value">43.4%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #f59e0b, #fbbf24)">🪟</div>
+                                    <span class="process-name">WindowManager</span>
+                                    <span class="process-value">27.0%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #06b6d4, #22d3ee)">🎵</div>
+                                    <span class="process-name">抖音</span>
+                                    <span class="process-value">22.9%</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Showcase: Health Score -->
+    <section class="showcase">
+        <div class="container">
+            <div class="showcase-inner">
+                <div class="showcase-visual showcase-visual-left">
+                    <div class="mockup-window">
+                        <div class="mockup-window-header">
+                            <div class="mockup-window-dots">
+                                <span class="mockup-window-dot red"></span>
+                                <span class="mockup-window-dot yellow"></span>
+                                <span class="mockup-window-dot green"></span>
+                            </div>
+                            <span class="mockup-window-title">健康评分</span>
+                        </div>
+                        <div class="mockup-window-body">
+                            <div class="health-mockup">
+                                <div class="health-ring-container">
+                                    <svg class="health-ring-svg" viewBox="0 0 160 160">
+                                        <defs>
+                                            <linearGradient id="healthGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#22c55e"/>
+                                                <stop offset="100%" style="stop-color:#4ade80"/>
+                                            </linearGradient>
+                                        </defs>
+                                        <circle class="health-ring-bg" cx="80" cy="80" r="70"/>
+                                        <circle class="health-ring-fg" cx="80" cy="80" r="70" stroke-dasharray="440" stroke-dashoffset="110"/>
+                                    </svg>
+                                    <div class="health-ring-text">
+                                        <span class="health-score">93</span>
+                                        <span class="health-label">优秀</span>
+                                    </div>
+                                </div>
+                                <div class="health-dims">
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">CPU</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 95%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">95</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">GPU</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 82%; background: var(--c-good)"></div>
+                                        </div>
+                                        <span class="health-dim-value">82</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">磁盘</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 100%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">100</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">内存</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 93%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">93</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">散热</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 100%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">100</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="showcase-text showcase-visual-right">
+                    <span class="section-eyebrow">健康评分</span>
+                    <h2 class="section-title">智能评估<br>Mac 健康状态</h2>
+                    <p class="section-desc">基于 CPU、GPU、磁盘、内存压力、散热等多维度数据，综合计算 Mac 健康评分，让你对设备状态了如指掌。</p>
+                    <ul class="showcase-list">
+                        <li>0-100 分综合健康评分</li>
+                        <li>五大维度独立评估</li>
+                        <li>优秀/良好/一般/较差/危急五级分级</li>
+                        <li>趋势追踪与历史对比</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Statistics Section -->
+    <section class="statistics" id="statistics">
+        <div class="container">
+            <div class="section-header fade-in">
+                <span class="section-eyebrow">数据统计</span>
+                <h2 class="section-title">历史数据，一目了然</h2>
+                <p class="section-desc">24小时、7天、30天、一年，多时间维度统计，助你洞察系统运行规律。</p>
+            </div>
+            <div class="stats-showcase fade-in">
+                <div class="stats-tabs">
+                    <button class="stats-tab active">过去24小时</button>
+                    <button class="stats-tab">过去7天</button>
+                    <button class="stats-tab">过去30天</button>
+                    <button class="stats-tab">过去一年</button>
+                </div>
+                <div class="stats-content">
+                    <div class="stats-summary">
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-cpu), #ff8a8a)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    <rect x="9" y="9" width="6" height="6"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">CPU 均值</div>
+                                <div class="stats-summary-value" style="color: var(--c-cpu)">22.6%</div>
+                            </div>
+                        </div>
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-gpu), #c084fc)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">GPU 均值</div>
+                                <div class="stats-summary-value" style="color: var(--c-gpu)">17.6%</div>
+                            </div>
+                        </div>
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-memory), #60a5fa)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                    <path d="M6 10h.01M6 14h.01"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">内存均值</div>
+                                <div class="stats-summary-value" style="color: var(--c-memory)">77.3%</div>
+                            </div>
+                        </div>
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-power), #fbbf24)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">功耗均值</div>
+                                <div class="stats-summary-value" style="color: var(--c-power)">11.3 W</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="heatmap-container">
+                        <div class="heatmap-title">负载热力图</div>
+                        <div class="heatmap-grid" id="heatmap">
+                            <!-- Generated by JS -->
+                        </div>
+                        <div class="heatmap-legend">
+                            <span>低</span>
+                            <div class="heatmap-legend-bar">
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.1)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.25)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.4)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.6)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.8)"></div>
+                            </div>
+                            <span>高</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Events Section -->
+    <section class="events" id="events">
+        <div class="container">
+            <div class="section-header fade-in">
+                <span class="section-eyebrow">系统事件</span>
+                <h2 class="section-title">智能事件检测</h2>
+                <p class="section-desc">自动检测 CPU 高负载、内存压力、磁盘空间不足等关键事件，及时提醒你关注系统健康。</p>
+            </div>
+            <div class="events-showcase fade-in">
+                <div class="timeline">
+                    <div class="timeline-day">
+                        <div class="timeline-day-label">今天</div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">⚡ 网络流量峰值</span>
+                                <span class="timeline-event-time">18:25</span>
+                            </div>
+                            <div class="timeline-event-detail">240.0 MB</div>
+                        </div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">⚡ 网络流量峰值</span>
+                                <span class="timeline-event-time">18:15</span>
+                            </div>
+                            <div class="timeline-event-detail">360.9 MB</div>
+                        </div>
+                        <div class="timeline-event critical">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">🔥 内存压力升级</span>
+                                <span class="timeline-event-time">18:13</span>
+                            </div>
+                            <div class="timeline-event-detail">正常 → 警告 · Top 进程: Zed, WindowServer, IntelliJ IDEA</div>
+                        </div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">💾 磁盘 I/O 峰值</span>
+                                <span class="timeline-event-time">18:05</span>
+                            </div>
+                            <div class="timeline-event-detail">1.43 GB</div>
+                        </div>
+                    </div>
+                    <div class="timeline-day">
+                        <div class="timeline-day-label">昨天</div>
+                        <div class="timeline-event info">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">✓ 内存压力缓解</span>
+                                <span class="timeline-event-time">17:57</span>
+                            </div>
+                            <div class="timeline-event-detail">警告 → 正常 · Top 进程: Zed, ecosystemd, trustd</div>
+                        </div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">⚡ 网络流量峰值</span>
+                                <span class="timeline-event-time">17:55</span>
+                            </div>
+                            <div class="timeline-event-detail">127.7 MB</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download CTA -->
+    <section class="download" id="download">
+        <div class="container">
+            <div class="download-card fade-in">
+                <span class="section-eyebrow">立即体验</span>
+                <h2 class="section-title">准备好让你的 Mac<br>一目了然了吗？</h2>
+                <p class="section-desc">免费下载，支持 macOS 26+ 及 Apple Silicon。</p>
+                <div class="download-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v20M2 12h20"/>
+                    </svg>
+                    macOS 26+ · Apple Silicon · 免费
+                </div>
+                <div class="download-actions">
+                    <a href="#" class="btn-primary" style="font-size: 16px; padding: 16px 40px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        下载最新版
+                    </a>
+                    <a href="#" class="btn-secondary" style="font-size: 16px; padding: 16px 40px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                        </svg>
+                        GitHub
+                    </a>
+                </div>
+                <p class="download-note">开源免费，持续更新中</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-inner">
+                <a href="#" class="footer-brand">
+                    <div class="footer-brand-icon" style="background: #2C2C2E;">
+                        <svg viewBox="0 0 32 32" width="16" height="16">
+                            <circle cx="16" cy="16" r="14" fill="none" stroke="#2ECC71" stroke-width="3" stroke-linecap="round" stroke-dasharray="55 30" transform="rotate(-90 16 16)"/>
+                            <circle cx="16" cy="16" r="3.5" fill="#2ECC71"/>
+                        </svg>
+                    </div>
+                    HagimiMonitor
+                </a>
+                <ul class="footer-links">
+                    <li><a href="#features">功能</a></li>
+                    <li><a href="#showcase">监控</a></li>
+                    <li><a href="#statistics">统计</a></li>
+                    <li><a href="#download">下载</a></li>
+                </ul>
+                <span class="footer-copy">© 2026 HagimiMonitor. All rights reserved.</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- JavaScript -->
+    <script>
+        // Navigation scroll effect
+        const nav = document.getElementById('nav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
+            }
+        });
+
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, observerOptions);
+
+        document.querySelectorAll('.fade-in').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Generate heatmap
+        const heatmap = document.getElementById('heatmap');
+        const heatmapColors = [
+            'rgba(59,130,246,0.05)',
+            'rgba(59,130,246,0.1)',
+            'rgba(59,130,246,0.2)',
+            'rgba(59,130,246,0.35)',
+            'rgba(59,130,246,0.5)',
+            'rgba(59,130,246,0.7)',
+            'rgba(59,130,246,0.85)'
+        ];
+
+        for (let i = 0; i < 168; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'heatmap-cell';
+            const intensity = Math.random();
+            const colorIndex = Math.floor(intensity * heatmapColors.length);
+            cell.style.background = heatmapColors[colorIndex];
+            heatmap.appendChild(cell);
+        }
+
+        // Stats tab switching
+        document.querySelectorAll('.stats-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.stats-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                // Animate heatmap refresh
+                const cells = document.querySelectorAll('.heatmap-cell');
+                cells.forEach((cell, i) => {
+                    setTimeout(() => {
+                        const intensity = Math.random();
+                        const colorIndex = Math.floor(intensity * heatmapColors.length);
+                        cell.style.background = heatmapColors[colorIndex];
+                    }, i * 2);
+                });
+            });
+        });
+
+        // Smooth scroll for nav links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
+                }
+            });
+        });
+    </script>
+</body>
+</html>
