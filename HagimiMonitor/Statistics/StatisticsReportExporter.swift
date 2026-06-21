@@ -72,6 +72,37 @@ struct StatisticsReportStrings: Codable {
     let eventTitle: String
     let eventTopProcesses: String
     let eventDuration: String
+    // Executive Summary
+    let summaryTitle: String
+    let moduleLoad: String
+    let keyInsights: String
+    let insightLoadHigh: String
+    let insightLoadMedium: String
+    let insightLoadLow: String
+    let insightPeak: String
+    let insightBusiest: String
+    let insightHealthScore: String
+    let insightThermal: String
+    let insightSevereEvents: String
+    // Heatmap
+    let heatmapTitle: String
+    let heatmapLow: String
+    let heatmapHigh: String
+    // Card tabs
+    let tabTrend: String
+    let tabDistribution: String
+    // Histogram
+    let samples: String
+    // Time labels
+    let today: String
+    let yesterday: String
+    let daySun: String
+    let dayMon: String
+    let dayTue: String
+    let dayWed: String
+    let dayThu: String
+    let dayFri: String
+    let daySat: String
 }
 
 struct StatisticsReportRangePayload: Codable {
@@ -89,6 +120,9 @@ struct StatisticsReportModulePayload: Codable {
     let peak: Double
     let low: Double
     let median: Double
+    let p50: Double
+    let p90: Double
+    let p95: Double
     let totalBytesIn: Int64?
     let totalBytesOut: Int64?
     let totalBytesRead: Int64?
@@ -164,7 +198,38 @@ struct StatisticsReportExporter {
                 healthNoDataHint: String(localized: "health.no-data.hint"),
                 eventTitle: String(localized: "event.title"),
                 eventTopProcesses: String(localized: "event.top-processes"),
-                eventDuration: String(localized: "event.duration")
+                eventDuration: String(localized: "event.duration"),
+                // Executive Summary
+                summaryTitle: String(localized: "report.summary.title"),
+                moduleLoad: String(localized: "report.module-load"),
+                keyInsights: String(localized: "report.key-insights"),
+                insightLoadHigh: String(localized: "report.insight.load-high"),
+                insightLoadMedium: String(localized: "report.insight.load-medium"),
+                insightLoadLow: String(localized: "report.insight.load-low"),
+                insightPeak: String(localized: "report.insight.peak"),
+                insightBusiest: String(localized: "report.insight.busiest"),
+                insightHealthScore: String(localized: "report.insight.health-score"),
+                insightThermal: String(localized: "report.insight.thermal"),
+                insightSevereEvents: String(localized: "report.insight.severe-events"),
+                // Heatmap
+                heatmapTitle: String(localized: "report.heatmap.title"),
+                heatmapLow: String(localized: "report.heatmap.low"),
+                heatmapHigh: String(localized: "report.heatmap.high"),
+                // Card tabs
+                tabTrend: String(localized: "report.tab.trend"),
+                tabDistribution: String(localized: "report.tab.distribution"),
+                // Histogram
+                samples: String(localized: "report.samples"),
+                // Time labels
+                today: String(localized: "report.today"),
+                yesterday: String(localized: "report.yesterday"),
+                daySun: String(localized: "report.day.sun"),
+                dayMon: String(localized: "report.day.mon"),
+                dayTue: String(localized: "report.day.tue"),
+                dayWed: String(localized: "report.day.wed"),
+                dayThu: String(localized: "report.day.thu"),
+                dayFri: String(localized: "report.day.fri"),
+                daySat: String(localized: "report.day.sat")
             ),
             ranges: Self.rangeSpecs.map { spec in
                 let pendingBuckets = spec.range == .last24Hours ? pending : nil
@@ -229,8 +294,18 @@ struct StatisticsReportExporter {
         )
     }
 
+    private static func percentile(sorted: [Double], p: Double) -> Double {
+        guard !sorted.isEmpty else { return 0 }
+        let idx = p * Double(sorted.count - 1)
+        let lo = Int(idx)
+        let hi = min(lo + 1, sorted.count - 1)
+        let frac = idx - Double(lo)
+        return sorted[lo] * (1 - frac) + sorted[hi] * frac
+    }
+
     private func modulePayload(from summary: StatisticsSummary) -> StatisticsReportModulePayload {
-        StatisticsReportModulePayload(
+        let avgs = summary.points.map(\.avg).sorted()
+        return StatisticsReportModulePayload(
             kind: summary.kind.rawValue,
             title: summary.kind.title,
             symbol: summary.kind.symbol,
@@ -238,6 +313,9 @@ struct StatisticsReportExporter {
             peak: summary.peak,
             low: summary.low,
             median: summary.median,
+            p50: Self.percentile(sorted: avgs, p: 0.50),
+            p90: Self.percentile(sorted: avgs, p: 0.90),
+            p95: Self.percentile(sorted: avgs, p: 0.95),
             totalBytesIn: summary.totalBytesIn,
             totalBytesOut: summary.totalBytesOut,
             totalBytesRead: summary.totalBytesRead,
@@ -484,6 +562,131 @@ struct StatisticsReportHTMLBuilder {
               .metric:nth-child(3) { grid-column: span 2; padding-top: 10px; }
               .metric:nth-child(3)::before { display: none; }
             }
+
+            /* ===== Executive Summary ===== */
+            .insights { margin-bottom: 28px; }
+            .insights h2 { margin: 0 0 18px; font-size: 20px; font-weight: 700;
+              letter-spacing: -.02em; }
+            .insight-grid { display: grid;
+              grid-template-columns: minmax(200px, 200px) 1fr 1fr;
+              gap: 16px; align-items: stretch; }
+            .insight-score { background: var(--bg-elev); border: 1px solid var(--border);
+              border-radius: 18px; padding: 20px 24px; box-shadow: var(--shadow-md);
+              display: flex; flex-direction: column; align-items: center; justify-content: center;
+              gap: 6px; }
+            .score-ring-wrap { position: relative; width: 80px; height: 80px; }
+            .score-ring-wrap svg { width: 100%; height: 100%; }
+            .score-ring-text { position: absolute; inset: 0; display: flex;
+              align-items: center; justify-content: center; }
+            .insight-score .big-score { font-size: 28px; font-weight: 700;
+              font-variant-numeric: tabular-nums; letter-spacing: -.02em; line-height: 1; }
+            .insight-score .score-label { font-size: 12px; color: var(--text-dim);
+              font-weight: 600; letter-spacing: .02em; }
+            .score-capped { font-size: 10px; color: #d94848; font-weight: 600; }
+            .score-dots { display: flex; gap: 5px; margin-top: 4px; }
+            .score-dot { width: 8px; height: 8px; border-radius: 50%;
+              box-shadow: 0 0 0 2px var(--bg-elev); }
+            .insight-load { background: var(--bg-elev); border: 1px solid var(--border);
+              border-radius: 18px; padding: 22px; box-shadow: var(--shadow-md); }
+            .insight-load h3 { margin: 0 0 14px; font-size: 13px; color: var(--text-dim);
+              font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+            .insight-load-item { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+            .insight-load-item .il-name { width: 80px; font-size: 12.5px; color: var(--text-dim);
+              font-weight: 500; flex: none; }
+            .insight-load-item .il-bar { flex: 1; min-width: 0; height: 8px; background: var(--bg-inset);
+              border-radius: 4px; overflow: hidden; }
+            .insight-load-item .il-bar-fill { display: block; height: 100%; border-radius: 4px;
+              transition: width .4s ease; }
+            .insight-load-item .il-val { width: 40px; text-align: right; font-size: 12px;
+              font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+            .insight-list { background: var(--bg-elev); border: 1px solid var(--border);
+              border-radius: 18px; padding: 22px; box-shadow: var(--shadow-md); }
+            .insight-list h3 { margin: 0 0 14px; font-size: 13px; color: var(--text-dim);
+              font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+            .insight-list ul { margin: 0; padding: 0; list-style: none; }
+            .insight-list li { padding: 5px 0; font-size: 13px; color: var(--text);
+              line-height: 1.5; }
+            .insight-list li::before { content: ""; display: inline-block; width: 6px;
+              height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: middle;
+              background: var(--c-network); }
+
+            /* ===== Heatmap ===== */
+            .heatmap-wrap { margin-top: 20px; background: var(--bg-elev);
+              border: 1px solid var(--border); border-radius: 18px; padding: 22px;
+              box-shadow: var(--shadow-md); }
+            .heatmap-wrap h3 { margin: 0 0 14px; font-size: 13px; color: var(--text-dim);
+              font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+            .heatmap-container { display: flex; gap: 8px; align-items: flex-start;
+              overflow-x: auto; }
+            .heatmap-labels { display: flex; flex-direction: column; gap: 3px;
+              padding-top: 22px; flex: none; }
+            .heatmap-labels span { height: 15px; display: flex; align-items: center;
+              font-size: 10px; color: var(--text-faint); font-weight: 500;
+              font-variant-numeric: tabular-nums; }
+            .heatmap-grid-wrap { flex: 1; min-width: 0; }
+            .heatmap-days { display: flex; gap: 3px; margin-bottom: 4px; padding-left: 0; }
+            .heatmap-days span { width: 15px; text-align: center; font-size: 10px;
+              color: var(--text-faint); font-weight: 500; }
+            .heatmap-rows { display: flex; flex-direction: column; gap: 3px; }
+            .heatmap-row { display: flex; gap: 3px; }
+            .heatmap-cell { width: 15px; height: 15px; border-radius: 3px;
+              background: var(--bg-inset); transition: background .15s; }
+            .heatmap-cell:hover { outline: 2px solid var(--text-faint); outline-offset: 1px; }
+            .heatmap-legend { display: flex; align-items: center; gap: 4px;
+              margin-top: 10px; justify-content: flex-end; }
+            .heatmap-legend span { font-size: 10px; color: var(--text-faint); }
+            .heatmap-legend .heatmap-cell { cursor: default; }
+            .heatmap-legend .heatmap-cell:hover { outline: none; }
+            .heatmap-tip { position: absolute; pointer-events: none; opacity: 0;
+              transform: translate(-50%, calc(-100% - 6px));
+              background: var(--text); color: var(--bg-elev);
+              padding: 6px 10px; border-radius: 8px; font-size: 11.5px;
+              white-space: nowrap; box-shadow: 0 6px 16px rgba(0,0,0,.2);
+              transition: opacity .12s; z-index: 10;
+              font-variant-numeric: tabular-nums; }
+            .heatmap-tip b { font-weight: 700; }
+
+            /* ===== Percentile badges ===== */
+            .percentiles { display: flex; gap: 10px; margin-top: 12px;
+              padding-top: 12px; border-top: 1px solid var(--hairline); }
+            .pct-badge { background: var(--bg-soft); border-radius: 8px;
+              padding: 6px 10px; text-align: center; flex: 1; }
+            .pct-badge .pct-label { font-size: 10px; color: var(--text-faint);
+              font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+            .pct-badge .pct-val { font-size: 14px; font-weight: 660;
+              font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+            /* ===== Histogram ===== */
+            .hist-wrap { position: relative; height: 130px; margin: 6px -6px 0;
+              border-radius: 10px; padding: 10px 8px 4px; }
+            .hist-wrap svg { width: 100%; height: 100%; display: block; overflow: visible; }
+            .hist-bar { rx: 2; }
+            .hist-bar:hover { opacity: .85; }
+            .hist-label { fill: var(--text-faint); font-size: 9px;
+              font-variant-numeric: tabular-nums; font-weight: 500; }
+            .hist-tooltip { position: absolute; pointer-events: none; opacity: 0;
+              transform: translate(-50%, calc(-100% - 6px));
+              background: var(--text); color: var(--bg-elev);
+              padding: 6px 10px; border-radius: 8px; font-size: 11px;
+              white-space: nowrap; box-shadow: 0 6px 16px rgba(0,0,0,.2);
+              transition: opacity .12s; z-index: 5;
+              font-variant-numeric: tabular-nums; }
+
+            /* ===== Chart peak marker ===== */
+            .peak-label { font-size: 9px; font-weight: 600;
+              font-variant-numeric: tabular-nums; }
+
+            /* ===== Chart/Tab toggle ===== */
+            .card-tabs { display: flex; gap: 2px; margin-bottom: 12px;
+              background: var(--bg-inset); border-radius: 8px; padding: 2px; }
+            .card-tabs button { appearance: none; border: 0; background: transparent;
+              cursor: pointer; padding: 5px 12px; border-radius: 6px;
+              font-size: 11.5px; font-weight: 580; color: var(--text-dim);
+              font-family: inherit; transition: color .15s, background .15s;
+              white-space: nowrap; }
+            .card-tabs button:hover { color: var(--text); }
+            .card-tabs button.active { background: var(--bg-elev); color: var(--text);
+              box-shadow: var(--shadow-sm); }
           </style>
         </head>
         <body>
@@ -497,7 +700,7 @@ struct StatisticsReportHTMLBuilder {
               </div>
               <nav class="segmented" id="tabs" role="tablist"></nav>
             </header>
-            <section id="health"></section>
+            <section class="insights" id="insights"></section>
             <section class="grid" id="cards"></section>
             <section id="timeline"></section>
             <footer id="footer"></footer>
@@ -585,6 +788,261 @@ struct StatisticsReportHTMLBuilder {
                 { label: L.peak, val: pct(m.peak, m.kind), lead: false },
                 { label: L.median, val: pct(m.median, m.kind), lead: false }
               ]};
+            }
+
+            // ===== Percentiles =====
+            function percentiles(values) {
+              if (!values.length) return { p50: 0, p90: 0, p95: 0 };
+              const s = values.slice().sort((a, b) => a - b);
+              function q(p) { const i = p * (s.length - 1); const lo = Math.floor(i);
+                return s[lo] * (1 - (i - lo)) + (s[Math.min(lo + 1, s.length - 1)] || s[lo]) * (i - lo); }
+              return { p50: q(0.5), p90: q(0.9), p95: q(0.95) };
+            }
+
+            // ===== Executive Summary =====
+            function renderInsights(range) {
+              const el = document.getElementById('insights');
+              const mods = range.modules || [];
+              const hs = range.healthScore;
+
+              // Overall load (CPU+GPU+Memory avg)
+              const loadMods = mods.filter(m => ['cpu','gpu','memory'].includes(m.kind));
+              const overallLoad = loadMods.length ? loadMods.reduce((s, m) => s + m.avg, 0) / loadMods.length : 0;
+
+              // Key metrics panel
+              let metricsHTML = '';
+              metricsHTML += '<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--text-dim);font-weight:600;margin-bottom:4px">' + L.moduleLoad.toUpperCase() + '</div>' +
+                '<div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:' + accentOf('cpu') + '">' + overallLoad.toFixed(1) + '%</div></div>';
+              loadMods.forEach(m => {
+                const c = accentOf(m.kind);
+                metricsHTML += '<div class="insight-load-item"><span class="il-name">' + m.title + '</span>' +
+                  '<span class="il-bar"><span class="il-bar-fill" style="width:' + Math.min(m.avg, 100) + '%;background:' + c + '"></span></span>' +
+                  '<span class="il-val" style="color:' + c + '">' + m.avg.toFixed(1) + '%</span></div>';
+              });
+
+              // Insights
+              const insights = [];
+              if (overallLoad > 70) insights.push(L.insightLoadHigh.replace('{value}', overallLoad.toFixed(0)));
+              else if (overallLoad > 40) insights.push(L.insightLoadMedium.replace('{value}', overallLoad.toFixed(0)));
+              else insights.push(L.insightLoadLow.replace('{value}', overallLoad.toFixed(0)));
+
+              let peakMod = null, peakVal = 0;
+              mods.forEach(m => { if (m.peak > peakVal && m.kind !== 'network' && m.kind !== 'storage') { peakVal = m.peak; peakMod = m; } });
+              if (peakMod) {
+                const peakPt = peakMod.points.reduce((best, p) => p.peak > best.peak ? p : best, peakMod.points[0]);
+                const peakTime = new Date(peakPt.timestamp * 1000).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                insights.push(L.insightPeak.replace('{module}', peakMod.title).replace('{value}', peakVal.toFixed(1) + '%').replace('{time}', peakTime));
+              }
+
+              let busiest = null, busiestAvg = 0;
+              mods.forEach(m => { if (m.avg > busiestAvg && m.kind !== 'network' && m.kind !== 'storage') { busiestAvg = m.avg; busiest = m; } });
+              if (busiest && busiestAvg > 30) insights.push(L.insightBusiest.replace('{module}', busiest.title).replace('{value}', busiestAvg.toFixed(1)));
+
+              if (hs && hs.isDataAvailable) {
+                const lvl = hs.level || levelOf(hs.score);
+                insights.push(L.insightHealthScore.replace('{score}', Math.round(hs.score)).replace('{level}', LEVEL_LABELS[lvl] || lvl));
+                if (hs.thermalCapped) insights.push(L.insightThermal);
+              }
+
+              // Find peak event
+              const severeEvents = (payload.events || []).filter(e => e.severity >= 2);
+              if (severeEvents.length > 0) insights.push(L.insightSevereEvents.replace('{count}', severeEvents.length));
+
+              const insightsHTML = '<ul>' + insights.map(i => '<li>' + i + '</li>').join('') + '</ul>';
+
+              // Score panel with ring + sub-dimensions
+              let scoreHTML = '';
+              if (hs && hs.isDataAvailable) {
+                const lvl = hs.level || levelOf(hs.score);
+                const lColor = LEVEL_COLORS[lvl] || '#5856d6';
+                const circ = 2 * Math.PI * 36;
+                const off = circ * (1 - Math.min(hs.score, 100) / 100);
+                // Sub-dimension dots
+                let dimDots = '';
+                (hs.dimensions || []).forEach(d => {
+                  if (d.isAvailable === false) return;
+                  const dc = LEVEL_COLORS[d.level] || LEVEL_COLORS.good;
+                  dimDots += '<span class="score-dot" style="background:' + dc + '" title="' + d.name + '"></span>';
+                });
+                const cappedBadge = hs.thermalCapped ? '<div class="score-capped">⚠ ' + L.healthThermalCapped + '</div>' : '';
+                scoreHTML =
+                  '<div class="score-ring-wrap">' +
+                    '<svg viewBox="0 0 80 80">' +
+                      '<circle cx="40" cy="40" r="36" fill="none" stroke="var(--bg-inset)" stroke-width="6"/>' +
+                      '<circle cx="40" cy="40" r="36" fill="none" stroke="' + lColor + '" stroke-width="6" stroke-linecap="round" ' +
+                        'stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '" ' +
+                        'style="transform:rotate(-90deg);transform-origin:center"/>' +
+                    '</svg>' +
+                    '<div class="score-ring-text">' +
+                      '<span class="big-score" style="color:' + lColor + '">' + Math.round(hs.score) + '</span>' +
+                    '</div>' +
+                  '</div>' +
+                  '<div class="score-label" style="color:' + lColor + '">' + (LEVEL_LABELS[lvl] || lvl) + '</div>' +
+                  cappedBadge +
+                  '<div class="score-dots">' + dimDots + '</div>';
+              } else {
+                scoreHTML = '<div class="big-score" style="color:var(--text-faint)">--</div>' +
+                  '<div class="score-label">' + L.healthNoData + '</div>';
+              }
+
+              // Heatmap
+              const heatmapHTML = buildHeatmap(mods);
+
+              el.innerHTML = '<h2>' + L.summaryTitle + '</h2>' +
+                '<div class="insight-grid">' +
+                  '<div class="insight-score">' + scoreHTML + '</div>' +
+                  '<div class="insight-load"><h3>' + L.moduleLoad + '</h3>' + metricsHTML + '</div>' +
+                  '<div class="insight-list"><h3>' + L.keyInsights + '</h3>' + insightsHTML + '</div>' +
+                '</div>' +
+                heatmapHTML;
+            }
+
+            // ===== Heatmap (7×24 grid) =====
+            function buildHeatmap(mods) {
+              const cpu = mods.find(m => m.kind === 'cpu');
+              if (!cpu || !cpu.points.length) return '';
+              const heat = Array.from({length: 7}, () => Array(24).fill(0));
+              const counts = Array.from({length: 7}, () => Array(24).fill(0));
+              cpu.points.forEach(p => {
+                const d = new Date(p.timestamp * 1000);
+                const day = d.getDay(), hour = d.getHours();
+                heat[day][hour] += p.avg;
+                counts[day][hour]++;
+              });
+              let maxVal = 1;
+              for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) {
+                if (counts[d][h] > 0) { heat[d][h] /= counts[d][h]; }
+                if (heat[d][h] > maxVal) maxVal = heat[d][h];
+              }
+              const dayLabels = [L.daySun, L.dayMon, L.dayTue, L.dayWed, L.dayThu, L.dayFri, L.daySat];
+              let rows = '';
+              for (let d = 0; d < 7; d++) {
+                rows += '<div class="heatmap-row">';
+                for (let h = 0; h < 24; h++) {
+                  const intensity = counts[d][h] > 0 ? heat[d][h] / maxVal : 0;
+                  const bg = intensity === 0 ? '' :
+                    'background:hsla(210,80%,' + (isDark ? (35 + 30 * intensity) : (65 - 35 * intensity)) + '%,' + (0.25 + 0.7 * intensity) + ')';
+                  const valText = counts[d][h] > 0 ? heat[d][h].toFixed(1) + '%' : '--';
+                  rows += '<div class="heatmap-cell" style="' + bg + '" data-day="' + d + '" data-hour="' + h + '" data-val="' + valText + '"></div>';
+                }
+                rows += '</div>';
+              }
+              const hourRow = '<div style="display:flex;gap:3px;margin-bottom:2px">' +
+                '<span style="width:0;display:inline-block"></span>' +
+                Array.from({length:24}, (_, i) =>
+                  '<span style="width:15px;text-align:center;display:inline-block;font-size:10px;color:var(--text-faint);' +
+                  ([0,3,6,9,12,15,18,21].includes(i) ? '' : 'visibility:hidden') + '">' + i + '</span>'
+                ).join('') + '</div>';
+
+              return '<div class="heatmap-wrap"><h3>' + L.heatmapTitle + '</h3>' +
+                '<div class="heatmap-container">' +
+                  '<div class="heatmap-labels">' + dayLabels.map(l => '<span>' + l + '</span>').join('') + '</div>' +
+                  '<div class="heatmap-grid-wrap">' + hourRow +
+                    '<div class="heatmap-rows">' + rows + '</div>' +
+                  '</div>' +
+                '</div>' +
+                '<div class="heatmap-legend"><span>' + L.heatmapLow + '</span>' +
+                  [0, 0.25, 0.5, 0.75, 1].map(v => {
+                    const bg = v === 0 ? 'background:var(--bg-inset)' :
+                      'background:hsla(210,80%,' + (isDark ? (35 + 30 * v) : (65 - 35 * v)) + '%,' + (0.25 + 0.7 * v) + ')';
+                    return '<div class="heatmap-cell" style="' + bg + '"></div>';
+                  }).join('') +
+                  '<span>' + L.heatmapHigh + '</span></div>' +
+                '<div class="heatmap-tip"></div>' +
+              '</div>';
+            }
+
+            function initHeatmapTooltip() {
+              const wrap = document.querySelector('.heatmap-wrap');
+              if (!wrap) return;
+              const tip = wrap.querySelector('.heatmap-tip');
+              const dayLabels = [L.daySun, L.dayMon, L.dayTue, L.dayWed, L.dayThu, L.dayFri, L.daySat];
+              wrap.addEventListener('mousemove', function(ev) {
+                const cell = ev.target.closest('.heatmap-cell[data-day]');
+                if (!cell || !tip) { if (tip) tip.style.opacity = 0; return; }
+                const d = +cell.dataset.day, h = +cell.dataset.hour;
+                const val = cell.dataset.val;
+                tip.innerHTML = dayLabels[d] + ' ' + h + ':00 — <b>' + val + '</b>';
+                const rect = cell.getBoundingClientRect();
+                const wrapRect = wrap.getBoundingClientRect();
+                tip.style.left = (rect.left - wrapRect.left + rect.width / 2) + 'px';
+                tip.style.top = (rect.top - wrapRect.top - 6) + 'px';
+                tip.style.opacity = 1;
+              });
+              wrap.addEventListener('mouseleave', function() { tip.style.opacity = 0; });
+            }
+
+            // ===== Histogram =====
+            function buildHistogram(container, m) {
+              if (!m.points.length) return;
+              const vals = m.points.map(p => p.avg);
+              const lo = Math.min.apply(null, vals), hi = Math.max.apply(null, vals);
+              const bucketCount = 12;
+              const range = hi - lo || 1;
+              const bucketW = range / bucketCount;
+              const buckets = new Array(bucketCount).fill(0);
+              vals.forEach(v => { const b = Math.min(Math.floor((v - lo) / bucketW), bucketCount - 1); buckets[b]++; });
+              const maxB = Math.max.apply(null, buckets);
+              const color = container.style.getPropertyValue('--accent-c').trim() || accentOf(m.kind);
+
+              const W = 600, H = 130, PAD_L = 8, PAD_R = 8, PAD_T = 10, PAD_B = 22;
+              const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+              const barW = (innerW / bucketCount) - 2;
+
+              let bars = '';
+              buckets.forEach((count, i) => {
+                const barH = maxB > 0 ? (count / maxB) * innerH : 0;
+                const x = PAD_L + i * (innerW / bucketCount) + 1;
+                const y = PAD_T + innerH - barH;
+                const pctLabel = (count / vals.length * 100).toFixed(0) + '%';
+                bars += '<rect class="hist-bar" x="' + x.toFixed(1) + '" y="' + y.toFixed(1) + '" ' +
+                  'width="' + barW.toFixed(1) + '" height="' + barH.toFixed(1) + '" ' +
+                  'fill="' + color + '" opacity="0.7" data-pct="' + pctLabel + '" ' +
+                  'data-range="' + (lo + i * bucketW).toFixed(1) + '-' + (lo + (i+1) * bucketW).toFixed(1) + '"/>';
+              });
+
+              // X-axis labels (every 3rd bucket)
+              let labels = '';
+              for (let i = 0; i <= bucketCount; i += 3) {
+                const x = PAD_L + i * (innerW / bucketCount);
+                const val = lo + i * bucketW;
+                labels += '<text class="hist-label" x="' + x.toFixed(1) + '" y="' + (H - 4) + '" text-anchor="middle">' +
+                  (m.kind === 'power' ? val.toFixed(0) + 'W' : val.toFixed(0) + '%') + '</text>';
+              }
+
+              const svgEl = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+              svgEl.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+              svgEl.setAttribute('preserveAspectRatio', 'none');
+              svgEl.innerHTML = bars + labels;
+
+              const wrap = document.createElement('div');
+              wrap.className = 'hist-wrap';
+              wrap.style.cssText = 'position:relative;height:130px;margin:6px -6px 0;border-radius:10px;padding:10px 8px 4px';
+              wrap.appendChild(svgEl);
+
+              const tip = document.createElement('div');
+              tip.className = 'hist-tooltip';
+              wrap.appendChild(tip);
+
+              wrap.addEventListener('mousemove', function(ev) {
+                const rect = svgEl.getBoundingClientRect();
+                const relX = (ev.clientX - rect.left) / rect.width;
+                const bucketIdx = Math.floor((relX * W - PAD_L) / (innerW / bucketCount));
+                if (bucketIdx >= 0 && bucketIdx < bucketCount && buckets[bucketIdx] > 0) {
+                  const barEl = svgEl.querySelectorAll('.hist-bar')[bucketIdx];
+                  const rangeText = barEl.getAttribute('data-range');
+                  const pctText = barEl.getAttribute('data-pct');
+                  tip.innerHTML = rangeText + '<br><b>' + buckets[bucketIdx] + '</b> ' + L.samples + ' (' + pctText + ')';
+                  tip.style.left = ((PAD_L + bucketIdx * (innerW / bucketCount) + innerW / bucketCount / 2) / W * 100) + '%';
+                  tip.style.top = ((PAD_T + innerH - (buckets[bucketIdx] / maxB * innerH)) / H * 100) + '%';
+                  tip.style.opacity = 1;
+                } else {
+                  tip.style.opacity = 0;
+                }
+              });
+              wrap.addEventListener('mouseleave', function() { tip.style.opacity = 0; });
+
+              container.appendChild(wrap);
             }
 
             // ===== Chart =====
@@ -702,6 +1160,18 @@ struct StatisticsReportHTMLBuilder {
                 }
 
                 const gid = 'g_' + m.kind + '_' + rangeId;
+                // Peak annotation
+                let peakAnno = '';
+                if (pts.length > 1) {
+                  let peakIdx = 0;
+                  for (let i = 1; i < pts.length; i++) { if (pts[i].peak > pts[peakIdx].peak) peakIdx = i; }
+                  const pk = pts[peakIdx];
+                  const px = X(peakIdx), py = Y(pk.peak);
+                  const peakLabel = pk.peak.toFixed(1) + (m.kind === 'power' ? 'W' : '%');
+                  peakAnno = '<line x1="' + px.toFixed(1) + '" y1="' + py.toFixed(1) + '" x2="' + px.toFixed(1) + '" y2="' + (PAD_T + innerH) + '" stroke="' + color + '" stroke-width="1" stroke-dasharray="2 2" opacity="0.5"/>' +
+                    '<circle cx="' + px.toFixed(1) + '" cy="' + py.toFixed(1) + '" r="3.5" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="1.5"/>' +
+                    '<text class="peak-label" x="' + px.toFixed(1) + '" y="' + (py - 8).toFixed(1) + '" text-anchor="middle" fill="' + color + '">' + peakLabel + '</text>';
+                }
                 host.innerHTML =
                   '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none">' +
                     '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1">' +
@@ -712,6 +1182,7 @@ struct StatisticsReportHTMLBuilder {
                     '<path d="' + area + '" fill="url(#' + gid + ')"/>' +
                     '<path d="' + line('peak') + '" fill="none" stroke="' + color + '" stroke-width="1.2" stroke-opacity="0.4" stroke-dasharray="3 3" stroke-linecap="round"/>' +
                     '<path d="' + line('avg') + '" fill="none" stroke="' + color + '" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>' +
+                    peakAnno +
                     '<line class="cursor-line" y1="' + PAD_T + '" y2="' + (PAD_T + innerH) + '"/>' +
                     '<circle class="cursor-dot" r="4" fill="' + color + '" stroke="var(--bg-elev)" stroke-width="2.2"/>' +
                   '</svg>' +
@@ -831,9 +1302,10 @@ struct StatisticsReportHTMLBuilder {
               tabs.querySelectorAll('button').forEach(b => b.onclick = () => { active = b.dataset.id; render(); });
 
               const range = payload.ranges.find(r => r.id === active) || payload.ranges[0];
-              renderHealth(range);
+              renderInsights(range);
+              initHeatmapTooltip();
               const cards = document.getElementById('cards');
-              cards.innerHTML = range.modules.map(m => {
+              cards.innerHTML = range.modules.map((m, idx) => {
                 const color = accentOf(m.kind);
                 const mets = metricsOf(m);
                 const metsHTML = mets.items.map(it =>
@@ -850,6 +1322,16 @@ struct StatisticsReportHTMLBuilder {
                         '<span><i class="dashed" style="border-color:' + color + '"></i>' + L.peak + '</span>'
                     ) +
                   '</div>' : '';
+                // Percentiles
+                const pvals = m.points.map(p => p.avg);
+                const pcts = percentiles(pvals);
+                const pUnit = m.kind === 'power' ? 'W' : '%';
+                const pctHTML = m.points.length > 1 ?
+                  '<div class="percentiles">' +
+                    '<div class="pct-badge"><div class="pct-label">P50</div><div class="pct-val">' + pcts.p50.toFixed(1) + pUnit + '</div></div>' +
+                    '<div class="pct-badge"><div class="pct-label">P90</div><div class="pct-val">' + pcts.p90.toFixed(1) + pUnit + '</div></div>' +
+                    '<div class="pct-badge"><div class="pct-label">P95</div><div class="pct-val">' + pcts.p95.toFixed(1) + pUnit + '</div></div>' +
+                  '</div>' : '';
                 return '<article class="card" style="--accent-c:' + color + '">' +
                   '<div class="card-head">' +
                     '<div class="card-icon">' +
@@ -859,12 +1341,36 @@ struct StatisticsReportHTMLBuilder {
                     '<h2>' + m.title + '</h2>' +
                   '</div>' +
                   '<div class="metrics' + (mets.dual ? ' dual' : '') + '">' + metsHTML + '</div>' +
-                  '<div class="chart"></div>' + legend +
+                  '<div class="card-tabs" data-idx="' + idx + '">' +
+                    '<button class="active" data-view="chart">' + L.tabTrend + '</button>' +
+                    '<button data-view="hist">' + L.tabDistribution + '</button>' +
+                  '</div>' +
+                  '<div class="chart" data-view="chart"></div>' +
+                  '<div class="hist-container" data-view="hist" style="display:none"></div>' +
+                  legend + pctHTML +
                 '</article>';
               }).join('');
 
+              // Tab switching
+              cards.querySelectorAll('.card-tabs').forEach(tabs => {
+                const card = tabs.closest('.card');
+                tabs.querySelectorAll('button').forEach(btn => {
+                  btn.onclick = () => {
+                    tabs.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const view = btn.dataset.view;
+                    card.querySelectorAll('.chart, .hist-container').forEach(el => {
+                      el.style.display = el.dataset.view === view ? '' : 'none';
+                    });
+                  };
+                });
+              });
+
               const cardEls = cards.querySelectorAll('.card');
-              range.modules.forEach((m, i) => buildChart(cardEls[i], m, range.id));
+              range.modules.forEach((m, i) => {
+                buildChart(cardEls[i], m, range.id);
+                buildHistogram(cardEls[i].querySelector('.hist-container'), m);
+              });
 
               // ===== Event Timeline =====
               renderTimeline();
@@ -892,9 +1398,9 @@ struct StatisticsReportHTMLBuilder {
                 const d = new Date(ev.timestamp * 1000);
                 let dayKey;
                 if (d >= todayStart) {
-                  dayKey = L.today || 'Today';
+                  dayKey = L.today;
                 } else if (d >= yesterdayStart) {
-                  dayKey = L.yesterday || 'Yesterday';
+                  dayKey = L.yesterday;
                 } else {
                   dayKey = d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
                 }
