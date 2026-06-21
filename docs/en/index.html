@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <style>
         /* ========================================
            CSS VARIABLES & RESET
@@ -80,6 +81,10 @@
                 --shadow-md: 0 4px 20px rgba(0,0,0,0.1);
                 --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
                 --shadow-glow: 0 0 60px rgba(46, 204, 113, 0.08);
+            }
+
+            .hero-title .gradient-text {
+                background: linear-gradient(135deg, #1d1d1f 0%, var(--brand-purple-dark) 100%);
             }
         }
 
@@ -804,6 +809,287 @@
             color: var(--ink-secondary);
         }
 
+        /* Memory module mockup */
+        .memory-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 16px;
+        }
+
+        .memory-icon {
+            width: 20px;
+            height: 20px;
+            color: var(--ink-secondary);
+            flex-shrink: 0;
+        }
+
+        .memory-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .memory-percent {
+            font-size: 15px;
+            font-weight: 700;
+            color: var(--ink);
+            margin-left: 4px;
+        }
+
+        .memory-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-left: 8px;
+        }
+
+        .memory-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            border-radius: 3px;
+            transition: width 0.8s ease;
+        }
+
+        .memory-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 24px;
+            margin-bottom: 16px;
+            padding: 0 4px;
+        }
+
+        .memory-stat-row {
+            display: contents;
+        }
+
+        .memory-stat-label {
+            font-size: 12px;
+            color: var(--ink-tertiary);
+        }
+
+        .memory-stat-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+            font-family: var(--font-mono);
+            text-align: right;
+        }
+
+        .memory-divider {
+            height: 1px;
+            background: var(--line);
+            margin: 12px 0;
+        }
+
+        .memory-app-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .memory-app-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 6px 8px;
+            border-radius: var(--radius-sm);
+            transition: background 0.2s ease;
+        }
+
+        .memory-app-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .app-icon {
+            width: 24px;
+            height: 24px;
+            flex-shrink: 0;
+            border-radius: 5px;
+        }
+
+        .app-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--ink);
+        }
+
+        .app-value {
+            font-size: 12px;
+            font-family: var(--font-mono);
+            color: var(--ink-secondary);
+        }
+
+        /* Card Stack - Poker fan effect */
+        .card-stack {
+            position: relative;
+            width: 340px;
+            height: 420px;
+            perspective: 1200px;
+        }
+
+        .card-stack-inner {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            transform-style: preserve-3d;
+        }
+
+        .monitor-card {
+            position: absolute;
+            width: 300px;
+            background: rgba(20, 20, 30, 0.95);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+            transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-origin: bottom center;
+            cursor: pointer;
+        }
+
+        .monitor-card:nth-child(1) {
+            z-index: 3;
+            transform: translateX(20px) translateY(40px) rotate(-5deg);
+        }
+
+        .monitor-card:nth-child(2) {
+            z-index: 2;
+            transform: translateX(0) translateY(50px) rotate(0deg);
+        }
+
+        .monitor-card:nth-child(3) {
+            z-index: 1;
+            transform: translateX(-20px) translateY(60px) rotate(5deg);
+        }
+
+        .card-stack:hover .monitor-card:nth-child(1) {
+            transform: translateX(-160px) translateY(10px) rotate(-15deg);
+        }
+
+        .card-stack:hover .monitor-card:nth-child(2) {
+            transform: translateX(0) translateY(0) rotate(0deg);
+        }
+
+        .card-stack:hover .monitor-card:nth-child(3) {
+            transform: translateX(160px) translateY(10px) rotate(15deg);
+        }
+
+        .monitor-card-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .monitor-card-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        .monitor-card-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--ink);
+        }
+
+        .monitor-card-percent {
+            margin-left: auto;
+            font-size: 14px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+
+        .monitor-card-body {
+            padding: 14px 16px;
+        }
+
+        .monitor-card-stats {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 6px 16px;
+            margin-bottom: 12px;
+        }
+
+        .monitor-card-stat {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .monitor-card-stat-label {
+            font-size: 11px;
+            color: var(--ink-tertiary);
+        }
+
+        .monitor-card-stat-value {
+            font-size: 12px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            color: var(--ink);
+        }
+
+        .monitor-card-divider {
+            height: 1px;
+            background: var(--line);
+            margin: 10px 0;
+        }
+
+        .monitor-card-apps {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .monitor-card-app {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+        }
+
+        .monitor-card-app-icon {
+            width: 20px;
+            height: 20px;
+            border-radius: 5px;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .monitor-card-app-icon svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .monitor-card-app-name {
+            flex: 1;
+            font-size: 12px;
+            color: var(--ink);
+        }
+
+        .monitor-card-app-value {
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--ink-secondary);
+        }
+
+        /* Card accent colors */
+        .monitor-card.cpu { border-top: 2px solid var(--c-cpu); }
+        .monitor-card.cpu .monitor-card-percent { color: var(--c-cpu); }
+        .monitor-card.storage { border-top: 2px solid var(--c-storage); }
+        .monitor-card.storage .monitor-card-percent { color: var(--c-storage); }
+        .monitor-card.network { border-top: 2px solid var(--c-network); }
+        .monitor-card.network .monitor-card-percent { color: var(--c-network); }
+
         /* Health score mockup */
         .health-mockup {
             display: flex;
@@ -1236,6 +1522,26 @@
             color: var(--ink-secondary);
         }
 
+        .event-icon {
+            width: 14px;
+            height: 14px;
+            display: inline-block;
+            vertical-align: -2px;
+            margin-right: 4px;
+        }
+
+        .timeline-event.warning .event-icon {
+            color: var(--c-fair);
+        }
+
+        .timeline-event.critical .event-icon {
+            color: var(--c-critical);
+        }
+
+        .timeline-event.info .event-icon {
+            color: var(--c-good);
+        }
+
         /* ========================================
            DOWNLOAD CTA
            ======================================== */
@@ -1538,6 +1844,17 @@
                 background: var(--paper);
                 border: 1px solid var(--line);
             }
+            .monitor-card {
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+            }
+            .monitor-card-header {
+                border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            }
+            .monitor-card-app-icon {
+                background: rgba(0, 0, 0, 0.05) !important;
+            }
         }
     </style>
 </head>
@@ -1839,41 +2156,192 @@
                     </ul>
                 </div>
                 <div class="showcase-visual showcase-visual-right">
-                    <div class="mockup-window">
-                        <div class="mockup-window-header">
-                            <div class="mockup-window-dots">
-                                <span class="mockup-window-dot red"></span>
-                                <span class="mockup-window-dot yellow"></span>
-                                <span class="mockup-window-dot green"></span>
+                    <div class="card-stack">
+                        <div class="card-stack-inner">
+                            <!-- CPU Card -->
+                            <div class="monitor-card cpu">
+                                <div class="monitor-card-header">
+                                    <svg class="monitor-card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-cpu)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                        <rect x="9" y="9" width="6" height="6"/>
+                                        <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                                    </svg>
+                                    <span class="monitor-card-title">CPU</span>
+                                    <span class="monitor-card-percent">22%</span>
+                                </div>
+                                <div class="monitor-card-body">
+                                    <div class="monitor-card-stats">
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">System</span>
+                                            <span class="monitor-card-stat-value">3%</span>
+                                        </div>
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">User</span>
+                                            <span class="monitor-card-stat-value">18%</span>
+                                        </div>
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">Idle</span>
+                                            <span class="monitor-card-stat-value">78%</span>
+                                        </div>
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">Temp</span>
+                                            <span class="monitor-card-stat-value">78°C</span>
+                                        </div>
+                                    </div>
+                                    <div class="monitor-card-divider"></div>
+                                    <div class="monitor-card-apps">
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #1A1A2E">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="#6366F1" stroke-width="2.5">
+                                                    <path d="M4 4 L12 20 L20 4"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">Zed</span>
+                                            <span class="monitor-card-app-value">100.7%</span>
+                                        </div>
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                                    <circle cx="12" cy="12" r="3"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">WindowServer</span>
+                                            <span class="monitor-card-app-value">43.2%</span>
+                                        </div>
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="9"/>
+                                                    <path d="M12 6 L12 12 L16 14"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">HagimiMonitor</span>
+                                            <span class="monitor-card-app-value">38.7%</span>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
-                            <span class="mockup-window-title">HagimiMonitor</span>
-                        </div>
-                        <div class="mockup-window-body">
-                            <div class="process-list">
-                                <div class="process-item">
-                                    <div class="process-icon" style="background: linear-gradient(135deg, #ff6b6b, #ff8a8a)">⚡</div>
-                                    <span class="process-name">Zed</span>
-                                    <span class="process-value">100.6%</span>
+
+                            <!-- Storage Card -->
+                            <div class="monitor-card storage">
+                                <div class="monitor-card-header">
+                                    <svg class="monitor-card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-storage)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                                        <circle cx="12" cy="15" r="2"/>
+                                        <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                                    </svg>
+                                    <span class="monitor-card-title">Storage</span>
+                                    <span class="monitor-card-percent">41%</span>
                                 </div>
-                                <div class="process-item">
-                                    <div class="process-icon" style="background: linear-gradient(135deg, #a855f7, #c084fc)">🖥</div>
-                                    <span class="process-name">WindowServer</span>
-                                    <span class="process-value">60.3%</span>
+                                <div class="monitor-card-body">
+                                    <div class="monitor-card-stats">
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">Used</span>
+                                            <span class="monitor-card-stat-value">403.63 GB</span>
+                                        </div>
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">Free</span>
+                                            <span class="monitor-card-stat-value">591.04 GB</span>
+                                        </div>
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">Total</span>
+                                            <span class="monitor-card-stat-value">994.66 GB</span>
+                                        </div>
+                                    </div>
+                                    <div class="monitor-card-divider"></div>
+                                    <div class="monitor-card-apps">
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #00A2E8">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="5"/>
+                                                    <path d="M12 4 L12 7"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">Safari</span>
+                                            <span class="monitor-card-app-value">↑332 KB ↓0 KB</span>
+                                        </div>
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #07C160">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                                    <path d="M12 4 C7 4 3 8 3 12 C3 16 7 20 12 20"/>
+                                                    <circle cx="16" cy="8" r="2" fill="white"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">WeChat IME</span>
+                                            <span class="monitor-card-app-value">↑70 KB ↓180 KB</span>
+                                        </div>
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
+                                                    <circle cx="12" cy="12" r="9"/>
+                                                    <path d="M12 6 L12 12 L16 14"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">HagimiMonitor</span>
+                                            <span class="monitor-card-app-value">↑0 KB ↓98 KB</span>
+                                        </div>
+                                    </div>
                                 </div>
-                                <div class="process-item">
-                                    <div class="process-icon" style="background: linear-gradient(135deg, #3b82f6, #60a5fa)">📊</div>
-                                    <span class="process-name">HagimiMonitor</span>
-                                    <span class="process-value">43.4%</span>
+                            </div>
+
+                            <!-- Network Card -->
+                            <div class="monitor-card network">
+                                <div class="monitor-card-header">
+                                    <svg class="monitor-card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-network)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                                        <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                                        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                                        <line x1="12" y1="20" x2="12.01" y2="20"/>
+                                    </svg>
+                                    <span class="monitor-card-title">Network</span>
+                                    <span class="monitor-card-percent" style="font-size: 12px">Wi-Fi</span>
                                 </div>
-                                <div class="process-item">
-                                    <div class="process-icon" style="background: linear-gradient(135deg, #f59e0b, #fbbf24)">🪟</div>
-                                    <span class="process-name">WindowManager</span>
-                                    <span class="process-value">27.0%</span>
-                                </div>
-                                <div class="process-item">
-                                    <div class="process-icon" style="background: linear-gradient(135deg, #06b6d4, #22d3ee)">🎵</div>
-                                    <span class="process-name">TikTok</span>
-                                    <span class="process-value">22.9%</span>
+                                <div class="monitor-card-body">
+                                    <div class="monitor-card-stats">
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">IP</span>
+                                            <span class="monitor-card-stat-value">192.168.31.122</span>
+                                        </div>
+                                        <div class="monitor-card-stat">
+                                            <span class="monitor-card-stat-label">Public IP</span>
+                                            <span class="monitor-card-stat-value">66.90.98.146</span>
+                                        </div>
+                                    </div>
+                                    <div class="monitor-card-divider"></div>
+                                    <div class="monitor-card-apps">
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
+                                                    <circle cx="12" cy="12" r="3"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">mihomo</span>
+                                            <span class="monitor-card-app-value">↑304 KB ↓92 KB</span>
+                                        </div>
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #1a1a1a">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
+                                                    <path d="M12 2 L2 7 L12 12 L22 7 Z"/>
+                                                    <path d="M2 17 L12 22 L22 17"/>
+                                                    <path d="M2 12 L12 17 L22 12"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">ClashMac</span>
+                                            <span class="monitor-card-app-value">↑0 KB ↓212 KB</span>
+                                        </div>
+                                        <div class="monitor-card-app">
+                                            <div class="monitor-card-app-icon" style="background: #07C160">
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                                                    <path d="M12 4 C7 4 3 8 3 12 C3 16 7 20 12 20"/>
+                                                    <circle cx="16" cy="8" r="2" fill="white"/>
+                                                </svg>
+                                            </div>
+                                            <span class="monitor-card-app-name">WeChat IME</span>
+                                            <span class="monitor-card-app-value">↑102 KB ↓7 KB</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2072,28 +2540,28 @@
                         <div class="timeline-day-label">Today</div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">⚡ Network Traffic Peak</span>
+                                <span class="timeline-event-title"><i data-lucide="zap" class="event-icon"></i> Network Traffic Peak</span>
                                 <span class="timeline-event-time">18:25</span>
                             </div>
                             <div class="timeline-event-detail">240.0 MB</div>
                         </div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">⚡ Network Traffic Peak</span>
+                                <span class="timeline-event-title"><i data-lucide="zap" class="event-icon"></i> Network Traffic Peak</span>
                                 <span class="timeline-event-time">18:15</span>
                             </div>
                             <div class="timeline-event-detail">360.9 MB</div>
                         </div>
                         <div class="timeline-event critical">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">🔥 Memory Pressure Increased</span>
+                                <span class="timeline-event-title"><i data-lucide="flame" class="event-icon"></i> Memory Pressure Increased</span>
                                 <span class="timeline-event-time">18:13</span>
                             </div>
                             <div class="timeline-event-detail">Normal → Warning · Top Processes: Zed, WindowServer, IntelliJ IDEA</div>
                         </div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">💾 Disk I/O Peak</span>
+                                <span class="timeline-event-title"><i data-lucide="hard-drive" class="event-icon"></i> Disk I/O Peak</span>
                                 <span class="timeline-event-time">18:05</span>
                             </div>
                             <div class="timeline-event-detail">1.43 GB</div>
@@ -2103,14 +2571,14 @@
                         <div class="timeline-day-label">Yesterday</div>
                         <div class="timeline-event info">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">✓ Memory Pressure Relieved</span>
+                                <span class="timeline-event-title"><i data-lucide="check-circle-2" class="event-icon"></i> Memory Pressure Relieved</span>
                                 <span class="timeline-event-time">17:57</span>
                             </div>
                             <div class="timeline-event-detail">Warning → Normal · Top Processes: Zed, ecosystemd, trustd</div>
                         </div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">⚡ Network Traffic Peak</span>
+                                <span class="timeline-event-title"><i data-lucide="zap" class="event-icon"></i> Network Traffic Peak</span>
                                 <span class="timeline-event-time">17:55</span>
                             </div>
                             <div class="timeline-event-detail">127.7 MB</div>
@@ -2246,6 +2714,11 @@
                 });
             });
         });
+
+        // Initialize Lucide icons
+        if (typeof lucide !== 'undefined') {
+            lucide.createIcons();
+        }
 
         // Smooth scroll for nav links
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {

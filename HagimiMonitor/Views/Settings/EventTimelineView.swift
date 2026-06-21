@@ -142,13 +142,12 @@ struct EventTimelineDay: View {
                 }
             }
             .overlay(alignment: .leading) {
-                // Vertical line
+                // Vertical line - aligned to the center of the icon column
                 GeometryReader { geo in
-                    let rowHeight: CGFloat = 44
-                    let lineHeight = CGFloat(events.count) * rowHeight
+                    let lineHeight = geo.size.height - 16
                     Rectangle()
                         .fill(Color.secondary.opacity(0.2))
-                        .frame(width: 2, height: max(0, lineHeight - 16))
+                        .frame(width: 2, height: max(0, lineHeight))
                         .offset(x: 5, y: 8)
                 }
                 .frame(width: 12)
