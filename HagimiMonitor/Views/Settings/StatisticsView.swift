@@ -304,7 +304,7 @@ private struct SummaryCard: View {
             return AnyView(EmptyView())
         }
         return AnyView(
-            HStack(alignment: .top, spacing: 10) {
+            HStack(alignment: .top, spacing: 0) {
                 dualMetricColumn(dual.first)
                 Divider()
                     .opacity(0.5)
@@ -330,7 +330,7 @@ private struct SummaryCard: View {
                 Text(metric.number)
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.55)
+                    .minimumScaleFactor(0.7)
                     .lineLimit(1)
                     .foregroundStyle(hasData ? .primary : .tertiary)
                 if !metric.unit.isEmpty {
@@ -342,6 +342,7 @@ private struct SummaryCard: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
     }
 
     private var iconBadge: some View {
