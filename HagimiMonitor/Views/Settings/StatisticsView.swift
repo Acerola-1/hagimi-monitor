@@ -43,16 +43,9 @@ struct StatisticsView: View {
     }
 
     private var header: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .center, spacing: 14) {
-                Text(String(localized: "stats.summary.title"))
-                    .font(.title3.weight(.semibold))
-
-                Spacer(minLength: 12)
-
-                rangePicker
-                reportButton
-            }
+        HStack(alignment: .center, spacing: 14) {
+            rangePicker
+            reportButton
         }
     }
 
