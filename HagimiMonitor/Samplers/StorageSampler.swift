@@ -1,5 +1,6 @@
 import Foundation
 import IOKit
+import DiskArbitration
 import OSLog
 
 final class StorageSampler: MonitorSampler {
@@ -59,38 +60,52 @@ final class StorageSampler: MonitorSampler {
         }
     }
 
-    /// 从 IOBlockStorageDriver 读取磁盘累计读写字节
+    /// 通过 DiskArbitration + IORegistry 读取磁盘累计读写字节
+    /// 使用与 Stats app 相同的方式：通过 BSD name 找到 IOMedia，向上遍历到父设备读取 Statistics
     private func readDiskIOStats() -> (bytesRead: Int64, bytesWritten: Int64)? {
-        var iterator: io_iterator_t = 0
-        let matching = IOServiceMatching("IOBlockStorageDriver")
-        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
-            return nil
-        }
-        defer { IOObjectRelease(iterator) }
+        guard let session = DASessionCreate(kCFAllocatorDefault) else { return nil }
 
-        var totalRead: Int64 = 0
-        var totalWritten: Int64 = 0
+        let rootURL = URL(fileURLWithPath: "/")
+        guard let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, rootURL as CFURL),
+              let bsdName = DADiskGetBSDName(disk) else { return nil }
 
-        var service = IOIteratorNext(iterator)
-        while service != 0 {
-            defer { IOObjectRelease(service) }
+        let bsdString = String(cString: bsdName)
+        let service = IOServiceGetMatchingService(kIOMainPortDefault, IOBSDNameMatching(kIOMainPortDefault, 0, bsdString))
+        guard service != 0 else { return nil }
+        defer { IOObjectRelease(service) }
 
-            if let properties = IORegistryEntryCreateCFProperty(service, "Statistics" as CFString, kCFAllocatorDefault, 0)?.takeRetainedValue() as? [String: Any] {
-                if let read = properties["Bytes (Read)"] as? Int64 {
+        // 向上遍历找到包含 Statistics 的父设备
+        var parent: io_registry_entry_t = 0
+        var current = service
+        for _ in 0..<5 {
+            if IORegistryEntryGetParentEntry(current, kIOServicePlane, &parent) != KERN_SUCCESS { break }
+            if current != service { IOObjectRelease(current) }
+
+            var propsRef: Unmanaged<CFMutableDictionary>? = nil
+            if IORegistryEntryCreateCFProperties(parent, &propsRef, kCFAllocatorDefault, 0) == KERN_SUCCESS,
+               let props = propsRef?.takeRetainedValue() as? [String: Any],
+               let stats = props["Statistics"] as? [String: Any] {
+                var totalRead: Int64 = 0
+                var totalWritten: Int64 = 0
+                if let read = stats["Bytes (Read)"] as? Int64 {
                     totalRead += read
-                } else if let read = properties["Bytes (Read)"] as? NSNumber {
+                } else if let read = stats["Bytes (Read)"] as? NSNumber {
                     totalRead += read.int64Value
                 }
-                if let written = properties["Bytes (Write)"] as? Int64 {
+                if let written = stats["Bytes (Write)"] as? Int64 {
                     totalWritten += written
-                } else if let written = properties["Bytes (Write)"] as? NSNumber {
+                } else if let written = stats["Bytes (Write)"] as? NSNumber {
                     totalWritten += written.int64Value
                 }
+                if totalRead > 0 || totalWritten > 0 {
+                    IOObjectRelease(parent)
+                    return (totalRead, totalWritten)
+                }
             }
-            service = IOIteratorNext(iterator)
+            current = parent
         }
-
-        return (bytesRead: totalRead, bytesWritten: totalWritten)
+        if current != service { IOObjectRelease(current) }
+        return nil
     }
 
     private func externalVolumesJSON() -> String? {

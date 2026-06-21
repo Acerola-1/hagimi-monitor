@@ -825,7 +825,8 @@ struct StatisticsReportHTMLBuilder {
               // Key metrics panel (only when data exists)
               let metricsHTML = '';
               if (hasData) {
-                metricsHTML += '<div style="margin-bottom:12px"><div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:' + accentOf('cpu') + '">' + overallLoad.toFixed(1) + '%</div></div>';
+                const loadColor = overallLoad > 70 ? (isDark ? '#ff6961' : '#d94848') : overallLoad > 40 ? (isDark ? '#ffb340' : '#d4a843') : (isDark ? '#5be17b' : '#2f9e64');
+                metricsHTML += '<div style="margin-bottom:12px"><div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:' + loadColor + '">' + overallLoad.toFixed(1) + '%</div></div>';
                 loadMods.forEach(m => {
                   const c = accentOf(m.kind);
                   metricsHTML += '<div class="insight-load-item"><span class="il-name">' + m.title + '</span>' +
