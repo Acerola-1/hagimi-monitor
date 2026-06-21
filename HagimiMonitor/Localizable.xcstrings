@@ -5165,19 +5165,19 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "CPU 负载热力图"
+            "value": "负载热力图"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "CPU Load Heatmap"
+            "value": "Load Heatmap"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "CPU負荷ヒートマップ"
+            "value": "負荷ヒートマップ"
           }
         }
       }

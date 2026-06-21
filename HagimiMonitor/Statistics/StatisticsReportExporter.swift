@@ -583,9 +583,12 @@ struct StatisticsReportHTMLBuilder {
             .insight-score .score-label { font-size: 12px; color: var(--text-dim);
               font-weight: 600; letter-spacing: .02em; }
             .score-capped { font-size: 10px; color: #d94848; font-weight: 600; }
-            .score-dots { display: flex; gap: 5px; margin-top: 4px; }
-            .score-dot { width: 8px; height: 8px; border-radius: 50%;
-              box-shadow: 0 0 0 2px var(--bg-elev); }
+            .score-dots { display: flex; gap: 5px; margin-top: 4px; flex-wrap: wrap;
+              justify-content: center; }
+            .score-badge { display: inline-flex; align-items: center; gap: 4px;
+              font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 6px;
+              border: 1px solid; background: var(--bg-soft); }
+            .score-badge-dot { width: 6px; height: 6px; border-radius: 50%; flex: none; }
             .insight-load { background: var(--bg-elev); border: 1px solid var(--border);
               border-radius: 18px; padding: 22px; box-shadow: var(--shadow-md); }
             .insight-load h3 { margin: 0 0 14px; font-size: 13px; color: var(--text-dim);
@@ -613,32 +616,34 @@ struct StatisticsReportHTMLBuilder {
             /* ===== Heatmap ===== */
             .heatmap-wrap { margin-top: 20px; background: var(--bg-elev);
               border: 1px solid var(--border); border-radius: 18px; padding: 22px;
-              box-shadow: var(--shadow-md); }
+              box-shadow: var(--shadow-md); position: relative; }
             .heatmap-wrap h3 { margin: 0 0 14px; font-size: 13px; color: var(--text-dim);
               font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
-            .heatmap-container { display: flex; gap: 8px; align-items: flex-start;
-              overflow-x: auto; }
-            .heatmap-labels { display: flex; flex-direction: column; gap: 3px;
-              padding-top: 22px; flex: none; }
-            .heatmap-labels span { height: 15px; display: flex; align-items: center;
+            .heatmap-tabs { margin-bottom: 14px; }
+            .heatmap-section { margin-bottom: 18px; }
+            .heatmap-section:last-child { margin-bottom: 0; }
+            .heatmap-section-title { font-size: 12px; font-weight: 600; color: var(--text);
+              margin-bottom: 8px; }
+            .heatmap-container { display: flex; gap: 6px; align-items: flex-start; }
+            .heatmap-labels { display: flex; flex-direction: column; gap: 2px;
+              padding-top: 20px; flex: none; }
+            .heatmap-labels span { display: flex; align-items: center; aspect-ratio: 1;
               font-size: 10px; color: var(--text-faint); font-weight: 500;
               font-variant-numeric: tabular-nums; }
             .heatmap-grid-wrap { flex: 1; min-width: 0; }
-            .heatmap-days { display: flex; gap: 3px; margin-bottom: 4px; padding-left: 0; }
-            .heatmap-days span { width: 15px; text-align: center; font-size: 10px;
-              color: var(--text-faint); font-weight: 500; }
-            .heatmap-rows { display: flex; flex-direction: column; gap: 3px; }
-            .heatmap-row { display: flex; gap: 3px; }
-            .heatmap-cell { width: 15px; height: 15px; border-radius: 3px;
-              background: var(--bg-inset); transition: background .15s; }
+            .heatmap-rows { display: flex; flex-direction: column; gap: 2px; }
+            .heatmap-row { display: flex; gap: 2px; }
+            .heatmap-cell { flex: 1; aspect-ratio: 1; border-radius: 3px;
+              background: var(--bg-inset); transition: background .15s; min-width: 0; }
             .heatmap-cell:hover { outline: 2px solid var(--text-faint); outline-offset: 1px; }
             .heatmap-legend { display: flex; align-items: center; gap: 4px;
               margin-top: 10px; justify-content: flex-end; }
             .heatmap-legend span { font-size: 10px; color: var(--text-faint); }
-            .heatmap-legend .heatmap-cell { cursor: default; }
+            .heatmap-legend .heatmap-cell { cursor: default; width: 14px; height: 14px;
+              flex: none; aspect-ratio: auto; }
             .heatmap-legend .heatmap-cell:hover { outline: none; }
-            .heatmap-tip { position: absolute; pointer-events: none; opacity: 0;
-              transform: translate(-50%, calc(-100% - 6px));
+            .heatmap-tip { position: fixed; pointer-events: none; opacity: 0;
+              transform: translate(-50%, calc(-100% - 8px));
               background: var(--text); color: var(--bg-elev);
               padding: 6px 10px; border-radius: 8px; font-size: 11.5px;
               white-space: nowrap; box-shadow: 0 6px 16px rgba(0,0,0,.2);
@@ -805,48 +810,61 @@ struct StatisticsReportHTMLBuilder {
               const mods = range.modules || [];
               const hs = range.healthScore;
 
-              // Overall load (CPU+GPU+Memory avg)
+              // Check if any module has actual data
+              const hasData = mods.some(m => m.points.length > 0);
+
+              // Overall load (weighted + softmax, same as main panel)
               const loadMods = mods.filter(m => ['cpu','gpu','memory'].includes(m.kind));
-              const overallLoad = loadMods.length ? loadMods.reduce((s, m) => s + m.avg, 0) / loadMods.length : 0;
+              const cpuAvg = (mods.find(m => m.kind === 'cpu') || {avg: 0}).avg;
+              const gpuAvg = (mods.find(m => m.kind === 'gpu') || {avg: 0}).avg;
+              const memAvg = (mods.find(m => m.kind === 'memory') || {avg: 0}).avg;
+              const rawScore = Math.min(Math.max(cpuAvg * 0.5 + gpuAvg * 0.3 + memAvg * 0.2, 0), 99.9) / 100;
+              const boosted = Math.pow(rawScore, 1.3);
+              const overallLoad = rawScore > 0 ? (boosted / (boosted + Math.pow(1 - rawScore, 1.3))) * 100 : 0;
 
-              // Key metrics panel
+              // Key metrics panel (only when data exists)
               let metricsHTML = '';
-              metricsHTML += '<div style="margin-bottom:12px"><div style="font-size:11px;color:var(--text-dim);font-weight:600;margin-bottom:4px">' + L.moduleLoad.toUpperCase() + '</div>' +
-                '<div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:' + accentOf('cpu') + '">' + overallLoad.toFixed(1) + '%</div></div>';
-              loadMods.forEach(m => {
-                const c = accentOf(m.kind);
-                metricsHTML += '<div class="insight-load-item"><span class="il-name">' + m.title + '</span>' +
-                  '<span class="il-bar"><span class="il-bar-fill" style="width:' + Math.min(m.avg, 100) + '%;background:' + c + '"></span></span>' +
-                  '<span class="il-val" style="color:' + c + '">' + m.avg.toFixed(1) + '%</span></div>';
-              });
+              if (hasData) {
+                metricsHTML += '<div style="margin-bottom:12px"><div style="font-size:36px;font-weight:700;font-variant-numeric:tabular-nums;color:' + accentOf('cpu') + '">' + overallLoad.toFixed(1) + '%</div></div>';
+                loadMods.forEach(m => {
+                  const c = accentOf(m.kind);
+                  metricsHTML += '<div class="insight-load-item"><span class="il-name">' + m.title + '</span>' +
+                    '<span class="il-bar"><span class="il-bar-fill" style="width:' + Math.min(m.avg, 100) + '%;background:' + c + '"></span></span>' +
+                    '<span class="il-val" style="color:' + c + '">' + m.avg.toFixed(1) + '%</span></div>';
+                });
+              } else {
+                metricsHTML = '<div style="color:var(--text-faint);font-size:13px;padding:20px 0">' + L.empty + '</div>';
+              }
 
-              // Insights
+              // Insights (only when data exists)
               const insights = [];
-              if (overallLoad > 70) insights.push(L.insightLoadHigh.replace('{value}', overallLoad.toFixed(0)));
-              else if (overallLoad > 40) insights.push(L.insightLoadMedium.replace('{value}', overallLoad.toFixed(0)));
-              else insights.push(L.insightLoadLow.replace('{value}', overallLoad.toFixed(0)));
+              if (hasData) {
+                if (overallLoad > 70) insights.push(L.insightLoadHigh.replace('{value}', overallLoad.toFixed(0)));
+                else if (overallLoad > 40) insights.push(L.insightLoadMedium.replace('{value}', overallLoad.toFixed(0)));
+                else insights.push(L.insightLoadLow.replace('{value}', overallLoad.toFixed(0)));
 
-              let peakMod = null, peakVal = 0;
-              mods.forEach(m => { if (m.peak > peakVal && m.kind !== 'network' && m.kind !== 'storage') { peakVal = m.peak; peakMod = m; } });
-              if (peakMod) {
-                const peakPt = peakMod.points.reduce((best, p) => p.peak > best.peak ? p : best, peakMod.points[0]);
-                const peakTime = new Date(peakPt.timestamp * 1000).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-                insights.push(L.insightPeak.replace('{module}', peakMod.title).replace('{value}', peakVal.toFixed(1) + '%').replace('{time}', peakTime));
+                let peakMod = null, peakVal = 0;
+                mods.forEach(m => { if (m.peak > peakVal && m.kind !== 'network' && m.kind !== 'storage') { peakVal = m.peak; peakMod = m; } });
+                if (peakMod) {
+                  const peakPt = peakMod.points.reduce((best, p) => p.peak > best.peak ? p : best, peakMod.points[0]);
+                  const peakTime = new Date(peakPt.timestamp * 1000).toLocaleString(locale, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  insights.push(L.insightPeak.replace('{module}', peakMod.title).replace('{value}', peakVal.toFixed(1) + '%').replace('{time}', peakTime));
+                }
+
+                let busiest = null, busiestAvg = 0;
+                mods.forEach(m => { if (m.avg > busiestAvg && m.kind !== 'network' && m.kind !== 'storage') { busiestAvg = m.avg; busiest = m; } });
+                if (busiest && busiestAvg > 30) insights.push(L.insightBusiest.replace('{module}', busiest.title).replace('{value}', busiestAvg.toFixed(1)));
+
+                if (hs && hs.isDataAvailable) {
+                  const lvl = hs.level || levelOf(hs.score);
+                  insights.push(L.insightHealthScore.replace('{score}', Math.round(hs.score)).replace('{level}', LEVEL_LABELS[lvl] || lvl));
+                  if (hs.thermalCapped) insights.push(L.insightThermal);
+                }
+
+                // Find peak event
+                const severeEvents = (payload.events || []).filter(e => e.severity >= 2);
+                if (severeEvents.length > 0) insights.push(L.insightSevereEvents.replace('{count}', severeEvents.length));
               }
-
-              let busiest = null, busiestAvg = 0;
-              mods.forEach(m => { if (m.avg > busiestAvg && m.kind !== 'network' && m.kind !== 'storage') { busiestAvg = m.avg; busiest = m; } });
-              if (busiest && busiestAvg > 30) insights.push(L.insightBusiest.replace('{module}', busiest.title).replace('{value}', busiestAvg.toFixed(1)));
-
-              if (hs && hs.isDataAvailable) {
-                const lvl = hs.level || levelOf(hs.score);
-                insights.push(L.insightHealthScore.replace('{score}', Math.round(hs.score)).replace('{level}', LEVEL_LABELS[lvl] || lvl));
-                if (hs.thermalCapped) insights.push(L.insightThermal);
-              }
-
-              // Find peak event
-              const severeEvents = (payload.events || []).filter(e => e.severity >= 2);
-              if (severeEvents.length > 0) insights.push(L.insightSevereEvents.replace('{count}', severeEvents.length));
 
               const insightsHTML = '<ul>' + insights.map(i => '<li>' + i + '</li>').join('') + '</ul>';
 
@@ -857,12 +875,13 @@ struct StatisticsReportHTMLBuilder {
                 const lColor = LEVEL_COLORS[lvl] || '#5856d6';
                 const circ = 2 * Math.PI * 36;
                 const off = circ * (1 - Math.min(hs.score, 100) / 100);
-                // Sub-dimension dots
+                // Sub-dimension badges
                 let dimDots = '';
                 (hs.dimensions || []).forEach(d => {
                   if (d.isAvailable === false) return;
                   const dc = LEVEL_COLORS[d.level] || LEVEL_COLORS.good;
-                  dimDots += '<span class="score-dot" style="background:' + dc + '" title="' + d.name + '"></span>';
+                  dimDots += '<span class="score-badge" style="color:' + dc + ';border-color:' + dc + '">' +
+                    '<span class="score-badge-dot" style="background:' + dc + '"></span>' + d.name + '</span>';
                 });
                 const cappedBadge = hs.thermalCapped ? '<div class="score-capped">⚠ ' + L.healthThermalCapped + '</div>' : '';
                 scoreHTML =
@@ -888,59 +907,84 @@ struct StatisticsReportHTMLBuilder {
               // Heatmap
               const heatmapHTML = buildHeatmap(mods);
 
+              // Hide entire section when no data at all
+              if (!hasData && !(hs && hs.isDataAvailable)) {
+                el.innerHTML = '';
+                return;
+              }
+
+              const insightsListHTML = insights.length ? '<div class="insight-list"><h3>' + L.keyInsights + '</h3>' + insightsHTML + '</div>' : '';
               el.innerHTML = '<h2>' + L.summaryTitle + '</h2>' +
                 '<div class="insight-grid">' +
                   '<div class="insight-score">' + scoreHTML + '</div>' +
                   '<div class="insight-load"><h3>' + L.moduleLoad + '</h3>' + metricsHTML + '</div>' +
-                  '<div class="insight-list"><h3>' + L.keyInsights + '</h3>' + insightsHTML + '</div>' +
+                  insightsListHTML +
                 '</div>' +
                 heatmapHTML;
             }
 
-            // ===== Heatmap (7×24 grid) =====
+            // ===== Heatmap (7×24 grid, per module, tabbed) =====
             function buildHeatmap(mods) {
-              const cpu = mods.find(m => m.kind === 'cpu');
-              if (!cpu || !cpu.points.length) return '';
-              const heat = Array.from({length: 7}, () => Array(24).fill(0));
-              const counts = Array.from({length: 7}, () => Array(24).fill(0));
-              cpu.points.forEach(p => {
-                const d = new Date(p.timestamp * 1000);
-                const day = d.getDay(), hour = d.getHours();
-                heat[day][hour] += p.avg;
-                counts[day][hour]++;
-              });
-              let maxVal = 1;
-              for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) {
-                if (counts[d][h] > 0) { heat[d][h] /= counts[d][h]; }
-                if (heat[d][h] > maxVal) maxVal = heat[d][h];
-              }
+              const heatMods = mods.filter(m => m.points.length > 0 && m.kind !== 'network' && m.kind !== 'storage');
+              if (!heatMods.length) return '';
+
               const dayLabels = [L.daySun, L.dayMon, L.dayTue, L.dayWed, L.dayThu, L.dayFri, L.daySat];
-              let rows = '';
-              for (let d = 0; d < 7; d++) {
-                rows += '<div class="heatmap-row">';
-                for (let h = 0; h < 24; h++) {
-                  const intensity = counts[d][h] > 0 ? heat[d][h] / maxVal : 0;
-                  const bg = intensity === 0 ? '' :
-                    'background:hsla(210,80%,' + (isDark ? (35 + 30 * intensity) : (65 - 35 * intensity)) + '%,' + (0.25 + 0.7 * intensity) + ')';
-                  const valText = counts[d][h] > 0 ? heat[d][h].toFixed(1) + '%' : '--';
-                  rows += '<div class="heatmap-cell" style="' + bg + '" data-day="' + d + '" data-hour="' + h + '" data-val="' + valText + '"></div>';
-                }
-                rows += '</div>';
-              }
-              const hourRow = '<div style="display:flex;gap:3px;margin-bottom:2px">' +
+              const hourRow = '<div style="display:flex;gap:2px;margin-bottom:2px">' +
                 '<span style="width:0;display:inline-block"></span>' +
                 Array.from({length:24}, (_, i) =>
-                  '<span style="width:15px;text-align:center;display:inline-block;font-size:10px;color:var(--text-faint);' +
-                  ([0,3,6,9,12,15,18,21].includes(i) ? '' : 'visibility:hidden') + '">' + i + '</span>'
+                  '<span style="flex:1;text-align:center;font-size:10px;color:var(--text-faint);' +
+                  ([0,6,12,18].includes(i) ? '' : 'visibility:hidden') + '">' + i + '</span>'
                 ).join('') + '</div>';
 
-              return '<div class="heatmap-wrap"><h3>' + L.heatmapTitle + '</h3>' +
-                '<div class="heatmap-container">' +
-                  '<div class="heatmap-labels">' + dayLabels.map(l => '<span>' + l + '</span>').join('') + '</div>' +
-                  '<div class="heatmap-grid-wrap">' + hourRow +
-                    '<div class="heatmap-rows">' + rows + '</div>' +
+              // Tab buttons
+              let tabs = '<div class="segmented heatmap-tabs">';
+              heatMods.forEach((m, i) => {
+                tabs += '<button data-kind="' + m.kind + '" class="' + (i === 0 ? 'active' : '') + '" style="font-size:12px">' + m.title + '</button>';
+              });
+              tabs += '</div>';
+
+              // Sections (hidden except first)
+              let sections = '';
+              heatMods.forEach((m, i) => {
+                const heat = Array.from({length: 7}, () => Array(24).fill(0));
+                const counts = Array.from({length: 7}, () => Array(24).fill(0));
+                m.points.forEach(p => {
+                  const d = new Date(p.timestamp * 1000);
+                  const day = d.getDay(), hour = d.getHours();
+                  heat[day][hour] += p.avg;
+                  counts[day][hour]++;
+                });
+                let maxVal = 1;
+                for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) {
+                  if (counts[d][h] > 0) { heat[d][h] /= counts[d][h]; }
+                  if (heat[d][h] > maxVal) maxVal = heat[d][h];
+                }
+                const hue = m.kind === 'cpu' ? 210 : m.kind === 'gpu' ? 140 : m.kind === 'memory' ? 35 : 270;
+                let rows = '';
+                for (let d = 0; d < 7; d++) {
+                  rows += '<div class="heatmap-row">';
+                  for (let h = 0; h < 24; h++) {
+                    const intensity = counts[d][h] > 0 ? heat[d][h] / maxVal : 0;
+                    const bg = intensity === 0 ? '' :
+                      'background:hsla(' + hue + ',80%,' + (isDark ? (35 + 30 * intensity) : (65 - 35 * intensity)) + '%,' + (0.25 + 0.7 * intensity) + ')';
+                    const valText = counts[d][h] > 0 ? heat[d][h].toFixed(1) + (m.kind === 'power' ? 'W' : '%') : '--';
+                    rows += '<div class="heatmap-cell" style="' + bg + '" data-day="' + d + '" data-hour="' + h + '" data-val="' + valText + '" data-kind="' + m.kind + '"></div>';
+                  }
+                  rows += '</div>';
+                }
+                const vis = i === 0 ? '' : 'display:none';
+                sections += '<div class="heatmap-section" data-kind="' + m.kind + '" style="' + vis + '">' +
+                  '<div class="heatmap-container">' +
+                    '<div class="heatmap-labels">' + dayLabels.map(l => '<span>' + l + '</span>').join('') + '</div>' +
+                    '<div class="heatmap-grid-wrap">' + hourRow +
+                      '<div class="heatmap-rows">' + rows + '</div>' +
+                    '</div>' +
                   '</div>' +
-                '</div>' +
+                '</div>';
+              });
+
+              return '<div class="heatmap-wrap"><h3>' + L.heatmapTitle + '</h3>' +
+                tabs + sections +
                 '<div class="heatmap-legend"><span>' + L.heatmapLow + '</span>' +
                   [0, 0.25, 0.5, 0.75, 1].map(v => {
                     const bg = v === 0 ? 'background:var(--bg-inset)' :
@@ -957,6 +1001,20 @@ struct StatisticsReportHTMLBuilder {
               if (!wrap) return;
               const tip = wrap.querySelector('.heatmap-tip');
               const dayLabels = [L.daySun, L.dayMon, L.dayTue, L.dayWed, L.dayThu, L.dayFri, L.daySat];
+
+              // Tab switching
+              wrap.querySelectorAll('.heatmap-tabs button').forEach(btn => {
+                btn.onclick = () => {
+                  wrap.querySelectorAll('.heatmap-tabs button').forEach(b => b.classList.remove('active'));
+                  btn.classList.add('active');
+                  const kind = btn.dataset.kind;
+                  wrap.querySelectorAll('.heatmap-section[data-kind]').forEach(s => {
+                    s.style.display = s.dataset.kind === kind ? '' : 'none';
+                  });
+                };
+              });
+
+              // Tooltip
               wrap.addEventListener('mousemove', function(ev) {
                 const cell = ev.target.closest('.heatmap-cell[data-day]');
                 if (!cell || !tip) { if (tip) tip.style.opacity = 0; return; }
@@ -964,9 +1022,8 @@ struct StatisticsReportHTMLBuilder {
                 const val = cell.dataset.val;
                 tip.innerHTML = dayLabels[d] + ' ' + h + ':00 — <b>' + val + '</b>';
                 const rect = cell.getBoundingClientRect();
-                const wrapRect = wrap.getBoundingClientRect();
-                tip.style.left = (rect.left - wrapRect.left + rect.width / 2) + 'px';
-                tip.style.top = (rect.top - wrapRect.top - 6) + 'px';
+                tip.style.left = (rect.left + rect.width / 2) + 'px';
+                tip.style.top = (rect.top - 8) + 'px';
                 tip.style.opacity = 1;
               });
               wrap.addEventListener('mouseleave', function() { tip.style.opacity = 0; });
