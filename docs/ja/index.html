@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HagimiMonitor — 你的 Mac，一眼即懂</title>
-    <meta name="description" content="HagimiMonitor 是一款优雅的 macOS 菜单栏系统监控工具，实时追踪 CPU、GPU、内存、存储、网络和电池状态。">
+    <title>HagimiMonitor — Macの状態が一目でわかる</title>
+    <meta name="description" content="HagimiMonitorは、macOSメニューバーに常駐するシステムモニタリングツールです。CPU、GPU、メモリ、ストレージ、ネットワーク、バッテリーの状態をリアルタイムで監視します。">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -59,9 +59,28 @@
             --radius-xl: 28px;
 
             /* Typography */
-            --font-display: 'Noto Serif SC', Georgia, serif;
-            --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-display: 'Noto Serif JP', Georgia, serif;
+            --font-body: 'Noto Sans JP', -apple-system, BlinkMacSystemFont, sans-serif;
             --font-mono: 'SF Mono', 'Fira Code', monospace;
+        }
+
+        /* Light theme via prefers-color-scheme */
+        @media (prefers-color-scheme: light) {
+            :root {
+                --page: #f5f5f7;
+                --page-2: #ffffff;
+                --paper: rgba(0, 0, 0, 0.03);
+                --paper-2: rgba(0, 0, 0, 0.06);
+                --ink: #1d1d1f;
+                --ink-secondary: #6e6e73;
+                --ink-tertiary: #86868b;
+                --line: rgba(0, 0, 0, 0.08);
+                --line-strong: rgba(0, 0, 0, 0.15);
+                --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+                --shadow-md: 0 4px 20px rgba(0,0,0,0.1);
+                --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+                --shadow-glow: 0 0 60px rgba(46, 204, 113, 0.08);
+            }
         }
 
         * {
@@ -1453,6 +1472,73 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* Light theme adjustments for specific elements */
+        @media (prefers-color-scheme: light) {
+            .bg-gradient {
+                background:
+                    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46, 204, 113, 0.06), transparent),
+                    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(34, 197, 94, 0.04), transparent),
+                    radial-gradient(ellipse 50% 50% at 20% 60%, rgba(46, 204, 113, 0.03), transparent);
+            }
+            .bg-grid {
+                background-image:
+                    linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+            }
+            .nav.scrolled {
+                background: rgba(255, 255, 255, 0.85);
+                border-bottom: 1px solid var(--line);
+            }
+            .mockup-panel {
+                background: rgba(255, 255, 255, 0.8);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                box-shadow:
+                    0 25px 60px rgba(0, 0, 0, 0.1),
+                    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+                    0 0 80px rgba(46, 204, 113, 0.06);
+            }
+            .mockup-row {
+                background: rgba(0, 0, 0, 0.03);
+            }
+            .mockup-row:hover {
+                background: rgba(0, 0, 0, 0.06);
+            }
+            .mockup-window {
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+            }
+            .process-item {
+                background: rgba(0, 0, 0, 0.03);
+            }
+            .stats-showcase {
+                background: var(--paper);
+                border: 1px solid var(--line);
+            }
+            .stats-summary-item {
+                background: rgba(0, 0, 0, 0.03);
+            }
+            .timeline-event {
+                background: rgba(0, 0, 0, 0.02);
+                border: 1px solid rgba(0, 0, 0, 0.06);
+            }
+            .timeline-event:hover {
+                background: rgba(0, 0, 0, 0.04);
+                border-color: rgba(0, 0, 0, 0.1);
+            }
+            .download-card {
+                background: linear-gradient(135deg, rgba(46, 204, 113, 0.05), rgba(34, 197, 94, 0.03));
+                border: 1px solid rgba(46, 204, 113, 0.1);
+            }
+            .download-card::before {
+                background: radial-gradient(circle, rgba(46, 204, 113, 0.06) 0%, transparent 70%);
+            }
+            .feature-card {
+                background: var(--paper);
+                border: 1px solid var(--line);
+            }
+        }
     </style>
 </head>
 <body>
@@ -1482,11 +1568,11 @@
                 HagimiMonitor
             </a>
             <ul class="nav-links">
-                <li><a href="#features">功能</a></li>
-                <li><a href="#showcase">监控</a></li>
-                <li><a href="#statistics">统计</a></li>
-                <li><a href="#events">事件</a></li>
-                <li><a href="#download">下载</a></li>
+                <li><a href="#features">機能</a></li>
+                <li><a href="#showcase">モニタリング</a></li>
+                <li><a href="#statistics">統計</a></li>
+                <li><a href="#events">イベント</a></li>
+                <li><a href="#download">ダウンロード</a></li>
             </ul>
             <a href="#download" class="nav-cta">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -1494,7 +1580,7 @@
                     <polyline points="7 10 12 15 17 10"/>
                     <line x1="12" y1="15" x2="12" y2="3"/>
                 </svg>
-                免费下载
+                無料ダウンロード
             </a>
         </div>
     </nav>
@@ -1505,14 +1591,14 @@
             <div class="hero-text">
                 <div class="hero-badge">
                     <span class="dot"></span>
-                    macOS 专属 · 免费下载
+                    macOS専用 · 無料
                 </div>
                 <h1 class="hero-title">
-                    你的 Mac，<br>
-                    <span class="gradient-text">一眼即懂。</span>
+                    Macの状態が<br>
+                    <span class="gradient-text">一目でわかる。</span>
                 </h1>
                 <p class="hero-subtitle">
-                    HagimiMonitor 将 CPU、GPU、内存、存储与网络的实时状态，以最优雅的方式呈现在你的菜单栏。
+                    HagimiMonitorは、CPU、GPU、メモリ、ストレージ、ネットワークのリアルタイム状態を、メニューバーにエレガントに表示します。
                 </p>
                 <div class="hero-actions">
                     <a href="#download" class="btn-primary">
@@ -1521,10 +1607,10 @@
                             <polyline points="7 10 12 15 17 10"/>
                             <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
-                        免费下载
+                        無料ダウンロード
                     </a>
                     <a href="#features" class="btn-secondary">
-                        了解更多
+                        詳細を見る
                     </a>
                 </div>
             </div>
@@ -1582,7 +1668,7 @@
                                 <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
                             </svg>
                         </div>
-                        <span class="mockup-row-label">内存:</span>
+                        <span class="mockup-row-label">メモリ:</span>
                         <span class="mockup-row-value">78%</span>
                         <div class="mockup-row-graph">
                             <div class="mockup-progress">
@@ -1600,7 +1686,7 @@
                                 <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
                             </svg>
                         </div>
-                        <span class="mockup-row-label">存储:</span>
+                        <span class="mockup-row-label">ストレージ:</span>
                         <span class="mockup-row-value">41%</span>
                         <div class="mockup-row-graph">
                             <div class="mockup-progress">
@@ -1619,7 +1705,7 @@
                                 <line x1="12" y1="20" x2="12.01" y2="20"/>
                             </svg>
                         </div>
-                        <span class="mockup-row-label">网络:</span>
+                        <span class="mockup-row-label">ネットワーク:</span>
                         <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
                         <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
                     </div>
@@ -1634,7 +1720,7 @@
                                 <line x1="10" y1="11" x2="10.01" y2="11"/>
                             </svg>
                         </div>
-                        <span class="mockup-row-label">电源:</span>
+                        <span class="mockup-row-label">電源:</span>
                         <span class="mockup-row-value">90%</span>
                         <span class="mockup-row-detail">○ 14.7 W</span>
                     </div>
@@ -1648,8 +1734,8 @@
                                 <line x1="12" y1="17" x2="12" y2="21"/>
                             </svg>
                         </div>
-                        <span class="mockup-row-label">显示器:</span>
-                        <span class="mockup-row-value" style="font-size: 12px">2台 · 外接1</span>
+                        <span class="mockup-row-label">ディスプレイ:</span>
+                        <span class="mockup-row-value" style="font-size: 12px">2台 · 外部接続1</span>
                         <span class="mockup-row-detail">›</span>
                     </div>
                 </div>
@@ -1661,9 +1747,9 @@
     <section class="features" id="features">
         <div class="container">
             <div class="section-header fade-in">
-                <span class="section-eyebrow">核心功能</span>
-                <h2 class="section-title">全方位掌控你的 Mac</h2>
-                <p class="section-desc">七大监控模块，从菜单栏到详细面板，每一个数据都触手可及。</p>
+                <span class="section-eyebrow">主要機能</span>
+                <h2 class="section-title">Macを完全に把握</h2>
+                <p class="section-desc">7つのモニタリングモジュールで、メニューバーから詳細パネルまで、すべてのデータが指先に。</p>
             </div>
             <div class="features-grid">
                 <div class="feature-card fade-in" style="--accent-color: var(--c-cpu)">
@@ -1674,8 +1760,8 @@
                             <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
                         </svg>
                     </div>
-                    <h3>CPU 监控</h3>
-                    <p>实时追踪系统、用户、空闲 CPU 使用率，支持温度读取与进程级分析。</p>
+                    <h3>CPUモニタリング</h3>
+                    <p>システム、ユーザー、アイドルCPU使用率をリアルタイムで追跡。温度読み取りとプロセスレベル分析に対応。</p>
                 </div>
                 <div class="feature-card fade-in" style="--accent-color: var(--c-gpu)">
                     <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-gpu), #c084fc)">
@@ -1685,8 +1771,8 @@
                             <line x1="12" y1="17" x2="12" y2="21"/>
                         </svg>
                     </div>
-                    <h3>GPU 监控</h3>
-                    <p>通过 IOKit 查询 GPU 利用率、渲染与分块性能，掌握图形负载。</p>
+                    <h3>GPUモニタリング</h3>
+                    <p>IOKit経由でGPU使用率、レンダリング、タイリング性能を確認。</p>
                 </div>
                 <div class="feature-card fade-in" style="--accent-color: var(--c-memory)">
                     <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-memory), #60a5fa)">
@@ -1695,8 +1781,8 @@
                             <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
                         </svg>
                     </div>
-                    <h3>内存监控</h3>
-                    <p>追踪内存压力、交换分区使用，智能检测内存压力等级变化。</p>
+                    <h3>メモリモニタリング</h3>
+                    <p>メモリプレッシャー、スワップ使用量を追跡。メモリプレッシャーレベルの変化を検出。</p>
                 </div>
                 <div class="feature-card fade-in" style="--accent-color: var(--c-storage)">
                     <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-storage), #fbbf24)">
@@ -1706,8 +1792,8 @@
                             <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
                         </svg>
                     </div>
-                    <h3>存储监控</h3>
-                    <p>实时磁盘容量与 I/O 统计，支持外部卷检测与读写速率追踪。</p>
+                    <h3>ストレージモニタリング</h3>
+                    <p>リアルタイムディスク容量とI/O統計。外部ボリューム検出と読み書き速度追跡に対応。</p>
                 </div>
                 <div class="feature-card fade-in" style="--accent-color: var(--c-network)">
                     <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-network), #22d3ee)">
@@ -1718,8 +1804,8 @@
                             <line x1="12" y1="20" x2="12.01" y2="20"/>
                         </svg>
                     </div>
-                    <h3>网络监控</h3>
-                    <p>追踪上传下载速率，检测网络接口类型，获取公网 IP 地址。</p>
+                    <h3>ネットワークモニタリング</h3>
+                    <p>アップロード/ダウンロード速度を追跡。ネットワークインターフェースタイプを検出、公网IPを取得。</p>
                 </div>
                 <div class="feature-card fade-in" style="--accent-color: var(--c-battery)">
                     <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-battery), #4ade80)">
@@ -1730,8 +1816,8 @@
                             <line x1="10" y1="11" x2="10.01" y2="11"/>
                         </svg>
                     </div>
-                    <h3>电池与电源</h3>
-                    <p>电池健康度、充电功率、循环次数、温度全方位监控。</p>
+                    <h3>バッテリーと電源</h3>
+                    <p>バッテリー状態、充電電力、充電回数、温度を全方位で監視。</p>
                 </div>
             </div>
         </div>
@@ -1742,14 +1828,14 @@
         <div class="container">
             <div class="showcase-inner">
                 <div class="showcase-text">
-                    <span class="section-eyebrow">实时监控</span>
-                    <h2 class="section-title">菜单栏一眼可见<br>展开即见详情</h2>
-                    <p class="section-desc">动态环形图标实时反映系统负载，点击展开即可查看 CPU、GPU、内存等七大模块的详细数据。</p>
+                    <span class="section-eyebrow">リアルタイムモニタリング</span>
+                    <h2 class="section-title">メニューバーで一目瞭然<br>展開して詳細を確認</h2>
+                    <p class="section-desc">動的リングアイコンがシステム負荷をリアルタイムで反映。タップして展開し、CPU、GPU、メモリなど7つのモジュールの詳細データを確認。</p>
                     <ul class="showcase-list">
-                        <li>动态菜单栏环形图标，四色负载指示</li>
-                        <li>玻璃拟态 UI，支持平衡/活力双主题</li>
-                        <li>展开行查看进程级详细信息</li>
-                        <li>Sparkline 迷你图表实时趋势</li>
+                        <li>動的メニューバーアイコン、4色負荷表示</li>
+                        <li>ガラスモーフィズムUI、バランス/バイタル両テーマ対応</li>
+                        <li>行を展開してプロセスレベルの詳細を確認</li>
+                        <li>Sparklineミニチャートでリアルタイムトレンド</li>
                     </ul>
                 </div>
                 <div class="showcase-visual showcase-visual-right">
@@ -1809,7 +1895,7 @@
                                 <span class="mockup-window-dot yellow"></span>
                                 <span class="mockup-window-dot green"></span>
                             </div>
-                            <span class="mockup-window-title">健康评分</span>
+                            <span class="mockup-window-title">ヘルススコア</span>
                         </div>
                         <div class="mockup-window-body">
                             <div class="health-mockup">
@@ -1852,7 +1938,7 @@
                                         <span class="health-dim-value">100</span>
                                     </div>
                                     <div class="health-dim">
-                                        <span class="health-dim-name">内存</span>
+                                        <span class="health-dim-name">メモリ</span>
                                         <div class="health-dim-bar">
                                             <div class="health-dim-fill" style="width: 93%; background: var(--c-excellent)"></div>
                                         </div>
@@ -1871,14 +1957,14 @@
                     </div>
                 </div>
                 <div class="showcase-text showcase-visual-right">
-                    <span class="section-eyebrow">健康评分</span>
-                    <h2 class="section-title">智能评估<br>Mac 健康状态</h2>
-                    <p class="section-desc">基于 CPU、GPU、磁盘、内存压力、散热等多维度数据，综合计算 Mac 健康评分，让你对设备状态了如指掌。</p>
+                    <span class="section-eyebrow">ヘルススコア</span>
+                    <h2 class="section-title">インテリジェント評価<br>Macの健康状態</h2>
+                    <p class="section-desc">基于 CPU、GPU、磁盘、メモリ压力、散热等多维度数据，综合计算 Mac ヘルススコア，让你对设备状态了如指掌。</p>
                     <ul class="showcase-list">
-                        <li>0-100 分综合健康评分</li>
-                        <li>五大维度独立评估</li>
-                        <li>优秀/良好/一般/较差/危急五级分级</li>
-                        <li>趋势追踪与历史对比</li>
+                        <li>0-100 分综合ヘルススコア</li>
+                        <li>5つの独立した評価軸</li>
+                        <li>5段階評価：優秀/良好/普通/要注意/危機</li>
+                        <li>トレンド追跡と履歴比較</li>
                     </ul>
                 </div>
             </div>
@@ -1889,16 +1975,16 @@
     <section class="statistics" id="statistics">
         <div class="container">
             <div class="section-header fade-in">
-                <span class="section-eyebrow">数据统计</span>
-                <h2 class="section-title">历史数据，一目了然</h2>
-                <p class="section-desc">24小时、7天、30天、一年，多时间维度统计，助你洞察系统运行规律。</p>
+                <span class="section-eyebrow">データ統計</span>
+                <h2 class="section-title">履歴データが一目でわかる</h2>
+                <p class="section-desc">24時間、7日、30日、1年のマルチタイムフレーム統計で、システムの動作パターンを把握。</p>
             </div>
             <div class="stats-showcase fade-in">
                 <div class="stats-tabs">
-                    <button class="stats-tab active">过去24小时</button>
-                    <button class="stats-tab">过去7天</button>
-                    <button class="stats-tab">过去30天</button>
-                    <button class="stats-tab">过去一年</button>
+                    <button class="stats-tab active">過去24時間</button>
+                    <button class="stats-tab">過去7日</button>
+                    <button class="stats-tab">過去30日</button>
+                    <button class="stats-tab">過去1年</button>
                 </div>
                 <div class="stats-content">
                     <div class="stats-summary">
@@ -1910,7 +1996,7 @@
                                 </svg>
                             </div>
                             <div class="stats-summary-info">
-                                <div class="stats-summary-label">CPU 均值</div>
+                                <div class="stats-summary-label">CPU平均</div>
                                 <div class="stats-summary-value" style="color: var(--c-cpu)">22.6%</div>
                             </div>
                         </div>
@@ -1922,7 +2008,7 @@
                                 </svg>
                             </div>
                             <div class="stats-summary-info">
-                                <div class="stats-summary-label">GPU 均值</div>
+                                <div class="stats-summary-label">GPU平均</div>
                                 <div class="stats-summary-value" style="color: var(--c-gpu)">17.6%</div>
                             </div>
                         </div>
@@ -1934,7 +2020,7 @@
                                 </svg>
                             </div>
                             <div class="stats-summary-info">
-                                <div class="stats-summary-label">内存均值</div>
+                                <div class="stats-summary-label">メモリ平均</div>
                                 <div class="stats-summary-value" style="color: var(--c-memory)">77.3%</div>
                             </div>
                         </div>
@@ -1945,13 +2031,13 @@
                                 </svg>
                             </div>
                             <div class="stats-summary-info">
-                                <div class="stats-summary-label">功耗均值</div>
+                                <div class="stats-summary-label">電力平均</div>
                                 <div class="stats-summary-value" style="color: var(--c-power)">11.3 W</div>
                             </div>
                         </div>
                     </div>
                     <div class="heatmap-container">
-                        <div class="heatmap-title">负载热力图</div>
+                        <div class="heatmap-title">負荷ヒートマップ</div>
                         <div class="heatmap-grid" id="heatmap">
                             <!-- Generated by JS -->
                         </div>
@@ -1976,55 +2062,55 @@
     <section class="events" id="events">
         <div class="container">
             <div class="section-header fade-in">
-                <span class="section-eyebrow">系统事件</span>
-                <h2 class="section-title">智能事件检测</h2>
-                <p class="section-desc">自动检测 CPU 高负载、内存压力、磁盘空间不足等关键事件，及时提醒你关注系统健康。</p>
+                <span class="section-eyebrow">システムイベント</span>
+                <h2 class="section-title">インテリジェントイベント検出</h2>
+                <p class="section-desc">CPU高負荷、メモリプレッシャー、ディスク容量不足などの重要イベントを自動検出。</p>
             </div>
             <div class="events-showcase fade-in">
                 <div class="timeline">
                     <div class="timeline-day">
-                        <div class="timeline-day-label">今天</div>
+                        <div class="timeline-day-label">今日</div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">⚡ 网络流量峰值</span>
+                                <span class="timeline-event-title">⚡ ネットワークトラフィックピーク</span>
                                 <span class="timeline-event-time">18:25</span>
                             </div>
                             <div class="timeline-event-detail">240.0 MB</div>
                         </div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">⚡ 网络流量峰值</span>
+                                <span class="timeline-event-title">⚡ ネットワークトラフィックピーク</span>
                                 <span class="timeline-event-time">18:15</span>
                             </div>
                             <div class="timeline-event-detail">360.9 MB</div>
                         </div>
                         <div class="timeline-event critical">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">🔥 内存压力升级</span>
+                                <span class="timeline-event-title">🔥 メモリプレッシャー上昇</span>
                                 <span class="timeline-event-time">18:13</span>
                             </div>
-                            <div class="timeline-event-detail">正常 → 警告 · Top 进程: Zed, WindowServer, IntelliJ IDEA</div>
+                            <div class="timeline-event-detail">正常 → 警告 · トッププロセス: Zed, WindowServer, IntelliJ IDEA</div>
                         </div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">💾 磁盘 I/O 峰值</span>
+                                <span class="timeline-event-title">💾 ディスクI/Oピーク</span>
                                 <span class="timeline-event-time">18:05</span>
                             </div>
                             <div class="timeline-event-detail">1.43 GB</div>
                         </div>
                     </div>
                     <div class="timeline-day">
-                        <div class="timeline-day-label">昨天</div>
+                        <div class="timeline-day-label">昨日</div>
                         <div class="timeline-event info">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">✓ 内存压力缓解</span>
+                                <span class="timeline-event-title">✓ メモリプレッシャー緩和</span>
                                 <span class="timeline-event-time">17:57</span>
                             </div>
-                            <div class="timeline-event-detail">警告 → 正常 · Top 进程: Zed, ecosystemd, trustd</div>
+                            <div class="timeline-event-detail">警告 → 正常 · トッププロセス: Zed, ecosystemd, trustd</div>
                         </div>
                         <div class="timeline-event warning">
                             <div class="timeline-event-header">
-                                <span class="timeline-event-title">⚡ 网络流量峰值</span>
+                                <span class="timeline-event-title">⚡ ネットワークトラフィックピーク</span>
                                 <span class="timeline-event-time">17:55</span>
                             </div>
                             <div class="timeline-event-detail">127.7 MB</div>
@@ -2039,14 +2125,14 @@
     <section class="download" id="download">
         <div class="container">
             <div class="download-card fade-in">
-                <span class="section-eyebrow">立即体验</span>
-                <h2 class="section-title">准备好让你的 Mac<br>一目了然了吗？</h2>
-                <p class="section-desc">免费下载，支持 macOS 26+ 及 Apple Silicon。</p>
+                <span class="section-eyebrow">今すぐ体験</span>
+                <h2 class="section-title">Macの状態を<br>一目で把握しませんか？</h2>
+                <p class="section-desc">無料ダウンロード、macOS 26+とApple Siliconに対応。</p>
                 <div class="download-badge">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M12 2v20M2 12h20"/>
                     </svg>
-                    macOS 26+ · Apple Silicon · 免费
+                    macOS 26+ · Apple Silicon · 無料
                 </div>
                 <div class="download-actions">
                     <a href="#" class="btn-primary" style="font-size: 16px; padding: 16px 40px;">
@@ -2055,7 +2141,7 @@
                             <polyline points="7 10 12 15 17 10"/>
                             <line x1="12" y1="15" x2="12" y2="3"/>
                         </svg>
-                        下载最新版
+                        最新版をダウンロード
                     </a>
                     <a href="#" class="btn-secondary" style="font-size: 16px; padding: 16px 40px;">
                         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -2064,7 +2150,7 @@
                         GitHub
                     </a>
                 </div>
-                <p class="download-note">开源免费，持续更新中</p>
+                <p class="download-note">オープンソース・無料、継続的にアップデート中</p>
             </div>
         </div>
     </section>
@@ -2083,10 +2169,10 @@
                     HagimiMonitor
                 </a>
                 <ul class="footer-links">
-                    <li><a href="#features">功能</a></li>
-                    <li><a href="#showcase">监控</a></li>
-                    <li><a href="#statistics">统计</a></li>
-                    <li><a href="#download">下载</a></li>
+                    <li><a href="#features">機能</a></li>
+                    <li><a href="#showcase">モニタリング</a></li>
+                    <li><a href="#statistics">統計</a></li>
+                    <li><a href="#download">ダウンロード</a></li>
                 </ul>
                 <span class="footer-copy">© 2026 HagimiMonitor. All rights reserved.</span>
             </div>

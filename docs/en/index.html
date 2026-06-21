@@ -3,70 +3,89 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hagimi Monitor - macOS Menu Bar System Monitor</title>
-    <meta name="description" content="Hagimi Monitor is a macOS menu bar system monitor for Apple Silicon.">
-    <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "SoftwareApplication",
-        "name": "Hagimi Monitor",
-        "applicationCategory": "UtilitiesApplication",
-        "operatingSystem": "macOS 26",
-        "description": "macOS 菜单栏系统监控工具，实时显示 CPU、GPU、内存、存储、网络和电池状态。",
-        "offers": {
-            "@type": "Offer",
-            "price": "0",
-            "priceCurrency": "USD"
-        },
-        "programmingLanguage": "Swift",
-        "processorRequirements": "Apple Silicon"
-    }
-    </script>
+    <title>HagimiMonitor — Your Mac, at a Glance</title>
+    <meta name="description" content="HagimiMonitor is an elegant macOS menu bar system monitor that tracks CPU, GPU, memory, storage, network, and battery in real-time.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* ========================================
+           CSS VARIABLES & RESET
+           ======================================== */
         :root {
-            --page: #f2f0ea;
-            --paper: #fbfaf6;
-            --ink: #171817;
-            --muted: #686a63;
-            --line: rgba(28, 30, 26, 0.12);
-            --line-strong: rgba(28, 30, 26, 0.22);
-            --green: #238649;
-            --amber: #d8891d;
-            --red: #d84736;
-            --shadow: 0 28px 80px rgba(31, 30, 24, 0.14);
-            --radius: 8px;
+            /* Dark theme (default) */
+            --page: #0a0a0f;
+            --page-2: #0f0f1a;
+            --paper: rgba(255, 255, 255, 0.03);
+            --paper-2: rgba(255, 255, 255, 0.06);
+            --ink: #f0f0f5;
+            --ink-secondary: #a0a0b0;
+            --ink-tertiary: #606070;
+            --line: rgba(255, 255, 255, 0.08);
+            --line-strong: rgba(255, 255, 255, 0.15);
+
+            /* Brand */
+            --brand-purple: #2ECC71;
+            --brand-purple-light: #4ade80;
+            --brand-purple-dark: #22c55e;
+            --brand-glow: rgba(46, 204, 113, 0.3);
+
+            /* Module colors */
+            --c-cpu: #ff6b6b;
+            --c-gpu: #a855f7;
+            --c-memory: #3b82f6;
+            --c-storage: #f59e0b;
+            --c-network: #06b6d4;
+            --c-battery: #22c55e;
+            --c-power: #f97316;
+
+            /* Health */
+            --c-excellent: #22c55e;
+            --c-good: #3b82f6;
+            --c-fair: #f59e0b;
+            --c-poor: #f97316;
+            --c-critical: #ef4444;
+
+            /* Shadows */
+            --shadow-sm: 0 1px 3px rgba(0,0,0,0.3);
+            --shadow-md: 0 4px 20px rgba(0,0,0,0.4);
+            --shadow-lg: 0 8px 40px rgba(0,0,0,0.5);
+            --shadow-glow: 0 0 60px rgba(46, 204, 113, 0.15);
+
+            /* Radius */
+            --radius-sm: 8px;
+            --radius-md: 14px;
+            --radius-lg: 20px;
+            --radius-xl: 28px;
+
+            /* Typography */
+            --font-display: 'Playfair Display', Georgia, serif;
+            --font-body: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-mono: 'SF Mono', 'Fira Code', monospace;
         }
 
-        [data-theme="dark"] {
-            --page: #111311;
-            --paper: #191b18;
-            --ink: #f1efe6;
-            --muted: #a6a398;
-            --line: rgba(241, 239, 230, 0.13);
-            --line-strong: rgba(241, 239, 230, 0.24);
-            --green: #5ac878;
-            --amber: #e2a442;
-            --red: #ee6a5b;
-            --shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root:not([data-theme]) {
-                --page: #111311;
-                --paper: #191b18;
-                --ink: #f1efe6;
-                --muted: #a6a398;
-                --line: rgba(241, 239, 230, 0.13);
-                --line-strong: rgba(241, 239, 230, 0.24);
-                --green: #5ac878;
-                --amber: #e2a442;
-                --red: #ee6a5b;
-                --shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+        /* Light theme via prefers-color-scheme */
+        @media (prefers-color-scheme: light) {
+            :root {
+                --page: #f5f5f7;
+                --page-2: #ffffff;
+                --paper: rgba(0, 0, 0, 0.03);
+                --paper-2: rgba(0, 0, 0, 0.06);
+                --ink: #1d1d1f;
+                --ink-secondary: #6e6e73;
+                --ink-tertiary: #86868b;
+                --line: rgba(0, 0, 0, 0.08);
+                --line-strong: rgba(0, 0, 0, 0.15);
+                --shadow-sm: 0 1px 3px rgba(0,0,0,0.08);
+                --shadow-md: 0 4px 20px rgba(0,0,0,0.1);
+                --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
+                --shadow-glow: 0 0 60px rgba(46, 204, 113, 0.08);
             }
         }
 
         * {
+            margin: 0;
+            padding: 0;
             box-sizing: border-box;
         }
 
@@ -75,1139 +94,2172 @@
         }
 
         body {
-            margin: 0;
-            background:
-                linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 88px 88px,
-                linear-gradient(0deg, var(--line) 1px, transparent 1px) 0 0 / 88px 88px,
-                var(--page);
+            font-family: var(--font-body);
+            background: var(--page);
             color: var(--ink);
-            font-family: ui-serif, "Iowan Old Style", "Songti SC", "Noto Serif CJK SC", Georgia, serif;
-            line-height: 1.55;
+            line-height: 1.6;
+            overflow-x: hidden;
             -webkit-font-smoothing: antialiased;
-            text-rendering: optimizeLegibility;
         }
 
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        img {
-            display: block;
-            max-width: 100%;
-        }
-
-        figure {
-            margin: 0;
-        }
-
-        /* Focus styles */
-        a:focus-visible,
-        button:focus-visible {
-            outline: 2px solid var(--green);
-            outline-offset: 2px;
-            border-radius: 4px;
-        }
-
-        .site-header {
-            position: sticky;
-            top: 0;
-            z-index: 20;
-            border-bottom: 1px solid var(--line);
-            background: color-mix(in srgb, var(--page) 88%, transparent);
-            backdrop-filter: blur(18px);
-        }
-
-        .nav {
-            width: min(1160px, calc(100% - 40px));
-            height: 64px;
+        /* ========================================
+           UTILITIES
+           ======================================== */
+        .container {
+            max-width: 1200px;
             margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        .glass {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
+        }
+
+        .glass-strong {
+            background: rgba(255, 255, 255, 0.06);
+            backdrop-filter: blur(24px) saturate(200%);
+            -webkit-backdrop-filter: blur(24px) saturate(200%);
+            border: 1px solid var(--line-strong);
+            border-radius: var(--radius-md);
+        }
+
+        /* ========================================
+           BACKGROUND EFFECTS
+           ======================================== */
+        .bg-gradient {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background:
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46, 204, 113, 0.12), transparent),
+                radial-gradient(ellipse 60% 40% at 80% 80%, rgba(34, 197, 94, 0.08), transparent),
+                radial-gradient(ellipse 50% 50% at 20% 60%, rgba(46, 204, 113, 0.05), transparent);
+            pointer-events: none;
+        }
+
+        .bg-grid {
+            position: fixed;
+            inset: 0;
+            z-index: -1;
+            background-image:
+                linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+            background-size: 60px 60px;
+            pointer-events: none;
+            mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%);
+        }
+
+        /* ========================================
+           NAVIGATION
+           ======================================== */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 16px 0;
+            transition: all 0.3s ease;
+        }
+
+        .nav.scrolled {
+            background: rgba(10, 10, 15, 0.8);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border-bottom: 1px solid var(--line);
+        }
+
+        .nav-inner {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
         }
 
-        .brand {
-            display: inline-flex;
+        .nav-logo {
+            display: flex;
             align-items: center;
-            gap: 11px;
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-            font-size: 14px;
-            font-weight: 700;
-            letter-spacing: 0;
+            gap: 10px;
+            text-decoration: none;
+            color: var(--ink);
+            font-weight: 600;
+            font-size: 18px;
         }
 
-        /* brand icon: src image is 1254x1254 but displayed at 30x30 — consider providing a smaller web-optimized version */
-        .brand img {
-            width: 30px;
-            height: 30px;
-            border-radius: 7px;
+        .nav-logo-icon {
+            width: 32px;
+            height: 32px;
+            background: #2C2C2E;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-shadow: 0 0 12px rgba(46, 204, 113, 0.2);
         }
 
         .nav-links {
             display: flex;
-            align-items: center;
-            gap: 8px;
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-            font-size: 13px;
-            color: var(--muted);
+            gap: 32px;
+            list-style: none;
         }
 
         .nav-links a {
-            padding: 8px 10px;
-            border-radius: 7px;
+            color: var(--ink-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.2s ease;
+            position: relative;
         }
 
         .nav-links a:hover {
-            background: color-mix(in srgb, var(--ink) 7%, transparent);
             color: var(--ink);
         }
 
-        .github-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 7px;
-            border: 1px solid var(--line-strong);
-            background: color-mix(in srgb, var(--paper) 76%, transparent);
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--brand-purple);
+            border-radius: 1px;
+            transition: width 0.3s ease;
         }
 
-        .github-stars {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            margin-left: 2px;
-            padding-left: 8px;
-            border-left: 1px solid var(--line);
-            color: var(--ink);
-            font-variant-numeric: tabular-nums;
+        .nav-links a:hover::after {
+            width: 100%;
         }
 
-        .github-stars svg {
-            width: 13px;
-            height: 13px;
-            fill: var(--amber);
-        }
-
-        .github-pill > svg {
-            width: 15px;
-            height: 15px;
-            fill: currentColor;
-        }
-
-        .language-pill {
-            display: inline-flex;
+        .nav-cta {
+            display: flex;
             align-items: center;
             gap: 6px;
-            border: 1px solid var(--line-strong);
-            background: color-mix(in srgb, var(--paper) 76%, transparent);
-            color: var(--ink);
-            font-weight: 650;
+            padding: 8px 20px;
+            background: linear-gradient(135deg, var(--brand-purple), var(--brand-purple-dark));
+            color: white;
+            text-decoration: none;
+            border-radius: 100px;
+            font-size: 14px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(46, 204, 113, 0.3);
         }
 
-        .language-pill svg {
-            width: 15px;
-            height: 15px;
-            fill: none;
-            stroke: currentColor;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
+        .nav-cta:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(46, 204, 113, 0.4);
         }
 
-        /* Hero */
+        .nav-cta svg {
+            width: 16px;
+            height: 16px;
+        }
+
+        /* ========================================
+           HERO SECTION
+           ======================================== */
         .hero {
-            width: min(1160px, calc(100% - 40px));
-            min-height: calc(100svh - 64px);
-            margin: 0 auto;
-            padding: clamp(46px, 7vw, 92px) 0 56px;
-            display: grid;
-            grid-template-columns: minmax(0, 0.94fr) minmax(340px, 0.86fr);
-            gap: clamp(36px, 7vw, 88px);
+            min-height: 100vh;
+            display: flex;
             align-items: center;
+            padding: 120px 0 80px;
+            position: relative;
         }
 
-        .eyebrow {
-            margin: 0 0 18px;
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-            font-size: 12px;
-            font-weight: 800;
-            color: var(--green);
-            letter-spacing: 0.06em;
-            text-transform: uppercase;
+        .hero-inner {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 60px;
+            align-items: center;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
         }
 
-        h1 {
-            max-width: 680px;
-            margin: 0;
-            font-size: clamp(42px, 7vw, 82px);
-            line-height: 0.98;
-            letter-spacing: 0;
-            font-weight: 760;
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid rgba(46, 204, 113, 0.2);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--brand-purple-light);
+            margin-bottom: 24px;
+            width: fit-content;
         }
 
-        .lead {
-            max-width: 560px;
-            margin: 26px 0 0;
-            color: var(--muted);
-            font-size: clamp(17px, 2.2vw, 21px);
-            line-height: 1.78;
+        .hero-badge .dot {
+            width: 6px;
+            height: 6px;
+            background: var(--brand-purple-light);
+            border-radius: 50%;
+            animation: pulse-dot 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .hero-title {
+            font-family: var(--font-display);
+            font-size: clamp(42px, 6vw, 72px);
+            font-weight: 700;
+            line-height: 1.05;
+            letter-spacing: -0.02em;
+            margin-bottom: 20px;
+        }
+
+        .hero-title .gradient-text {
+            background: linear-gradient(135deg, #fff 0%, var(--brand-purple-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero-subtitle {
+            font-size: clamp(16px, 2vw, 20px);
+            color: var(--ink-secondary);
+            line-height: 1.7;
+            max-width: 480px;
+            margin-bottom: 32px;
         }
 
         .hero-actions {
             display: flex;
-            align-items: center;
-            gap: 12px;
+            gap: 16px;
             flex-wrap: wrap;
-            margin-top: 34px;
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
         }
 
-        .button {
+        .btn-primary {
             display: inline-flex;
             align-items: center;
-            justify-content: center;
-            gap: 9px;
-            min-height: 44px;
-            padding: 0 18px;
-            border-radius: var(--radius);
-            border: 1px solid var(--ink);
-            background: var(--ink);
-            color: var(--page);
-            font-size: 14px;
-            font-weight: 750;
+            gap: 8px;
+            padding: 14px 32px;
+            background: linear-gradient(135deg, var(--brand-purple), var(--brand-purple-dark));
+            color: white;
+            text-decoration: none;
+            border-radius: 100px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 20px rgba(46, 204, 113, 0.3);
+            border: none;
+            cursor: pointer;
         }
 
-        .button.secondary {
-            border-color: var(--line-strong);
-            background: color-mix(in srgb, var(--paper) 74%, transparent);
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 30px rgba(46, 204, 113, 0.4);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 14px 32px;
+            background: transparent;
             color: var(--ink);
-        }
-
-        .button:hover {
-            transform: translateY(-1px);
-        }
-
-        .button svg {
-            width: 17px;
-            height: 17px;
-        }
-
-        .spec-row {
-            margin-top: 32px;
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            border-top: 1px solid var(--line);
-            border-bottom: 1px solid var(--line);
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-        }
-
-        .spec-row div {
-            padding: 14px 16px 14px 0;
-            color: var(--muted);
-            font-size: 12px;
-            font-weight: 650;
-        }
-
-        .spec-row div + div {
-            padding-left: 16px;
-            border-left: 1px solid var(--line);
-        }
-
-        /* Product frame with macOS menu bar simulation */
-        .product-frame {
-            justify-self: end;
-            width: min(100%, 480px);
-            position: relative;
-        }
-
-        .menubar-sim {
-            height: 32px;
-            margin: 0 12px -3px;
+            text-decoration: none;
+            border-radius: 100px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s ease;
             border: 1px solid var(--line-strong);
-            border-bottom: 0;
-            border-radius: 10px 10px 0 0;
-            background: color-mix(in srgb, var(--paper) 84%, transparent);
+            cursor: pointer;
+        }
+
+        .btn-secondary:hover {
+            background: var(--paper-2);
+            border-color: var(--line-strong);
+        }
+
+        /* Hero mockup */
+        .hero-mockup {
+            position: relative;
+            perspective: 1000px;
+        }
+
+        .mockup-panel {
+            background: rgba(20, 20, 30, 0.8);
+            backdrop-filter: blur(24px) saturate(180%);
+            -webkit-backdrop-filter: blur(24px) saturate(180%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow:
+                0 25px 60px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+                0 0 80px rgba(46, 204, 113, 0.1);
+            transform: rotateX(5deg) rotateY(-5deg);
+            animation: float-mockup 6s ease-in-out infinite;
+            max-width: 380px;
+            margin: 0 auto;
+        }
+
+        @keyframes float-mockup {
+            0%, 100% { transform: rotateX(5deg) rotateY(-5deg) translateY(0); }
+            50% { transform: rotateX(5deg) rotateY(-5deg) translateY(-12px); }
+        }
+
+        .mockup-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 12px 0 14px;
-            color: var(--muted);
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-            font-size: 12px;
-            font-weight: 600;
+            margin-bottom: 16px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        .menubar-left {
+        .mockup-header-left {
             display: flex;
             align-items: center;
-            gap: 14px;
+            gap: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.08em;
+            color: var(--ink-secondary);
+            text-transform: uppercase;
         }
 
-        .menubar-left svg {
-            fill: currentColor;
+        .mockup-live-dot {
+            width: 6px;
+            height: 6px;
+            background: var(--c-excellent);
+            border-radius: 50%;
+            box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3);
+            animation: pulse-dot 2s ease-in-out infinite;
         }
 
-        .menubar-right {
+        .mockup-time {
+            font-size: 12px;
+            color: var(--ink-tertiary);
+            font-family: var(--font-mono);
+        }
+
+        .mockup-row {
             display: flex;
             align-items: center;
             gap: 10px;
+            padding: 10px 12px;
+            margin-bottom: 6px;
+            border-radius: var(--radius-sm);
+            background: rgba(255, 255, 255, 0.04);
+            transition: background 0.2s ease;
         }
 
-        .menubar-right svg {
-            fill: currentColor;
+        .mockup-row:hover {
+            background: rgba(255, 255, 255, 0.07);
         }
 
-        .ring-icon {
-            width: 16px;
-            height: 16px;
-            border: 3px solid var(--green);
-            border-right-color: var(--amber);
-            border-bottom-color: var(--red);
-            border-radius: 50%;
+        .mockup-row-icon {
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             flex-shrink: 0;
         }
 
-        .screen-shot {
-            border: 1px solid var(--line-strong);
-            border-radius: 14px;
-            background: var(--paper);
-            box-shadow: var(--shadow);
+        .mockup-row-icon svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .mockup-row-label {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--ink-secondary);
+            min-width: 50px;
+        }
+
+        .mockup-row-value {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+            font-family: var(--font-mono);
+            min-width: 40px;
+        }
+
+        .mockup-row-graph {
+            flex: 1;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        .mockup-sparkline {
+            width: 60px;
+            height: 18px;
+        }
+
+        .mockup-progress {
+            width: 60px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
             overflow: hidden;
         }
 
-        /* Theme-aware screenshot switching for hero */
-        .screen-shot .dark {
-            display: none;
+        .mockup-progress-fill {
+            height: 100%;
+            border-radius: 2px;
+            transition: width 0.5s ease;
         }
 
-        :root:not([data-theme]) .screen-shot .dark {
-            display: none;
+        .mockup-row-detail {
+            font-size: 11px;
+            color: var(--ink-tertiary);
+            margin-left: auto;
+            font-family: var(--font-mono);
         }
 
-        @media (prefers-color-scheme: dark) {
-            :root:not([data-theme]) .screen-shot .light {
-                display: none;
-            }
-
-            :root:not([data-theme]) .screen-shot .dark {
-                display: block;
-            }
+        /* ========================================
+           FEATURES SECTION
+           ======================================== */
+        .features {
+            padding: 120px 0;
+            position: relative;
         }
 
-        [data-theme="light"] .screen-shot .light {
-            display: block;
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
         }
 
-        [data-theme="light"] .screen-shot .dark {
-            display: none;
+        .section-eyebrow {
+            display: inline-block;
+            padding: 6px 16px;
+            background: rgba(46, 204, 113, 0.1);
+            border: 1px solid rgba(46, 204, 113, 0.2);
+            border-radius: 100px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--brand-purple-light);
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            margin-bottom: 16px;
         }
 
-        [data-theme="dark"] .screen-shot .light {
-            display: none;
+        .section-title {
+            font-family: var(--font-display);
+            font-size: clamp(32px, 4vw, 48px);
+            font-weight: 700;
+            line-height: 1.1;
+            margin-bottom: 16px;
         }
 
-        [data-theme="dark"] .screen-shot .dark {
-            display: block;
-        }
-
-        /* Sections */
-        .section {
-            width: min(1160px, calc(100% - 40px));
+        .section-desc {
+            font-size: 18px;
+            color: var(--ink-secondary);
+            max-width: 560px;
             margin: 0 auto;
-            padding: 88px 0;
-            border-top: 1px solid var(--line);
+            line-height: 1.7;
         }
 
-        .section-head {
-            display: grid;
-            grid-template-columns: minmax(0, 0.72fr) minmax(260px, 0.46fr);
-            gap: 48px;
-            align-items: end;
-            margin-bottom: 34px;
-        }
-
-        h2 {
-            margin: 0;
-            font-size: clamp(29px, 4.6vw, 54px);
-            line-height: 1.04;
-            letter-spacing: 0;
-        }
-
-        .section-head p {
-            margin: 0;
-            color: var(--muted);
-            font-size: 16px;
-            line-height: 1.75;
-        }
-
-        /* Feature grid */
-        .feature-grid {
+        .features-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            border: 1px solid var(--line-strong);
+            gap: 24px;
+        }
+
+        .feature-card {
+            padding: 32px;
+            border-radius: var(--radius-lg);
             background: var(--paper);
+            border: 1px solid var(--line);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
         }
 
-        .feature {
-            min-height: 210px;
-            padding: 26px;
-            border-right: 1px solid var(--line);
-            border-bottom: 1px solid var(--line);
+        .feature-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px;
+            background: var(--accent-color);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
 
-        .feature:nth-child(3n) {
-            border-right: 0;
+        .feature-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--line-strong);
+            box-shadow: var(--shadow-md);
         }
 
-        .feature:nth-last-child(-n + 3) {
-            border-bottom: 0;
+        .feature-card:hover::before {
+            opacity: 1;
         }
 
         .feature-icon {
-            width: 36px;
-            height: 36px;
-            margin-bottom: 18px;
-            border-radius: 8px;
-            background: color-mix(in srgb, var(--green) 10%, transparent);
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-sm);
             display: flex;
             align-items: center;
             justify-content: center;
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .feature-icon::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: inherit;
+            background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.05));
+            pointer-events: none;
         }
 
         .feature-icon svg {
-            width: 20px;
-            height: 20px;
-            stroke: var(--green);
-            fill: none;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
+            width: 24px;
+            height: 24px;
+            color: white;
         }
 
-        .feature h3 {
-            margin: 0 0 10px;
-            font-family: ui-sans-serif, "SF Pro Display", "PingFang SC", system-ui, sans-serif;
-            font-size: 19px;
-            letter-spacing: 0;
+        .feature-card h3 {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 8px;
         }
 
-        .feature p {
-            margin: 0;
-            color: var(--muted);
-            font-size: 15px;
+        .feature-card p {
+            font-size: 14px;
+            color: var(--ink-secondary);
+            line-height: 1.6;
         }
 
-        /* Theme toggle */
-        .section-head-row {
-            display: flex;
-            align-items: end;
-            justify-content: space-between;
-            gap: 20px;
-            margin-bottom: 34px;
+        /* ========================================
+           MONITORING SHOWCASE
+           ======================================== */
+        .showcase {
+            padding: 120px 0;
+            position: relative;
         }
 
-        .section-head-row .section-head-text {
+        .showcase-inner {
             display: grid;
-            grid-template-columns: minmax(0, 0.72fr) minmax(260px, 0.46fr);
-            gap: 48px;
-            align-items: end;
-            flex: 1;
-        }
-
-        .theme-toggle {
-            display: inline-flex;
+            grid-template-columns: 1fr 1fr;
+            gap: 80px;
             align-items: center;
-            justify-content: center;
-            width: 36px;
-            height: 36px;
-            border: 1px solid var(--line-strong);
-            border-radius: 7px;
-            background: color-mix(in srgb, var(--paper) 74%, transparent);
-            cursor: pointer;
-            flex-shrink: 0;
-            padding: 0;
-            color: var(--ink);
         }
 
-        .theme-toggle:hover {
-            background: color-mix(in srgb, var(--ink) 7%, transparent);
+        .showcase-text {
+            order: 1;
         }
 
-        .theme-toggle svg {
-            width: 18px;
-            height: 18px;
-            stroke: currentColor;
-            fill: none;
-            stroke-width: 2;
-            stroke-linecap: round;
-            stroke-linejoin: round;
+        .showcase-visual {
+            order: 2;
         }
 
-        .theme-toggle .icon-sun {
-            display: block;
+        .showcase-visual-left {
+            order: 1;
         }
 
-        .theme-toggle .icon-moon {
-            display: none;
+        .showcase-visual-right {
+            order: 2;
         }
 
-        [data-theme="dark"] .theme-toggle .icon-sun {
-            display: none;
+        .showcase-text .section-eyebrow {
+            margin-bottom: 20px;
         }
 
-        [data-theme="dark"] .theme-toggle .icon-moon {
-            display: block;
+        .showcase-text .section-title {
+            text-align: left;
+            margin-bottom: 16px;
         }
 
-        /* Showcase grid with theme-aware screenshots */
-        .showcase-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 22px;
+        .showcase-text .section-desc {
+            text-align: left;
+            margin: 0 0 24px 0;
         }
 
-        .shot-card {
-            border: 1px solid var(--line-strong);
-            background: var(--paper);
-            border-radius: var(--radius);
-            padding: 14px;
-        }
-
-        .shot-card img {
-            width: 100%;
-            border-radius: 6px;
-            border: 1px solid var(--line);
-            background: var(--page);
-        }
-
-        /* Theme-aware screenshot visibility in showcase */
-        .shot-card .dark {
-            display: none;
-        }
-
-        :root:not([data-theme]) .shot-card .dark {
-            display: none;
-        }
-
-        @media (prefers-color-scheme: dark) {
-            :root:not([data-theme]) .shot-card .light {
-                display: none;
-            }
-
-            :root:not([data-theme]) .shot-card .dark {
-                display: block;
-            }
-        }
-
-        [data-theme="light"] .shot-card .light {
-            display: block;
-        }
-
-        [data-theme="light"] .shot-card .dark {
-            display: none;
-        }
-
-        [data-theme="dark"] .shot-card .light {
-            display: none;
-        }
-
-        [data-theme="dark"] .shot-card .dark {
-            display: block;
-        }
-
-        .shot-caption {
-            display: flex;
-            align-items: baseline;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 14px 2px 2px;
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-        }
-
-        .shot-caption strong {
-            font-size: 14px;
-        }
-
-        .shot-caption span {
-            color: var(--muted);
-            font-size: 12px;
-        }
-
-        /* Detail section */
-        .detail-layout {
-            display: grid;
-            grid-template-columns: minmax(280px, 0.38fr) minmax(0, 0.62fr);
-            gap: 42px;
-            align-items: start;
-        }
-
-        .detail-copy {
-            position: sticky;
-            top: 96px;
-        }
-
-        .detail-copy p {
-            margin: 22px 0 0;
-            color: var(--muted);
-            font-size: 16px;
-            line-height: 1.8;
-        }
-
-        .detail-list {
-            margin: 28px 0 0;
-            padding: 0;
+        .showcase-list {
             list-style: none;
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-            color: var(--muted);
-            font-size: 14px;
-        }
-
-        .detail-list li {
-            padding: 12px 0;
-            border-top: 1px solid var(--line);
-        }
-
-        .detail-image {
-            padding: 14px;
-            border: 1px solid var(--line-strong);
-            border-radius: var(--radius);
-            background: var(--paper);
-        }
-
-        .detail-image img {
-            width: 100%;
-            border-radius: 6px;
-            border: 1px solid var(--line);
-            max-height: 800px;
-            object-fit: contain;
-            object-position: top;
-        }
-
-        .detail-image-note {
-            margin: 10px 0 0;
-            text-align: center;
-            color: var(--muted);
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-            font-size: 11px;
-        }
-
-        /* Star history section */
-        .stars-layout {
-            display: grid;
-            grid-template-columns: minmax(0, 0.34fr) minmax(0, 0.66fr);
-            gap: 42px;
-            align-items: stretch;
-        }
-
-        .stars-copy {
             display: flex;
             flex-direction: column;
+            gap: 12px;
+        }
+
+        .showcase-list li {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 15px;
+            color: var(--ink-secondary);
+        }
+
+        .showcase-list li::before {
+            content: '✓';
+            display: flex;
+            align-items: center;
             justify-content: center;
+            width: 20px;
+            height: 20px;
+            background: rgba(34, 197, 94, 0.15);
+            color: var(--c-excellent);
+            border-radius: 50%;
+            font-size: 11px;
+            font-weight: 700;
+            flex-shrink: 0;
         }
 
-        .stars-copy h2 {
-            margin: 0;
+        /* Mockup window */
+        .mockup-window {
+            background: rgba(20, 20, 30, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            box-shadow:
+                0 20px 60px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset;
         }
 
-        .stars-copy p {
-            margin: 22px 0 0;
-            color: var(--muted);
-            font-size: 16px;
-            line-height: 1.8;
+        .mockup-window-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
         }
 
-        .stars-actions {
+        .mockup-window-dots {
+            display: flex;
+            gap: 6px;
+        }
+
+        .mockup-window-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+        }
+
+        .mockup-window-dot.red { background: #ff5f57; }
+        .mockup-window-dot.yellow { background: #febc2e; }
+        .mockup-window-dot.green { background: #28c840; }
+
+        .mockup-window-title {
+            font-size: 13px;
+            color: var(--ink-tertiary);
+            margin-left: 8px;
+        }
+
+        .mockup-window-body {
+            padding: 20px;
+        }
+
+        /* Process list mockup */
+        .process-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .process-item {
             display: flex;
             align-items: center;
             gap: 12px;
-            flex-wrap: wrap;
-            margin-top: 26px;
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+            padding: 10px 14px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: var(--radius-sm);
         }
 
-        .stars-chart {
-            padding: 14px;
-            border: 1px solid var(--line-strong);
-            border-radius: var(--radius);
-            background: var(--paper);
+        .process-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        .process-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .process-value {
+            font-size: 13px;
+            font-family: var(--font-mono);
+            color: var(--ink-secondary);
+        }
+
+        /* Health score mockup */
+        .health-mockup {
             display: flex;
             flex-direction: column;
+            align-items: center;
+            gap: 24px;
+            padding: 32px;
         }
 
-        .stars-chart .star-link {
-            display: block;
-            line-height: 0;
-            border-radius: 6px;
-            overflow: hidden;
-            border: 1px solid var(--line);
-            background: var(--page);
+        .health-ring-container {
+            position: relative;
+            width: 160px;
+            height: 160px;
         }
 
-        .stars-chart img {
+        .health-ring-svg {
             width: 100%;
-            height: auto;
-            display: block;
+            height: 100%;
+            transform: rotate(-90deg);
         }
 
-        .stars-chart .light {
-            display: block;
+        .health-ring-bg {
+            fill: none;
+            stroke: rgba(255, 255, 255, 0.06);
+            stroke-width: 10;
         }
 
-        .stars-chart .dark {
-            display: none;
+        .health-ring-fg {
+            fill: none;
+            stroke: url(#healthGradient);
+            stroke-width: 10;
+            stroke-linecap: round;
+            stroke-dasharray: 440;
+            stroke-dashoffset: 110;
+            transition: stroke-dashoffset 1.5s ease;
         }
 
-        @media (prefers-color-scheme: dark) {
-            :root:not([data-theme]) .stars-chart .light {
-                display: none;
-            }
-
-            :root:not([data-theme]) .stars-chart .dark {
-                display: block;
-            }
+        .health-ring-text {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
         }
 
-        [data-theme="light"] .stars-chart .light {
-            display: block;
+        .health-score {
+            font-size: 48px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            color: var(--c-excellent);
+            line-height: 1;
         }
 
-        [data-theme="light"] .stars-chart .dark {
-            display: none;
+        .health-label {
+            font-size: 14px;
+            color: var(--c-excellent);
+            margin-top: 4px;
+            font-weight: 600;
         }
 
-        [data-theme="dark"] .stars-chart .light {
-            display: none;
+        .health-dims {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
-        [data-theme="dark"] .stars-chart .dark {
-            display: block;
+        .health-dim {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
-        .stars-caption {
-            margin: 10px 0 0;
-            text-align: center;
-            color: var(--muted);
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
+        .health-dim-name {
+            font-size: 13px;
+            color: var(--ink-secondary);
+            min-width: 60px;
+        }
+
+        .health-dim-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .health-dim-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 1s ease;
+        }
+
+        .health-dim-value {
+            font-size: 13px;
+            font-family: var(--font-mono);
+            color: var(--ink-secondary);
+            min-width: 40px;
+            text-align: right;
+        }
+
+        /* Stats cards mockup */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .stat-card {
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: var(--radius-sm);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .stat-card-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .stat-card-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stat-card-icon svg {
+            width: 18px;
+            height: 18px;
+            color: white;
+        }
+
+        .stat-card-title {
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .stat-card-subtitle {
             font-size: 11px;
+            color: var(--ink-tertiary);
         }
 
-        /* Footer */
+        .stat-card-value {
+            font-size: 28px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+            margin-bottom: 8px;
+        }
+
+        .stat-card-meta {
+            display: flex;
+            gap: 16px;
+        }
+
+        .stat-card-meta-item {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-card-meta-label {
+            font-size: 11px;
+            color: var(--ink-tertiary);
+        }
+
+        .stat-card-meta-value {
+            font-size: 13px;
+            font-family: var(--font-mono);
+            font-weight: 600;
+        }
+
+        /* ========================================
+           STATISTICS SECTION
+           ======================================== */
+        .statistics {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .stats-showcase {
+            background: var(--paper);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-xl);
+            padding: 48px;
+            margin-top: 64px;
+        }
+
+        .stats-tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 32px;
+            flex-wrap: wrap;
+        }
+
+        .stats-tab {
+            padding: 8px 20px;
+            border-radius: 100px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid transparent;
+            background: transparent;
+            color: var(--ink-secondary);
+        }
+
+        .stats-tab.active {
+            background: rgba(46, 204, 113, 0.15);
+            color: var(--brand-purple-light);
+            border-color: rgba(46, 204, 113, 0.3);
+        }
+
+        .stats-tab:hover:not(.active) {
+            background: var(--paper-2);
+        }
+
+        .stats-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 32px;
+        }
+
+        .stats-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .stats-summary-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: var(--radius-sm);
+        }
+
+        .stats-summary-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .stats-summary-icon svg {
+            width: 20px;
+            height: 20px;
+            color: white;
+        }
+
+        .stats-summary-info {
+            flex: 1;
+        }
+
+        .stats-summary-label {
+            font-size: 12px;
+            color: var(--ink-tertiary);
+            margin-bottom: 2px;
+        }
+
+        .stats-summary-value {
+            font-size: 18px;
+            font-weight: 700;
+            font-family: var(--font-mono);
+        }
+
+        /* Heatmap */
+        .heatmap-container {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: var(--radius-sm);
+            padding: 24px;
+        }
+
+        .heatmap-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+        }
+
+        .heatmap-grid {
+            display: grid;
+            grid-template-columns: repeat(24, 1fr);
+            gap: 3px;
+        }
+
+        .heatmap-cell {
+            aspect-ratio: 1;
+            border-radius: 2px;
+            transition: all 0.3s ease;
+        }
+
+        .heatmap-cell:hover {
+            transform: scale(1.3);
+            z-index: 1;
+            position: relative;
+        }
+
+        .heatmap-legend {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            font-size: 11px;
+            color: var(--ink-tertiary);
+        }
+
+        .heatmap-legend-bar {
+            display: flex;
+            gap: 2px;
+        }
+
+        .heatmap-legend-cell {
+            width: 12px;
+            height: 12px;
+            border-radius: 2px;
+        }
+
+        /* ========================================
+           EVENTS SECTION
+           ======================================== */
+        .events {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .events-showcase {
+            max-width: 800px;
+            margin: 64px auto 0;
+        }
+
+        .timeline {
+            position: relative;
+            padding-left: 32px;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 7px;
+            top: 8px;
+            bottom: 8px;
+            width: 2px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 1px;
+        }
+
+        .timeline-day {
+            margin-bottom: 32px;
+        }
+
+        .timeline-day-label {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--ink-secondary);
+            margin-bottom: 16px;
+            margin-left: -32px;
+            padding-left: 32px;
+        }
+
+        .timeline-event {
+            position: relative;
+            padding: 14px 16px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: var(--radius-sm);
+            transition: all 0.2s ease;
+        }
+
+        .timeline-event:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .timeline-event::before {
+            content: '';
+            position: absolute;
+            left: -25px;
+            top: 18px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            border: 2px solid var(--page);
+        }
+
+        .timeline-event.warning::before {
+            background: var(--c-fair);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.2);
+        }
+
+        .timeline-event.critical::before {
+            background: var(--c-critical);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.2);
+        }
+
+        .timeline-event.info::before {
+            background: var(--c-good);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+        }
+
+        .timeline-event-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 4px;
+        }
+
+        .timeline-event-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .timeline-event-time {
+            font-size: 12px;
+            color: var(--ink-tertiary);
+            font-family: var(--font-mono);
+        }
+
+        .timeline-event-detail {
+            font-size: 13px;
+            color: var(--ink-secondary);
+        }
+
+        /* ========================================
+           DOWNLOAD CTA
+           ======================================== */
+        .download {
+            padding: 120px 0;
+            position: relative;
+        }
+
+        .download-card {
+            text-align: center;
+            padding: 80px 48px;
+            background: linear-gradient(135deg, rgba(46, 204, 113, 0.08), rgba(34, 197, 94, 0.05));
+            border: 1px solid rgba(46, 204, 113, 0.15);
+            border-radius: var(--radius-xl);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .download-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(46, 204, 113, 0.1) 0%, transparent 70%);
+            animation: rotate-glow 20s linear infinite;
+        }
+
+        @keyframes rotate-glow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .download-card > * {
+            position: relative;
+            z-index: 1;
+        }
+
+        .download-card .section-title {
+            margin-bottom: 16px;
+        }
+
+        .download-card .section-desc {
+            margin-bottom: 32px;
+        }
+
+        .download-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 100px;
+            font-size: 13px;
+            color: var(--ink-secondary);
+            margin-bottom: 32px;
+        }
+
+        .download-badge svg {
+            width: 18px;
+            height: 18px;
+            color: var(--ink-secondary);
+        }
+
+        .download-actions {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .download-note {
+            margin-top: 24px;
+            font-size: 13px;
+            color: var(--ink-tertiary);
+        }
+
+        /* ========================================
+           FOOTER
+           ======================================== */
         .footer {
-            width: min(1160px, calc(100% - 40px));
-            margin: 0 auto;
-            padding: 42px 0 56px;
+            padding: 48px 0;
             border-top: 1px solid var(--line);
+        }
+
+        .footer-inner {
             display: flex;
             justify-content: space-between;
-            gap: 18px;
-            color: var(--muted);
-            font-family: ui-sans-serif, "SF Pro Text", "PingFang SC", system-ui, sans-serif;
-            font-size: 13px;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 24px;
         }
 
-        .footer a {
+        .footer-brand {
+            display: flex;
+            align-items: center;
+            gap: 10px;
             color: var(--ink);
-            font-weight: 700;
+            font-weight: 600;
+            font-size: 16px;
+            text-decoration: none;
         }
 
-        /* Responsive */
-        @media (max-width: 860px) {
-            .nav {
-                width: min(100% - 28px, 1160px);
-            }
-
-            .nav-links a:not(.github-pill) {
-                display: none;
-            }
-
-            .hero,
-            .section,
-            .footer {
-                width: min(100% - 28px, 1160px);
-            }
-
-            .hero {
-                min-height: auto;
-                grid-template-columns: 1fr;
-                padding-top: 42px;
-            }
-
-            .product-frame {
-                justify-self: stretch;
-                width: min(100%, 520px);
-                margin: 0 auto;
-            }
-
-            .section-head,
-            .section-head-row .section-head-text,
-            .detail-layout,
-            .stars-layout {
-                grid-template-columns: 1fr;
-                gap: 22px;
-            }
-
-            .feature-grid,
-            .showcase-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .feature,
-            .feature:nth-child(3n),
-            .feature:nth-last-child(-n + 3) {
-                border-right: 0;
-                border-bottom: 1px solid var(--line);
-            }
-
-            .feature:last-child {
-                border-bottom: 0;
-            }
-
-            .detail-copy {
-                position: static;
-            }
+        .footer-brand-icon {
+            width: 28px;
+            height: 28px;
+            background: #2C2C2E;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
         }
 
-        @media (max-width: 560px) {
-            body {
-                background-size: 54px 54px;
+        .footer-links {
+            display: flex;
+            gap: 24px;
+            list-style: none;
+        }
+
+        .footer-links a {
+            color: var(--ink-secondary);
+            text-decoration: none;
+            font-size: 14px;
+            transition: color 0.2s ease;
+        }
+
+        .footer-links a:hover {
+            color: var(--ink);
+        }
+
+        .footer-copy {
+            font-size: 13px;
+            color: var(--ink-tertiary);
+        }
+
+        /* ========================================
+           ANIMATIONS
+           ======================================== */
+        .fade-in {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+
+        .fade-in.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ========================================
+           RESPONSIVE
+           ======================================== */
+        @media (max-width: 1024px) {
+            .hero-inner {
+                grid-template-columns: 1fr;
+                text-align: center;
             }
 
-            .brand span {
-                max-width: 150px;
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
+            .hero-title {
+                font-size: clamp(36px, 8vw, 56px);
             }
 
-            h1 {
-                font-size: clamp(38px, 14vw, 58px);
-            }
-
-            .lead {
-                font-size: 16px;
+            .hero-subtitle {
+                margin-left: auto;
+                margin-right: auto;
             }
 
             .hero-actions {
-                align-items: stretch;
+                justify-content: center;
             }
 
-            .button {
-                width: 100%;
+            .features-grid {
+                grid-template-columns: repeat(2, 1fr);
             }
 
-            .spec-row {
+            .showcase-inner {
+                grid-template-columns: 1fr;
+                gap: 48px;
+            }
+
+            .showcase-text .section-title,
+            .showcase-text .section-desc {
+                text-align: center;
+            }
+
+            .showcase-text .section-eyebrow {
+                margin-left: auto;
+                margin-right: auto;
+            }
+
+            .showcase-list {
+                align-items: center;
+            }
+
+            .stats-content {
                 grid-template-columns: 1fr;
             }
+        }
 
-            .spec-row div + div {
-                padding-left: 0;
-                border-left: 0;
-                border-top: 1px solid var(--line);
-            }
-
-            .section {
-                padding: 62px 0;
-            }
-
-            .feature {
-                min-height: 0;
-            }
-
-            .footer {
-                flex-direction: column;
-            }
-
-            .menubar-sim {
+        @media (max-width: 640px) {
+            .nav-links {
                 display: none;
             }
 
-            .screen-shot {
-                border-radius: 14px;
+            .hero {
+                padding: 100px 0 60px;
+            }
+
+            .features-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .stats-tabs {
+                justify-content: center;
+            }
+
+            .stats-showcase {
+                padding: 24px;
+            }
+
+            .download-card {
+                padding: 48px 24px;
+            }
+
+            .footer-inner {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Light theme adjustments for specific elements */
+        @media (prefers-color-scheme: light) {
+            .bg-gradient {
+                background:
+                    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46, 204, 113, 0.06), transparent),
+                    radial-gradient(ellipse 60% 40% at 80% 80%, rgba(34, 197, 94, 0.04), transparent),
+                    radial-gradient(ellipse 50% 50% at 20% 60%, rgba(46, 204, 113, 0.03), transparent);
+            }
+            .bg-grid {
+                background-image:
+                    linear-gradient(rgba(0,0,0,0.03) 1px, transparent 1px),
+                    linear-gradient(90deg, rgba(0,0,0,0.03) 1px, transparent 1px);
+            }
+            .nav.scrolled {
+                background: rgba(255, 255, 255, 0.85);
+                border-bottom: 1px solid var(--line);
+            }
+            .mockup-panel {
+                background: rgba(255, 255, 255, 0.8);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                box-shadow:
+                    0 25px 60px rgba(0, 0, 0, 0.1),
+                    0 0 0 1px rgba(255, 255, 255, 0.5) inset,
+                    0 0 80px rgba(46, 204, 113, 0.06);
+            }
+            .mockup-row {
+                background: rgba(0, 0, 0, 0.03);
+            }
+            .mockup-row:hover {
+                background: rgba(0, 0, 0, 0.06);
+            }
+            .mockup-window {
+                background: rgba(255, 255, 255, 0.95);
+                border: 1px solid rgba(0, 0, 0, 0.08);
+                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+            }
+            .process-item {
+                background: rgba(0, 0, 0, 0.03);
+            }
+            .stats-showcase {
+                background: var(--paper);
+                border: 1px solid var(--line);
+            }
+            .stats-summary-item {
+                background: rgba(0, 0, 0, 0.03);
+            }
+            .timeline-event {
+                background: rgba(0, 0, 0, 0.02);
+                border: 1px solid rgba(0, 0, 0, 0.06);
+            }
+            .timeline-event:hover {
+                background: rgba(0, 0, 0, 0.04);
+                border-color: rgba(0, 0, 0, 0.1);
+            }
+            .download-card {
+                background: linear-gradient(135deg, rgba(46, 204, 113, 0.05), rgba(34, 197, 94, 0.03));
+                border: 1px solid rgba(46, 204, 113, 0.1);
+            }
+            .download-card::before {
+                background: radial-gradient(circle, rgba(46, 204, 113, 0.06) 0%, transparent 70%);
+            }
+            .feature-card {
+                background: var(--paper);
+                border: 1px solid var(--line);
             }
         }
     </style>
 </head>
 <body>
-    <header class="site-header">
-        <nav class="nav" aria-label="主导航">
-            <a class="brand" href="#">
-                <img src="../images/icon-128.png" alt="" width="30" height="30">
-                <span>Hagimi Monitor</span>
+    <!-- Background effects -->
+    <div class="bg-gradient"></div>
+    <div class="bg-grid"></div>
+
+    <!-- Navigation -->
+    <nav class="nav" id="nav">
+        <div class="nav-inner">
+            <a href="#" class="nav-logo">
+                <div class="nav-logo-icon" style="background: #2C2C2E; box-shadow: 0 0 12px rgba(46, 204, 113, 0.3);">
+                    <svg viewBox="0 0 32 32" width="20" height="20">
+                        <defs>
+                            <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                        </defs>
+                        <circle cx="16" cy="16" r="14" fill="none" stroke="#2ECC71" stroke-width="3" stroke-linecap="round" stroke-dasharray="55 30" transform="rotate(-90 16 16)" filter="url(#glow)"/>
+                        <circle cx="16" cy="16" r="3.5" fill="#2ECC71" filter="url(#glow)"/>
+                    </svg>
+                </div>
+                HagimiMonitor
             </a>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#themes">Screenshots</a>
-                <a href="#details">Details</a>
-                <a href="#stars">Stars</a>
-                <a class="language-pill" href="../zh/" data-lang-switch="zh" hreflang="zh-CN" lang="zh-CN" aria-label="切换到中文">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M2 12h20"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10Z"/></svg>
-                    中文
-                </a>
-                <a class="github-pill" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 .3a12 12 0 0 0-3.79 23.39c.6.11.82-.26.82-.58v-2.04c-3.34.73-4.04-1.42-4.04-1.42-.55-1.39-1.34-1.76-1.34-1.76-1.09-.75.08-.73.08-.73 1.21.08 1.85 1.24 1.85 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.31-5.47-1.34-5.47-5.94 0-1.31.47-2.38 1.24-3.22-.12-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23A11.5 11.5 0 0 1 12 5.78c1.02 0 2.05.14 3.01.4 2.29-1.55 3.3-1.23 3.3-1.23.65 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.82 1.1.82 2.22v3.29c0 .32.22.69.82.58A12 12 0 0 0 12 .3Z"/></svg>
-                    GitHub
-                    <span class="github-stars" aria-label="GitHub stars">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.92 6.26 6.83.83-5.05 4.68 1.34 6.76L12 17.14l-6.04 3.39 1.34-6.76-5.05-4.68 6.83-.83L12 2Z"/></svg>
-                        <span id="star-count">--</span>
-                    </span>
-                </a>
-            </div>
-        </nav>
-    </header>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#showcase">Monitoring</a></li>
+                <li><a href="#statistics">Statistics</a></li>
+                <li><a href="#events">Events</a></li>
+                <li><a href="#download">Download</a></li>
+            </ul>
+            <a href="#download" class="nav-cta">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+                Free Download
+            </a>
+        </div>
+    </nav>
 
-    <main>
-        <section class="hero">
-            <div>
-                <p class="eyebrow">macOS 26+ / Apple Silicon</p>
-                <h1>System status at a glance.</h1>
-                <p class="lead">The menu bar icon shows real-time system load. Click to expand CPU, GPU, memory, storage, network, and battery details. Stays under 30 MB, no desktop clutter.</p>
+    <!-- Hero Section -->
+    <section class="hero" id="hero">
+        <div class="hero-inner">
+            <div class="hero-text">
+                <div class="hero-badge">
+                    <span class="dot"></span>
+                    macOS Exclusive · Free
+                </div>
+                <h1 class="hero-title">
+                    Your Mac,<br>
+                    <span class="gradient-text">at a Glance.</span>
+                </h1>
+                <p class="hero-subtitle">
+                    HagimiMonitor displays real-time CPU, GPU, memory, storage, and network status in your menu bar with elegance.
+                </p>
                 <div class="hero-actions">
-                    <a class="button" href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
-                        Download Latest
+                    <a href="#download" class="btn-primary">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Free Download
                     </a>
-                    <a class="button secondary" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">View Source</a>
-                </div>
-                <div class="spec-row" aria-label="基础信息">
-                    <div>macOS 26+</div>
-                    <div>Apple Silicon Optimized</div>
-                    <div>Free <div>免费开源</div> Open Source</div>
+                    <a href="#features" class="btn-secondary">
+                        Learn More
+                    </a>
                 </div>
             </div>
+            <div class="hero-mockup">
+                <div class="mockup-panel">
+                    <div class="mockup-header">
+                        <div class="mockup-header-left">
+                            <span class="mockup-live-dot"></span>
+                            <span>SYSTEM · LIVE</span>
+                        </div>
+                        <span class="mockup-time">18:06</span>
+                    </div>
 
-            <div class="product-frame" aria-label="产品截图">
-                <div class="menubar-sim" aria-hidden="true">
-                    <div class="menubar-left">
-                        <!-- Apple logo -->
-                        <svg width="13" height="16" viewBox="0 0 170 200" aria-hidden="true"><path d="M150 62.5c-1.4-7.2-4.1-13.3-8.2-18.3-4.1-5-9.6-9-16.5-12 3.4-4.8 5.8-9.5 7.2-14.2 1.4-4.7 1.8-9.1 1.2-13.2-5.8 1.3-10.8 3.6-15 6.9-4.2 3.3-8.3 7.7-12.2 13.2-4.3-1.4-9.4-2.1-15.3-2.1-5.6 0-10.6.6-15 1.9-3.9-5.4-8-9.7-12.2-13-4.2-3.3-9.2-5.6-15-6.9-.6 4.1-.2 8.5 1.2 13.2 1.4 4.7 3.8 9.4 7.2 14.2-6.9 3-12.4 7-16.5 12-4.1 5-6.9 11.1-8.2 18.3-6.8 3-12 7.1-15.7 12.2-3.7 5.1-5.5 10.8-5.5 17.2 0 8.2 2.9 15.1 8.6 20.6 5.7 5.5 12.9 8.8 21.6 9.8 5.4.8 10.4.8 15 0 4.6-.8 8.8-2.2 12.5-4.3 3.1-1.7 5.7-3.7 7.8-6 1.6-1.7 2.9-3.5 3.9-5.4h.7c1 1.9 2.3 3.7 3.9 5.4 2.1 2.3 4.7 4.3 7.8 6 3.7 2.1 7.9 3.5 12.5 4.3 4.6.8 9.6.8 15 0 8.7-1 15.9-4.3 21.6-9.8 5.7-5.5 8.6-12.4 8.6-20.6 0-6.4-1.8-12.1-5.5-17.2-3.7-5.1-8.9-9.2-15.8-12.2Z" fill="currentColor"/></svg>
-                        <span>Hagimi Monitor</span>
+                    <!-- CPU -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-cpu)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                <rect x="9" y="9" width="6" height="6"/>
+                                <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">CPU:</span>
+                        <span class="mockup-row-value">17%</span>
+                        <div class="mockup-row-graph">
+                            <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="var(--c-cpu)" stroke-width="1.5" opacity="0.8"/>
+                            </svg>
+                        </div>
                     </div>
-                    <div class="menubar-right">
-                        <!-- WiFi icon -->
-                        <svg width="15" height="12" viewBox="0 0 24 18" aria-hidden="true"><path d="M12 16a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3Zm-4.95-3.54a7.03 7.03 0 0 1 9.9 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/><path d="M3.51 8.16a11.05 11.05 0 0 1 16.98 0" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/></svg>
-                        <!-- Battery icon -->
-                        <svg width="20" height="11" viewBox="0 0 28 14" aria-hidden="true"><rect x="1" y="1" width="22" height="12" rx="2.5" stroke="currentColor" stroke-width="1.5" fill="none"/><rect x="3.5" y="3.5" width="14" height="7" rx="1" fill="currentColor" opacity="0.7"/><path d="M25 5v4a2 2 0 0 0 0-4Z" fill="currentColor" opacity="0.5"/></svg>
-                        <!-- Control Center icon -->
-                        <svg width="14" height="14" viewBox="0 0 20 20" aria-hidden="true"><circle cx="5" cy="5" r="2.5" fill="currentColor"/><circle cx="15" cy="5" r="2.5" fill="currentColor"/><circle cx="5" cy="15" r="2.5" fill="currentColor"/><circle cx="15" cy="15" r="2.5" fill="currentColor"/></svg>
-                        <!-- Hagimi Monitor ring icon -->
-                        <div class="ring-icon"></div>
+
+                    <!-- GPU -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-gpu)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">GPU:</span>
+                        <span class="mockup-row-value">11%</span>
+                        <div class="mockup-row-graph">
+                            <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="var(--c-gpu)" stroke-width="1.5" opacity="0.8"/>
+                            </svg>
+                        </div>
+                    </div>
+
+                    <!-- Memory -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-memory)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">Memory:</span>
+                        <span class="mockup-row-value">78%</span>
+                        <div class="mockup-row-graph">
+                            <div class="mockup-progress">
+                                <div class="mockup-progress-fill" style="width: 78%; background: var(--c-memory)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Storage -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-storage)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                                <circle cx="12" cy="15" r="2"/>
+                                <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">Storage:</span>
+                        <span class="mockup-row-value">41%</span>
+                        <div class="mockup-row-graph">
+                            <div class="mockup-progress">
+                                <div class="mockup-progress-fill" style="width: 41%; background: var(--c-storage)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Network -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-network)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                                <line x1="12" y1="20" x2="12.01" y2="20"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">Network:</span>
+                        <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
+                        <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
+                    </div>
+
+                    <!-- Battery -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--c-battery)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="7" width="16" height="10" rx="2"/>
+                                <line x1="22" y1="11" x2="22" y2="13"/>
+                                <line x1="6" y1="11" x2="6.01" y2="11"/>
+                                <line x1="10" y1="11" x2="10.01" y2="11"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">Power:</span>
+                        <span class="mockup-row-value">90%</span>
+                        <span class="mockup-row-detail">○ 14.7 W</span>
+                    </div>
+
+                    <!-- Display -->
+                    <div class="mockup-row">
+                        <div class="mockup-row-icon" style="color: var(--ink-secondary)">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                <line x1="12" y1="17" x2="12" y2="21"/>
+                            </svg>
+                        </div>
+                        <span class="mockup-row-label">Display:</span>
+                        <span class="mockup-row-value" style="font-size: 12px">2Displays · External1</span>
+                        <span class="mockup-row-detail">›</span>
                     </div>
                 </div>
-                <div class="screen-shot">
-                    <img class="light" src="../images/vitality-light.png" alt="Hagimi Monitor 活力浅色界面截图">
-                    <img class="dark" src="../images/vitality-dark.png" alt="Hagimi Monitor 活力深色界面截图">
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features" id="features">
+        <div class="container">
+            <div class="section-header fade-in">
+                <span class="section-eyebrow">Core Features</span>
+                <h2 class="section-title">Full Control of Your Mac</h2>
+                <p class="section-desc">Seven monitoring modules, from menu bar to detailed panel, every metric within reach.</p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card fade-in" style="--accent-color: var(--c-cpu)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-cpu), #ff8a8a)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="4" y="4" width="16" height="16" rx="2"/>
+                            <rect x="9" y="9" width="6" height="6"/>
+                            <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                        </svg>
+                    </div>
+                    <h3>CPU Monitoring</h3>
+                    <p>Real-time tracking of system, user, and idle CPU usage, with temperature reading and process-level analysis.</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-gpu)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-gpu), #c084fc)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="3" width="20" height="14" rx="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                    </div>
+                    <h3>GPU Monitoring</h3>
+                    <p>Query GPU utilization, rendering, and tiling performance via IOKit.</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-memory)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-memory), #60a5fa)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="6" width="20" height="12" rx="2"/>
+                            <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                        </svg>
+                    </div>
+                    <h3>Memory Monitoring</h3>
+                    <p>Track memory pressure, swap usage, and detect memory pressure level changes.</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-storage)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-storage), #fbbf24)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                            <circle cx="12" cy="15" r="2"/>
+                            <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                        </svg>
+                    </div>
+                    <h3>Storage Monitoring</h3>
+                    <p>Real-time disk capacity and I/O statistics, with external volume detection.</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-network)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-network), #22d3ee)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                            <line x1="12" y1="20" x2="12.01" y2="20"/>
+                        </svg>
+                    </div>
+                    <h3>Network Monitoring</h3>
+                    <p>Track upload/download rates, detect network interface types, get public IP.</p>
+                </div>
+                <div class="feature-card fade-in" style="--accent-color: var(--c-battery)">
+                    <div class="feature-icon" style="background: linear-gradient(135deg, var(--c-battery), #4ade80)">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <rect x="2" y="7" width="16" height="10" rx="2"/>
+                            <line x1="22" y1="11" x2="22" y2="13"/>
+                            <line x1="6" y1="11" x2="6.01" y2="11"/>
+                            <line x1="10" y1="11" x2="10.01" y2="11"/>
+                        </svg>
+                    </div>
+                    <h3>Battery & Power</h3>
+                    <p>Battery health, charging power, cycle count, temperature monitoring.</p>
                 </div>
             </div>
-        </section>
+        </div>
+    </section>
 
-        <section id="features" class="section">
-            <div class="section-head">
-                <h2>Status changes, visible at a glance.</h2>
-                <p>From menu bar load to expanded detailed metrics, Hagimi Monitor is designed for long-term residence and quick troubleshooting when fans spin up, lag occurs, or external devices act up.</p>
-            </div>
-            <div class="feature-grid">
-                <article class="feature">
-                    <div class="feature-icon">
-                        <!-- Ring/circle icon -->
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 1 6.36 2.64" style="stroke:var(--amber)"/><path d="M12 3a9 9 0 0 0-6.36 15.36" style="stroke:var(--red)"/></svg>
-                    </div>
-                    <h3>Load Ring</h3>
-                    <p>The menu bar icon reflects system pressure in real time. Colors shift from green to orange to red — light load, busy, or high pressure at a glance.</p>
-                </article>
-                <article class="feature">
-                    <div class="feature-icon">
-                        <!-- CPU/chip icon -->
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 1v3M15 1v3M9 20v3M15 20v3M1 9h3M1 15h3M20 9h3M20 15h3"/></svg>
-                    </div>
-                    <h3>Core Metrics</h3>
-                    <p>CPU, GPU, memory, storage, network, and battery are sampled independently. No need to open Activity Monitor for status changes.</p>
-                </article>
-                <article class="feature">
-                    <div class="feature-icon">
-                        <!-- Chart/trend icon -->
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20L8 13L13 16L21 6"/><path d="M17 6h4v4"/></svg>
-                    </div>
-                    <h3>Trend Charts</h3>
-                    <p>CPU and GPU usage come with mini trend charts. Brief spikes and sustained high load are not conflated.</p>
-                </article>
-                <article class="feature">
-                    <div class="feature-icon">
-                        <!-- Expand/chevrons icon -->
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 20l5-5 5 5"/><path d="M7 4l5 5 5-5"/></svg>
-                    </div>
-                    <h3>Expand Details</h3>
-                    <p>When you need to dig deeper, expand to see core distribution, VRAM, memory pressure, volume info, IP, and battery health.</p>
-                </article>
-                <article class="feature">
-                    <div class="feature-icon">
-                        <!-- Palette/swatch icon -->
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r="1.5" fill="var(--green)" stroke="none"/><circle cx="12" cy="7.5" r="1.5" fill="var(--amber)" stroke="none"/><circle cx="16" cy="10" r="1.5" fill="var(--red)" stroke="none"/></svg>
-                    </div>
-                    <h3>Two Color Schemes</h3>
-                    <p>Balanced mode is calmer; Vibrant mode is more striking. Both adapt to light and dark appearances.</p>
-                </article>
-                <article class="feature">
-                    <div class="feature-icon">
-                        <!-- Display/monitor icon -->
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
-                    </div>
-                    <h3>Display Controls</h3>
-                    <p>The non-App Store version supports brightness, volume, and contrast adjustment for external displays via DDC/CI protocol.</p>
-                </article>
-            </div>
-        </section>
-
-        <section id="themes" class="section">
-            <div class="section-head-row">
-                <div class="section-head-text">
-                    <h2>Light and dark, each with two panel styles.</h2>
-                    <p>Balanced mode is calmer; Vibrant mode is more striking. When the system appearance switches, the panel follows to stay clearly readable.</p>
-                </div>
-                <button class="theme-toggle" id="theme-toggle" aria-label="切换浅色/深色预览" type="button">
-                    <!-- Sun icon (shown in dark mode, click to go light) -->
-                    <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
-                    <!-- Moon icon (shown in light mode, click to go dark) -->
-                    <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z"/></svg>
-                </button>
-            </div>
-            <div class="showcase-grid">
-                <figure class="shot-card">
-                    <img class="light" src="../images/balance-light.png" alt="平衡主题浅色模式截图" loading="lazy">
-                    <img class="dark" src="../images/balance-dark.png" alt="平衡主题深色模式截图" loading="lazy">
-                    <figcaption class="shot-caption">
-                        <strong>Balanced</strong>
-                        <span>Closer to system panels</span>
-                    </figcaption>
-                </figure>
-                <figure class="shot-card">
-                    <img class="light" src="../images/vitality-light.png" alt="活力主题浅色模式截图" loading="lazy">
-                    <img class="dark" src="../images/vitality-dark.png" alt="活力主题深色模式截图" loading="lazy">
-                    <figcaption class="shot-caption">
-                        <strong>Vibrant</strong>
-                        <span>More distinct status colors</span>
-                    </figcaption>
-                </figure>
-                <figure class="shot-card">
-                    <img class="light" src="../images/balance-dark.png" alt="平衡主题深色面板" loading="lazy">
-                    <img class="dark" src="../images/balance-light.png" alt="平衡主题浅色面板" loading="lazy">
-                    <figcaption class="shot-caption">
-                        <strong>Balanced</strong>
-                        <span>Dark / light panel comparison</span>
-                    </figcaption>
-                </figure>
-                <figure class="shot-card">
-                    <img class="light" src="../images/vitality-dark.png" alt="活力主题深色面板" loading="lazy">
-                    <img class="dark" src="../images/vitality-light.png" alt="活力主题浅色面板" loading="lazy">
-                    <figcaption class="shot-caption">
-                        <strong>Vibrant</strong>
-                        <span>Dark / light panel comparison</span>
-                    </figcaption>
-                </figure>
-            </div>
-        </section>
-
-        <section id="details" class="section">
-            <div class="detail-layout">
-                <div class="detail-copy">
-                    <p class="eyebrow">Details</p>
-                    <h2>Stays minimal, expands when needed.</h2>
-                    <p>The default view keeps high-frequency info; clicking a module reveals finer diagnostic data. Stays out of the way daily, no need to scramble for tools when issues arise.</p>
-                    <ul class="detail-list">
-                        <li>CPU core distribution and real-time frequency</li>
-                        <li>GPU usage, VRAM, and graphics state</li>
-                        <li>Memory pressure, swap space, and storage volume details</li>
-                        <li>Network address, battery health, and cycle count</li>
+    <!-- Showcase: Real-time Monitoring -->
+    <section class="showcase" id="showcase">
+        <div class="container">
+            <div class="showcase-inner">
+                <div class="showcase-text">
+                    <span class="section-eyebrow">Real-time Monitoring</span>
+                    <h2 class="section-title">Visible at a Glance<br>Expand for Details</h2>
+                    <p class="section-desc">Dynamic ring icon reflects system load in real-time. Click to expand for detailed metrics.</p>
+                    <ul class="showcase-list">
+                        <li>Dynamic menu bar ring icon with four-color load indicators</li>
+                        <li>Glassmorphism UI with Balanced/Vibrant dual themes</li>
+                        <li>Expand rows for process-level details</li>
+                        <li>Sparkline mini charts for real-time trends</li>
                     </ul>
                 </div>
-                <div class="detail-image">
-                    <img src="../images/detailed-data.png" alt="详细数据展开截图" loading="lazy">
-                    <p class="detail-image-note">Screenshot may require scrolling to view full content</p>
-                </div>
-            </div>
-        </section>
-        <section id="stars" class="section">
-            <div class="stars-layout">
-                <div class="stars-copy">
-                    <p class="eyebrow">Star History</p>
-                    <h2>Your Star matters.</h2>
-                    <p>This project is independently maintained long-term. Every Star is a reason to keep refining details. If Hagimi Monitor is useful to you, consider leaving a star on GitHub.</p>
-                    <div class="stars-actions">
-                        <a class="button" href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 2 2.92 6.26 6.83.83-5.05 4.68 1.34 6.76L12 17.14l-6.04 3.39 1.34-6.76-5.05-4.68 6.83-.83L12 2Z"/></svg>
-                            Star on GitHub
-                        </a>
+                <div class="showcase-visual showcase-visual-right">
+                    <div class="mockup-window">
+                        <div class="mockup-window-header">
+                            <div class="mockup-window-dots">
+                                <span class="mockup-window-dot red"></span>
+                                <span class="mockup-window-dot yellow"></span>
+                                <span class="mockup-window-dot green"></span>
+                            </div>
+                            <span class="mockup-window-title">HagimiMonitor</span>
+                        </div>
+                        <div class="mockup-window-body">
+                            <div class="process-list">
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #ff6b6b, #ff8a8a)">⚡</div>
+                                    <span class="process-name">Zed</span>
+                                    <span class="process-value">100.6%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #a855f7, #c084fc)">🖥</div>
+                                    <span class="process-name">WindowServer</span>
+                                    <span class="process-value">60.3%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #3b82f6, #60a5fa)">📊</div>
+                                    <span class="process-name">HagimiMonitor</span>
+                                    <span class="process-value">43.4%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #f59e0b, #fbbf24)">🪟</div>
+                                    <span class="process-name">WindowManager</span>
+                                    <span class="process-value">27.0%</span>
+                                </div>
+                                <div class="process-item">
+                                    <div class="process-icon" style="background: linear-gradient(135deg, #06b6d4, #22d3ee)">🎵</div>
+                                    <span class="process-name">TikTok</span>
+                                    <span class="process-value">22.9%</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <figure class="stars-chart">
-                    <a class="star-link" href="https://star-history.com/#Acerola-1/hagimi-monitor&Date" target="_blank" rel="noopener" aria-label="查看完整 Star 增长曲线">
-                        <img class="light" src="https://api.star-history.com/svg?repos=Acerola-1/hagimi-monitor&type=Date" alt="Hagimi Monitor Star 增长曲线（浅色）" loading="lazy">
-                        <img class="dark" src="https://api.star-history.com/svg?repos=Acerola-1/hagimi-monitor&type=Date&theme=dark" alt="Hagimi Monitor Star 增长曲线（深色）" loading="lazy">
-                    </a>
-                    <figcaption class="stars-caption">Data source: star-history.com</figcaption>
-                </figure>
             </div>
-        </section>
-    </main>
+        </div>
+    </section>
 
+    <!-- Showcase: Health Score -->
+    <section class="showcase">
+        <div class="container">
+            <div class="showcase-inner">
+                <div class="showcase-visual showcase-visual-left">
+                    <div class="mockup-window">
+                        <div class="mockup-window-header">
+                            <div class="mockup-window-dots">
+                                <span class="mockup-window-dot red"></span>
+                                <span class="mockup-window-dot yellow"></span>
+                                <span class="mockup-window-dot green"></span>
+                            </div>
+                            <span class="mockup-window-title">Health Score</span>
+                        </div>
+                        <div class="mockup-window-body">
+                            <div class="health-mockup">
+                                <div class="health-ring-container">
+                                    <svg class="health-ring-svg" viewBox="0 0 160 160">
+                                        <defs>
+                                            <linearGradient id="healthGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                                <stop offset="0%" style="stop-color:#22c55e"/>
+                                                <stop offset="100%" style="stop-color:#4ade80"/>
+                                            </linearGradient>
+                                        </defs>
+                                        <circle class="health-ring-bg" cx="80" cy="80" r="70"/>
+                                        <circle class="health-ring-fg" cx="80" cy="80" r="70" stroke-dasharray="440" stroke-dashoffset="110"/>
+                                    </svg>
+                                    <div class="health-ring-text">
+                                        <span class="health-score">93</span>
+                                        <span class="health-label">Excellent</span>
+                                    </div>
+                                </div>
+                                <div class="health-dims">
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">CPU</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 95%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">95</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">GPU</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 82%; background: var(--c-good)"></div>
+                                        </div>
+                                        <span class="health-dim-value">82</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">Disk</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 100%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">100</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">Memory</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 93%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">93</span>
+                                    </div>
+                                    <div class="health-dim">
+                                        <span class="health-dim-name">Thermal</span>
+                                        <div class="health-dim-bar">
+                                            <div class="health-dim-fill" style="width: 100%; background: var(--c-excellent)"></div>
+                                        </div>
+                                        <span class="health-dim-value">100</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="showcase-text showcase-visual-right">
+                    <span class="section-eyebrow">Health Score</span>
+                    <h2 class="section-title">Intelligent Assessment<br>Mac Health Status</h2>
+                    <p class="section-desc">Comprehensive Mac health score based on CPU, GPU, disk, memory pressure, and thermal data.</p>
+                    <ul class="showcase-list">
+                        <li>0-100 comprehensive health score</li>
+                        <li>Five-dimension independent assessment</li>
+                        <li>Five levels: Excellent/Good/Fair/Poor/Critical</li>
+                        <li>Trend tracking and historical comparison</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Statistics Section -->
+    <section class="statistics" id="statistics">
+        <div class="container">
+            <div class="section-header fade-in">
+                <span class="section-eyebrow">Data Statistics</span>
+                <h2 class="section-title">Historical Data at a Glance</h2>
+                <p class="section-desc">24h, 7d, 30d, 1y multi-timeframe statistics to understand system patterns.</p>
+            </div>
+            <div class="stats-showcase fade-in">
+                <div class="stats-tabs">
+                    <button class="stats-tab active">Last 24h</button>
+                    <button class="stats-tab">Last 7d</button>
+                    <button class="stats-tab">Last 30d</button>
+                    <button class="stats-tab">Last Year</button>
+                </div>
+                <div class="stats-content">
+                    <div class="stats-summary">
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-cpu), #ff8a8a)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    <rect x="9" y="9" width="6" height="6"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">CPU Avg</div>
+                                <div class="stats-summary-value" style="color: var(--c-cpu)">22.6%</div>
+                            </div>
+                        </div>
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-gpu), #c084fc)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">GPU Avg</div>
+                                <div class="stats-summary-value" style="color: var(--c-gpu)">17.6%</div>
+                            </div>
+                        </div>
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-memory), #60a5fa)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                    <path d="M6 10h.01M6 14h.01"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">Memory Avg</div>
+                                <div class="stats-summary-value" style="color: var(--c-memory)">77.3%</div>
+                            </div>
+                        </div>
+                        <div class="stats-summary-item">
+                            <div class="stats-summary-icon" style="background: linear-gradient(135deg, var(--c-power), #fbbf24)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+                                </svg>
+                            </div>
+                            <div class="stats-summary-info">
+                                <div class="stats-summary-label">Power Avg</div>
+                                <div class="stats-summary-value" style="color: var(--c-power)">11.3 W</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="heatmap-container">
+                        <div class="heatmap-title">Load Heatmap</div>
+                        <div class="heatmap-grid" id="heatmap">
+                            <!-- Generated by JS -->
+                        </div>
+                        <div class="heatmap-legend">
+                            <span>Low</span>
+                            <div class="heatmap-legend-bar">
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.1)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.25)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.4)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.6)"></div>
+                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.8)"></div>
+                            </div>
+                            <span>High</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Events Section -->
+    <section class="events" id="events">
+        <div class="container">
+            <div class="section-header fade-in">
+                <span class="section-eyebrow">System Events</span>
+                <h2 class="section-title">Intelligent Event Detection</h2>
+                <p class="section-desc">Automatically detect CPU high load, memory pressure, low disk space, and other critical events.</p>
+            </div>
+            <div class="events-showcase fade-in">
+                <div class="timeline">
+                    <div class="timeline-day">
+                        <div class="timeline-day-label">Today</div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">⚡ Network Traffic Peak</span>
+                                <span class="timeline-event-time">18:25</span>
+                            </div>
+                            <div class="timeline-event-detail">240.0 MB</div>
+                        </div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">⚡ Network Traffic Peak</span>
+                                <span class="timeline-event-time">18:15</span>
+                            </div>
+                            <div class="timeline-event-detail">360.9 MB</div>
+                        </div>
+                        <div class="timeline-event critical">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">🔥 Memory Pressure Increased</span>
+                                <span class="timeline-event-time">18:13</span>
+                            </div>
+                            <div class="timeline-event-detail">Normal → Warning · Top Processes: Zed, WindowServer, IntelliJ IDEA</div>
+                        </div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">💾 Disk I/O Peak</span>
+                                <span class="timeline-event-time">18:05</span>
+                            </div>
+                            <div class="timeline-event-detail">1.43 GB</div>
+                        </div>
+                    </div>
+                    <div class="timeline-day">
+                        <div class="timeline-day-label">Yesterday</div>
+                        <div class="timeline-event info">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">✓ Memory Pressure Relieved</span>
+                                <span class="timeline-event-time">17:57</span>
+                            </div>
+                            <div class="timeline-event-detail">Warning → Normal · Top Processes: Zed, ecosystemd, trustd</div>
+                        </div>
+                        <div class="timeline-event warning">
+                            <div class="timeline-event-header">
+                                <span class="timeline-event-title">⚡ Network Traffic Peak</span>
+                                <span class="timeline-event-time">17:55</span>
+                            </div>
+                            <div class="timeline-event-detail">127.7 MB</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Download CTA -->
+    <section class="download" id="download">
+        <div class="container">
+            <div class="download-card fade-in">
+                <span class="section-eyebrow">Get Started</span>
+                <h2 class="section-title">Ready to make your Mac<br>crystal clear?</h2>
+                <p class="section-desc">Free download, supports macOS 26+ and Apple Silicon.</p>
+                <div class="download-badge">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 2v20M2 12h20"/>
+                    </svg>
+                    macOS 26+ · Apple Silicon · Free
+                </div>
+                <div class="download-actions">
+                    <a href="#" class="btn-primary" style="font-size: 16px; padding: 16px 40px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="7 10 12 15 17 10"/>
+                            <line x1="12" y1="15" x2="12" y2="3"/>
+                        </svg>
+                        Download Latest
+                    </a>
+                    <a href="#" class="btn-secondary" style="font-size: 16px; padding: 16px 40px;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+                        </svg>
+                        GitHub
+                    </a>
+                </div>
+                <p class="download-note">Open source and free, continuously updated</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
     <footer class="footer">
-        <span>Hagimi Monitor · MIT License</span>
-        <span>Made by <a href="https://github.com/Acerola-1" target="_blank" rel="noopener">Acerola</a></span>
+        <div class="container">
+            <div class="footer-inner">
+                <a href="#" class="footer-brand">
+                    <div class="footer-brand-icon" style="background: #2C2C2E;">
+                        <svg viewBox="0 0 32 32" width="16" height="16">
+                            <circle cx="16" cy="16" r="14" fill="none" stroke="#2ECC71" stroke-width="3" stroke-linecap="round" stroke-dasharray="55 30" transform="rotate(-90 16 16)"/>
+                            <circle cx="16" cy="16" r="3.5" fill="#2ECC71"/>
+                        </svg>
+                    </div>
+                    HagimiMonitor
+                </a>
+                <ul class="footer-links">
+                    <li><a href="#features">Features</a></li>
+                    <li><a href="#showcase">Monitoring</a></li>
+                    <li><a href="#statistics">Statistics</a></li>
+                    <li><a href="#download">Download</a></li>
+                </ul>
+                <span class="footer-copy">© 2026 HagimiMonitor. All rights reserved.</span>
+            </div>
+        </div>
     </footer>
+
+    <!-- JavaScript -->
     <script>
-        // Theme toggle: persist to localStorage, respect prefers-color-scheme on first load
-        (function () {
-            const root = document.documentElement;
-            const toggle = document.getElementById("theme-toggle");
-            const stored = localStorage.getItem("theme");
-
-            if (stored === "light" || stored === "dark") {
-                root.setAttribute("data-theme", stored);
+        // Navigation scroll effect
+        const nav = document.getElementById('nav');
+        window.addEventListener('scroll', () => {
+            if (window.scrollY > 50) {
+                nav.classList.add('scrolled');
+            } else {
+                nav.classList.remove('scrolled');
             }
+        });
 
-            toggle.addEventListener("click", function () {
-                const current = root.getAttribute("data-theme");
-                let next;
-                if (current === "dark") {
-                    next = "light";
-                } else if (current === "light") {
-                    next = "dark";
-                } else {
-                    // No explicit theme yet — infer from system preference
-                    next = window.matchMedia("(prefers-color-scheme: dark)").matches ? "light" : "dark";
+        // Intersection Observer for fade-in animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -50px 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
                 }
-                root.setAttribute("data-theme", next);
-                localStorage.setItem("theme", next);
             });
-        })();
+        }, observerOptions);
 
-        document.querySelectorAll("[data-lang-switch]").forEach((link) => {
-            link.addEventListener("click", () => {
-                try {
-                    localStorage.setItem("hagimi-lang", link.dataset.langSwitch);
-                } catch (e) {}
+        document.querySelectorAll('.fade-in').forEach(el => {
+            observer.observe(el);
+        });
+
+        // Generate heatmap
+        const heatmap = document.getElementById('heatmap');
+        const heatmapColors = [
+            'rgba(59,130,246,0.05)',
+            'rgba(59,130,246,0.1)',
+            'rgba(59,130,246,0.2)',
+            'rgba(59,130,246,0.35)',
+            'rgba(59,130,246,0.5)',
+            'rgba(59,130,246,0.7)',
+            'rgba(59,130,246,0.85)'
+        ];
+
+        for (let i = 0; i < 168; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'heatmap-cell';
+            const intensity = Math.random();
+            const colorIndex = Math.floor(intensity * heatmapColors.length);
+            cell.style.background = heatmapColors[colorIndex];
+            heatmap.appendChild(cell);
+        }
+
+        // Stats tab switching
+        document.querySelectorAll('.stats-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.stats-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                // Animate heatmap refresh
+                const cells = document.querySelectorAll('.heatmap-cell');
+                cells.forEach((cell, i) => {
+                    setTimeout(() => {
+                        const intensity = Math.random();
+                        const colorIndex = Math.floor(intensity * heatmapColors.length);
+                        cell.style.background = heatmapColors[colorIndex];
+                    }, i * 2);
+                });
             });
         });
 
-        // GitHub star count via shields.io
-        const starCount = document.getElementById("star-count");
-        // shields.io 合法返回示例: "0", "42", "1.2k", "10k", "1M"
-        const STAR_VALUE_PATTERN = /^\d+(\.\d+)?[kM]?$/;
-
-        fetch("https://img.shields.io/github/stars/Acerola-1/hagimi-monitor.json")
-            .then((r) => r.ok ? r.json() : Promise.reject())
-            .then((data) => {
-                const val = typeof data?.value === "string" ? data.value.trim() : "";
-                if (STAR_VALUE_PATTERN.test(val)) {
-                    starCount.textContent = val;
-                } else {
-                    // shields.io 偶尔会返回类似 "Unable to select next GitHub token from pool" 的错误消息
-                    starCount.textContent = "-";
+        // Smooth scroll for nav links
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({
+                        behavior: 'smooth',
+                        block: 'start'
+                    });
                 }
-            })
-            .catch(() => {
-                starCount.textContent = "-";
             });
+        });
     </script>
 </body>
 </html>
