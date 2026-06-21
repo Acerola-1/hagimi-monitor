@@ -18,7 +18,6 @@ struct StatisticsView: View {
         (.last24Hours, String(localized: "stats.range.24h")),
         (.lastWeek, String(localized: "stats.range.week")),
         (.lastMonth, String(localized: "stats.range.month")),
-        (.lastYear, String(localized: "stats.range.year")),
     ]
 
     var body: some View {
@@ -46,22 +45,14 @@ struct StatisticsView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .center, spacing: 14) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(String(localized: "stats.summary.title"))
-                        .font(.title3.weight(.semibold))
-                    Text(String(localized: "stats.summary.subtitle"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                Text(String(localized: "stats.summary.title"))
+                    .font(.title3.weight(.semibold))
 
                 Spacer(minLength: 12)
 
+                rangePicker
                 reportButton
             }
-
-            rangePicker
         }
     }
 
@@ -149,12 +140,11 @@ struct StatisticsView: View {
     }
 
     private func refreshData() {
-        let pending = pendingProvider?() ?? [:]
-        let pendingBucket = range == .last24Hours ? pending.first?.value : nil
-        healthScore = aggregator.queryHealthScore(range: range, pending: pendingBucket)
+        // 统计页面只读已入库数据（HourlySample / DailyAggregate），不含实时 pending。
+        // 同一小时内反复切换范围，读到的数据完全一致，分数不会变化。
+        healthScore = aggregator.queryHealthScore(range: range, pending: nil)
         summaries = Dictionary(uniqueKeysWithValues: Self.summaryKinds.map { kind in
-            let pendingForKind = range == .last24Hours ? pending[kind.rawValue] : nil
-            return (kind, aggregator.query(kind: kind, range: range, pending: pendingForKind))
+            (kind, aggregator.query(kind: kind, range: range, pending: nil))
         })
     }
 
@@ -507,6 +497,7 @@ private struct SummaryCard: View {
 
 struct HealthScoreSection: View {
     let healthScore: HealthScore
+    @State private var showTips = false
 
     var body: some View {
         if #available(macOS 26, *) {
@@ -524,13 +515,46 @@ struct HealthScoreSection: View {
     }
 
     private var healthContent: some View {
+        Group {
+            if healthScore.isDataAvailable {
+                scoreContent
+            } else {
+                emptyContent
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 16)
+    }
+
+    private var scoreContent: some View {
         HStack(alignment: .center, spacing: 24) {
-            HealthScoreRingView(score: healthScore)
+            VStack(spacing: 6) {
+                HealthScoreRingView(score: healthScore)
+                if healthScore.trend.count >= 2 {
+                    HealthTrendSparkline(points: healthScore.trend)
+                        .frame(width: 100, height: 22)
+                }
+            }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(String(localized: "health.title"))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Text(String(localized: "health.title"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Button {
+                        showTips.toggle()
+                    } label: {
+                        Image(systemName: "info.circle")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help(String(localized: "health.tips.button"))
+                    .popover(isPresented: $showTips, arrowEdge: .top) {
+                        HealthTipsPopover()
+                    }
+                    Spacer(minLength: 0)
+                }
 
                 if healthScore.thermalCapped {
                     Label(String(localized: "health.thermal-capped"), systemImage: "thermometer.high")
@@ -543,8 +567,26 @@ struct HealthScoreSection: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 16)
+    }
+
+    private var emptyContent: some View {
+        HStack(alignment: .center, spacing: 14) {
+            Image(systemName: "chart.bar.xaxis")
+                .font(.title2)
+                .foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(String(localized: "health.title"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(String(localized: "health.no-data"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(String(localized: "health.no-data.hint"))
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer(minLength: 0)
+        }
     }
 
     private var healthGlassTint: Color {
@@ -593,34 +635,126 @@ struct HealthScoreRingView: View {
     }
 }
 
+// MARK: - Health Trend Sparkline
+
+struct HealthTrendSparkline: View {
+    let points: [HealthTrendPoint]
+
+    var body: some View {
+        GeometryReader { geo in
+            if points.count >= 2 {
+                Path { path in
+                    let stepX = geo.size.width / CGFloat(points.count - 1)
+                    for (i, p) in points.enumerated() {
+                        let x = CGFloat(i) * stepX
+                        let y = geo.size.height * (1 - CGFloat(min(max(p.score, 0), 100)) / 100)
+                        if i == 0 {
+                            path.move(to: CGPoint(x: x, y: y))
+                        } else {
+                            path.addLine(to: CGPoint(x: x, y: y))
+                        }
+                    }
+                }
+                .stroke(
+                    LinearGradient(
+                        colors: [.green.opacity(0.8), .yellow.opacity(0.8), .red.opacity(0.8)],
+                        startPoint: .leading, endPoint: .trailing
+                    ),
+                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
+                )
+            }
+        }
+    }
+}
+
+// MARK: - Health Tips Popover
+
+struct HealthTipsPopover: View {
+    private struct DimTip {
+        let name: String
+        let tip: String
+    }
+
+    private var tips: [DimTip] {
+        [
+            DimTip(name: String(localized: "health.dimension.cpu"), tip: String(localized: "health.tips.cpu")),
+            DimTip(name: String(localized: "health.dimension.gpu"), tip: String(localized: "health.tips.gpu")),
+            DimTip(name: String(localized: "health.dimension.disk"), tip: String(localized: "health.tips.disk")),
+            DimTip(name: String(localized: "health.dimension.pressure"), tip: String(localized: "health.tips.pressure")),
+            DimTip(name: String(localized: "health.dimension.thermal"), tip: String(localized: "health.tips.thermal")),
+        ]
+    }
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 10) {
+                Text(String(localized: "health.tips.title"))
+                    .font(.headline)
+                Text(String(localized: "health.tips.intro"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Divider()
+
+                ForEach(Array(tips.enumerated()), id: \.offset) { _, tip in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(tip.name)
+                            .font(.subheadline.weight(.semibold))
+                        Text(tip.tip)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                Divider()
+                Text(String(localized: "health.tips.thermal"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .frame(width: 280)
+        }
+        .frame(maxHeight: 360)
+    }
+}
+
 // MARK: - Dimension Score Row
 
 struct DimensionScoreRow: View {
     let dimension: DimensionScore
 
     var body: some View {
-        HStack(spacing: 8) {
-            Text(dimension.name)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .frame(width: 72, alignment: .leading)
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.secondary.opacity(0.08))
-                    Capsule()
-                        .fill(levelColor.opacity(0.7))
-                        .frame(width: geo.size.width * min(max(dimension.healthValue, 0), 1))
-                }
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 6) {
+                Text(dimension.name)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                Spacer(minLength: 0)
+                Text(dimension.rawText)
+                    .font(.caption2.weight(.medium))
+                    .monospacedDigit()
+                    .foregroundStyle(.primary)
             }
-            .frame(height: 6)
-
-            Text("\(Int(dimension.healthValue * 100))%")
-                .font(.caption2.weight(.medium))
-                .monospacedDigit()
-                .foregroundStyle(levelColor)
-                .frame(width: 32, alignment: .trailing)
+            HStack(spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.secondary.opacity(0.08))
+                        Capsule()
+                            .fill(levelColor.opacity(0.7))
+                            .frame(width: geo.size.width * min(max(dimension.healthValue, 0), 1))
+                    }
+                }
+                .frame(height: 6)
+                Text("\(Int(dimension.healthValue * 100))")
+                    .font(.caption2.weight(.semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(levelColor)
+                    .frame(width: 26, alignment: .trailing)
+            }
         }
     }
 

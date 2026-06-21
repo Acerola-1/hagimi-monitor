@@ -35,11 +35,20 @@ enum HealthLevel: String, CaseIterable {
 struct DimensionScore: Identifiable {
     let id = UUID()
     let name: String           // Localized display name
-    let rawValue: Double       // Original value (e.g., 72 for 72%)
+    let rawText: String        // Localized display of the original value (e.g. "32%", "2.3 GB", "正常")
+    let rawValue: Double       // Original numeric value (e.g. 72 for 72%, level int for pressure/thermal)
     let healthValue: Double    // Health degree 0-1
     let weight: Double         // Effective weight (after redistribution)
     let level: HealthLevel
-    let isAvailable: Bool      // Whether data exists
+    let isAvailable: Bool      // Whether data exists for this dimension
+}
+
+// MARK: - HealthTrendPoint
+
+struct HealthTrendPoint: Identifiable {
+    let id = UUID()
+    let date: Date
+    let score: Double          // 0-100
 }
 
 // MARK: - HealthScore
@@ -50,28 +59,30 @@ struct HealthScore {
     let dimensions: [DimensionScore]
     let thermalCapped: Bool    // Was score capped by thermal throttle
     let timeRange: StatisticsTimeRange
+    let isDataAvailable: Bool  // False when the range has no persisted/pending data
+    let trend: [HealthTrendPoint]  // Per-bucket score history (oldest → newest)
 }
 
 // MARK: - HealthScoreWeights
 
 struct HealthScoreWeights {
-    var cpu: Double = 0.25
-    var memory: Double = 0.25
-    var gpu: Double = 0.15
-    var disk: Double = 0.10
-    var swap: Double = 0.10
-    var pressure: Double = 0.10
+    // macOS 内存管理哲学：主动填满 RAM 做缓存，内存占用% 无意义；
+    // Swap 也是正常内存管理手段。内存健康只看压力等级。
+    var cpu: Double = 0.35
+    var gpu: Double = 0.20
+    var disk: Double = 0.15
+    var pressure: Double = 0.25
     var thermal: Double = 0.05
 
-    var total: Double { cpu + memory + gpu + disk + swap + pressure + thermal }
+    var total: Double { cpu + gpu + disk + pressure + thermal }
 
     /// Normalize weights so they sum to 1.0
     func normalized() -> HealthScoreWeights {
         let t = total
         guard t > 0 else { return Self() }
         return HealthScoreWeights(
-            cpu: cpu / t, memory: memory / t, gpu: gpu / t,
-            disk: disk / t, swap: swap / t, pressure: pressure / t, thermal: thermal / t
+            cpu: cpu / t, gpu: gpu / t,
+            disk: disk / t, pressure: pressure / t, thermal: thermal / t
         )
     }
 }

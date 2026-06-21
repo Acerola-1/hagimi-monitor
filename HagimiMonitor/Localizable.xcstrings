@@ -3361,19 +3361,19 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "24小时"
+            "value": "过去24小时"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "24h"
+            "value": "Past 24 Hours"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "24時間"
+            "value": "過去24時間"
           }
         }
       }
@@ -3405,19 +3405,19 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "一月"
+            "value": "过去30天"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Month"
+            "value": "Past 30 Days"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "1ヶ月"
+            "value": "過去30日"
           }
         }
       }
@@ -3427,19 +3427,19 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "一周"
+            "value": "过去7天"
           }
         },
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Week"
+            "value": "Past 7 Days"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "1週間"
+            "value": "過去7日"
           }
         }
       }
@@ -4650,6 +4650,270 @@
           "stringUnit": {
             "state": "translated",
             "value": "重大"
+          }
+        }
+      }
+    },
+    "health.tips.button": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "评分说明"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health Score Explained"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スコアの説明"
+          }
+        }
+      }
+    },
+    "health.tips.title": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "评分说明"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health Score Explained"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "スコアの説明"
+          }
+        }
+      }
+    },
+    "health.tips.intro": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康评分基于所选时间范围的历史统计（非实时负载），由 7 个维度加权平均得出；持续热节流时额外限制分数。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The health score is based on historical statistics for the selected range (not real-time load). It is a weighted average of 7 dimensions, with an extra cap under sustained thermal throttling."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ヘルススコアは選択した期間の履歴統計（リアルタイム負荷ではない）に基づき、7 つの指標の加重平均で算出します。持続的なサーマルスロットリング時は追加で制限されます。"
+          }
+        }
+      }
+    },
+    "health.tips.thermal": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当整段窗口的平均热状态达到「过热」及以上时，评分会被限制，以反映热节流对体验的影响。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When the average thermal state across the window reaches Hot or above, the score is capped to reflect the impact of thermal throttling."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "期間全体の平均熱状態が「高温」以上に達すると、サーマルスロットリングの影響を反映してスコアが制限されます。"
+          }
+        }
+      }
+    },
+    "health.tips.cpu": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU 利用率越低越健康；70% 以下接近满分，超过 90% 急剧下降。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lower CPU utilization is healthier; near full below 70%, drops sharply above 90%."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU 使用率が低いほど健康。70% 以下はほぼ満点、90% 超で急減します。"
+          }
+        }
+      }
+    },
+    "health.tips.memory": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存占用越高越不健康，线性计算。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Higher memory usage is less healthy, computed linearly."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリ使用率が高いほど不健康、線形で計算。"
+          }
+        }
+      }
+    },
+    "health.tips.gpu": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU 利用率越高越不健康，线性计算。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Higher GPU utilization is less healthy, computed linearly."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU 使用率が高いほど不健康、線形で計算。"
+          }
+        }
+      }
+    },
+    "health.tips.disk": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "磁盘空间充足时不扣分，仅当剩余空间低于 15% 才开始下降。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No penalty while free space is sufficient; only drops when free space falls below 15%."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "空き容量が十分なら減点なし、空き 15% 未満で低下し始めます。"
+          }
+        }
+      }
+    },
+    "health.tips.swap": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap 使用量相对物理内存的占比，占比越高越不健康。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap usage relative to physical memory — the higher the ratio, the less healthy."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "物理メモリに対する Swap 使用量の割合、高いほど不健康。"
+          }
+        }
+      }
+    },
+    "health.tips.pressure": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统内存压力等级（正常/警告/严重），与内存占用分开计算，更能反映内存吃紧程度。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System memory pressure level (normal/warning/critical), tracked separately from memory usage and a better signal of memory strain."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムのメモリプレッシャーレベル（通常/警告/重大）。メモリ使用率とは別に計算し、メモリ圧迫をより反映します。"
+          }
+        }
+      }
+    },
+    "health.no-data": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前时间范围数据不足"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough data for this range"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "この期間のデータが不足しています"
+          }
+        }
+      }
+    },
+    "health.no-data.hint": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请稍后再试，或切换其他时间范围。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please try again later or switch to another time range."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "後でもう一度試すか、別の期間を選択してください。"
           }
         }
       }

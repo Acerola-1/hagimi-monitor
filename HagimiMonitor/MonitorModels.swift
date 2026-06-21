@@ -253,8 +253,11 @@ final class MonitorStore: ObservableObject {
     private let cpuHighLoadMinDuration: TimeInterval = 300 // 5 分钟
     private let batteryOverheatThreshold: Double = 40.0 // 40°C
 
-    /// 暴露给统计页，用于读取当前小时尚未落库的内存桶。
+    /// 暴露给统计页，用于读取当前采集窗口尚未落库的内存桶。
     var statisticsPendingSnapshot: [String: PendingBucket] { statisticsRecorder.pendingSnapshot() }
+
+    /// App 退出时将当前未落库的采样桶立即写入 SwiftData，避免丢失。
+    func flushStatistics() { statisticsRecorder.flush() }
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []

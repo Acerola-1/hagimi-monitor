@@ -25,15 +25,24 @@ struct HealthScoreReportPayload: Codable {
     let score: Double
     let level: String
     let thermalCapped: Bool
+    let isDataAvailable: Bool
     let dimensions: [DimensionScoreReportPayload]
+    let trend: [HealthTrendPointPayload]
+}
+
+struct HealthTrendPointPayload: Codable {
+    let timestamp: TimeInterval
+    let score: Double
 }
 
 struct DimensionScoreReportPayload: Codable {
     let name: String
+    let rawText: String
     let rawValue: Double
     let healthValue: Double
     let weight: Double
     let level: String
+    let isAvailable: Bool
 }
 
 struct StatisticsReportStrings: Codable {
@@ -57,6 +66,8 @@ struct StatisticsReportStrings: Codable {
     let healthPoor: String
     let healthCritical: String
     let healthThermalCapped: String
+    let healthNoData: String
+    let healthNoDataHint: String
     // Event timeline
     let eventTitle: String
     let eventTopProcesses: String
@@ -149,13 +160,15 @@ struct StatisticsReportExporter {
                 healthPoor: String(localized: "health.level.poor"),
                 healthCritical: String(localized: "health.level.critical"),
                 healthThermalCapped: String(localized: "health.thermal-capped"),
+                healthNoData: String(localized: "health.no-data"),
+                healthNoDataHint: String(localized: "health.no-data.hint"),
                 eventTitle: String(localized: "event.title"),
                 eventTopProcesses: String(localized: "event.top-processes"),
                 eventDuration: String(localized: "event.duration")
             ),
             ranges: Self.rangeSpecs.map { spec in
-                let pendingBucket = spec.range == .last24Hours ? pending.first?.value : nil
-                let health = aggregator.queryHealthScore(range: spec.range, pending: pendingBucket)
+                let pendingBuckets = spec.range == .last24Hours ? pending : nil
+                let health = aggregator.queryHealthScore(range: spec.range, pending: pendingBuckets)
                 return StatisticsReportRangePayload(
                     id: spec.id,
                     title: spec.range.title,
@@ -200,15 +213,19 @@ struct StatisticsReportExporter {
             score: health.score,
             level: health.level.rawValue,
             thermalCapped: health.thermalCapped,
+            isDataAvailable: health.isDataAvailable,
             dimensions: health.dimensions.map { dim in
                 DimensionScoreReportPayload(
                     name: dim.name,
+                    rawText: dim.rawText,
                     rawValue: dim.rawValue,
                     healthValue: dim.healthValue,
                     weight: dim.weight,
-                    level: dim.level.rawValue
+                    level: dim.level.rawValue,
+                    isAvailable: dim.isAvailable
                 )
-            }
+            },
+            trend: health.trend.map { HealthTrendPointPayload(timestamp: $0.date.timeIntervalSince1970, score: $0.score) }
         )
     }
 
@@ -418,6 +435,12 @@ struct StatisticsReportHTMLBuilder {
             .health-dim-row .dim-bar-fill { height: 100%; border-radius: 4px; transition: width .4s ease; }
             .health-dim-row .dim-val { width: 36px; text-align: right; font-size: 12px;
               font-weight: 600; font-variant-numeric: tabular-nums; flex: none; }
+            .health-dim-row .dim-raw { width: 64px; text-align: right; font-size: 11.5px;
+              color: var(--text-dim); font-variant-numeric: tabular-nums; flex: none; }
+            .health-empty { padding: 20px 4px; color: var(--text-dim); font-size: 13px; }
+            .health-empty .hint { font-size: 11.5px; color: var(--text-faint); margin-top: 4px; }
+            .health-trend { margin-top: 14px; width: 100%; height: 48px; }
+            .health-trend path.line { fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
             /* ===== Event Timeline ===== */
             .timeline-section { background: var(--bg-elev); border: 1px solid var(--border);
@@ -746,22 +769,42 @@ struct StatisticsReportHTMLBuilder {
               const el = document.getElementById('health');
               const hs = range.healthScore;
               if (!hs) { el.innerHTML = ''; return; }
+              if (hs.isDataAvailable === false) {
+                el.innerHTML = '<div class="health-card"><div class="health-empty">' +
+                  L.healthNoData + '<div class="hint">' + L.healthNoDataHint + '</div></div></div>';
+                return;
+              }
               const level = hs.level || levelOf(hs.score);
               const color = LEVEL_COLORS[level] || LEVEL_COLORS.good;
               const circumference = 2 * Math.PI * 54;
               const offset = circumference * (1 - Math.min(hs.score, 100) / 100);
               let dimsHTML = '';
               (hs.dimensions || []).forEach(d => {
-                if (!d.isAvailable) return;
+                if (d.isAvailable === false) return;
                 const dc = LEVEL_COLORS[d.level] || LEVEL_COLORS.good;
                 const pct = Math.round(d.healthValue * 100);
                 dimsHTML += '<div class="health-dim-row">' +
                   '<span class="dim-name">' + d.name + '</span>' +
                   '<span class="dim-bar"><span class="dim-bar-fill" style="width:' + pct + '%;background:' + dc + '"></span></span>' +
-                  '<span class="dim-val" style="color:' + dc + '">' + pct + '%</span>' +
+                  '<span class="dim-raw">' + (d.rawText || '') + '</span>' +
+                  '<span class="dim-val" style="color:' + dc + '">' + pct + '</span>' +
                 '</div>';
               });
               const cappedText = hs.thermalCapped ? '<div class="capped">' + L.healthThermalCapped + '</div>' : '';
+              // 趋势线
+              let trendHTML = '';
+              const trend = hs.trend || [];
+              if (trend.length >= 2) {
+                const w = 600, h = 48, pad = 2;
+                const xs = trend.map((_, i) => pad + (w - 2*pad) * i / (trend.length - 1));
+                const ys = trend.map(p => pad + (h - 2*pad) * (1 - Math.min(Math.max(p.score,0),100)/100));
+                let d = 'M ' + xs[0].toFixed(1) + ' ' + ys[0].toFixed(1);
+                for (let i = 1; i < trend.length; i++) { d += ' L ' + xs[i].toFixed(1) + ' ' + ys[i].toFixed(1); }
+                trendHTML = '<svg class="health-trend" viewBox="0 0 ' + w + ' ' + h + '" preserveAspectRatio="none">' +
+                  '<path class="line" d="' + d + '" stroke="url(#trendGrad)"/>' +
+                  '<defs><linearGradient id="trendGrad" x1="0" x2="1"><stop offset="0" stop-color="#2f9e64"/>' +
+                  '<stop offset="0.5" stop-color="#d4a843"/><stop offset="1" stop-color="#d94848"/></linearGradient></defs></svg>';
+              }
               el.innerHTML = '<div class="health-card">' +
                 '<div class="health-ring-wrap">' +
                   '<svg viewBox="0 0 120 120">' +
@@ -775,7 +818,7 @@ struct StatisticsReportHTMLBuilder {
                     cappedText +
                   '</div>' +
                 '</div>' +
-                '<div class="health-dims">' + dimsHTML + '</div>' +
+                '<div class="health-dims">' + dimsHTML + trendHTML + '</div>' +
               '</div>';
             }
 

@@ -17,23 +17,45 @@
 
 ### 维度定义
 
+macOS 内存管理哲学：主动填满 RAM 做文件缓存、压缩非活跃页面，内存占用% 无意义；Swap 也是正常内存管理手段。内存健康只看压力等级。
+
 | 维度 | 健康度计算 | 权重 | 数据来源 |
 |------|-----------|------|----------|
-| CPU | `(100 - avg_cpu%) / 100` | 0.25 | `HourlySample.avg` (kind=cpu) |
-| Memory | `(100 - avg_memory%) / 100` | 0.25 | `HourlySample.avg` (kind=memory) |
-| GPU | `(100 - avg_gpu%) / 100` | 0.15 | `HourlySample.avg` (kind=gpu) |
-| Disk | `(100 - avg_disk%) / 100` | 0.10 | `HourlySample.avg` (kind=storage) |
-| Swap | `max(0, 1 - swapUsed / physicalMemory)` | 0.10 | `HourlySample.swapUsed` |
-| Memory Pressure | `[normal: 1.0, warning: 0.5, critical: 0.0]` | 0.10 | `HourlySample.memoryPressureLevel` |
-| Thermal | `[nominal: 1.0, fair: 0.75, serious: 0.5, critical: 0.0]` | 0.05 | `HourlySample.thermalState` |
+| CPU | **分段曲线**（见下） | 0.35 | `HourlySample.avg` (kind=cpu) |
+| GPU | `(100 - avg%) / 100` | 0.20 | `HourlySample.avg` (kind=gpu) |
+| Disk | **阈值扣分**：剩余≥15%满分，<15%线性下降 | 0.15 | `HourlySample.avg` (kind=storage) |
+| Memory Pressure | **插值**：avg 0→1.0, 1→0.5, 2→0.0 | 0.25 | `HourlySample.memoryPressureLevel` 加权均值 |
+| Thermal | **插值**：avg 0→1.0, 1→0.75, 2→0.5, 3→0.0 | 0.05 | `HourlySample.thermalState` 加权均值 |
 
 **总分公式：**
 ```
-rawScore = 0.25*s_cpu + 0.25*s_mem + 0.15*s_gpu + 0.10*s_disk
-         + 0.10*s_swap + 0.10*s_pressure + 0.05*s_thermal
+rawScore = 0.35*s_cpu + 0.20*s_gpu + 0.15*s_disk + 0.25*s_pressure + 0.05*s_thermal
 
-score = thermalState == .critical ? min(rawScore * 100, 20) : rawScore * 100
+score = avgThermalState >= 2.0 ? min(rawScore * 100, 40) : rawScore * 100
 ```
+
+### 热压力硬帽
+
+原设计硬帽到 20 分（一旦触及 .critical 即触发），实测导致评分剧烈跳变。改为：
+- 基于整段窗口的**加权平均热状态**（而非出现过的峰值）
+- 阈值 `avgThermalState >= 2.0`（平均处于 serious 及以上）——单次 critical 在 24h 窗口里对均值影响仅约 0.125，不会误触
+- 硬帽分数从 20 提升到 **40**——过低的帽值会让分数瞬间从优秀跌到糟糕，缺乏区分度
+
+**CPU（分段曲线）**：低负载接近满分，重载时急剧下降：
+```
+usage ≤ 70%: health = 1.0 - (usage/70) * 0.15    → 0%→1.0, 70%→0.85
+70–90%:      health = 0.85 - ((usage-70)/20) * 0.55 → 90%→0.30
+90–100%:     health = 0.30 - ((usage-90)/10) * 0.30  → 100%→0.0
+```
+选择分段而非线性是因为 CPU 50% 和 90% 的体验差距远大于 40 个百分点，线性无法区分。
+
+**磁盘（阈值扣分）**：磁盘占用本身不等于不健康，只在剩余空间不足时才扣分：
+```
+free ≥ 15%: health = 1.0
+free < 15%: health = free / 15   → 0%→0, 15%→1.0
+```
+
+**压力/热状态（连续插值）**：基于整段时间的**加权均值**（排除 unknown=3），而非逐层 max。避免一次瞬时峰值把整个窗口的评分钉死。
 
 ### 降级策略
 
@@ -43,16 +65,25 @@ score = thermalState == .critical ? min(rawScore * 100, 20) : rawScore * 100
 // 示例：thermalState 为 nil 时
 var weights: [(value: Double, weight: Double)] = [
     (s_cpu, 0.25),
-    (s_mem, 0.25),
+    (s_mem, 0.20),
     (s_gpu, 0.15),
     (s_disk, 0.10),
     (s_swap, 0.10),
-    (s_pressure, 0.10),
+    (s_pressure, 0.15),
     // thermal 缺失，跳过
 ]
 let totalWeight = weights.reduce(0) { $0 + $1.weight }
 let rawScore = weights.reduce(0) { $0 + $1.value * $1.weight } / totalWeight
 ```
+
+### 空数据处理
+
+当指定时间范围内**完全无数据**（CPU 无 HourlySample 且无 pending）时，`queryHealthScore` 返回：
+```swift
+HealthScore(score: 0, level: .critical, dimensions: [], thermalCapped: false,
+            timeRange: range, isDataAvailable: false, trend: [])
+```
+UI 展示「数据不足」卡片，而非 100 分。这是防止空数据→满分误判的核心防护。
 
 ### 评分等级
 
@@ -66,16 +97,53 @@ let rawScore = weights.reduce(0) { $0 + $1.value * $1.weight } / totalWeight
 
 ### 时间范围
 
-健康评分基于历史统计，支持以下时间范围：
+统计页面只读**已入库数据**，不含实时 pending 桶。同一小时内反复切换范围，读到的数据完全一致，分数绝对不变。
 
-| 范围 | 数据源 | 含义 |
-|------|--------|------|
-| 过去 1 小时 | 当前 PendingBucket + 最近 HourlySample | "现在状态如何" |
-| 过去 24 小时 | 24 个 HourlySample | "今天状态如何" |
-| 过去 7 天 | 7 个 DailyAggregate | "本周状态如何" |
-| 过去 30 天 | 30 个 DailyAggregate | "本月状态如何" |
+| 范围 | 数据源 | UI 标签 | 分数稳定性 |
+|------|--------|---------|-----------|
+| 过去 24 小时 | 已入库 HourlySample（不含当前未 flush 小时） | 过去24小时 | 绝对稳定 |
+| 过去 7 天 | 已入库 DailyAggregate（不含今天） | 过去7天 | 绝对稳定 |
+| 过去 30 天 | 已入库 DailyAggregate（不含今天） | 过去30天 | 绝对稳定 |
+| 过去 1 年 | 已入库 DailyAggregate | （仅 HTML 报告） | 绝对稳定 |
 
-对于多数据点范围（如 24h），取各维度的 avg 值的均值作为该维度的健康度输入。
+UI picker 只展示 3 个选项（24h/7d/30d），"过去 1 年"仅在 HTML 详细报告中提供。所有范围的评分基于已入库的死数据，不会因当前小时的采样变化而波动。
+
+### 趋势线
+
+`HealthScore.trend: [HealthTrendPoint]` 按时间桶复算分量分（不含热压力硬帽），用于 UI sparkline 和 HTML 报告：
+- **24h**：逐小时（24 个点）
+- **7d/30d/1y**：逐天（6+N+1 个点，含今天）
+
+每个桶的分数由该桶的 cpu/mem/gpu/disk/swap/pressure/thermal 原始值通过 `scoreFrom` 加权计算，缺失维度自动剔除重分配。趋势线不应用热压力硬帽（避免单桶过热导致整条线扭曲）。
+
+### 分项原始值展示
+
+`DimensionScoreRow` 采用两行布局（修复初版只显示 healthValue 导致的「看不懂」）：
+- **第一行**：维度名（左侧）+ 原始值文案（右侧，如 "32%"、"2.3 GB"、"正常"）
+- **第二行**：健康度条形图 + 健康分
+
+原始值文案（`rawText`）在聚合器中计算，每种维度使用最直观的格式：
+- CPU/GPU/Memory/Disk：`"\(Int(avg))%"`（利用率百分比）
+- Swap：格式化为 KB/MB/GB
+- Pressure：`压力等级文案`（正常/警告/严重）
+- Thermal：`热状态文案`（正常/较热/过热/严重过热）
+
+### 评分说明 Tips
+
+`HealthScoreSection` 标题栏右侧 info 按钮，点击打开 Popover 说明：
+- 总分公式：7 个维度加权平均 + 热节流帽
+- 各维度含义与计算方式
+- 热节流硬帽逻辑
+- 数据不足状态
+
+每个维度使用 `health.tips.<dim>` 本地化 key，如「CPU 利用率越低越健康；70% 以下接近满分，超过 90% 急剧下降」。
+
+### 空数据状态
+
+当 `HealthScore.isDataAvailable == false` 时，`HealthScoreSection` 显示占位卡片而非圆环：
+- 图标 `chart.bar.xaxis`
+- 标题「当前时间范围数据不足」
+- 副标题「请稍后再试，或切换其他时间范围。」
 
 ## UI 设计
 
@@ -111,9 +179,23 @@ errorBanner       // 现有，不动
 - 容器使用 `GlassEffectContainer` + `.glassEffect(.regular.tint(...))`，尺寸约 120pt
 
 **分项条形图 `DimensionScoreRow`**：
-- 每行：维度名、原始值、健康度条形图、等级标签
-- 条形图复用已有 `ProgressMeter`（`Views/Panel/ProgressMeter.swift`）
-- 颜色跟随维度等级，取自 `MonitorPalette` 新增的 `healthTint(for: HealthLevel)`
+- 两行布局：第一行维度名 + 原始值文案，第二行健康度条形图 + 健康分
+- 条形图复用 `Capsule` 实现，颜色跟随维度等级
+- 颜色取自 `MonitorPalette.healthTint(for: HealthLevel)`
+
+**信息按钮 `HealthTipsPopover`**：
+- 标题栏右侧 info.circle 按钮，点击打开 Popover（width: 280, maxHeight: 360）
+- 内容：总分说明 + 各维度含义 + 热节流说明
+- 本地化 key：`health.tips.button`、`health.tips.title`、`health.tips.intro`、`health.tips.<dim>`
+
+**趋势线 `HealthTrendSparkline`**：
+- 圆环下方、分项上方，宽度同圆环（100pt），高度 22pt
+- SwiftUI Path 折线，颜色从绿→黄→红渐变
+- 仅在 `trend.count >= 2` 时显示
+
+**空数据状态**：
+- `!isDataAvailable` 时渲染占位卡片：图标 + 「数据不足」+ 提示文字
+- 不再将空数据算为 100 分
 
 **范围联动**：健康评分通过 `queryHealthScore(range:)` 复用全局 `range`，无独立选择器。
 

@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 import os.log
 
-/// 内存桶：累加当前小时的采样值
+/// 内存桶：累加当前采集窗口（5 分钟）的采样值
 private struct SampleBucket {
     // MARK: - 现有字段
     var sum: Double = 0
@@ -87,24 +87,27 @@ final class StatisticsRecorder {
     private let container: ModelContainer
     private let logger = Logger(subsystem: Bundle.main.bundleIdentifier ?? "hagimi", category: "StatisticsRecorder")
 
-    /// 当前小时的内存桶 [MonitorKind.rawValue: SampleBucket]
+    /// 采集窗口时长（5 分钟）
+    private static let windowDuration: TimeInterval = 300
+
+    /// 当前采集窗口的内存桶 [MonitorKind.rawValue: SampleBucket]
     private var buckets: [String: SampleBucket] = [:]
-    /// 当前小时起始时间
-    private var currentHour: Date
+    /// 当前采集窗口起始时间
+    private var currentWindow: Date
     /// 上次采样的累计值（用于计算差值）
     private var lastCumulative: [String: (bytesIn: Int64, bytesOut: Int64, bytesRead: Int64, bytesWritten: Int64, swapins: Int64, swapouts: Int64)] = [:]
 
     // MARK: - Batch Event Detection State
-    /// 上一小时的 Swap 使用量（用于检测 Swap 突增）
-    private var previousHourSwapUsed: Double?
-    /// 上一小时的磁盘 I/O 总量（用于检测 I/O 峰值）
-    private var previousHourDiskIO: Double?
-    /// 上一小时的网络流量总量（用于检测网络峰值）
-    private var previousHourNetworkTotal: Double?
+    /// 上一窗口的 Swap 使用量（用于检测 Swap 突增）
+    private var previousWindowSwapUsed: Double?
+    /// 上一窗口的磁盘 I/O 总量（用于检测 I/O 峰值）
+    private var previousWindowDiskIO: Double?
+    /// 上一窗口的网络流量总量（用于检测网络峰值）
+    private var previousWindowNetworkTotal: Double?
 
     init(container: ModelContainer) {
         self.container = container
-        self.currentHour = StatisticsRecorder.startOfHour(Date())
+        self.currentWindow = StatisticsRecorder.startOfWindow(Date())
     }
 
     /// 使用全局共享容器创建。Recorder 与 Aggregator 必须共用同一容器。
@@ -115,12 +118,12 @@ final class StatisticsRecorder {
     /// 接收一批采样结果，累加到内存桶
     func record(modules: [MonitorModule]) {
         let now = Date()
-        let hour = StatisticsRecorder.startOfHour(now)
+        let window = StatisticsRecorder.startOfWindow(now)
 
-        // 小时切换：flush 上一小时的桶
-        if hour != currentHour {
+        // 窗口切换：flush 上一窗口的桶
+        if window != currentWindow {
             flushCurrentBuckets()
-            currentHour = hour
+            currentWindow = window
         }
 
         for module in modules {
@@ -291,13 +294,13 @@ final class StatisticsRecorder {
         }
     }
 
-    /// 当前小时尚未落库的内存桶快照（供「过去24小时」视图合并显示，避免整点前无数据）。
+    /// 当前采集窗口尚未落库的内存桶快照（供「过去24小时」视图合并显示，避免整点前无数据）。
     /// key 为 `MonitorKind.rawValue`。
     func pendingSnapshot() -> [String: PendingBucket] {
         var result: [String: PendingBucket] = [:]
         for (kind, bucket) in buckets where bucket.count > 0 {
             result[kind] = PendingBucket(
-                hour: currentHour,
+                hour: currentWindow,
                 avg: bucket.avg,
                 peak: bucket.peak,
                 low: bucket.low,
@@ -341,7 +344,7 @@ final class StatisticsRecorder {
     /// 将当前桶写入 HourlySample，清理超过 24 小时的旧数据，聚合成 DailyAggregate
     private func flushCurrentBuckets() {
         let context = ModelContext(container)
-        let hour = currentHour
+        let hour = currentWindow
 
         for (kind, bucket) in buckets {
             guard bucket.count > 0 else { continue }
@@ -404,7 +407,7 @@ final class StatisticsRecorder {
         // Swap 突增检测（增长 >100%）
         if let memBucket = buckets["memory"], memBucket.swapUsedCount > 0 {
             let currentSwap = memBucket.swapUsedSum / Double(memBucket.swapUsedCount)
-            if let prev = previousHourSwapUsed, prev > 0, currentSwap > prev * 2 {
+            if let prev = previousWindowSwapUsed, prev > 0, currentSwap > prev * 2 {
                 let event = SystemEvent(
                     timestamp: Date(),
                     eventType: SystemEventType.swapUsageSpike.rawValue,
@@ -416,7 +419,7 @@ final class StatisticsRecorder {
                 )
                 context.insert(event)
             }
-            previousHourSwapUsed = currentSwap
+            previousWindowSwapUsed = currentSwap
         }
 
         // 磁盘空间不足检测（<5GB warning, <1GB critical）
@@ -439,10 +442,10 @@ final class StatisticsRecorder {
             }
         }
 
-        // 磁盘 I/O 峰值检测（当前小时总 I/O 超过上一小时 3 倍）
+        // 磁盘 I/O 峰值检测（当前窗口总 I/O 超过上一窗口 3 倍）
         if let storageBucket = buckets["storage"] {
             let currentIO = Double(storageBucket.bytesReadSum + storageBucket.bytesWrittenSum)
-            if let prev = previousHourDiskIO, prev > 0, currentIO > prev * 3, currentIO > 100 * 1024 * 1024 {
+            if let prev = previousWindowDiskIO, prev > 0, currentIO > prev * 3, currentIO > 100 * 1024 * 1024 {
                 let event = SystemEvent(
                     timestamp: Date(),
                     eventType: SystemEventType.diskIOSpike.rawValue,
@@ -454,13 +457,13 @@ final class StatisticsRecorder {
                 )
                 context.insert(event)
             }
-            previousHourDiskIO = currentIO > 0 ? currentIO : previousHourDiskIO
+            previousWindowDiskIO = currentIO > 0 ? currentIO : previousWindowDiskIO
         }
 
-        // 网络流量峰值检测（当前小时总流量超过上一小时 3 倍）
+        // 网络流量峰值检测（当前窗口总流量超过上一窗口 3 倍）
         if let netBucket = buckets["network"] {
             let currentTotal = Double(netBucket.bytesInSum + netBucket.bytesOutSum)
-            if let prev = previousHourNetworkTotal, prev > 0, currentTotal > prev * 3, currentTotal > 100 * 1024 * 1024 {
+            if let prev = previousWindowNetworkTotal, prev > 0, currentTotal > prev * 3, currentTotal > 100 * 1024 * 1024 {
                 let event = SystemEvent(
                     timestamp: Date(),
                     eventType: SystemEventType.networkSpike.rawValue,
@@ -472,7 +475,7 @@ final class StatisticsRecorder {
                 )
                 context.insert(event)
             }
-            previousHourNetworkTotal = currentTotal > 0 ? currentTotal : previousHourNetworkTotal
+            previousWindowNetworkTotal = currentTotal > 0 ? currentTotal : previousWindowNetworkTotal
         }
 
         do {
@@ -594,8 +597,21 @@ final class StatisticsRecorder {
 
     // MARK: - Helpers
 
-    private static func startOfHour(_ date: Date) -> Date {
-        Calendar.current.date(from: Calendar.current.dateComponents([.year, .month, .day, .hour], from: date))!
+    /// 将时间截断到 5 分钟窗口边界（如 14:32 → 14:30, 14:37 → 14:35）
+    private static func startOfWindow(_ date: Date) -> Date {
+        let cal = Calendar.current
+        let comps = cal.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let truncatedMinute = (comps.minute ?? 0) / 5 * 5
+        return cal.date(from: DateComponents(
+            year: comps.year, month: comps.month, day: comps.day,
+            hour: comps.hour, minute: truncatedMinute, second: 0
+        ))!
+    }
+
+    /// App 退出时调用，将当前未落库的桶立即 flush，避免数据丢失。
+    func flush() {
+        guard !buckets.isEmpty else { return }
+        flushCurrentBuckets()
     }
 
     private func metricInt64(_ module: MonitorModule, key: String) -> Int64? {

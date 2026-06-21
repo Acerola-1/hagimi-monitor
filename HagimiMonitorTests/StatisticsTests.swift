@@ -85,8 +85,8 @@ struct StatisticsTests {
         let container = makeTestContainer()
         let context = ModelContext(container)
 
-        // 插入测试数据
-        for i in 0..<7 {
+        // 插入过去 7 个完整天的数据（不含今天——今天由 hourly+pending 实时拼出）
+        for i in 1...7 {
             let date = Calendar.current.date(byAdding: .day, value: -i, to: Calendar.current.startOfDay(for: Date()))!
             let agg = DailyAggregate(date: date, kind: "cpu", avg: Double(30 + i * 5), peak: Double(50 + i * 5), low: Double(10 + i), sampleCount: 1000)
             context.insert(agg)
@@ -104,6 +104,108 @@ struct StatisticsTests {
         let range = StatisticsTimeRange.lastWeek
         // 验证不会崩溃，title 非空
         #expect(!range.title.isEmpty)
+    }
+
+    // MARK: - Health Score
+
+    private func recentHour() -> Date {
+        Calendar.current.dateInterval(of: .hour, for: Date().addingTimeInterval(-3600))!.start
+    }
+
+    @Test("Health score reports no data for empty range")
+    func testHealthScoreNoData() async throws {
+        let container = makeTestContainer()
+        let aggregator = await StatisticsAggregator(container: container)
+        let health = await aggregator.queryHealthScore(range: .lastWeek)
+        #expect(health.isDataAvailable == false)
+        #expect(health.dimensions.isEmpty)
+        #expect(health.trend.isEmpty)
+    }
+
+    @Test("Health score computes from hourly data")
+    func testHealthScoreWithData() async throws {
+        let container = makeTestContainer()
+        let context = ModelContext(container)
+        let hour = recentHour()
+        context.insert(HourlySample(hour: hour, kind: "cpu", avg: 30, peak: 60, low: 5, sampleCount: 10, thermalState: 0))
+        context.insert(HourlySample(hour: hour, kind: "memory", avg: 50, peak: 70, low: 30, sampleCount: 10, memoryPressureLevel: 0))
+        context.insert(HourlySample(hour: hour, kind: "gpu", avg: 20, peak: 40, low: 5, sampleCount: 10))
+        context.insert(HourlySample(hour: hour, kind: "storage", avg: 60, peak: 60, low: 60, sampleCount: 1))
+        try context.save()
+
+        let aggregator = await StatisticsAggregator(container: container)
+        let health = await aggregator.queryHealthScore(range: .last24Hours)
+        #expect(health.isDataAvailable == true)
+        #expect(health.score > 0)
+        #expect(health.score <= 100)
+        #expect(health.dimensions.contains { $0.isAvailable })
+        #expect(health.dimensions.contains { !$0.rawText.isEmpty })
+    }
+
+    @Test("Health score applies thermal cap when average thermal is serious or worse")
+    func testHealthScoreThermalCap() async throws {
+        let container = makeTestContainer()
+        let context = ModelContext(container)
+        let hour = recentHour()
+        context.insert(HourlySample(hour: hour, kind: "cpu", avg: 10, peak: 20, low: 5, sampleCount: 10, thermalState: 2))
+        context.insert(HourlySample(hour: hour, kind: "memory", avg: 20, peak: 30, low: 10, sampleCount: 10, memoryPressureLevel: 0))
+        try context.save()
+
+        let aggregator = await StatisticsAggregator(container: container)
+        let health = await aggregator.queryHealthScore(range: .last24Hours)
+        #expect(health.thermalCapped == true)
+        #expect(health.score <= 40)
+    }
+
+    @Test("Health score CPU dimension uses piecewise formula")
+    func testHealthScoreCPUFormula() async throws {
+        let container = makeTestContainer()
+        let context = ModelContext(container)
+        let hour = recentHour()
+        context.insert(HourlySample(hour: hour, kind: "cpu", avg: 50, peak: 60, low: 40, sampleCount: 10, thermalState: 0))
+        context.insert(HourlySample(hour: hour, kind: "memory", avg: 50, peak: 70, low: 30, sampleCount: 10, memoryPressureLevel: 0))
+        try context.save()
+
+        let aggregator = await StatisticsAggregator(container: container)
+        let health = await aggregator.queryHealthScore(range: .last24Hours)
+        // CPU avg 50 → health ≈ 0.893
+        let cpuDim = health.dimensions.first { abs($0.healthValue - 0.893) < 0.02 }
+        #expect(cpuDim != nil)
+    }
+
+    @Test("Health score builds trend from multiple buckets")
+    func testHealthScoreTrend() async throws {
+        let container = makeTestContainer()
+        let context = ModelContext(container)
+        let h1 = recentHour()
+        let h0 = Calendar.current.date(byAdding: .hour, value: -1, to: h1)!
+        for h in [h0, h1] {
+            context.insert(HourlySample(hour: h, kind: "cpu", avg: 40, peak: 60, low: 10, sampleCount: 10, thermalState: 0))
+            context.insert(HourlySample(hour: h, kind: "memory", avg: 40, peak: 60, low: 20, sampleCount: 10, memoryPressureLevel: 0))
+        }
+        try context.save()
+
+        let aggregator = await StatisticsAggregator(container: container)
+        let health = await aggregator.queryHealthScore(range: .last24Hours)
+        #expect(health.trend.count == 2)
+        #expect(health.trend.allSatisfy { $0.score > 0 && $0.score <= 100 })
+    }
+
+    @Test("Health score disk dimension stays full until free space below 15%")
+    func testHealthScoreDiskThreshold() async throws {
+        let container = makeTestContainer()
+        let context = ModelContext(container)
+        let hour = recentHour()
+        context.insert(HourlySample(hour: hour, kind: "cpu", avg: 10, peak: 20, low: 5, sampleCount: 10, thermalState: 0))
+        context.insert(HourlySample(hour: hour, kind: "memory", avg: 20, peak: 30, low: 10, sampleCount: 10, memoryPressureLevel: 0))
+        context.insert(HourlySample(hour: hour, kind: "storage", avg: 80, peak: 80, low: 80, sampleCount: 1))
+        try context.save()
+
+        let aggregator = await StatisticsAggregator(container: container)
+        let health = await aggregator.queryHealthScore(range: .last24Hours)
+        let diskDim = health.dimensions.first { $0.rawValue == 80.0 && $0.isAvailable }
+        #expect(diskDim != nil)
+        #expect(diskDim!.healthValue == 1.0)
     }
 
     @Test("Report exporter builds payload for all ranges")

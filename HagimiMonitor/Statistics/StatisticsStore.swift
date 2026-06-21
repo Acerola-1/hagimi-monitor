@@ -48,18 +48,24 @@ enum StatisticsStore {
     /// 全局唯一容器。创建失败时降级为内存容器，保证 App 不因统计功能崩溃。
     static let container: ModelContainer = {
         do {
-            return try ModelContainer(
-                for: Schema(StatisticsSchemaV2.models),
+            // 必须用 versionedSchema，不能用 Schema(models:) 创建匿名 schema，
+            // 否则 staged migration 找不到版本匹配 → "unknown model version" 错误。
+            let c = try ModelContainer(
+                for: Schema(versionedSchema: StatisticsSchemaV2.self),
                 migrationPlan: StatisticsMigrationPlan.self,
                 configurations: [ModelConfiguration(isStoredInMemoryOnly: false)]
             )
+            logger.info("StatisticsStore: persistent container created at \(c.configurations.first?.url.path ?? "unknown", privacy: .public)")
+            return c
         } catch {
-            logger.error("Failed to create persistent statistics container, falling back to in-memory: \(error.localizedDescription, privacy: .public)")
+            logger.error("StatisticsStore: FAILED to create persistent container: \(String(describing: error), privacy: .public)")
             // 降级：内存容器。统计数据不持久化，但不影响 App 运行。
-            return try! ModelContainer(
-                for: Schema(StatisticsSchemaV2.models),
+            let fallback = try! ModelContainer(
+                for: Schema(versionedSchema: StatisticsSchemaV2.self),
                 configurations: [ModelConfiguration(isStoredInMemoryOnly: true)]
             )
+            logger.warning("StatisticsStore: fell back to IN-MEMORY container (data will NOT persist)")
+            return fallback
         }
     }()
 }
