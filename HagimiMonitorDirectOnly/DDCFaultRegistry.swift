@@ -23,7 +23,6 @@ nonisolated final class DDCFaultRegistry {
         var readFaults: Int = 0
         var writeFaults: Int = 0
         var disabled: Bool = false
-        /// 禁用到期时刻(Date)。nil 表示未禁用。到期后允许一次半开探测。
         var disabledUntil: Date?
     }
 
@@ -67,7 +66,7 @@ nonisolated final class DDCFaultRegistry {
     func recordWriteSuccess(_ key: ControlKey) {
         lock.lock(); defer { lock.unlock() }
         var s = states[key] ?? State()
-        // 一次成功即自愈,理由同 recordReadSuccess:避免历史累计失败导致控制永久禁用。
+        // 一次成功即自愈,避免历史累计失败导致控制永久禁用。
         s.writeFaults = 0
         s.disabled = false
         s.disabledUntil = nil

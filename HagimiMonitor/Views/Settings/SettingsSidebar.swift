@@ -6,6 +6,7 @@ enum SettingsRoute: Hashable {
     #if DISPLAY_CONTROL
     case displayModule
     #endif
+    case statistics
     case about
 }
 
@@ -21,7 +22,7 @@ struct SettingsSidebar: View {
             }
 
             Section {
-                ForEach(MonitorKind.allCases) { kind in
+                ForEach(MonitorKind.userVisibleCases) { kind in
                     Label(kind.title, systemImage: kind.symbol)
                         .tag(SettingsRoute.module(kind))
                 }
@@ -30,6 +31,12 @@ struct SettingsSidebar: View {
                 Label(String(localized: "settings.sidebar.display"), systemImage: "display")
                     .tag(SettingsRoute.displayModule)
                 #endif
+            }
+
+            // 统计
+            Section {
+                Label(String(localized: "settings.sidebar.statistics"), systemImage: "chart.bar")
+                    .tag(SettingsRoute.statistics)
             }
 
             Section {

@@ -1,10 +1,3 @@
-//
-//  HagimiMonitorApp.swift
-//  HagimiMonitor
-//
-//  Created by Acerola on 2026/5/11.
-//
-
 import SwiftUI
 
 extension NSAppearance {
@@ -22,6 +15,8 @@ struct HagimiMonitorApp: App {
         MenuBarExtra {
             MonitorPanelView(store: monitorStore)
                 .preferredColorScheme(effectiveColorScheme)
+                .onAppear { monitorStore.panelDidAppear() }
+                .onDisappear { monitorStore.panelDidDisappear() }
         } label: {
             Image(nsImage: MenuBarComputeRingIcon.image(
                 load: monitorStore.displayedComputeLoad,
@@ -42,7 +37,7 @@ struct HagimiMonitorApp: App {
         .commands { AppMenuCommands() }
 
         Settings {
-            SettingsRootView(settings: monitorStore.settings)
+            SettingsRootView(settings: monitorStore.settings, store: monitorStore)
                 // 设置窗口始终跟随系统外观
         }
         .windowResizability(.contentSize)

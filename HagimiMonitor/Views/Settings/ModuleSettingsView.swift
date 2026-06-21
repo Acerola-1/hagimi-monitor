@@ -53,6 +53,60 @@ struct ModuleSettingsView: View {
                 }
             }
 
+            if kind == .cpu {
+                SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.show-cpu-processes")) {
+                        Toggle("", isOn: $settings.showCPUProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.cpu.show-system-processes")) {
+                        Toggle("", isOn: $settings.cpuShowSystemProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+            }
+
+            if kind == .storage {
+                SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.show-disk-processes")) {
+                        Toggle("", isOn: $settings.showDiskProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.disk.show-system-processes")) {
+                        Toggle("", isOn: $settings.diskShowSystemProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+            }
+
+            if kind == .network {
+                SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.show-network-processes")) {
+                        Toggle("", isOn: $settings.showNetworkProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.network.show-system-processes")) {
+                        Toggle("", isOn: $settings.networkShowSystemProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+            }
+
             HStack {
                 Spacer()
                 if #available(macOS 26, *) {

@@ -24,7 +24,7 @@ struct TopMemoryProcess: Identifiable, Equatable {
 
 /// 系统进程的可执行文件所在路径前缀。匹配这些前缀的视为系统进程,
 /// 在用户关闭"显示系统进程"时过滤掉。参考活动监视器的进程分类。
-private let systemProcessPathPrefixes: [String] = [
+let systemProcessPathPrefixes: [String] = [
     "/System/",
     "/usr/",
     "/sbin/",
@@ -40,18 +40,18 @@ private let systemProcessPathPrefixes: [String] = [
 /// 此处刻意只放行 Safari,而非用 activationPolicy 放行所有 .regular App——否则 Finder、
 /// SystemUIServer 等系统自带 GUI 也会涌入列表,这不符合产品意图(它们仍应受"显示系统
 /// 进程"开关控制)。新增白名单需求时在此追加路径片段即可。
-private let alwaysVisibleSystemAppMarkers: [String] = [
+let alwaysVisibleSystemAppMarkers: [String] = [
     "/Safari.app/Contents/MacOS/",
 ]
 
 /// `responsibility_get_pid_responsible_for_pid` 的 C 函数签名。
 /// 该 libsystem 私有 API 返回某进程的"负责进程"pid——即 Safari 的 WebContent、
 /// Chrome 的 Helper 等子进程真正归属的宿主 App。活动监视器用它做进程分组。
-private typealias ResponsiblePidFunction = @convention(c) (Int32) -> Int32
+typealias ResponsiblePidFunction = @convention(c) (Int32) -> Int32
 
 /// 进程 -> 负责进程 pid 的解析器。dlsym 拿不到符号时回退为「返回自身」,
 /// 退化成不合并的行为,保证功能不崩。
-private let responsiblePidResolver: ResponsiblePidFunction = {
+let responsiblePidResolver: ResponsiblePidFunction = {
     guard let handle = dlopen(nil, RTLD_NOW),
           let symbol = dlsym(handle, "responsibility_get_pid_responsible_for_pid")
     else {
@@ -62,7 +62,7 @@ private let responsiblePidResolver: ResponsiblePidFunction = {
 }()
 
 /// 读取进程可执行文件路径。失败返回空串。
-private func executablePath(for pid: pid_t) -> String {
+func executablePath(for pid: pid_t) -> String {
     var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
     let length = proc_pidpath(pid, &buffer, UInt32(MAXPATHLEN))
     return length > 0 ? String(cString: buffer) : ""
@@ -184,20 +184,11 @@ func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses: Bool = fal
     return Array(result.sorted { $0.memoryUsage > $1.memoryUsage }.prefix(limit))
 }
 
-/// 【必须主线程调用】用 NSWorkspace 为采样结果补齐本地化名与 App 图标。
-/// NSWorkspace 的 API 不保证线程安全,故图标/名称的获取与后台 syscall 采样分离。
-/// 只对最终展示的 top N 做 enrich,且预先构建 [pid: NSRunningApplication] 字典,
-/// 避免每项都全量遍历 runningApplications(O(N×M))。
-@MainActor
+/// 用 NSRunningApplication(pid:) 为采样结果补齐本地化名与 App 图标。
+/// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
 func enrich(_ rawProcesses: [RawMemoryProcess]) -> [TopMemoryProcess] {
-    // 一次性构建 pid -> App 映射,O(1) 查找。
-    let appsByPid = Dictionary(
-        NSWorkspace.shared.runningApplications.map { ($0.processIdentifier, $0) },
-        uniquingKeysWith: { first, _ in first }
-    )
-
     return rawProcesses.map { raw in
-        let app = appsByPid[raw.pid]
+        let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 
         // 本地化名优先(如"谷歌浏览器"),否则用路径兜底名。
         let name: String

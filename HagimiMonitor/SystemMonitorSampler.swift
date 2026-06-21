@@ -12,7 +12,8 @@ final class SystemMonitorSampler {
         .memory: MemorySampler(),
         .storage: StorageSampler(),
         .network: NetworkSampler(),
-        .battery: BatterySampler()
+        .battery: BatterySampler(),
+        .power: PowerSampler()
     ]
 
     func sample(previousModules: [MonitorModule]) -> Result<SystemMonitorSnapshot, SamplingError> {
@@ -51,7 +52,6 @@ final class SystemMonitorSampler {
             } else if modulesByKind.isEmpty {
                 return .failure(errors[0])
             } else {
-                // Partial success: some modules sampled, some failed
                 AppLogger.sampler.error("Partial sampling failure: \(errors.map(\.description).joined(separator: ", "), privacy: .public)")
                 return .success(SystemMonitorSnapshot(modules: modules))
             }
@@ -81,6 +81,7 @@ final class SystemMonitorSampler {
         case .storage: return .storageUnavailable
         case .network: return .networkUnavailable
         case .battery: return .batteryUnavailable
+        case .power: return .powerUnavailable
         }
     }
 }

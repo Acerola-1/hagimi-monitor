@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SettingsRootView: View {
     @ObservedObject var settings: MonitorSettings
+    let store: MonitorStore
     @State private var selection: SettingsRoute = .general
 
     var body: some View {
@@ -20,8 +21,8 @@ struct SettingsRootView: View {
         .frame(
             minWidth: 560,
             idealWidth: 600,
-            minHeight: 360,
-            idealHeight: 382
+            minHeight: 384,
+            idealHeight: 406
         )
         .background(SettingsWindowTracker(selection: $selection))
     }
@@ -37,6 +38,10 @@ struct SettingsRootView: View {
         case .displayModule:
             DisplayModuleSettingsView(settings: settings)
         #endif
+        case .statistics:
+            StatisticsView(pendingProvider: { [weak store] in
+                store?.statisticsPendingSnapshot ?? [:]
+            })
         case .about:
             AboutSettingsView()
         }
@@ -126,6 +131,8 @@ extension SettingsTab {
             return nil
         case .about:
             return .about
+        case .statistics:
+            return .statistics
         }
     }
 }

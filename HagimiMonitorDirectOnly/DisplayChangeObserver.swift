@@ -10,8 +10,7 @@ final class DisplayChangeObserver {
     // 方法里发生,但 deinit 在非隔离上下文执行,为避免 Swift 6 严格并发告警,
     // 标记为 nonisolated(unsafe);重复 CGDisplayRemoveReconfigurationCallback 是安全的。
     private nonisolated(unsafe) var registered = false
-    // NSWorkspace 通知注册的幂等性标志。理由同 `registered`:deinit 为非隔离上下文,
-    // 重复 removeObserver 是安全的(NotificationCenter 文档保证)。
+    // nonisolated(unsafe): 同 registered,deinit 中安全注销。
     private nonisolated(unsafe) var workspaceRegistered = false
 
     func start(onChange: @escaping () -> Void) {

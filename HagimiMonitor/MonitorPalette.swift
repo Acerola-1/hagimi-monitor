@@ -115,6 +115,21 @@ struct MonitorPalette {
         }
     }
 
+    func healthTint(for level: HealthLevel) -> Color {
+        switch level {
+        case .excellent:
+            Color(hex: 0x2F9E64)
+        case .good:
+            Color(hex: 0x3BAFDA)
+        case .fair:
+            Color(hex: 0xD4A843)
+        case .poor:
+            Color(hex: 0xE08E45)
+        case .critical:
+            Color(hex: 0xD94848)
+        }
+    }
+
     private var neutralGlassTint: Color {
         Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
     }
@@ -137,6 +152,8 @@ struct MonitorPalette {
             Color(hex: 0x43A6A0)
         case .battery:
             Color(hex: 0x65AF52)
+        case .power:
+            Color(hex: 0xF1C21B)
         }
     }
 
@@ -154,6 +171,8 @@ struct MonitorPalette {
             Color(hex: 0x009D9A)
         case .battery:
             Color(hex: 0x198038)
+        case .power:
+            Color(hex: 0xF1C21B)
         }
     }
 }

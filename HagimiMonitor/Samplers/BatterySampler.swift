@@ -49,9 +49,9 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
                 MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--"),
                 MonitorMetric(name: "power", value: wattString(systemPower)),
-                MonitorMetric(name: "health", value: smart.healthPercent.map(percent) ?? "--"),
-                MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--"),
-                MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--")
+                MonitorMetric(name: "health", value: smart.healthPercent.map(percent) ?? "--", numericValue: smart.healthPercent),
+                MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--", numericValue: smart.cycleCount.map(Double.init)),
+                MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius)
             ],
             samples: seedSamples(percentage)
         )
@@ -175,7 +175,6 @@ final class BatterySampler: MonitorSampler {
         }
 
         guard let powerIn = doubleValue(value["SystemPowerIn"]), powerIn > 0 else {
-            // 电池供电：用 BatteryPower
             if let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 {
                 return abs(bp) / 1_000
             }
@@ -185,13 +184,11 @@ final class BatterySampler: MonitorSampler {
         let batteryPower = signedDoubleValue(value["BatteryPower"]) ?? 0
 
         if batteryPower == 0 {
-            // 未充电：SystemPowerIn 就是系统功耗
             return powerIn / 1_000
         }
 
         let systemPower = powerIn - abs(batteryPower)
         if systemPower > 0 {
-            // 充电时：系统功耗 = 适配器输入 - 充电功率
             return systemPower / 1_000
         }
 

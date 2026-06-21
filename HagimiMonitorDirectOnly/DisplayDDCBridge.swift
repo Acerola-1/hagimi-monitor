@@ -191,7 +191,6 @@ private enum DDCTransport {
     // MARK: - Circuit Breaker
 
     private static let circuitLock = NSLock()
-    /// 熔断打开的截止时刻(monotonic);nil 表示闭合。访问受 circuitLock 保护。
     private nonisolated(unsafe) static var circuitOpenUntil: DispatchTime?
 
     /// 熔断冷却时长。> communicateTimeout,确保上一个 hang 任务大概率已退出再放行探测。
@@ -201,7 +200,6 @@ private enum DDCTransport {
         circuitLock.lock()
         defer { circuitLock.unlock() }
         guard let until = circuitOpenUntil else { return false }
-        // 冷却到期则闭合,放行一次探测;若探测再超时会重新打开。
         if DispatchTime.now() >= until {
             circuitOpenUntil = nil
             return false

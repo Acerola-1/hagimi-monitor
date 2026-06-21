@@ -66,6 +66,12 @@ final class MonitorSettings: ObservableObject {
     @Published var mediaKeyFineScaleVolume: Bool = false
     @Published var showMemoryProcesses: Bool = true
     @Published var memoryShowSystemProcesses: Bool = false
+    @Published var showCPUProcesses: Bool = false
+    @Published var cpuShowSystemProcesses: Bool = false
+    @Published var showDiskProcesses: Bool = false
+    @Published var diskShowSystemProcesses: Bool = false
+    @Published var showNetworkProcesses: Bool = false
+    @Published var networkShowSystemProcesses: Bool = false
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
@@ -92,6 +98,12 @@ final class MonitorSettings: ObservableObject {
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
         showMemoryProcesses = defaults.object(forKey: Keys.showMemoryProcesses) as? Bool ?? true
         memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? false
+        showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? false
+        cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? false
+        showDiskProcesses = defaults.object(forKey: Keys.showDiskProcesses) as? Bool ?? false
+        diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? false
+        showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? false
+        networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? false
 
         mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
         mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
@@ -103,7 +115,7 @@ final class MonitorSettings: ObservableObject {
             let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
             visibleKinds = Set(kinds)
         } else {
-            visibleKinds = Set(MonitorKind.allCases)
+            visibleKinds = Set(MonitorKind.userVisibleCases)
         }
 
         var loadedMetrics: [MonitorKind: Set<String>] = [:]
@@ -173,6 +185,8 @@ final class MonitorSettings: ObservableObject {
                 return ["IP 地址": "ip-address", "上传": "upload", "下载": "download"]
             case .battery:
                 return ["充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power"]
+            case .power:
+                return ["功率": "power-watts"]
             }
         }()
 
@@ -312,6 +326,48 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $showCPUProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showCPUProcesses)
+            }
+            .store(in: &cancellables)
+
+        $cpuShowSystemProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.cpuShowSystemProcesses)
+            }
+            .store(in: &cancellables)
+
+        $showDiskProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showDiskProcesses)
+            }
+            .store(in: &cancellables)
+
+        $diskShowSystemProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.diskShowSystemProcesses)
+            }
+            .store(in: &cancellables)
+
+        $showNetworkProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showNetworkProcesses)
+            }
+            .store(in: &cancellables)
+
+        $networkShowSystemProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.networkShowSystemProcesses)
+            }
+            .store(in: &cancellables)
+
         $visibleKinds
             .dropFirst()
             .sink { [weak self] newValue in
@@ -374,6 +430,12 @@ private enum Keys {
     static let mediaKeyFineScaleVolume = "settings.mediaKey.fineScaleVolume"
     static let showMemoryProcesses = "settings.memory.showProcesses"
     static let memoryShowSystemProcesses = "settings.memory.showSystemProcesses"
+    static let showCPUProcesses = "settings.cpu.showProcesses"
+    static let cpuShowSystemProcesses = "settings.cpu.showSystemProcesses"
+    static let showDiskProcesses = "settings.disk.showProcesses"
+    static let diskShowSystemProcesses = "settings.disk.showSystemProcesses"
+    static let showNetworkProcesses = "settings.network.showProcesses"
+    static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let visibleKinds = "settings.visibleKinds"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
 }

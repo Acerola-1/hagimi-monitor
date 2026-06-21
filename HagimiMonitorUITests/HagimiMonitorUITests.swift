@@ -1,10 +1,3 @@
-//
-//  HagimiMonitorUITests.swift
-//  HagimiMonitorUITests
-//
-//  Created by Acerola on 2026/5/11.
-//
-
 import XCTest
 
 final class HagimiMonitorUITests: XCTestCase {

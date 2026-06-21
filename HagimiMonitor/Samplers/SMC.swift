@@ -37,8 +37,6 @@ final class SMCReader {
         return temperatures.reduce(0, +) / Double(temperatures.count)
     }
 
-    // MARK: - Private
-
     private func readValue(_ key: String) -> Double? {
         guard conn != 0 else { return nil }
 
