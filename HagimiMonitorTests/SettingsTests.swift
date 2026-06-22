@@ -122,6 +122,8 @@ struct SettingsTests {
         #expect(MenuBarMetricFormatter.fixedPercentage(42.4) == " 42%")
         #expect(MenuBarMetricFormatter.temperature(88.4) == " 88°")
         #expect(MenuBarMetricFormatter.throughput(2_516_582, direction: "↓") == "↓2.4M")
+        #expect(MenuBarMetricFormatter.throughput(512, direction: "↑") == "↑512B")
         #expect(MenuBarMetricFormatter.capacity(137_438_953_472) == "128G")
+        #expect(MenuBarMetricFormatter.capacity(nil) == "  --")
     }
 }

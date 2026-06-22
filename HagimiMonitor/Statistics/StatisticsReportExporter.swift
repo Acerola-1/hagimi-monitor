@@ -72,6 +72,7 @@ struct StatisticsReportStrings: Codable {
     let eventTitle: String
     let eventTopProcesses: String
     let eventDuration: String
+    let eventShowMore: String
     // Executive Summary
     let summaryTitle: String
     let moduleLoad: String
@@ -86,6 +87,8 @@ struct StatisticsReportStrings: Codable {
     let insightSevereEvents: String
     // Heatmap
     let heatmapTitle: String
+    let heatmapDescription: String
+    let heatmapAvg: String
     let heatmapLow: String
     let heatmapHigh: String
     // Card tabs
@@ -169,7 +172,7 @@ struct StatisticsReportExporter {
     }
 
     func makePayload(pending: [String: PendingBucket] = [:]) -> StatisticsReportPayload {
-        let events = aggregator.queryEvents(range: .lastMonth, limit: 200)
+        let events = aggregator.queryEvents(range: .lastYear, limit: 1000)
         return StatisticsReportPayload(
             generatedAt: now(),
             appName: "HagimiMonitor",
@@ -199,6 +202,7 @@ struct StatisticsReportExporter {
                 eventTitle: String(localized: "event.title"),
                 eventTopProcesses: String(localized: "event.top-processes"),
                 eventDuration: String(localized: "event.duration"),
+                eventShowMore: String(localized: "event.show-more"),
                 // Executive Summary
                 summaryTitle: String(localized: "report.summary.title"),
                 moduleLoad: String(localized: "report.module-load"),
@@ -213,6 +217,8 @@ struct StatisticsReportExporter {
                 insightSevereEvents: String(localized: "report.insight.severe-events"),
                 // Heatmap
                 heatmapTitle: String(localized: "report.heatmap.title"),
+                heatmapDescription: String(localized: "report.heatmap.description"),
+                heatmapAvg: String(localized: "report.heatmap.avg"),
                 heatmapLow: String(localized: "report.heatmap.low"),
                 heatmapHigh: String(localized: "report.heatmap.high"),
                 // Card tabs
@@ -543,6 +549,11 @@ struct StatisticsReportHTMLBuilder {
             .timeline-row .event-title { font-size: 13px; font-weight: 600; margin: 2px 0; }
             .timeline-row .event-detail { font-size: 12px; color: var(--text-dim); }
             .timeline-row .event-processes { font-size: 11px; color: var(--text-faint); margin-top: 2px; }
+            .timeline-more { display: flex; justify-content: center; margin-top: 14px; }
+            .timeline-more button { border: 0; border-radius: 999px; padding: 7px 14px;
+              background: var(--bg-inset); color: var(--accent); font: inherit; font-size: 12px;
+              font-weight: 600; cursor: pointer; }
+            .timeline-more button:hover { filter: brightness(0.96); }
             @media (prefers-color-scheme: dark) {
               .timeline-row.severity-2::before { background: #ff6961; }
               .timeline-row.severity-1::before { background: #ffb340; }
@@ -617,23 +628,26 @@ struct StatisticsReportHTMLBuilder {
             .heatmap-wrap { margin-top: 20px; background: var(--bg-elev);
               border: 1px solid var(--border); border-radius: 18px; padding: 22px;
               box-shadow: var(--shadow-md); position: relative; }
-            .heatmap-wrap h3 { margin: 0 0 14px; font-size: 13px; color: var(--text-dim);
+            .heatmap-wrap h3 { margin: 0 0 8px; font-size: 13px; color: var(--text-dim);
               font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
+            .heatmap-desc { margin: 0 0 14px; font-size: 11px; line-height: 1.45;
+              color: var(--text-faint); }
             .heatmap-tabs { margin-bottom: 14px; }
             .heatmap-section { margin-bottom: 18px; }
             .heatmap-section:last-child { margin-bottom: 0; }
             .heatmap-section-title { font-size: 12px; font-weight: 600; color: var(--text);
               margin-bottom: 8px; }
-            .heatmap-container { display: flex; gap: 6px; align-items: flex-start; }
-            .heatmap-labels { display: flex; flex-direction: column; gap: 2px;
-              padding-top: 20px; flex: none; }
-            .heatmap-labels span { display: flex; align-items: center; aspect-ratio: 1;
-              font-size: 10px; color: var(--text-faint); font-weight: 500;
-              font-variant-numeric: tabular-nums; }
-            .heatmap-grid-wrap { flex: 1; min-width: 0; }
+            .heatmap-grid-wrap { min-width: 0; }
+            .heatmap-hour-row { display: grid; grid-template-columns: 18px repeat(24, 1fr);
+              gap: 2px; margin-bottom: 2px; }
+            .heatmap-hour-row span { text-align: center; font-size: 10px;
+              color: var(--text-faint); }
             .heatmap-rows { display: flex; flex-direction: column; gap: 2px; }
-            .heatmap-row { display: flex; gap: 2px; }
-            .heatmap-cell { flex: 1; aspect-ratio: 1; border-radius: 3px;
+            .heatmap-row { display: grid; grid-template-columns: 18px repeat(24, 1fr); gap: 2px; }
+            .heatmap-day-label { display: flex; align-items: center; justify-content: center;
+              aspect-ratio: 1; font-size: 10px; color: var(--text-faint); font-weight: 500;
+              font-variant-numeric: tabular-nums; }
+            .heatmap-cell { aspect-ratio: 1; border-radius: 3px;
               background: var(--bg-inset); transition: background .15s; min-width: 0; }
             .heatmap-cell:hover { outline: 2px solid var(--text-faint); outline-offset: 1px; }
             .heatmap-legend { display: flex; align-items: center; gap: 4px;
@@ -717,6 +731,14 @@ struct StatisticsReportHTMLBuilder {
             const L = payload.strings;
             const locale = payload.locale || undefined;
             let active = payload.ranges[0] && payload.ranges[0].id;
+            let timelineLimit = 50;
+
+            const RANGE_WINDOW_MS = {
+              last24Hours: 24 * 60 * 60 * 1000,
+              lastWeek: 7 * 24 * 60 * 60 * 1000,
+              lastMonth: 30 * 24 * 60 * 60 * 1000,
+              lastYear: 365 * 24 * 60 * 60 * 1000
+            };
 
             const ACCENT_LIGHT = {
               cpu: '#ff453a', gpu: '#30d158', memory: '#ff9f0a',
@@ -771,6 +793,15 @@ struct StatisticsReportHTMLBuilder {
               const d = new Date(ts * 1000);
               if (rangeId === 'last24Hours') return d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
               return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
+            }
+            function eventsForRange(rangeId) {
+              const end = new Date(payload.generatedAt).getTime();
+              const windowMs = RANGE_WINDOW_MS[rangeId] || RANGE_WINDOW_MS.lastMonth;
+              const start = end - windowMs;
+              return (payload.events || []).filter(ev => {
+                const ts = ev.timestamp * 1000;
+                return ts >= start && ts <= end;
+              });
             }
 
             // ===== Per-card metrics =====
@@ -862,8 +893,7 @@ struct StatisticsReportHTMLBuilder {
                   if (hs.thermalCapped) insights.push(L.insightThermal);
                 }
 
-                // Find peak event
-                const severeEvents = (payload.events || []).filter(e => e.severity >= 2);
+                const severeEvents = eventsForRange(range.id).filter(e => e.severity >= 2);
                 if (severeEvents.length > 0) insights.push(L.insightSevereEvents.replace('{count}', severeEvents.length));
               }
 
@@ -930,11 +960,9 @@ struct StatisticsReportHTMLBuilder {
               if (!heatMods.length) return '';
 
               const dayLabels = [L.daySun, L.dayMon, L.dayTue, L.dayWed, L.dayThu, L.dayFri, L.daySat];
-              const hourRow = '<div style="display:flex;gap:2px;margin-bottom:2px">' +
-                '<span style="width:0;display:inline-block"></span>' +
+              const hourRow = '<div class="heatmap-hour-row"><span></span>' +
                 Array.from({length:24}, (_, i) =>
-                  '<span style="flex:1;text-align:center;font-size:10px;color:var(--text-faint);' +
-                  ([0,6,12,18].includes(i) ? '' : 'visibility:hidden') + '">' + i + '</span>'
+                  '<span style="' + ([0,6,12,18].includes(i) ? '' : 'visibility:hidden') + '">' + i + '</span>'
                 ).join('') + '</div>';
 
               // Tab buttons
@@ -963,28 +991,26 @@ struct StatisticsReportHTMLBuilder {
                 const hue = m.kind === 'cpu' ? 210 : m.kind === 'gpu' ? 140 : m.kind === 'memory' ? 35 : 270;
                 let rows = '';
                 for (let d = 0; d < 7; d++) {
-                  rows += '<div class="heatmap-row">';
+                  rows += '<div class="heatmap-row"><span class="heatmap-day-label">' + dayLabels[d] + '</span>';
                   for (let h = 0; h < 24; h++) {
                     const intensity = counts[d][h] > 0 ? heat[d][h] / maxVal : 0;
                     const bg = intensity === 0 ? '' :
                       'background:hsla(' + hue + ',80%,' + (isDark ? (35 + 30 * intensity) : (65 - 35 * intensity)) + '%,' + (0.25 + 0.7 * intensity) + ')';
                     const valText = counts[d][h] > 0 ? heat[d][h].toFixed(1) + (m.kind === 'power' ? 'W' : '%') : '--';
-                    rows += '<div class="heatmap-cell" style="' + bg + '" data-day="' + d + '" data-hour="' + h + '" data-val="' + valText + '" data-kind="' + m.kind + '"></div>';
+                    rows += '<div class="heatmap-cell" style="' + bg + '" data-day="' + d + '" data-hour="' + h + '" data-val="' + valText + '" data-count="' + counts[d][h] + '" data-kind="' + m.kind + '"></div>';
                   }
                   rows += '</div>';
                 }
                 const vis = i === 0 ? '' : 'display:none';
                 sections += '<div class="heatmap-section" data-kind="' + m.kind + '" style="' + vis + '">' +
-                  '<div class="heatmap-container">' +
-                    '<div class="heatmap-labels">' + dayLabels.map(l => '<span>' + l + '</span>').join('') + '</div>' +
-                    '<div class="heatmap-grid-wrap">' + hourRow +
-                      '<div class="heatmap-rows">' + rows + '</div>' +
-                    '</div>' +
+                  '<div class="heatmap-grid-wrap">' + hourRow +
+                    '<div class="heatmap-rows">' + rows + '</div>' +
                   '</div>' +
                 '</div>';
               });
 
               return '<div class="heatmap-wrap"><h3>' + L.heatmapTitle + '</h3>' +
+                '<p class="heatmap-desc">' + L.heatmapDescription + '</p>' +
                 tabs + sections +
                 '<div class="heatmap-legend"><span>' + L.heatmapLow + '</span>' +
                   [0, 0.25, 0.5, 0.75, 1].map(v => {
@@ -1021,7 +1047,9 @@ struct StatisticsReportHTMLBuilder {
                 if (!cell || !tip) { if (tip) tip.style.opacity = 0; return; }
                 const d = +cell.dataset.day, h = +cell.dataset.hour;
                 const val = cell.dataset.val;
-                tip.innerHTML = dayLabels[d] + ' ' + h + ':00 — <b>' + val + '</b>';
+                const count = cell.dataset.count || '0';
+                const range = String(h).padStart(2, '0') + ':00-' + String(h).padStart(2, '0') + ':59';
+                tip.innerHTML = '<b>' + dayLabels[d] + ' ' + range + '</b><br>' + L.heatmapAvg + ' ' + val + '<br>' + L.samples + ' ' + count;
                 const rect = cell.getBoundingClientRect();
                 tip.style.left = (rect.left + rect.width / 2) + 'px';
                 tip.style.top = (rect.top - 8) + 'px';
@@ -1357,7 +1385,7 @@ struct StatisticsReportHTMLBuilder {
               tabs.innerHTML = payload.ranges.map(r =>
                 '<button role="tab" class="' + (r.id === active ? 'active' : '') + '" data-id="' + r.id + '">' + r.title + '</button>'
               ).join('');
-              tabs.querySelectorAll('button').forEach(b => b.onclick = () => { active = b.dataset.id; render(); });
+              tabs.querySelectorAll('button').forEach(b => b.onclick = () => { active = b.dataset.id; timelineLimit = 50; render(); });
 
               const range = payload.ranges.find(r => r.id === active) || payload.ranges[0];
               renderInsights(range);
@@ -1437,8 +1465,9 @@ struct StatisticsReportHTMLBuilder {
             // ===== Event Timeline Rendering =====
             function renderTimeline() {
               const el = document.getElementById('timeline');
-              const events = payload.events;
-              if (!events || !events.length) { el.innerHTML = ''; return; }
+              const allEvents = eventsForRange(active);
+              if (!allEvents.length) { el.innerHTML = ''; return; }
+              const events = allEvents.slice(0, timelineLimit);
 
               const SEVERITY_ICON = {
                 2: '&#9888;', // exclamationmark.triangle
@@ -1446,12 +1475,11 @@ struct StatisticsReportHTMLBuilder {
                 0: '&#8505;'  // info.circle
               };
 
-              // Group events by day
-              const now = new Date();
+              const now = new Date(payload.generatedAt);
               const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
               const yesterdayStart = new Date(todayStart); yesterdayStart.setDate(yesterdayStart.getDate() - 1);
 
-              const groups = {};
+              const groups = new Map();
               events.forEach(ev => {
                 const d = new Date(ev.timestamp * 1000);
                 let dayKey;
@@ -1462,15 +1490,15 @@ struct StatisticsReportHTMLBuilder {
                 } else {
                   dayKey = d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
                 }
-                if (!groups[dayKey]) groups[dayKey] = [];
-                groups[dayKey].push(ev);
+                if (!groups.has(dayKey)) groups.set(dayKey, []);
+                groups.get(dayKey).push(ev);
               });
 
               let html = '<div class="timeline-section">';
               html += '<h2>' + L.eventTitle + '</h2>';
-              html += '<div class="event-count">' + events.length + ' ' + (L.eventTitle || 'events') + '</div>';
+              html += '<div class="event-count">' + events.length + ' / ' + allEvents.length + ' ' + (L.eventTitle || 'events') + '</div>';
 
-              for (const [day, dayEvents] of Object.entries(groups)) {
+              for (const [day, dayEvents] of groups.entries()) {
                 html += '<div class="timeline-day">';
                 html += '<div class="timeline-day-label">' + day + '</div>';
                 html += '<div class="timeline-events">';
@@ -1494,8 +1522,13 @@ struct StatisticsReportHTMLBuilder {
                 html += '</div></div>';
               }
 
+              if (allEvents.length > events.length) {
+                html += '<div class="timeline-more"><button id="timelineMore">' + L.eventShowMore + '</button></div>';
+              }
               html += '</div>';
               el.innerHTML = html;
+              const more = document.getElementById('timelineMore');
+              if (more) more.onclick = () => { timelineLimit += 50; renderTimeline(); };
             }
 
             function escapeHtml(s) {

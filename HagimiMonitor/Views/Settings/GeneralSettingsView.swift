@@ -62,25 +62,29 @@ private struct MenuBarDisplaySettingsSection: View {
 
             SettingsDivider()
 
-            SettingsRow(title: String(localized: "menu-bar-display.preview")) {
-                if settings.menuBarDisplayMode == .ring {
-                    Image(nsImage: MenuBarComputeRingIcon.image(
-                        load: store.displayedComputeLoad,
-                        darkMode: NSApp.effectiveAppearance.isDark,
-                        loadLevel: store.haloRingLoadLevel
-                    ))
-                    .resizable()
-                    .frame(width: 18, height: 18)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.quaternary.opacity(0.55), in: Capsule())
-                } else {
-                    MenuBarMetricLabel(items: store.previewMenuBarMetricItems())
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 6)
-                        .background(.quaternary.opacity(0.55), in: Capsule())
+            VStack(alignment: .leading, spacing: 8) {
+                Text(String(localized: "menu-bar-display.preview"))
+                    .font(.body.weight(.medium))
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack {
+                        Spacer(minLength: 0)
+
+                        preview
+                            .fixedSize()
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 6)
+                            .background(.quaternary.opacity(0.55), in: Capsule())
+
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity)
                 }
+                .defaultScrollAnchor(.center)
+                .frame(maxWidth: .infinity)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
             if settings.menuBarDisplayMode == .metrics {
                 SettingsRow(
@@ -128,6 +132,21 @@ private struct MenuBarDisplaySettingsSection: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var preview: some View {
+        if settings.menuBarDisplayMode == .ring {
+            Image(nsImage: MenuBarComputeRingIcon.image(
+                load: store.displayedComputeLoad,
+                darkMode: NSApp.effectiveAppearance.isDark,
+                loadLevel: store.haloRingLoadLevel
+            ))
+            .resizable()
+            .frame(width: 18, height: 18)
+        } else {
+            MenuBarMetricLabel(items: store.previewMenuBarMetricItems(), style: .preview)
         }
     }
 }

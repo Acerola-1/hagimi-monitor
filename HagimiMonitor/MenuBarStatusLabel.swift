@@ -24,40 +24,72 @@ struct MenuBarStatusLabel: View {
 }
 
 struct MenuBarMetricLabel: View {
+    enum Style {
+        case menuBar
+        case preview
+    }
+
     let items: [MenuBarMetricItem]
+    var style: Style = .menuBar
 
     private var text: String {
-        items.map { item in
-            if item.kind.menuBarPrefix.isEmpty {
-                item.value
-            } else {
-                "\(item.kind.menuBarPrefix) \(item.value)"
-            }
-        }
-        .joined(separator: "   ")
+        items.map { metricText(for: $0.kind, value: $0.value) }
+            .joined(separator: separator)
     }
 
     private var reservedText: String {
-        items.map { item in
-            if item.kind.menuBarPrefix.isEmpty {
-                reservedValue(for: item.kind)
-            } else {
-                "\(item.kind.menuBarPrefix) \(reservedValue(for: item.kind))"
-            }
-        }
-        .joined(separator: "   ")
+        items.map { metricText(for: $0.kind, value: reservedValue(for: $0.kind)) }
+            .joined(separator: separator)
     }
 
     var body: some View {
         Text(text)
-            .font(.system(size: 13, weight: .semibold, design: .rounded).monospacedDigit())
+            .font(labelFont)
             .lineLimit(1)
-            .frame(width: reservedWidth, alignment: .center)
+            .allowsTightening(false)
+            .minimumScaleFactor(1)
+            .frame(width: reservedWidth, alignment: labelAlignment)
+            .clipped()
+    }
+
+    private var labelFont: Font {
+        .system(size: fontSize, weight: .medium, design: .rounded).monospacedDigit()
+    }
+
+    private var measuringFont: NSFont {
+        NSFont.systemFont(ofSize: fontSize, weight: .medium)
+    }
+
+    private var fontSize: CGFloat {
+        switch style {
+        case .menuBar:
+            9
+        case .preview:
+            9
+        }
+    }
+
+    private var separator: String { "  " }
+
+    private var labelAlignment: Alignment {
+        switch style {
+        case .menuBar:
+            .leading
+        case .preview:
+            .center
+        }
     }
 
     private var reservedWidth: CGFloat {
-        let font = NSFont.systemFont(ofSize: 13, weight: .semibold)
-        return ceil((reservedText as NSString).size(withAttributes: [.font: font]).width) + 2
+        ceil((reservedText as NSString).size(withAttributes: [.font: measuringFont]).width) + 4
+    }
+
+    private func metricText(for kind: MenuBarMetricKind, value: String) -> String {
+        if kind.menuBarPrefix.isEmpty {
+            value
+        } else {
+            "\(kind.menuBarPrefix) \(value)"
+        }
     }
 
     private func reservedValue(for kind: MenuBarMetricKind) -> String {
@@ -65,13 +97,13 @@ struct MenuBarMetricLabel: View {
         case .cpuUsage, .gpuUsage, .memoryUsage, .batteryLevel:
             "100%"
         case .networkDownload:
-            "↓999M"
+            "↓9.9G"
         case .networkUpload:
-            "↑999M"
+            "↑9.9G"
         case .cpuTemperature:
-            "100°"
+            "999°"
         case .storageFree:
-            "999G"
+            "9.9T"
         }
     }
 }

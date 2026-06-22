@@ -122,13 +122,16 @@ enum MenuBarMetricFormatter {
     }
 
     static func throughput(_ value: Double?, direction: String) -> String {
-        guard let value else { return "\(direction)\(unavailable)" }
-        return direction + compactRate(value)
+        guard let value else { return direction + leftPad(unavailable, to: 4) }
+        return direction + leftPad(compactRate(value), to: 4)
     }
 
     static func capacity(_ value: Double?) -> String {
-        guard let value else { return unavailable }
+        guard let value else { return leftPad(unavailable, to: 4) }
+        return leftPad(compactCapacity(value), to: 4)
+    }
 
+    private static func compactCapacity(_ value: Double) -> String {
         let safeValue = max(0, value)
         let units = ["B", "K", "M", "G", "T"]
         var scaled = safeValue
@@ -160,5 +163,10 @@ enum MenuBarMetricFormatter {
             return "\(Int(scaled.rounded()))\(units[unitIndex])"
         }
         return "\(String(format: "%.1f", scaled))\(units[unitIndex])"
+    }
+
+    private static func leftPad(_ value: String, to length: Int) -> String {
+        guard value.count < length else { return value }
+        return String(repeating: " ", count: length - value.count) + value
     }
 }

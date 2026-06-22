@@ -5402,6 +5402,50 @@
         }
       }
     },
+    "report.heatmap.description": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每行代表星期几，每列代表一天中的小时；颜色表示所选时间范围内同一星期和小时段的平均负载。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rows are weekdays and columns are hours of day. Color shows the average load for matching weekday/hour slots in the selected range."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "行は曜日、列は時間帯を表します。色は選択範囲内の同じ曜日・時間帯の平均負荷を示します。"
+          }
+        }
+      }
+    },
+    "report.heatmap.avg": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均负载"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average load"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均負荷"
+          }
+        }
+      }
+    },
     "report.heatmap.low": {
       "localizations": {
         "zh-Hans": {
