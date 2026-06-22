@@ -82,10 +82,6 @@
                 --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
                 --shadow-glow: 0 0 60px rgba(46, 204, 113, 0.08);
             }
-
-            .hero-title .gradient-text {
-                background: linear-gradient(135deg, #1d1d1f 0%, var(--brand-purple-dark) 100%);
-            }
         }
 
         * {
@@ -2155,6 +2151,13 @@
             }
             .monitor-row-progress {
                 background: rgba(0, 0, 0, 0.06);
+            }
+            /* Hero gradient text: dark-ink → deeper brand-green for legibility on light bg */
+            .hero-title .gradient-text {
+                background: linear-gradient(135deg, #1d1d1f 0%, #15803d 100%);
+                -webkit-background-clip: text;
+                -webkit-text-fill-color: transparent;
+                background-clip: text;
             }
         }
     </style>
