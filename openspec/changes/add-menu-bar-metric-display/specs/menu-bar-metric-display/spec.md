@@ -14,7 +14,7 @@ The system SHALL allow users to choose a menu bar metric display mode where sele
 - **AND** the label still behaves as the same single menu bar item
 
 ### Requirement: Curated Menu Bar Metric Choices
-The system SHALL expose only menu-bar-friendly metrics for metric display mode. The initial supported choices SHALL include CPU usage, GPU usage, memory usage, battery level, network download rate, network upload rate, storage usage, and storage free space when their source data is available.
+The system SHALL expose only menu-bar-friendly metrics for metric display mode. The initial supported choices SHALL include CPU usage, GPU usage, memory usage, battery level, network download rate, network upload rate, CPU temperature, and storage free space when their source data is available.
 
 #### Scenario: Settings show supported menu bar metrics
 - **WHEN** the user opens the menu bar display settings
@@ -54,8 +54,12 @@ The system SHALL preserve the user-selected order of menu bar metrics and render
 The system SHALL format menu bar metrics with compact values suitable for limited menu bar width.
 
 #### Scenario: Percentage metric formatting
-- **WHEN** a selected metric is a percentage value such as CPU, GPU, memory, battery, or storage usage
+- **WHEN** a selected metric is a percentage value such as CPU, GPU, memory, or battery
 - **THEN** the menu bar label displays it as a whole-number percentage such as `42%`
+
+#### Scenario: Temperature formatting
+- **WHEN** a selected metric is CPU temperature
+- **THEN** the menu bar label displays compact temperature text such as `88°`
 
 #### Scenario: Network rate formatting
 - **WHEN** a selected metric is network upload or download rate

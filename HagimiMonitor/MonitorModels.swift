@@ -431,38 +431,80 @@ final class MonitorStore: ObservableObject {
     }
 
     var combinedComputeLoad: Double {
-        switch settings.ringSource {
-        case .combined:
-            let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
-            let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
-            let memoryPressure = allModules.first { $0.kind == .memory }?.pressure ?? .unknown
-            return ComputeLoadModel.combined(
-                cpuValue: cpuValue,
-                gpuValue: gpuValue,
-                memoryPressure: memoryPressure
-            )
-        case .cpu:
-            return allModules.first { $0.kind == .cpu }?.value ?? 0
-        case .gpu:
-            return allModules.first { $0.kind == .gpu }?.value ?? 0
-        case .memory:
-            return allModules.first { $0.kind == .memory }?.value ?? 0
-        }
+        let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
+        let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
+        let memoryPressure = allModules.first { $0.kind == .memory }?.pressure ?? .unknown
+        return ComputeLoadModel.combined(
+            cpuValue: cpuValue,
+            gpuValue: gpuValue,
+            memoryPressure: memoryPressure
+        )
     }
 
     var haloRingLoadLevel: MenuBarComputeLoadLevel {
-        switch settings.ringSource {
-        case .combined, .cpu, .gpu:
-            return ComputeLoadModel.loadLevel(for: combinedComputeLoad)
-        case .memory:
-            let pressure = allModules.first { $0.kind == .memory }?.pressure ?? .unknown
-            switch pressure {
-            case .normal: return .idle
-            case .warning: return .busy
-            case .critical: return .stressed
-            case .unknown: return .working
-            }
+        ComputeLoadModel.loadLevel(for: combinedComputeLoad)
+    }
+
+    var menuBarMetricItems: [MenuBarMetricItem] {
+        settings.menuBarMetricKinds.map { kind in
+            MenuBarMetricItem(kind: kind, value: menuBarMetricValue(for: kind))
         }
+    }
+
+    func previewMenuBarMetricItems() -> [MenuBarMetricItem] {
+        settings.menuBarMetricKinds.map { kind in
+            MenuBarMetricItem(kind: kind, value: previewMenuBarMetricValue(for: kind))
+        }
+    }
+
+    private func menuBarMetricValue(for kind: MenuBarMetricKind) -> String {
+        switch kind {
+        case .cpuUsage:
+            return MenuBarMetricFormatter.fixedPercentage(moduleValue(.cpu))
+        case .gpuUsage:
+            return MenuBarMetricFormatter.fixedPercentage(moduleValue(.gpu))
+        case .memoryUsage:
+            return MenuBarMetricFormatter.fixedPercentage(moduleValue(.memory))
+        case .batteryLevel:
+            return MenuBarMetricFormatter.fixedPercentage(moduleValue(.battery))
+        case .networkDownload:
+            return MenuBarMetricFormatter.throughput(metricValue("download", in: .network), direction: "↓")
+        case .networkUpload:
+            return MenuBarMetricFormatter.throughput(metricValue("upload", in: .network), direction: "↑")
+        case .cpuTemperature:
+            return MenuBarMetricFormatter.temperature(metricValue("temperature", in: .cpu))
+        case .storageFree:
+            return MenuBarMetricFormatter.capacity(metricValue("free", in: .storage))
+        }
+    }
+
+    private func previewMenuBarMetricValue(for kind: MenuBarMetricKind) -> String {
+        switch kind {
+        case .cpuUsage:
+            "35%"
+        case .gpuUsage:
+            "34%"
+        case .memoryUsage:
+            "61%"
+        case .batteryLevel:
+            "76%"
+        case .networkDownload:
+            "↓2.4M"
+        case .networkUpload:
+            "↑320K"
+        case .cpuTemperature:
+            " 88°"
+        case .storageFree:
+            "128G"
+        }
+    }
+
+    private func moduleValue(_ kind: MonitorKind) -> Double? {
+        allModules.first { $0.kind == kind }?.value
+    }
+
+    private func metricValue(_ name: String, in kind: MonitorKind) -> Double? {
+        allModules.first { $0.kind == kind }?.metrics.first { $0.name == name }?.numericValue
     }
 
     private func advance() {

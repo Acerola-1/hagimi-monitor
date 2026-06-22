@@ -40,7 +40,7 @@ Introduce menu bar-specific display settings instead of reusing module metric to
 Recommended model shape:
 
 - `MenuBarDisplayMode`: `ring`, `metrics`
-- `MenuBarMetricKind`: curated menu bar metric choices such as CPU usage, GPU usage, memory usage, battery level, network download, network upload, storage usage, storage free, and CPU temperature when available.
+- `MenuBarMetricKind`: curated menu bar metric choices such as CPU usage, GPU usage, memory usage, battery level, network download, network upload, CPU temperature, and storage free when available.
 - `menuBarMetricKinds: [MenuBarMetricKind]`: ordered selection, capped at 4.
 
 Rationale:

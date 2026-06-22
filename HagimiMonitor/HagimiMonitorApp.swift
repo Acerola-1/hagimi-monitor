@@ -29,14 +29,7 @@ struct HagimiMonitorApp: App {
                     handleWillTerminate()
                 }
         } label: {
-            Image(nsImage: MenuBarComputeRingIcon.image(
-                load: monitorStore.displayedComputeLoad,
-                darkMode: NSApp.effectiveAppearance.isDark,
-                loadLevel: monitorStore.haloRingLoadLevel
-            ))
-            .resizable()
-            .frame(width: 18, height: 18)
-            .help("HagimiMonitor")
+            MenuBarStatusLabel(store: monitorStore, darkMode: NSApp.effectiveAppearance.isDark)
         }
         .menuBarExtraStyle(.window)
 
