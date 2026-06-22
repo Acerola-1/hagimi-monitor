@@ -190,7 +190,12 @@ else
   } > "$NOTES_FILE"
 fi
 
-# 创建发布分支并提交
+# 同步 main 并从 main 创建发布分支
+echo ">>> 同步 main 分支..."
+git fetch origin main
+git checkout main
+git pull origin main
+
 echo ">>> 创建发布分支 ${RELEASE_BRANCH}..."
 git checkout -b "$RELEASE_BRANCH"
 
