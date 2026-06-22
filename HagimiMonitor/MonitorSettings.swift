@@ -54,6 +54,8 @@ final class MonitorSettings: ObservableObject {
     @Published var themePreference: AppThemePreference = .system
     @Published var colorSchemePreference: MonitorColorSchemePreference = .balanced
     @Published var ringSource: HaloRingSource = .combined
+    @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
+    @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
     @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
@@ -88,8 +90,13 @@ final class MonitorSettings: ObservableObject {
         let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.balanced.rawValue
         colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .balanced
 
-        let ringSourceRawValue = defaults.string(forKey: Keys.ringSource) ?? HaloRingSource.combined.rawValue
-        ringSource = HaloRingSource(rawValue: ringSourceRawValue) ?? .combined
+        ringSource = .combined
+
+        let menuBarDisplayModeRawValue = defaults.string(forKey: Keys.menuBarDisplayMode) ?? MenuBarDisplayMode.ring.rawValue
+        menuBarDisplayMode = MenuBarDisplayMode(rawValue: menuBarDisplayModeRawValue) ?? .ring
+        menuBarMetricKinds = MonitorSettings.validatedMenuBarMetrics(
+            defaults.array(forKey: Keys.menuBarMetricKinds) as? [String]
+        )
 
         showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
         displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? false
@@ -170,6 +177,51 @@ final class MonitorSettings: ObservableObject {
         enabledMetrics[kind] = defaultMetricIds(for: kind)
     }
 
+    func isMenuBarMetricSelected(_ kind: MenuBarMetricKind) -> Bool {
+        menuBarMetricKinds.contains(kind)
+    }
+
+    func canSelectMenuBarMetric(_ kind: MenuBarMetricKind) -> Bool {
+        isMenuBarMetricSelected(kind) || menuBarMetricKinds.count < MenuBarMetricKind.maximumSelectionCount
+    }
+
+    func setMenuBarMetric(_ kind: MenuBarMetricKind, selected: Bool) {
+        var current = menuBarMetricKinds
+        if selected {
+            guard !current.contains(kind), current.count < MenuBarMetricKind.maximumSelectionCount else { return }
+            current.append(kind)
+        } else {
+            current.removeAll { $0 == kind }
+        }
+        menuBarMetricKinds = current.isEmpty ? MenuBarMetricKind.defaultSelection : current
+    }
+
+    func moveMenuBarMetric(_ kind: MenuBarMetricKind, direction: Int) {
+        guard let index = menuBarMetricKinds.firstIndex(of: kind) else { return }
+        let target = index + direction
+        guard menuBarMetricKinds.indices.contains(target) else { return }
+        menuBarMetricKinds.swapAt(index, target)
+    }
+
+    private static func validatedMenuBarMetrics(_ rawValues: [String]?) -> [MenuBarMetricKind] {
+        guard let rawValues else {
+            return MenuBarMetricKind.defaultSelection
+        }
+
+        var result: [MenuBarMetricKind] = []
+        for rawValue in rawValues {
+            guard let kind = MenuBarMetricKind(rawValue: rawValue), !result.contains(kind) else {
+                continue
+            }
+            result.append(kind)
+            if result.count == MenuBarMetricKind.maximumSelectionCount {
+                break
+            }
+        }
+
+        return result.isEmpty ? MenuBarMetricKind.defaultSelection : result
+    }
+
     private func migrateMetrics(_ ids: [String], for kind: MonitorKind) -> [String] {
         let mapping: [String: String] = {
             switch kind {
@@ -237,8 +289,22 @@ final class MonitorSettings: ObservableObject {
 
         $ringSource
             .dropFirst()
+            .sink { [weak self] _ in
+                self?.persist(HaloRingSource.combined.rawValue, forKey: Keys.ringSource)
+            }
+            .store(in: &cancellables)
+
+        $menuBarDisplayMode
+            .dropFirst()
             .sink { [weak self] newValue in
-                self?.persist(newValue.rawValue, forKey: Keys.ringSource)
+                self?.persist(newValue.rawValue, forKey: Keys.menuBarDisplayMode)
+            }
+            .store(in: &cancellables)
+
+        $menuBarMetricKinds
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.map(\.rawValue), forKey: Keys.menuBarMetricKinds)
             }
             .store(in: &cancellables)
 
@@ -418,6 +484,8 @@ private enum Keys {
     static let themePreference = "settings.themePreference"
     static let colorSchemePreference = "settings.colorSchemePreference"
     static let ringSource = "settings.ringSource"
+    static let menuBarDisplayMode = "settings.menuBar.displayMode"
+    static let menuBarMetricKinds = "settings.menuBar.metricKinds"
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"

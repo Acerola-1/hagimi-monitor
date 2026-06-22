@@ -1,0 +1,416 @@
+import Foundation
+import OSLog
+
+// MARK: - Diagnostics Support
+
+enum DiagnosticsDirectories {
+    static var applicationSupport: URL {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        return base.appendingPathComponent("HagimiMonitor", isDirectory: true)
+    }
+}
+
+extension JSONEncoder {
+    static var hagimiDiagnostics: JSONEncoder {
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        return encoder
+    }
+}
+
+extension JSONDecoder {
+    static var hagimiDiagnostics: JSONDecoder {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return decoder
+    }
+}
+
+// MARK: - App Log Store
+
+final class AppLogStore {
+    enum Level: String {
+        case info
+        case warning
+        case error
+    }
+
+    static let shared = AppLogStore()
+
+    private let logsDirectory: URL
+    private let currentLogURL: URL
+    private let rotatedLogURL: URL
+    private let maxFileSize: UInt64
+    private let dateProvider: () -> Date
+    private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.app-log")
+    private let formatter: ISO8601DateFormatter
+
+    init(
+        baseDirectory: URL? = nil,
+        maxFileSize: UInt64 = 1_048_576,
+        dateProvider: @escaping () -> Date = Date.init
+    ) {
+        let root = baseDirectory ?? DiagnosticsDirectories.applicationSupport
+        self.logsDirectory = root.appendingPathComponent("Logs", isDirectory: true)
+        self.currentLogURL = logsDirectory.appendingPathComponent("app.log")
+        self.rotatedLogURL = logsDirectory.appendingPathComponent("app.1.log")
+        self.maxFileSize = maxFileSize
+        self.dateProvider = dateProvider
+        self.formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        createLogsDirectoryIfNeeded()
+    }
+
+    func info(_ message: String, category: String) {
+        write(level: .info, category: category, message: message)
+    }
+
+    func warning(_ message: String, category: String) {
+        write(level: .warning, category: category, message: message)
+    }
+
+    func error(_ message: String, category: String) {
+        write(level: .error, category: category, message: message)
+    }
+
+    func flush() {
+        queue.sync {}
+    }
+
+    func logFileURLs() -> [URL] {
+        flush()
+        return [currentLogURL, rotatedLogURL].filter { FileManager.default.fileExists(atPath: $0.path) }
+    }
+
+    private func write(level: Level, category: String, message: String) {
+        let timestamp = formatter.string(from: dateProvider())
+        let normalizedMessage = message
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\n", with: " ")
+        let line = "\(timestamp) [\(level.rawValue)] [\(category)] \(normalizedMessage)\n"
+
+        queue.async { [currentLogURL, logsDirectory, maxFileSize, rotatedLogURL] in
+            do {
+                try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
+                try AppLogStore.rotateIfNeeded(currentLogURL: currentLogURL, rotatedLogURL: rotatedLogURL, maxFileSize: maxFileSize)
+                if FileManager.default.fileExists(atPath: currentLogURL.path) {
+                    let handle = try FileHandle(forWritingTo: currentLogURL)
+                    try handle.seekToEnd()
+                    if let data = line.data(using: .utf8) {
+                        try handle.write(contentsOf: data)
+                    }
+                    try handle.close()
+                } else {
+                    try line.write(to: currentLogURL, atomically: true, encoding: .utf8)
+                }
+            } catch {
+                // Logging must never affect app behavior.
+            }
+        }
+    }
+
+    private func createLogsDirectoryIfNeeded() {
+        try? FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
+    }
+
+    private static func rotateIfNeeded(currentLogURL: URL, rotatedLogURL: URL, maxFileSize: UInt64) throws {
+        guard let attributes = try? FileManager.default.attributesOfItem(atPath: currentLogURL.path),
+              let size = attributes[.size] as? UInt64,
+              size >= maxFileSize else {
+            return
+        }
+
+        if FileManager.default.fileExists(atPath: rotatedLogURL.path) {
+            try FileManager.default.removeItem(at: rotatedLogURL)
+        }
+        try FileManager.default.moveItem(at: currentLogURL, to: rotatedLogURL)
+    }
+}
+
+// MARK: - Launch State
+
+struct AppLaunchState: Codable {
+    var launchID: String
+    var launchDate: Date
+    var lastCleanExitDate: Date?
+    var previousRunEndedUnexpectedly: Bool
+}
+
+final class AppLaunchStateTracker {
+    static let shared = AppLaunchStateTracker()
+
+    private let stateURL: URL
+    private let dateProvider: () -> Date
+    private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.launch-state")
+    private var currentState: AppLaunchState?
+
+    init(baseDirectory: URL? = nil, dateProvider: @escaping () -> Date = Date.init) {
+        let root = baseDirectory ?? DiagnosticsDirectories.applicationSupport
+        self.stateURL = root.appendingPathComponent("run-state.json")
+        self.dateProvider = dateProvider
+    }
+
+    @discardableResult
+    func markLaunch() -> Bool {
+        queue.sync {
+            let previous = loadState()
+            let previousUnexpected = previous.map { $0.lastCleanExitDate == nil } ?? false
+            let state = AppLaunchState(
+                launchID: UUID().uuidString,
+                launchDate: dateProvider(),
+                lastCleanExitDate: nil,
+                previousRunEndedUnexpectedly: previousUnexpected
+            )
+            currentState = state
+            saveState(state)
+            return previousUnexpected
+        }
+    }
+
+    func markCleanExit() {
+        queue.sync {
+            var state = currentState ?? loadState() ?? AppLaunchState(
+                launchID: UUID().uuidString,
+                launchDate: dateProvider(),
+                lastCleanExitDate: nil,
+                previousRunEndedUnexpectedly: false
+            )
+            state.lastCleanExitDate = dateProvider()
+            state.previousRunEndedUnexpectedly = false
+            currentState = state
+            saveState(state)
+        }
+    }
+
+    func stateSnapshot() -> AppLaunchState? {
+        queue.sync { currentState ?? loadState() }
+    }
+
+    func stateFileURL() -> URL? {
+        queue.sync {
+            FileManager.default.fileExists(atPath: stateURL.path) ? stateURL : nil
+        }
+    }
+
+    private func loadState() -> AppLaunchState? {
+        guard let data = try? Data(contentsOf: stateURL) else { return nil }
+        return try? JSONDecoder.hagimiDiagnostics.decode(AppLaunchState.self, from: data)
+    }
+
+    private func saveState(_ state: AppLaunchState) {
+        do {
+            try FileManager.default.createDirectory(
+                at: stateURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let data = try JSONEncoder.hagimiDiagnostics.encode(state)
+            try data.write(to: stateURL, options: .atomic)
+        } catch {
+            // Diagnostics state must never affect app behavior.
+        }
+    }
+}
+
+// MARK: - App Log Exporter
+
+struct AppLogExporter {
+    struct Configuration {
+        var outputDirectory: URL
+        var appLogStore: AppLogStore
+        var launchStateTracker: AppLaunchStateTracker
+        var dateProvider: () -> Date
+        var compress: Bool
+
+        static var `default`: Configuration {
+            Configuration(
+                outputDirectory: FileManager.default.temporaryDirectory
+                    .appendingPathComponent("HagimiMonitor", isDirectory: true)
+                    .appendingPathComponent("Diagnostics", isDirectory: true),
+                appLogStore: .shared,
+                launchStateTracker: .shared,
+                dateProvider: Date.init,
+                compress: true
+            )
+        }
+    }
+
+    private struct Metadata: Codable {
+        let generatedAt: Date
+        let appName: String
+        let appVersion: String
+        let buildNumber: String
+        let bundleIdentifier: String
+        let osVersion: String
+        let architecture: String
+        let locale: String
+        let previousRunEndedUnexpectedly: Bool
+    }
+
+    private let configuration: Configuration
+
+    init(configuration: Configuration = .default) {
+        self.configuration = configuration
+    }
+
+    func export() throws -> URL {
+        configuration.appLogStore.flush()
+
+        let generatedAt = configuration.dateProvider()
+        let folderName = "hagimi-monitor-diagnostics-\(timestampString(from: generatedAt))"
+        let stagingRoot = configuration.outputDirectory
+        let folderURL = stagingRoot.appendingPathComponent(folderName, isDirectory: true)
+        let logsURL = folderURL.appendingPathComponent("logs", isDirectory: true)
+        let stateURL = folderURL.appendingPathComponent("state", isDirectory: true)
+
+        if FileManager.default.fileExists(atPath: folderURL.path) {
+            try FileManager.default.removeItem(at: folderURL)
+        }
+        try FileManager.default.createDirectory(at: logsURL, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: stateURL, withIntermediateDirectories: true)
+
+        try writeReadme(to: folderURL.appendingPathComponent("README.txt"), generatedAt: generatedAt)
+        try writeMetadata(to: folderURL.appendingPathComponent("metadata.json"), generatedAt: generatedAt)
+        try copyAppLogs(to: logsURL)
+        try copyLaunchState(to: stateURL)
+        writeUnifiedLog(to: logsURL)
+
+        guard configuration.compress else {
+            return folderURL
+        }
+
+        let zipURL = stagingRoot.appendingPathComponent("\(folderName).zip")
+        if FileManager.default.fileExists(atPath: zipURL.path) {
+            try FileManager.default.removeItem(at: zipURL)
+        }
+
+        do {
+            try createZip(from: folderURL, to: zipURL)
+            return zipURL
+        } catch {
+            configuration.appLogStore.warning("Failed to create diagnostics zip: \(error.localizedDescription)", category: "diagnostics")
+            return folderURL
+        }
+    }
+
+    private func writeReadme(to url: URL, generatedAt: Date) throws {
+        let text = """
+        \(String(localized: "diagnostics.readme.title"))
+
+        \(String(localized: "diagnostics.readme.description"))
+
+        Generated At: \(ISO8601DateFormatter().string(from: generatedAt))
+
+        \(String(localized: "diagnostics.readme.privacy"))
+
+        \(String(localized: "diagnostics.readme.feedback"))
+        https://github.com/Acerola-1/hagimi-monitor/issues
+        """
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    }
+
+    private func writeMetadata(to url: URL, generatedAt: Date) throws {
+        let info = Bundle.main.infoDictionary ?? [:]
+        let state = configuration.launchStateTracker.stateSnapshot()
+        let metadata = Metadata(
+            generatedAt: generatedAt,
+            appName: (info["CFBundleName"] as? String) ?? "HagimiMonitor",
+            appVersion: (info["CFBundleShortVersionString"] as? String) ?? "unknown",
+            buildNumber: (info["CFBundleVersion"] as? String) ?? "unknown",
+            bundleIdentifier: Bundle.main.bundleIdentifier ?? "unknown",
+            osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            architecture: DiagnosticsSystemInfo.architecture,
+            locale: Locale.current.identifier,
+            previousRunEndedUnexpectedly: state?.previousRunEndedUnexpectedly ?? false
+        )
+        let data = try JSONEncoder.hagimiDiagnostics.encode(metadata)
+        try data.write(to: url, options: .atomic)
+    }
+
+    private func copyAppLogs(to logsURL: URL) throws {
+        for sourceURL in configuration.appLogStore.logFileURLs() {
+            let destinationURL = logsURL.appendingPathComponent(sourceURL.lastPathComponent)
+            if FileManager.default.fileExists(atPath: destinationURL.path) {
+                try FileManager.default.removeItem(at: destinationURL)
+            }
+            try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+        }
+    }
+
+    private func copyLaunchState(to stateDirectory: URL) throws {
+        guard let sourceURL = configuration.launchStateTracker.stateFileURL() else { return }
+        let destinationURL = stateDirectory.appendingPathComponent(sourceURL.lastPathComponent)
+        if FileManager.default.fileExists(atPath: destinationURL.path) {
+            try FileManager.default.removeItem(at: destinationURL)
+        }
+        try FileManager.default.copyItem(at: sourceURL, to: destinationURL)
+    }
+
+    private func writeUnifiedLog(to logsURL: URL) {
+        let destinationURL = logsURL.appendingPathComponent("unified.log")
+        do {
+            let text = try recentUnifiedLogText()
+            try text.write(to: destinationURL, atomically: true, encoding: .utf8)
+        } catch {
+            let fallbackURL = logsURL.appendingPathComponent("unified-log-unavailable.txt")
+            let message = String(localized: "diagnostics.unified-log-unavailable")
+                + "\n\n"
+                + error.localizedDescription
+            try? message.write(to: fallbackURL, atomically: true, encoding: .utf8)
+        }
+    }
+
+    private func recentUnifiedLogText() throws -> String {
+        let store = try OSLogStore(scope: .currentProcessIdentifier)
+        let startDate = configuration.dateProvider().addingTimeInterval(-24 * 60 * 60)
+        let position = store.position(date: startDate)
+        let predicate = NSPredicate(format: "subsystem == %@", "com.acerola.hagimi-monitor")
+        let entries = try store.getEntries(at: position, matching: predicate)
+
+        var lines: [String] = []
+        for entry in entries.prefix(2_000) {
+            guard let log = entry as? OSLogEntryLog else { continue }
+            lines.append("\(ISO8601DateFormatter().string(from: log.date)) [\(log.category)] \(log.composedMessage)")
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func createZip(from folderURL: URL, to zipURL: URL) throws {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ditto")
+        process.arguments = [
+            "-c",
+            "-k",
+            "--sequesterRsrc",
+            "--keepParent",
+            folderURL.path,
+            zipURL.path
+        ]
+        try process.run()
+        process.waitUntilExit()
+        guard process.terminationStatus == 0 else {
+            throw CocoaError(.fileWriteUnknown)
+        }
+    }
+
+    private func timestampString(from date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyyMMdd-HHmmss"
+        return formatter.string(from: date)
+    }
+}
+
+private enum DiagnosticsSystemInfo {
+    static var architecture: String {
+        #if arch(arm64)
+        return "arm64"
+        #elseif arch(x86_64)
+        return "x86_64"
+        #else
+        return "unknown"
+        #endif
+    }
+}

@@ -27,7 +27,9 @@ final class SystemMonitorSampler {
 
             for kind in kinds {
                 guard let sampler = samplers[kind] else {
-                    AppLogger.sampler.error("No sampler registered for kind: \(kind.rawValue, privacy: .public)")
+                    let message = "No sampler registered for kind: \(kind.rawValue)"
+                    AppLogger.sampler.error("\(message, privacy: .public)")
+                    AppLogStore.shared.error(message, category: "sampler")
                     errors.append(samplingError(for: kind))
                     continue
                 }
@@ -52,7 +54,9 @@ final class SystemMonitorSampler {
             } else if modulesByKind.isEmpty {
                 return .failure(errors[0])
             } else {
-                AppLogger.sampler.error("Partial sampling failure: \(errors.map(\.description).joined(separator: ", "), privacy: .public)")
+                let message = "Partial sampling failure: \(errors.map(\.description).joined(separator: ", "))"
+                AppLogger.sampler.error("\(message, privacy: .public)")
+                AppLogStore.shared.error(message, category: "sampler")
                 return .success(SystemMonitorSnapshot(modules: modules))
             }
         }

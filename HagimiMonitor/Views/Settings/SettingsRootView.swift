@@ -31,7 +31,7 @@ struct SettingsRootView: View {
     private var detailView: some View {
         switch selection {
         case .general:
-            GeneralSettingsView(settings: settings)
+            GeneralSettingsView(settings: settings, store: store)
         case .module(let kind):
             ModuleSettingsView(kind: kind, settings: settings)
         #if DISPLAY_CONTROL

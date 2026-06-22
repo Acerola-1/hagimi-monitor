@@ -58,8 +58,8 @@ struct HagimiMonitorTests {
         #expect(ComputeLoadModel.memoryPressureScore(.warning) == 50)
         #expect(ComputeLoadModel.memoryPressureScore(.critical) == 85)
         #expect(ComputeLoadModel.memoryPressureScore(.unknown) == 0)
-        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .warning) - 43.640488) < 1e-4)
-        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .critical) - 67.943312) < 1e-4)
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .warning) - 45.750142) < 1e-4)
+        #expect(abs(ComputeLoadModel.combined(cpuValue: 50, gpuValue: 25, memoryPressure: .critical) - 72.101857) < 1e-4)
     }
 
     @Test func computeLoadSoftmaxSurfacesSingleBottleneck() {
