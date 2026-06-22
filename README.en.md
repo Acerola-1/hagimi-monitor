@@ -1,23 +1,134 @@
 # HagimiMonitor
 
+> [中文](README.md) · [Website](https://acerola-1.github.io/hagimi-monitor/)
+
 <p align="center">
   <img src="docs/images/icon.png" width="132" alt="HagimiMonitor icon">
 </p>
 
 <p align="center">
-  <strong>macOS Menu Bar System Monitor</strong>
+  <strong>Your Mac, at a Glance.</strong>
 </p>
 
 <p align="center">
-  Native Swift, stays around 30 MB. A dynamic ring and a compact panel tell you what matters.
+  HagimiMonitor is an elegant macOS menu bar system monitor that displays CPU, GPU, memory, storage, network, battery, and display status through a dynamic ring and a compact glass panel.
 </p>
 
 <p align="center">
-  <a href="#installation">Installation</a> ·
+  <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest"><strong>Download Latest</strong></a> ·
   <a href="#highlights">Highlights</a> ·
   <a href="#screenshots">Screenshots</a> ·
-  <a href="#requirements">Requirements</a>
+  <a href="#installation">Installation</a> ·
+  <a href="#build">Build</a>
 </p>
+
+<p align="center">
+  <img alt="macOS 26+" src="https://img.shields.io/badge/macOS-26%2B-111827?style=flat-square&logo=apple">
+  <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-M%20series-2ECC71?style=flat-square&logo=apple">
+  <img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-F05138?style=flat-square&logo=swift&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
+</p>
+
+## Screenshots
+
+### Multi-Theme Color Schemes
+
+HagimiMonitor includes a semantic Palette. Module colors, glass backgrounds, dividers, progress tracks, and status colors change consistently with the selected theme. It currently offers Balanced and Vibrant styles, fully adapted for light / dark mode.
+
+| Balanced · Dark | Balanced · Light |
+| --- | --- |
+| ![Balanced dark theme](docs/images/balance-dark.png) | ![Balanced light theme](docs/images/balance-light.png) |
+
+| Vibrant · Dark | Vibrant · Light |
+| --- | --- |
+| ![Vibrant dark theme](docs/images/vitality-dark.png) | ![Vibrant light theme](docs/images/vitality-light.png) |
+
+### Expand for Details
+
+The default state stays compact. Click the menu bar item to expand complete details for CPU, GPU, memory, storage, network, battery, displays, and more.
+
+<p align="center">
+  <img src="docs/images/detailed-data.png" width="430" alt="HagimiMonitor expanded rich metrics">
+</p>
+
+## Highlights
+
+### Visible Directly from the Menu Bar
+
+The dynamic ring icon reflects system load in real time, smoothly combining CPU and GPU usage into one pressure indicator. Light load, busy, or near critical — visible at a glance.
+
+### Seven Monitoring Modules
+
+From the menu bar to the detailed panel, key metrics are always within reach:
+
+- **CPU**: system / user / idle usage, uptime, temperature reading, process-level usage
+- **GPU**: graphics load, render / tiler performance, VRAM info
+- **Memory**: usage rate, memory pressure, swap, pressure level changes
+- **Storage**: system disk, external volumes, read / write rates
+- **Network**: upload / download rates, network interface type, IP information
+- **Battery & Power**: level, power status, power draw, health, and other available info
+- **Display**: brightness, volume, and contrast control depending on DDC/CI support
+
+### Glass UI and Unified Colors
+
+The panel uses a lightweight glassmorphism UI, with a unified Palette for module accents, status semantics, dividers, progress tracks, and light / dark mode adaptation.
+
+### Statistics, Health Score, and Event Detection
+
+HagimiMonitor provides longer-term views around system state:
+
+- 0-100 Mac health score across CPU, GPU, disk, memory pressure, and thermal dimensions
+- Multi-range statistics for 24 hours, 7 days, 30 days, and one year
+- Automatic detection for CPU high load, memory pressure, low disk space, network traffic peaks, and other key events
+
+### External Display Control
+
+Adjust brightness, volume, and contrast for external displays from the menu bar via DDC/CI. This depends on display, cable, connection, and system support; unsupported controls are not shown as available.
+
+### Native Swift, Lightweight Resident
+
+Built with Swift / SwiftUI and optimized for Apple Silicon. Daily memory footprint is around 30 MB, making it suitable as a long-running menu bar status panel.
+
+## Installation
+
+1. Download the latest `.dmg` from [Releases](https://github.com/Acerola-1/hagimi-monitor/releases/latest)
+2. Open the DMG and drag HagimiMonitor into the Applications folder
+3. Launch it from Launchpad or Applications
+
+## Allowing Unsigned Apps
+
+HagimiMonitor is currently not notarized by Apple, so macOS may block it. After installation, run in Terminal:
+
+```bash
+sudo xattr -cr /Applications/HagimiMonitor.app
+```
+
+Then launch normally.
+
+## Requirements
+
+- macOS 26 or later
+- Apple Silicon (M-series chips)
+
+## Build
+
+For development, use the `HagimiMonitorDirect` scheme:
+
+```bash
+xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitorDirect -configuration Debug build
+```
+
+Release / App Store build:
+
+```bash
+xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitor -configuration Release build
+```
+
+Run tests:
+
+```bash
+xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitorDirect -configuration Debug test
+```
 
 ## Star History
 
@@ -34,95 +145,6 @@
 <p align="center">
   If this project helps you, a ⭐ would mean a lot for continued maintenance.
 </p>
-
-## Screenshots
-
-### Multi-Theme Color Schemes
-
-HagimiMonitor includes a semantic color system. All module colors, glass backgrounds, dividers, progress tracks, status colors, and display controls are resolved through a unified Palette. Currently offers "Balanced" and "Vibrant" styles, fully adapted for light / dark mode.
-
-| Balanced · Dark | Balanced · Light |
-| --- | --- |
-| ![Balanced dark theme](docs/images/balance-dark.png) | ![Balanced light theme](docs/images/balance-light.png) |
-
-| Vibrant · Dark | Vibrant · Light |
-| --- | --- |
-| ![Vibrant dark theme](docs/images/vitality-dark.png) | ![Vibrant light theme](docs/images/vitality-light.png) |
-
-More presets will be added, with custom color scheme configuration to match your desktop style.
-
-### Expanded Rich Data
-
-The default state stays compact; expanding reveals more complete details for CPU, GPU, memory, storage, and more. Quick scan or deep dive — your choice.
-
-<p align="center">
-  <img src="docs/images/detailed-data.png" width="430" alt="HagimiMonitor expanded rich metrics">
-</p>
-
-## Highlights
-
-### Core System Data at a Glance
-
-HagimiMonitor focuses on the most essential system metrics: CPU, GPU, memory, storage, network, and battery. The panel avoids clutter, placing truly impactful data in the most scannable positions.
-
-### Dynamic Ring Shows Combined Load
-
-The menu bar icon is not static decoration. HagimiMonitor combines CPU and GPU load, smoothly calculates current system pressure, and displays it through a dynamic ring: light load, busy, or near critical — instantly visible.
-
-### Native Swift, Lightweight Resident
-
-Built with Swift / SwiftUI, optimized for Apple Silicon. Daily memory footprint around 30 MB, perfect for long-term residence in the menu bar.
-
-### Unified Color System
-
-Colors are not just swapped — they are managed by a unified Palette:
-
-- Module accent colors: CPU, GPU, memory, storage, network, battery, and display each have clear visual identity.
-- Glass texture: Row backgrounds, dividers, and progress tracks coordinate with the theme.
-- Status semantics: Normal, warning, and critical states use independent semantic colors, separate from module colors.
-- Light / dark adaptation: Each color scheme covers both light and dark modes.
-
-### Display Controls
-
-HagimiMonitor supports brightness, volume, and contrast control for external displays directly from the menu bar panel, integrating external monitors into the same workflow.
-
-Note: Display control depends on display, cable, connection, and system environment support. External displays typically need DDC/CI protocol support; unsupported controls are not shown as available.
-
-## Installation
-
-1. Download the latest `.dmg` from [Releases](https://github.com/Acerola-1/hagimi-monitor/releases)
-2. Open the DMG and drag HagimiMonitor to your Applications folder
-
-## Allowing Unsigned Apps
-
-HagimiMonitor is currently not notarized by Apple, so macOS will block it. After installation, run in Terminal:
-
-```bash
-sudo xattr -cr /Applications/HagimiMonitor.app
-```
-
-Then launch normally.
-
-## Requirements
-
-- macOS 26 or later
-- Apple Silicon (M-series chips)
-
-## Current Monitoring Scope
-
-- CPU: overall usage, system / user / idle, uptime
-- GPU: graphics load, render / tiler, VRAM info
-- Memory: usage rate, memory pressure, swap
-- Storage: system disk and external volume capacity
-- Network: upload / download rates
-- Battery: level, power status, power consumption, health, and other available info
-- Display: brightness, volume, contrast control (depends on DDC/CI support)
-
-## Build
-
-```bash
-xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitor -configuration Debug build
-```
 
 ## License
 

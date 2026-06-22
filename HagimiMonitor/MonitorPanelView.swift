@@ -72,9 +72,6 @@ struct MonitorPanelView: View {
         }
         .containerBackground(.clear, for: .window)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
-        .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-            store.flushStatistics()
-        }
     }
 
     private var panelBackgroundColor: Color {
