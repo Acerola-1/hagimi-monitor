@@ -105,10 +105,10 @@ NOTES_FILE="RELEASE_NOTES.md"
 
 echo "=== 发布 ${TAG} ==="
 
-# 检查工作区（仅允许版本号和发布说明文件变更）
-if [[ -n $(git status --porcelain | grep -vE "$PBXPROJ|$NOTES_FILE") ]]; then
+# 检查工作区是否干净
+if [[ -n $(git status --porcelain) ]]; then
   echo "错误: 工作区有未提交的更改，请先提交或暂存"
-  git status --short | grep -vE "$PBXPROJ|$NOTES_FILE"
+  git status --short
   exit 1
 fi
 
@@ -118,6 +118,15 @@ if git tag -l "$TAG" | grep -q "$TAG"; then
   echo "如需重新发布，请先删除: git tag -d ${TAG} && git push origin --delete ${TAG}"
   exit 1
 fi
+
+# 同步 main 并从 main 创建发布分支
+echo ">>> 同步 main 分支..."
+git fetch origin main
+git checkout main
+git pull origin main --no-edit
+
+echo ">>> 创建发布分支 ${RELEASE_BRANCH}..."
+git checkout -b "$RELEASE_BRANCH"
 
 # 更新 MARKETING_VERSION
 echo ">>> 更新 MARKETING_VERSION 为 ${VERSION}..."
@@ -190,15 +199,7 @@ else
   } > "$NOTES_FILE"
 fi
 
-# 同步 main 并从 main 创建发布分支
-echo ">>> 同步 main 分支..."
-git fetch origin main
-git checkout main
-git pull origin main
-
-echo ">>> 创建发布分支 ${RELEASE_BRANCH}..."
-git checkout -b "$RELEASE_BRANCH"
-
+# 提交变更
 if [[ -n $(git status --porcelain) ]]; then
   echo ">>> 提交版本号变更..."
   git add "$PBXPROJ" "$NOTES_FILE"
@@ -226,7 +227,7 @@ gh pr merge --squash --delete-branch "$PR_URL"
 # 拉取 main 并打 tag
 echo ">>> 拉取 main 并打 tag..."
 git checkout main
-git pull origin main
+git pull origin main --no-edit
 git tag "$TAG"
 git push origin "$TAG"
 
