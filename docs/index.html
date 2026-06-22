@@ -9,14 +9,21 @@
         (function() {
             try {
                 const stored = localStorage.getItem("hagimi-lang");
-                if (stored === "zh" || stored === "en") {
+                if (stored === "zh" || stored === "en" || stored === "ja") {
                     location.replace("./" + stored + "/");
                     return;
                 }
             } catch (e) {}
             const lang = navigator.language || navigator.userLanguage;
-            if (lang && lang.toLowerCase().startsWith("zh")) {
-                location.replace("./zh/");
+            if (lang) {
+                const lower = lang.toLowerCase();
+                if (lower.startsWith("zh")) {
+                    location.replace("./zh/");
+                } else if (lower.startsWith("ja")) {
+                    location.replace("./ja/");
+                } else {
+                    location.replace("./en/");
+                }
             } else {
                 location.replace("./en/");
             }
@@ -24,7 +31,7 @@
     </script>
     <noscript>
         <p>Please select your language:</p>
-        <p><a href="zh/">中文</a> | <a href="en/">English</a></p>
+        <p><a href="zh/">中文</a> | <a href="en/">English</a> | <a href="ja/">日本語</a></p>
     </noscript>
 </head>
 <body>

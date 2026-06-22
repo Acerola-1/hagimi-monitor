@@ -304,18 +304,18 @@ private struct SummaryCard: View {
             return AnyView(EmptyView())
         }
         return AnyView(
-            HStack(alignment: .top, spacing: 10) {
-                dualMetricColumn(dual.first)
+            VStack(alignment: .leading, spacing: 10) {
+                dualMetricRow(dual.first)
                 Divider()
                     .opacity(0.5)
-                dualMetricColumn(dual.second)
+                dualMetricRow(dual.second)
             }
             .padding(.top, 2)
         )
     }
 
-    private func dualMetricColumn(_ metric: DualMetric) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func dualMetricRow(_ metric: DualMetric) -> some View {
+        HStack(spacing: 0) {
             HStack(spacing: 4) {
                 Image(systemName: metric.symbol)
                     .font(.caption.weight(.semibold))
@@ -325,12 +325,15 @@ private struct SummaryCard: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+            .frame(width: 56, alignment: .leading)
+
+            Spacer(minLength: 0)
 
             HStack(alignment: .lastTextBaseline, spacing: 3) {
                 Text(metric.number)
                     .font(.system(size: 22, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                    .minimumScaleFactor(0.55)
+                    .minimumScaleFactor(0.7)
                     .lineLimit(1)
                     .foregroundStyle(hasData ? .primary : .tertiary)
                 if !metric.unit.isEmpty {
@@ -341,7 +344,6 @@ private struct SummaryCard: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var iconBadge: some View {
