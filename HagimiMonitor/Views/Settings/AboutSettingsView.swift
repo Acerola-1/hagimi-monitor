@@ -1,8 +1,11 @@
 import AppKit
+import OSLog
 import SwiftUI
 
 struct AboutSettingsView: View {
     @State private var updateChecker = UpdateChecker()
+    @State private var isExportingLogs = false
+    @State private var logExportMessage: String?
 
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
     private let issuesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/issues")!
@@ -57,6 +60,10 @@ struct AboutSettingsView: View {
                                 .frame(minWidth: 80)
                         }
                     }
+                }
+
+                SettingsRow(title: String(localized: "about.diagnostics"), subtitle: logExportMessage) {
+                    exportLogsButton
                 }
             }
 
@@ -143,6 +150,68 @@ struct AboutSettingsView: View {
                     Button(String(localized: "about.retry")) {
                         Task { await updateChecker.checkForUpdates() }
                     }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var exportLogsButton: some View {
+        let label = isExportingLogs
+            ? String(localized: "about.exporting-logs")
+            : String(localized: "about.export-logs")
+
+        if #available(macOS 26, *) {
+            Button {
+                exportLogs()
+            } label: {
+                if isExportingLogs {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Label(label, systemImage: "doc.zipper")
+                        .frame(minWidth: 80)
+                }
+            }
+            .disabled(isExportingLogs)
+            .buttonStyle(.glass)
+        } else {
+            Button {
+                exportLogs()
+            } label: {
+                if isExportingLogs {
+                    ProgressView()
+                        .controlSize(.small)
+                } else {
+                    Label(label, systemImage: "doc.zipper")
+                        .frame(minWidth: 80)
+                }
+            }
+            .disabled(isExportingLogs)
+        }
+    }
+
+    private func exportLogs() {
+        guard !isExportingLogs else { return }
+        isExportingLogs = true
+        logExportMessage = nil
+        AppLogStore.shared.info("Diagnostics export requested", category: "settings")
+
+        Task {
+            do {
+                let url = try AppLogExporter().export()
+                AppLogStore.shared.info("Diagnostics export succeeded: \(url.lastPathComponent)", category: "settings")
+                await MainActor.run {
+                    isExportingLogs = false
+                    logExportMessage = String(localized: "about.export-logs-done")
+                    NSWorkspace.shared.activateFileViewerSelecting([url])
+                }
+            } catch {
+                AppLogger.diagnostics.error("Diagnostics export failed: \(String(describing: error), privacy: .public)")
+                AppLogStore.shared.error("Diagnostics export failed: \(error.localizedDescription)", category: "settings")
+                await MainActor.run {
+                    isExportingLogs = false
+                    logExportMessage = String(localized: "about.export-logs-failed")
                 }
             }
         }

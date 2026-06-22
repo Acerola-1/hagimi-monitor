@@ -257,7 +257,10 @@ final class MonitorStore: ObservableObject {
     var statisticsPendingSnapshot: [String: PendingBucket] { statisticsRecorder.pendingSnapshot() }
 
     /// App 退出时将当前未落库的采样桶立即写入 SwiftData，避免丢失。
-    func flushStatistics() { statisticsRecorder.flush() }
+    func flushStatistics() {
+        AppLogStore.shared.info("Flushing statistics before termination", category: "statistics")
+        statisticsRecorder.flush()
+    }
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
@@ -504,7 +507,9 @@ final class MonitorStore: ObservableObject {
             statisticsRecorder.record(modules: snapshot.modules)
             detectEvents(modules: snapshot.modules)
         case .failure(let error):
-            AppLogger.sampler.error("Sampling failed: \(error.description, privacy: .public)")
+            let message = "Sampling failed: \(error.description)"
+            AppLogger.sampler.error("\(message, privacy: .public)")
+            AppLogStore.shared.error(message, category: "sampler")
         }
 
         if pendingSampleKinds.isEmpty {

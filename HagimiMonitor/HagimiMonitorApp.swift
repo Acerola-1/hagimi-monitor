@@ -11,12 +11,23 @@ struct HagimiMonitorApp: App {
     @StateObject private var monitorStore = MonitorStore()
     @Environment(\.colorScheme) private var colorScheme
 
+    init() {
+        let previousUnexpected = AppLaunchStateTracker.shared.markLaunch()
+        AppLogStore.shared.info("App launched", category: "app")
+        if previousUnexpected {
+            AppLogStore.shared.warning("Previous run may have ended unexpectedly", category: "app")
+        }
+    }
+
     var body: some Scene {
         MenuBarExtra {
             MonitorPanelView(store: monitorStore)
                 .preferredColorScheme(effectiveColorScheme)
                 .onAppear { monitorStore.panelDidAppear() }
                 .onDisappear { monitorStore.panelDidDisappear() }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    handleWillTerminate()
+                }
         } label: {
             Image(nsImage: MenuBarComputeRingIcon.image(
                 load: monitorStore.displayedComputeLoad,
@@ -45,6 +56,13 @@ struct HagimiMonitorApp: App {
 
     private var effectiveColorScheme: ColorScheme? {
         monitorStore.settings.themePreference.colorScheme
+    }
+
+    private func handleWillTerminate() {
+        AppLogStore.shared.info("App will terminate", category: "app")
+        monitorStore.flushStatistics()
+        AppLaunchStateTracker.shared.markCleanExit()
+        AppLogStore.shared.flush()
     }
 }
 
