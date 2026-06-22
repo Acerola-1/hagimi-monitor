@@ -394,8 +394,93 @@
         /* Hero mockup */
         .hero-mockup {
             position: relative;
-            perspective: 1000px;
+            perspective: 1200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
+
+        .hero-mockup-stack {
+            position: relative;
+            width: 380px;
+            height: 520px;
+            perspective: 1200px;
+        }
+
+        .hero-mockup-stack .mockup-panel {
+            position: absolute;
+            width: 100%;
+            transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+            transform-origin: center center;
+            animation: none;
+        }
+
+        /* Default stacked state - vibrant on top */
+        .hero-mockup-stack .mockup-panel:nth-child(1) {
+            z-index: 1;
+            transform: rotateX(5deg) rotateY(-5deg) translateY(8px) translateX(12px) rotate(2deg);
+            opacity: 0.9;
+        }
+
+        .hero-mockup-stack .mockup-panel:nth-child(2) {
+            z-index: 2;
+            transform: rotateX(5deg) rotateY(-5deg) translateY(0) translateX(0);
+        }
+
+        /* Hover fan-out effect */
+        .hero-mockup-stack:hover .mockup-panel:nth-child(1) {
+            transform: rotateX(5deg) rotateY(-5deg) translateY(30px) translateX(50px) rotate(6deg);
+            opacity: 1;
+        }
+
+        .hero-mockup-stack:hover .mockup-panel:nth-child(2) {
+            transform: rotateX(5deg) rotateY(-5deg) translateY(-30px) translateX(-50px) rotate(-6deg);
+        }
+
+        /* Vibrant color scheme panel - uses CSS variables for easy override */
+        .mockup-panel-vibrant {
+            background: rgba(20, 20, 30, 0.85);
+            backdrop-filter: blur(24px) saturate(200%);
+            -webkit-backdrop-filter: blur(24px) saturate(200%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: var(--radius-lg);
+            padding: 20px;
+            box-shadow:
+                0 25px 60px rgba(0, 0, 0, 0.5),
+                0 0 0 1px rgba(255, 255, 255, 0.05) inset,
+                0 0 80px rgba(250, 77, 86, 0.08);
+            max-width: 380px;
+            margin: 0 auto;
+        }
+
+        /* Vibrant overrides - use specific row classes instead of nth-of-type */
+        .mockup-panel-vibrant .mockup-row-cpu { background: rgba(250, 77, 86, 0.16) !important; border: 1px solid rgba(250, 77, 86, 0.22) !important; }
+        .mockup-panel-vibrant .mockup-row-cpu .mockup-row-icon { color: #FA4D56 !important; }
+        .mockup-panel-vibrant .mockup-row-cpu .mockup-sparkline path { stroke: #FA4D56 !important; }
+        .mockup-panel-vibrant .mockup-row-cpu .mockup-progress-fill { background: #FA4D56 !important; }
+
+        .mockup-panel-vibrant .mockup-row-gpu { background: rgba(168, 85, 247, 0.16) !important; border: 1px solid rgba(168, 85, 247, 0.22) !important; }
+        .mockup-panel-vibrant .mockup-row-gpu .mockup-row-icon { color: #A855F7 !important; }
+        .mockup-panel-vibrant .mockup-row-gpu .mockup-sparkline path { stroke: #A855F7 !important; }
+        .mockup-panel-vibrant .mockup-row-gpu .mockup-progress-fill { background: #A855F7 !important; }
+
+        .mockup-panel-vibrant .mockup-row-memory { background: rgba(17, 146, 232, 0.16) !important; border: 1px solid rgba(17, 146, 232, 0.22) !important; }
+        .mockup-panel-vibrant .mockup-row-memory .mockup-row-icon { color: #1192E8 !important; }
+        .mockup-panel-vibrant .mockup-row-memory .mockup-sparkline path { stroke: #1192E8 !important; }
+        .mockup-panel-vibrant .mockup-row-memory .mockup-progress-fill { background: #1192E8 !important; }
+
+        .mockup-panel-vibrant .mockup-row-storage { background: rgba(178, 134, 0, 0.16) !important; border: 1px solid rgba(178, 134, 0, 0.22) !important; }
+        .mockup-panel-vibrant .mockup-row-storage .mockup-row-icon { color: #B28600 !important; }
+        .mockup-panel-vibrant .mockup-row-storage .mockup-progress-fill { background: #B28600 !important; }
+
+        .mockup-panel-vibrant .mockup-row-network { background: rgba(0, 157, 154, 0.16) !important; border: 1px solid rgba(0, 157, 154, 0.22) !important; }
+        .mockup-panel-vibrant .mockup-row-network .mockup-row-icon { color: #009D9A !important; }
+
+        .mockup-panel-vibrant .mockup-row-battery { background: rgba(25, 128, 56, 0.16) !important; border: 1px solid rgba(25, 128, 56, 0.22) !important; }
+        .mockup-panel-vibrant .mockup-row-battery .mockup-row-icon { color: #198038 !important; }
+
+        .mockup-panel-vibrant .mockup-row-display { background: rgba(120, 130, 150, 0.10) !important; border: 1px solid rgba(120, 130, 150, 0.15) !important; }
+        .mockup-panel-vibrant .mockup-row-display .mockup-row-icon { color: var(--ink-secondary) !important; }
 
         .mockup-panel {
             background: rgba(20, 20, 30, 0.8);
@@ -2148,128 +2233,257 @@
                 </div>
             </div>
             <div class="hero-mockup">
-                <div class="mockup-panel">
-                    <div class="mockup-header">
-                        <div class="mockup-header-left">
-                            <span class="mockup-live-dot"></span>
-                            <span>SYSTEM · LIVE</span>
+                <div class="hero-mockup-stack">
+                    <!-- Balanced color scheme (original) -->
+                    <div class="mockup-panel">
+                        <div class="mockup-header">
+                            <div class="mockup-header-left">
+                                <span class="mockup-live-dot"></span>
+                                <span>SYSTEM · LIVE</span>
+                            </div>
+                            <span class="mockup-time">18:06</span>
                         </div>
-                        <span class="mockup-time">18:06</span>
-                    </div>
 
-                    <!-- CPU -->
-                    <div class="mockup-row">
-                        <div class="mockup-row-icon" style="color: var(--c-cpu)">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="4" y="4" width="16" height="16" rx="2"/>
-                                <rect x="9" y="9" width="6" height="6"/>
-                                <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
-                            </svg>
-                        </div>
-                        <span class="mockup-row-label">CPU:</span>
-                        <span class="mockup-row-value">17%</span>
-                        <div class="mockup-row-graph">
-                            <svg class="mockup-sparkline" viewBox="0 0 60 18">
-                                <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="var(--c-cpu)" stroke-width="1.5" opacity="0.8"/>
-                            </svg>
-                        </div>
-                    </div>
-
-                    <!-- GPU -->
-                    <div class="mockup-row">
-                        <div class="mockup-row-icon" style="color: var(--c-gpu)">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                <line x1="8" y1="21" x2="16" y2="21"/>
-                                <line x1="12" y1="17" x2="12" y2="21"/>
-                            </svg>
-                        </div>
-                        <span class="mockup-row-label">GPU:</span>
-                        <span class="mockup-row-value">11%</span>
-                        <div class="mockup-row-graph">
-                            <svg class="mockup-sparkline" viewBox="0 0 60 18">
-                                <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="var(--c-gpu)" stroke-width="1.5" opacity="0.8"/>
-                            </svg>
-                        </div>
-                    </div>
-
-                    <!-- Memory -->
-                    <div class="mockup-row">
-                        <div class="mockup-row-icon" style="color: var(--c-memory)">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="6" width="20" height="12" rx="2"/>
-                                <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
-                            </svg>
-                        </div>
-                        <span class="mockup-row-label">内存:</span>
-                        <span class="mockup-row-value">78%</span>
-                        <div class="mockup-row-graph">
-                            <div class="mockup-progress">
-                                <div class="mockup-progress-fill" style="width: 78%; background: var(--c-memory)"></div>
+                        <!-- CPU -->
+                        <div class="mockup-row">
+                            <div class="mockup-row-icon" style="color: var(--c-cpu)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    <rect x="9" y="9" width="6" height="6"/>
+                                    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">CPU:</span>
+                            <span class="mockup-row-value">17%</span>
+                            <div class="mockup-row-graph">
+                                <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                    <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="var(--c-cpu)" stroke-width="1.5" opacity="0.8"/>
+                                </svg>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- Storage -->
-                    <div class="mockup-row">
-                        <div class="mockup-row-icon" style="color: var(--c-storage)">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
-                                <circle cx="12" cy="15" r="2"/>
-                                <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
-                            </svg>
-                        </div>
-                        <span class="mockup-row-label">存储:</span>
-                        <span class="mockup-row-value">41%</span>
-                        <div class="mockup-row-graph">
-                            <div class="mockup-progress">
-                                <div class="mockup-progress-fill" style="width: 41%; background: var(--c-storage)"></div>
+                        <!-- GPU -->
+                        <div class="mockup-row">
+                            <div class="mockup-row-icon" style="color: var(--c-gpu)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">GPU:</span>
+                            <span class="mockup-row-value">11%</span>
+                            <div class="mockup-row-graph">
+                                <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                    <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="var(--c-gpu)" stroke-width="1.5" opacity="0.8"/>
+                                </svg>
                             </div>
                         </div>
+
+                        <!-- Memory -->
+                        <div class="mockup-row">
+                            <div class="mockup-row-icon" style="color: var(--c-memory)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                    <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">内存:</span>
+                            <span class="mockup-row-value">78%</span>
+                            <div class="mockup-row-graph">
+                                <div class="mockup-progress">
+                                    <div class="mockup-progress-fill" style="width: 78%; background: var(--c-memory)"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Storage -->
+                        <div class="mockup-row">
+                            <div class="mockup-row-icon" style="color: var(--c-storage)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                                    <circle cx="12" cy="15" r="2"/>
+                                    <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">存储:</span>
+                            <span class="mockup-row-value">41%</span>
+                            <div class="mockup-row-graph">
+                                <div class="mockup-progress">
+                                    <div class="mockup-progress-fill" style="width: 41%; background: var(--c-storage)"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Network -->
+                        <div class="mockup-row">
+                            <div class="mockup-row-icon" style="color: var(--c-network)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                                    <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                                    <line x1="12" y1="20" x2="12.01" y2="20"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">网络:</span>
+                            <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
+                            <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
+                        </div>
+
+                        <!-- Battery -->
+                        <div class="mockup-row">
+                            <div class="mockup-row-icon" style="color: var(--c-battery)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="7" width="16" height="10" rx="2"/>
+                                    <line x1="22" y1="11" x2="22" y2="13"/>
+                                    <line x1="6" y1="11" x2="6.01" y2="11"/>
+                                    <line x1="10" y1="11" x2="10.01" y2="11"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">电源:</span>
+                            <span class="mockup-row-value">90%</span>
+                            <span class="mockup-row-detail">○ 14.7 W</span>
+                        </div>
+
+                        <!-- Display -->
+                        <div class="mockup-row">
+                            <div class="mockup-row-icon" style="color: var(--ink-secondary)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">显示器:</span>
+                            <span class="mockup-row-value" style="font-size: 12px">2台 · 外接1</span>
+                            <span class="mockup-row-detail">›</span>
+                        </div>
                     </div>
 
-                    <!-- Network -->
-                    <div class="mockup-row">
-                        <div class="mockup-row-icon" style="color: var(--c-network)">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-                                <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-                                <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-                                <line x1="12" y1="20" x2="12.01" y2="20"/>
-                            </svg>
+                    <!-- Vibrant color scheme -->
+                    <div class="mockup-panel mockup-panel-vibrant">
+                        <div class="mockup-header">
+                            <div class="mockup-header-left">
+                                <span class="mockup-live-dot"></span>
+                                <span>SYSTEM · LIVE</span>
+                            </div>
+                            <span class="mockup-time">18:06</span>
                         </div>
-                        <span class="mockup-row-label">网络:</span>
-                        <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
-                        <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
-                    </div>
 
-                    <!-- Battery -->
-                    <div class="mockup-row">
-                        <div class="mockup-row-icon" style="color: var(--c-battery)">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="7" width="16" height="10" rx="2"/>
-                                <line x1="22" y1="11" x2="22" y2="13"/>
-                                <line x1="6" y1="11" x2="6.01" y2="11"/>
-                                <line x1="10" y1="11" x2="10.01" y2="11"/>
-                            </svg>
+                        <!-- CPU -->
+                        <div class="mockup-row mockup-row-cpu">
+                            <div class="mockup-row-icon" style="color: #FA4D56">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                    <rect x="9" y="9" width="6" height="6"/>
+                                    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">CPU:</span>
+                            <span class="mockup-row-value">17%</span>
+                            <div class="mockup-row-graph">
+                                <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                    <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="#FA4D56" stroke-width="1.5" opacity="0.8"/>
+                                </svg>
+                            </div>
                         </div>
-                        <span class="mockup-row-label">电源:</span>
-                        <span class="mockup-row-value">90%</span>
-                        <span class="mockup-row-detail">○ 14.7 W</span>
-                    </div>
 
-                    <!-- Display -->
-                    <div class="mockup-row">
-                        <div class="mockup-row-icon" style="color: var(--ink-secondary)">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                <line x1="8" y1="21" x2="16" y2="21"/>
-                                <line x1="12" y1="17" x2="12" y2="21"/>
-                            </svg>
+                        <!-- GPU -->
+                        <div class="mockup-row mockup-row-gpu">
+                            <div class="mockup-row-icon" style="color: #A855F7">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">GPU:</span>
+                            <span class="mockup-row-value">11%</span>
+                            <div class="mockup-row-graph">
+                                <svg class="mockup-sparkline" viewBox="0 0 60 18">
+                                    <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="#A855F7" stroke-width="1.5" opacity="0.8"/>
+                                </svg>
+                            </div>
                         </div>
-                        <span class="mockup-row-label">显示器:</span>
-                        <span class="mockup-row-value" style="font-size: 12px">2台 · 外接1</span>
-                        <span class="mockup-row-detail">›</span>
+
+                        <!-- Memory -->
+                        <div class="mockup-row mockup-row-memory">
+                            <div class="mockup-row-icon" style="color: #1192E8">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                    <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">内存:</span>
+                            <span class="mockup-row-value">78%</span>
+                            <div class="mockup-row-graph">
+                                <div class="mockup-progress">
+                                    <div class="mockup-progress-fill" style="width: 78%; background: #1192E8"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Storage -->
+                        <div class="mockup-row mockup-row-storage">
+                            <div class="mockup-row-icon" style="color: #B28600">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                                    <circle cx="12" cy="15" r="2"/>
+                                    <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">存储:</span>
+                            <span class="mockup-row-value">41%</span>
+                            <div class="mockup-row-graph">
+                                <div class="mockup-progress">
+                                    <div class="mockup-progress-fill" style="width: 41%; background: #B28600"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Network -->
+                        <div class="mockup-row mockup-row-network">
+                            <div class="mockup-row-icon" style="color: #009D9A">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                                    <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                                    <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                                    <line x1="12" y1="20" x2="12.01" y2="20"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">网络:</span>
+                            <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
+                            <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
+                        </div>
+
+                        <!-- Battery -->
+                        <div class="mockup-row mockup-row-battery">
+                            <div class="mockup-row-icon" style="color: #198038">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="7" width="16" height="10" rx="2"/>
+                                    <line x1="22" y1="11" x2="22" y2="13"/>
+                                    <line x1="6" y1="11" x2="6.01" y2="11"/>
+                                    <line x1="10" y1="11" x2="10.01" y2="11"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">电源:</span>
+                            <span class="mockup-row-value">90%</span>
+                            <span class="mockup-row-detail">○ 14.7 W</span>
+                        </div>
+
+                        <!-- Display -->
+                        <div class="mockup-row mockup-row-display">
+                            <div class="mockup-row-icon" style="color: var(--ink-secondary)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                    <line x1="8" y1="21" x2="16" y2="21"/>
+                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                </svg>
+                            </div>
+                            <span class="mockup-row-label">显示器:</span>
+                            <span class="mockup-row-value" style="font-size: 12px">2台 · 外接1</span>
+                            <span class="mockup-row-detail">›</span>
+                        </div>
                     </div>
                 </div>
             </div>
