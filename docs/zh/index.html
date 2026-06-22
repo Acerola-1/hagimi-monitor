@@ -2076,6 +2076,112 @@
             }
         }
 
+        /* ============ Mobile fine-tuning (phones) ============ */
+        @media (max-width: 768px) {
+            /* Tighter container padding on phones */
+            .nav-inner,
+            .hero-inner,
+            .container {
+                padding-left: 16px;
+                padding-right: 16px;
+            }
+
+            /* Sections — reduce vertical air */
+            .hero { padding: 90px 0 56px; min-height: auto; }
+            .features,
+            .showcase,
+            .statistics,
+            .events,
+            .download { padding: 72px 0; }
+            .section-header { margin-bottom: 40px; }
+            .hero-inner { gap: 40px; }
+
+            /* Hero title — tighten and prevent overflow */
+            .hero-title { font-size: clamp(34px, 10vw, 52px); }
+            .hero-badge { font-size: 12px; }
+
+            /* Hero mockup stack — flatten 3D, fit width, only show front panel */
+            .hero-mockup { perspective: none; }
+            .hero-mockup-stack {
+                width: 100%;
+                max-width: 340px;
+                height: auto;
+                perspective: none;
+            }
+            .hero-mockup-stack .mockup-panel,
+            .hero-mockup-stack:hover .mockup-panel:nth-child(1),
+            .hero-mockup-stack:hover .mockup-panel:nth-child(2) {
+                position: relative;
+                transform: none !important;
+                animation: none !important;
+                opacity: 1;
+                width: 100%;
+                max-width: 100%;
+                margin: 0 auto;
+            }
+            /* Hide the back (vibrant) panel on phones — fan-out needs hover */
+            .hero-mockup-stack .mockup-panel:nth-child(1) { display: none; }
+
+            /* Generic mockup panel — kill 3D + float on phones */
+            .mockup-panel,
+            .mockup-panel-vibrant {
+                max-width: 100%;
+                transform: none !important;
+                animation: none !important;
+            }
+
+            /* Showcase card stack — render the 3 monitor cards as a clean column */
+            .showcase-visual { width: 100%; display: flex; justify-content: center; }
+            .card-stack {
+                width: 100%;
+                max-width: 320px;
+                height: auto;
+                perspective: none;
+            }
+            .card-stack-inner {
+                transform-style: flat;
+                display: flex;
+                flex-direction: column;
+                gap: 12px;
+            }
+            .monitor-card,
+            .monitor-card:nth-child(1),
+            .monitor-card:nth-child(2),
+            .monitor-card:nth-child(3),
+            .card-stack:hover .monitor-card:nth-child(1),
+            .card-stack:hover .monitor-card:nth-child(2),
+            .card-stack:hover .monitor-card:nth-child(3) {
+                position: relative !important;
+                width: 100%;
+                transform: none !important;
+            }
+
+            /* Feature cards */
+            .feature-card { padding: 24px; }
+
+            /* Statistics */
+            .stats-showcase { padding: 20px; margin-top: 40px; }
+            .stats-tab { padding: 8px 14px; font-size: 12px; }
+            .heatmap-container { padding: 16px; }
+            .heatmap-grid { gap: 2px; }
+            .stats-summary-value { font-size: 16px; }
+
+            /* Timeline */
+            .timeline { padding-left: 28px; }
+            .timeline-day-label { margin-left: -28px; padding-left: 28px; }
+            .timeline-event { padding: 12px 14px; }
+            .timeline-event-header { flex-wrap: wrap; gap: 4px; }
+
+            /* Download CTA — full-width stacked buttons */
+            .download-card { padding: 56px 20px; }
+            .download-actions { flex-direction: column; align-items: stretch; }
+            .download-actions .btn-primary,
+            .download-actions .btn-secondary { justify-content: center; }
+
+            /* Nav — keep CTA compact */
+            .nav-cta { padding: 7px 14px; font-size: 13px; }
+        }
+
         /* Light theme adjustments for specific elements */
         @media (prefers-color-scheme: light) {
             .bg-gradient {
