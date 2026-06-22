@@ -926,8 +926,8 @@
         /* Card Stack - Poker fan effect */
         .card-stack {
             position: relative;
-            width: 340px;
-            height: 420px;
+            width: 320px;
+            height: 400px;
             perspective: 1200px;
         }
 
@@ -940,10 +940,10 @@
 
         .monitor-card {
             position: absolute;
-            width: 300px;
-            background: rgba(20, 20, 30, 0.95);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: var(--radius-lg);
+            width: 280px;
+            background: rgba(20, 20, 30, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px;
             overflow: hidden;
             box-shadow:
                 0 20px 60px rgba(0, 0, 0, 0.5),
@@ -951,6 +951,8 @@
             transition: all 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
             transform-origin: bottom center;
             cursor: pointer;
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
         }
 
         .monitor-card:nth-child(1) {
@@ -969,7 +971,7 @@
         }
 
         .card-stack:hover .monitor-card:nth-child(1) {
-            transform: translateX(-160px) translateY(10px) rotate(-15deg);
+            transform: translateX(-150px) translateY(10px) rotate(-15deg);
         }
 
         .card-stack:hover .monitor-card:nth-child(2) {
@@ -977,118 +979,332 @@
         }
 
         .card-stack:hover .monitor-card:nth-child(3) {
-            transform: translateX(160px) translateY(10px) rotate(15deg);
+            transform: translateX(150px) translateY(10px) rotate(15deg);
         }
 
-        .monitor-card-header {
+        .monitor-card-body {
+            padding: 10px;
+        }
+
+        /* Row Header - matches actual app */
+        .monitor-row-header {
             display: flex;
             align-items: center;
             gap: 8px;
-            padding: 12px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            padding: 8px 10px;
         }
 
-        .monitor-card-icon {
+        .monitor-row-icon {
             width: 18px;
             height: 18px;
             flex-shrink: 0;
         }
 
-        .monitor-card-title {
+        .monitor-row-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--ink);
+            letter-spacing: 0.15px;
+            line-height: 1;
+        }
+
+        .monitor-row-value {
             font-size: 14px;
             font-weight: 600;
-            color: var(--ink);
-        }
-
-        .monitor-card-percent {
-            margin-left: auto;
-            font-size: 14px;
-            font-weight: 700;
             font-family: var(--font-mono);
+            color: var(--ink);
+            line-height: 1;
         }
 
-        .monitor-card-body {
-            padding: 14px 16px;
+        .monitor-row-sparkline {
+            width: 56px;
+            height: 18px;
+            margin-left: auto;
+            flex-shrink: 0;
         }
 
-        .monitor-card-stats {
+        .monitor-row-sparkline svg {
+            width: 100%;
+            height: 100%;
+        }
+
+        .monitor-row-progress {
+            width: 56px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .monitor-row-progress-fill {
+            height: 100%;
+            border-radius: 2px;
+        }
+
+        .monitor-row-pills {
+            display: flex;
+            gap: 6px;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        .monitor-pill {
+            font-size: 11px;
+            font-family: var(--font-mono);
+            font-weight: 500;
+            color: var(--ink-secondary);
+            line-height: 1;
+        }
+
+        /* Expanded Detail - matches actual app */
+        .monitor-detail {
+            padding: 0 10px 9px;
+        }
+
+        .monitor-detail-separator {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.06);
+            margin-left: 28px;
+            margin-bottom: 8px;
+        }
+
+        .monitor-detail-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
             gap: 6px 16px;
-            margin-bottom: 12px;
+            margin-left: 28px;
+            margin-bottom: 8px;
         }
 
-        .monitor-card-stat {
+        .monitor-detail-cell {
             display: flex;
             justify-content: space-between;
             align-items: center;
+            gap: 8px;
         }
 
-        .monitor-card-stat-label {
+        .monitor-detail-cell.full-width {
+            grid-column: 1 / -1;
+        }
+
+        .monitor-detail-label {
             font-size: 11px;
+            font-weight: 500;
             color: var(--ink-tertiary);
+            letter-spacing: 0.1px;
+            line-height: 1;
         }
 
-        .monitor-card-stat-value {
+        .monitor-detail-value {
             font-size: 12px;
             font-weight: 600;
             font-family: var(--font-mono);
             color: var(--ink);
+            line-height: 1;
         }
 
-        .monitor-card-divider {
-            height: 1px;
-            background: var(--line);
-            margin: 10px 0;
-        }
-
-        .monitor-card-apps {
+        /* Process List - matches actual app */
+        .monitor-process-list {
             display: flex;
             flex-direction: column;
-            gap: 5px;
+            gap: 4px;
+            margin-left: 28px;
         }
 
-        .monitor-card-app {
+        .monitor-process {
             display: flex;
             align-items: center;
-            gap: 8px;
-            padding: 4px 0;
+            gap: 6px;
         }
 
-        .monitor-card-app-icon {
-            width: 20px;
-            height: 20px;
-            border-radius: 5px;
+        .monitor-process-icon {
+            width: 16px;
+            height: 16px;
             flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            color: var(--ink-tertiary);
         }
 
-        .monitor-card-app-icon svg {
-            width: 14px;
-            height: 14px;
-        }
-
-        .monitor-card-app-name {
+        .monitor-process-name {
             flex: 1;
             font-size: 12px;
+            font-weight: 500;
             color: var(--ink);
+            letter-spacing: 0.1px;
+            line-height: 1;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
         }
 
-        .monitor-card-app-value {
+        .monitor-process-value {
             font-size: 11px;
             font-family: var(--font-mono);
+            font-weight: 500;
             color: var(--ink-secondary);
+            line-height: 1;
         }
 
         /* Card accent colors */
         .monitor-card.cpu { border-top: 2px solid var(--c-cpu); }
-        .monitor-card.cpu .monitor-card-percent { color: var(--c-cpu); }
+        .monitor-card.cpu .monitor-row-value { color: var(--c-cpu); }
         .monitor-card.storage { border-top: 2px solid var(--c-storage); }
-        .monitor-card.storage .monitor-card-percent { color: var(--c-storage); }
+        .monitor-card.storage .monitor-row-value { color: var(--c-storage); }
         .monitor-card.network { border-top: 2px solid var(--c-network); }
-        .monitor-card.network .monitor-card-percent { color: var(--c-network); }
+        .monitor-card.network .monitor-row-value { color: var(--c-network); }
+
+        /* Display Control Mockup */
+        .display-control-row {
+            border-radius: 14px;
+            overflow: hidden;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+        }
+
+        .display-control-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 10px;
+            cursor: pointer;
+        }
+
+        .display-control-icon {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+            color: var(--c-power);
+        }
+
+        .display-control-label {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--ink);
+            letter-spacing: 0.15px;
+            line-height: 1;
+        }
+
+        .display-control-value {
+            font-size: 14px;
+            font-weight: 600;
+            font-family: var(--font-mono);
+            color: var(--ink);
+            line-height: 1;
+        }
+
+        .display-control-chevron {
+            width: 14px;
+            height: 14px;
+            margin-left: auto;
+            flex-shrink: 0;
+            color: var(--ink-tertiary);
+        }
+
+        .display-control-detail {
+            padding: 0 10px 9px;
+        }
+
+        .display-detail-separator {
+            height: 1px;
+            background: rgba(255, 255, 255, 0.06);
+            margin-left: 28px;
+            margin-bottom: 8px;
+        }
+
+        .display-device {
+            margin-bottom: 8px;
+        }
+
+        .display-device-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 4px 0;
+            margin-left: 28px;
+        }
+
+        .display-device-icon {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            color: var(--c-power);
+        }
+
+        .display-device-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--ink);
+            line-height: 1;
+            letter-spacing: 0.1px;
+        }
+
+        .display-device-badge {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--ink-secondary);
+            background: rgba(255, 255, 255, 0.06);
+            padding: 2px 8px;
+            border-radius: 100px;
+            line-height: 1;
+        }
+
+        .display-sliders {
+            display: flex;
+            flex-direction: column;
+            gap: 7px;
+            margin-left: 28px;
+            margin-top: 6px;
+        }
+
+        .display-slider {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .display-slider-icon {
+            width: 14px;
+            height: 14px;
+            flex-shrink: 0;
+            color: var(--c-power);
+        }
+
+        .display-slider-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: var(--ink-secondary);
+            width: 60px;
+            line-height: 1;
+            letter-spacing: 0.1px;
+        }
+
+        .display-slider-track {
+            flex: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .display-slider-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--c-power), #f97316);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        .display-slider-value {
+            font-size: 12px;
+            font-family: var(--font-mono);
+            font-weight: 600;
+            color: var(--ink-secondary);
+            width: 34px;
+            text-align: right;
+            line-height: 1;
+        }
 
         /* Health score mockup */
         .health-mockup {
@@ -1849,11 +2065,11 @@
                 border: 1px solid rgba(0, 0, 0, 0.08);
                 box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
             }
-            .monitor-card-header {
-                border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+            .monitor-detail-separator {
+                background: rgba(0, 0, 0, 0.06);
             }
-            .monitor-card-app-icon {
-                background: rgba(0, 0, 0, 0.05) !important;
+            .monitor-row-progress {
+                background: rgba(0, 0, 0, 0.06);
             }
         }
     </style>
@@ -2160,64 +2376,69 @@
                         <div class="card-stack-inner">
                             <!-- CPU Card -->
                             <div class="monitor-card cpu">
-                                <div class="monitor-card-header">
-                                    <svg class="monitor-card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-cpu)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <rect x="4" y="4" width="16" height="16" rx="2"/>
-                                        <rect x="9" y="9" width="6" height="6"/>
-                                        <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
-                                    </svg>
-                                    <span class="monitor-card-title">CPU</span>
-                                    <span class="monitor-card-percent">22%</span>
-                                </div>
                                 <div class="monitor-card-body">
-                                    <div class="monitor-card-stats">
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">System</span>
-                                            <span class="monitor-card-stat-value">3%</span>
-                                        </div>
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">User</span>
-                                            <span class="monitor-card-stat-value">18%</span>
-                                        </div>
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">Idle</span>
-                                            <span class="monitor-card-stat-value">78%</span>
-                                        </div>
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">Temp</span>
-                                            <span class="monitor-card-stat-value">78°C</span>
+                                    <!-- Row Header -->
+                                    <div class="monitor-row-header">
+                                        <svg class="monitor-row-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-cpu)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="4" y="4" width="16" height="16" rx="2"/>
+                                            <rect x="9" y="9" width="6" height="6"/>
+                                            <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                                        </svg>
+                                        <span class="monitor-row-label">CPU:</span>
+                                        <span class="monitor-row-value">22%</span>
+                                        <div class="monitor-row-sparkline">
+                                            <svg viewBox="0 0 56 18" preserveAspectRatio="none">
+                                                <path d="M0,14 Q7,10 14,12 T28,8 T42,11 T56,6" fill="none" stroke="var(--c-cpu)" stroke-width="1.5" opacity="0.8"/>
+                                            </svg>
                                         </div>
                                     </div>
-                                    <div class="monitor-card-divider"></div>
-                                    <div class="monitor-card-apps">
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #1A1A2E">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="#6366F1" stroke-width="2.5">
-                                                    <path d="M4 4 L12 20 L20 4"/>
-                                                </svg>
+                                    <!-- Expanded Detail -->
+                                    <div class="monitor-detail">
+                                        <div class="monitor-detail-separator"></div>
+                                        <div class="monitor-detail-grid">
+                                            <div class="monitor-detail-cell">
+                                                <span class="monitor-detail-label">System</span>
+                                                <span class="monitor-detail-value">3%</span>
                                             </div>
-                                            <span class="monitor-card-app-name">Zed</span>
-                                            <span class="monitor-card-app-value">100.7%</span>
+                                            <div class="monitor-detail-cell">
+                                                <span class="monitor-detail-label">User</span>
+                                                <span class="monitor-detail-value">18%</span>
+                                            </div>
+                                            <div class="monitor-detail-cell">
+                                                <span class="monitor-detail-label">Idle</span>
+                                                <span class="monitor-detail-value">78%</span>
+                                            </div>
+                                            <div class="monitor-detail-cell">
+                                                <span class="monitor-detail-label">Temp</span>
+                                                <span class="monitor-detail-value">78°C</span>
+                                            </div>
                                         </div>
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2">
-                                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                                    <circle cx="12" cy="12" r="3"/>
+                                        <div class="monitor-detail-separator"></div>
+                                        <div class="monitor-process-list">
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
                                                 </svg>
+                                                <span class="monitor-process-name">Zed</span>
+                                                <span class="monitor-process-value">100.7%</span>
                                             </div>
-                                            <span class="monitor-card-app-name">WindowServer</span>
-                                            <span class="monitor-card-app-value">43.2%</span>
-                                        </div>
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
-                                                    <circle cx="12" cy="12" r="9"/>
-                                                    <path d="M12 6 L12 12 L16 14"/>
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
                                                 </svg>
+                                                <span class="monitor-process-name">WindowServer</span>
+                                                <span class="monitor-process-value">43.2%</span>
                                             </div>
-                                            <span class="monitor-card-app-name">HagimiMonitor</span>
-                                            <span class="monitor-card-app-value">38.7%</span>
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
+                                                </svg>
+                                                <span class="monitor-process-name">HagimiMonitor</span>
+                                                <span class="monitor-process-value">38.7%</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -2225,61 +2446,63 @@
 
                             <!-- Storage Card -->
                             <div class="monitor-card storage">
-                                <div class="monitor-card-header">
-                                    <svg class="monitor-card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-storage)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
-                                        <circle cx="12" cy="15" r="2"/>
-                                        <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
-                                    </svg>
-                                    <span class="monitor-card-title">Storage</span>
-                                    <span class="monitor-card-percent">41%</span>
-                                </div>
                                 <div class="monitor-card-body">
-                                    <div class="monitor-card-stats">
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">Used</span>
-                                            <span class="monitor-card-stat-value">403.63 GB</span>
-                                        </div>
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">Free</span>
-                                            <span class="monitor-card-stat-value">591.04 GB</span>
-                                        </div>
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">Total</span>
-                                            <span class="monitor-card-stat-value">994.66 GB</span>
+                                    <!-- Row Header -->
+                                    <div class="monitor-row-header">
+                                        <svg class="monitor-row-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-storage)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
+                                            <circle cx="12" cy="15" r="2"/>
+                                            <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                                        </svg>
+                                        <span class="monitor-row-label">Storage:</span>
+                                        <span class="monitor-row-value">41%</span>
+                                        <div class="monitor-row-progress">
+                                            <div class="monitor-row-progress-fill" style="width: 41%; background: var(--c-storage)"></div>
                                         </div>
                                     </div>
-                                    <div class="monitor-card-divider"></div>
-                                    <div class="monitor-card-apps">
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #00A2E8">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                                                    <circle cx="12" cy="12" r="5"/>
-                                                    <path d="M12 4 L12 7"/>
-                                                </svg>
+                                    <!-- Expanded Detail -->
+                                    <div class="monitor-detail">
+                                        <div class="monitor-detail-separator"></div>
+                                        <div class="monitor-detail-grid">
+                                            <div class="monitor-detail-cell">
+                                                <span class="monitor-detail-label">Used</span>
+                                                <span class="monitor-detail-value">403.63 GB</span>
                                             </div>
-                                            <span class="monitor-card-app-name">Safari</span>
-                                            <span class="monitor-card-app-value">↑332 KB ↓0 KB</span>
+                                            <div class="monitor-detail-cell">
+                                                <span class="monitor-detail-label">Free</span>
+                                                <span class="monitor-detail-value">591.04 GB</span>
+                                            </div>
+                                            <div class="monitor-detail-cell full-width">
+                                                <span class="monitor-detail-label">Total</span>
+                                                <span class="monitor-detail-value">994.66 GB</span>
+                                            </div>
                                         </div>
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #07C160">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                                                    <path d="M12 4 C7 4 3 8 3 12 C3 16 7 20 12 20"/>
-                                                    <circle cx="16" cy="8" r="2" fill="white"/>
+                                        <div class="monitor-detail-separator"></div>
+                                        <div class="monitor-process-list">
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
                                                 </svg>
+                                                <span class="monitor-process-name">Safari</span>
+                                                <span class="monitor-process-value">↑332 KB ↓0 KB</span>
                                             </div>
-                                            <span class="monitor-card-app-name">WeChat IME</span>
-                                            <span class="monitor-card-app-value">↑70 KB ↓180 KB</span>
-                                        </div>
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2">
-                                                    <circle cx="12" cy="12" r="9"/>
-                                                    <path d="M12 6 L12 12 L16 14"/>
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
                                                 </svg>
+                                                <span class="monitor-process-name">WeChat IME</span>
+                                                <span class="monitor-process-value">↑70 KB ↓180 KB</span>
                                             </div>
-                                            <span class="monitor-card-app-name">HagimiMonitor</span>
-                                            <span class="monitor-card-app-value">↑0 KB ↓98 KB</span>
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
+                                                </svg>
+                                                <span class="monitor-process-name">HagimiMonitor</span>
+                                                <span class="monitor-process-value">↑0 KB ↓98 KB</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -2287,65 +2510,203 @@
 
                             <!-- Network Card -->
                             <div class="monitor-card network">
-                                <div class="monitor-card-header">
-                                    <svg class="monitor-card-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-network)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
-                                        <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
-                                        <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
-                                        <line x1="12" y1="20" x2="12.01" y2="20"/>
-                                    </svg>
-                                    <span class="monitor-card-title">Network</span>
-                                    <span class="monitor-card-percent" style="font-size: 12px">Wi-Fi</span>
-                                </div>
                                 <div class="monitor-card-body">
-                                    <div class="monitor-card-stats">
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">IP</span>
-                                            <span class="monitor-card-stat-value">192.168.31.122</span>
-                                        </div>
-                                        <div class="monitor-card-stat">
-                                            <span class="monitor-card-stat-label">Public IP</span>
-                                            <span class="monitor-card-stat-value">66.90.98.146</span>
+                                    <!-- Row Header -->
+                                    <div class="monitor-row-header">
+                                        <svg class="monitor-row-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-network)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
+                                            <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
+                                            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
+                                            <line x1="12" y1="20" x2="12.01" y2="20"/>
+                                        </svg>
+                                        <span class="monitor-row-label">Network:</span>
+                                        <span class="monitor-row-value" style="font-size: 13px">Wi-Fi</span>
+                                        <div class="monitor-row-pills">
+                                            <span class="monitor-pill">↑ 1024 B/s</span>
+                                            <span class="monitor-pill">↓ 1024 B/s</span>
                                         </div>
                                     </div>
-                                    <div class="monitor-card-divider"></div>
-                                    <div class="monitor-card-apps">
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #0a0a0a">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2">
-                                                    <rect x="3" y="3" width="18" height="18" rx="2"/>
-                                                    <circle cx="12" cy="12" r="3"/>
-                                                </svg>
+                                    <!-- Expanded Detail -->
+                                    <div class="monitor-detail">
+                                        <div class="monitor-detail-separator"></div>
+                                        <div class="monitor-detail-grid">
+                                            <div class="monitor-detail-cell full-width">
+                                                <span class="monitor-detail-label">IP</span>
+                                                <span class="monitor-detail-value">192.168.31.122</span>
                                             </div>
-                                            <span class="monitor-card-app-name">mihomo</span>
-                                            <span class="monitor-card-app-value">↑304 KB ↓92 KB</span>
+                                            <div class="monitor-detail-cell full-width">
+                                                <span class="monitor-detail-label">Public IP</span>
+                                                <span class="monitor-detail-value">66.90.98.146</span>
+                                            </div>
                                         </div>
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #1a1a1a">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2">
-                                                    <path d="M12 2 L2 7 L12 12 L22 7 Z"/>
-                                                    <path d="M2 17 L12 22 L22 17"/>
-                                                    <path d="M2 12 L12 17 L22 12"/>
+                                        <div class="monitor-detail-separator"></div>
+                                        <div class="monitor-process-list">
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
                                                 </svg>
+                                                <span class="monitor-process-name">mihomo</span>
+                                                <span class="monitor-process-value">↑304 KB ↓92 KB</span>
                                             </div>
-                                            <span class="monitor-card-app-name">ClashMac</span>
-                                            <span class="monitor-card-app-value">↑0 KB ↓212 KB</span>
-                                        </div>
-                                        <div class="monitor-card-app">
-                                            <div class="monitor-card-app-icon" style="background: #07C160">
-                                                <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
-                                                    <path d="M12 4 C7 4 3 8 3 12 C3 16 7 20 12 20"/>
-                                                    <circle cx="16" cy="8" r="2" fill="white"/>
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
                                                 </svg>
+                                                <span class="monitor-process-name">ClashMac</span>
+                                                <span class="monitor-process-value">↑0 KB ↓212 KB</span>
                                             </div>
-                                            <span class="monitor-card-app-name">WeChat IME</span>
-                                            <span class="monitor-card-app-value">↑102 KB ↓7 KB</span>
+                                            <div class="monitor-process">
+                                                <svg class="monitor-process-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                                    <rect x="3" y="3" width="18" height="18" rx="2" stroke-dasharray="3 2"/>
+                                                    <circle cx="12" cy="12" r="4"/>
+                                                </svg>
+                                                <span class="monitor-process-name">WeChat IME</span>
+                                                <span class="monitor-process-value">↑102 KB ↓7 KB</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Showcase: Display Control -->
+    <section class="showcase">
+        <div class="container">
+            <div class="showcase-inner">
+                <div class="showcase-visual showcase-visual-left">
+                    <div class="mockup-window">
+                        <div class="mockup-window-header">
+                            <div class="mockup-window-dots">
+                                <span class="mockup-window-dot red"></span>
+                                <span class="mockup-window-dot yellow"></span>
+                                <span class="mockup-window-dot green"></span>
+                            </div>
+                            <span class="mockup-window-title">Display Control</span>
+                        </div>
+                        <div class="mockup-window-body">
+                            <!-- Display Control Row -->
+                            <div class="display-control-row">
+                                <div class="display-control-header">
+                                    <svg class="display-control-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-power)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                        <line x1="8" y1="21" x2="16" y2="21"/>
+                                        <line x1="12" y1="17" x2="12" y2="21"/>
+                                    </svg>
+                                    <span class="display-control-label">Display:</span>
+                                    <span class="display-control-value">2 · External 1</span>
+                                    <svg class="display-control-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="6 9 12 15 18 9"/>
+                                    </svg>
+                                </div>
+                                <div class="display-control-detail">
+                                    <div class="display-detail-separator"></div>
+                                    <div class="display-device">
+                                        <div class="display-device-header">
+                                            <svg class="display-device-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-power)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                                <line x1="12" y1="17" x2="12" y2="21"/>
+                                            </svg>
+                                            <span class="display-device-name">Color LCD</span>
+                                            <span class="display-device-badge">Built-in</span>
+                                        </div>
+                                        <div class="display-sliders">
+                                            <div class="display-slider">
+                                                <svg class="display-slider-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-power)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="5"/>
+                                                    <line x1="12" y1="1" x2="12" y2="3"/>
+                                                    <line x1="12" y1="21" x2="12" y2="23"/>
+                                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                                    <line x1="1" y1="12" x2="3" y2="12"/>
+                                                    <line x1="21" y1="12" x2="23" y2="12"/>
+                                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                                </svg>
+                                                <span class="display-slider-label">Brightness</span>
+                                                <div class="display-slider-track">
+                                                    <div class="display-slider-fill" style="width: 38%"></div>
+                                                </div>
+                                                <span class="display-slider-value">38%</span>
+                                            </div>
+                                            <div class="display-slider">
+                                                <svg class="display-slider-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-power)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                                                </svg>
+                                                <span class="display-slider-label">Volume</span>
+                                                <div class="display-slider-track">
+                                                    <div class="display-slider-fill" style="width: 40%"></div>
+                                                </div>
+                                                <span class="display-slider-value">40%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="display-detail-separator" style="margin-left: 28px; opacity: 0.5;"></div>
+                                    <div class="display-device">
+                                        <div class="display-device-header">
+                                            <svg class="display-device-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-power)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                                                <line x1="8" y1="21" x2="16" y2="21"/>
+                                                <line x1="12" y1="17" x2="12" y2="21"/>
+                                            </svg>
+                                            <span class="display-device-name">DELL S2725QC</span>
+                                            <span class="display-device-badge">External</span>
+                                        </div>
+                                        <div class="display-sliders">
+                                            <div class="display-slider">
+                                                <svg class="display-slider-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-power)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <circle cx="12" cy="12" r="5"/>
+                                                    <line x1="12" y1="1" x2="12" y2="3"/>
+                                                    <line x1="12" y1="21" x2="12" y2="23"/>
+                                                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                                                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                                                    <line x1="1" y1="12" x2="3" y2="12"/>
+                                                    <line x1="21" y1="12" x2="23" y2="12"/>
+                                                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                                                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                                                </svg>
+                                                <span class="display-slider-label">Brightness</span>
+                                                <div class="display-slider-track">
+                                                    <div class="display-slider-fill" style="width: 0%"></div>
+                                                </div>
+                                                <span class="display-slider-value">0%</span>
+                                            </div>
+                                            <div class="display-slider">
+                                                <svg class="display-slider-icon" viewBox="0 0 24 24" fill="none" stroke="var(--c-power)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                                                    <path d="M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                                                </svg>
+                                                <span class="display-slider-label">Volume</span>
+                                                <div class="display-slider-track">
+                                                    <div class="display-slider-fill" style="width: 6%"></div>
+                                                </div>
+                                                <span class="display-slider-value">6%</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="showcase-text">
+                    <span class="section-eyebrow">Display Control</span>
+                    <h2 class="section-title">DDC/CI External Display<br>Brightness & Volume</h2>
+                    <p class="section-desc">Control external display hardware directly via DDC/CI protocol. Adjust brightness, volume, and contrast from the menu bar without reaching for physical buttons.</p>
+                    <ul class="showcase-list">
+                        <li>DDC/CI brightness control for external displays</li>
+                        <li>Display built-in volume adjustment (hardware support required)</li>
+                        <li>Fine contrast adjustment for eye comfort</li>
+                        <li>Media key shortcuts with OSD support</li>
+                    </ul>
                 </div>
             </div>
         </div>
