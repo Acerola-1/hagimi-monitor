@@ -20,6 +20,8 @@ final class NetworkSampler: MonitorSampler {
         previousNetworkBytes = (bytes.input, bytes.output, now)
 
         let publicIP = cachedPublicIP()
+        let ipv4 = bytes.ipv4.first ?? "--"
+        let ipv6 = bytes.ipv6.first ?? "--"
 
         guard let previousBytes else {
             return MonitorModule(
@@ -27,7 +29,8 @@ final class NetworkSampler: MonitorSampler {
                 value: 0,
                 summary: bytes.interface,
                 metrics: [
-                    MonitorMetric(name: "ip-address", value: networkAddressSummary(bytes.addresses)),
+                    MonitorMetric(name: "ipv4", value: ipv4),
+                    MonitorMetric(name: "ipv6", value: ipv6),
                     MonitorMetric(name: "public-ip", value: publicIP),
                     MonitorMetric(name: "upload", value: "--"),
                     MonitorMetric(name: "download", value: "--"),
@@ -48,7 +51,8 @@ final class NetworkSampler: MonitorSampler {
             value: value,
             summary: bytes.interface,
             metrics: [
-                MonitorMetric(name: "ip-address", value: networkAddressSummary(bytes.addresses)),
+                MonitorMetric(name: "ipv4", value: ipv4),
+                MonitorMetric(name: "ipv6", value: ipv6),
                 MonitorMetric(name: "public-ip", value: publicIP),
                 MonitorMetric(name: "upload", value: bytesPerSecond(upload), numericValue: upload),
                 MonitorMetric(name: "download", value: bytesPerSecond(download), numericValue: download),
@@ -62,11 +66,12 @@ final class NetworkSampler: MonitorSampler {
     private func networkBytes() -> NetworkInterfaceSnapshot {
         var addressList: UnsafeMutablePointer<ifaddrs>?
         var totalsByInterface: [String: (input: UInt64, output: UInt64)] = [:]
-        var addressesByInterface: [String: [String]] = [:]
+        var ipv4ByInterface: [String: [String]] = [:]
+        var ipv6ByInterface: [String: [String]] = [:]
 
         guard getifaddrs(&addressList) == 0, let firstAddress = addressList else {
             AppLogger.sampler.error("getifaddrs failed, errno: \(errno)")
-            return NetworkInterfaceSnapshot(input: 0, output: 0, interface: "disconnected", addresses: [])
+            return NetworkInterfaceSnapshot(input: 0, output: 0, interface: "disconnected", ipv4: [], ipv6: [])
         }
         defer { freeifaddrs(addressList) }
 
@@ -92,15 +97,26 @@ final class NetworkSampler: MonitorSampler {
                 current.output += UInt64(data.ifi_obytes)
                 totalsByInterface[name] = current
 
-            case AF_INET, AF_INET6:
+            case AF_INET:
                 guard let addressText = ipAddress(from: address) else {
                     continue
                 }
 
-                var addresses = addressesByInterface[name] ?? []
+                var addresses = ipv4ByInterface[name] ?? []
                 if !addresses.contains(addressText) {
                     addresses.append(addressText)
-                    addressesByInterface[name] = addresses
+                    ipv4ByInterface[name] = addresses
+                }
+
+            case AF_INET6:
+                guard let addressText = ipAddress(from: address) else {
+                    continue
+                }
+
+                var addresses = ipv6ByInterface[name] ?? []
+                if !addresses.contains(addressText) {
+                    addresses.append(addressText)
+                    ipv6ByInterface[name] = addresses
                 }
 
             default:
@@ -121,7 +137,8 @@ final class NetworkSampler: MonitorSampler {
             input: total.input,
             output: total.output,
             interface: networkInterfaceTitle(activeKey),
-            addresses: activeKey.flatMap { addressesByInterface[$0] } ?? []
+            ipv4: activeKey.flatMap { ipv4ByInterface[$0] } ?? [],
+            ipv6: activeKey.flatMap { ipv6ByInterface[$0] } ?? []
         )
     }
 
@@ -280,7 +297,8 @@ struct NetworkInterfaceSnapshot {
     let input: UInt64
     let output: UInt64
     let interface: String
-    let addresses: [String]
+    let ipv4: [String]
+    let ipv6: [String]
 }
 
 func networkAddressSummary(_ addresses: [String]) -> String {
