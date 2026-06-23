@@ -354,6 +354,28 @@
         }
       }
     },
+    "about.follow": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关注作者"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Follow"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "フォロー"
+          }
+        }
+      }
+    },
     "about.footnote": {
       "localizations": {
         "zh-Hans": {
