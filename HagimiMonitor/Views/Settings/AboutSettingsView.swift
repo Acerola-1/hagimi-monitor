@@ -9,6 +9,7 @@ struct AboutSettingsView: View {
 
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
     private let issuesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/issues")!
+    private let twitterURL = URL(string: "https://x.com/Acerola64175279")!
 
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
@@ -57,6 +58,23 @@ struct AboutSettingsView: View {
                     } else {
                         Link(destination: issuesURL) {
                             Label("Issue", systemImage: "exclamationmark.bubble")
+                                .frame(minWidth: 80)
+                        }
+                    }
+                }
+
+                SettingsRow(title: String(localized: "about.follow")) {
+                    if #available(macOS 26, *) {
+                        Button {
+                            NSWorkspace.shared.open(twitterURL)
+                        } label: {
+                            Label("X / Twitter", systemImage: "at")
+                                .frame(minWidth: 80)
+                        }
+                        .buttonStyle(.glass)
+                    } else {
+                        Link(destination: twitterURL) {
+                            Label("X / Twitter", systemImage: "at")
                                 .frame(minWidth: 80)
                         }
                     }

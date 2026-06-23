@@ -27,6 +27,7 @@
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-M%20series-2ECC71?style=flat-square&logo=apple">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-F05138?style=flat-square&logo=swift&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
+  <a href="https://x.com/Acerola64175279"><img alt="Follow on X" src="https://img.shields.io/badge/X-@Acerola64175279-000000?style=flat-square&logo=x"></a>
 </p>
 
 ## Screenshots

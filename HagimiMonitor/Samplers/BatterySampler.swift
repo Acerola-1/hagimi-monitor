@@ -81,17 +81,34 @@ final class BatterySampler: MonitorSampler {
         }
         defer { IOObjectRelease(service) }
 
-        let cycleCount = intRegistryValue(service, "CycleCount")
-        let designCapacity = doubleRegistryValue(service, "DesignCapacity")
-        let maxCapacity = doubleRegistryValue(service, "AppleRawMaxCapacity")
-            ?? doubleRegistryValue(service, "MaxCapacity")
-        let voltage = doubleRegistryValue(service, "Voltage")
-        let amperage = doubleRegistryValue(service, "Amperage")
+        // 兼容 macOS 26 / 27 的不同 IORegistry 布局：
+        //   - macOS 26 及以前：DesignCapacity / AppleRawMaxCapacity / Temperature 等键直接
+        //     挂在 AppleSmartBattery 根节点上，可通过 IORegistryEntryCreateCFProperty 取到。
+        //   - macOS 27（2026/06 发布的 beta 起）：这些键被移到子节点 AppleSmartBatteryPack 的
+        //     "BatteryData" 字典里，根节点对应属性返回 nil，导致温度 / 健康度读不出来。
+        // 这里先收集整棵子树的 BatteryData 并集（根节点优先），再统一查询：
+        // 根节点能读到时走 26 原路径；读不到时回退到合并后的 BatteryData，覆盖 27。
+        // 参考 docs/stats 的 Modules/Battery/readers.swift —— Stats 在 27 下仍能正常显示，
+        // 因为它的容差更大并直接读 BatteryData 字典。
+        let batteryData = collectBatteryData(service)
+        let lookupDouble: (String) -> Double? = { [self] key in
+            doubleRegistryValue(service, key) ?? doubleValue(batteryData[key])
+        }
+        let lookupInt: (String) -> Int? = { [self] key in
+            intRegistryValue(service, key) ?? intValue(batteryData[key])
+        }
+
+        let cycleCount = lookupInt("CycleCount")
+        let designCapacity = lookupDouble("DesignCapacity")
+        let maxCapacity = lookupDouble("AppleRawMaxCapacity")
+            ?? lookupDouble("MaxCapacity")
+        let voltage = lookupDouble("Voltage")
+        let amperage = lookupDouble("Amperage")
         let adapterWatts = adapterWatts(service)
         let systemPowerWatts = systemPowerWatts(service)
         let chargingPowerWatts = chargingPowerWatts(service)
         let telemetryChargingWatts = telemetryChargingWatts(service)
-        let temperature = doubleRegistryValue(service, "Temperature").map { $0 / 100 }
+        let temperature = lookupDouble("Temperature").map { $0 / 100 }
         let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
             min(100, max(0, maxCapacity / designCapacity * 100))
         } else {
@@ -231,6 +248,41 @@ final class BatterySampler: MonitorSampler {
         }
         return doubleValue(value)
     }
+}
+
+/// 递归收集 AppleSmartBattery 子树中所有 BatteryData 字典的并集。
+///
+/// 系统差异：
+///   - macOS 26 及以前：BatteryData 主要存在于根节点 AppleSmartBattery，子节点信息有限。
+///   - macOS 27 起：根节点的 BatteryData 被精简，DesignCapacity / AppleRawMaxCapacity /
+///     AppleRawCurrentCapacity / Temperature / InstantAmperage 等键被搬到子节点
+///     AppleSmartBatteryPack 的 BatteryData 中。
+///
+/// 合并策略：先序遍历，遇到先来的键不覆盖（即根节点优先）。这样 26 上等价于原行为，
+/// 27 上则能用子节点的值补全根节点缺失的字段。
+private func collectBatteryData(_ root: io_registry_entry_t) -> [String: Any] {
+    var merged: [String: Any] = [:]
+
+    func walk(_ entry: io_registry_entry_t) {
+        if let dict = IORegistryEntryCreateCFProperty(entry, "BatteryData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any] {
+            for (key, value) in dict where merged[key] == nil {
+                merged[key] = value
+            }
+        }
+        var iterator: io_iterator_t = 0
+        guard IORegistryEntryGetChildIterator(entry, kIOServicePlane, &iterator) == KERN_SUCCESS else {
+            return
+        }
+        defer { IOObjectRelease(iterator) }
+        while case let child = IOIteratorNext(iterator), child != IO_OBJECT_NULL {
+            walk(child)
+            IOObjectRelease(child)
+        }
+    }
+
+    walk(root)
+    return merged
 }
 
 private struct SmartBatteryInfo {
