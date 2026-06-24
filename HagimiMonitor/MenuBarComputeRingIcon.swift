@@ -24,17 +24,23 @@ enum MenuBarComputeRingIcon {
             return cached
         }
 
-        let image = NSImage(size: NSSize(width: 18, height: 18))
-        image.lockFocus()
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+            NSGraphicsContext.current?.imageInterpolation = .high
+            NSColor.clear.setFill()
+            rect.fill()
 
-        NSGraphicsContext.current?.imageInterpolation = .high
-        NSColor.clear.setFill()
-        NSRect(x: 0, y: 0, width: 18, height: 18).fill()
+            let isDark: Bool
+            let appearance = NSAppearance.currentDrawing()
+            if let match = appearance.bestMatch(from: [.aqua, .darkAqua, .vibrantDark, .vibrantLight]) {
+                isDark = match == .darkAqua || match == .vibrantDark
+            } else {
+                isDark = darkMode
+            }
 
-        let style = MenuBarComputeRingImageStyle(load: canonicalLoad, darkMode: darkMode, loadLevel: loadLevel)
-        drawRing(style: style)
-
-        image.unlockFocus()
+            let style = MenuBarComputeRingImageStyle(load: canonicalLoad, darkMode: isDark, loadLevel: loadLevel)
+            drawRing(style: style)
+            return true
+        }
         image.isTemplate = false
 
         cache.setObject(image, forKey: key)
