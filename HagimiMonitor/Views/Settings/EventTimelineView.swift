@@ -175,6 +175,21 @@ struct EventTimelineRow: View {
         return formatter.string(from: event.timestamp)
     }
 
+    private var localizedTitle: String {
+        guard let type = SystemEventType(rawValue: event.eventType) else {
+            return event.title
+        }
+        return type.title
+    }
+
+    private var localizedDetail: String {
+        guard let type = SystemEventType(rawValue: event.eventType) else {
+            return event.detail
+        }
+        // detail 包含动态数值，无法完全重新本地化，但保留原始 detail
+        return event.detail
+    }
+
     private var topProcessesList: [String] {
         guard let json = event.topProcesses,
               let data = json.data(using: .utf8),
@@ -186,7 +201,6 @@ struct EventTimelineRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            // Severity icon + node
             ZStack {
                 Circle()
                     .fill(severityColor)
@@ -201,7 +215,7 @@ struct EventTimelineRow: View {
                     Image(systemName: severityIcon)
                         .font(.caption)
                         .foregroundStyle(severityColor)
-                    Text(event.title)
+                    Text(localizedTitle)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
                     Spacer()

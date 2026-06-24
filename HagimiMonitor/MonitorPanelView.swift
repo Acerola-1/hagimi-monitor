@@ -410,7 +410,7 @@ private struct MetricDetailGrid: View {
     /// 需要占满整行的长值字段(IP、启动时间等):它们的 value 太长,
     /// 塞进两列会撑破列宽或触发不可控换行,故显式整行、排到网格末尾。
     private static let fullRowMetricIDs: Set<String> = [
-        "ip-address", "public-ip", "uptime", "adapter"
+        "ipv4", "ipv6", "public-ip", "uptime", "adapter"
     ]
 
     private var shortMetrics: [MonitorMetric] {
@@ -726,7 +726,7 @@ private struct NetworkGlassRow: View, Equatable {
     }
 
     private var detailMetrics: [MonitorMetric] {
-        let names = ["ip-address", "public-ip"]
+        let names = ["ipv4", "ipv6", "public-ip"]
         let enabledNames = Set(details.map(\.name))
         return names.compactMap { name in
             guard enabledNames.contains(name) else { return nil }

@@ -2069,7 +2069,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "GPU Mem"
+            "value": "MEM"
           }
         },
         "ja": {
@@ -2274,6 +2274,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "IPアドレス"
+          }
+        }
+      }
+    },
+    "metric.network.ipv4": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPv4"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPv4"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPv4"
+          }
+        }
+      }
+    },
+    "metric.network.ipv6": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPv6"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPv6"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "IPv6"
           }
         }
       }
