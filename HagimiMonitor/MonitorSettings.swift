@@ -234,7 +234,7 @@ final class MonitorSettings: ObservableObject {
             case .storage:
                 return ["已用": "used", "可用": "free", "总量": "total"]
             case .network:
-                return ["IP 地址": "ip-address", "上传": "upload", "下载": "download"]
+                return ["IP 地址": "ipv4", "上传": "upload", "下载": "download"]
             case .battery:
                 return ["充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power"]
             case .power:

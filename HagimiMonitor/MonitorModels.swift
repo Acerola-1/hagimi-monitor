@@ -130,7 +130,8 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             ]
         case .network:
             return [
-                MetricSwitch(id: "ip-address", title: String(localized: "metric.network.ip-address"), isDefault: true),
+                MetricSwitch(id: "ipv4", title: String(localized: "metric.network.ipv4"), isDefault: true),
+                MetricSwitch(id: "ipv6", title: String(localized: "metric.network.ipv6"), isDefault: true),
                 MetricSwitch(id: "public-ip", title: String(localized: "metric.network.public-ip"), isDefault: true),
             ]
         case .battery:
