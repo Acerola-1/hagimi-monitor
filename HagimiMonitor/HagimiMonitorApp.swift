@@ -12,11 +12,13 @@ struct HagimiMonitorApp: App {
     @Environment(\.colorScheme) private var colorScheme
 
     init() {
+        CrashHandler.install()
         let previousUnexpected = AppLaunchStateTracker.shared.markLaunch()
         AppLogStore.shared.info("App launched", category: "app")
         if previousUnexpected {
             AppLogStore.shared.warning("Previous run may have ended unexpectedly", category: "app")
         }
+        HealthMonitor.shared.start()
     }
 
     var body: some Scene {
