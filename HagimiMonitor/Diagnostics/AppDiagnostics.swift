@@ -129,6 +129,99 @@ final class AppLogStore {
     }
 }
 
+// MARK: - Crash Handler
+
+/// Global log file path, set once at launch.
+/// Must be a plain global so the signal/exception handlers (C function pointers) can access it.
+private var _crashLogPathCString: [CChar] = []
+private var _crashLogPath: String = ""
+
+/// C function for signal handling — no Swift context capture allowed.
+private func handleSignal(_ sig: Int32) {
+    guard !_crashLogPathCString.isEmpty else { return }
+
+    let sigName: String
+    switch sig {
+    case SIGABRT: sigName = "SIGABRT"
+    case SIGSEGV: sigName = "SIGSEGV"
+    case SIGBUS:  sigName = "SIGBUS"
+    case SIGILL:  sigName = "SIGILL"
+    case SIGFPE:  sigName = "SIGFPE"
+    case SIGTERM: sigName = "SIGTERM"
+    default:      sigName = "UNKNOWN"
+    }
+
+    let prefix = "FATAL [crash] Caught signal: "
+    let suffix = "\n"
+
+    _crashLogPathCString.withUnsafeBufferPointer { pathBuf in
+        guard let pathPtr = pathBuf.baseAddress else { return }
+        let fd = open(pathPtr, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+        guard fd >= 0 else { return }
+        _ = prefix.withCString { write(fd, $0, strlen($0)) }
+        _ = sigName.withCString { write(fd, $0, strlen($0)) }
+        _ = suffix.withCString { write(fd, $0, strlen($0)) }
+        close(fd)
+    }
+}
+
+/// Captures fatal signals and uncaught exceptions so that the crash reason
+/// appears in `app.log` even when `willTerminate` is never called.
+///
+/// Signal handlers are constrained to async-signal-safe calls only,
+/// so we bypass `AppLogStore` and write directly via POSIX `write(2)`.
+enum CrashHandler {
+    static let logPath: String = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("HagimiMonitor/Logs")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("app.log").path
+    }()
+
+    /// Install signal + exception handlers. Call once at app launch.
+    static func install() {
+        // Cache the log path in globals so C function pointer handlers can access it.
+        _crashLogPath = logPath
+        _crashLogPathCString = logPath.cString(using: .utf8) ?? []
+        installSignalHandlers()
+        installExceptionHandler()
+    }
+
+    // MARK: - Signal Handlers
+
+    private static let caughtSignals: [Int32] = [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTERM]
+
+    private static func installSignalHandlers() {
+        for sig in caughtSignals {
+            _ = signal(sig, handleSignal)
+        }
+    }
+
+    // MARK: - Uncaught Exception Handler
+
+    private static func installExceptionHandler() {
+        NSSetUncaughtExceptionHandler { exception in
+            let name = exception.name.rawValue
+            let reason = exception.reason ?? "no reason"
+            let message = "FATAL [crash] Uncaught exception: \(name) — \(reason)\n"
+
+            // This handler runs on the throwing thread before the process dies.
+            // AppLogStore's async write may not flush in time, so write directly.
+            // Use the global path since C function pointers cannot capture context.
+            if let data = message.data(using: .utf8) {
+                if let handle = FileHandle(forWritingAtPath: _crashLogPath) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                } else {
+                    try? data.write(to: URL(fileURLWithPath: _crashLogPath), options: .atomic)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Launch State
 
 struct AppLaunchState: Codable {
@@ -210,6 +303,78 @@ final class AppLaunchStateTracker {
         } catch {
             // Diagnostics state must never affect app behavior.
         }
+    }
+}
+
+// MARK: - Health Monitor
+
+/// Periodically logs memory usage and main-thread responsiveness.
+/// Helps diagnose SIGKILL kills that leave no crash handler output
+/// (typically memory jetsam or watchdog timeout).
+final class HealthMonitor {
+    static let shared = HealthMonitor()
+
+    private var timer: DispatchSourceTimer?
+    private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.health", qos: .utility)
+    private let interval: TimeInterval
+
+    /// Main-thread liveness ping — written by the main thread, read by the monitor.
+    private var mainThreadAlive: Bool = true
+
+    init(interval: TimeInterval = 300) { // 5 minutes
+        self.interval = interval
+    }
+
+    func start() {
+        // Install a main-thread run-loop observer so we can detect hangs.
+        installMainThreadPing()
+
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in self?.checkHealth() }
+        timer.resume()
+        self.timer = timer
+    }
+
+    private func installMainThreadPing() {
+        // A repeating timer on the main run loop proves the thread is alive.
+        let ping = DispatchSource.makeTimerSource(queue: .main)
+        ping.schedule(deadline: .now(), repeating: 60) // ping every 60s
+        ping.setEventHandler { [weak self] in
+            self?.mainThreadAlive = true
+        }
+        ping.resume()
+    }
+
+    private func checkHealth() {
+        let memMB = currentMemoryMB()
+        let alive = mainThreadAlive
+        mainThreadAlive = false // reset; main thread has 60s to set it back
+
+        let status = alive ? "ok" : "UNRESPONSIVE"
+        AppLogStore.shared.info(
+            "Health: memory=\(memMB)MB, mainThread=\(status)",
+            category: "health"
+        )
+
+        if memMB > 500 {
+            AppLogStore.shared.warning(
+                "High memory usage: \(memMB)MB — risk of jetsam kill",
+                category: "health"
+            )
+        }
+    }
+
+    private func currentMemoryMB() -> Int64 {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return -1 }
+        return Int64(info.resident_size) / 1_048_576
     }
 }
 
