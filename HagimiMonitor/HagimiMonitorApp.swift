@@ -18,6 +18,7 @@ struct HagimiMonitorApp: App {
         if previousUnexpected {
             AppLogStore.shared.warning("Previous run may have ended unexpectedly", category: "app")
         }
+        HealthMonitor.shared.start()
     }
 
     var body: some Scene {

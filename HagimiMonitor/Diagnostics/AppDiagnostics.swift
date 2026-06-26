@@ -306,6 +306,78 @@ final class AppLaunchStateTracker {
     }
 }
 
+// MARK: - Health Monitor
+
+/// Periodically logs memory usage and main-thread responsiveness.
+/// Helps diagnose SIGKILL kills that leave no crash handler output
+/// (typically memory jetsam or watchdog timeout).
+final class HealthMonitor {
+    static let shared = HealthMonitor()
+
+    private var timer: DispatchSourceTimer?
+    private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.health", qos: .utility)
+    private let interval: TimeInterval
+
+    /// Main-thread liveness ping — written by the main thread, read by the monitor.
+    private var mainThreadAlive: Bool = true
+
+    init(interval: TimeInterval = 300) { // 5 minutes
+        self.interval = interval
+    }
+
+    func start() {
+        // Install a main-thread run-loop observer so we can detect hangs.
+        installMainThreadPing()
+
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + interval, repeating: interval)
+        timer.setEventHandler { [weak self] in self?.checkHealth() }
+        timer.resume()
+        self.timer = timer
+    }
+
+    private func installMainThreadPing() {
+        // A repeating timer on the main run loop proves the thread is alive.
+        let ping = DispatchSource.makeTimerSource(queue: .main)
+        ping.schedule(deadline: .now(), repeating: 60) // ping every 60s
+        ping.setEventHandler { [weak self] in
+            self?.mainThreadAlive = true
+        }
+        ping.resume()
+    }
+
+    private func checkHealth() {
+        let memMB = currentMemoryMB()
+        let alive = mainThreadAlive
+        mainThreadAlive = false // reset; main thread has 60s to set it back
+
+        let status = alive ? "ok" : "UNRESPONSIVE"
+        AppLogStore.shared.info(
+            "Health: memory=\(memMB)MB, mainThread=\(status)",
+            category: "health"
+        )
+
+        if memMB > 500 {
+            AppLogStore.shared.warning(
+                "High memory usage: \(memMB)MB — risk of jetsam kill",
+                category: "health"
+            )
+        }
+    }
+
+    private func currentMemoryMB() -> Int64 {
+        var info = mach_task_basic_info()
+        var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.size) / 4
+        let result = withUnsafeMutablePointer(to: &info) {
+            $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
+                task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), $0, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return -1 }
+        return Int64(info.resident_size) / 1_048_576
+    }
+}
+
 // MARK: - App Log Exporter
 
 struct AppLogExporter {
