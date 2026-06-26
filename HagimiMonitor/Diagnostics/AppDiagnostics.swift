@@ -315,10 +315,12 @@ final class HealthMonitor {
     static let shared = HealthMonitor()
 
     private var timer: DispatchSourceTimer?
+    private var pingTimer: DispatchSourceTimer?
     private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.health", qos: .utility)
     private let interval: TimeInterval
 
     /// Main-thread liveness ping — written by the main thread, read by the monitor.
+    /// Note: intentionally accessed from two queues without lock (diagnostic flag, race is harmless).
     private var mainThreadAlive: Bool = true
 
     init(interval: TimeInterval = 300) { // 5 minutes
@@ -344,6 +346,7 @@ final class HealthMonitor {
             self?.mainThreadAlive = true
         }
         ping.resume()
+        self.pingTimer = ping
     }
 
     private func checkHealth() {

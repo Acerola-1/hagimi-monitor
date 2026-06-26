@@ -649,10 +649,11 @@ final class MonitorStore: ObservableObject {
     private func checkCPUHighLoad(module: MonitorModule) {
         let cpuValue = module.value
         if cpuValue >= cpuHighLoadThreshold {
+            let startTime = cpuHighLoadStartTime ?? Date()
             if cpuHighLoadStartTime == nil {
-                cpuHighLoadStartTime = Date()
+                cpuHighLoadStartTime = startTime
             }
-            let duration = Date().timeIntervalSince(cpuHighLoadStartTime!)
+            let duration = Date().timeIntervalSince(startTime)
             if duration >= cpuHighLoadMinDuration {
                 // 去重：上次记录后需重新积累
                 if let lastTime = lastCPUHighLoadEventTime,
