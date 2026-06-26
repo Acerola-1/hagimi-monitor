@@ -129,6 +129,99 @@ final class AppLogStore {
     }
 }
 
+// MARK: - Crash Handler
+
+/// Global log file path, set once at launch.
+/// Must be a plain global so the signal/exception handlers (C function pointers) can access it.
+private var _crashLogPathCString: [CChar] = []
+private var _crashLogPath: String = ""
+
+/// C function for signal handling — no Swift context capture allowed.
+private func handleSignal(_ sig: Int32) {
+    guard !_crashLogPathCString.isEmpty else { return }
+
+    let sigName: String
+    switch sig {
+    case SIGABRT: sigName = "SIGABRT"
+    case SIGSEGV: sigName = "SIGSEGV"
+    case SIGBUS:  sigName = "SIGBUS"
+    case SIGILL:  sigName = "SIGILL"
+    case SIGFPE:  sigName = "SIGFPE"
+    case SIGTERM: sigName = "SIGTERM"
+    default:      sigName = "UNKNOWN"
+    }
+
+    let prefix = "FATAL [crash] Caught signal: "
+    let suffix = "\n"
+
+    _crashLogPathCString.withUnsafeBufferPointer { pathBuf in
+        guard let pathPtr = pathBuf.baseAddress else { return }
+        let fd = open(pathPtr, O_WRONLY | O_APPEND | O_CREAT, 0o644)
+        guard fd >= 0 else { return }
+        _ = prefix.withCString { write(fd, $0, strlen($0)) }
+        _ = sigName.withCString { write(fd, $0, strlen($0)) }
+        _ = suffix.withCString { write(fd, $0, strlen($0)) }
+        close(fd)
+    }
+}
+
+/// Captures fatal signals and uncaught exceptions so that the crash reason
+/// appears in `app.log` even when `willTerminate` is never called.
+///
+/// Signal handlers are constrained to async-signal-safe calls only,
+/// so we bypass `AppLogStore` and write directly via POSIX `write(2)`.
+enum CrashHandler {
+    static let logPath: String = {
+        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+            ?? FileManager.default.temporaryDirectory
+        let dir = base.appendingPathComponent("HagimiMonitor/Logs")
+        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir.appendingPathComponent("app.log").path
+    }()
+
+    /// Install signal + exception handlers. Call once at app launch.
+    static func install() {
+        // Cache the log path in globals so C function pointer handlers can access it.
+        _crashLogPath = logPath
+        _crashLogPathCString = logPath.cString(using: .utf8) ?? []
+        installSignalHandlers()
+        installExceptionHandler()
+    }
+
+    // MARK: - Signal Handlers
+
+    private static let caughtSignals: [Int32] = [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTERM]
+
+    private static func installSignalHandlers() {
+        for sig in caughtSignals {
+            _ = signal(sig, handleSignal)
+        }
+    }
+
+    // MARK: - Uncaught Exception Handler
+
+    private static func installExceptionHandler() {
+        NSSetUncaughtExceptionHandler { exception in
+            let name = exception.name.rawValue
+            let reason = exception.reason ?? "no reason"
+            let message = "FATAL [crash] Uncaught exception: \(name) — \(reason)\n"
+
+            // This handler runs on the throwing thread before the process dies.
+            // AppLogStore's async write may not flush in time, so write directly.
+            // Use the global path since C function pointers cannot capture context.
+            if let data = message.data(using: .utf8) {
+                if let handle = FileHandle(forWritingAtPath: _crashLogPath) {
+                    handle.seekToEndOfFile()
+                    handle.write(data)
+                    handle.closeFile()
+                } else {
+                    try? data.write(to: URL(fileURLWithPath: _crashLogPath), options: .atomic)
+                }
+            }
+        }
+    }
+}
+
 // MARK: - Launch State
 
 struct AppLaunchState: Codable {
