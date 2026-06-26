@@ -668,6 +668,10 @@ private struct NetworkGlassRow: View, Equatable {
         theme.moduleTint(for: module.kind)
     }
 
+    private var hasExpandableContent: Bool {
+        !detailMetrics.isEmpty || (showNetworkProcesses && !topNetworkProcesses.isEmpty)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -706,9 +710,11 @@ private struct NetworkGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            if isExpanded {
+            if isExpanded, hasExpandableContent {
                 VStack(spacing: 9) {
-                    MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
+                    if !detailMetrics.isEmpty {
+                        MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
+                    }
                     if showNetworkProcesses, !topNetworkProcesses.isEmpty {
                         InlineNetworkProcessList(processes: topNetworkProcesses, theme: theme)
                     }
@@ -720,7 +726,9 @@ private struct NetworkGlassRow: View, Equatable {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            toggleExpansion?()
+            if hasExpandableContent {
+                toggleExpansion?()
+            }
         }
         .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
     }
