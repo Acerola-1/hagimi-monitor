@@ -217,7 +217,7 @@ struct MonitorPanelView: View {
     }
 
     private func toggleExpansion(for kind: MonitorKind) {
-        withAnimation(.smooth(duration: 0.18)) {
+        setExpansion {
             if expandedKinds.contains(kind) {
                 expandedKinds.remove(kind)
             } else {
@@ -242,12 +242,24 @@ struct MonitorPanelView: View {
 
     /// 残留 expandedKinds 里的不可见 kind 不影响判定;全展开分支用可见集合覆盖,顺便清掉残留。
     private func toggleAllExpansion() {
-        withAnimation(.smooth(duration: 0.18)) {
+        setExpansion {
             if allVisibleRowsExpanded {
                 expandedKinds.removeAll()
             } else {
                 expandedKinds = Set(visibleKinds)
             }
+        }
+    }
+
+    /// macOS 26+:窗口缩放由系统按顶边锚定,行高逐帧补间是平滑的。
+    /// macOS 15:`MenuBarExtra(.window)` 在逐帧 resize 时锚点用左下角,
+    /// 顶边会被反复推上去再拉回,造成面板顶部抖动。故此版本不做几何补间——
+    /// 窗口一次性 resize 到位,顶边只在静止态钉住,不抖。
+    private func setExpansion(_ mutate: () -> Void) {
+        if #available(macOS 26, *) {
+            withAnimation(.easeInOut(duration: 0.25), mutate)
+        } else {
+            mutate()
         }
     }
 
@@ -1438,11 +1450,18 @@ private struct ProcessIcon: View {
     }
 }
 
-private extension AnyTransition {
+extension AnyTransition {
+    /// macOS 26+:插入时微缩放 + 淡入,移除时淡出,配合系统的窗口缩放调和。
+    /// macOS 15:返回 `.identity`。`MenuBarExtra(.window)` 不调和 transition 与窗口 resize,
+    /// removal 的淡出帧会残留在已缩小的窗口里造成收起闪烁,故此版本不做任何离场过渡。
     static var detailDisclosure: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
-            removal: .opacity
-        )
+        if #available(macOS 26, *) {
+            return .asymmetric(
+                insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
+                removal: .opacity
+            )
+        } else {
+            return .identity
+        }
     }
 }

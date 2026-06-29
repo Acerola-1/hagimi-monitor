@@ -49,7 +49,6 @@ struct CompatibleGlassEffect: ViewModifier {
                     VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                         .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 )
-                .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         }
     }
 }

@@ -10,7 +10,7 @@ struct DisplayControlsSection: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
 
-    private let expansionAnimation = Animation.smooth(duration: 0.22)
+    private let expansionAnimation = Animation.easeInOut(duration: 0.25)
 
     var body: some View {
         let palette = MonitorPalette(
@@ -56,9 +56,7 @@ struct DisplayControlsSection: View {
             .padding(.vertical, 8)
             .contentShape(Rectangle())
             .onTapGesture {
-                withAnimation(expansionAnimation) {
-                    isExpanded.toggle()
-                }
+                toggleExpansion()
             }
 
             if isExpanded {
@@ -77,7 +75,6 @@ struct DisplayControlsSection: View {
             controller.attach(settings: settings)
             controller.refreshAsync()
         }
-        .animation(expansionAnimation, value: isExpanded)
         .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
     }
 
@@ -119,6 +116,18 @@ struct DisplayControlsSection: View {
         }
     }
 
+    /// macOS 26+ 做几何补间;macOS 15 一次性到位,避免 MenuBarExtra 逐帧 resize 抖动。
+    /// chevron 旋转仍由 `.animation(value: isExpanded)` 平滑(纯旋转不改高度)。
+    private func toggleExpansion() {
+        if #available(macOS 26, *) {
+            withAnimation(expansionAnimation) {
+                isExpanded.toggle()
+            }
+        } else {
+            isExpanded.toggle()
+        }
+    }
+
     private func summary(for displays: [ControlledDisplay], hasControls: Bool) -> String {
         guard hasControls else {
             return String(localized: "display.controls-disabled")
@@ -132,15 +141,6 @@ struct DisplayControlsSection: View {
             return "\(countPart) · \(unitExternal) \(externalCount)"
         }
         return countPart
-    }
-}
-
-private extension AnyTransition {
-    static var detailDisclosure: AnyTransition {
-        .asymmetric(
-            insertion: .opacity,
-            removal: .opacity
-        )
     }
 }
 
