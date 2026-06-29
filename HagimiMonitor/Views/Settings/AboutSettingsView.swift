@@ -30,54 +30,33 @@ struct AboutSettingsView: View {
 
             SettingsGroup {
                 SettingsRow(title: String(localized: "about.release-version")) {
-                    if #available(macOS 26, *) {
-                        Button {
-                            NSWorkspace.shared.open(releasesURL)
-                        } label: {
-                            Label("Releases", systemImage: "shippingbox")
-                                .frame(minWidth: 80)
-                        }
-                        .buttonStyle(.glass)
-                    } else {
-                        Link(destination: releasesURL) {
-                            Label("Releases", systemImage: "shippingbox")
-                                .frame(minWidth: 80)
-                        }
+                    Button {
+                        NSWorkspace.shared.open(releasesURL)
+                    } label: {
+                        Label("Releases", systemImage: "shippingbox")
+                            .frame(minWidth: 80)
                     }
+                    .compatibleButtonStyle()
                 }
 
                 SettingsRow(title: String(localized: "about.feedback")) {
-                    if #available(macOS 26, *) {
-                        Button {
-                            NSWorkspace.shared.open(issuesURL)
-                        } label: {
-                            Label("Issue", systemImage: "exclamationmark.bubble")
-                                .frame(minWidth: 80)
-                        }
-                        .buttonStyle(.glass)
-                    } else {
-                        Link(destination: issuesURL) {
-                            Label("Issue", systemImage: "exclamationmark.bubble")
-                                .frame(minWidth: 80)
-                        }
+                    Button {
+                        NSWorkspace.shared.open(issuesURL)
+                    } label: {
+                        Label("Issue", systemImage: "exclamationmark.bubble")
+                            .frame(minWidth: 80)
                     }
+                    .compatibleButtonStyle()
                 }
 
                 SettingsRow(title: String(localized: "about.follow")) {
-                    if #available(macOS 26, *) {
-                        Button {
-                            NSWorkspace.shared.open(twitterURL)
-                        } label: {
-                            Label("X / Twitter", systemImage: "at")
-                                .frame(minWidth: 80)
-                        }
-                        .buttonStyle(.glass)
-                    } else {
-                        Link(destination: twitterURL) {
-                            Label("X / Twitter", systemImage: "at")
-                                .frame(minWidth: 80)
-                        }
+                    Button {
+                        NSWorkspace.shared.open(twitterURL)
+                    } label: {
+                        Label("X / Twitter", systemImage: "at")
+                            .frame(minWidth: 80)
                     }
+                    .compatibleButtonStyle()
                 }
 
                 SettingsRow(title: String(localized: "about.diagnostics"), subtitle: logExportMessage) {
@@ -131,16 +110,10 @@ struct AboutSettingsView: View {
                 Text(String(localized: "about.up-to-date"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                if #available(macOS 26, *) {
-                    Button(String(localized: "about.check-again")) {
-                        Task { await updateChecker.checkForUpdates() }
-                    }
-                    .buttonStyle(.glass)
-                } else {
-                    Button(String(localized: "about.check-again")) {
-                        Task { await updateChecker.checkForUpdates() }
-                    }
+                Button(String(localized: "about.check-again")) {
+                    Task { await updateChecker.checkForUpdates() }
                 }
+                .compatibleButtonStyle()
             }
 
         case .updateAvailable(let latestVersion, _, let downloadURL, _):
@@ -159,16 +132,10 @@ struct AboutSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                if #available(macOS 26, *) {
-                    Button(String(localized: "about.retry")) {
-                        Task { await updateChecker.checkForUpdates() }
-                    }
-                    .buttonStyle(.glass)
-                } else {
-                    Button(String(localized: "about.retry")) {
-                        Task { await updateChecker.checkForUpdates() }
-                    }
+                Button(String(localized: "about.retry")) {
+                    Task { await updateChecker.checkForUpdates() }
                 }
+                .compatibleButtonStyle()
             }
         }
     }
@@ -179,34 +146,19 @@ struct AboutSettingsView: View {
             ? String(localized: "about.exporting-logs")
             : String(localized: "about.export-logs")
 
-        if #available(macOS 26, *) {
-            Button {
-                exportLogs()
-            } label: {
-                if isExportingLogs {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label(label, systemImage: "doc.zipper")
-                        .frame(minWidth: 80)
-                }
+        Button {
+            exportLogs()
+        } label: {
+            if isExportingLogs {
+                ProgressView()
+                    .controlSize(.small)
+            } else {
+                Label(label, systemImage: "doc.zipper")
+                    .frame(minWidth: 80)
             }
-            .disabled(isExportingLogs)
-            .buttonStyle(.glass)
-        } else {
-            Button {
-                exportLogs()
-            } label: {
-                if isExportingLogs {
-                    ProgressView()
-                        .controlSize(.small)
-                } else {
-                    Label(label, systemImage: "doc.zipper")
-                        .frame(minWidth: 80)
-                }
-            }
-            .disabled(isExportingLogs)
         }
+        .disabled(isExportingLogs)
+        .compatibleButtonStyle()
     }
 
     private func exportLogs() {

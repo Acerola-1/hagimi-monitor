@@ -13,6 +13,8 @@ struct MonitorPanelView: View {
     @Environment(\.openSettings) private var openSettings
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
+    @State private var timeString: String = ""
+    @State private var timeUpdateTask: Task<Void, Never>?
 
     var body: some View {
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
@@ -22,19 +24,20 @@ struct MonitorPanelView: View {
             scheme: colorScheme
         )
 
-        GlassEffectContainer(spacing: 8) {
+        CompatibleGlassContainer(spacing: 8) {
             VStack(spacing: 6) {
                 header(theme: theme)
+                    .transaction { $0.animation = nil }
 
                 ForEach(store.modules) { module in
                     row(for: module, theme: theme)
-                        .glassEffectID("metric-\(module.kind.id)", in: glassNamespace)
+                        .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
                 }
 
                 #if DISPLAY_CONTROL
                 if store.settings.displayModuleVisible {
                     DisplayControlsSection(settings: store.settings)
-                        .glassEffectID("display-controls", in: glassNamespace)
+                        .compatibleGlassEffectID("display-controls", in: glassNamespace)
                 }
                 #endif
 
@@ -45,7 +48,7 @@ struct MonitorPanelView: View {
                         Label(String(localized: "panel.activity-monitor"), systemImage: "waveform.path.ecg")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glass)
+                    .compatibleButtonStyle()
                     .buttonBorderShape(.capsule)
 
                     Button {
@@ -54,7 +57,7 @@ struct MonitorPanelView: View {
                         Label(String(localized: "panel.settings"), systemImage: "gearshape")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glass)
+                    .compatibleButtonStyle()
                     .buttonBorderShape(.capsule)
                 }
                 .font(.footnote.weight(.medium))
@@ -70,8 +73,14 @@ struct MonitorPanelView: View {
             .fixedSize(horizontal: false, vertical: true)
             .background(panelBackgroundColor)
         }
-        .containerBackground(.clear, for: .window)
+        .compatibleContainerBackground()
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
+        .onAppear {
+            startTimeUpdateTask()
+        }
+        .onDisappear {
+            timeUpdateTask?.cancel()
+        }
     }
 
     private var panelBackgroundColor: Color {
@@ -86,8 +95,7 @@ struct MonitorPanelView: View {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
-                    .symbolEffect(.pulse, options: .repeating.speed(0.8))
-                    .animation(.easeInOut(duration: 0.6), value: store.haloRingLoadLevel)
+                    .compatiblePulseEffect()
 
                 Text("SYSTEM · LIVE")
                     .monitorPanelLabelFont(tracking: 1.1)
@@ -243,8 +251,14 @@ struct MonitorPanelView: View {
         }
     }
 
-    private var timeString: String {
-        panelTimeFormatter.string(from: Date())
+    private func startTimeUpdateTask() {
+        timeUpdateTask?.cancel()
+        timeUpdateTask = Task {
+            while !Task.isCancelled {
+                timeString = panelTimeFormatter.string(from: Date())
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
     }
 
     private func openActivityMonitor() {
@@ -346,7 +360,7 @@ private struct MetricGlassRow: View, Equatable {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
     }
 
     @ViewBuilder
@@ -730,7 +744,7 @@ private struct NetworkGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
     }
 
     private var detailMetrics: [MonitorMetric] {
@@ -776,7 +790,7 @@ private struct BatteryGlassRow: View, Equatable {
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(tint)
                     .frame(width: 18)
-                    .symbolEffect(.variableColor.iterative, isActive: isCharging)
+                    .compatibleVariableColorEffect(isActive: isCharging)
 
                 Text(String(localized: "kind.battery") + ":")
                     .monitorPanelMetricLabelFont()
@@ -818,7 +832,7 @@ private struct BatteryGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
     }
 
     private var hasBattery: Bool {

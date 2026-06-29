@@ -78,7 +78,7 @@ struct DisplayControlsSection: View {
             controller.refreshAsync()
         }
         .animation(expansionAnimation, value: isExpanded)
-        .glassEffect(.regular.tint(palette.displayGlassTint), in: .rect(cornerRadius: 14, style: .continuous))
+        .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
     }
 
     @ViewBuilder

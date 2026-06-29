@@ -82,7 +82,7 @@ struct StatisticsView: View {
                     .labelStyle(.titleAndIcon)
                     .frame(minWidth: 96)
             }
-            .buttonStyle(.glass)
+            .compatibleButtonStyle()
             .controlSize(.regular)
             .fixedSize()
         } else {
@@ -496,9 +496,9 @@ struct HealthScoreSection: View {
 
     var body: some View {
         if #available(macOS 26, *) {
-            GlassEffectContainer {
+            CompatibleGlassContainer {
                 healthContent
-                    .glassEffect(.regular.tint(healthGlassTint), in: .rect(cornerRadius: 14, style: .continuous))
+                    .compatibleGlassEffect(tint: healthGlassTint, cornerRadius: 14)
             }
         } else {
             healthContent
