@@ -63,6 +63,7 @@ fastlane/test_output
 docs/stats
 docs/MonitorControl-main
 docs/Lunar-main
+docs/FluidMenuBarExtra-main
 .omo/
 
 # Build output
