@@ -30,44 +30,50 @@ struct CompatibleGlassContainer<Content: View>: View {
 
 // MARK: - Compatible Glass Effect Modifier
 
-/// 跨版本兼容的 `.glassEffect` 替代。macOS 26+ 使用原生 `.glassEffect`，
-/// macOS 15 使用 `NSVisualEffectView` 背景实现近似效果。
+/// 行级毛玻璃效果，macOS 26 与 15 统一实现。
+///
+/// 设计取舍:液态玻璃(`.glassEffect`)在 26 上对行而言视觉与毛玻璃无异，
+/// 却把行绑进 `GlassEffectContainer` 的几何合并逻辑，是展开闪烁的诱因之一。
+/// 故行级统一降为 `NSVisualEffectView` 毛玻璃，液态玻璃仅保留在底部按钮
+/// (见 `compatibleButtonStyle`)。
+///
+/// 关键:`blendingMode` 必须用 `.withinWindow`，不能用 `.behindWindow`。
+/// `.behindWindow` 采样窗口背后的桌面——`MenuBarExtra(.window)` 展开时会 resize
+/// 宿主窗口，每一帧都要重新向 WindowServer 请求背景合成，导致整个面板(含顶部
+/// SYSTEM·LIVE)闪烁、像被重新加载。`.withinWindow` 只混合窗口内内容，resize
+/// 不再触发桌面重采样，从根上消除闪烁。
 struct CompatibleGlassEffect: ViewModifier {
     var tint: Color
     var cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content
-                .glassEffect(
-                    .regular.tint(tint),
-                    in: .rect(cornerRadius: cornerRadius, style: .continuous)
-                )
-        } else {
-            content
-                .background(
-                    VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
-                        .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
-                )
-        }
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background {
+                shape
+                    .fill(tint)
+                    .background {
+                        VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                            .clipShape(shape)
+                    }
+            }
     }
 }
 
 // MARK: - Compatible Glass Effect ID Modifier
 
-/// 跨版本兼容的 `.glassEffectID` 替代。macOS 26+ 使用原生 API，
-/// macOS 15 上为空操作（NSVisualEffectView 无等价概念）。
+/// `.glassEffectID` 的兼容占位。
+///
+/// 行级已统一为毛玻璃(见 `CompatibleGlassEffect`)，不再参与 `GlassEffectContainer`
+/// 的液态玻璃合并，故此 modifier 在所有版本上均为空操作——把 `glassEffectID`
+/// 附加在没有 `.glassEffect` 的视图上，26 上会引入无谓的容器几何重算。
+/// 调用点保留(含 `namespace` 参数)以维持 API 兼容，行为为透传。
 struct CompatibleGlassEffectID: ViewModifier {
     var id: String
     var namespace: Namespace.ID
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content
-                .glassEffectID(id, in: namespace)
-        } else {
-            content
-        }
+        content
     }
 }
 
