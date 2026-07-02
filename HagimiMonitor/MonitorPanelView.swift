@@ -251,10 +251,13 @@ struct MonitorPanelView: View {
         }
     }
 
-    /// 高度动画由窗口层 `setFrame(display:animate:)` 驱动,SwiftUI 侧不做几何补间,
-    /// 避免与窗口层动画抢锚点导致顶部抖动。两版本行为统一。
+    /// 由 SwiftUI 对布局做补间(卡片撑开、下方按钮平滑下推),窗口层逐帧跟随内容尺寸
+    /// (`FluidPanelController.contentSizeDidChange` 用 `animate: false` 贴合每帧高度),
+    /// 二者不抢锚点。曲线 / 时长对齐原始 dev 版本,保持一致的展开手感。
     private func setExpansion(_ mutate: () -> Void) {
-        mutate()
+        withAnimation(.smooth(duration: 0.18)) {
+            mutate()
+        }
     }
 
     private func startTimeUpdateTask() {
@@ -1445,13 +1448,11 @@ private struct ProcessIcon: View {
 }
 
 extension AnyTransition {
-    /// 统一的展开/折叠过渡:插入时微缩放 + 淡入,移除时淡出。
-    /// 高度动画由窗口层 `setFrame(display:animate:)` 驱动,此处仅做内容过渡,
-    /// 不引入几何插值以避免与窗口层动画冲突。两版本行为统一。
+    /// 统一的展开/折叠过渡:插入与移除对称,都用「微缩放(顶部锚定)+ 淡入淡出」。
+    /// 对称很关键——移除若只用 `.opacity`,缺少几何锚点,SwiftUI 对容器高度的回收
+    /// 处理与插入不一致,窗口逐帧跟随时底部按钮会「跳」回来;补上同样的 scale 锚点
+    /// 后,收起与展开镜像对称,观感一致顺滑。
     static var detailDisclosure: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
-            removal: .opacity
-        )
+        .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
     }
 }

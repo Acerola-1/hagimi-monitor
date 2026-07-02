@@ -242,21 +242,20 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Sizing / Positioning
 
-    /// SwiftUI 内容尺寸变化时:平滑动画调整窗口高度,顶边保持锚定。
-    /// 高度动画由窗口层 `animate: true` 提供,SwiftUI 侧不做几何动画,避免抖动。
+    /// SwiftUI 内容尺寸变化时:窗口顶边锚定、高度贴合内容当前尺寸。
     ///
-    /// 关键:必须 `DispatchQueue.main.async` 异步派发(对齐 FluidMenuBarExtra)。
-    /// 该回调发生在 SwiftUI 的布局事务内,若同步调用 `setFrame(animate:true)`,
-    /// 窗口动画会被当前事务吞掉、退化为瞬间跳变——这正是「动画尽数丢失」的直接原因。
-    /// 异步派发到下一个 runloop,让 SwiftUI 先完成布局,窗口再独立跑高度动画。
+    /// 必须 `DispatchQueue.main.async`(对齐 FluidMenuBarExtra):该回调发生在 SwiftUI
+    /// 布局事务内,若同步 `setFrame(display:true)` 会在动画事务里强制重绘、引发 re-entrant
+    /// 布局,把窗口定位/尺寸状态搞坏(表现为面板脱离菜单栏、底部大片空窗)。异步派发
+    /// 到下一个 runloop,让 SwiftUI 先完成当前帧布局,窗口再贴合。
+    ///
+    /// 不能 guard panel.isVisible:size reader 的首次 onAppear 常在面板可见之前(init
+    /// 布局阶段)触发,若丢弃则窗口尺寸永远停在默认值、之后 onChange 不再触发。
     private func contentSizeDidChange(to size: CGSize) {
-        // 不能 guard panel.isVisible!对齐 FluidMenuBarExtra:size reader 的首次
-        // onAppear 上报常发生在面板可见之前(init 布局阶段),若在此丢弃,窗口尺寸
-        // 就永远停在默认值、之后 onChange 不再触发。始终更新尺寸,仅在可见时才动画。
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.frame.size != size else { return }
-            self.setPanelFrame(size: size, animate: self.panel.isVisible)
+            self.setPanelFrame(size: size, animate: false)
         }
     }
 
