@@ -170,11 +170,15 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
 
-        // 主题 / 系统浅深色切换:重新快照(SwiftUI 内部不感知 NSStatusItem 的 appearance)。
+        // 主题切换:重新快照(SwiftUI 内部不感知 NSStatusItem 的 appearance)。
         store.settings.$themePreference
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
-        NSApp.publisher(for: \.effectiveAppearance)
+
+        // 关键:直接监听 button 自身的 effectiveAppearance。焦点切换 / 壁纸变化 /
+        // 菜单栏黑白模式翻转时,这个值会「即刻」更新——比等下一个采样 tick(~1s)
+        // 快得多,图标墨色随焦点迅速跟随。option(.initial) 顺带完成首刷。
+        button.publisher(for: \.effectiveAppearance, options: [.new])
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
     }
