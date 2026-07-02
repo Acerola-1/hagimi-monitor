@@ -28,17 +28,11 @@ struct HagimiMonitorApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("HagimiMonitor Preview") {
-            ContentView(store: monitorStore)
-                .preferredColorScheme(effectiveColorScheme)
-        }
-        .windowResizability(.contentSize)
-        .commands { AppMenuCommands() }
-
         Settings {
             SettingsRootView(settings: monitorStore.settings, store: monitorStore)
         }
         .windowResizability(.contentSize)
+        .commands { AppMenuCommands() }
     }
 
     private var effectiveColorScheme: ColorScheme? {
