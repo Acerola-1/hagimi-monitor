@@ -16,9 +16,9 @@ import SwiftUI
 /// 的高度补间完全交给窗口层的 `animate: true`。这正好避开上一轮「SwiftUI 几何
 /// 动画 + 窗口 resize 抢锚点」导致的顶部抖动。
 ///
-/// 动态图标:`NSStatusItem.button` 内嵌 `NSHostingView(MenuBarStatusLabel)`,
-/// 因此负载环 / 可变宽指标文本等动态内容都能正常显示——这是无法直接使用
-/// FluidMenuBarExtra(仅支持静态图标)的原因。
+/// 动态图标:把 `MenuBarStatusLabel` 用 `ImageRenderer` 快照成 `NSImage` 赋给标准
+/// `NSStatusItem.button.image`(负载/采样变化时重刷)。走标准图路径而非子视图,是为了
+/// 让系统对「非活跃屏幕」自动变淡(与原生 app 一致);子视图路径拿不到逐屏 dimming。
 @MainActor
 final class FluidPanelController: NSObject, NSWindowDelegate {
     private let store: MonitorStore
@@ -28,7 +28,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private let statusItem: NSStatusItem
     private let panel: NSPanel
     private var hostingView: NSHostingView<AnyView>?
-    private var labelHostingView: NSHostingView<AnyView>?
 
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
@@ -148,30 +147,35 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private func configureStatusItem() {
         guard let button = statusItem.button else { return }
 
-        let hosting = NSHostingView(rootView: makeStatusLabelRoot())
-        hosting.translatesAutoresizingMaskIntoConstraints = false
-        button.addSubview(hosting)
-        labelHostingView = hosting
-
-        // hosting 填满 button;button 宽度由 statusItem.length 控制,
-        // 后者随内容固有宽度动态更新(见 updateStatusItemLength)。
-        NSLayoutConstraint.activate([
-            hosting.leadingAnchor.constraint(equalTo: button.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: button.trailingAnchor),
-            hosting.topAnchor.constraint(equalTo: button.topAnchor),
-            hosting.bottomAnchor.constraint(equalTo: button.bottomAnchor)
-        ])
-
+        // 关键:图标走标准的 `button.image` 路径(而非往 button 塞 NSHostingView 子视图)。
+        // 只有标准状态项图会被菜单栏系统跨屏复制并在「非活跃屏幕」自动变淡,与原生 app
+        // 一致;自建子视图拿不到这个逐屏 dimming(表现为非活跃屏幕全亮)。动态内容(负载
+        // 环/可变宽指标文本)通过 ImageRenderer 每次快照渲染成 NSImage 再赋给 button.image。
+        button.imagePosition = .imageOnly
+        button.image = nil
         button.setAccessibilityTitle("HagimiMonitor")
 
-        // dark mode 变化时刷新图标外观(SwiftUI 内部不感知 NSStatusItem 的 appearance)。
-        store.settings.$themePreference
-            .sink { [weak self] _ in self?.refreshLabelAppearance() }
+        refreshStatusItemImage()
+
+        // 负载环随 displayedComputeLoad 平滑变化;指标文本随 modules 采样变化。
+        store.$displayedComputeLoad
+            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .store(in: &cancellables)
+        store.$modules
+            .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
 
-        // 监听外观变化(系统浅/深色切换)
+        // 显示模式(环/指标)切换。
+        store.settings.$menuBarDisplayMode
+            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .store(in: &cancellables)
+
+        // 主题 / 系统浅深色切换:重新快照(SwiftUI 内部不感知 NSStatusItem 的 appearance)。
+        store.settings.$themePreference
+            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .store(in: &cancellables)
         NSApp.publisher(for: \.effectiveAppearance)
-            .sink { [weak self] _ in self?.refreshLabelAppearance() }
+            .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
     }
 
@@ -293,30 +297,34 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 构造状态项 label 视图:内嵌尺寸读取器,内容宽度变化时更新 `statusItem.length`,
     /// 使 variableLength 状态项宽度精确跟随图标/文字固有宽度(否则 button 会塌成默认窄宽,
     /// 图标被挤)。水平留白模拟系统 MenuBarExtra 的边距。
-    private func makeStatusLabelRoot() -> AnyView {
+    /// 把 SwiftUI 状态项 label 快照成 NSImage 赋给 `button.image`,并按图像宽度更新
+    /// `statusItem.length`。快照走 SwiftUI 现有绘制,样式与旧的子视图完全一致。
+    private func refreshStatusItemImage() {
         let label = MenuBarStatusLabel(store: store, darkMode: NSApp.effectiveAppearance.isDark)
             .padding(.horizontal, Self.statusItemHorizontalPadding)
             .fixedSize()
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear { [weak self] in self?.updateStatusItemLength(geometry.size.width) }
-                        .onChange(of: geometry.size.width) { [weak self] _, newWidth in
-                            self?.updateStatusItemLength(newWidth)
-                        }
-                }
-            )
-        return AnyView(label)
+
+        let renderer = ImageRenderer(content: label)
+        // 与菜单栏一致的绘制外观,保证浅/深色墨色正确。
+        renderer.proposedSize = ProposedViewSize(width: nil, height: 22)
+        let scale = statusItem.button?.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        renderer.scale = scale
+
+        guard let cgImage = renderer.cgImage else { return }
+        let pointSize = NSSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale)
+        let image = NSImage(cgImage: cgImage, size: pointSize)
+        // 非 template:保留环的白圈 + 彩点原始配色。系统仍会对非活跃屏幕的整条菜单栏
+        // (含本图)做变淡合成,达到与原生 app 一致的观感。
+        image.isTemplate = false
+
+        statusItem.button?.image = image
+        updateStatusItemLength(pointSize.width)
     }
 
     private func updateStatusItemLength(_ width: CGFloat) {
         let target = max(width.rounded(.up), 24)
         guard statusItem.length != target else { return }
         statusItem.length = target
-    }
-
-    private func refreshLabelAppearance() {
-        labelHostingView?.rootView = makeStatusLabelRoot()
     }
 
     /// 打开设置窗口前关闭面板(供 AppDelegate 的 openSettings 闭包调用)。
