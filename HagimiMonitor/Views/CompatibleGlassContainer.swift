@@ -94,36 +94,34 @@ extension View {
         modifier(CompatibleGlassEffectID(id: id, namespace: namespace))
     }
 
-    /// 跨版本兼容的 `.buttonStyle(.glass)` 替代。
-    /// macOS 26+ 使用原生 Glass 按钮样式；macOS 15 降级为毛玻璃材质胶囊
-    /// (`PanelMaterialButtonStyle`),避免 `.borderedProminent` 的实心蓝按钮
-    /// 贴在毛玻璃面板上突兀,观感与 26/27 的液态玻璃统一。
-    @ViewBuilder
+    /// 面板底部按钮样式:统一用毛玻璃材质胶囊(`PanelMaterialButtonStyle`)。
+    /// 面板整体(含各行)已是 `.menu` 毛玻璃基调,底部按钮若用 26 原生
+    /// `.buttonStyle(.glass)` 液态玻璃,深色模式下会偏亮偏透、与周围格格不入,
+    /// 故所有版本都统一为与行同款的毛玻璃胶囊。
     func compatibleButtonStyle() -> some View {
-        if #available(macOS 26, *) {
-            self.buttonStyle(.glass)
-        } else {
-            self.buttonStyle(PanelMaterialButtonStyle())
-        }
+        self.buttonStyle(PanelMaterialButtonStyle())
     }
 }
 
 // MARK: - macOS 15 毛玻璃按钮样式
 
-/// macOS 15 的按钮降级样式:毛玻璃材质胶囊,替代扎眼的 `.borderedProminent` 实心蓝。
-/// 与面板整体毛玻璃融为一体,近似 26/27 上 `.buttonStyle(.glass)` 的通透观感。
+/// 面板底部按钮样式:毛玻璃材质胶囊,与面板各行同款的 `.menu` +
+/// `.withinWindow` 毛玻璃,融为一体、深浅模式下基调一致。
 private struct PanelMaterialButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let shape = Capsule()
+        return configuration.label
             .padding(.vertical, 6)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
-            .background(.regularMaterial, in: Capsule())
+            .background {
+                VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                    .clipShape(shape)
+            }
             .overlay(
-                Capsule()
-                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+                shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
             )
-            .contentShape(Capsule())
+            .contentShape(shape)
             .opacity(configuration.isPressed ? 0.7 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }

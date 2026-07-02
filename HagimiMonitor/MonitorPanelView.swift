@@ -60,7 +60,7 @@ struct MonitorPanelView: View {
                     .compatibleButtonStyle()
                     .buttonBorderShape(.capsule)
                 }
-                .font(.footnote.weight(.medium))
+                .font(.body.weight(.medium))
                 .foregroundStyle(theme.primaryText)
                 .padding(.top, 2)
             }
