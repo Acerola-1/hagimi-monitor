@@ -34,7 +34,7 @@ struct AboutSettingsView: View {
                         NSWorkspace.shared.open(releasesURL)
                     } label: {
                         Label("Releases", systemImage: "shippingbox")
-                            .frame(minWidth: 80)
+                            .frame(width: 120, alignment: .leading)
                     }
                     .compatibleButtonStyle()
                 }
@@ -44,7 +44,7 @@ struct AboutSettingsView: View {
                         NSWorkspace.shared.open(issuesURL)
                     } label: {
                         Label("Issue", systemImage: "exclamationmark.bubble")
-                            .frame(minWidth: 80)
+                            .frame(width: 120, alignment: .leading)
                     }
                     .compatibleButtonStyle()
                 }
@@ -54,7 +54,7 @@ struct AboutSettingsView: View {
                         NSWorkspace.shared.open(twitterURL)
                     } label: {
                         Label("X / Twitter", systemImage: "at")
-                            .frame(minWidth: 80)
+                            .frame(width: 120, alignment: .leading)
                     }
                     .compatibleButtonStyle()
                 }
@@ -152,9 +152,10 @@ struct AboutSettingsView: View {
             if isExportingLogs {
                 ProgressView()
                     .controlSize(.small)
+                    .frame(width: 120, alignment: .leading)
             } else {
                 Label(label, systemImage: "doc.zipper")
-                    .frame(minWidth: 80)
+                    .frame(width: 120, alignment: .leading)
             }
         }
         .disabled(isExportingLogs)
