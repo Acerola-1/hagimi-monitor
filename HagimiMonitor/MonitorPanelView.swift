@@ -1324,8 +1324,10 @@ private struct ProcessRowData: Identifiable {
     let id: Int
     let name: String
     let icon: NSImage?
-    let primaryText: String
-    let secondaryText: String
+    /// 上行/写入 值(不含箭头)
+    let upText: String
+    /// 下行/读取 值(不含箭头)
+    let downText: String
 }
 
 /// 磁盘 I/O 进程列表。
@@ -1339,8 +1341,8 @@ struct InlineDiskProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                primaryText: "↑\(byteCountString(Int64(proc.bytesWritten)))",
-                secondaryText: "↓\(byteCountString(Int64(proc.bytesRead)))"
+                upText: byteCountString(Int64(proc.bytesWritten)),
+                downText: byteCountString(Int64(proc.bytesRead))
             )
         }
     }
@@ -1373,8 +1375,8 @@ struct InlineNetworkProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                primaryText: "↑\(byteCountString(Int64(proc.upload)))",
-                secondaryText: "↓\(byteCountString(Int64(proc.download)))"
+                upText: byteCountString(Int64(proc.upload)),
+                downText: byteCountString(Int64(proc.download))
             )
         }
     }
@@ -1412,18 +1414,27 @@ private struct ProcessRowView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
 
-            HStack(spacing: 4) {
-                Text(row.primaryText)
-                    .monitorPanelMonoFont(.caption2, weight: .medium)
-                Text(row.secondaryText)
-                    .monitorPanelMonoFont(.caption2, weight: .medium)
+            // 两个数值各占固定宽度、右对齐:箭头留在左侧固定位置,数字尾部对齐,
+            // 数值宽度变化时列位置不再左右抖动,跨行也对齐成整齐两列。
+            HStack(spacing: 10) {
+                metricColumn(symbol: "↑", value: row.upText)
+                metricColumn(symbol: "↓", value: row.downText)
             }
             .foregroundStyle(theme.secondaryText)
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
             .layoutPriority(1)
+        }
+    }
+
+    private func metricColumn(symbol: String, value: String) -> some View {
+        HStack(spacing: 3) {
+            Text(symbol)
+                .monitorPanelMonoFont(.caption2, weight: .medium)
+            Text(value)
+                .monitorPanelMonoFont(.caption2, weight: .medium)
+                .frame(width: 56, alignment: .trailing)
         }
     }
 }
