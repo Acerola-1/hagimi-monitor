@@ -70,9 +70,12 @@ struct DisplayControlsSection: View {
                 )
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
-                .transition(.detailDisclosure)
+                .transition(Self.displayDisclosure)
             }
         }
+        // 收起过渡用 .move(上移)会让 detail 短暂绘制到 header 之上(VStack 中后声明者
+        // 层级更高),必须 clip 兜住;圆角与下方 glass 背景一致(14),避免收起瞬间露出直角。
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .onAppear {
             controller.attach(settings: settings)
             controller.refreshAsync()
@@ -126,6 +129,25 @@ struct DisplayControlsSection: View {
         withAnimation(expansionAnimation) {
             isExpanded.toggle()
         }
+    }
+
+    /// 显示器行专用过渡。展开沿用统一的 disclosure(淡入 + 顶部锚定微放大),与其它行一致;
+    /// 收起改为「上移 + 淡出」。
+    ///
+    /// 关键差异:显示器行展开内容含 `Slider`(SwiftUI 内部桥接 AppKit `NSSlider`),
+    /// `.scale` 变换作用不到该 NSView 图层——收起时槽位缩小而 slider 不跟着缩,视觉上
+    /// 「整块 slider 瞬间消失、剩余高度再补完」,即用户反馈的收起卡顿。`.move` 是位置
+    /// 位移,能带动 NSView 图层平滑退场,消除这一段落差。
+    ///
+    /// 用 `.bottom`(向下移出)而非 `.top`:detail 位于「显示器」标题行下方,`.top`
+    /// 会让它上移途中压到标题上(重叠「飞出」);`.bottom` 朝远离标题的方向退场,
+    /// 配合外层圆角 clip 被收缩的底边吃掉,不再与标题重叠。展开仍用统一 disclosure,
+    /// 保持手感不变。
+    private static var displayDisclosure: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
+            removal: .move(edge: .bottom).combined(with: .opacity)
+        )
     }
 
     private func summary(for displays: [ControlledDisplay], hasControls: Bool) -> String {
