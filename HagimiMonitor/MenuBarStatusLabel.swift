@@ -49,14 +49,14 @@ struct MenuBarMetricLabel: View {
     }
 
     /// 每个指标占一个独立的固定宽度单元:前缀(SF 图标 / CPU / ↑↓ 等)固定在左侧,
-    /// 数值放进按「最大可能值」测得的定宽框、右对齐。这样某个数值变宽/变窄
-    /// 只在自己单元内变化,不会把相邻指标左右推挤——菜单栏整体宽度、各指标
-    /// 位置都保持恒定。
+    /// 数值放进按「最大可能值」测得的定宽框、**左对齐**贴住前缀。短值时预留的
+    /// 空白落在尾部,与指标间距合并成更大的「组间空隙」,视觉上数字始终跟自己的
+    /// 前缀成一组。每格宽度仍固定,相邻指标位置不会左右抖动。
     private func cell(for item: MenuBarMetricItem) -> some View {
         HStack(spacing: symbolSpacing) {
             leading(for: item.kind)
             Text(numericValue(for: item))
-                .frame(width: valueWidth(for: item.kind), alignment: .trailing)
+                .frame(width: valueWidth(for: item.kind), alignment: .leading)
         }
     }
 
