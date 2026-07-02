@@ -32,24 +32,68 @@ struct MenuBarMetricLabel: View {
     let items: [MenuBarMetricItem]
     var style: Style = .menuBar
 
-    private var text: String {
-        items.map { metricText(for: $0.kind, value: $0.value) }
-            .joined(separator: separator)
-    }
-
-    private var reservedText: String {
-        items.map { metricText(for: $0.kind, value: reservedValue(for: $0.kind)) }
-            .joined(separator: separator)
-    }
-
     var body: some View {
-        Text(text)
-            .font(labelFont)
-            .lineLimit(1)
-            .allowsTightening(false)
-            .minimumScaleFactor(1)
-            .frame(width: reservedWidth, alignment: labelAlignment)
-            .clipped()
+        HStack(spacing: interCellSpacing) {
+            ForEach(items) { item in
+                cell(for: item)
+            }
+        }
+        .font(labelFont)
+        .lineLimit(1)
+        .allowsTightening(false)
+        .fixedSize()
+    }
+
+    /// 每个指标占一个独立的固定宽度单元:前缀(CPU / ↑↓ 等)固定在左侧,
+    /// 数值放进按「最大可能值」测得的定宽框、右对齐。这样某个数值变宽/变窄
+    /// 只在自己单元内变化,不会把相邻指标左右推挤——菜单栏整体宽度、各指标
+    /// 位置都保持恒定。
+    private func cell(for item: MenuBarMetricItem) -> some View {
+        let parts = components(for: item)
+        return HStack(spacing: parts.symbol.isEmpty ? 0 : symbolSpacing) {
+            if !parts.symbol.isEmpty {
+                Text(parts.symbol)
+            }
+            Text(parts.value)
+                .frame(width: valueWidth(for: item.kind), alignment: .trailing)
+        }
+    }
+
+    /// 把指标值拆成「固定前缀符号」+「数值」两部分。
+    /// - 带文字前缀的(CPU/GPU/MEM…)前缀即 `menuBarPrefix`。
+    /// - 网络无文字前缀,值以 ↑/↓ 箭头开头,箭头拆出作为固定符号。
+    /// 数值一律 trim 掉格式化时补的空白,宽度交给定宽框统一控制。
+    private func components(for item: MenuBarMetricItem) -> (symbol: String, value: String) {
+        let prefix = item.kind.menuBarPrefix
+        if !prefix.isEmpty {
+            return (prefix, item.value.trimmingCharacters(in: .whitespaces))
+        }
+        if let first = item.value.first, first == "↑" || first == "↓" {
+            let rest = item.value.dropFirst().trimmingCharacters(in: .whitespaces)
+            return (String(first), String(rest))
+        }
+        return ("", item.value.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// 数值框固定宽度:按该指标可能达到的最宽字符串测量(等宽数字字体),
+    /// 保证数值在最大/最小值间切换时右对齐、右边缘不动。
+    private func valueWidth(for kind: MenuBarMetricKind) -> CGFloat {
+        let sample = reservedNumericValue(for: kind)
+        let width = (sample as NSString).size(withAttributes: [.font: measuringFont]).width
+        return ceil(width) + 2
+    }
+
+    private func reservedNumericValue(for kind: MenuBarMetricKind) -> String {
+        switch kind {
+        case .cpuUsage, .gpuUsage, .memoryUsage, .batteryLevel:
+            "100%"
+        case .networkDownload, .networkUpload:
+            "888M"
+        case .cpuTemperature:
+            "888°"
+        case .storageFree:
+            "888G"
+        }
     }
 
     private var labelFont: Font {
@@ -57,53 +101,14 @@ struct MenuBarMetricLabel: View {
     }
 
     private var measuringFont: NSFont {
-        NSFont.systemFont(ofSize: fontSize, weight: .medium)
+        NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .medium)
     }
 
-    private var fontSize: CGFloat {
-        switch style {
-        case .menuBar:
-            9
-        case .preview:
-            9
-        }
-    }
+    private var fontSize: CGFloat { 12 }
 
-    private var separator: String { "  " }
+    /// 指标之间的间距。
+    private var interCellSpacing: CGFloat { 6 }
 
-    private var labelAlignment: Alignment {
-        switch style {
-        case .menuBar:
-            .leading
-        case .preview:
-            .center
-        }
-    }
-
-    private var reservedWidth: CGFloat {
-        ceil((reservedText as NSString).size(withAttributes: [.font: measuringFont]).width) + 4
-    }
-
-    private func metricText(for kind: MenuBarMetricKind, value: String) -> String {
-        if kind.menuBarPrefix.isEmpty {
-            value
-        } else {
-            "\(kind.menuBarPrefix) \(value)"
-        }
-    }
-
-    private func reservedValue(for kind: MenuBarMetricKind) -> String {
-        switch kind {
-        case .cpuUsage, .gpuUsage, .memoryUsage, .batteryLevel:
-            "100%"
-        case .networkDownload:
-            "↓9.9G"
-        case .networkUpload:
-            "↑9.9G"
-        case .cpuTemperature:
-            "999°"
-        case .storageFree:
-            "9.9T"
-        }
-    }
+    /// 前缀符号与数值之间的间距。
+    private var symbolSpacing: CGFloat { 2 }
 }
