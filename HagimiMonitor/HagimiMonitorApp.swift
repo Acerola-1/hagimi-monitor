@@ -46,6 +46,8 @@ struct AppMenuCommands: Commands {
     @Environment(\.openSettings) private var openSettings
 
     var body: some Commands {
+        let _ = SettingsWindowPresenter.cache(openSettings)
+
         CommandGroup(replacing: .appInfo) {
             Button(String(localized: "menu.about")) {
                 SettingsWindowPresenter.open(openSettings, tab: .about)
@@ -57,6 +59,13 @@ struct AppMenuCommands: Commands {
                 NSApp.terminate(nil)
             }
             .keyboardShortcut("q", modifiers: .command)
+        }
+
+        CommandGroup(replacing: .appSettings) {
+            Button(String(localized: "menu.settings")) {
+                SettingsWindowPresenter.open(openSettings)
+            }
+            .keyboardShortcut(",", modifiers: .command)
         }
     }
 }

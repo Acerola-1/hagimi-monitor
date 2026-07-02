@@ -13,12 +13,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         FluidPanelController(store: store) { [weak self] in
             // 先关闭面板再打开设置窗口
             self?.fluidPanelController.dismissPanelForSettings()
-            // macOS 14+: 使用 showSettingsWindow: selector 打开设置
-            if #available(macOS 14, *) {
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-            } else {
-                NSApp.sendAction(Selector(("showPreferencesWindow:")), to: nil, from: nil)
-            }
+            // 复用 openSettings 环境 action(与 Cmd+, 走同一条路径),
+            // 而非依赖未公开的 showSettingsWindow: selector
+            SettingsWindowPresenter.openFromOutsideSwiftUI()
         }
     }()
 

@@ -13,6 +13,24 @@ enum SettingsWindowPresenter {
     private static var pendingFocus = false
     @MainActor
     private static var pendingTab: SettingsTab?
+    @MainActor
+    private static var cachedOpenSettings: OpenSettingsAction?
+
+    /// 由 `AppMenuCommands` 在每次刷新菜单时写入,供非 View 上下文(如面板按钮)复用。
+    @MainActor
+    static func cache(_ openSettings: OpenSettingsAction) {
+        cachedOpenSettings = openSettings
+    }
+
+    /// 供面板等无法访问 `@Environment(\.openSettings)` 的调用方使用。
+    @MainActor
+    static func openFromOutsideSwiftUI(tab: SettingsTab? = nil) {
+        guard let cachedOpenSettings else {
+            AppLogger.settings.error("openSettings action not cached yet")
+            return
+        }
+        open(cachedOpenSettings, tab: tab)
+    }
 
     @MainActor
     static func open(_ openSettings: OpenSettingsAction, tab: SettingsTab? = nil) {
