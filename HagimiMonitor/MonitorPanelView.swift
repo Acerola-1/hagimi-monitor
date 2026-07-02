@@ -1260,7 +1260,7 @@ private struct MemoryProcessList: View {
 
                         Spacer(minLength: 4)
 
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(proc.memoryUsage), countStyle: .memory))
+                        Text(byteCountString(Int64(proc.memoryUsage), countStyle: .memory))
                             .monitorPanelMonoFont(.caption2, weight: .medium)
                             .foregroundStyle(theme.secondaryText)
                             .lineLimit(1)
@@ -1339,8 +1339,8 @@ struct InlineDiskProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                primaryText: "↑\(ByteCountFormatter.string(fromByteCount: Int64(proc.bytesWritten), countStyle: .file))",
-                secondaryText: "↓\(ByteCountFormatter.string(fromByteCount: Int64(proc.bytesRead), countStyle: .file))"
+                primaryText: "↑\(byteCountString(Int64(proc.bytesWritten)))",
+                secondaryText: "↓\(byteCountString(Int64(proc.bytesRead)))"
             )
         }
     }
@@ -1373,8 +1373,8 @@ struct InlineNetworkProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                primaryText: "↑\(ByteCountFormatter.string(fromByteCount: Int64(proc.upload), countStyle: .file))",
-                secondaryText: "↓\(ByteCountFormatter.string(fromByteCount: Int64(proc.download), countStyle: .file))"
+                primaryText: "↑\(byteCountString(Int64(proc.upload)))",
+                secondaryText: "↓\(byteCountString(Int64(proc.download)))"
             )
         }
     }

@@ -8,6 +8,24 @@ func bytes(_ value: Double) -> String {
     byteFormatter.string(fromByteCount: Int64(max(0, value)))
 }
 
+/// 将字节数格式化为固定单位(B/KB/MB/GB/TB)字符串。
+/// `ByteCountFormatter` 会把 bytes 单位本地化成「字节」,而单位不应随语言翻译,故自行格式化。
+/// `.file` 用 1000 进制、`.memory` 用 1024 进制,与 `ByteCountFormatter` 语义保持一致。
+func byteCountString(_ value: Int64, countStyle: ByteCountFormatter.CountStyle = .file) -> String {
+    let base: Double = countStyle == .memory ? 1024 : 1000
+    var scaled = Double(max(0, value))
+    let units = ["B", "KB", "MB", "GB", "TB"]
+    var index = 0
+    while scaled >= base, index < units.count - 1 {
+        scaled /= base
+        index += 1
+    }
+    if index == 0 {
+        return "\(Int(scaled.rounded())) \(units[index])"
+    }
+    return "\(String(format: scaled >= 10 ? "%.0f" : "%.1f", scaled)) \(units[index])"
+}
+
 func memoryBytes(_ value: Double) -> String {
     memoryByteFormatter.string(fromByteCount: Int64(max(0, value)))
 }
