@@ -300,17 +300,31 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 把 SwiftUI 状态项 label 快照成 NSImage 赋给 `button.image`,并按图像宽度更新
     /// `statusItem.length`。快照走 SwiftUI 现有绘制,样式与旧的子视图完全一致。
     private func refreshStatusItemImage() {
-        let label = MenuBarStatusLabel(store: store, darkMode: NSApp.effectiveAppearance.isDark)
+        // 用「状态项按钮的外观」而非 App 全局外观来决定墨色:菜单栏图标的黑/白由
+        // 系统按当前壁纸/菜单栏底色决定(彩色壁纸下会走白字模式),button 的
+        // effectiveAppearance 已反映这一判定,与旁边系统图标同步;若用 App 全局外观,
+        // 浅色系统 + 彩色壁纸时会画成黑环,和白色的系统图标格格不入。
+        let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
+        let isDark = appearance.isDark
+
+        let label = MenuBarStatusLabel(store: store, darkMode: isDark)
+            .environment(\.colorScheme, isDark ? .dark : .light)
             .padding(.horizontal, Self.statusItemHorizontalPadding)
             .fixedSize()
 
         let renderer = ImageRenderer(content: label)
-        // 与菜单栏一致的绘制外观,保证浅/深色墨色正确。
         renderer.proposedSize = ProposedViewSize(width: nil, height: 22)
         let scale = statusItem.button?.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         renderer.scale = scale
 
-        guard let cgImage = renderer.cgImage else { return }
+        // 把选定外观设为当前绘制上下文,使环内部的 NSAppearance.currentDrawing() 判定
+        // 与上面 isDark 一致(否则 ImageRenderer 会用 App 全局外观绘制)。
+        var cgImage: CGImage?
+        appearance.performAsCurrentDrawingAppearance {
+            cgImage = renderer.cgImage
+        }
+        guard let cgImage else { return }
+
         let pointSize = NSSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale)
         let image = NSImage(cgImage: cgImage, size: pointSize)
         // 非 template:保留环的白圈 + 彩点原始配色。系统仍会对非活跃屏幕的整条菜单栏
