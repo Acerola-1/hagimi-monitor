@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <img alt="macOS 26+" src="https://img.shields.io/badge/macOS-26%2B-111827?style=flat-square&logo=apple">
+  <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-111827?style=flat-square&logo=apple">
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-M%20series-2ECC71?style=flat-square&logo=apple">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-F05138?style=flat-square&logo=swift&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
@@ -88,7 +88,7 @@ Adjust brightness, volume, and contrast for external displays from the menu bar 
 
 ### Native Swift, Lightweight Resident
 
-Built with Swift / SwiftUI and optimized for Apple Silicon. Daily memory footprint is around 30 MB, making it suitable as a long-running menu bar status panel.
+Built with Swift / SwiftUI and optimized for Apple Silicon. Daily memory footprint is around 50 MB, making it suitable as a long-running menu bar status panel.
 
 ## Installation
 
@@ -108,7 +108,7 @@ Then launch normally.
 
 ## Requirements
 
-- macOS 26 or later
+- macOS 15 or later
 - Apple Silicon (M-series chips)
 
 ## Build

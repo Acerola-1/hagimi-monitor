@@ -19,7 +19,7 @@ struct EventTimelineSection: View {
             } else {
                 if #available(macOS 26, *) {
                     timelineContent
-                        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 16))
+                        .compatibleGlassEffect(cornerRadius: 16)
                 } else {
                     timelineContent
                         .background(Color(nsColor: .controlBackgroundColor).opacity(0.5))

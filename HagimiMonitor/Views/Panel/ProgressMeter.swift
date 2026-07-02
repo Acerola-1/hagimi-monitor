@@ -22,5 +22,6 @@ struct ProgressMeter: View {
                     .frame(width: geo.size.width * min(1, max(0, value / 100)))
             }
         }
+        .animation(.easeInOut(duration: 0.3), value: value)
     }
 }

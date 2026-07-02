@@ -113,7 +113,7 @@ struct ModuleSettingsView: View {
                     Button(String(localized: "settings.reset-defaults")) {
                         settings.resetMetrics(for: kind)
                     }
-                    .buttonStyle(.glass)
+                    .compatibleButtonStyle()
                 } else {
                     Button(String(localized: "settings.reset-defaults")) {
                         settings.resetMetrics(for: kind)

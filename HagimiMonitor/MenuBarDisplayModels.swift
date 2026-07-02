@@ -17,6 +17,23 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// 菜单栏指标的前缀形态:SF 图标(紧凑)或文字(CPU/GPU…)。
+enum MenuBarMetricPrefixStyle: String, CaseIterable, Identifiable {
+    case icon
+    case text
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .icon:
+            String(localized: "menu-bar-metric-prefix.icon")
+        case .text:
+            String(localized: "menu-bar-metric-prefix.text")
+        }
+    }
+}
+
 enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     case cpuUsage
     case gpuUsage

@@ -85,12 +85,6 @@ struct StatisticsReportStrings: Codable {
     let insightHealthScore: String
     let insightThermal: String
     let insightSevereEvents: String
-    // Heatmap
-    let heatmapTitle: String
-    let heatmapDescription: String
-    let heatmapAvg: String
-    let heatmapLow: String
-    let heatmapHigh: String
     // Card tabs
     let tabTrend: String
     let tabDistribution: String
@@ -215,12 +209,6 @@ struct StatisticsReportExporter {
                 insightHealthScore: String(localized: "report.insight.health-score"),
                 insightThermal: String(localized: "report.insight.thermal"),
                 insightSevereEvents: String(localized: "report.insight.severe-events"),
-                // Heatmap
-                heatmapTitle: String(localized: "report.heatmap.title"),
-                heatmapDescription: String(localized: "report.heatmap.description"),
-                heatmapAvg: String(localized: "report.heatmap.avg"),
-                heatmapLow: String(localized: "report.heatmap.low"),
-                heatmapHigh: String(localized: "report.heatmap.high"),
                 // Card tabs
                 tabTrend: String(localized: "report.tab.trend"),
                 tabDistribution: String(localized: "report.tab.distribution"),
@@ -624,47 +612,6 @@ struct StatisticsReportHTMLBuilder {
               height: 6px; border-radius: 50%; margin-right: 8px; vertical-align: middle;
               background: var(--c-network); }
 
-            /* ===== Heatmap ===== */
-            .heatmap-wrap { margin-top: 20px; background: var(--bg-elev);
-              border: 1px solid var(--border); border-radius: 18px; padding: 22px;
-              box-shadow: var(--shadow-md); position: relative; }
-            .heatmap-wrap h3 { margin: 0 0 8px; font-size: 13px; color: var(--text-dim);
-              font-weight: 600; letter-spacing: .02em; text-transform: uppercase; }
-            .heatmap-desc { margin: 0 0 14px; font-size: 11px; line-height: 1.45;
-              color: var(--text-faint); }
-            .heatmap-tabs { margin-bottom: 14px; }
-            .heatmap-section { margin-bottom: 18px; }
-            .heatmap-section:last-child { margin-bottom: 0; }
-            .heatmap-section-title { font-size: 12px; font-weight: 600; color: var(--text);
-              margin-bottom: 8px; }
-            .heatmap-grid-wrap { min-width: 0; }
-            .heatmap-hour-row { display: grid; grid-template-columns: 18px repeat(24, 1fr);
-              gap: 2px; margin-bottom: 2px; }
-            .heatmap-hour-row span { text-align: center; font-size: 10px;
-              color: var(--text-faint); }
-            .heatmap-rows { display: flex; flex-direction: column; gap: 2px; }
-            .heatmap-row { display: grid; grid-template-columns: 18px repeat(24, 1fr); gap: 2px; }
-            .heatmap-day-label { display: flex; align-items: center; justify-content: center;
-              aspect-ratio: 1; font-size: 10px; color: var(--text-faint); font-weight: 500;
-              font-variant-numeric: tabular-nums; }
-            .heatmap-cell { aspect-ratio: 1; border-radius: 3px;
-              background: var(--bg-inset); transition: background .15s; min-width: 0; }
-            .heatmap-cell:hover { outline: 2px solid var(--text-faint); outline-offset: 1px; }
-            .heatmap-legend { display: flex; align-items: center; gap: 4px;
-              margin-top: 10px; justify-content: flex-end; }
-            .heatmap-legend span { font-size: 10px; color: var(--text-faint); }
-            .heatmap-legend .heatmap-cell { cursor: default; width: 14px; height: 14px;
-              flex: none; aspect-ratio: auto; }
-            .heatmap-legend .heatmap-cell:hover { outline: none; }
-            .heatmap-tip { position: fixed; pointer-events: none; opacity: 0;
-              transform: translate(-50%, calc(-100% - 8px));
-              background: var(--text); color: var(--bg-elev);
-              padding: 6px 10px; border-radius: 8px; font-size: 11.5px;
-              white-space: nowrap; box-shadow: 0 6px 16px rgba(0,0,0,.2);
-              transition: opacity .12s; z-index: 10;
-              font-variant-numeric: tabular-nums; }
-            .heatmap-tip b { font-weight: 700; }
-
             /* ===== Percentile badges ===== */
             .percentiles { display: flex; gap: 10px; margin-top: 12px;
               padding-top: 12px; border-top: 1px solid var(--hairline); }
@@ -935,9 +882,6 @@ struct StatisticsReportHTMLBuilder {
                   '<div class="score-label">' + L.healthNoData + '</div>';
               }
 
-              // Heatmap
-              const heatmapHTML = buildHeatmap(mods);
-
               // Hide entire section when no data at all
               if (!hasData && !(hs && hs.isDataAvailable)) {
                 el.innerHTML = '';
@@ -950,112 +894,7 @@ struct StatisticsReportHTMLBuilder {
                   '<div class="insight-score">' + scoreHTML + '</div>' +
                   '<div class="insight-load"><h3>' + L.moduleLoad + '</h3>' + metricsHTML + '</div>' +
                   insightsListHTML +
-                '</div>' +
-                heatmapHTML;
-            }
-
-            // ===== Heatmap (7×24 grid, per module, tabbed) =====
-            function buildHeatmap(mods) {
-              const heatMods = mods.filter(m => m.points.length > 0 && m.kind !== 'network' && m.kind !== 'storage');
-              if (!heatMods.length) return '';
-
-              const dayLabels = [L.daySun, L.dayMon, L.dayTue, L.dayWed, L.dayThu, L.dayFri, L.daySat];
-              const hourRow = '<div class="heatmap-hour-row"><span></span>' +
-                Array.from({length:24}, (_, i) =>
-                  '<span style="' + ([0,6,12,18].includes(i) ? '' : 'visibility:hidden') + '">' + i + '</span>'
-                ).join('') + '</div>';
-
-              // Tab buttons
-              let tabs = '<div class="segmented heatmap-tabs">';
-              heatMods.forEach((m, i) => {
-                tabs += '<button data-kind="' + m.kind + '" class="' + (i === 0 ? 'active' : '') + '" style="font-size:12px">' + m.title + '</button>';
-              });
-              tabs += '</div>';
-
-              // Sections (hidden except first)
-              let sections = '';
-              heatMods.forEach((m, i) => {
-                const heat = Array.from({length: 7}, () => Array(24).fill(0));
-                const counts = Array.from({length: 7}, () => Array(24).fill(0));
-                m.points.forEach(p => {
-                  const d = new Date(p.timestamp * 1000);
-                  const day = d.getDay(), hour = d.getHours();
-                  heat[day][hour] += p.avg;
-                  counts[day][hour]++;
-                });
-                let maxVal = 1;
-                for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) {
-                  if (counts[d][h] > 0) { heat[d][h] /= counts[d][h]; }
-                  if (heat[d][h] > maxVal) maxVal = heat[d][h];
-                }
-                const hue = m.kind === 'cpu' ? 210 : m.kind === 'gpu' ? 140 : m.kind === 'memory' ? 35 : 270;
-                let rows = '';
-                for (let d = 0; d < 7; d++) {
-                  rows += '<div class="heatmap-row"><span class="heatmap-day-label">' + dayLabels[d] + '</span>';
-                  for (let h = 0; h < 24; h++) {
-                    const intensity = counts[d][h] > 0 ? heat[d][h] / maxVal : 0;
-                    const bg = intensity === 0 ? '' :
-                      'background:hsla(' + hue + ',80%,' + (isDark ? (35 + 30 * intensity) : (65 - 35 * intensity)) + '%,' + (0.25 + 0.7 * intensity) + ')';
-                    const valText = counts[d][h] > 0 ? heat[d][h].toFixed(1) + (m.kind === 'power' ? 'W' : '%') : '--';
-                    rows += '<div class="heatmap-cell" style="' + bg + '" data-day="' + d + '" data-hour="' + h + '" data-val="' + valText + '" data-count="' + counts[d][h] + '" data-kind="' + m.kind + '"></div>';
-                  }
-                  rows += '</div>';
-                }
-                const vis = i === 0 ? '' : 'display:none';
-                sections += '<div class="heatmap-section" data-kind="' + m.kind + '" style="' + vis + '">' +
-                  '<div class="heatmap-grid-wrap">' + hourRow +
-                    '<div class="heatmap-rows">' + rows + '</div>' +
-                  '</div>' +
                 '</div>';
-              });
-
-              return '<div class="heatmap-wrap"><h3>' + L.heatmapTitle + '</h3>' +
-                '<p class="heatmap-desc">' + L.heatmapDescription + '</p>' +
-                tabs + sections +
-                '<div class="heatmap-legend"><span>' + L.heatmapLow + '</span>' +
-                  [0, 0.25, 0.5, 0.75, 1].map(v => {
-                    const bg = v === 0 ? 'background:var(--bg-inset)' :
-                      'background:hsla(210,80%,' + (isDark ? (35 + 30 * v) : (65 - 35 * v)) + '%,' + (0.25 + 0.7 * v) + ')';
-                    return '<div class="heatmap-cell" style="' + bg + '"></div>';
-                  }).join('') +
-                  '<span>' + L.heatmapHigh + '</span></div>' +
-                '<div class="heatmap-tip"></div>' +
-              '</div>';
-            }
-
-            function initHeatmapTooltip() {
-              const wrap = document.querySelector('.heatmap-wrap');
-              if (!wrap) return;
-              const tip = wrap.querySelector('.heatmap-tip');
-              const dayLabels = [L.daySun, L.dayMon, L.dayTue, L.dayWed, L.dayThu, L.dayFri, L.daySat];
-
-              // Tab switching
-              wrap.querySelectorAll('.heatmap-tabs button').forEach(btn => {
-                btn.onclick = () => {
-                  wrap.querySelectorAll('.heatmap-tabs button').forEach(b => b.classList.remove('active'));
-                  btn.classList.add('active');
-                  const kind = btn.dataset.kind;
-                  wrap.querySelectorAll('.heatmap-section[data-kind]').forEach(s => {
-                    s.style.display = s.dataset.kind === kind ? '' : 'none';
-                  });
-                };
-              });
-
-              // Tooltip
-              wrap.addEventListener('mousemove', function(ev) {
-                const cell = ev.target.closest('.heatmap-cell[data-day]');
-                if (!cell || !tip) { if (tip) tip.style.opacity = 0; return; }
-                const d = +cell.dataset.day, h = +cell.dataset.hour;
-                const val = cell.dataset.val;
-                const count = cell.dataset.count || '0';
-                const range = String(h).padStart(2, '0') + ':00-' + String(h).padStart(2, '0') + ':59';
-                tip.innerHTML = '<b>' + dayLabels[d] + ' ' + range + '</b><br>' + L.heatmapAvg + ' ' + val + '<br>' + L.samples + ' ' + count;
-                const rect = cell.getBoundingClientRect();
-                tip.style.left = (rect.left + rect.width / 2) + 'px';
-                tip.style.top = (rect.top - 8) + 'px';
-                tip.style.opacity = 1;
-              });
-              wrap.addEventListener('mouseleave', function() { tip.style.opacity = 0; });
             }
 
             // ===== Histogram =====
@@ -1389,7 +1228,6 @@ struct StatisticsReportHTMLBuilder {
 
               const range = payload.ranges.find(r => r.id === active) || payload.ranges[0];
               renderInsights(range);
-              initHeatmapTooltip();
               const cards = document.getElementById('cards');
               cards.innerHTML = range.modules.map((m, idx) => {
                 const color = accentOf(m.kind);
