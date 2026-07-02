@@ -136,10 +136,31 @@
             inset: 0;
             z-index: -1;
             background:
-                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46, 204, 113, 0.12), transparent),
+                radial-gradient(ellipse 80% 50% at 50% -10%, rgba(46, 204, 113, 0.14), transparent),
+                radial-gradient(ellipse 60% 40% at 85% 15%, rgba(96, 165, 250, 0.05), transparent),
                 radial-gradient(ellipse 60% 40% at 80% 80%, rgba(34, 197, 94, 0.08), transparent),
-                radial-gradient(ellipse 50% 50% at 20% 60%, rgba(46, 204, 113, 0.05), transparent);
+                radial-gradient(ellipse 50% 50% at 15% 55%, rgba(168, 85, 247, 0.04), transparent);
             pointer-events: none;
+        }
+
+        /* Soft animated aurora blob behind hero for depth */
+        .bg-aurora {
+            position: fixed;
+            top: -20%;
+            left: 50%;
+            width: 900px;
+            height: 600px;
+            transform: translateX(-50%);
+            z-index: -1;
+            background: radial-gradient(ellipse at center, rgba(46, 204, 113, 0.10), transparent 60%);
+            filter: blur(60px);
+            pointer-events: none;
+            animation: aurora-drift 16s ease-in-out infinite;
+        }
+
+        @keyframes aurora-drift {
+            0%, 100% { transform: translateX(-50%) translateY(0) scale(1); opacity: 0.9; }
+            50% { transform: translateX(-46%) translateY(20px) scale(1.08); opacity: 1; }
         }
 
         .bg-grid {
@@ -324,10 +345,11 @@
         }
 
         .hero-title .gradient-text {
-            background: linear-gradient(135deg, #fff 0%, var(--brand-purple-light) 100%);
+            background: linear-gradient(120deg, var(--brand-purple-light) 0%, var(--brand-purple) 45%, #7dd3a8 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            position: relative;
         }
 
         .hero-subtitle {
@@ -399,7 +421,7 @@
         .hero-mockup-stack {
             position: relative;
             width: 380px;
-            height: 520px;
+            height: 600px;
             perspective: 1200px;
         }
 
@@ -572,11 +594,31 @@
         }
 
         .mockup-row-value {
-            font-size: 13px;
-            font-weight: 600;
+            font-size: 16px;
+            font-weight: 700;
             color: var(--ink);
             font-family: var(--font-mono);
-            min-width: 40px;
+            min-width: 46px;
+            letter-spacing: -0.01em;
+        }
+
+        .mockup-row-value-sm {
+            font-size: 14px;
+            font-weight: 600;
+            min-width: auto;
+        }
+
+        .mockup-row-chevron {
+            font-size: 18px;
+            font-weight: 400;
+            color: var(--ink-tertiary);
+        }
+
+        .mockup-gauge-icon {
+            width: 13px;
+            height: 13px;
+            vertical-align: -2px;
+            opacity: 0.85;
         }
 
         .mockup-row-graph {
@@ -607,10 +649,61 @@
         }
 
         .mockup-row-detail {
-            font-size: 11px;
-            color: var(--ink-tertiary);
+            font-size: 12px;
+            color: var(--ink-secondary);
             margin-left: auto;
             font-family: var(--font-mono);
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            white-space: nowrap;
+        }
+
+        /* Bottom action buttons (活动监视器 / 设置) */
+        .mockup-footer {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            padding-top: 4px;
+        }
+
+        .mockup-footer-btn {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            font-size: 12.5px;
+            font-weight: 500;
+            color: var(--ink-secondary);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            transition: background 0.2s ease;
+        }
+
+        .mockup-footer-btn svg {
+            width: 15px;
+            height: 15px;
+            color: var(--ink-tertiary);
+            flex-shrink: 0;
+        }
+
+        .mockup-footer-btn:hover {
+            background: rgba(255, 255, 255, 0.09);
+        }
+
+        @media (prefers-color-scheme: light) {
+            .mockup-footer-btn {
+                background: rgba(255, 255, 255, 0.55);
+                border-color: rgba(0, 0, 0, 0.06);
+            }
+            .mockup-footer-btn:hover {
+                background: rgba(255, 255, 255, 0.75);
+            }
         }
 
         /* ========================================
@@ -627,8 +720,10 @@
         }
 
         .section-eyebrow {
-            display: inline-block;
-            padding: 6px 16px;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 6px 16px 6px 12px;
             background: rgba(46, 204, 113, 0.1);
             border: 1px solid rgba(46, 204, 113, 0.2);
             border-radius: 100px;
@@ -638,6 +733,15 @@
             letter-spacing: 0.05em;
             text-transform: uppercase;
             margin-bottom: 16px;
+        }
+
+        .section-eyebrow::before {
+            content: '';
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--brand-purple-light);
+            box-shadow: 0 0 8px var(--brand-purple-light);
         }
 
         .section-title {
@@ -667,9 +771,10 @@
             border-radius: var(--radius-lg);
             background: var(--paper);
             border: 1px solid var(--line);
-            transition: all 0.3s ease;
+            transition: transform 0.35s cubic-bezier(0.34, 1.3, 0.64, 1), border-color 0.3s ease, box-shadow 0.3s ease;
             position: relative;
             overflow: hidden;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
         }
 
         .feature-card::before {
@@ -684,25 +789,50 @@
             transition: opacity 0.3s ease;
         }
 
+        /* Radial accent glow that fades in on hover */
+        .feature-card::after {
+            content: '';
+            position: absolute;
+            top: -40%;
+            right: -30%;
+            width: 240px;
+            height: 240px;
+            background: radial-gradient(circle, var(--accent-color), transparent 70%);
+            opacity: 0;
+            filter: blur(20px);
+            transition: opacity 0.4s ease;
+            pointer-events: none;
+        }
+
         .feature-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--line-strong);
-            box-shadow: var(--shadow-md);
+            transform: translateY(-6px);
+            border-color: color-mix(in srgb, var(--accent-color) 40%, var(--line-strong));
+            box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255, 255, 255, 0.06);
         }
 
         .feature-card:hover::before {
             opacity: 1;
         }
 
+        .feature-card:hover::after {
+            opacity: 0.10;
+        }
+
         .feature-icon {
-            width: 48px;
-            height: 48px;
-            border-radius: var(--radius-sm);
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 20px;
+            margin-bottom: 22px;
             position: relative;
+            box-shadow: 0 6px 16px -4px var(--accent-color, rgba(0,0,0,0.3));
+            transition: transform 0.35s cubic-bezier(0.34, 1.4, 0.64, 1);
+        }
+
+        .feature-card:hover .feature-icon {
+            transform: scale(1.08) rotate(-3deg);
         }
 
         .feature-icon::after {
@@ -710,14 +840,17 @@
             position: absolute;
             inset: 0;
             border-radius: inherit;
-            background: linear-gradient(135deg, rgba(255,255,255,0.18), rgba(0,0,0,0.05));
+            background: linear-gradient(135deg, rgba(255,255,255,0.28), rgba(0,0,0,0.08));
             pointer-events: none;
         }
 
         .feature-icon svg {
-            width: 24px;
-            height: 24px;
+            width: 25px;
+            height: 25px;
             color: white;
+            position: relative;
+            z-index: 1;
+            filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));
         }
 
         .feature-card h3 {
@@ -1662,55 +1795,115 @@
             font-family: var(--font-mono);
         }
 
-        /* Heatmap */
-        .heatmap-container {
+        /* Load trend chart */
+        .trend-container {
             background: rgba(255, 255, 255, 0.02);
-            border-radius: var(--radius-sm);
+            border: 1px solid var(--line);
+            border-radius: var(--radius-md);
             padding: 24px;
         }
 
-        .heatmap-title {
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 16px;
+        @media (prefers-color-scheme: light) {
+            .trend-container { background: rgba(0, 0, 0, 0.015); }
         }
 
-        .heatmap-grid {
-            display: grid;
-            grid-template-columns: repeat(24, 1fr);
-            gap: 3px;
-        }
-
-        .heatmap-cell {
-            aspect-ratio: 1;
-            border-radius: 2px;
-            transition: all 0.3s ease;
-        }
-
-        .heatmap-cell:hover {
-            transform: scale(1.3);
-            z-index: 1;
-            position: relative;
-        }
-
-        .heatmap-legend {
+        .trend-header {
             display: flex;
             align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
             gap: 8px;
-            margin-top: 12px;
+        }
+
+        .trend-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .trend-legend {
+            display: flex;
+            gap: 16px;
+        }
+
+        .trend-legend-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             font-size: 11px;
             color: var(--ink-tertiary);
         }
 
-        .heatmap-legend-bar {
-            display: flex;
-            gap: 2px;
+        .trend-legend-dot {
+            width: 9px;
+            height: 9px;
+            border-radius: 3px;
         }
 
-        .heatmap-legend-cell {
-            width: 12px;
-            height: 12px;
-            border-radius: 2px;
+        .trend-chart {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 140px;
+            padding-bottom: 2px;
+        }
+
+        .trend-bar {
+            flex: 1;
+            position: relative;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            border-radius: 4px 4px 2px 2px;
+            background: rgba(255, 107, 107, 0.14);
+            overflow: hidden;
+            transition: background 0.2s ease;
+            min-height: 4px;
+        }
+
+        .trend-bar-fill {
+            width: 100%;
+            border-radius: 4px 4px 2px 2px;
+            background: linear-gradient(to top, var(--c-cpu), #ff9a9a);
+            transition: height 0.6s cubic-bezier(0.34, 1.2, 0.64, 1);
+        }
+
+        .trend-bar:hover {
+            background: rgba(255, 107, 107, 0.28);
+        }
+
+        .trend-bar::after {
+            content: attr(data-value);
+            position: absolute;
+            top: -22px;
+            left: 50%;
+            transform: translateX(-50%) translateY(4px);
+            font-size: 10px;
+            font-family: var(--font-mono);
+            color: var(--ink);
+            background: var(--paper-2);
+            border: 1px solid var(--line);
+            padding: 2px 6px;
+            border-radius: 5px;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+            z-index: 2;
+        }
+
+        .trend-bar:hover::after {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+
+        .trend-axis {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 12px;
+            font-size: 11px;
+            color: var(--ink-tertiary);
+            font-family: var(--font-mono);
         }
 
         /* ========================================
@@ -2162,8 +2355,8 @@
             /* Statistics */
             .stats-showcase { padding: 20px; margin-top: 40px; }
             .stats-tab { padding: 8px 14px; font-size: 12px; }
-            .heatmap-container { padding: 16px; }
-            .heatmap-grid { gap: 2px; }
+            .trend-container { padding: 16px; }
+            .trend-chart { height: 110px; }
             .stats-summary-value { font-size: 16px; }
 
             /* Timeline */
@@ -2271,6 +2464,7 @@
 <body>
     <!-- Background effects -->
     <div class="bg-gradient"></div>
+    <div class="bg-aurora"></div>
     <div class="bg-grid"></div>
 
     <!-- Navigation -->
@@ -2350,23 +2544,23 @@
                                 <span class="mockup-live-dot"></span>
                                 <span>SYSTEM · LIVE</span>
                             </div>
-                            <span class="mockup-time">18:06</span>
+                            <span class="mockup-time">23:42</span>
                         </div>
 
                         <!-- CPU -->
                         <div class="mockup-row">
                             <div class="mockup-row-icon" style="color: var(--c-cpu)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
-                                    <rect x="9" y="9" width="6" height="6"/>
-                                    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="6" y="6" width="12" height="12" rx="2.5"/>
+                                    <rect x="9.5" y="9.5" width="5" height="5" rx="1"/>
+                                    <path d="M9 3v2.5M15 3v2.5M9 18.5V21M15 18.5V21M3 9h2.5M3 15h2.5M18.5 9H21M18.5 15H21"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">CPU:</span>
-                            <span class="mockup-row-value">17%</span>
+                            <span class="mockup-row-value">21%</span>
                             <div class="mockup-row-graph">
                                 <svg class="mockup-sparkline" viewBox="0 0 60 18">
-                                    <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="var(--c-cpu)" stroke-width="1.5" opacity="0.8"/>
+                                    <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="var(--c-cpu)" stroke-width="1.5" opacity="0.85"/>
                                 </svg>
                             </div>
                         </div>
@@ -2374,17 +2568,17 @@
                         <!-- GPU -->
                         <div class="mockup-row">
                             <div class="mockup-row-icon" style="color: var(--c-gpu)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                    <line x1="8" y1="21" x2="16" y2="21"/>
-                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="12" rx="2.5"/>
+                                    <line x1="9" y1="20" x2="15" y2="20"/>
+                                    <line x1="12" y1="16" x2="12" y2="20"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">GPU:</span>
-                            <span class="mockup-row-value">11%</span>
+                            <span class="mockup-row-value">24%</span>
                             <div class="mockup-row-graph">
                                 <svg class="mockup-sparkline" viewBox="0 0 60 18">
-                                    <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="var(--c-gpu)" stroke-width="1.5" opacity="0.8"/>
+                                    <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="var(--c-gpu)" stroke-width="1.5" opacity="0.85"/>
                                 </svg>
                             </div>
                         </div>
@@ -2392,16 +2586,17 @@
                         <!-- Memory -->
                         <div class="mockup-row">
                             <div class="mockup-row-icon" style="color: var(--c-memory)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
-                                    <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="7" width="18" height="10" rx="2"/>
+                                    <path d="M6.5 17v2M10 17v2M14 17v2M17.5 17v2"/>
+                                    <path d="M7 11h.01M10.5 11h.01M14 11h.01M17 11h.01"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">内存:</span>
-                            <span class="mockup-row-value">78%</span>
+                            <span class="mockup-row-value">86%</span>
                             <div class="mockup-row-graph">
                                 <div class="mockup-progress">
-                                    <div class="mockup-progress-fill" style="width: 78%; background: var(--c-memory)"></div>
+                                    <div class="mockup-progress-fill" style="width: 86%; background: var(--c-battery)"></div>
                                 </div>
                             </div>
                         </div>
@@ -2409,17 +2604,17 @@
                         <!-- Storage -->
                         <div class="mockup-row">
                             <div class="mockup-row-icon" style="color: var(--c-storage)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
-                                    <circle cx="12" cy="15" r="2"/>
-                                    <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2H4V8z"/>
+                                    <path d="M4 10h16v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6z"/>
+                                    <line x1="7.5" y1="14" x2="10.5" y2="14"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">存储:</span>
-                            <span class="mockup-row-value">41%</span>
+                            <span class="mockup-row-value">28%</span>
                             <div class="mockup-row-graph">
                                 <div class="mockup-progress">
-                                    <div class="mockup-progress-fill" style="width: 41%; background: var(--c-storage)"></div>
+                                    <div class="mockup-progress-fill" style="width: 28%; background: var(--c-storage)"></div>
                                 </div>
                             </div>
                         </div>
@@ -2427,7 +2622,7 @@
                         <!-- Network -->
                         <div class="mockup-row">
                             <div class="mockup-row-icon" style="color: var(--c-network)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
                                     <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
                                     <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
@@ -2435,37 +2630,53 @@
                                 </svg>
                             </div>
                             <span class="mockup-row-label">网络:</span>
-                            <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
-                            <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
+                            <span class="mockup-row-value mockup-row-value-sm">Wi-Fi</span>
+                            <span class="mockup-row-detail">↑ 4.0 KB/s&nbsp;&nbsp;↓ 6.0 KB/s</span>
                         </div>
 
                         <!-- Battery -->
                         <div class="mockup-row">
                             <div class="mockup-row-icon" style="color: var(--c-battery)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="7" width="16" height="10" rx="2"/>
-                                    <line x1="22" y1="11" x2="22" y2="13"/>
-                                    <line x1="6" y1="11" x2="6.01" y2="11"/>
-                                    <line x1="10" y1="11" x2="10.01" y2="11"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="8" width="17" height="8" rx="2.5"/>
+                                    <rect x="4" y="10" width="10" height="4" rx="1" fill="currentColor" stroke="none"/>
+                                    <path d="M22 11v2"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">电源:</span>
-                            <span class="mockup-row-value">90%</span>
-                            <span class="mockup-row-detail">○ 14.7 W</span>
+                            <span class="mockup-row-value">71%</span>
+                            <span class="mockup-row-detail"><svg class="mockup-gauge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2.5"/></svg> 7.2 W</span>
                         </div>
 
                         <!-- Display -->
                         <div class="mockup-row">
-                            <div class="mockup-row-icon" style="color: var(--ink-secondary)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                    <line x1="8" y1="21" x2="16" y2="21"/>
-                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                            <div class="mockup-row-icon" style="color: var(--c-memory)">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="12" rx="2.5"/>
+                                    <line x1="9" y1="20" x2="15" y2="20"/>
+                                    <line x1="12" y1="16" x2="12" y2="20"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">显示器:</span>
-                            <span class="mockup-row-value" style="font-size: 12px">2台 · 外接1</span>
-                            <span class="mockup-row-detail">›</span>
+                            <span class="mockup-row-value mockup-row-value-sm">1 台</span>
+                            <span class="mockup-row-detail mockup-row-chevron">›</span>
+                        </div>
+
+                        <!-- Footer buttons -->
+                        <div class="mockup-footer">
+                            <div class="mockup-footer-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12h3l2.5-7 4 14 2.5-7H21"/>
+                                </svg>
+                                活动监视器
+                            </div>
+                            <div class="mockup-footer-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                </svg>
+                                设置
+                            </div>
                         </div>
                     </div>
 
@@ -2476,23 +2687,23 @@
                                 <span class="mockup-live-dot"></span>
                                 <span>SYSTEM · LIVE</span>
                             </div>
-                            <span class="mockup-time">18:06</span>
+                            <span class="mockup-time">00:00</span>
                         </div>
 
                         <!-- CPU -->
                         <div class="mockup-row mockup-row-cpu">
                             <div class="mockup-row-icon" style="color: #FA4D56">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="4" y="4" width="16" height="16" rx="2"/>
-                                    <rect x="9" y="9" width="6" height="6"/>
-                                    <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 15h3M1 9h3M1 15h3"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="6" y="6" width="12" height="12" rx="2.5"/>
+                                    <rect x="9.5" y="9.5" width="5" height="5" rx="1"/>
+                                    <path d="M9 3v2.5M15 3v2.5M9 18.5V21M15 18.5V21M3 9h2.5M3 15h2.5M18.5 9H21M18.5 15H21"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">CPU:</span>
-                            <span class="mockup-row-value">17%</span>
+                            <span class="mockup-row-value">25%</span>
                             <div class="mockup-row-graph">
                                 <svg class="mockup-sparkline" viewBox="0 0 60 18">
-                                    <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="#FA4D56" stroke-width="1.5" opacity="0.8"/>
+                                    <path d="M0,14 Q5,12 10,13 T20,10 T30,12 T40,8 T50,11 T60,9" fill="none" stroke="#FA4D56" stroke-width="1.5" opacity="0.85"/>
                                 </svg>
                             </div>
                         </div>
@@ -2500,17 +2711,17 @@
                         <!-- GPU -->
                         <div class="mockup-row mockup-row-gpu">
                             <div class="mockup-row-icon" style="color: #A855F7">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                    <line x1="8" y1="21" x2="16" y2="21"/>
-                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="12" rx="2.5"/>
+                                    <line x1="9" y1="20" x2="15" y2="20"/>
+                                    <line x1="12" y1="16" x2="12" y2="20"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">GPU:</span>
-                            <span class="mockup-row-value">11%</span>
+                            <span class="mockup-row-value">64%</span>
                             <div class="mockup-row-graph">
                                 <svg class="mockup-sparkline" viewBox="0 0 60 18">
-                                    <path d="M0,12 Q10,14 20,11 T40,13 T60,10" fill="none" stroke="#A855F7" stroke-width="1.5" opacity="0.8"/>
+                                    <path d="M0,13 Q6,6 12,9 T24,5 T36,10 T48,4 T60,8" fill="none" stroke="#A855F7" stroke-width="1.5" opacity="0.85"/>
                                 </svg>
                             </div>
                         </div>
@@ -2518,16 +2729,17 @@
                         <!-- Memory -->
                         <div class="mockup-row mockup-row-memory">
                             <div class="mockup-row-icon" style="color: #1192E8">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="6" width="20" height="12" rx="2"/>
-                                    <path d="M6 10h.01M6 14h.01M10 10h.01M10 14h.01M14 10h.01M14 14h.01M18 10h.01M18 14h.01"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="7" width="18" height="10" rx="2"/>
+                                    <path d="M6.5 17v2M10 17v2M14 17v2M17.5 17v2"/>
+                                    <path d="M7 11h.01M10.5 11h.01M14 11h.01M17 11h.01"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">内存:</span>
-                            <span class="mockup-row-value">78%</span>
+                            <span class="mockup-row-value">86%</span>
                             <div class="mockup-row-graph">
                                 <div class="mockup-progress">
-                                    <div class="mockup-progress-fill" style="width: 78%; background: #1192E8"></div>
+                                    <div class="mockup-progress-fill" style="width: 86%; background: #1192E8"></div>
                                 </div>
                             </div>
                         </div>
@@ -2535,17 +2747,17 @@
                         <!-- Storage -->
                         <div class="mockup-row mockup-row-storage">
                             <div class="mockup-row-icon" style="color: #B28600">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20 7H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2z"/>
-                                    <circle cx="12" cy="15" r="2"/>
-                                    <path d="M4 7V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v2H4V8z"/>
+                                    <path d="M4 10h16v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6z"/>
+                                    <line x1="7.5" y1="14" x2="10.5" y2="14"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">存储:</span>
-                            <span class="mockup-row-value">41%</span>
+                            <span class="mockup-row-value">28%</span>
                             <div class="mockup-row-graph">
                                 <div class="mockup-progress">
-                                    <div class="mockup-progress-fill" style="width: 41%; background: #B28600"></div>
+                                    <div class="mockup-progress-fill" style="width: 28%; background: #B28600"></div>
                                 </div>
                             </div>
                         </div>
@@ -2553,7 +2765,7 @@
                         <!-- Network -->
                         <div class="mockup-row mockup-row-network">
                             <div class="mockup-row-icon" style="color: #009D9A">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M5 12.55a11 11 0 0 1 14.08 0"/>
                                     <path d="M1.42 9a16 16 0 0 1 21.16 0"/>
                                     <path d="M8.53 16.11a6 6 0 0 1 6.95 0"/>
@@ -2561,37 +2773,53 @@
                                 </svg>
                             </div>
                             <span class="mockup-row-label">网络:</span>
-                            <span class="mockup-row-value" style="font-size: 12px">Wi-Fi</span>
-                            <span class="mockup-row-detail">↑ 512 B/s  ↓ 0 B/s</span>
+                            <span class="mockup-row-value mockup-row-value-sm">Wi-Fi</span>
+                            <span class="mockup-row-detail">↑ 3.5 KB/s&nbsp;&nbsp;↓ 3.5 KB/s</span>
                         </div>
 
                         <!-- Battery -->
                         <div class="mockup-row mockup-row-battery">
                             <div class="mockup-row-icon" style="color: #198038">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="7" width="16" height="10" rx="2"/>
-                                    <line x1="22" y1="11" x2="22" y2="13"/>
-                                    <line x1="6" y1="11" x2="6.01" y2="11"/>
-                                    <line x1="10" y1="11" x2="10.01" y2="11"/>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="8" width="17" height="8" rx="2.5"/>
+                                    <path d="M22 11v2"/>
+                                    <path d="M11 9.5l-2 3h3l-2 3" stroke-width="1.6"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">电源:</span>
-                            <span class="mockup-row-value">90%</span>
-                            <span class="mockup-row-detail">○ 14.7 W</span>
+                            <span class="mockup-row-value">71%</span>
+                            <span class="mockup-row-detail"><svg class="mockup-gauge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 12l4-2.5"/></svg> 44.2 W</span>
                         </div>
 
                         <!-- Display -->
                         <div class="mockup-row mockup-row-display">
-                            <div class="mockup-row-icon" style="color: var(--ink-secondary)">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="3" width="20" height="14" rx="2"/>
-                                    <line x1="8" y1="21" x2="16" y2="21"/>
-                                    <line x1="12" y1="17" x2="12" y2="21"/>
+                            <div class="mockup-row-icon" style="color: #C7688E">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="3" y="4" width="18" height="12" rx="2.5"/>
+                                    <line x1="9" y1="20" x2="15" y2="20"/>
+                                    <line x1="12" y1="16" x2="12" y2="20"/>
                                 </svg>
                             </div>
                             <span class="mockup-row-label">显示器:</span>
-                            <span class="mockup-row-value" style="font-size: 12px">2台 · 外接1</span>
-                            <span class="mockup-row-detail">›</span>
+                            <span class="mockup-row-value mockup-row-value-sm">2 台 · 外接 1</span>
+                            <span class="mockup-row-detail mockup-row-chevron">›</span>
+                        </div>
+
+                        <!-- Footer buttons -->
+                        <div class="mockup-footer">
+                            <div class="mockup-footer-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M3 12h3l2.5-7 4 14 2.5-7H21"/>
+                                </svg>
+                                活动监视器
+                            </div>
+                            <div class="mockup-footer-btn">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                    <circle cx="12" cy="12" r="3"/>
+                                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                                </svg>
+                                设置
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -3192,21 +3420,19 @@
                             </div>
                         </div>
                     </div>
-                    <div class="heatmap-container">
-                        <div class="heatmap-title">负载热力图</div>
-                        <div class="heatmap-grid" id="heatmap">
+                    <div class="trend-container">
+                        <div class="trend-header">
+                            <div class="trend-title">CPU 负载趋势</div>
+                            <div class="trend-legend">
+                                <span class="trend-legend-item"><span class="trend-legend-dot" style="background: var(--c-cpu)"></span>每小时均值</span>
+                                <span class="trend-legend-item"><span class="trend-legend-dot" style="background: rgba(255,107,107,0.35)"></span>峰值</span>
+                            </div>
+                        </div>
+                        <div class="trend-chart" id="trendChart">
                             <!-- Generated by JS -->
                         </div>
-                        <div class="heatmap-legend">
-                            <span>低</span>
-                            <div class="heatmap-legend-bar">
-                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.1)"></div>
-                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.25)"></div>
-                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.4)"></div>
-                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.6)"></div>
-                                <div class="heatmap-legend-cell" style="background: rgba(59,130,246,0.8)"></div>
-                            </div>
-                            <span>高</span>
+                        <div class="trend-axis">
+                            <span>00:00</span><span>06:00</span><span>12:00</span><span>18:00</span><span>现在</span>
                         </div>
                     </div>
                 </div>
@@ -3370,41 +3596,43 @@
             observer.observe(el);
         });
 
-        // Generate heatmap
-        const heatmap = document.getElementById('heatmap');
-        const heatmapColors = [
-            'rgba(59,130,246,0.05)',
-            'rgba(59,130,246,0.1)',
-            'rgba(59,130,246,0.2)',
-            'rgba(59,130,246,0.35)',
-            'rgba(59,130,246,0.5)',
-            'rgba(59,130,246,0.7)',
-            'rgba(59,130,246,0.85)'
-        ];
+        // Generate CPU load trend bars (24 hours)
+        const trendChart = document.getElementById('trendChart');
 
-        for (let i = 0; i < 168; i++) {
-            const cell = document.createElement('div');
-            cell.className = 'heatmap-cell';
-            const intensity = Math.random();
-            const colorIndex = Math.floor(intensity * heatmapColors.length);
-            cell.style.background = heatmapColors[colorIndex];
-            heatmap.appendChild(cell);
+        // A believable daily CPU curve: low overnight, ramps up daytime, evening dip
+        function trendProfile() {
+            const base = [8,6,5,5,6,9,14,22,34,42,38,45,52,40,36,44,50,58,46,38,30,22,16,12];
+            return base.map(v => Math.max(3, Math.min(96, v + (Math.random() * 18 - 9))));
         }
+
+        function renderTrend() {
+            const values = trendProfile();
+            trendChart.innerHTML = '';
+            values.forEach((v, i) => {
+                const peak = Math.min(99, v + 12 + Math.random() * 20);
+                const bar = document.createElement('div');
+                bar.className = 'trend-bar';
+                bar.style.height = peak + '%';
+                bar.setAttribute('data-value', Math.round(v) + '%');
+                const fill = document.createElement('div');
+                fill.className = 'trend-bar-fill';
+                fill.style.height = '0%';
+                bar.appendChild(fill);
+                trendChart.appendChild(bar);
+                // animate in
+                requestAnimationFrame(() => {
+                    setTimeout(() => { fill.style.height = (v / peak * 100) + '%'; }, i * 20);
+                });
+            });
+        }
+        renderTrend();
 
         // Stats tab switching
         document.querySelectorAll('.stats-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 document.querySelectorAll('.stats-tab').forEach(t => t.classList.remove('active'));
                 tab.classList.add('active');
-                // Animate heatmap refresh
-                const cells = document.querySelectorAll('.heatmap-cell');
-                cells.forEach((cell, i) => {
-                    setTimeout(() => {
-                        const intensity = Math.random();
-                        const colorIndex = Math.floor(intensity * heatmapColors.length);
-                        cell.style.background = heatmapColors[colorIndex];
-                    }, i * 2);
-                });
+                renderTrend();
             });
         });
 
