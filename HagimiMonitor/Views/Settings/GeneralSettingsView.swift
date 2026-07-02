@@ -87,6 +87,19 @@ private struct MenuBarDisplaySettingsSection: View {
             .padding(.vertical, 10)
 
             if settings.menuBarDisplayMode == .metrics {
+                SettingsRow(title: String(localized: "menu-bar-metric-prefix.style")) {
+                    Picker(String(localized: "menu-bar-metric-prefix.style"), selection: $settings.menuBarMetricPrefixStyle) {
+                        ForEach(MenuBarMetricPrefixStyle.allCases) { prefixStyle in
+                            Text(prefixStyle.title).tag(prefixStyle)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: 150)
+                }
+
+                SettingsDivider()
+
                 SettingsRow(
                     title: String(localized: "menu-bar-display.metrics-title"),
                     subtitle: String(localized: "menu-bar-display.metrics-limit")
@@ -146,7 +159,11 @@ private struct MenuBarDisplaySettingsSection: View {
             .resizable()
             .frame(width: 18, height: 18)
         } else {
-            MenuBarMetricLabel(items: store.previewMenuBarMetricItems(), style: .preview)
+            MenuBarMetricLabel(
+                items: store.previewMenuBarMetricItems(),
+                style: .preview,
+                prefixStyle: settings.menuBarMetricPrefixStyle
+            )
         }
     }
 }

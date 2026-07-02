@@ -17,8 +17,11 @@ struct MenuBarStatusLabel: View {
             .frame(width: 18, height: 18)
             .help("HagimiMonitor")
         case .metrics:
-            MenuBarMetricLabel(items: store.menuBarMetricItems)
-                .help("HagimiMonitor")
+            MenuBarMetricLabel(
+                items: store.menuBarMetricItems,
+                prefixStyle: store.settings.menuBarMetricPrefixStyle
+            )
+            .help("HagimiMonitor")
         }
     }
 }
@@ -31,6 +34,7 @@ struct MenuBarMetricLabel: View {
 
     let items: [MenuBarMetricItem]
     var style: Style = .menuBar
+    var prefixStyle: MenuBarMetricPrefixStyle = .icon
 
     var body: some View {
         HStack(spacing: interCellSpacing) {
@@ -44,35 +48,49 @@ struct MenuBarMetricLabel: View {
         .fixedSize()
     }
 
-    /// 每个指标占一个独立的固定宽度单元:前缀(CPU / ↑↓ 等)固定在左侧,
+    /// 每个指标占一个独立的固定宽度单元:前缀(SF 图标 / CPU / ↑↓ 等)固定在左侧,
     /// 数值放进按「最大可能值」测得的定宽框、右对齐。这样某个数值变宽/变窄
     /// 只在自己单元内变化,不会把相邻指标左右推挤——菜单栏整体宽度、各指标
     /// 位置都保持恒定。
     private func cell(for item: MenuBarMetricItem) -> some View {
-        let parts = components(for: item)
-        return HStack(spacing: parts.symbol.isEmpty ? 0 : symbolSpacing) {
-            if !parts.symbol.isEmpty {
-                Text(parts.symbol)
-            }
-            Text(parts.value)
+        HStack(spacing: symbolSpacing) {
+            leading(for: item.kind)
+            Text(numericValue(for: item))
                 .frame(width: valueWidth(for: item.kind), alignment: .trailing)
         }
     }
 
-    /// 把指标值拆成「固定前缀符号」+「数值」两部分。
-    /// - 带文字前缀的(CPU/GPU/MEM…)前缀即 `menuBarPrefix`。
-    /// - 网络无文字前缀,值以 ↑/↓ 箭头开头,箭头拆出作为固定符号。
-    /// 数值一律 trim 掉格式化时补的空白,宽度交给定宽框统一控制。
-    private func components(for item: MenuBarMetricItem) -> (symbol: String, value: String) {
-        let prefix = item.kind.menuBarPrefix
-        if !prefix.isEmpty {
-            return (prefix, item.value.trimmingCharacters(in: .whitespaces))
+    /// 前缀视图:图标模式用 SF Symbol,文字模式用 CPU/GPU… 或网络的 ↑↓。
+    @ViewBuilder
+    private func leading(for kind: MenuBarMetricKind) -> some View {
+        switch prefixStyle {
+        case .icon:
+            Image(systemName: kind.symbol)
+        case .text:
+            Text(textPrefix(for: kind))
         }
-        if let first = item.value.first, first == "↑" || first == "↓" {
-            let rest = item.value.dropFirst().trimmingCharacters(in: .whitespaces)
-            return (String(first), String(rest))
+    }
+
+    /// 文字前缀:带 `menuBarPrefix` 的直接用,网络无前缀则用方向箭头。
+    private func textPrefix(for kind: MenuBarMetricKind) -> String {
+        switch kind {
+        case .networkDownload:
+            "↓"
+        case .networkUpload:
+            "↑"
+        default:
+            kind.menuBarPrefix
         }
-        return ("", item.value.trimmingCharacters(in: .whitespaces))
+    }
+
+    /// 纯数值:trim 掉格式化补的空白,并剥掉网络值里内嵌的 ↑/↓ 箭头
+    /// (箭头由前缀部分统一呈现),宽度交给定宽框控制。
+    private func numericValue(for item: MenuBarMetricItem) -> String {
+        var value = Substring(item.value)
+        if let first = value.first, first == "↑" || first == "↓" {
+            value = value.dropFirst()
+        }
+        return value.trimmingCharacters(in: .whitespaces)
     }
 
     /// 数值框固定宽度:按该指标可能达到的最宽字符串测量(等宽数字字体),
@@ -109,6 +127,8 @@ struct MenuBarMetricLabel: View {
     /// 指标之间的间距。
     private var interCellSpacing: CGFloat { 6 }
 
-    /// 前缀符号与数值之间的间距。
-    private var symbolSpacing: CGFloat { 2 }
+    /// 前缀与数值之间的间距(图标比文字略需留白)。
+    private var symbolSpacing: CGFloat {
+        prefixStyle == .icon ? 3 : 2
+    }
 }
