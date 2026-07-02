@@ -8,8 +8,14 @@ extension NSAppearance {
 
 @main
 struct HagimiMonitorApp: App {
-    @StateObject private var monitorStore = MonitorStore()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.colorScheme) private var colorScheme
+
+    /// MonitorStore 由 AppDelegate 创建并持有。
+    /// App 通过 appDelegate 引用访问。
+    private var monitorStore: MonitorStore {
+        appDelegate.store
+    }
 
     init() {
         CrashHandler.install()
@@ -22,42 +28,15 @@ struct HagimiMonitorApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
-            MonitorPanelView(store: monitorStore)
-                .preferredColorScheme(effectiveColorScheme)
-                .onAppear { monitorStore.panelDidAppear() }
-                .onDisappear { monitorStore.panelDidDisappear() }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                    handleWillTerminate()
-                }
-        } label: {
-            MenuBarStatusLabel(store: monitorStore, darkMode: NSApp.effectiveAppearance.isDark)
-        }
-        .menuBarExtraStyle(.window)
-
-        WindowGroup("HagimiMonitor Preview") {
-            ContentView(store: monitorStore)
-                .preferredColorScheme(effectiveColorScheme)
+        Settings {
+            SettingsRootView(settings: monitorStore.settings, store: monitorStore)
         }
         .windowResizability(.contentSize)
         .commands { AppMenuCommands() }
-
-        Settings {
-            SettingsRootView(settings: monitorStore.settings, store: monitorStore)
-                // 设置窗口始终跟随系统外观
-        }
-        .windowResizability(.contentSize)
     }
 
     private var effectiveColorScheme: ColorScheme? {
         monitorStore.settings.themePreference.colorScheme
-    }
-
-    private func handleWillTerminate() {
-        AppLogStore.shared.info("App will terminate", category: "app")
-        monitorStore.flushStatistics()
-        AppLaunchStateTracker.shared.markCleanExit()
-        AppLogStore.shared.flush()
     }
 }
 
@@ -67,6 +46,8 @@ struct AppMenuCommands: Commands {
     @Environment(\.openSettings) private var openSettings
 
     var body: some Commands {
+        let _ = SettingsWindowPresenter.cache(openSettings)
+
         CommandGroup(replacing: .appInfo) {
             Button(String(localized: "menu.about")) {
                 SettingsWindowPresenter.open(openSettings, tab: .about)
@@ -78,6 +59,13 @@ struct AppMenuCommands: Commands {
                 NSApp.terminate(nil)
             }
             .keyboardShortcut("q", modifiers: .command)
+        }
+
+        CommandGroup(replacing: .appSettings) {
+            Button(String(localized: "menu.settings")) {
+                SettingsWindowPresenter.open(openSettings)
+            }
+            .keyboardShortcut(",", modifiers: .command)
         }
     }
 }

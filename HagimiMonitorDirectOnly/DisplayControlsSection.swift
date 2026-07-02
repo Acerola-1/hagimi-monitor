@@ -10,7 +10,9 @@ struct DisplayControlsSection: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
 
-    private let expansionAnimation = Animation.smooth(duration: 0.22)
+    // 与其他 metric 行统一曲线/时长(MonitorPanelView.setExpansion 用同一条),
+    // 保证展开/折叠手感一致,窗口逐帧跟随不打架。
+    private let expansionAnimation = Animation.smooth(duration: 0.18)
 
     var body: some View {
         let palette = MonitorPalette(
@@ -56,9 +58,7 @@ struct DisplayControlsSection: View {
             .padding(.vertical, 8)
             .contentShape(Rectangle())
             .onTapGesture {
-                withAnimation(expansionAnimation) {
-                    isExpanded.toggle()
-                }
+                toggleExpansion()
             }
 
             if isExpanded {
@@ -77,8 +77,7 @@ struct DisplayControlsSection: View {
             controller.attach(settings: settings)
             controller.refreshAsync()
         }
-        .animation(expansionAnimation, value: isExpanded)
-        .glassEffect(.regular.tint(palette.displayGlassTint), in: .rect(cornerRadius: 14, style: .continuous))
+        .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
     }
 
     @ViewBuilder
@@ -119,6 +118,16 @@ struct DisplayControlsSection: View {
         }
     }
 
+    /// 统一用 `withAnimation` 做布局补间,窗口层(FluidPanelController)逐帧跟随。
+    /// 旧代码在 macOS 15 走「一次性到位」分支是为了规避 MenuBarExtra 逐帧 resize 抖动;
+    /// 现已改用自建 NSPanel,该分支过时且有害——瞬间 toggle 会与 chevron 旋转、内容
+    /// transition 的时间线打架,造成「收一半停顿再补完」的卡顿。两版本统一即可。
+    private func toggleExpansion() {
+        withAnimation(expansionAnimation) {
+            isExpanded.toggle()
+        }
+    }
+
     private func summary(for displays: [ControlledDisplay], hasControls: Bool) -> String {
         guard hasControls else {
             return String(localized: "display.controls-disabled")
@@ -132,15 +141,6 @@ struct DisplayControlsSection: View {
             return "\(countPart) · \(unitExternal) \(externalCount)"
         }
         return countPart
-    }
-}
-
-private extension AnyTransition {
-    static var detailDisclosure: AnyTransition {
-        .asymmetric(
-            insertion: .opacity,
-            removal: .opacity
-        )
     }
 }
 

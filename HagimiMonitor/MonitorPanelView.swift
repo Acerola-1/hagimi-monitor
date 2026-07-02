@@ -10,9 +10,11 @@ private let panelTimeFormatter: DateFormatter = {
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.fluidOpenSettings) private var fluidOpenSettings
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
+    @State private var timeString: String = ""
+    @State private var timeUpdateTask: Task<Void, Never>?
 
     var body: some View {
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
@@ -22,19 +24,20 @@ struct MonitorPanelView: View {
             scheme: colorScheme
         )
 
-        GlassEffectContainer(spacing: 8) {
+        CompatibleGlassContainer(spacing: 8) {
             VStack(spacing: 6) {
                 header(theme: theme)
+                    .transaction { $0.animation = nil }
 
                 ForEach(store.modules) { module in
                     row(for: module, theme: theme)
-                        .glassEffectID("metric-\(module.kind.id)", in: glassNamespace)
+                        .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
                 }
 
                 #if DISPLAY_CONTROL
                 if store.settings.displayModuleVisible {
                     DisplayControlsSection(settings: store.settings)
-                        .glassEffectID("display-controls", in: glassNamespace)
+                        .compatibleGlassEffectID("display-controls", in: glassNamespace)
                 }
                 #endif
 
@@ -45,19 +48,19 @@ struct MonitorPanelView: View {
                         Label(String(localized: "panel.activity-monitor"), systemImage: "waveform.path.ecg")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glass)
+                    .compatibleButtonStyle()
                     .buttonBorderShape(.capsule)
 
                     Button {
-                        SettingsWindowPresenter.open(openSettings)
+                        fluidOpenSettings()
                     } label: {
                         Label(String(localized: "panel.settings"), systemImage: "gearshape")
                             .frame(maxWidth: .infinity)
                     }
-                    .buttonStyle(.glass)
+                    .compatibleButtonStyle()
                     .buttonBorderShape(.capsule)
                 }
-                .font(.footnote.weight(.medium))
+                .font(.body.weight(.medium))
                 .foregroundStyle(theme.primaryText)
                 .padding(.top, 2)
             }
@@ -70,8 +73,14 @@ struct MonitorPanelView: View {
             .fixedSize(horizontal: false, vertical: true)
             .background(panelBackgroundColor)
         }
-        .containerBackground(.clear, for: .window)
+        .compatibleContainerBackground()
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
+        .onAppear {
+            startTimeUpdateTask()
+        }
+        .onDisappear {
+            timeUpdateTask?.cancel()
+        }
     }
 
     private var panelBackgroundColor: Color {
@@ -86,8 +95,7 @@ struct MonitorPanelView: View {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
-                    .symbolEffect(.pulse, options: .repeating.speed(0.8))
-                    .animation(.easeInOut(duration: 0.6), value: store.haloRingLoadLevel)
+                    .compatiblePulseEffect()
 
                 Text("SYSTEM · LIVE")
                     .monitorPanelLabelFont(tracking: 1.1)
@@ -209,7 +217,7 @@ struct MonitorPanelView: View {
     }
 
     private func toggleExpansion(for kind: MonitorKind) {
-        withAnimation(.smooth(duration: 0.18)) {
+        setExpansion {
             if expandedKinds.contains(kind) {
                 expandedKinds.remove(kind)
             } else {
@@ -234,7 +242,7 @@ struct MonitorPanelView: View {
 
     /// 残留 expandedKinds 里的不可见 kind 不影响判定;全展开分支用可见集合覆盖,顺便清掉残留。
     private func toggleAllExpansion() {
-        withAnimation(.smooth(duration: 0.18)) {
+        setExpansion {
             if allVisibleRowsExpanded {
                 expandedKinds.removeAll()
             } else {
@@ -243,8 +251,23 @@ struct MonitorPanelView: View {
         }
     }
 
-    private var timeString: String {
-        panelTimeFormatter.string(from: Date())
+    /// 由 SwiftUI 对布局做补间(卡片撑开、下方按钮平滑下推),窗口层逐帧跟随内容尺寸
+    /// (`FluidPanelController.contentSizeDidChange` 用 `animate: false` 贴合每帧高度),
+    /// 二者不抢锚点。曲线 / 时长对齐原始 dev 版本,保持一致的展开手感。
+    private func setExpansion(_ mutate: () -> Void) {
+        withAnimation(.smooth(duration: 0.18)) {
+            mutate()
+        }
+    }
+
+    private func startTimeUpdateTask() {
+        timeUpdateTask?.cancel()
+        timeUpdateTask = Task {
+            while !Task.isCancelled {
+                timeString = panelTimeFormatter.string(from: Date())
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
     }
 
     private func openActivityMonitor() {
@@ -346,7 +369,7 @@ private struct MetricGlassRow: View, Equatable {
         .onTapGesture {
             toggleExpansion?()
         }
-        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
     }
 
     @ViewBuilder
@@ -730,7 +753,7 @@ private struct NetworkGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
     }
 
     private var detailMetrics: [MonitorMetric] {
@@ -776,7 +799,7 @@ private struct BatteryGlassRow: View, Equatable {
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(tint)
                     .frame(width: 18)
-                    .symbolEffect(.variableColor.iterative, isActive: isCharging)
+                    .compatibleVariableColorEffect(isActive: isCharging)
 
                 Text(String(localized: "kind.battery") + ":")
                     .monitorPanelMetricLabelFont()
@@ -818,7 +841,7 @@ private struct BatteryGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
-        .glassEffect(.regular.tint(theme.rowGlassTint(for: module.kind)), in: .rect(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
     }
 
     private var hasBattery: Bool {
@@ -1237,7 +1260,7 @@ private struct MemoryProcessList: View {
 
                         Spacer(minLength: 4)
 
-                        Text(ByteCountFormatter.string(fromByteCount: Int64(proc.memoryUsage), countStyle: .memory))
+                        Text(byteCountString(Int64(proc.memoryUsage), countStyle: .memory))
                             .monitorPanelMonoFont(.caption2, weight: .medium)
                             .foregroundStyle(theme.secondaryText)
                             .lineLimit(1)
@@ -1301,8 +1324,10 @@ private struct ProcessRowData: Identifiable {
     let id: Int
     let name: String
     let icon: NSImage?
-    let primaryText: String
-    let secondaryText: String
+    /// 上行/写入 值(不含箭头)
+    let upText: String
+    /// 下行/读取 值(不含箭头)
+    let downText: String
 }
 
 /// 磁盘 I/O 进程列表。
@@ -1316,8 +1341,8 @@ struct InlineDiskProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                primaryText: "↑\(ByteCountFormatter.string(fromByteCount: Int64(proc.bytesWritten), countStyle: .file))",
-                secondaryText: "↓\(ByteCountFormatter.string(fromByteCount: Int64(proc.bytesRead), countStyle: .file))"
+                upText: byteCountString(Int64(proc.bytesWritten)),
+                downText: byteCountString(Int64(proc.bytesRead))
             )
         }
     }
@@ -1350,8 +1375,8 @@ struct InlineNetworkProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                primaryText: "↑\(ByteCountFormatter.string(fromByteCount: Int64(proc.upload), countStyle: .file))",
-                secondaryText: "↓\(ByteCountFormatter.string(fromByteCount: Int64(proc.download), countStyle: .file))"
+                upText: byteCountString(Int64(proc.upload)),
+                downText: byteCountString(Int64(proc.download))
             )
         }
     }
@@ -1389,18 +1414,27 @@ private struct ProcessRowView: View {
                 .lineLimit(1)
                 .truncationMode(.tail)
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
 
-            HStack(spacing: 4) {
-                Text(row.primaryText)
-                    .monitorPanelMonoFont(.caption2, weight: .medium)
-                Text(row.secondaryText)
-                    .monitorPanelMonoFont(.caption2, weight: .medium)
+            // 两个数值各占固定宽度、右对齐:箭头留在左侧固定位置,数字尾部对齐,
+            // 数值宽度变化时列位置不再左右抖动,跨行也对齐成整齐两列。
+            HStack(spacing: 10) {
+                metricColumn(symbol: "↑", value: row.upText)
+                metricColumn(symbol: "↓", value: row.downText)
             }
             .foregroundStyle(theme.secondaryText)
             .lineLimit(1)
-            .fixedSize(horizontal: true, vertical: false)
             .layoutPriority(1)
+        }
+    }
+
+    private func metricColumn(symbol: String, value: String) -> some View {
+        HStack(spacing: 3) {
+            Text(symbol)
+                .monitorPanelMonoFont(.caption2, weight: .medium)
+            Text(value)
+                .monitorPanelMonoFont(.caption2, weight: .medium)
+                .frame(width: 56, alignment: .trailing)
         }
     }
 }
@@ -1424,11 +1458,12 @@ private struct ProcessIcon: View {
     }
 }
 
-private extension AnyTransition {
+extension AnyTransition {
+    /// 统一的展开/折叠过渡:插入与移除对称,都用「微缩放(顶部锚定)+ 淡入淡出」。
+    /// 对称很关键——移除若只用 `.opacity`,缺少几何锚点,SwiftUI 对容器高度的回收
+    /// 处理与插入不一致,窗口逐帧跟随时底部按钮会「跳」回来;补上同样的 scale 锚点
+    /// 后,收起与展开镜像对称,观感一致顺滑。
     static var detailDisclosure: AnyTransition {
-        .asymmetric(
-            insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
-            removal: .opacity
-        )
+        .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
     }
 }

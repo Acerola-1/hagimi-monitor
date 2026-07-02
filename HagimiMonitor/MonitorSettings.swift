@@ -56,6 +56,7 @@ final class MonitorSettings: ObservableObject {
     @Published var ringSource: HaloRingSource = .combined
     @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
     @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
+    @Published var menuBarMetricPrefixStyle: MenuBarMetricPrefixStyle = .icon
     @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
@@ -94,6 +95,8 @@ final class MonitorSettings: ObservableObject {
 
         let menuBarDisplayModeRawValue = defaults.string(forKey: Keys.menuBarDisplayMode) ?? MenuBarDisplayMode.ring.rawValue
         menuBarDisplayMode = MenuBarDisplayMode(rawValue: menuBarDisplayModeRawValue) ?? .ring
+        let prefixStyleRawValue = defaults.string(forKey: Keys.menuBarMetricPrefixStyle) ?? MenuBarMetricPrefixStyle.icon.rawValue
+        menuBarMetricPrefixStyle = MenuBarMetricPrefixStyle(rawValue: prefixStyleRawValue) ?? .icon
         menuBarMetricKinds = MonitorSettings.validatedMenuBarMetrics(
             defaults.array(forKey: Keys.menuBarMetricKinds) as? [String]
         )
@@ -308,6 +311,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $menuBarMetricPrefixStyle
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.menuBarMetricPrefixStyle)
+            }
+            .store(in: &cancellables)
+
         $showBuiltInDisplays
             .dropFirst()
             .sink { [weak self] newValue in
@@ -486,6 +496,7 @@ private enum Keys {
     static let ringSource = "settings.ringSource"
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
     static let menuBarMetricKinds = "settings.menuBar.metricKinds"
+    static let menuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"

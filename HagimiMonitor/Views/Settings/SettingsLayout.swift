@@ -159,9 +159,9 @@ struct SettingsIconHeader<Accessory: View>: View {
         .padding(.horizontal, 14)
 
         if #available(macOS 26, *) {
-            GlassEffectContainer {
+            CompatibleGlassContainer {
                 header
-                    .glassEffect(.regular, in: .rect(cornerRadius: 12))
+                    .compatibleGlassEffect(cornerRadius: 12)
             }
         } else {
             header

@@ -23,7 +23,7 @@
 </p>
 
 <p align="center">
-  <img alt="macOS 26+" src="https://img.shields.io/badge/macOS-26%2B-111827?style=flat-square&logo=apple">
+  <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-111827?style=flat-square&logo=apple">
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-M%20series-2ECC71?style=flat-square&logo=apple">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-F05138?style=flat-square&logo=swift&logoColor=white">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
@@ -88,7 +88,7 @@ HagimiMonitor 会围绕系统状态提供更多长期视角：
 
 ### Swift 原生，轻量常驻
 
-应用使用 Swift / SwiftUI 原生开发，面向 Apple Silicon 优化。日常常驻内存约 30 MB，适合作为长期挂在菜单栏里的系统状态面板。
+应用使用 Swift / SwiftUI 原生开发，面向 Apple Silicon 优化。日常常驻内存约 50 MB，适合作为长期挂在菜单栏里的系统状态面板。
 
 ## 安装
 
@@ -108,7 +108,7 @@ sudo xattr -cr /Applications/HagimiMonitor.app
 
 ## 系统要求
 
-- macOS 26 及以上
+- macOS 15 及以上
 - Apple Silicon（M 系列芯片）
 
 ## 构建
