@@ -95,14 +95,37 @@ extension View {
     }
 
     /// 跨版本兼容的 `.buttonStyle(.glass)` 替代。
-    /// macOS 26+ 使用原生 Glass 按钮样式，macOS 15 降级为 `.borderedProminent`。
+    /// macOS 26+ 使用原生 Glass 按钮样式；macOS 15 降级为毛玻璃材质胶囊
+    /// (`PanelMaterialButtonStyle`),避免 `.borderedProminent` 的实心蓝按钮
+    /// 贴在毛玻璃面板上突兀,观感与 26/27 的液态玻璃统一。
     @ViewBuilder
     func compatibleButtonStyle() -> some View {
         if #available(macOS 26, *) {
             self.buttonStyle(.glass)
         } else {
-            self.buttonStyle(.borderedProminent)
+            self.buttonStyle(PanelMaterialButtonStyle())
         }
+    }
+}
+
+// MARK: - macOS 15 毛玻璃按钮样式
+
+/// macOS 15 的按钮降级样式:毛玻璃材质胶囊,替代扎眼的 `.borderedProminent` 实心蓝。
+/// 与面板整体毛玻璃融为一体,近似 26/27 上 `.buttonStyle(.glass)` 的通透观感。
+private struct PanelMaterialButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .padding(.vertical, 6)
+            .padding(.horizontal, 10)
+            .frame(maxWidth: .infinity)
+            .background(.regularMaterial, in: Capsule())
+            .overlay(
+                Capsule()
+                    .strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+            )
+            .contentShape(Capsule())
+            .opacity(configuration.isPressed ? 0.7 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
