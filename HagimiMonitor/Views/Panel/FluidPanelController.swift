@@ -318,7 +318,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         let renderer = ImageRenderer(content: label)
         renderer.proposedSize = ProposedViewSize(width: nil, height: 22)
-        let scale = statusItem.button?.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
+        // 按所有屏幕里的最大 backingScaleFactor 光栅化:菜单栏在每块屏幕各画一遍,若只按
+        // 主屏 scale 烤成位图,到 scale 更高的副屏会被放大而模糊。取最大 scale 后,任何屏幕
+        // 都是缩小(清晰)而非放大。point 尺寸 = 像素/scale 不变,故状态项宽度、布局不受影响。
+        let scale = NSScreen.screens.map(\.backingScaleFactor).max()
+            ?? statusItem.button?.window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor ?? 2
         renderer.scale = scale
 
         // 把选定外观设为当前绘制上下文,使环内部的 NSAppearance.currentDrawing() 判定
