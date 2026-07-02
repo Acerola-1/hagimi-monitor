@@ -100,18 +100,28 @@ struct StatisticsView: View {
     }
 
     private var summaryGrid: some View {
-        LazyVGrid(
-            columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)],
-            spacing: 12
-        ) {
-            ForEach(Self.summaryKinds, id: \.self) { kind in
-                SummaryCard(
-                    kind: kind,
-                    summary: summaries[kind],
-                    accentColor: accentColor(for: kind)
-                )
+        // 用非惰性 Grid 替代 LazyVGrid:卡片仅 6 个,惰性无收益,
+        // 且 LazyVGrid 在 ScrollView 中从底部回滚时会把已滚出的顶部单元格渲染成空白。
+        let kinds = Self.summaryKinds
+        let rowCount = (kinds.count + 1) / 2
+        return Grid(horizontalSpacing: 12, verticalSpacing: 12) {
+            ForEach(0..<rowCount, id: \.self) { row in
+                GridRow {
+                    card(for: kinds[row * 2])
+                    if row * 2 + 1 < kinds.count {
+                        card(for: kinds[row * 2 + 1])
+                    }
+                }
             }
         }
+    }
+
+    private func card(for kind: MonitorKind) -> some View {
+        SummaryCard(
+            kind: kind,
+            summary: summaries[kind],
+            accentColor: accentColor(for: kind)
+        )
     }
 
     private func errorBanner(_ message: String) -> some View {
@@ -523,13 +533,7 @@ struct HealthScoreSection: View {
 
     private var scoreContent: some View {
         HStack(alignment: .center, spacing: 24) {
-            VStack(spacing: 6) {
-                HealthScoreRingView(score: healthScore)
-                if healthScore.trend.count >= 2 {
-                    HealthTrendSparkline(points: healthScore.trend)
-                        .frame(width: 100, height: 22)
-                }
-            }
+            HealthScoreRingView(score: healthScore)
 
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
@@ -627,38 +631,6 @@ struct HealthScoreRingView: View {
 
     private var ringColor: Color {
         MonitorPalette(preference: .balanced, colorScheme: .light).healthTint(for: score.level)
-    }
-}
-
-// MARK: - Health Trend Sparkline
-
-struct HealthTrendSparkline: View {
-    let points: [HealthTrendPoint]
-
-    var body: some View {
-        GeometryReader { geo in
-            if points.count >= 2 {
-                Path { path in
-                    let stepX = geo.size.width / CGFloat(points.count - 1)
-                    for (i, p) in points.enumerated() {
-                        let x = CGFloat(i) * stepX
-                        let y = geo.size.height * (1 - CGFloat(min(max(p.score, 0), 100)) / 100)
-                        if i == 0 {
-                            path.move(to: CGPoint(x: x, y: y))
-                        } else {
-                            path.addLine(to: CGPoint(x: x, y: y))
-                        }
-                    }
-                }
-                .stroke(
-                    LinearGradient(
-                        colors: [.green.opacity(0.8), .yellow.opacity(0.8), .red.opacity(0.8)],
-                        startPoint: .leading, endPoint: .trailing
-                    ),
-                    style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round)
-                )
-            }
-        }
     }
 }
 
