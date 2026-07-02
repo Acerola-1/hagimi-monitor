@@ -8,8 +8,14 @@ extension NSAppearance {
 
 @main
 struct HagimiMonitorApp: App {
-    @StateObject private var monitorStore = MonitorStore()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @Environment(\.colorScheme) private var colorScheme
+
+    /// MonitorStore 由 AppDelegate 创建并持有。
+    /// App 通过 appDelegate 引用访问。
+    private var monitorStore: MonitorStore {
+        appDelegate.store
+    }
 
     init() {
         CrashHandler.install()
@@ -22,19 +28,6 @@ struct HagimiMonitorApp: App {
     }
 
     var body: some Scene {
-        MenuBarExtra {
-            MonitorPanelView(store: monitorStore)
-                .preferredColorScheme(effectiveColorScheme)
-                .onAppear { monitorStore.panelDidAppear() }
-                .onDisappear { monitorStore.panelDidDisappear() }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                    handleWillTerminate()
-                }
-        } label: {
-            MenuBarStatusLabel(store: monitorStore, darkMode: NSApp.effectiveAppearance.isDark)
-        }
-        .menuBarExtraStyle(.window)
-
         WindowGroup("HagimiMonitor Preview") {
             ContentView(store: monitorStore)
                 .preferredColorScheme(effectiveColorScheme)
@@ -44,20 +37,12 @@ struct HagimiMonitorApp: App {
 
         Settings {
             SettingsRootView(settings: monitorStore.settings, store: monitorStore)
-                // 设置窗口始终跟随系统外观
         }
         .windowResizability(.contentSize)
     }
 
     private var effectiveColorScheme: ColorScheme? {
         monitorStore.settings.themePreference.colorScheme
-    }
-
-    private func handleWillTerminate() {
-        AppLogStore.shared.info("App will terminate", category: "app")
-        monitorStore.flushStatistics()
-        AppLaunchStateTracker.shared.markCleanExit()
-        AppLogStore.shared.flush()
     }
 }
 

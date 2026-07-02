@@ -10,7 +10,7 @@ private let panelTimeFormatter: DateFormatter = {
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
     @Environment(\.colorScheme) private var colorScheme
-    @Environment(\.openSettings) private var openSettings
+    @Environment(\.fluidOpenSettings) private var fluidOpenSettings
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
     @State private var timeString: String = ""
@@ -52,7 +52,7 @@ struct MonitorPanelView: View {
                     .buttonBorderShape(.capsule)
 
                     Button {
-                        SettingsWindowPresenter.open(openSettings)
+                        fluidOpenSettings()
                     } label: {
                         Label(String(localized: "panel.settings"), systemImage: "gearshape")
                             .frame(maxWidth: .infinity)
@@ -251,16 +251,10 @@ struct MonitorPanelView: View {
         }
     }
 
-    /// macOS 26+:窗口缩放由系统按顶边锚定,行高逐帧补间是平滑的。
-    /// macOS 15:`MenuBarExtra(.window)` 在逐帧 resize 时锚点用左下角,
-    /// 顶边会被反复推上去再拉回,造成面板顶部抖动。故此版本不做几何补间——
-    /// 窗口一次性 resize 到位,顶边只在静止态钉住,不抖。
+    /// 高度动画由窗口层 `setFrame(display:animate:)` 驱动,SwiftUI 侧不做几何补间,
+    /// 避免与窗口层动画抢锚点导致顶部抖动。两版本行为统一。
     private func setExpansion(_ mutate: () -> Void) {
-        if #available(macOS 26, *) {
-            withAnimation(.easeInOut(duration: 0.25), mutate)
-        } else {
-            mutate()
-        }
+        mutate()
     }
 
     private func startTimeUpdateTask() {
@@ -1451,17 +1445,13 @@ private struct ProcessIcon: View {
 }
 
 extension AnyTransition {
-    /// macOS 26+:插入时微缩放 + 淡入,移除时淡出,配合系统的窗口缩放调和。
-    /// macOS 15:返回 `.identity`。`MenuBarExtra(.window)` 不调和 transition 与窗口 resize,
-    /// removal 的淡出帧会残留在已缩小的窗口里造成收起闪烁,故此版本不做任何离场过渡。
+    /// 统一的展开/折叠过渡:插入时微缩放 + 淡入,移除时淡出。
+    /// 高度动画由窗口层 `setFrame(display:animate:)` 驱动,此处仅做内容过渡,
+    /// 不引入几何插值以避免与窗口层动画冲突。两版本行为统一。
     static var detailDisclosure: AnyTransition {
-        if #available(macOS 26, *) {
-            return .asymmetric(
-                insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
-                removal: .opacity
-            )
-        } else {
-            return .identity
-        }
+        .asymmetric(
+            insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)),
+            removal: .opacity
+        )
     }
 }
