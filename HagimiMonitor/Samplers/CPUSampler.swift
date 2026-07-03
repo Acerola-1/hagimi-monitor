@@ -8,6 +8,10 @@ import IOKit
 final class CPUSampler: MonitorSampler {
     var kind: MonitorKind { .cpu }
 
+    // mach_host_self() 每次调用都会给当前 task 增加一个对 host port 的 send right，
+    // 且从不释放。若在采样循环里反复调用会持续泄漏，累积到阈值被 jetsam 静默 SIGKILL。
+    // 缓存为 stored property，进程生命周期内只获取一次。
+    private let host = mach_host_self()
     private var previousCPUInfo: host_cpu_load_info?
     #if DISPLAY_CONTROL
     private let smcReader: SMCReader? = SMCReader()
@@ -78,7 +82,7 @@ final class CPUSampler: MonitorSampler {
         var info = host_cpu_load_info()
         let result = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics(mach_host_self(), HOST_CPU_LOAD_INFO, $0, &size)
+                host_statistics(host, HOST_CPU_LOAD_INFO, $0, &size)
             }
         }
         guard result == KERN_SUCCESS else {
