@@ -5,14 +5,17 @@ import OSLog
 final class MemorySampler: MonitorSampler {
     var kind: MonitorKind { .memory }
 
-    private let totalMemorySize = MemorySampler.memoryTotalSize()
+    // mach_host_self() 每次调用都会泄漏一个 host port 的 send right，累积到阈值会被
+    // jetsam 静默 SIGKILL。缓存为 stored property，进程生命周期内只获取一次。
+    private let host = mach_host_self()
+    private lazy var totalMemorySize = memoryTotalSize()
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &stats) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_statistics64(mach_host_self(), HOST_VM_INFO64, $0, &count)
+                host_statistics64(host, HOST_VM_INFO64, $0, &count)
             }
         }
 
@@ -57,12 +60,12 @@ final class MemorySampler: MonitorSampler {
         )
     }
 
-    private static func memoryTotalSize() -> Double {
+    private func memoryTotalSize() -> Double {
         var info = host_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<host_basic_info_data_t>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &info) {
             $0.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
-                host_info(mach_host_self(), HOST_BASIC_INFO, $0, &count)
+                host_info(host, HOST_BASIC_INFO, $0, &count)
             }
         }
         guard result == KERN_SUCCESS else {

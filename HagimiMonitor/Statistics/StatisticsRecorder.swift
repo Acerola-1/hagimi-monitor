@@ -179,8 +179,9 @@ final class StatisticsRecorder {
                     AppLogger.sampler.warning("Storage metricInt64 failed: cumulativeBytesRead/cumulativeBytesWritten not found in module metrics")
                 }
                 // Phase 2: diskFree 取最新值
-                if let free = metricNumeric(module, key: "free") {
-                    bucket.diskFree = Int64(free)
+                if let free = metricNumeric(module, key: "free"),
+                   let iv = safeInt64(free) {
+                    bucket.diskFree = iv
                     bucket.diskFreeCount += 1
                 }
             }
@@ -202,8 +203,8 @@ final class StatisticsRecorder {
                     let level = Int16(pressureLevel)
                     bucket.pressureLevelMax = max(bucket.pressureLevelMax, level)
                 }
-                if let swapinsVal = metricNumeric(module, key: "swapins") {
-                    let swapins = Int64(swapinsVal)
+                if let swapinsVal = metricNumeric(module, key: "swapins"),
+                   let swapins = safeInt64(swapinsVal) {
                     let prev = lastCumulative["memory"]
                     let delta = max(0, swapins - (prev?.swapins ?? swapins))
                     bucket.swapinsDelta += delta
@@ -214,8 +215,8 @@ final class StatisticsRecorder {
                                                 swapins: swapins,
                                                 swapouts: prev?.swapouts ?? 0)
                 }
-                if let swapoutsVal = metricNumeric(module, key: "swapouts") {
-                    let swapouts = Int64(swapoutsVal)
+                if let swapoutsVal = metricNumeric(module, key: "swapouts"),
+                   let swapouts = safeInt64(swapoutsVal) {
                     let prev = lastCumulative["memory"]
                     let delta = max(0, swapouts - (prev?.swapouts ?? swapouts))
                     bucket.swapoutsDelta += delta
@@ -310,7 +311,7 @@ final class StatisticsRecorder {
                 bytesWritten: bucket.bytesWrittenSum,
                 avgPower: bucket.avgPower,
                 // Phase 1
-                swapUsed: bucket.swapUsedCount > 0 ? Int64(bucket.swapUsedSum / Double(bucket.swapUsedCount)) : nil,
+                swapUsed: bucket.swapUsedCount > 0 ? safeInt64(bucket.swapUsedSum / Double(bucket.swapUsedCount)) : nil,
                 memoryPressureLevel: bucket.pressureLevelMax >= 0 ? bucket.pressureLevelMax : nil,
                 thermalState: bucket.thermalStateMax >= 0 ? bucket.thermalStateMax : nil,
                 swapins: bucket.swapinsDelta > 0 ? bucket.swapinsDelta : nil,
@@ -320,14 +321,14 @@ final class StatisticsRecorder {
                 cpuUser: bucket.count > 0 ? bucket.cpuUserSum / Double(bucket.count) : nil,
                 cpuIdle: bucket.count > 0 ? bucket.cpuIdleSum / Double(bucket.count) : nil,
                 cpuTemperature: bucket.cpuTempCount > 0 ? bucket.cpuTempSum / Double(bucket.cpuTempCount) : nil,
-                memoryUsed: bucket.memoryUsedCount > 0 ? Int64(bucket.memoryUsedSum / Double(bucket.memoryUsedCount)) : nil,
+                memoryUsed: bucket.memoryUsedCount > 0 ? safeInt64(bucket.memoryUsedSum / Double(bucket.memoryUsedCount)) : nil,
                 diskFree: bucket.diskFreeCount > 0 ? bucket.diskFree : nil,
-                netPeakDownload: bucket.netPeakDownload > 0 ? Int64(bucket.netPeakDownload) : nil,
-                netPeakUpload: bucket.netPeakUpload > 0 ? Int64(bucket.netPeakUpload) : nil,
-                diskPeakRead: bucket.diskPeakRead > 0 ? Int64(bucket.diskPeakRead) : nil,
-                diskPeakWrite: bucket.diskPeakWrite > 0 ? Int64(bucket.diskPeakWrite) : nil,
+                netPeakDownload: bucket.netPeakDownload > 0 ? safeInt64(bucket.netPeakDownload) : nil,
+                netPeakUpload: bucket.netPeakUpload > 0 ? safeInt64(bucket.netPeakUpload) : nil,
+                diskPeakRead: bucket.diskPeakRead > 0 ? safeInt64(bucket.diskPeakRead) : nil,
+                diskPeakWrite: bucket.diskPeakWrite > 0 ? safeInt64(bucket.diskPeakWrite) : nil,
                 // Phase 3
-                gpuMemoryUsed: bucket.gpuMemoryCount > 0 ? Int64(bucket.gpuMemorySum / Double(bucket.gpuMemoryCount)) : nil,
+                gpuMemoryUsed: bucket.gpuMemoryCount > 0 ? safeInt64(bucket.gpuMemorySum / Double(bucket.gpuMemoryCount)) : nil,
                 gpuRenderUtil: bucket.gpuUtilCount > 0 ? bucket.gpuRenderSum / Double(bucket.gpuUtilCount) : nil,
                 gpuTilerUtil: bucket.gpuUtilCount > 0 ? bucket.gpuTilerSum / Double(bucket.gpuUtilCount) : nil,
                 batteryHealth: bucket.batteryHealthCount > 0 ? bucket.batteryHealthSum / Double(bucket.batteryHealthCount) : nil,
@@ -358,7 +359,7 @@ final class StatisticsRecorder {
                 bytesWrittenDelta: bucket.bytesWrittenSum > 0 ? bucket.bytesWrittenSum : nil,
                 avgPower: bucket.avgPower,
                 // Phase 1
-                swapUsed: bucket.swapUsedCount > 0 ? Int64(bucket.swapUsedSum / Double(bucket.swapUsedCount)) : nil,
+                swapUsed: bucket.swapUsedCount > 0 ? safeInt64(bucket.swapUsedSum / Double(bucket.swapUsedCount)) : nil,
                 memoryPressureLevel: bucket.pressureLevelMax >= 0 ? bucket.pressureLevelMax : nil,
                 thermalState: bucket.thermalStateMax >= 0 ? bucket.thermalStateMax : nil,
                 swapins: bucket.swapinsDelta > 0 ? bucket.swapinsDelta : nil,
@@ -368,14 +369,14 @@ final class StatisticsRecorder {
                 cpuUser: bucket.count > 0 ? bucket.cpuUserSum / Double(bucket.count) : nil,
                 cpuIdle: bucket.count > 0 ? bucket.cpuIdleSum / Double(bucket.count) : nil,
                 cpuTemperature: bucket.cpuTempCount > 0 ? bucket.cpuTempSum / Double(bucket.cpuTempCount) : nil,
-                memoryUsed: bucket.memoryUsedCount > 0 ? Int64(bucket.memoryUsedSum / Double(bucket.memoryUsedCount)) : nil,
+                memoryUsed: bucket.memoryUsedCount > 0 ? safeInt64(bucket.memoryUsedSum / Double(bucket.memoryUsedCount)) : nil,
                 diskFree: bucket.diskFreeCount > 0 ? bucket.diskFree : nil,
-                netPeakDownload: bucket.netPeakDownload > 0 ? Int64(bucket.netPeakDownload) : nil,
-                netPeakUpload: bucket.netPeakUpload > 0 ? Int64(bucket.netPeakUpload) : nil,
-                diskPeakRead: bucket.diskPeakRead > 0 ? Int64(bucket.diskPeakRead) : nil,
-                diskPeakWrite: bucket.diskPeakWrite > 0 ? Int64(bucket.diskPeakWrite) : nil,
+                netPeakDownload: bucket.netPeakDownload > 0 ? safeInt64(bucket.netPeakDownload) : nil,
+                netPeakUpload: bucket.netPeakUpload > 0 ? safeInt64(bucket.netPeakUpload) : nil,
+                diskPeakRead: bucket.diskPeakRead > 0 ? safeInt64(bucket.diskPeakRead) : nil,
+                diskPeakWrite: bucket.diskPeakWrite > 0 ? safeInt64(bucket.diskPeakWrite) : nil,
                 // Phase 3
-                gpuMemoryUsed: bucket.gpuMemoryCount > 0 ? Int64(bucket.gpuMemorySum / Double(bucket.gpuMemoryCount)) : nil,
+                gpuMemoryUsed: bucket.gpuMemoryCount > 0 ? safeInt64(bucket.gpuMemorySum / Double(bucket.gpuMemoryCount)) : nil,
                 gpuRenderUtil: bucket.gpuUtilCount > 0 ? bucket.gpuRenderSum / Double(bucket.gpuUtilCount) : nil,
                 gpuTilerUtil: bucket.gpuUtilCount > 0 ? bucket.gpuTilerSum / Double(bucket.gpuUtilCount) : nil,
                 batteryHealth: bucket.batteryHealthCount > 0 ? bucket.batteryHealthSum / Double(bucket.batteryHealthCount) : nil,
@@ -429,7 +430,7 @@ final class StatisticsRecorder {
             let threshold1GB: Double = 1 * 1024 * 1024 * 1024
             if diskFree < threshold5GB {
                 let severity: Int16 = diskFree < threshold1GB ? 2 : 1
-                let freeStr = formatBytes(Int64(diskFree))
+                let freeStr = formatBytes(safeInt64(diskFree) ?? 0)
                 let event = SystemEvent(
                     timestamp: Date(),
                     eventType: SystemEventType.diskSpaceLow.rawValue,
@@ -451,7 +452,7 @@ final class StatisticsRecorder {
                     eventType: SystemEventType.diskIOSpike.rawValue,
                     severity: 1,
                     title: SystemEventType.diskIOSpike.title,
-                    detail: formatBytes(Int64(currentIO)),
+                    detail: formatBytes(safeInt64(currentIO) ?? 0),
                     value: currentIO,
                     previousValue: prev
                 )
@@ -469,7 +470,7 @@ final class StatisticsRecorder {
                     eventType: SystemEventType.networkSpike.rawValue,
                     severity: 1,
                     title: SystemEventType.networkSpike.title,
-                    detail: formatBytes(Int64(currentTotal)),
+                    detail: formatBytes(safeInt64(currentTotal) ?? 0),
                     value: currentTotal,
                     previousValue: prev
                 )
@@ -614,10 +615,20 @@ final class StatisticsRecorder {
         flushCurrentBuckets()
     }
 
+    /// 安全的 Double → Int64 转换，防止 NaN / Inf 触发 Swift fatalError (EXC_BREAKPOINT)
+    private func safeInt64(_ value: Double) -> Int64? {
+        guard value.isFinite else { return nil }
+        // clamp 到 Int64 可表示范围，避免溢出 trap
+        let lo = Double(Int64.min)
+        let hi = Double(Int64.max)
+        let clamped = Swift.min(hi, Swift.max(lo, value))
+        return Int64(clamped)
+    }
+
     private func metricInt64(_ module: MonitorModule, key: String) -> Int64? {
         guard let metric = module.metrics.first(where: { $0.name == key }),
-              let value = Int64(metric.value) else { return nil }
-        return value
+              let v = Double(metric.value) else { return nil }
+        return safeInt64(v)
     }
 
     private func metricDouble(_ module: MonitorModule, key: String) -> Double? {
