@@ -20,9 +20,9 @@ struct SettingsRootView: View {
             HStack(spacing: 0) {
                 SettingsSidebar(selection: $selection, settings: settings)
                     .frame(width: 164)
-                    .background(.bar)
+                    .background(.bar, ignoresSafeAreaEdges: .top)
 
-                Divider()
+                SettingsColumnDivider()
 
                 detailView
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -59,6 +59,19 @@ struct SettingsRootView: View {
     }
 }
 
+/// 侧栏与内容区之间的分隔线：上下两端渐隐，避免通顶到底的硬线在两种不同材质
+/// （侧栏的 `.bar` 模糊材质、内容区的 `.regularMaterial`）交界处显得生硬。
+private struct SettingsColumnDivider: View {
+    var body: some View {
+        LinearGradient(
+            colors: [.clear, Color(nsColor: .separatorColor).opacity(0.6), .clear],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .frame(width: 1)
+    }
+}
+
 /// 设置面板顶部的更新提醒条：仅在检测到新版本时出现，不影响其余设置内容的使用。
 private struct UpdateAvailableBanner: View {
     let latestVersion: String
@@ -90,7 +103,7 @@ private struct UpdateAvailableBanner: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
-        .background(.bar)
+        .background(.bar, ignoresSafeAreaEdges: .top)
         .overlay(alignment: .bottom) {
             Divider()
         }
