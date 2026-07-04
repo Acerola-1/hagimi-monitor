@@ -262,6 +262,29 @@
             width: 100%;
         }
 
+        .nav-github {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            border: 1px solid var(--line);
+            border-radius: 999px;
+            color: var(--ink-secondary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+            transition: border-color 0.2s ease, color 0.2s ease;
+        }
+
+        .nav-github:hover {
+            color: var(--ink);
+            border-color: var(--line-strong);
+        }
+
+        .nav-github svg {
+            flex-shrink: 0;
+        }
+
         .nav-cta {
             display: flex;
             align-items: center;
@@ -2495,13 +2518,9 @@
                 <li><a href="#events">事件</a></li>
                 <li><a href="#download">下载</a></li>
             </ul>
-            <a href="#download" class="nav-cta">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                    <polyline points="7 10 12 15 17 10"/>
-                    <line x1="12" y1="15" x2="12" y2="3"/>
-                </svg>
-                免费下载
+            <a href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener" class="nav-github" aria-label="GitHub Stars">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 .3a12 12 0 0 0-3.8 23.38c.6.12.83-.26.83-.57v-2c-3.34.72-4.04-1.6-4.04-1.6-.55-1.4-1.34-1.77-1.34-1.77-1.1-.75.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.08 1.84 2.83 1.31 3.52 1 .1-.78.42-1.31.76-1.61-2.67-.3-5.47-1.34-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.14-.3-.54-1.52.1-3.18 0 0 1-.32 3.3 1.23a11.5 11.5 0 0 1 6 0c2.3-1.55 3.3-1.23 3.3-1.23.64 1.66.24 2.88.12 3.18.77.84 1.23 1.91 1.23 3.22 0 4.6-2.8 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .31.22.7.83.57A12 12 0 0 0 12 .3"/></svg>
+                <span id="navGithubCount">&ndash;</span>
             </a>
         </div>
     </nav>
@@ -3560,6 +3579,8 @@
                             <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/>
                         </svg>
                     </a></li>
+                
+                    <li><a href="stats.html">使用数据</a></li>
                 </ul>
                 <span class="footer-copy">© 2026 HagimiMonitor. All rights reserved.</span>
             </div>
@@ -3654,6 +3675,39 @@
                 }
             });
         });
-    </script>
+    
+        // GitHub star count, cached in localStorage to respect API rate limits
+        (function() {
+            var KEY = 'hagimi-github-stars';
+            var TTL = 60 * 60 * 1000;
+            var el = document.getElementById('navGithubCount');
+            if (!el) return;
+
+            function format(n) {
+                if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
+                return String(n);
+            }
+
+            var cached = null;
+            try { cached = JSON.parse(localStorage.getItem(KEY)); } catch (e) {}
+
+            if (cached && typeof cached.count === 'number') {
+                el.textContent = format(cached.count);
+            }
+
+            if (cached && Date.now() - cached.ts < TTL) return;
+
+            fetch('https://api.github.com/repos/Acerola-1/hagimi-monitor')
+                .then(function(res) { return res.ok ? res.json() : null; })
+                .then(function(data) {
+                    if (!data || typeof data.stargazers_count !== 'number') return;
+                    el.textContent = format(data.stargazers_count);
+                    try {
+                        localStorage.setItem(KEY, JSON.stringify({ count: data.stargazers_count, ts: Date.now() }));
+                    } catch (e) {}
+                })
+                .catch(function() {});
+        })();
+</script>
 </body>
 </html>

@@ -5,25 +5,36 @@ struct SettingsRootView: View {
     @ObservedObject var settings: MonitorSettings
     let store: MonitorStore
     @State private var selection: SettingsRoute = .general
+    @State private var updateChecker = UpdateChecker.shared
+    @State private var dismissedUpdateVersion: String?
 
     var body: some View {
-        HStack(spacing: 0) {
-            SettingsSidebar(selection: $selection, settings: settings)
-                .frame(width: 164)
-                .background(.bar)
+        VStack(spacing: 0) {
+            if case .updateAvailable(let latestVersion, _, let downloadURL, _) = updateChecker.state,
+               dismissedUpdateVersion != latestVersion {
+                UpdateAvailableBanner(latestVersion: latestVersion, downloadURL: downloadURL) {
+                    dismissedUpdateVersion = latestVersion
+                }
+            }
 
-            Divider()
+            HStack(spacing: 0) {
+                SettingsSidebar(selection: $selection, settings: settings)
+                    .frame(width: 164)
+                    .background(.bar)
 
-            detailView
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(nsColor: .windowBackgroundColor))
+                Divider()
+
+                detailView
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(Color(nsColor: .windowBackgroundColor))
+            }
+            .frame(
+                minWidth: 560,
+                idealWidth: 600,
+                minHeight: 384,
+                idealHeight: 406
+            )
         }
-        .frame(
-            minWidth: 560,
-            idealWidth: 600,
-            minHeight: 384,
-            idealHeight: 406
-        )
         .background(SettingsWindowTracker(selection: $selection))
     }
 
@@ -44,6 +55,63 @@ struct SettingsRootView: View {
             })
         case .about:
             AboutSettingsView()
+        }
+    }
+}
+
+/// 设置面板顶部的更新提醒条：仅在检测到新版本时出现，不影响其余设置内容的使用。
+private struct UpdateAvailableBanner: View {
+    let latestVersion: String
+    let downloadURL: URL
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill")
+                .foregroundStyle(.tint)
+
+            Text(String(localized: "about.found") + latestVersion)
+                .font(.callout)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            downloadButton
+
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(String(localized: "update.banner.dismiss"))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.bar)
+        .overlay(alignment: .bottom) {
+            Divider()
+        }
+        .transition(.move(edge: .top).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.2), value: latestVersion)
+    }
+
+    @ViewBuilder
+    private var downloadButton: some View {
+        let action = {
+            NSWorkspace.shared.open(downloadURL)
+            onDismiss()
+        }
+        if #available(macOS 26, *) {
+            Button(String(localized: "about.download-update"), action: action)
+                .controlSize(.small)
+                .buttonStyle(.glassProminent)
+        } else {
+            Button(String(localized: "about.download-update"), action: action)
+                .controlSize(.small)
+                .buttonStyle(.borderedProminent)
         }
     }
 }

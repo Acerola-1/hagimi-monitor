@@ -3,7 +3,7 @@ import OSLog
 import SwiftUI
 
 struct AboutSettingsView: View {
-    @State private var updateChecker = UpdateChecker()
+    @State private var updateChecker = UpdateChecker.shared
     @State private var isExportingLogs = false
     @State private var logExportMessage: String?
 
@@ -118,7 +118,7 @@ struct AboutSettingsView: View {
 
         case .updateAvailable(let latestVersion, _, let downloadURL, _):
             VStack(alignment: .trailing, spacing: 5) {
-                Text(String(localized: "about.found") + " \(latestVersion)")
+                Text(String(localized: "about.found") + latestVersion)
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 primaryButton(title: String(localized: "about.download-update")) {
