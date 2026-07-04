@@ -5,7 +5,11 @@ import Foundation
 final class UpdateChecker {
     typealias DataLoader = (URLRequest) async throws -> (Data, URLResponse)
 
+    /// 供设置面板打开等入口触发自动检查、供 `AboutSettingsView` 观察同一份状态。
+    static let shared = UpdateChecker()
+
     private(set) var state: UpdateCheckState = .idle
+    private var lastCheckedAt: Date?
 
     private let latestReleaseURL: URL
     private let currentVersionProvider: () -> String
@@ -29,8 +33,17 @@ final class UpdateChecker {
         currentVersionProvider()
     }
 
+    /// 供设置窗口打开等自动触发场景使用：距上次检查未超过 `minInterval` 时直接跳过，避免每次开窗都打一次 GitHub API 并打断已展示的更新提示。
+    func checkForUpdatesIfStale(minInterval: TimeInterval = 30 * 60) async {
+        if let lastCheckedAt, Date().timeIntervalSince(lastCheckedAt) < minInterval {
+            return
+        }
+        await checkForUpdates()
+    }
+
     func checkForUpdates() async {
         guard !state.isChecking else { return }
+        lastCheckedAt = Date()
         state = .checking
 
         var request = URLRequest(url: latestReleaseURL)
@@ -61,7 +74,7 @@ final class UpdateChecker {
             }
 
             if VersionParser.isNewer(latestVersion, than: currentVersion) {
-                let downloadURL = resolveDownloadURL(from: release)
+                let downloadURL = Self.resolveDownloadURL(from: release)
                 state = .updateAvailable(
                     latestVersion: latestVersion,
                     publishedAt: release.publishedAt,
@@ -90,10 +103,6 @@ final class UpdateChecker {
             }
         }
         return release.htmlURL
-    }
-
-    private func resolveDownloadURL(from release: GitHubRelease) -> URL {
-        Self.resolveDownloadURL(from: release)
     }
 
     private func failureMessage(for response: URLResponse, data: Data) -> String {

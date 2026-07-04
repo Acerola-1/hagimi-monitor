@@ -40,10 +40,19 @@ struct SettingsGroup<Content: View>: View {
                     .padding(.horizontal, 2)
             }
 
-            VStack(spacing: 0) {
-                content
+            if #available(macOS 26, *) {
+                CompatibleGlassContainer {
+                    VStack(spacing: 0) {
+                        content
+                    }
+                    .compatibleGlassEffect(cornerRadius: 13)
+                }
+            } else {
+                VStack(spacing: 0) {
+                    content
+                }
+                .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
-            .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
     }
 }

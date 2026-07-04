@@ -107,18 +107,19 @@ struct ModuleSettingsView: View {
                 }
             }
 
-            HStack {
-                Spacer()
-                if #available(macOS 26, *) {
-                    Button(String(localized: "settings.reset-defaults")) {
-                        settings.resetMetrics(for: kind)
-                    }
-                    .compatibleButtonStyle()
-                } else {
-                    Button(String(localized: "settings.reset-defaults")) {
-                        settings.resetMetrics(for: kind)
-                    }
+            if #available(macOS 26, *) {
+                Button(String(localized: "settings.reset-defaults")) {
+                    settings.resetMetrics(for: kind)
                 }
+                .compatibleButtonStyle()
+            } else {
+                Button(String(localized: "settings.reset-defaults")) {
+                    settings.resetMetrics(for: kind)
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 10)
+                .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
         }
     }

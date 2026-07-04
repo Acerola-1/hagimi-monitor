@@ -35,6 +35,9 @@ enum SettingsWindowPresenter {
     @MainActor
     static func open(_ openSettings: OpenSettingsAction, tab: SettingsTab? = nil) {
         AppLogger.settings.info("Opening settings window")
+        Task { await UpdateChecker.shared.checkForUpdatesIfStale() }
+        UsageReporter.shared.reportIfNeeded(trigger: .settings)
+
         if let tab {
             UserDefaults.standard.set(tab.rawValue, forKey: selectedTabDefaultsKey)
             pendingTab = tab
@@ -56,6 +59,11 @@ enum SettingsWindowPresenter {
         AppLogger.settings.info("Registering settings window")
         settingsWindow = window
         window.title = ""
+        // 标题栏与下方内容合并为一体：标题栏透明 + 内容延伸到标题栏区域，
+        // 让侧栏的 `.bar` 材质一路延伸到红绿灯按钮下方，避免标题栏和内容区
+        // 在视觉上像两块拼接起来的独立区域。
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
         normalize(window)
 
         if pendingFocus {

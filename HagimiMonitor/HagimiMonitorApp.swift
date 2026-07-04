@@ -25,6 +25,7 @@ struct HagimiMonitorApp: App {
             AppLogStore.shared.warning("Previous run may have ended unexpectedly", category: "app")
         }
         HealthMonitor.shared.start()
+        UsageReporter.shared.reportIfNeeded(trigger: .launch)
     }
 
     var body: some Scene {
