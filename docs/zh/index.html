@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HagimiMonitor — 你的 Mac，一眼即懂</title>
     <meta name="description" content="HagimiMonitor 是一款优雅的 macOS 菜单栏系统监控工具，实时追踪 CPU、GPU、内存、存储、网络和电池状态。">
+    <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -30,6 +31,8 @@
             --brand-purple-light: #4ade80;
             --brand-purple-dark: #22c55e;
             --brand-glow: rgba(46, 204, 113, 0.3);
+            --load-working: var(--brand-purple);
+            --ring-halo: rgba(0, 0, 0, 0.48);
 
             /* Module colors */
             --c-cpu: #ff6b6b;
@@ -81,6 +84,7 @@
                 --shadow-md: 0 4px 20px rgba(0,0,0,0.1);
                 --shadow-lg: 0 8px 40px rgba(0,0,0,0.12);
                 --shadow-glow: 0 0 60px rgba(46, 204, 113, 0.08);
+                --ring-halo: rgba(255, 255, 255, 0.78);
             }
         }
 
@@ -215,16 +219,34 @@
             font-size: 18px;
         }
 
-        .nav-logo-icon {
-            width: 32px;
-            height: 32px;
-            background: #2C2C2E;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            box-shadow: 0 0 12px rgba(46, 204, 113, 0.2);
+        .ring-gauge { flex-shrink: 0; }
+
+        .ring-gauge .ring-track {
+            fill: none;
+            stroke: var(--ink);
+            stroke-opacity: 0.3;
+            stroke-width: 2.7;
+        }
+
+        .ring-gauge .ring-arc {
+            fill: none;
+            stroke: var(--ink);
+            stroke-opacity: 0.88;
+            stroke-width: 4;
+            stroke-linecap: round;
+            transform-origin: 18px 18px;
+            transform: rotate(-90deg); /* 把起点从 3 点钟转到 12 点钟 */
+        }
+
+        .ring-gauge .ring-halo { fill: var(--ring-halo); }
+        .ring-gauge .ring-dot {
+            transition: fill 0.4s ease;
+            animation: ring-dot-breathe 0.8s ease-in-out infinite alternate;
+        }
+
+        @keyframes ring-dot-breathe {
+            from { opacity: 1; }
+            to { opacity: 0.4; }
         }
 
         .nav-links {
@@ -2160,16 +2182,7 @@
             text-decoration: none;
         }
 
-        .footer-brand-icon {
-            width: 28px;
-            height: 28px;
-            background: #2C2C2E;
-            border-radius: 6px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 12px;
-        }
+        .footer-brand-icon.ring-gauge { flex-shrink: 0; }
 
         .footer-links {
             display: flex;
@@ -2494,21 +2507,12 @@
     <nav class="nav" id="nav">
         <div class="nav-inner">
             <a href="#" class="nav-logo">
-                <div class="nav-logo-icon" style="background: #2C2C2E; box-shadow: 0 0 12px rgba(46, 204, 113, 0.3);">
-                    <svg viewBox="0 0 32 32" width="20" height="20">
-                        <defs>
-                            <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
-                                <feGaussianBlur stdDeviation="1.5" result="blur"/>
-                                <feMerge>
-                                    <feMergeNode in="blur"/>
-                                    <feMergeNode in="SourceGraphic"/>
-                                </feMerge>
-                            </filter>
-                        </defs>
-                        <circle cx="16" cy="16" r="14" fill="none" stroke="#2ECC71" stroke-width="3" stroke-linecap="round" stroke-dasharray="55 30" transform="rotate(-90 16 16)" filter="url(#glow)"/>
-                        <circle cx="16" cy="16" r="3.5" fill="#2ECC71" filter="url(#glow)"/>
-                    </svg>
-                </div>
+                <svg class="ring-gauge" width="26" height="26" viewBox="0 0 36 36">
+                    <circle class="ring-track" cx="18" cy="18" r="13.2"/>
+                    <circle class="ring-arc" cx="18" cy="18" r="13" stroke-dasharray="81.68" stroke-dashoffset="18"/>
+                    <circle class="ring-halo" cx="18" cy="18" r="6.4"/>
+                    <circle class="ring-dot" cx="18" cy="18" r="4.6" fill="var(--load-working)"/>
+                </svg>
                 HagimiMonitor
             </a>
             <ul class="nav-links">
@@ -3561,12 +3565,12 @@
         <div class="container">
             <div class="footer-inner">
                 <a href="#" class="footer-brand">
-                    <div class="footer-brand-icon" style="background: #2C2C2E;">
-                        <svg viewBox="0 0 32 32" width="16" height="16">
-                            <circle cx="16" cy="16" r="14" fill="none" stroke="#2ECC71" stroke-width="3" stroke-linecap="round" stroke-dasharray="55 30" transform="rotate(-90 16 16)"/>
-                            <circle cx="16" cy="16" r="3.5" fill="#2ECC71"/>
-                        </svg>
-                    </div>
+                    <svg class="ring-gauge footer-brand-icon" width="22" height="22" viewBox="0 0 36 36">
+                        <circle class="ring-track" cx="18" cy="18" r="13.2"/>
+                        <circle class="ring-arc" cx="18" cy="18" r="13" stroke-dasharray="81.68" stroke-dashoffset="18"/>
+                        <circle class="ring-halo" cx="18" cy="18" r="6.4"/>
+                        <circle class="ring-dot" cx="18" cy="18" r="4.6" fill="var(--load-working)"/>
+                    </svg>
                     HagimiMonitor
                 </a>
                 <ul class="footer-links">

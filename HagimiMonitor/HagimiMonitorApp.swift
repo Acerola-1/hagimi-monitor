@@ -26,6 +26,7 @@ struct HagimiMonitorApp: App {
         }
         HealthMonitor.shared.start()
         UsageReporter.shared.reportIfNeeded(trigger: .launch)
+        UsageReporter.shared.start()
     }
 
     var body: some Scene {
