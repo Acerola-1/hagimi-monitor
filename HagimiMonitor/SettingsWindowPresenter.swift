@@ -36,7 +36,6 @@ enum SettingsWindowPresenter {
     static func open(_ openSettings: OpenSettingsAction, tab: SettingsTab? = nil) {
         AppLogger.settings.info("Opening settings window")
         Task { await UpdateChecker.shared.checkForUpdatesIfStale() }
-        UsageReporter.shared.reportIfNeeded(trigger: .settings)
 
         if let tab {
             UserDefaults.standard.set(tab.rawValue, forKey: selectedTabDefaultsKey)
