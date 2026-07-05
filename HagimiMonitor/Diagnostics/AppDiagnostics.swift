@@ -148,6 +148,7 @@ private func handleSignal(_ sig: Int32) {
     case SIGILL:  sigName = "SIGILL"
     case SIGFPE:  sigName = "SIGFPE"
     case SIGTERM: sigName = "SIGTERM"
+    case SIGTRAP: sigName = "SIGTRAP"
     default:      sigName = "UNKNOWN"
     }
 
@@ -190,7 +191,7 @@ enum CrashHandler {
 
     // MARK: - Signal Handlers
 
-    private static let caughtSignals: [Int32] = [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTERM]
+    private static let caughtSignals: [Int32] = [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTERM, SIGTRAP]
 
     private static func installSignalHandlers() {
         for sig in caughtSignals {

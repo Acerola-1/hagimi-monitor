@@ -199,7 +199,7 @@ final class StatisticsRecorder {
                     bucket.swapUsedSum += swapUsed
                     bucket.swapUsedCount += 1
                 }
-                if let pressureLevel = metricNumeric(module, key: "pressure-level") {
+                if let pressureLevel = metricNumeric(module, key: "pressure-level"), pressureLevel.isFinite {
                     let level = Int16(pressureLevel)
                     bucket.pressureLevelMax = max(bucket.pressureLevelMax, level)
                 }
@@ -276,8 +276,8 @@ final class StatisticsRecorder {
                     bucket.batteryHealthSum += health
                     bucket.batteryHealthCount += 1
                 }
-                if let cycles = metricNumeric(module, key: "cycle-count") {
-                    bucket.batteryCycleCount = Int(cycles)
+                if let cycles = metricNumeric(module, key: "cycle-count"), let safeCycles = safeInt64(cycles) {
+                    bucket.batteryCycleCount = Int(safeCycles)
                     bucket.batteryCycleCountSet = true
                 }
                 if let temp = metricNumeric(module, key: "temperature") {
