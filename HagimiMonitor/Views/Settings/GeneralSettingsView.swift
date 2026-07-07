@@ -89,15 +89,15 @@ private struct MenuBarDisplaySettingsSection: View {
             if settings.menuBarDisplayMode == .metrics {
                 SettingsDivider()
 
-                SettingsRow(title: String(localized: "menu-bar-metric-prefix.style")) {
-                    Picker(String(localized: "menu-bar-metric-prefix.style"), selection: $settings.menuBarMetricPrefixStyle) {
-                        ForEach(MenuBarMetricPrefixStyle.allCases) { prefixStyle in
-                            Text(prefixStyle.title).tag(prefixStyle)
+                SettingsRow(title: String(localized: "menu-bar-metric-layout.style")) {
+                    Picker(String(localized: "menu-bar-metric-layout.style"), selection: $settings.menuBarMetricLayoutStyle) {
+                        ForEach(MenuBarMetricLayoutStyle.allCases) { layoutStyle in
+                            Text(layoutStyle.title).tag(layoutStyle)
                         }
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
-                    .frame(width: 150)
+                    .frame(width: 210)
                 }
 
                 SettingsDivider()
@@ -164,7 +164,7 @@ private struct MenuBarDisplaySettingsSection: View {
             MenuBarMetricLabel(
                 items: store.previewMenuBarMetricItems(),
                 style: .preview,
-                prefixStyle: settings.menuBarMetricPrefixStyle
+                layoutStyle: settings.menuBarMetricLayoutStyle
             )
         }
     }
