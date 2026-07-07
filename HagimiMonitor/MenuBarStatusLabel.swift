@@ -38,8 +38,8 @@ struct MenuBarMetricLabel: View {
 
     var body: some View {
         HStack(spacing: interCellSpacing) {
-            ForEach(items) { item in
-                cell(for: item)
+            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
+                cell(for: item, isTrailing: index == items.count - 1)
             }
         }
         .font(labelFont)
@@ -52,11 +52,18 @@ struct MenuBarMetricLabel: View {
     /// 数值放进按「最大可能值」测得的定宽框、**左对齐**贴住前缀。短值时预留的
     /// 空白落在尾部,与指标间距合并成更大的「组间空隙」,视觉上数字始终跟自己的
     /// 前缀成一组。每格宽度仍固定,相邻指标位置不会左右抖动。
-    private func cell(for item: MenuBarMetricItem) -> some View {
+    /// 末位指标是整个菜单栏图标的右边缘,身后没有下一个指标可供分组,固定宽度
+    /// 预留的尾部空白会直接变成图标右侧的空洞留白,故末位不做定宽预留,按实际
+    /// 内容收紧,消除该处的空间浪费。
+    private func cell(for item: MenuBarMetricItem, isTrailing: Bool) -> some View {
         HStack(spacing: symbolSpacing) {
             leading(for: item.kind)
-            Text(numericValue(for: item))
-                .frame(width: valueWidth(for: item.kind), alignment: .leading)
+            if isTrailing {
+                Text(numericValue(for: item))
+            } else {
+                Text(numericValue(for: item))
+                    .frame(width: valueWidth(for: item.kind), alignment: .leading)
+            }
         }
     }
 
