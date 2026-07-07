@@ -137,7 +137,21 @@ private var _crashLogPathCString: [CChar] = []
 private var _crashLogPath: String = ""
 
 /// C function for signal handling — no Swift context capture allowed.
+///
+/// Critical: this handler MUST NOT return normally for trap-style signals (SIGTRAP/SIGILL/SIGFPE
+/// on arm64 are raised by a `brk`/trap instruction that does not advance past itself). If we just
+/// log and return, the CPU resumes at the very same faulting instruction and re-raises the same
+/// signal immediately — an infinite retrap loop that pegs the CPU and freezes the main thread
+/// forever without ever actually crashing (observed in the wild: millions of repeated log lines,
+/// UI completely unresponsive, yet the process never dies). So after logging, restore the default
+/// disposition and re-raise: this lets the OS actually terminate the process, which is far better
+/// than a silent, unkillable hang.
 private func handleSignal(_ sig: Int32) {
+    defer {
+        signal(sig, SIG_DFL)
+        raise(sig)
+    }
+
     guard !_crashLogPathCString.isEmpty else { return }
 
     let sigName: String

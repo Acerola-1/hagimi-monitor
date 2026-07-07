@@ -617,7 +617,7 @@ struct HealthScoreRingView: View {
                 .rotationEffect(.degrees(-90))
 
             VStack(spacing: 2) {
-                Text("\(Int(score.score))")
+                Text("\(safeIntDisplay(score.score))")
                     .font(.system(size: 28, weight: .bold, design: .rounded))
                     .monospacedDigit()
                     .foregroundStyle(ringColor)
@@ -716,7 +716,7 @@ struct DimensionScoreRow: View {
                     }
                 }
                 .frame(height: 6)
-                Text("\(Int(dimension.healthValue * 100))")
+                Text("\(safeIntDisplay(dimension.healthValue * 100))")
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(levelColor)

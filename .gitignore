@@ -75,3 +75,4 @@ build/
 .opencode/
 AGENTS.md
 CLAUDE.md
+.codegraph/

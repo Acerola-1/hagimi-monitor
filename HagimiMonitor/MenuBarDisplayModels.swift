@@ -17,19 +17,22 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
-/// 菜单栏指标的前缀形态:SF 图标(紧凑)或文字(CPU/GPU…)。
-enum MenuBarMetricPrefixStyle: String, CaseIterable, Identifiable {
+/// 菜单栏指标的显示布局:图标+数字、文字+数字(均为单行横排),或文字在上、数字在下的紧凑双层排布。
+enum MenuBarMetricLayoutStyle: String, CaseIterable, Identifiable {
     case icon
     case text
+    case compact
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .icon:
-            String(localized: "menu-bar-metric-prefix.icon")
+            String(localized: "menu-bar-metric-layout.icon")
         case .text:
-            String(localized: "menu-bar-metric-prefix.text")
+            String(localized: "menu-bar-metric-layout.text")
+        case .compact:
+            String(localized: "menu-bar-metric-layout.compact")
         }
     }
 }

@@ -2739,7 +2739,29 @@
         }
       }
     },
-    "menu-bar-metric-prefix.icon": {
+    "menu-bar-metric-layout.compact": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compact"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "コンパクト"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "紧凑"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-layout.icon": {
       "localizations": {
         "en": {
           "stringUnit": {
@@ -2761,29 +2783,29 @@
         }
       }
     },
-    "menu-bar-metric-prefix.style": {
+    "menu-bar-metric-layout.style": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Metric Label"
+            "value": "Layout"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "指標ラベル"
+            "value": "表示レイアウト"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "指标前缀"
+            "value": "显示布局"
           }
         }
       }
     },
-    "menu-bar-metric-prefix.text": {
+    "menu-bar-metric-layout.text": {
       "localizations": {
         "en": {
           "stringUnit": {

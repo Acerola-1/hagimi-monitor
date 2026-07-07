@@ -692,9 +692,9 @@ final class StatisticsAggregator {
         let thermalHealth = thermalState.map { HealthCalc.thermal($0) }
 
         let dims: [(name: String, rawText: String, rawValue: Double, health: Double, weight: Double, avail: Bool)] = [
-            (String(localized: "health.dimension.cpu"), "\(Int(cpuSummary.avg))%", cpuSummary.avg, cpuHealth, weights.cpu, cpuAvail),
-            (String(localized: "health.dimension.gpu"), "\(Int(gpuSummary.avg))%", gpuSummary.avg, gpuHealth, weights.gpu, gpuAvail),
-            (String(localized: "health.dimension.disk"), "\(Int(diskSummary.avg))%", diskSummary.avg, diskHealth, weights.disk, diskAvail),
+            (String(localized: "health.dimension.cpu"), "\(safeIntDisplay(cpuSummary.avg))%", cpuSummary.avg, cpuHealth, weights.cpu, cpuAvail),
+            (String(localized: "health.dimension.gpu"), "\(safeIntDisplay(gpuSummary.avg))%", gpuSummary.avg, gpuHealth, weights.gpu, gpuAvail),
+            (String(localized: "health.dimension.disk"), "\(safeIntDisplay(diskSummary.avg))%", diskSummary.avg, diskHealth, weights.disk, diskAvail),
             (String(localized: "health.dimension.pressure"),
              pressureLevel.map { Self.pressureLabel($0) } ?? "--",
              pressureLevel ?? 0, pressureHealth ?? 0, weights.pressure, pressureAvail),

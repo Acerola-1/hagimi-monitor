@@ -126,6 +126,14 @@ func signedDoubleValue(_ value: Any?) -> Double? {
     }
 }
 
+/// 安全的 Double → Int 转换，防止 NaN / Inf 触发 Swift fatalError (EXC_BREAKPOINT)。
+/// 用于任何直接来自除法/加权平均等计算、显示前未经校验的数值格式化场景。
+func safeIntDisplay(_ value: Double) -> Int {
+    guard value.isFinite else { return 0 }
+    let clamped = min(Double(Int.max), max(Double(Int.min), value))
+    return Int(clamped)
+}
+
 func intValue(_ value: Any?) -> Int? {
     switch value {
     case let value as Int:

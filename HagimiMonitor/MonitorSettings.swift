@@ -56,7 +56,7 @@ final class MonitorSettings: ObservableObject {
     @Published var ringSource: HaloRingSource = .combined
     @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
     @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
-    @Published var menuBarMetricPrefixStyle: MenuBarMetricPrefixStyle = .icon
+    @Published var menuBarMetricLayoutStyle: MenuBarMetricLayoutStyle = .icon
     @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
@@ -95,8 +95,10 @@ final class MonitorSettings: ObservableObject {
 
         let menuBarDisplayModeRawValue = defaults.string(forKey: Keys.menuBarDisplayMode) ?? MenuBarDisplayMode.ring.rawValue
         menuBarDisplayMode = MenuBarDisplayMode(rawValue: menuBarDisplayModeRawValue) ?? .ring
-        let prefixStyleRawValue = defaults.string(forKey: Keys.menuBarMetricPrefixStyle) ?? MenuBarMetricPrefixStyle.icon.rawValue
-        menuBarMetricPrefixStyle = MenuBarMetricPrefixStyle(rawValue: prefixStyleRawValue) ?? .icon
+        // 旧版仅有「图标/文字」两态的前缀样式,键名沿用其历史存储值作为迁移兜底,避免升级后静默重置为默认值。
+        let legacyPrefixStyleRawValue = defaults.string(forKey: Keys.legacyMenuBarMetricPrefixStyle)
+        let layoutStyleRawValue = defaults.string(forKey: Keys.menuBarMetricLayoutStyle) ?? legacyPrefixStyleRawValue ?? MenuBarMetricLayoutStyle.icon.rawValue
+        menuBarMetricLayoutStyle = MenuBarMetricLayoutStyle(rawValue: layoutStyleRawValue) ?? .icon
         menuBarMetricKinds = MonitorSettings.validatedMenuBarMetrics(
             defaults.array(forKey: Keys.menuBarMetricKinds) as? [String]
         )
@@ -311,10 +313,10 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $menuBarMetricPrefixStyle
+        $menuBarMetricLayoutStyle
             .dropFirst()
             .sink { [weak self] newValue in
-                self?.persist(newValue.rawValue, forKey: Keys.menuBarMetricPrefixStyle)
+                self?.persist(newValue.rawValue, forKey: Keys.menuBarMetricLayoutStyle)
             }
             .store(in: &cancellables)
 
@@ -496,7 +498,9 @@ private enum Keys {
     static let ringSource = "settings.ringSource"
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
     static let menuBarMetricKinds = "settings.menuBar.metricKinds"
-    static let menuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
+    static let menuBarMetricLayoutStyle = "settings.menuBar.metricLayoutStyle"
+    /// 旧版键名,仅用于读取迁移,不再写入。
+    static let legacyMenuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
