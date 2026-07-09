@@ -115,21 +115,6 @@ struct MonitorPalette {
         }
     }
 
-    func healthTint(for level: HealthLevel) -> Color {
-        switch level {
-        case .excellent:
-            Color(hex: 0x2F9E64)
-        case .good:
-            Color(hex: 0x3BAFDA)
-        case .fair:
-            Color(hex: 0xD4A843)
-        case .poor:
-            Color(hex: 0xE08E45)
-        case .critical:
-            Color(hex: 0xD94848)
-        }
-    }
-
     private var neutralGlassTint: Color {
         Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
     }
