@@ -31,7 +31,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             queue: .main
         ) { [weak self] _ in
             MainActor.assumeIsolated {
-                self?.store.flushStatistics()
                 AppLaunchStateTracker.shared.markCleanExit()
                 AppLogStore.shared.flush()
             }

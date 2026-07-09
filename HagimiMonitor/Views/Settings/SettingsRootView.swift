@@ -49,10 +49,7 @@ struct SettingsRootView: View {
         case .displayModule:
             DisplayModuleSettingsView(settings: settings)
         #endif
-        case .statistics:
-            StatisticsView(pendingProvider: { [weak store] in
-                store?.statisticsPendingSnapshot ?? [:]
-            })
+
         case .about:
             AboutSettingsView()
         }
@@ -212,8 +209,6 @@ extension SettingsTab {
             return nil
         case .about:
             return .about
-        case .statistics:
-            return .statistics
         }
     }
 }
