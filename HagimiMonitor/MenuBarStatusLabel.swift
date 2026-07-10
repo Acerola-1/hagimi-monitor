@@ -69,21 +69,21 @@ struct MenuBarMetricLabel: View {
                 }
             }
         case .compact:
-            compactCell(for: item, isTrailing: isTrailing)
+            compactCell(for: item)
         }
     }
 
     /// 紧凑模式:文字标签(小)在上、数值(大)在下的双层排布,专为窄屏机型省空间设计。
-    /// `alignment: .center` 让较窄的一行(通常是标签)在两行中居中对齐,而非贴左/贴右。
-    /// 末位指标同样不做定宽预留(理由同 `cell(for:isTrailing:)` 上方注释),该格收紧到实际内容宽度。
-    private func compactCell(for item: MenuBarMetricItem, isTrailing: Bool) -> some View {
-        VStack(alignment: .leading, spacing: -1) {
+    /// 标签与数值都居中对齐,且始终按 `compactCellWidth` 定宽(含末位指标),
+    /// 避免数值位数变化(如 8% → 18%)时上下两行、乃至整个图标宽度跟着跳动。
+    private func compactCell(for item: MenuBarMetricItem) -> some View {
+        VStack(alignment: .center, spacing: -1) {
             Text(textPrefix(for: item.kind))
                 .font(compactLabelFont)
             Text(numericValue(for: item))
                 .font(compactValueFont)
         }
-        .frame(width: isTrailing ? nil : compactCellWidth(for: item.kind))
+        .frame(width: compactCellWidth(for: item.kind))
     }
 
     /// 前缀视图:图标模式用 SF Symbol,文字模式用 CPU/GPU… 或网络的 ↑↓。

@@ -157,7 +157,7 @@ enum MenuBarMetricFormatter {
         var scaled = safeValue
         var unitIndex = 0
 
-        while scaled >= 1024, unitIndex < units.count - 1 {
+        while scaled >= 999.5, unitIndex < units.count - 1 {
             scaled /= 1024
             unitIndex += 1
         }
@@ -174,7 +174,7 @@ enum MenuBarMetricFormatter {
         var scaled = safeValue
         var unitIndex = 0
 
-        while scaled >= 1024, unitIndex < units.count - 1 {
+        while scaled >= 999.5, unitIndex < units.count - 1 {
             scaled /= 1024
             unitIndex += 1
         }
