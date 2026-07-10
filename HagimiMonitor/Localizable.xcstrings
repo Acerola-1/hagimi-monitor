@@ -2305,54 +2305,6 @@
         }
       }
     },
-    "mediaKey.fine-scale-brightness": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fine brightness step"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "亮度精细步进"
-          }
-        }
-      }
-    },
-    "mediaKey.fine-scale-hint": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shift+Option triggers fine steps by default; invert when on"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "默认 Shift+Option 触发精细步进;开启后反转"
-          }
-        }
-      }
-    },
-    "mediaKey.fine-scale-volume": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fine volume step"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "音量精细步进"
-          }
-        }
-      }
-    },
     "mediaKey.open-system-settings": {
       "localizations": {
         "en": {
@@ -5221,6 +5173,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "关于"
+          }
+        }
+      }
+    },
+    "settings.sidebar.beta-badge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
           }
         }
       }

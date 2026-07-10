@@ -314,12 +314,10 @@ final class DisplayControlController: ObservableObject {
     func attach(settings: MonitorSettings) {
         mediaKeyController.attach(controller: self, settings: settings)
 
-        let merged = Publishers.Merge5(
+        let merged = Publishers.Merge3(
             settings.$mediaKeyBrightnessEnabled.map { _ in () },
             settings.$mediaKeyVolumeEnabled.map { _ in () },
-            settings.$mediaKeyShowOSD.map { _ in () },
-            settings.$mediaKeyFineScaleBrightness.map { _ in () },
-            settings.$mediaKeyFineScaleVolume.map { _ in () }
+            settings.$mediaKeyShowOSD.map { _ in () }
         )
         .merge(with: mediaKeyController.permission.$isTrusted.map { _ in () })
 
@@ -622,8 +620,8 @@ private final class DisplayControlService {
             let nativeBrightness = useDisplayServices ? displayServices.getBrightness(displayID: id) : nil
             let hasDDCService = (kind == .externalDDC) && ddc.hasService(for: id)
             let ddcBrightness = (kind == .externalDDC) ? ddc.read(.brightness, displayID: id, fastFail: true) : nil
-            let ddcVolume: Double? = nil
-            let ddcContrast: Double? = nil
+            let ddcVolume = (kind == .externalDDC) ? ddc.read(.volume, displayID: id, fastFail: true) : nil
+            let ddcContrast = (kind == .externalDDC) ? ddc.read(.contrast, displayID: id, fastFail: true) : nil
 
             let storedBrightness = storedValue(for: .brightness, displayStorageID: storageID)
             let storedVolume = storedValue(for: .volume, displayStorageID: storageID)

@@ -157,9 +157,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         refreshStatusItemImage()
 
-        // 负载环随 displayedComputeLoad 平滑变化;指标文本随 modules 采样变化。
-        store.$displayedComputeLoad
-            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+        // 负载环随 displayedComputeLoad 平滑变化(30fps);指标文本随 modules 采样变化。
+        // 指标模式下 displayedComputeLoad 根本不参与渲染,过滤掉这个模式下的 30fps
+        // tick,避免白白触发 ImageRenderer 快照(见 refreshStatusItemImage 指标分支)。
+        store.loadAnimator.$displayedComputeLoad
+            .sink { [weak self] _ in
+                guard let self, self.store.settings.menuBarDisplayMode == .ring else { return }
+                self.refreshStatusItemImage()
+            }
             .store(in: &cancellables)
         store.$modules
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
@@ -311,37 +316,65 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
         let isDark = appearance.isDark
 
-        let label = MenuBarStatusLabel(store: store, darkMode: isDark)
-            .environment(\.colorScheme, isDark ? .dark : .light)
-            .padding(.horizontal, Self.statusItemHorizontalPadding)
-            .fixedSize()
-
-        let renderer = ImageRenderer(content: label)
-        renderer.proposedSize = ProposedViewSize(width: nil, height: 22)
-        // 按所有屏幕里的最大 backingScaleFactor 光栅化:菜单栏在每块屏幕各画一遍,若只按
-        // 主屏 scale 烤成位图,到 scale 更高的副屏会被放大而模糊。取最大 scale 后,任何屏幕
-        // 都是缩小(清晰)而非放大。point 尺寸 = 像素/scale 不变,故状态项宽度、布局不受影响。
-        let scale = NSScreen.screens.map(\.backingScaleFactor).max()
-            ?? statusItem.button?.window?.backingScaleFactor
-            ?? NSScreen.main?.backingScaleFactor ?? 2
-        renderer.scale = scale
-
-        // 把选定外观设为当前绘制上下文,使环内部的 NSAppearance.currentDrawing() 判定
-        // 与上面 isDark 一致(否则 ImageRenderer 会用 App 全局外观绘制)。
-        var cgImage: CGImage?
-        appearance.performAsCurrentDrawingAppearance {
-            cgImage = renderer.cgImage
+        // 环模式:MenuBarComputeRingIcon 已直接产出一张缓存好的 18×18 AppKit NSImage,
+        // 无需再走 SwiftUI + ImageRenderer 二次光栅化。直接赋给 button.image,可绕开
+        // CoreSVG/ImageRenderer 那一整套快照中间对象(CGImage/NSCGImageSnapshotRep/SVGPath),
+        // 它们此前会随负载动画持续累积、常驻不释放,也是空闲 CPU 高的主因。
+        // 该 NSImage 由绘制闭包惰性渲染,系统绘制时会按各屏 scale 原生重画,多屏依旧清晰;
+        // 内部读 NSAppearance.currentDrawing() 判定墨色,与 button 外观同步。
+        if store.settings.menuBarDisplayMode == .ring {
+            let image = MenuBarComputeRingIcon.image(
+                load: store.loadAnimator.displayedComputeLoad,
+                darkMode: isDark,
+                loadLevel: store.haloRingLoadLevel
+            )
+            // 负载未跨整数桶 / 外观未变时,image(...) 返回同一缓存 NSImage 对象。此时跳过
+            // button.image 重新赋值:$modules 每秒 tick 都会触发本方法,重复赋同一张图会让
+            // AppKit 反复为其生成缓存位图 rep(NSCGImageSnapshotRep),静置也持续累积。
+            // 直接比较 statusItem.button?.image(真实显示状态),而非另开一个影子变量:
+            // 后者在指标模式分支改写 button.image 后不会同步更新,会导致「指标→环形」
+            // 切换回来时误判「未变」而漏刷新。
+            guard image !== statusItem.button?.image else { return }
+            // isTemplate 已在 MenuBarComputeRingIcon.image(...) 内部设置,此处无需重复赋值。
+            statusItem.button?.image = image
+            // 与旧的 .padding(.horizontal) 等价:图像左右各补留白。
+            updateStatusItemLength(image.size.width + Self.statusItemHorizontalPadding * 2)
+            return
         }
-        guard let cgImage else { return }
 
-        let pointSize = NSSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale)
-        let image = NSImage(cgImage: cgImage, size: pointSize)
-        // 非 template:保留环的白圈 + 彩点原始配色。系统仍会对非活跃屏幕的整条菜单栏
-        // (含本图)做变淡合成,达到与原生 app 一致的观感。
-        image.isTemplate = false
+        // 指标(文本)模式:无现成位图,仍用 ImageRenderer 快照。autoreleasepool 确保每次
+        // 快照产生的 CG/SVG 中间对象在本次调用结束即释放,不再攒到内存高水位。
+        autoreleasepool {
+            let label = MenuBarStatusLabel(store: store, darkMode: isDark)
+                .environment(\.colorScheme, isDark ? .dark : .light)
+                .padding(.horizontal, Self.statusItemHorizontalPadding)
+                .fixedSize()
 
-        statusItem.button?.image = image
-        updateStatusItemLength(pointSize.width)
+            let renderer = ImageRenderer(content: label)
+            renderer.proposedSize = ProposedViewSize(width: nil, height: 22)
+            // 按所有屏幕里的最大 backingScaleFactor 光栅化:菜单栏在每块屏幕各画一遍,若只按
+            // 主屏 scale 烤成位图,到 scale 更高的副屏会被放大而模糊。取最大 scale 后,任何屏幕
+            // 都是缩小(清晰)而非放大。point 尺寸 = 像素/scale 不变,故状态项宽度、布局不受影响。
+            let scale = NSScreen.screens.map(\.backingScaleFactor).max()
+                ?? statusItem.button?.window?.backingScaleFactor
+                ?? NSScreen.main?.backingScaleFactor ?? 2
+            renderer.scale = scale
+
+            // 把选定外观设为当前绘制上下文,使内部的 NSAppearance.currentDrawing() 判定
+            // 与上面 isDark 一致(否则 ImageRenderer 会用 App 全局外观绘制)。
+            var cgImage: CGImage?
+            appearance.performAsCurrentDrawingAppearance {
+                cgImage = renderer.cgImage
+            }
+            guard let cgImage else { return }
+
+            let pointSize = NSSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale)
+            let image = NSImage(cgImage: cgImage, size: pointSize)
+            image.isTemplate = false
+
+            statusItem.button?.image = image
+            updateStatusItemLength(pointSize.width)
+        }
     }
 
     private func updateStatusItemLength(_ width: CGFloat) {

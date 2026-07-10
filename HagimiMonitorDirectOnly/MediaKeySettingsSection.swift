@@ -16,38 +16,12 @@ struct MediaKeySettingsSection: View {
                     .labelsHidden()
             }
 
-            if settings.mediaKeyBrightnessEnabled {
-                SettingsDivider()
-
-                SettingsRow(
-                    title: String(localized: "mediaKey.fine-scale-brightness"),
-                    subtitle: String(localized: "mediaKey.fine-scale-hint")
-                ) {
-                    Toggle("", isOn: $settings.mediaKeyFineScaleBrightness)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-            }
-
             SettingsDivider()
 
             SettingsRow(title: String(localized: "mediaKey.volume-toggle")) {
                 Toggle("", isOn: $settings.mediaKeyVolumeEnabled)
                     .toggleStyle(.switch)
                     .labelsHidden()
-            }
-
-            if settings.mediaKeyVolumeEnabled {
-                SettingsDivider()
-
-                SettingsRow(
-                    title: String(localized: "mediaKey.fine-scale-volume"),
-                    subtitle: String(localized: "mediaKey.fine-scale-hint")
-                ) {
-                    Toggle("", isOn: $settings.mediaKeyFineScaleVolume)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
             }
 
             if anyTakeoverEnabled {
