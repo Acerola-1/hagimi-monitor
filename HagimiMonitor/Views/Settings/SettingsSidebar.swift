@@ -6,7 +6,6 @@ enum SettingsRoute: Hashable {
     #if DISPLAY_CONTROL
     case displayModule
     #endif
-    case statistics
     case about
 }
 
@@ -31,12 +30,6 @@ struct SettingsSidebar: View {
                 Label(String(localized: "settings.sidebar.display"), systemImage: "display")
                     .tag(SettingsRoute.displayModule)
                 #endif
-            }
-
-            // 统计
-            Section {
-                Label(String(localized: "settings.sidebar.statistics"), systemImage: "chart.bar")
-                    .tag(SettingsRoute.statistics)
             }
 
             Section {
