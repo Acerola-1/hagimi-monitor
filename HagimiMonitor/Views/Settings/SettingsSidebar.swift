@@ -27,8 +27,11 @@ struct SettingsSidebar: View {
                 }
 
                 #if DISPLAY_CONTROL
-                Label(String(localized: "settings.sidebar.display"), systemImage: "display")
-                    .tag(SettingsRoute.displayModule)
+                HStack(spacing: 6) {
+                    Label(String(localized: "settings.sidebar.display"), systemImage: "display")
+                    BetaBadge()
+                }
+                .tag(SettingsRoute.displayModule)
                 #endif
             }
 
@@ -42,3 +45,16 @@ struct SettingsSidebar: View {
         .font(.callout)
     }
 }
+
+#if DISPLAY_CONTROL
+private struct BetaBadge: View {
+    var body: some View {
+        Text(String(localized: "settings.sidebar.beta-badge"))
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(.secondary.opacity(0.15), in: Capsule())
+    }
+}
+#endif

@@ -111,10 +111,19 @@ final class MediaKeyController {
     }
 
     /// 返回鼠标当前所在的外接屏 displayID。
-    /// 鼠标在内建屏或无法判定时返回 nil(调用方应放行事件交给系统)。
+    /// 鼠标在内建屏或无法判定时,若只有一台外接屏可控则直接兜底作用于它
+    /// (鼠标习惯留在内建屏、用快捷键调外接屏是常见场景);多台外接屏时
+    /// 无法判断意图,仍返回 nil 交给系统原生处理。
     /// 参考 MonitorControl DisplayManager.getCurrentDisplay:用 NSEvent.mouseLocation
     /// 与 NSScreen.screens 做 hit-test,再映射回 CGDirectDisplayID。
     private func targetDisplayIDForCurrentMouseLocation() -> CGDirectDisplayID? {
+        if let displayID = externalDisplayIDUnderMouse() {
+            return displayID
+        }
+        return singleExternalDisplayIDFallback()
+    }
+
+    private func externalDisplayIDUnderMouse() -> CGDirectDisplayID? {
         let mouseLocation = NSEvent.mouseLocation
         guard let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) }) else {
             return nil
@@ -128,6 +137,13 @@ final class MediaKeyController {
             return nil
         }
         return displayID
+    }
+
+    private func singleExternalDisplayIDFallback() -> CGDirectDisplayID? {
+        guard let controller else { return nil }
+        let externalDisplays = controller.displays.filter { !$0.isBuiltIn }
+        guard externalDisplays.count == 1 else { return nil }
+        return externalDisplays.first?.id
     }
 
     private func isOptionOnly(modifiers: NSEvent.ModifierFlags) -> Bool {
@@ -148,15 +164,7 @@ final class MediaKeyController {
 
     private func stepSize(for key: MediaKey, modifiers: NSEvent.ModifierFlags) -> Double {
         let isFine = modifiers.contains(.shift) && modifiers.contains(.option)
-        let invertFine: Bool
-        switch key {
-        case .brightnessUp, .brightnessDown:
-            invertFine = settings?.mediaKeyFineScaleBrightness ?? false
-        default:
-            invertFine = settings?.mediaKeyFineScaleVolume ?? false
-        }
-        let useFine = invertFine ? !isFine : isFine
-        return useFine ? fineStep : standardStep
+        return isFine ? fineStep : standardStep
     }
 
     private func adjustBrightness(by delta: Double, on displayID: CGDirectDisplayID) {
