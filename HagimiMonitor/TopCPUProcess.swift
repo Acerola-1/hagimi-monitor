@@ -23,6 +23,10 @@ struct RawCPUProcess {
     let cpuUsage: Double
 }
 
+/// ps 输出行的解析正则,提取行首 pid、紧跟的 cpu%。整个采样周期只编译一次,
+/// 避免在 enumerateLines 逐行闭包里为每个进程重新编译同一个 pattern。
+private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]+)\\s+(.+)$")
+
 /// 后台采样 CPU 占用最高的 N 个进程。
 /// 使用 `ps -Aceo pid,pcpu,comm -r` 获取每个进程的 CPU%,按宿主 App 合并子进程。
 func sampleTopCPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawCPUProcess] {
@@ -60,8 +64,7 @@ func sampleTopCPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false)
 
         let trimmed = line.trimmingCharacters(in: .whitespaces)
         // 用正则提取: pid（行首数字）、cpu%（紧跟的数字）
-        guard let regex = try? NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]+)\\s+(.+)$"),
-              let match = regex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) else {
+        guard let match = psLineRegex.firstMatch(in: trimmed, range: NSRange(trimmed.startIndex..., in: trimmed)) else {
             return
         }
 

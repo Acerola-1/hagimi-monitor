@@ -65,8 +65,6 @@ final class MonitorSettings: ObservableObject {
     @Published var mediaKeyBrightnessEnabled: Bool = false
     @Published var mediaKeyVolumeEnabled: Bool = false
     @Published var mediaKeyShowOSD: Bool = true
-    @Published var mediaKeyFineScaleBrightness: Bool = false
-    @Published var mediaKeyFineScaleVolume: Bool = false
     @Published var showMemoryProcesses: Bool = true
     @Published var memoryShowSystemProcesses: Bool = false
     @Published var showCPUProcesses: Bool = false
@@ -120,8 +118,6 @@ final class MonitorSettings: ObservableObject {
         mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
         mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
         mediaKeyShowOSD = defaults.object(forKey: Keys.mediaKeyShowOSD) as? Bool ?? true
-        mediaKeyFineScaleBrightness = defaults.object(forKey: Keys.mediaKeyFineScaleBrightness) as? Bool ?? false
-        mediaKeyFineScaleVolume = defaults.object(forKey: Keys.mediaKeyFineScaleVolume) as? Bool ?? false
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
             let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
@@ -376,20 +372,6 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $mediaKeyFineScaleBrightness
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.mediaKeyFineScaleBrightness)
-            }
-            .store(in: &cancellables)
-
-        $mediaKeyFineScaleVolume
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.mediaKeyFineScaleVolume)
-            }
-            .store(in: &cancellables)
-
         $showMemoryProcesses
             .dropFirst()
             .sink { [weak self] newValue in
@@ -509,8 +491,6 @@ private enum Keys {
     static let mediaKeyBrightnessEnabled = "settings.mediaKey.brightnessEnabled"
     static let mediaKeyVolumeEnabled = "settings.mediaKey.volumeEnabled"
     static let mediaKeyShowOSD = "settings.mediaKey.showOSD"
-    static let mediaKeyFineScaleBrightness = "settings.mediaKey.fineScaleBrightness"
-    static let mediaKeyFineScaleVolume = "settings.mediaKey.fineScaleVolume"
     static let showMemoryProcesses = "settings.memory.showProcesses"
     static let memoryShowSystemProcesses = "settings.memory.showSystemProcesses"
     static let showCPUProcesses = "settings.cpu.showProcesses"

@@ -154,7 +154,7 @@ private struct MenuBarDisplaySettingsSection: View {
     private var preview: some View {
         if settings.menuBarDisplayMode == .ring {
             Image(nsImage: MenuBarComputeRingIcon.image(
-                load: store.displayedComputeLoad,
+                load: store.loadAnimator.displayedComputeLoad,
                 darkMode: NSApp.effectiveAppearance.isDark,
                 loadLevel: store.haloRingLoadLevel
             ))
