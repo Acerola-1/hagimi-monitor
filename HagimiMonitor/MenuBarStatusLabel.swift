@@ -9,7 +9,7 @@ struct MenuBarStatusLabel: View {
         switch store.settings.menuBarDisplayMode {
         case .ring:
             Image(nsImage: MenuBarComputeRingIcon.image(
-                load: store.displayedComputeLoad,
+                load: store.loadAnimator.displayedComputeLoad,
                 darkMode: darkMode,
                 loadLevel: store.haloRingLoadLevel
             ))

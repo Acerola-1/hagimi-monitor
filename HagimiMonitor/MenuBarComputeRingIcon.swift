@@ -4,7 +4,13 @@ import Foundation
 enum MenuBarComputeRingIcon {
     private static let cache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        cache.countLimit = 840
+        // 桶组合上限 101(负载)×2(明暗)×4(等级)=808,但菜单栏实际只在当前负载附近的
+        // 少数桶间移动。840 会让几乎所有历史桶常驻,且每张被绘制过的缓存图会各持有一个
+        // AppKit 位图 rep,累积成内存高水位。displayedComputeLoad 由 30fps 平滑定时器驱动,
+        // 负载爬升/回落时会连续扫过一整段整数桶,limit 太小会导致近期刚淘汰的桶被
+        // 立刻重新访问、频繁重绘。300 约等于「整段负载范围 × 明暗两态」(101×2=202)
+        // 再留一些余量给相邻等级切换,足以覆盖单次爬升/回落的连续扫桶,不必到 840。
+        cache.countLimit = 300
         return cache
     }()
 

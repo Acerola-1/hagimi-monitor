@@ -221,7 +221,11 @@ final class MonitorStore: ObservableObject {
     @Published var topDiskProcesses: [TopDiskProcess] = []
     @Published var topNetworkProcesses: [TopNetworkProcess] = []
     var selectedKind: MonitorKind = .cpu
-    @Published private(set) var displayedComputeLoad = 0.0
+
+    /// 菜单栏负载环的 30fps 平滑动画状态,独立发布(而非 MonitorStore 自身的
+    /// @Published),避免 MonitorPanelView 等只用 `@ObservedObject` 订阅整个 store、
+    /// 却从不读取该值的视图,在负载爬升/回落期间被拖着以 30fps 重算整棵视图树。
+    let loadAnimator = MenuBarLoadAnimator()
 
     /// 面板是否可见,用于按需启停进程采样。
     @Published private(set) var isPanelVisible = false
@@ -229,13 +233,11 @@ final class MonitorStore: ObservableObject {
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
-    private var smoothingTimerCancellable: AnyCancellable?
     private var procSampleTimer: AnyCancellable?
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
-    private var menuBarTargetComputeLoad = 0.0
     private var isSampling = false
     private var pendingSampleKinds: Set<MonitorKind> = []
 
@@ -342,34 +344,43 @@ final class MonitorStore: ObservableObject {
         var diskProcesses: [TopDiskProcess]?
         var networkProcesses: [TopNetworkProcess]?
 
-        // 并行执行 4 类采样,各自独立互不阻塞。
-        group.enter()
-        procSampleQueue.async {
-            let raw = sampleTopMemoryProcesses(includeSystemProcesses: memoryIncludeSystem)
-            // enrich 使用 NSRunningApplication(pid:) 初始化,只读属性,后台线程安全。
-            memoryProcesses = enrich(raw)
-            group.leave()
+        // 并行执行 4 类采样,各自独立互不阻塞;只采样用户实际开启的列表,避免
+        // 关闭的列表仍每 5 秒 spawn ps/nettop 子进程空耗 CPU。
+        if settings.showMemoryProcesses {
+            group.enter()
+            procSampleQueue.async {
+                let raw = sampleTopMemoryProcesses(includeSystemProcesses: memoryIncludeSystem)
+                // enrich 使用 NSRunningApplication(pid:) 初始化,只读属性,后台线程安全。
+                memoryProcesses = enrich(raw)
+                group.leave()
+            }
         }
 
-        group.enter()
-        procSampleQueue.async {
-            let raw = sampleTopCPUProcesses(includeSystemProcesses: cpuIncludeSystem)
-            cpuProcesses = enrichCPU(raw)
-            group.leave()
+        if settings.showCPUProcesses {
+            group.enter()
+            procSampleQueue.async {
+                let raw = sampleTopCPUProcesses(includeSystemProcesses: cpuIncludeSystem)
+                cpuProcesses = enrichCPU(raw)
+                group.leave()
+            }
         }
 
-        group.enter()
-        procSampleQueue.async {
-            let raw = sampleTopDiskProcesses(includeSystemProcesses: diskIncludeSystem)
-            diskProcesses = enrichDisk(raw)
-            group.leave()
+        if settings.showDiskProcesses {
+            group.enter()
+            procSampleQueue.async {
+                let raw = sampleTopDiskProcesses(includeSystemProcesses: diskIncludeSystem)
+                diskProcesses = enrichDisk(raw)
+                group.leave()
+            }
         }
 
-        group.enter()
-        procSampleQueue.async {
-            let raw = sampleTopNetworkProcesses(includeSystemProcesses: networkIncludeSystem)
-            networkProcesses = enrichNetwork(raw)
-            group.leave()
+        if settings.showNetworkProcesses {
+            group.enter()
+            procSampleQueue.async {
+                let raw = sampleTopNetworkProcesses(includeSystemProcesses: networkIncludeSystem)
+                networkProcesses = enrichNetwork(raw)
+                group.leave()
+            }
         }
 
         // 全部采样完成后,在主线程更新 @Published 属性。
@@ -390,7 +401,6 @@ final class MonitorStore: ObservableObject {
 
     deinit {
         timerCancellable?.cancel()
-        smoothingTimerCancellable?.cancel()
         procSampleTimer?.cancel()
         cancellables.removeAll()
     }
@@ -514,8 +524,15 @@ final class MonitorStore: ObservableObject {
     private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
         switch result {
         case .success(let snapshot):
-            allModules = snapshot.modules
-            modules = visibleModules(from: allModules)
+            // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
+            // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
+            if allModules != snapshot.modules {
+                allModules = snapshot.modules
+            }
+            let newVisibleModules = visibleModules(from: allModules)
+            if modules != newVisibleModules {
+                modules = newVisibleModules
+            }
             updateMenuBarTargetComputeLoad()
 
         case .failure(let error):
@@ -535,16 +552,44 @@ final class MonitorStore: ObservableObject {
 
 
 
+    private func updateMenuBarTargetComputeLoad() {
+        loadAnimator.updateTarget(combinedComputeLoad)
+    }
+
+    private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
+        modules.filter { settings.isVisible($0.kind) }
+    }
+}
+
+/// 菜单栏负载环的 30fps 平滑动画状态。从 MonitorStore 拆出独立发布,详见
+/// `MonitorStore.loadAnimator` 处的说明。
+final class MenuBarLoadAnimator: ObservableObject {
+    @Published private(set) var displayedComputeLoad = 0.0
+
+    private var targetComputeLoad = 0.0
+    private var smoothingTimerCancellable: AnyCancellable?
+
+    func updateTarget(_ target: Double) {
+        guard ComputeLoadModel.shouldUpdateMenuBarTarget(
+            currentTarget: targetComputeLoad,
+            nextTarget: target
+        ) else {
+            return
+        }
+        targetComputeLoad = target
+        ensureSmoothingTimer()
+    }
+
     private func advanceSmoothing() {
         let next = ComputeLoadModel.smoothedDisplayValue(
             current: displayedComputeLoad,
-            target: menuBarTargetComputeLoad
+            target: targetComputeLoad
         )
-        let quantized = MonitorStore.quantizeLoad(next)
+        let quantized = Self.quantizeLoad(next)
         if quantized != displayedComputeLoad {
             displayedComputeLoad = quantized
         }
-        let quantizedTarget = MonitorStore.quantizeLoad(menuBarTargetComputeLoad)
+        let quantizedTarget = Self.quantizeLoad(targetComputeLoad)
         if abs(displayedComputeLoad - quantizedTarget) <= MonitorConstants.menuBarLoadSmoothStopThreshold {
             if displayedComputeLoad != quantizedTarget {
                 displayedComputeLoad = quantizedTarget
@@ -567,20 +612,8 @@ final class MonitorStore: ObservableObject {
             }
     }
 
-    private func updateMenuBarTargetComputeLoad() {
-        let currentLoad = combinedComputeLoad
-        guard ComputeLoadModel.shouldUpdateMenuBarTarget(
-            currentTarget: menuBarTargetComputeLoad,
-            nextTarget: currentLoad
-        ) else {
-            return
-        }
-        menuBarTargetComputeLoad = currentLoad
-        ensureSmoothingTimer()
-    }
-
-    private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
-        modules.filter { settings.isVisible($0.kind) }
+    deinit {
+        smoothingTimerCancellable?.cancel()
     }
 }
 
