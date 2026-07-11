@@ -36,7 +36,7 @@ struct MonitorPanelView: View {
 
                 #if DISPLAY_CONTROL
                 if store.settings.displayModuleVisible {
-                    DisplayControlsSection(settings: store.settings)
+                    DisplayControlsSection(settings: store.settings, isPanelVisible: store.isPanelVisible)
                         .compatibleGlassEffectID("display-controls", in: glassNamespace)
                 }
                 #endif

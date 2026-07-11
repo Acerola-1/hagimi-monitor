@@ -6,6 +6,7 @@ import SwiftUI
 
 struct DisplayControlsSection: View {
     @ObservedObject var settings: MonitorSettings
+    let isPanelVisible: Bool
     @StateObject private var controller = DisplayControlController()
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
@@ -76,6 +77,25 @@ struct DisplayControlsSection: View {
         .onAppear {
             controller.attach(settings: settings)
             controller.refreshAsync()
+            controller.setPolling(active: isPanelVisible && isExpanded)
+        }
+        // MonitorPanelView 只创建一次、常驻在 NSPanel 里,显隐只是窗口级 order,
+        // 不会重新触发 onAppear——面板每次重新打开都要重新读一次 DDC 当前值。
+        // 但只在这个瞬间刷新一次还不够:面板开着不关、只是反复展开/收起显示器,
+        // 或者面板一直停在展开状态,这期间系统设置/其他 app 改的亮度音量同样
+        // 发现不了(DDC 没有变化通知,只能主动读)。所以展开且面板可见期间持续
+        // 轮询,离开任一条件就停,避免空转占用 DDC 总线。
+        .onChange(of: isPanelVisible) { _, newValue in
+            if newValue {
+                controller.refreshAsync()
+            }
+            controller.setPolling(active: newValue && isExpanded)
+        }
+        .onChange(of: isExpanded) { _, newValue in
+            if newValue {
+                controller.refreshAsync()
+            }
+            controller.setPolling(active: isPanelVisible && newValue)
         }
         .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
     }
@@ -196,7 +216,7 @@ private struct DisplayControlGroup: View {
                         )
                     }
 
-                    if settings.displayVolumeControlEnabled {
+                    if settings.displayVolumeControlEnabled, !display.isBuiltIn {
                         DisplayControlSlider(
                             label: String(localized: "settings.volume"),
                             systemImage: "speaker.wave.2",
@@ -207,7 +227,7 @@ private struct DisplayControlGroup: View {
                         )
                     }
 
-                    if settings.displayContrastControlEnabled {
+                    if settings.displayContrastControlEnabled, !display.isBuiltIn {
                         DisplayControlSlider(
                             label: String(localized: "settings.contrast"),
                             systemImage: "circle.lefthalf.filled",
@@ -300,6 +320,12 @@ final class DisplayControlController: ObservableObject {
     private var settingsObservation: AnyCancellable?
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
+    /// 面板打开且详情展开期间的轮询定时器。系统设置/其他 app 改亮度音量不会
+    /// 产生任何通知,DDC 又是只能主动读取的哑协议,唯一能发现外部变化的办法就是
+    /// 这段时间内持续轮询;收起或面板隐藏后停掉,避免空转占用 DDC 总线。
+    private var pollTimerCancellable: AnyCancellable?
+    private static let pollInterval: TimeInterval = 3
+
     init() {
         changeObserver.start { [weak self] in
             self?.refreshAsync()
@@ -325,6 +351,20 @@ final class DisplayControlController: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.mediaKeyController.refresh()
+            }
+    }
+
+    func setPolling(active: Bool) {
+        guard active else {
+            pollTimerCancellable?.cancel()
+            pollTimerCancellable = nil
+            return
+        }
+        guard pollTimerCancellable == nil else { return }
+        pollTimerCancellable = Timer.publish(every: Self.pollInterval, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.refreshAsync()
             }
     }
 
