@@ -197,6 +197,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
                 return event
             }
 
+            // 按住 Cmd 点击状态项是系统的图标拖动/重排手势。必须把事件交还系统,
+            // 否则菜单栏管理器拿不到它、无法进入拖动模式(macOS 15 上事件链靠前,
+            // 此处不放行会导致 Cmd+拖动完全失效;26/27 上系统更早消费,才没暴露)。
+            if event.modifierFlags.contains(.command) {
+                return event
+            }
+
             switch event.type {
             case .leftMouseDown:
                 self.handleStatusItemLeftClick(event)
