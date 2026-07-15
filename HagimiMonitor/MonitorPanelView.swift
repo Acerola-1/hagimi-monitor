@@ -821,7 +821,7 @@ private struct BatteryGlassRow: View, Equatable {
                     MetricPill(systemImage: powerPillIcon, text: powerPillValue, theme: theme)
                         .layoutPriority(0)
                 } else {
-                    MetricPill(systemImage: "gauge.with.dots.needle.33percent", text: value("power"), theme: theme)
+                    MetricPill(systemImage: powerPillIcon, text: value("power"), theme: theme)
                         .layoutPriority(0)
                 }
             }
@@ -874,7 +874,7 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var powerPillIcon: String {
-        return "gauge.with.dots.needle.33percent"
+        return "powermeter"
     }
 
     private var powerPillValue: String {
