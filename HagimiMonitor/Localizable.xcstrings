@@ -3136,19 +3136,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Power"
+            "value": "System Power"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "電力"
+            "value": "システム電力"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "功率"
+            "value": "实时功耗"
           }
         }
       }

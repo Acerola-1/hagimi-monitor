@@ -189,14 +189,30 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func installEventMonitors() {
-        // 左键点击状态项:切换面板显隐。拦截事件避免系统默认高亮行为与我们冲突。
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown]) { [weak self] event in
+        // 左键单击即时切换面板;右键弹出上下文菜单(含退出)。
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self,
                   let button = self.statusItem.button,
                   event.window == button.window else {
                 return event
             }
-            self.togglePanel()
+
+            // 按住 Cmd 点击状态项是系统的图标拖动/重排手势。必须把事件交还系统,
+            // 否则菜单栏管理器拿不到它、无法进入拖动模式(macOS 15 上事件链靠前,
+            // 此处不放行会导致 Cmd+拖动完全失效;26/27 上系统更早消费,才没暴露)。
+            if event.modifierFlags.contains(.command) {
+                return event
+            }
+
+            switch event.type {
+            case .leftMouseDown:
+                self.handleStatusItemLeftClick(event)
+            case .rightMouseDown:
+                self.dismissPanel()
+                self.showStatusItemContextMenu(for: button, event: event)
+            default:
+                break
+            }
             return nil
         }
 
@@ -208,6 +224,29 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Show / Hide
+
+    private func handleStatusItemLeftClick(_ event: NSEvent) {
+        // 单击即时切换面板。退出走右键上下文菜单,故不做双击判定,避免为等待
+        // 双击窗口而延迟单击响应(那会导致面板"点了不出现")。
+        togglePanel()
+    }
+
+    private func showStatusItemContextMenu(for button: NSStatusBarButton, event: NSEvent) {
+        let menu = NSMenu(title: "HagimiMonitor")
+        let quitItem = NSMenuItem(
+            title: String(localized: "menu.quit"),
+            action: #selector(terminateApplication(_:)),
+            keyEquivalent: "q"
+        )
+        quitItem.keyEquivalentModifierMask = [.command]
+        quitItem.target = self
+        menu.addItem(quitItem)
+        NSMenu.popUpContextMenu(menu, with: event, for: button)
+    }
+
+    @objc private func terminateApplication(_ sender: Any?) {
+        NSApp.terminate(sender)
+    }
 
     private func togglePanel() {
         if panel.isVisible {

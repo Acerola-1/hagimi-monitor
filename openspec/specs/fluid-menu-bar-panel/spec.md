@@ -1,5 +1,8 @@
-## ADDED Requirements
+# fluid-menu-bar-panel Specification
 
+## Purpose
+TBD - created by archiving change replace-menubar-with-fluid-panel. Update Purpose after archive.
+## Requirements
 ### Requirement: Self-hosted menu bar panel window
 The system SHALL present the monitor panel through a self-owned `NSPanel` created and managed by `FluidPanelController`, instead of SwiftUI's `MenuBarExtra(.window)`, because `MenuBarExtra(.window)` on macOS 15 redraws the whole host window on every content-size change and causes the panel to flicker on expansion.
 
@@ -66,3 +69,16 @@ The controller SHALL dismiss the panel on outside interaction and integrate with
 #### Scenario: Panel clamps to screen edge
 - **WHEN** the panel's computed frame would extend past the screen's right or left visible edge
 - **THEN** the controller SHALL shift the frame horizontally to stay within the screen's visible area
+
+### Requirement: Discoverable status-item exit controls
+The status item SHALL offer an explicit right-click Quit command and a double-click shortcut to quit HagimiMonitor, while a single left-click continues to toggle the panel.
+
+#### Scenario: Right-click exposes Quit
+- **WHEN** the user right-clicks the menu bar status item
+- **THEN** the app SHALL show a context menu containing the localized Quit command
+
+#### Scenario: Double-click quits without opening the panel
+- **WHEN** the user double-clicks the menu bar status item
+- **THEN** the app SHALL terminate
+- **AND** the panel SHALL NOT flash open before termination
+

@@ -98,3 +98,8 @@ HagimiMonitor 是 `LSUIElement` 菜单栏应用，面板通过 SwiftUI `MenuBarE
 - 打开设置的入口：复用 `SettingsWindowPresenter.open(...)` 是否足够，还是必须经由 `@Environment(\.openSettings)`？（倾向前者，省去环境注入。）
 - 面板圆角与阴影的目标值：是否需要与 macOS 26 系统菜单严格一致，还是接受 Fluid 风格的略宽圆角？
 - `TransparentWindowBackground` 在自建 `NSPanel` 下是否仍需要，或可由 `NSPanel` 的透明配置直接替代。
+
+### 7. Status item exit controls
+**Decision:** A right-click on the status item presents a native context menu with the existing localized Quit command. A double-click terminates the app; a single-click is deferred by `NSEvent.doubleClickInterval` so it does not briefly open the panel before the second click arrives.
+
+**Reason:** This makes quitting discoverable without adding a visual control or extra height to the compact monitor panel. The context menu follows macOS conventions, while double-click remains a fast power-user action.

@@ -1,26 +1,32 @@
-## ADDED Requirements
+# panel-animation-consistency Specification
 
+## Purpose
+Defines version-aware panel animation behavior so detail disclosure, expansion, and progress-meter transitions stay smooth and consistent across supported macOS versions.
+## Requirements
 ### Requirement: Version-aware detail disclosure transition
-The system SHALL share a single `detailDisclosure` transition across all expandable sections in the panel (`MetricGlassRow`, `NetworkGlassRow`, `BatteryGlassRow`, and `DisplayControlsSection`), and SHALL adapt that transition by OS version because `MenuBarExtra(.window)` on macOS 15 does not reconcile a SwiftUI transition with the host window resize.
+The system SHALL share a single `detailDisclosure` transition across all expandable sections in the panel (`MetricGlassRow`, `NetworkGlassRow`, `BatteryGlassRow`, and `DisplayControlsSection`). Because the panel is now hosted in a self-owned `NSPanel` whose height is animated at the window layer (see `fluid-menu-bar-panel`), the transition SHALL be identical on macOS 15 and macOS 26+ and SHALL NOT branch by OS version.
 
-#### Scenario: macOS 26+ uses geometric transition
-- **WHEN** any expandable row is expanded or collapsed on macOS 26+
-- **THEN** the transition SHALL be `.asymmetric(insertion: .opacity.combined(with: .scale(scale: 0.98, anchor: .top)), removal: .opacity)`
+#### Scenario: Unified transition on all supported versions
+- **WHEN** any expandable row is expanded or collapsed on macOS 15 or macOS 26+
+- **THEN** the content transition SHALL be the same definition on both versions
+- **AND** the transition SHALL NOT introduce geometric interpolation that competes with the window-layer height animation
 
-#### Scenario: macOS 15 uses identity transition
-- **WHEN** any expandable row is expanded or collapsed on macOS 15
-- **THEN** the transition SHALL be `.identity` so no leftover removal frame is rendered against an already-resized window
+#### Scenario: Height change is smooth without flicker
+- **WHEN** a row is expanded or collapsed
+- **THEN** the panel height SHALL interpolate smoothly via the window layer
+- **AND** no leftover removal frame SHALL be rendered against a mismatched window size
 
 ### Requirement: Version-aware expansion animation
-The system SHALL drive expansion state changes through a shared helper that animates with `.easeInOut(duration: 0.25)` on macOS 26+ and mutates state without geometric interpolation on macOS 15, avoiding per-frame window resize jitter from `MenuBarExtra(.window)`.
+The system SHALL drive expansion state changes through a shared helper. Because the window layer now provides the smooth height interpolation with the top edge anchored (see `fluid-menu-bar-panel`), the helper SHALL mutate expansion state without OS-version branching and without per-version geometric animation, on both macOS 15 and macOS 26+.
 
-#### Scenario: macOS 26+ animates expansion
-- **WHEN** a row is toggled on macOS 26+
-- **THEN** the row height change SHALL interpolate with `.easeInOut(duration: 0.25)`
+#### Scenario: Expansion toggles uniformly
+- **WHEN** a row is toggled on macOS 15 or macOS 26+
+- **THEN** the expansion state SHALL update through the shared helper on both versions
+- **AND** the resulting height change SHALL be interpolated by the window layer, not by a per-version SwiftUI geometry animation
 
-#### Scenario: macOS 15 expands without geometric interpolation
-- **WHEN** a row is toggled on macOS 15
-- **THEN** the window SHALL resize to its final size in one step, with the top edge anchored only in the resting state
+#### Scenario: Top edge stays anchored during animation
+- **WHEN** the panel grows or shrinks from an expansion toggle
+- **THEN** the top edge SHALL remain anchored at the menu bar throughout the animation
 
 ### Requirement: Progress meter smooth transition
 The system SHALL animate the progress bar width change in `ProgressMeter` when the value changes.
@@ -28,3 +34,4 @@ The system SHALL animate the progress bar width change in `ProgressMeter` when t
 #### Scenario: Progress bar animates value change
 - **WHEN** the `value` parameter of `ProgressMeter` changes
 - **THEN** the width transition SHALL animate with `.easeInOut(duration: 0.3)`
+
