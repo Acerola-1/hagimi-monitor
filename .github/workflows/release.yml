@@ -59,6 +59,45 @@ jobs:
             OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
             archive
 
+      - name: Re-sign Sparkle nested components
+        run: |
+          # Sparkle 的二进制 XCFramework 内含 ad-hoc 签名的嵌套可执行文件。
+          # Xcode 仅重签 framework 根目录，公证会拒绝残留的 ad-hoc 签名；必须由叶到根重签。
+          APP_PATH="build/HagimiMonitor.xcarchive/Products/Applications/HagimiMonitor.app"
+          SPARKLE_FRAMEWORK="$APP_PATH/Contents/Frameworks/Sparkle.framework/Versions/Current"
+          SIGNING_IDENTITY="Developer ID Application"
+
+          sign_component() {
+            codesign --force --sign "$SIGNING_IDENTITY" \
+              --timestamp --options runtime \
+              --preserve-metadata=identifier,entitlements,flags \
+              "$1"
+          }
+
+          sign_component "$SPARKLE_FRAMEWORK/Autoupdate"
+          sign_component "$SPARKLE_FRAMEWORK/XPCServices/Downloader.xpc"
+          sign_component "$SPARKLE_FRAMEWORK/XPCServices/Installer.xpc"
+          sign_component "$SPARKLE_FRAMEWORK/Updater.app"
+          sign_component "$SPARKLE_FRAMEWORK"
+          sign_component "$APP_PATH"
+
+          # `--deep` 的成功只说明封装完整，不会发现 ad-hoc 签名；逐项确认公证要求。
+          for component in \
+            "$SPARKLE_FRAMEWORK/Autoupdate" \
+            "$SPARKLE_FRAMEWORK/XPCServices/Downloader.xpc" \
+            "$SPARKLE_FRAMEWORK/XPCServices/Installer.xpc" \
+            "$SPARKLE_FRAMEWORK/Updater.app" \
+            "$SPARKLE_FRAMEWORK" \
+            "$APP_PATH"; do
+            echo "--- $component ---"
+            SIGNING_INFO="$(codesign -dvvv "$component" 2>&1)"
+            echo "$SIGNING_INFO"
+            echo "$SIGNING_INFO" | grep -q "Authority=Developer ID Application"
+            echo "$SIGNING_INFO" | grep -q "TeamIdentifier=$APPLE_TEAM_ID"
+            echo "$SIGNING_INFO" | grep -Eq "Timestamp=|Signed Time="
+            echo "$SIGNING_INFO" | grep -q "runtime"
+          done
+
       - name: Notarize .app
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -72,11 +111,25 @@ jobs:
           # 打包成 zip 提交公证
           ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/HagimiMonitor.zip"
 
-          xcrun notarytool submit "$RUNNER_TEMP/HagimiMonitor.zip" \
+          # 提交公证并捕获 submission id；失败时拉取 Apple 详细日志便于定位
+          SUBMIT_OUT="$(xcrun notarytool submit "$RUNNER_TEMP/HagimiMonitor.zip" \
             --apple-id "$APPLE_ID" \
             --password "$APPLE_APP_PASSWORD" \
             --team-id "$APPLE_TEAM_ID" \
-            --wait
+            --wait 2>&1)"
+          echo "$SUBMIT_OUT"
+
+          SUBMISSION_ID="$(echo "$SUBMIT_OUT" | awk '/id:/{print $2; exit}')"
+          if ! echo "$SUBMIT_OUT" | grep -q "status: Accepted"; then
+            echo "::error::.app 公证未通过，拉取详细日志："
+            if [ -n "$SUBMISSION_ID" ]; then
+              xcrun notarytool log "$SUBMISSION_ID" \
+                --apple-id "$APPLE_ID" \
+                --password "$APPLE_APP_PASSWORD" \
+                --team-id "$APPLE_TEAM_ID" || true
+            fi
+            exit 1
+          fi
 
           # 将公证票据钉到 .app 上（离线也能通过 Gatekeeper）
           xcrun stapler staple "$APP_PATH"
@@ -167,4 +220,3 @@ jobs:
           publish_branch: gh-pages
           keep_files: true
           exclude_assets: '*.zip,*.md'
-
