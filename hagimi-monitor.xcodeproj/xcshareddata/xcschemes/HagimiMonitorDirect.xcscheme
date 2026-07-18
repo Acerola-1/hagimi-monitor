@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "2E0C71B92FB1A10000908371"
-               BuildableName = "HagimiMonitorDirect.app"
+               BuildableName = "HagimiMonitor.app"
                BlueprintName = "HagimiMonitorDirect"
                ReferencedContainer = "container:hagimi-monitor.xcodeproj">
             </BuildableReference>
@@ -58,7 +58,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2E0C71B92FB1A10000908371"
-            BuildableName = "HagimiMonitorDirect.app"
+            BuildableName = "HagimiMonitor.app"
             BlueprintName = "HagimiMonitorDirect"
             ReferencedContainer = "container:hagimi-monitor.xcodeproj">
          </BuildableReference>
@@ -75,7 +75,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "2E0C71B92FB1A10000908371"
-            BuildableName = "HagimiMonitorDirect.app"
+            BuildableName = "HagimiMonitor.app"
             BlueprintName = "HagimiMonitorDirect"
             ReferencedContainer = "container:hagimi-monitor.xcodeproj">
          </BuildableReference>

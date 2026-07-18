@@ -35,7 +35,8 @@ enum SettingsWindowPresenter {
     @MainActor
     static func open(_ openSettings: OpenSettingsAction, tab: SettingsTab? = nil) {
         AppLogger.settings.info("Opening settings window")
-        Task { await UpdateChecker.shared.checkForUpdatesIfStale() }
+        // 更新检查已由 Sparkle 在启动时接管后台定时检查(仅直接分发版),
+        // 无需在开窗时再手动触发。App Store 版更新交由商店管理。
 
         if let tab {
             UserDefaults.standard.set(tab.rawValue, forKey: selectedTabDefaultsKey)

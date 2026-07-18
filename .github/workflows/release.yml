@@ -10,39 +10,161 @@ jobs:
     runs-on: macos-15
     permissions:
       contents: write
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
         run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
 
-      - name: Build
+      - name: Import signing certificate
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          # 创建临时钥匙串并导入 Developer ID Application 证书
+          KEYCHAIN_PATH="$RUNNER_TEMP/app-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          security import "$RUNNER_TEMP/cert.p12" \
+            -P "$MACOS_CERT_PASSWORD" \
+            -A -t cert -f pkcs12 \
+            -k "$KEYCHAIN_PATH"
+
+          # 允许 codesign 无提示访问私钥
+          security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+
+          # 将临时钥匙串加入搜索列表
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Build & sign (Developer ID)
         run: |
           xcodebuild -project hagimi-monitor.xcodeproj \
             -scheme HagimiMonitorDirect \
             -configuration Release \
             -arch arm64 \
             -archivePath build/HagimiMonitor.xcarchive \
-            CODE_SIGN_IDENTITY="-" \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGN_STYLE=Manual \
+            CODE_SIGN_IDENTITY="Developer ID Application" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
             archive
+
+      - name: Notarize .app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          APP_PATH="build/HagimiMonitor.xcarchive/Products/Applications/HagimiMonitor.app"
+
+          # 校验签名 & Hardened Runtime
+          codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+
+          # 打包成 zip 提交公证
+          ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/HagimiMonitor.zip"
+
+          xcrun notarytool submit "$RUNNER_TEMP/HagimiMonitor.zip" \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          # 将公证票据钉到 .app 上（离线也能通过 Gatekeeper）
+          xcrun stapler staple "$APP_PATH"
 
       - name: Package .dmg
         run: |
+          APP_PATH="build/HagimiMonitor.xcarchive/Products/Applications/HagimiMonitor.app"
           mkdir -p dmg-temp
-          cp -R build/HagimiMonitor.xcarchive/Products/Applications/HagimiMonitor.app dmg-temp/
+          cp -R "$APP_PATH" dmg-temp/
           ln -s /Applications dmg-temp/Applications
           hdiutil create -volname HagimiMonitor \
             -srcfolder dmg-temp \
             -ov -format UDZO \
             build/HagimiMonitor.dmg
 
+      - name: Notarize .dmg
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          xcrun notarytool submit build/HagimiMonitor.dmg \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+
+          xcrun stapler staple build/HagimiMonitor.dmg
+
+      - name: Package Sparkle update ZIP
+        run: |
+          # Sparkle 自更新使用 ZIP(比 DMG 更稳:直接解压替换 .app)。
+          # 复用已公证并 staple 过的 .app,zip 内保留顶层 .app 目录。
+          APP_PATH="build/HagimiMonitor.xcarchive/Products/Applications/HagimiMonitor.app"
+          mkdir -p build/appcast
+          ditto -c -k --keepParent "$APP_PATH" "build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.zip"
+
+      - name: Sign update & generate appcast
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          # 定位 Sparkle 工具链(sign_update / generate_appcast)——由 SPM 解析到 DerivedData。
+          DERIVED="$HOME/Library/Developer/Xcode/DerivedData"
+          SPARKLE_BIN="$(find "$DERIVED" -type d -path '*/SourcePackages/artifacts/sparkle/Sparkle/bin' 2>/dev/null | head -1)"
+          if [ -z "$SPARKLE_BIN" ]; then
+            echo "::error::找不到 Sparkle 工具目录(sign_update/generate_appcast)"
+            exit 1
+          fi
+          echo "Sparkle tools: $SPARKLE_BIN"
+
+          # 私钥从 Secret 注入(EdDSA)。generate_appcast 会读取 build/appcast 下的 ZIP,
+          # 用私钥签名并产出 appcast.xml,更新日志取自各版本的 release notes。
+          echo "$SPARKLE_PRIVATE_KEY" > "$RUNNER_TEMP/sparkle_ed_private_key"
+
+          # 把本次发布说明放到 ZIP 同名 .html 供 appcast 内嵌为更新日志。
+          if [ -f RELEASE_NOTES.md ]; then
+            cp RELEASE_NOTES.md "build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.md" || true
+          fi
+
+          # 下载地址前缀:指向本次 GitHub Release 的资产。
+          DL_PREFIX="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+
+          "$SPARKLE_BIN/generate_appcast" \
+            --ed-key-file "$RUNNER_TEMP/sparkle_ed_private_key" \
+            --download-url-prefix "$DL_PREFIX/" \
+            build/appcast
+
+          rm -f "$RUNNER_TEMP/sparkle_ed_private_key"
+
+          echo "--- appcast.xml ---"
+          cat build/appcast/appcast.xml
+
       - name: Create Release & Upload
         uses: softprops/action-gh-release@v2
         with:
-          files: build/HagimiMonitor.dmg
+          files: |
+            build/HagimiMonitor.dmg
+            build/appcast/HagimiMonitor-${{ github.ref_name }}.zip
           body_path: RELEASE_NOTES.md
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Deploy appcast to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: build/appcast
+          publish_branch: gh-pages
+          keep_files: true
+          exclude_assets: '*.zip,*.md'
+
