@@ -8,7 +8,7 @@
 
 - [x] 2.1 Add Sparkle SPM package linked to the direct target only.
 - [x] 2.2 Inject `SUFeedURL` / `SUPublicEDKey` (placeholder) / `SUEnableInstallerLauncherService` into direct Debug/Release configs.
-- [ ] 2.3 Replace the `SUPublicEDKey` placeholder with the real public key (needs operator key generation).
+- [x] 2.3 Replace the `SUPublicEDKey` placeholder with the real public key (needs operator key generation).
 
 ## 3. Code Integration
 
@@ -25,7 +25,7 @@
 - [x] 4.3 Upload the ZIP to the GitHub Release; keep the DMG for browser download.
 - [x] 4.4 Deploy `appcast.xml` to the `gh-pages` branch.
 - [ ] 4.5 Enable GitHub Pages on `gh-pages` (operator action).
-- [ ] 4.6 Set the `SPARKLE_PRIVATE_KEY` GitHub Secret (operator action).
+- [x] 4.6 Set the `SPARKLE_PRIVATE_KEY` GitHub Secret (operator action).
 
 ## 5. Verification
 
