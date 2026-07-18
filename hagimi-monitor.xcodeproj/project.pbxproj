@@ -616,14 +616,12 @@
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = " /System/Library/PrivateFrameworks";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/SparkleInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
 				INFOPLIST_KEY_CFBundleLocalizations = "en ja zh-Hans";
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
-				INFOPLIST_KEY_SUFeedURL = "https://acerola-1.github.io/hagimi-monitor/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = SPARKLE_PUBLIC_KEY_PLACEHOLDER;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
@@ -665,14 +663,12 @@
 				ENABLE_PREVIEWS = YES;
 				FRAMEWORK_SEARCH_PATHS = " /System/Library/PrivateFrameworks";
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/SparkleInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
 				INFOPLIST_KEY_CFBundleLocalizations = "en ja zh-Hans";
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				INFOPLIST_KEY_SUEnableInstallerLauncherService = YES;
-				INFOPLIST_KEY_SUFeedURL = "https://acerola-1.github.io/hagimi-monitor/appcast.xml";
-				INFOPLIST_KEY_SUPublicEDKey = SPARKLE_PUBLIC_KEY_PLACEHOLDER;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/../Frameworks",
