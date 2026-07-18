@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		5AA0000000000000000000A3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5AA0000000000000000000A2 /* Sparkle */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		2E0C71992FB19C2E00908371 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -25,20 +29,15 @@
 
 /* Begin PBXFileReference section */
 		2E0C71892FB19C2D00908371 /* HagimiMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		2E0C71B52FB1A10000908371 /* HagimiMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E0C71982FB19C2E00908371 /* HagimiMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HagimiMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E0C71A22FB19C2E00908371 /* HagimiMonitorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HagimiMonitorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E0C71B52FB1A10000908371 /* HagimiMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		2E0C718B2FB19C2D00908371 /* HagimiMonitor */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = HagimiMonitor;
-			sourceTree = "<group>";
-		};
-		2E0C71BD2FB1A20000908371 /* HagimiMonitorDirectOnly */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = HagimiMonitorDirectOnly;
 			sourceTree = "<group>";
 		};
 		2E0C719B2FB19C2E00908371 /* HagimiMonitorTests */ = {
@@ -51,17 +50,15 @@
 			path = HagimiMonitorUITests;
 			sourceTree = "<group>";
 		};
+		2E0C71BD2FB1A20000908371 /* HagimiMonitorDirectOnly */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = HagimiMonitorDirectOnly;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		2E0C71862FB19C2D00908371 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-		2E0C71B72FB1A10000908371 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -79,6 +76,14 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2E0C71B72FB1A10000908371 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5AA0000000000000000000A3 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -132,29 +137,6 @@
 			productReference = 2E0C71892FB19C2D00908371 /* HagimiMonitor.app */;
 			productType = "com.apple.product-type.application";
 		};
-		2E0C71B92FB1A10000908371 /* HagimiMonitorDirect */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 2E0C71BC2FB1A10000908371 /* Build configuration list for PBXNativeTarget "HagimiMonitorDirect" */;
-			buildPhases = (
-				2E0C71B62FB1A10000908371 /* Sources */,
-				2E0C71B72FB1A10000908371 /* Frameworks */,
-				2E0C71B82FB1A10000908371 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-			);
-			fileSystemSynchronizedGroups = (
-				2E0C718B2FB19C2D00908371 /* HagimiMonitor */,
-				2E0C71BD2FB1A20000908371 /* HagimiMonitorDirectOnly */,
-			);
-			name = HagimiMonitorDirect;
-			packageProductDependencies = (
-			);
-			productName = HagimiMonitor;
-			productReference = 2E0C71B52FB1A10000908371 /* HagimiMonitor.app */;
-			productType = "com.apple.product-type.application";
-		};
 		2E0C71972FB19C2E00908371 /* HagimiMonitorTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 2E0C71AF2FB19C2E00908371 /* Build configuration list for PBXNativeTarget "HagimiMonitorTests" */;
@@ -201,6 +183,30 @@
 			productReference = 2E0C71A22FB19C2E00908371 /* HagimiMonitorUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		2E0C71B92FB1A10000908371 /* HagimiMonitorDirect */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2E0C71BC2FB1A10000908371 /* Build configuration list for PBXNativeTarget "HagimiMonitorDirect" */;
+			buildPhases = (
+				2E0C71B62FB1A10000908371 /* Sources */,
+				2E0C71B72FB1A10000908371 /* Frameworks */,
+				2E0C71B82FB1A10000908371 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				2E0C718B2FB19C2D00908371 /* HagimiMonitor */,
+				2E0C71BD2FB1A20000908371 /* HagimiMonitorDirectOnly */,
+			);
+			name = HagimiMonitorDirect;
+			packageProductDependencies = (
+				5AA0000000000000000000A2 /* Sparkle */,
+			);
+			productName = HagimiMonitor;
+			productReference = 2E0C71B52FB1A10000908371 /* HagimiMonitor.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -214,9 +220,6 @@
 					2E0C71882FB19C2D00908371 = {
 						CreatedOnToolsVersion = 26.4.1;
 					};
-					2E0C71B92FB1A10000908371 = {
-						CreatedOnToolsVersion = 26.4.1;
-					};
 					2E0C71972FB19C2E00908371 = {
 						CreatedOnToolsVersion = 26.4.1;
 						TestTargetID = 2E0C71B92FB1A10000908371;
@@ -225,19 +228,25 @@
 						CreatedOnToolsVersion = 26.4.1;
 						TestTargetID = 2E0C71882FB19C2D00908371;
 					};
+					2E0C71B92FB1A10000908371 = {
+						CreatedOnToolsVersion = 26.4.1;
+					};
 				};
 			};
 			buildConfigurationList = 2E0C71842FB19C2D00908371 /* Build configuration list for PBXProject "hagimi-monitor" */;
-			developmentRegion = zh-Hans;
+			developmentRegion = "zh-Hans";
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
 				ja,
-					zh-Hans,
+				"zh-Hans",
 			);
 			mainGroup = 2E0C71802FB19C2D00908371;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				5AA0000000000000000000A1 /* XCRemoteSwiftPackageReference "Sparkle" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2E0C718A2FB19C2D00908371 /* Products */;
 			projectDirPath = "";
@@ -259,13 +268,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2E0C71B82FB1A10000908371 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2E0C71962FB19C2E00908371 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -274,6 +276,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2E0C71A02FB19C2E00908371 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2E0C71B82FB1A10000908371 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -290,13 +299,6 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		2E0C71B62FB1A10000908371 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		2E0C71942FB19C2E00908371 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -305,6 +307,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		2E0C719E2FB19C2E00908371 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		2E0C71B62FB1A10000908371 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -459,11 +468,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleLocalizations = (
-					en,
-					ja,
-					"zh-Hans",
-				);
+				INFOPLIST_KEY_CFBundleLocalizations = "en ja zh-Hans";
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -498,11 +503,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleLocalizations = (
-					en,
-					ja,
-					"zh-Hans",
-				);
+				INFOPLIST_KEY_CFBundleLocalizations = "en ja zh-Hans";
 				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
 				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
@@ -515,112 +516,6 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-			};
-			name = Release;
-		};
-		2E0C71BA2FB1A10000908371 /* Debug */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = arm64;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
-				INFOPLIST_KEY_CFBundleLocalizations = (
-					en,
-					ja,
-					"zh-Hans",
-				);
-				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MARKETING_VERSION = 0.9.8;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
-				PRODUCT_NAME = HagimiMonitor;
-				REGISTER_APP_GROUPS = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DIRECT_DISTRIBUTION DISPLAY_CONTROL";
-				SWIFT_OBJC_BRIDGING_HEADER = "HagimiMonitorDirectOnly/DisplayBridgingHeader.h";
-				FRAMEWORK_SEARCH_PATHS = (
-					"",
-					"/System/Library/PrivateFrameworks",
-				);
-				OTHER_LDFLAGS = (
-					"-framework",
-					CoreDisplay,
-					"-framework",
-					DisplayServices,
-					"-framework",
-					OSD,
-				);
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
-				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				};
-				name = Debug;
-			};
-			2E0C71BB2FB1A10000908371 /* Release */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				ARCHS = arm64;
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
-				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_STYLE = Automatic;
-				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
-				ENABLE_APP_SANDBOX = NO;
-				ENABLE_HARDENED_RUNTIME = YES;
-				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
-				INFOPLIST_KEY_CFBundleLocalizations = (
-					en,
-					ja,
-					"zh-Hans",
-				);
-				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
-				INFOPLIST_KEY_LSUIElement = YES;
-				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				LD_RUNPATH_SEARCH_PATHS = (
-					"$(inherited)",
-					"@executable_path/../Frameworks",
-				);
-				MARKETING_VERSION = 0.9.8;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
-				PRODUCT_NAME = HagimiMonitor;
-				REGISTER_APP_GROUPS = YES;
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DIRECT_DISTRIBUTION DISPLAY_CONTROL";
-				SWIFT_OBJC_BRIDGING_HEADER = "HagimiMonitorDirectOnly/DisplayBridgingHeader.h";
-				FRAMEWORK_SEARCH_PATHS = (
-					"",
-					"/System/Library/PrivateFrameworks",
-				);
-				OTHER_LDFLAGS = (
-					"-framework",
-					CoreDisplay,
-					"-framework",
-					DisplayServices,
-					"-framework",
-					OSD,
-				);
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
@@ -707,6 +602,100 @@
 			};
 			name = Release;
 		};
+		2E0C71BA2FB1A10000908371 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = " /System/Library/PrivateFrameworks";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/SparkleInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
+				INFOPLIST_KEY_CFBundleLocalizations = "en ja zh-Hans";
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.9.8;
+				OTHER_LDFLAGS = (
+					"-framework",
+					CoreDisplay,
+					"-framework",
+					DisplayServices,
+					"-framework",
+					OSD,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
+				PRODUCT_NAME = HagimiMonitor;
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DIRECT_DISTRIBUTION DISPLAY_CONTROL";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = HagimiMonitorDirectOnly/DisplayBridgingHeader.h;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		2E0C71BB2FB1A10000908371 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ARCHS = arm64;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				ENABLE_APP_SANDBOX = NO;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				FRAMEWORK_SEARCH_PATHS = " /System/Library/PrivateFrameworks";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/SparkleInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = HagimiMonitor;
+				INFOPLIST_KEY_CFBundleLocalizations = "en ja zh-Hans";
+				INFOPLIST_KEY_CFBundleShortVersionString = "$(MARKETING_VERSION)";
+				INFOPLIST_KEY_LSUIElement = YES;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 0.9.8;
+				OTHER_LDFLAGS = (
+					"-framework",
+					CoreDisplay,
+					"-framework",
+					DisplayServices,
+					"-framework",
+					OSD,
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
+				PRODUCT_NAME = HagimiMonitor;
+				REGISTER_APP_GROUPS = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "$(inherited) DIRECT_DISTRIBUTION DISPLAY_CONTROL";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_OBJC_BRIDGING_HEADER = HagimiMonitorDirectOnly/DisplayBridgingHeader.h;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -724,15 +713,6 @@
 			buildConfigurations = (
 				2E0C71AD2FB19C2E00908371 /* Debug */,
 				2E0C71AE2FB19C2E00908371 /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
-		2E0C71BC2FB1A10000908371 /* Build configuration list for PBXNativeTarget "HagimiMonitorDirect" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				2E0C71BA2FB1A10000908371 /* Debug */,
-				2E0C71BB2FB1A10000908371 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
@@ -755,7 +735,35 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		2E0C71BC2FB1A10000908371 /* Build configuration list for PBXNativeTarget "HagimiMonitorDirect" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2E0C71BA2FB1A10000908371 /* Debug */,
+				2E0C71BB2FB1A10000908371 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		5AA0000000000000000000A1 /* XCRemoteSwiftPackageReference "Sparkle" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sparkle-project/Sparkle";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.6.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		5AA0000000000000000000A2 /* Sparkle */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5AA0000000000000000000A1 /* XCRemoteSwiftPackageReference "Sparkle" */;
+			productName = Sparkle;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 2E0C71812FB19C2D00908371 /* Project object */;
 }

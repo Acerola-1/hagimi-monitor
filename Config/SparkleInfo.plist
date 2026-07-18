@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>SUFeedURL</key>
+	<string>https://acerola-1.github.io/hagimi-monitor/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>fHL1MyFa8DDLwsRN84Nc2tTCsg/F0o/rVWZthczL+jA=</string>
+	<key>SUEnableInstallerLauncherService</key>
+	<true/>
+</dict>
+</plist>
