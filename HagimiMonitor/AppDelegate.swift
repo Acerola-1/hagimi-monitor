@@ -24,6 +24,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = store
         _ = fluidPanelController
 
+        // 启动 Sparkle 自更新(仅直接分发版;App Store 版更新交由商店管理)。
+        // 初始化即开始后台定时检查。
+        #if DIRECT_DISTRIBUTION
+        _ = UpdateService.shared
+        #endif
+
         // 注册 willTerminate 通知
         NotificationCenter.default.addObserver(
             forName: NSApplication.willTerminateNotification,

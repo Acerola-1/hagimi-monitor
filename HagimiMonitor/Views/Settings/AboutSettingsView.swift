@@ -4,7 +4,7 @@ import SwiftUI
 
 struct AboutSettingsView: View {
     #if DIRECT_DISTRIBUTION
-    @State private var updateChecker = UpdateChecker.shared
+    @ObservedObject private var updateService = UpdateService.shared
     #endif
     @State private var isExportingLogs = false
     @State private var logExportMessage: String?
@@ -96,53 +96,23 @@ struct AboutSettingsView: View {
         // App Store 版的更新完全交由 App Store 管理,此处不显示任何更新入口
         // (亦符合 App Store 审核要求:不得在 App 内引导用户去 App 外下载安装)。
         #if DIRECT_DISTRIBUTION
-        switch updateChecker.state {
-        case .idle:
+        VStack(alignment: .trailing, spacing: 6) {
+            // 主入口:Sparkle 自更新。点击后由 Sparkle 接管——弹出带更新日志的窗口、
+            // App 内下载校验、替换并重启,全程无需用户离开 App。
             primaryButton(title: String(localized: "about.check-updates")) {
-                Task { await updateChecker.checkForUpdates() }
+                updateService.checkForUpdates()
             }
+            .disabled(!updateService.canCheckForUpdates)
 
-        case .checking:
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                Text(String(localized: "about.checking"))
+            // 兜底副入口(始终显示):网络不佳、Sparkle 下载不动时,让用户跳转浏览器
+            // 到 GitHub Releases 手动下载安装包。
+            Button {
+                NSWorkspace.shared.open(releasesURL)
+            } label: {
+                Text(String(localized: "about.download-from-github"))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
             }
-
-        case .upToDate:
-            HStack(spacing: 8) {
-                Text(String(localized: "about.up-to-date"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Button(String(localized: "about.check-again")) {
-                    Task { await updateChecker.checkForUpdates() }
-                }
-                .compatibleButtonStyle()
-            }
-
-        case .updateAvailable(let latestVersion, _, let downloadURL, _):
-            VStack(alignment: .trailing, spacing: 5) {
-                Text(String(localized: "about.found") + latestVersion)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                primaryButton(title: String(localized: "about.download-update")) {
-                    NSWorkspace.shared.open(downloadURL)
-                }
-            }
-
-        case .failed(let message):
-            HStack(spacing: 8) {
-                Text(message)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Button(String(localized: "about.retry")) {
-                    Task { await updateChecker.checkForUpdates() }
-                }
-                .compatibleButtonStyle()
-            }
+            .buttonStyle(.link)
         }
         #else
         EmptyView()

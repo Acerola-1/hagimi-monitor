@@ -111,6 +111,28 @@
         }
       }
     },
+    "about.download-from-github" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Download from GitHub"
+          }
+        },
+        "ja" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GitHub からダウンロード"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "从 GitHub 下载"
+          }
+        }
+      }
+    },
     "about.download-update" : {
       "localizations" : {
         "en" : {
