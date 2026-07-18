@@ -3,7 +3,9 @@ import OSLog
 import SwiftUI
 
 struct AboutSettingsView: View {
+    #if DIRECT_DISTRIBUTION
     @State private var updateChecker = UpdateChecker.shared
+    #endif
     @State private var isExportingLogs = false
     @State private var logExportMessage: String?
 
@@ -90,6 +92,10 @@ struct AboutSettingsView: View {
 
     @ViewBuilder
     private var updateAccessory: some View {
+        // 更新入口按分发渠道拆分:仅直接分发(GitHub)版内置检查更新逻辑;
+        // App Store 版的更新完全交由 App Store 管理,此处不显示任何更新入口
+        // (亦符合 App Store 审核要求:不得在 App 内引导用户去 App 外下载安装)。
+        #if DIRECT_DISTRIBUTION
         switch updateChecker.state {
         case .idle:
             primaryButton(title: String(localized: "about.check-updates")) {
@@ -138,6 +144,9 @@ struct AboutSettingsView: View {
                 .compatibleButtonStyle()
             }
         }
+        #else
+        EmptyView()
+        #endif
     }
 
     @ViewBuilder

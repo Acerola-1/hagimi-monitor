@@ -35,7 +35,10 @@ enum SettingsWindowPresenter {
     @MainActor
     static func open(_ openSettings: OpenSettingsAction, tab: SettingsTab? = nil) {
         AppLogger.settings.info("Opening settings window")
+        // 仅直接分发(GitHub)版在开窗时自动检查更新;App Store 版交由商店管理。
+        #if DIRECT_DISTRIBUTION
         Task { await UpdateChecker.shared.checkForUpdatesIfStale() }
+        #endif
 
         if let tab {
             UserDefaults.standard.set(tab.rawValue, forKey: selectedTabDefaultsKey)
