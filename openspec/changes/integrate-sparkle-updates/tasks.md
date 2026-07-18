@@ -24,7 +24,7 @@
 - [x] 4.2 Sign the ZIP and generate `appcast.xml` via `generate_appcast` + `SPARKLE_PRIVATE_KEY`.
 - [x] 4.3 Upload the ZIP to the GitHub Release; keep the DMG for browser download.
 - [x] 4.4 Deploy `appcast.xml` to the `gh-pages` branch.
-- [ ] 4.5 Enable GitHub Pages on `gh-pages` (operator action).
+- [x] 4.5 Enable GitHub Pages on `gh-pages` (operator action).
 - [x] 4.6 Set the `SPARKLE_PRIVATE_KEY` GitHub Secret (operator action).
 
 ## 5. Verification
