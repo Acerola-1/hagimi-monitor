@@ -24,6 +24,7 @@
 
     },
     "about.check-again" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -68,6 +69,7 @@
       }
     },
     "about.checking" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -134,6 +136,7 @@
       }
     },
     "about.download-update" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -333,6 +336,7 @@
       }
     },
     "about.found" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -377,6 +381,7 @@
       }
     },
     "about.retry" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -421,6 +426,7 @@
       }
     },
     "about.up-to-date" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6276,6 +6282,7 @@
       }
     },
     "update.banner.dismiss" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6298,6 +6305,7 @@
       }
     },
     "update.check-failed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6320,6 +6328,7 @@
       }
     },
     "update.github-unavailable" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6342,6 +6351,7 @@
       }
     },
     "update.network-error" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6364,6 +6374,7 @@
       }
     },
     "update.no-release" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6386,6 +6397,7 @@
       }
     },
     "update.parse-failed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6408,6 +6420,7 @@
       }
     },
     "update.rate-limited" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6430,6 +6443,7 @@
       }
     },
     "update.temp-unavailable" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6452,6 +6466,7 @@
       }
     },
     "update.version-parse-failed" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
