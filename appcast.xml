@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>HagimiMonitor</title>
+        <item>
+            <title>0.9.10</title>
+            <pubDate>Sat, 18 Jul 2026 12:17:45 +0000</pubDate>
+            <sparkle:version>1</sparkle:version>
+            <sparkle:shortVersionString>0.9.10</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <sparkle:releaseNotesLink>https://acerola-1.github.io/hagimi-monitor/HagimiMonitor-v0.9.10.md</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.10/HagimiMonitor-v0.9.10.zip" length="3705673" type="application/octet-stream" sparkle:edSignature="0UmhAzzYIES/tIoNIC4Uo49RIOuITGLguPp6p/busBX6ZPA0vXu6fs3qo4qx1fUGwyf1s2zmRP60XpIQoZKNDg=="/>
+        </item>
+    </channel>
+</rss>
