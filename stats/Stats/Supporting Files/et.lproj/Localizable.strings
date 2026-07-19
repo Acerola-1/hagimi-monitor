@@ -1,0 +1,499 @@
+//
+//  Localizable.strings
+//  Stats
+//
+//  Created by postylem on 2023/07/26.
+//  Using Swift 5.0.
+//  Running on macOS 13.4.
+//
+//  Copyright © 2020 Serhiy Mytrovtsiy. All rights reserved.
+//
+
+// Modules
+"CPU" = "Protsessor";
+"Open CPU settings" = "Ava CPU seaded";
+"GPU" = "Graafika";
+"Open GPU settings" = "Ava GPU seaded";
+"RAM" = "Muutmälu";
+"Open RAM settings" = "Ava muutmälu seaded";
+"Disk" = "Kettad";
+"Open Disk settings" = "Ava ketta seaded";
+"Sensors" = "Sensorid";
+"Open Sensors settings" = "Ava sensorite seaded";
+"Network" = "Võrk";
+"Open Network settings" = "Ava võrgu seaded";
+"Battery" = "Aku";
+"Open Battery settings" = "Ava aku seaded";
+"Bluetooth" = "Bluetooth";
+"Open Bluetooth settings" = "Ava Bluetoothi seaded";
+"Clock" = "Kell";
+"Open Clock settings" = "Ava kella seaded";
+
+// Words
+"Unknown" = "Teadmata";
+"Version" = "Versioon";
+"Processor" = "Protsessor";
+"Memory" = "Mälu";
+"Graphics" = "Graafika";
+"Close" = "Sulge";
+"Download" = "Lae alla";
+"Install" = "Paigalda";
+"Cancel" = "Tühista";
+"Unavailable" = "Pole saadaval";
+"Yes" = "Jah";
+"No" = "Ei";
+"Automatic" = "Automaatne";
+"Manual" = "Käsitsi";
+"None" = "Pole";
+"Dots" = "Täpid";
+"Arrows" = "Nooled";
+"Characters" = "Märgid";
+"Short" = "Lühike";
+"Long" = "Pikk";
+"Statistics" = "Statistika";
+"Max" = "Maksimum";
+"Min" = "Miinimum";
+"Reset" = "Taasta";
+"Alignment" = "Joondus";
+"Left alignment" = "Vasakpoolne joondus";
+"Center alignment" = "Keskjoondus";
+"Right alignment" = "Parempoolne joondus";
+"Dashboard" = "Töölaud";
+"Disabled" = "Keelatud";
+"Silent" = "Vaigista";
+"Units" = "Ühikud";
+"Fans" = "Ventilaatorid";
+"Scaling" = "Skaleerimine";
+"Linear" = "Lineaarne";
+"Square" = "Ruut";
+"Cube" = "Kuup";
+"Logarithmic" = "Logaritmiline";
+"Fixed scale" = "Fikseeritud skaala";
+"Cores" = "Tuumad";
+"Core" = "Tuum";
+"Settings" = "Seaded";
+"Name" = "Nimi";
+"Format" = "Vorming";
+"Turn off" = "Lülita välja";
+"Normal" = "Normaalne";
+"Warning" = "Hoiatus";
+"Critical" = "Kriitiline";
+"Usage" = "Kasutus";
+"2 minutes" = "2 minutit";
+"3 minutes" = "3 minutit";
+"10 minutes" = "10 minutit";
+"Separator" = "Eraldaja";
+"Read" = "Loe";
+"Write" = "Kirjuta";
+"Frequency" = "Sagedus";
+"Save" = "Salvesta";
+"Run" = "Käivita";
+"Stop" = "Peata";
+"Uninstall" = "Desinstalleeri";
+"1 sec" = "1 sekund";
+"2 sec" = "2 sekundit";
+"3 sec" = "3 sekundit";
+"5 sec" = "5 sekundit";
+"10 sec" = "10 sekundit";
+"15 sec" = "15 sekundit";
+"30 sec" = "30 sekundit";
+"60 sec" = "60 sekundit";
+
+// Setup
+"Stats Setup" = "Stats seadistamine";
+"Previous" = "Eelmine";
+"Previous page" = "Eelmine leht";
+"Next" = "Järgmine";
+"Next page" = "Järgmine leht";
+"Finish" = "Lõpeta";
+"Finish setup" = "Lõpeta seadistamine";
+"Welcome to Stats" = "Tere tulemast Statsi";
+"welcome_message" = "Täname, et kasutate Statsi, tasuta avatud lähtekoodiga macOS-i süsteemimonitor menüüriba jaoks.";
+"Select preset" = "Vali etteseadistus"; // gemma4:31b
+"select_preset_message" = "Vali moodulite algne komplekt. Sa saad kõike hiljem seadetes kohandada."; // gemma4:31b
+"Default" = "Vaikimisi"; // gemma4:31b
+"Basic" = "Põhiline"; // gemma4:31b
+"Recommended" = "Soovitatav"; // gemma4:31b
+"Extended" = "Laiendatud"; // gemma4:31b
+"Start the application automatically when starting your Mac" = "Käivita rakendus automaatselt Maci käivitamisel";
+"Do not start the application automatically when starting your Mac" = "Ära käivita rakendust automaatselt Maci käivitamisel";
+"Do everything silently in the background (recommended)" = "Tee kõike vaikselt taustal (soovitatav)";
+"Check for a new version on startup" = "Kontrollige käivitamisel uut versiooni";
+"Check for a new version every day (once a day)" = "Kontrolli uut versiooni iga päev (üks kord päevas)";
+"Check for a new version every week (once a week)" = "Kontrolli uut versiooni iga nädal (üks kord nädalas)";
+"Check for a new version every month (once a month)" = "Kontrolli uut versiooni iga kuu (üks kord kuus)";
+"Never check for updates (not recommended)" = "Ära kunagi kontrolli värskendusi (pole soovitatav)";
+"The configuration is completed" = "Seadistamine on lõpetatud";
+"finish_setup_message" = "Kõik on paika pandud! \n Stats on avatud lähtekoodiga tööriist, see on tasuta ja jääb alati tasuta. \n Kui teile meeldib, saate projekti toetada, see on alati teretulnud!";
+
+// Alerts
+"New version available" = "Uus versioon on saadaval";
+"Click to install the new version of Stats" = "Klõpsa Statsi uue versiooni installimiseks";
+"Successfully updated" = "Edukalt värskendatud";
+"Stats was updated to v" = "Stats värskendati versioonile %0";
+"Reset settings text" = "Kõik rakenduse seaded lähtestatakse ja rakendus taaskäivitatakse. Kas olete kindel, et soovite seda teha?";
+"Support text" = "Täname teid Statsi kasutamise eest!\n\n Selle avatud lähtekoodiga projekti hooldamine ja täiustamine nõuab aega ja ressursse. Teie toetus aitab meil jätkuvalt pakkuda kõigile tasuta ja usaldusväärset rakendust.\n\nJa kui Stats on teie arvates kasulik, siis palun kaaluge panuse andmist. Iga väike summa aitab!";
+
+// Settings
+"Open Activity Monitor" = "Ava aktiivsusmonitor";
+"Report a bug" = "Teata veast";
+"Support the application" = "Toetage rakendust";
+"Close application" = "Sule rakendus";
+"Open application settings" = "Ava rakenduse seaded";
+"Open dashboard" = "Ava töölaud";
+"No notifications available in this module" = "Selles moodulis pole saadaval teavitusi.";
+"Open Calendar" = "Ava kalender";
+"Toggle the module" = "Lülita moodul sisse";
+"Open System Stats" = "Ava System Stats"; // gemma4:31b
+
+// Application settings
+"Check for updates" = "Otsi värskendusi";
+"At start" = "Käivitamisel";
+"Once per day" = "Üks kord päevas";
+"Once per week" = "Kord nädalas";
+"Once per month" = "Kord kuus";
+"Never" = "Mitte kunagi";
+"Check for update" = "Otsi värskendusi";
+"Show icon in dock" = "Kuva ikoon dokis";
+"Start at login" = "Käivita sisselogimisest";
+"Build number" = "Järgunumber";
+"Import settings" = "Impordi seaded";
+"Export settings" = "Ekspordi seaded";
+"Reset settings" = "Lähtesta seaded";
+"Pause the Stats" = "Peata Stats";
+"Resume the Stats" = "Jätka Stats";
+"Combined modules" = "Kombineeritud moodulid";
+"Combined details" = "Ühendatud andmed";
+"Spacing" = "Vahekaugus";
+"Choose file" = "Vali fail";
+"Stress tests" = "Stressitestid";
+
+// Dashboard
+"Serial number" = "Seerianumber";
+"Model identifier" = "Mudeli identifikaator";
+"Production year" = "Valmistamise aasta";
+"Uptime" = "Tööaeg";
+"Number of cores" = "%0 tuuma";
+"Number of threads" = "%0 lõime";
+"Number of e-cores" = "%0 tõhustuuma";
+"Number of p-cores" = "%0 jõudlustuuma";
+"Number of s-cores" = "%0 ülijõudlustuuma";
+"Disks" = "Kettad";
+"Display" = "Ekraan";
+
+// Update
+"The latest version of Stats installed" = "Uusim versioon on installitud";
+"Downloading..." = "Allalaadimine...";
+"Current version: " = "Praegune versioon: ";
+"Latest version: " = "Uusim version: ";
+
+// Widgets
+"Color" = "Värv";
+"Label" = "Silt";
+"Box" = "Kast";
+"Frame" = "Raam";
+"Value" = "Väärtus";
+"Colorize" = "Värvi";
+"Colorize value" = "Värvi väärtus";
+"Additional information" = "Lisateave";
+"Base" = "Alus";
+"Display mode" = "Kuvarežiim";
+"One row" = "Üks rida";
+"Two rows" = "Kaks read";
+"Mini widget" = "Väike vidin";
+"Line chart widget" = "Joonediagramm";
+"Bar chart widget" = "Tulpdiagramm";
+"Pie chart widget" = "Sektordiagramm";
+"Network chart widget" = "Võrgudiagramm";
+"Speed widget" = "Kiiruse vidin";
+"Battery widget" = "Akuvidin";
+"Stack widget" = "Virnasta vidin";
+"Memory widget" = "Mäluvidin";
+"Static width" = "Staatiline laius";
+"Tachometer widget" = "Tahhomeetrividin";
+"State widget" = "Olekuvidin";
+"Text widget" = "Tekstividin";
+"Battery details widget" = "Aku üksikasjade vidin";
+"Show symbols" = "Näita sümboleid";
+"Label widget" = "Sildividin";
+"Number of reads in the chart" = "Lugemiste arv diagrammil";
+"Color of download" = "Allaladimise värv";
+"Color of upload" = "Üleslaadimise värv";
+"Monospaced font" = "Fikseeritud laiusega kirjastiil";
+"Reverse order" = "Vastupidises järjekorras";
+"Chart history" = "Graafiku ajalugu";
+"Default color" = "Vaikevärv";
+"Transparent when no activity" = "Läbipaistev, kui pole tegevust";
+"Constant color" = "Ühtlane värv";
+"Custom..." = "Kohandatud...";
+
+// Module Kit
+"Open module settings" = "Ava mooduli sätted";
+"Open widget settings" = "Ava vidina seaded";
+"Update interval" = "Värskendamise intervall";
+"Usage history" = "Kasutusajalugu";
+"Details" = "Üksikasjad";
+"Top processes" = "Tipp-protsessid";
+"Pictogram" = "Piktogramm";
+"Module" = "Moodul";
+"Widgets" = "Vidinad";
+"Popup" = "Hüpik";
+"Notifications" = "Märguanded";
+"Merge widgets" = "Liida vidinad";
+"No available widgets to configure" = "Vidinaid pole saadaval seadistamiseks";
+"No options to configure for the popup in this module" = "Selles moodulis pole suvandeid konfigureerida hüpikakna jaoks";
+"Process" = "Protsess";
+"Kill process" = "Lõpeta protsess";
+"Keyboard shortcut" = "Kiirklahv";
+"Listening..." = "Kuulamine...";
+
+// Modules
+"Number of top processes" = "Tipp-protsesside arv";
+"Update interval for top processes" = "Tipp-protsesside värskendusintervall";
+"Chart color" = "Diagrammi värv";
+"Main chart scaling" = "Peamise graafi skaala";
+"Scale value" = "Mõõtühiku väärtus";
+"Text widget value" = "Teksti atribuudi väärtus";
+"Combined processes" = "Grupeeritud protsessid"; // gemma4:31b
+
+// CPU
+"CPU usage" = "CPU kasutus";
+"CPU temperature" = "CPU temperatuur";
+"CPU frequency" = "CPU sagedus";
+"System" = "Süsteem";
+"User" = "Kasutaja";
+"Idle" = "Ootel";
+"Show usage per core" = "Kuva kasutust tuuma kohta";
+"Show hyper-threading cores" = "Kuva hüperlõime tuumad";
+"Split the value (System/User)" = "Jaga väärtus (süsteem/kasutaja)";
+"Scheduler limit" = "Planeerija limiit";
+"Speed limit" = "Kiiruspiirang";
+"Average load" = "Keskmine koormus";
+"1 minute" = "1 minut";
+"5 minutes" = "5 minutit";
+"15 minutes" = "15 minutit";
+"CPU usage threshold" = "CPU kasutuslävi";
+"Efficiency cores" = "Tõhusustuumad";
+"Performance cores" = "Jõudlustuumad";
+"System color" = "Süsteemi värv";
+"User color" = "Kasutaja värv";
+"Idle color" = "Ooteloleku värv";
+"Cluster grouping" = "Klastrite rühmitamine";
+"Efficiency cores color" = "Tõhusustuumade värv";
+"Performance cores color" = "Jõudlustuumade värv";
+"Total load" = "Kokku koormus";
+"System load" = "Süsteemi koormus";
+"User load" = "Kasutajate koormus";
+"Efficiency cores load" = "Tõhusustuumade koormus";
+"Performance cores load" = "Jõudlustuumade koormus";
+"All cores" = "Kõik tuumad";
+"Load per core" = "Koormus tuuma kohta";
+"Efficiency core" = "Tõhusustuum";
+"Performance core" = "Jõudlustuum";
+"Super core" = "Superjõudlustuum";
+
+// GPU
+"GPU to show" = "GPU, mida näidatakse";
+"Show GPU type" = "Kuva GPU tüüp";
+"GPU utilization" = "GPU kasutus";
+"Model" = "Mudel";
+"Status" = "Olek";
+"Utilization" = "Kasutus";
+"Render utilization" = "Renderdamise kasutus";
+"Tiler utilization" = "Osapõhise renderdaja kasutus";
+"GPU usage threshold" = "GPU kasutuslävi";
+"GPU usage is" = "GPU kasutus on %0";
+
+// RAM
+"Memory usage" = "Mälu kasutus";
+"Memory pressure" = "Mälu surve";
+"Total" = "Kokku";
+"Used" = "Kasutatud";
+"App" = "Rakendus";
+"Wired" = "Juhtmega";
+"Compressed" = "Tihendatud";
+"Free" = "Vaba";
+"Swap" = "Saalemälu";
+"Split the value (App/Wired/Compressed)" = "Jagage väärtus (rakendus/juhtmega/tihendatud)";
+"RAM utilization threshold" = "Muutmälu kasutuslävi";
+"RAM utilization is" = "Muutmälu kasutus on %0";
+"App color" = "Rakenduse värv";
+"Wired color" = "Juhtmega värv";
+"Compressed color" = "Tihendatud värv";
+"Free color" = "Vaba värv";
+"Free memory (less than)" = "Vaba mälu (vähem kui)";
+"Swap size" = "Saalemälu suurus";
+"Free RAM is" = "Vaba RAM on %0";
+
+// Disk
+"Show removable disks" = "Kuva irdkettad";
+"Used disk memory" = "Kasutatud kettamälu";
+"Free disk memory" = "Vaba kettamälu";
+"Disk to show" = "Ketas, mida näidata";
+"Open disk" = "Ava ketas";
+"Switch view" = "Vaate vahetamine";
+"Disk utilization threshold" = "Ketta kasutuslävi";
+"Disk utilization is" = "Ketta kasutus on %0";
+"Read color" = "Lugemise värv";
+"Write color" = "Kirjutamise värv";
+"Disk usage" = "Kettakasutus";
+"Total read" = "Kokku lugemisi";
+"Total written" = "Kokku kirjutatud";
+"Drives" = "Kettad";
+"SMART data" = "SMART-andmed";
+"Power cycles" = "Toitetsüklid"; // gemma4:31b
+"Power on hours" = "Töötunnid"; // gemma4:31b
+
+// Sensors
+"Celsius" = "Celsiuse"; // gemma4:31b
+"Fahrenheit" = "Fahrenheit";
+"Save the fan speed" = "Salvesta ventilaatori kiirus";
+"Fan" = "Ventilaator";
+"HID sensors" = "HID-andurid";
+"Synchronize fan's control" = "Sünkroniseeri ventilaatori juhtimine";
+"Current" = "Voolutugevus";
+"Energy" = "Energia";
+"Show unknown sensors" = "Näita tundmatuid sensoreid";
+"Install fan helper" = "Installi ventilaatoriabiline";
+"Uninstall fan helper" = "Desinstalli ventilaatoriabiline";
+"Approve in System Settings ▸ Login Items" = "Kinnita Süsteemi seadetes ▸ Sisselogimise üksused"; // gemma4:31b
+"Fan helper needs your approval" = "Ventilaatori abiutill vajab teie heaks kiitmist"; // gemma4:31b
+"To control the fans, enable Stats in System Settings ▸ Login Items." = "Ventilaatorite juhtimiseks aktiveeri Stats Süsteemi seadetes ▸ Sisselogimise üksused."; // gemma4:31b
+"Open Login Items" = "Ava sisselogimise üksused"; // gemma4:31b
+"Could not enable the fan helper" = "Ei õnnestunud ventilaatori abiutliiti aktiveerida"; // gemma4:31b
+"Open System Settings ▸ Login Items, make sure Stats is allowed in the background, then try again." = "Ava Süsteemi seaded ▸ Logimise üksused, veendu, et Stats on lubatud taustal, seejärel proovi uuesti."; // gemma4:31b
+"Fan value" = "Ventilaatori väärtus";
+"Turn off fan" = "Lülita ventilaator välja";
+"You are going to turn off the fan. This is not recommended action that can damage your mac, are you sure you want to do that?" = "Te kavatstate lülitada ventilator välja. See ei ole soovitatav tegevus, mis võib kahjustada teie Mac-i. Kas olete kindel, et soovite seda teha?";
+"Sensor threshold" = "Sensori piirväärtus";
+"Left fan" = "Vasak ventilaator";
+"Right fan" = "Parem ventilaator";
+"Fastest fan" = "Kiireim ventilaator";
+"Sensor to show" = "Sensor näitamiseks";
+
+// Network
+"Uploading" = "Üleslaadimine";
+"Downloading" = "Allalaadimine";
+"Public IP" = "Avalik IP";
+"Local IP" = "Kohalik IP";
+"Interface" = "Liides";
+"Physical address" = "Füüsiline aadress";
+"Refresh" = "Värskenda";
+"Network interface" = "Võrguliides";
+"Total download" = "Allalaadimine kokku";
+"Total upload" = "Üleslaadimine kokku";
+"Reader type" = "Lugeja tüüp";
+"Interface based" = "Liidesepõhine";
+"Processes based" = "Protsessipõhine";
+"Reset data usage" = "Lähtesta andmekasutus";
+"VPN mode" = "VPN-režiim";
+"Standard" = "Standard";
+"Security" = "Turvalisus";
+"Channel" = "Kanal";
+"Autodetection" = "Automaattuvastus";
+"Widget activation threshold" = "Vidina aktiveerimise lävi";
+"Internet connection" = "Internetiühendus";
+"Connectivity host" = "Ühendushost";
+"Leave empty to disable the check" = "Kontrolli keelamiseks jätke tühjaks";
+"Connectivity history" = "Ühenduse ajalugu";
+"Auto-refresh public IP address" = "Avaliku IP-aadressi automaatne värskendamine";
+"Every hour" = "Iga tund";
+"Every 12 hours" = "Iga 12 tunni järel";
+"Every 24 hours" = "Iga 24 tunni järel";
+"Last reset" = "Viimane lähtestamine %0 tagasi";
+"Latency" = "Latents";
+"Address" = "Aadress";
+"WiFi network" = "Wifi võrk";
+"Local IP changed" = "Lokaalne IP-aadress on muutunud";
+"Public IP changed" = "Avalik IP-aadress on muutunud";
+"Previous IP" = "Eelmine IP: %0";
+"New IP" = "Uus IP-aadress: %0";
+"Internet connection lost" = "Internetühendus katkenud";
+"Internet connection established" = "Internetühendus on loodud";
+"Show country code instead of emoji" = "Näita emoji asemel riigikoodi";
+
+// Battery
+"Source" = "Allikas";
+"AC Power" = "Võrgutoide";
+"Battery Power" = "Akutoide";
+"Time" = "Aeg";
+"Health" = "Tervis";
+"Amperage" = "Voolutugevus";
+"Voltage" = "Pinge";
+"Cycles" = "Tsüklid";
+"Temperature" = "Temperatuur";
+"Power adapter" = "Toiteadapter";
+"Power" = "Toide";
+"Is charging" = "Laeb";
+"Time to discharge" = "Aeg tühjenemiseni";
+"Time to charge" = "Laadimise aeg";
+"Calculating" = "Arvutamine";
+"Fully charged" = "Laetud";
+"Low level notification" = "Madala taseme märguanne";
+"High level notification" = "Kõrge taseme märguanne";
+"Low battery" = "Aku on tühjenemas";
+"High battery" = "Aku on laetud";
+"Battery remaining" = "%0% jäänud";
+"Battery remaining to full charge" = "%0% täislaadimiseni";
+"Percentage" = "Protsent";
+"Percentage and time" = "Protsent ja aeg";
+"Time and percentage" = "Aeg ja protsent";
+"Time format" = "Ajavorming";
+"Hide additional information when full" = "Peida lisateave, kui täis";
+"Percentage inside the icon" = "Protsent ikooni sees";
+"Charger state inside the battery" = "Laadija olek aku sees";
+"Max capacity" = "Maksimaalne mahtuvus"; // gemma4:31b
+"Designed capacity" = "Projekteeritud maht"; // gemma4:31b
+"On hold" = "Ootel"; // gemma4:31b
+"On battery" = "Akul"; // gemma4:31b
+"Plugged in" = "Ühendatud"; // gemma4:31b
+"Charging" = "Laadimine"; // gemma4:31b
+
+// Bluetooth
+"No Bluetooth devices are available" = "Ükski Bluetoothi seade pole saadaval";
+
+// Clock
+"Time zone" = "Ajavöönd";
+"Local" = "Kohalik";
+"Calendar" = "Kalender";
+"Show week numbers" = "Näita nädalanumbreid";
+"Local time" = "Kohalik aeg";
+"Add new clock" = "Lisage uus kell";
+"Delete selected clock" = "Kustuta valitud kell";
+"Help with datetime format" = "Abi ajavormingu määramisel";
+"Sync with NTP server" = "Sünkroniseerimine NTP-serveriga";
+"Previous month" = "Eelmine kuu"; // gemma4:31b
+"Next month" = "Järgmine kuu"; // gemma4:31b
+
+// Colors
+"Based on utilization" = "Põhineb kasutusel";
+"Based on pressure" = "Põhineb survel";
+"Based on cluster" = "Põhineb klastril";
+"System accent" = "Süsteemi aktsent";
+"Monochrome accent" = "Ühevärviline aktsent";
+"Clear" = "Läbipaistev";
+"White" = "Valge";
+"Black" = "Must";
+"Gray" = "Hall";
+"Second gray" = "Teine hall";
+"Dark gray" = "Tumehall";
+"Light gray" = "Helehall";
+"Red" = "Punane";
+"Second red" = "Teine punane";
+"Green" = "Roheline";
+"Second green" = "Teine roheline";
+"Blue" = "Sinine";
+"Second blue" = "Teine sinine";
+"Yellow" = "Kollane";
+"Second yellow" = "Teine kollane";
+"Orange" = "Oranž";
+"Second orange" = "Teine oranž";
+"Purple" = "Lilla";
+"Second purple" = "Teine lilla";
+"Brown" = "Pruun";
+"Second brown" = "Teine pruun";
+"Cyan" = "Tsüaan";
+"Magenta" = "Purpur"; // gemma4:31b
+"Pink" = "Roosa";
+"Teal" = "Türkiis"; // gemma4:31b
+"Indigo" = "Indigo";

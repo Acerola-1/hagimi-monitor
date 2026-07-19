@@ -1,16 +1,39 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8">
-  <title>HagimiMonitor</title>
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 600px; margin: 60px auto; padding: 0 20px; text-align: center; }
-    h1 { color: #333; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hagimi Monitor</title>
+    <link rel="icon" type="image/png" href="images/icon-128.png" sizes="128x128">
+    <script>
+        (function() {
+            try {
+                const stored = localStorage.getItem("hagimi-lang");
+                if (stored === "zh" || stored === "en" || stored === "ja") {
+                    location.replace("./" + stored + "/");
+                    return;
+                }
+            } catch (e) {}
+            const lang = navigator.language || navigator.userLanguage;
+            if (lang) {
+                const lower = lang.toLowerCase();
+                if (lower.startsWith("zh")) {
+                    location.replace("./zh/");
+                } else if (lower.startsWith("ja")) {
+                    location.replace("./ja/");
+                } else {
+                    location.replace("./en/");
+                }
+            } else {
+                location.replace("./en/");
+            }
+        })();
+    </script>
+    <noscript>
+        <p>Please select your language:</p>
+        <p><a href="zh/">中文</a> | <a href="en/">English</a> | <a href="ja/">日本語</a></p>
+    </noscript>
 </head>
 <body>
-  <h1>HagimiMonitor</h1>
-  <p>macOS 菜单栏系统监控工具</p>
-  <p><a href="https://github.com/Acerola-1/hagimi-monitor">GitHub 仓库</a></p>
 </body>
 </html>

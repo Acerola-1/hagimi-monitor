@@ -1,0 +1,53 @@
+substitutions:
+  ssid: Wifi
+  password: password
+  board: board
+  platform: platform
+  platform_version: platform_version
+  sda: sda
+  scl: scl
+
+esphome:
+  name: lunarsensor
+  platform: $platform
+  board: $board
+  libraries:
+    - "SPI"
+    - "Adafruit Unified Sensor@^1.1.6"
+    - "Adafruit BusIO@^1.13.2"
+    - "Adafruit TSL2591 Library@^1.4.3"
+  platformio_options:
+    platform: $platform_version
+    lib_ldf_mode: "chain+"
+wifi:
+  ssid: $ssid
+  password: $password
+
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: "Lunar Sensor Hotspot"
+    password: "lunarals23"
+
+captive_portal:
+
+# Enable logging
+logger:
+  level: INFO
+
+# Enable Home Assistant API
+api:
+  reboot_timeout: 0s
+
+ota:
+
+sensor:
+SENSOR_DEFINITION
+
+i2c:
+  sda: $sda
+  scl: $scl
+  scan: False
+  id: bus_a
+
+web_server:
+  port: 80

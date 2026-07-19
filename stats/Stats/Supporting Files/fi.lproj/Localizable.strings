@@ -1,0 +1,499 @@
+//
+//  Localizable.strings
+//  Stats
+//
+//  Created by eightscrow on 07/12/2024.
+//  Using Swift 5.0.
+//  Running on macOS 10.15.
+//
+//  Copyright © 2020 Serhiy Mytrovtsiy. All rights reserved.
+//
+
+// Modules
+"CPU" = "CPU";
+"Open CPU settings" = "Avaa CPU asetukset";
+"GPU" = "Näytönohjain"; // translategemma:4b
+"Open GPU settings" = "Avaa GPU asetukset";
+"RAM" = "RAM";
+"Open RAM settings" = "Avaa RAM asetukset";
+"Disk" = "Levy";
+"Open Disk settings" = "Avaa Levy asetukset";
+"Sensors" = "Anturit";
+"Open Sensors settings" = "Avaa Anturit asetukset";
+"Network" = "Verkko";
+"Open Network settings" = "Avaa Verkko asetukset";
+"Battery" = "Akku";
+"Open Battery settings" = "Avaa Akku asetukset";
+"Bluetooth" = "Bluetooth";
+"Open Bluetooth settings" = "Avaa Bluetooth asetukset";
+"Clock" = "Kello";
+"Open Clock settings" = "Avaa Kello asetukset";
+
+// Words
+"Unknown" = "Tuntematon";
+"Version" = "Versio";
+"Processor" = "Suoritin";
+"Memory" = "Muisti";
+"Graphics" = "Grafiikka";
+"Close" = "Sulje";
+"Download" = "Lataa";
+"Install" = "Asenna";
+"Cancel" = "Peruuta";
+"Unavailable" = "Ei saatavilla";
+"Yes" = "Kyllä";
+"No" = "Ei";
+"Automatic" = "Automaattinen";
+"Manual" = "Manuaalinen";
+"None" = "Ei mitään";
+"Dots" = "Pisteet";
+"Arrows" = "Nuolet";
+"Characters" = "Merkit";
+"Short" = "Lyhyt";
+"Long" = "Pitkä";
+"Statistics" = "Tilastot";
+"Max" = "Maksimi";
+"Min" = "Minimi";
+"Reset" = "Palauta";
+"Alignment" = "Tasaus";
+"Left alignment" = "Vasen";
+"Center alignment" = "Keskellä";
+"Right alignment" = "Oikea";
+"Dashboard" = "Kojelauta";
+"Disabled" = "Pois käytöstä";
+"Silent" = "Hiljainen";
+"Units" = "Yksiköt";
+"Fans" = "Tuulettimet";
+"Scaling" = "Skaalaus";
+"Linear" = "Lineaarinen";
+"Square" = "Neliö";
+"Cube" = "Kuutio";
+"Logarithmic" = "Logaritmi";
+"Fixed scale" = "Kiinteä";
+"Cores" = "Ytimet";
+"Core" = "Ydin"; // translategemma:4b
+"Settings" = "Asetukset";
+"Name" = "Nimi";
+"Format" = "Muoto";
+"Turn off" = "Sammuta";
+"Normal" = "Normaali"; // translategemma:4b
+"Warning" = "Varoitus";
+"Critical" = "Kriittinen";
+"Usage" = "Käyttö";
+"2 minutes" = "2 minuuttia";
+"3 minutes" = "3 minuuttia";
+"10 minutes" = "10 minuuttia";
+"Separator" = "Erotin"; // translategemma:4b
+"Read" = "Luku"; // gemma4:31b
+"Write" = "Kirjoitus"; // gemma4:31b
+"Frequency" = "Taajuus"; // translategemma:4b
+"Save" = "Tallenna"; // translategemma:4b
+"Run" = "Suorita"; // gemma4:31b
+"Stop" = "Pysäytä"; // translategemma:4b
+"Uninstall" = "Poista asennus"; // translategemma:4b
+"1 sec" = "1 sek"; // gemma4:31b
+"2 sec" = "2 s"; // gemma4:31b
+"3 sec" = "3 s"; // gemma4:31b
+"5 sec" = "5 sek"; // gemma4:31b
+"10 sec" = "10 sek"; // gemma4:31b
+"15 sec" = "15 sek"; // gemma4:31b
+"30 sec" = "30 sek"; // gemma4:31b
+"60 sec" = "60 sek"; // gemma4:31b
+
+// Setup
+"Stats Setup" = "Stats asennus";
+"Previous" = "Edellinen";
+"Previous page" = "Edellinen sivu";
+"Next" = "Seuraava";
+"Next page" = "Seuraava sivu";
+"Finish" = "Valmis";
+"Finish setup" = "Viimeistele asennus";
+"Welcome to Stats" = "Tervetuloa Stats:iin";
+"welcome_message" = "Kiitos, että käytät Statsia, ilmaista avoimen lähdekoodin macOS-järjestelmämonitoria valikkorivillesi.";
+"Select preset" = "Valitse esiasetus"; // gemma4:31b
+"select_preset_message" = "Valitse moduulien aloituspaketti. Voit muokata kaikkea myöhemmin Asetuksista."; // gemma4:31b
+"Default" = "Oletus"; // gemma4:31b
+"Basic" = "Perus"; // gemma4:31b
+"Recommended" = "Suositeltu"; // gemma4:31b
+"Extended" = "Laajennettu"; // gemma4:31b
+"Start the application automatically when starting your Mac" = "Käynnistä sovellus automaattisesti, kun käynnistät Macin";
+"Do not start the application automatically when starting your Mac" = "Älä käynnistä sovellusta automaattisesti, kun käynnistät Macin";
+"Do everything silently in the background (recommended)" = "Tee kaikki hiljaisesti taustalla (suositeltu)";
+"Check for a new version on startup" = "Tarkista uusi versio käynnistyksen yhteydessä";
+"Check for a new version every day (once a day)" = "Tarkista uusi versio päivittäin (kerran päivässä)";
+"Check for a new version every week (once a week)" = "Tarkista uusi versio viikoittain (kerran viikossa)";
+"Check for a new version every month (once a month)" = "Tarkista uusi versio kuukausittain (kerran kuukaudessa)";
+"Never check for updates (not recommended)" = "Älä koskaan tarkista päivityksiä (ei suositeltu)";
+"The configuration is completed" = "Määritys on valmis";
+"finish_setup_message" = "Kaikki on valmista! \n Stats on avoimen lähdekoodin työkalu, se on ilmainen ja tulee aina olemaan. \n Jos pidät siitä, voit tukea projektia, mikä on aina arvostettua!";
+
+// Alerts
+"New version available" = "Uusi versio saatavilla";
+"Click to install the new version of Stats" = "Klikkaa asentaaksesi uuden version Statsista";
+"Successfully updated" = "Päivitys onnistui";
+"Stats was updated to v" = "Stats päivitettiin versioon v%0";
+"Reset settings text" = "Kaikki sovelluksen asetukset nollataan, ja sovellus käynnistetään uudelleen. Haluatko varmasti tehdä tämän?";
+"Support text" = "Kiitos, että käytät Statsia!\n\n Tämän avoimen lähdekoodin projektin ylläpitäminen ja parantaminen vie aikaa ja resursseja. Tukesi auttaa meitä jatkossakin tarjoamaan ilmaisen ja luotettavan sovelluksen kaikille.\n\nJos Stats on mielestäsi hyödyllinen, harkitse lahjoituksen tekemistä. Jokainen pieni osa auttaa!";
+
+// Settings
+"Open Activity Monitor" = "Avaa Aktiviteettimonitori";
+"Report a bug" = "Ilmoita virheestä";
+"Support the application" = "Tue sovellusta";
+"Close application" = "Sulje sovellus";
+"Open application settings" = "Avaa sovelluksen asetukset";
+"Open dashboard" = "Avaa kojelauta";
+"No notifications available in this module" = "Ei ilmoituksia tässä moduulissa";
+"Open Calendar" = "Avaa kalenteri"; // translategemma:4b
+"Toggle the module" = "Kytke moduuli"; // gemma4:31b
+"Open System Stats" = "Avaa System Stats"; // gemma4:31b
+
+// Application settings
+"Check for updates" = "Tarkista päivitykset";
+"At start" = "Käynnistyksessä";
+"Once per day" = "Kerran päivässä";
+"Once per week" = "Kerran viikossa";
+"Once per month" = "Kerran kuukaudessa";
+"Never" = "Ei koskaan";
+"Check for update" = "Tarkista päivitys";
+"Show icon in dock" = "Näytä kuvake telakassa";
+"Start at login" = "Käynnistä kirjautumisen yhteydessä";
+"Build number" = "Kokoonpanon numero";
+"Import settings" = "Tuo asetukset";
+"Export settings" = "Vie asetukset";
+"Reset settings" = "Nollaa asetukset";
+"Pause the Stats" = "Keskeytä Stats";
+"Resume the Stats" = "Jatka Statsin käyttöä";
+"Combined modules" = "Yhdistetyt moduulit";
+"Combined details" = "Yhdistetyt tiedot";
+"Spacing" = "Välistys"; // gemma4:31b
+"Choose file" = "Valitse tiedosto"; // translategemma:4b
+"Stress tests" = "Stressitestit"; // translategemma:4b
+
+// Dashboard
+"Serial number" = "Sarjanumero";
+"Model identifier" = "Mallin tunniste";
+"Production year" = "Valmistusvuosi";
+"Uptime" = "Käyttöaika";
+"Number of cores" = "%0 ydintä";
+"Number of threads" = "%0 säiettä";
+"Number of e-cores" = "%0 e-ydintä";
+"Number of p-cores" = "%0 p-ydintä";
+"Number of s-cores" = "%0 superydintä"; // gemma4:31b
+"Disks" = "Levyt"; // translategemma:4b
+"Display" = "Näyttö"; // translategemma:4b
+
+// Update
+"The latest version of Stats installed" = "Stats on päivitetty viimeisimpään versioon";
+"Downloading..." = "Ladataan...";
+"Current version: " = "Nykyinen versio:  ";
+"Latest version: " = "Viimeisin versio:    ";
+
+// Widgets
+"Color" = "Väri";
+"Label" = "Tunniste";
+"Box" = "Laatikko";
+"Frame" = "Kehys";
+"Value" = "Arvo";
+"Colorize" = "Värjää";
+"Colorize value" = "Värjää arvo";
+"Additional information" = "Lisätiedot";
+"Base" = "Perusta";
+"Display mode" = "Näyttötila";
+"One row" = "Yksi rivi";
+"Two rows" = "Kaksi riviä";
+"Mini widget" = "Pieni"; // translategemma:4b
+"Line chart widget" = "Viivakaavio";
+"Bar chart widget" = "Pylväskaavio";
+"Pie chart widget" = "Ympyräkaavio";
+"Network chart widget" = "Verkkokaavio";
+"Speed widget" = "Nopeus";
+"Battery widget" = "Akku";
+"Stack widget" = "Pino";
+"Memory widget" = "Muisti";
+"Static width" = "Staattinen leveys";
+"Tachometer widget" = "Tachometri";
+"State widget" = "Tila";
+"Text widget" = "Tekstiwidgetti"; // gemma4:31b
+"Battery details widget" = "Akun tiedot -widget"; // translategemma:4b
+"Show symbols" = "Näytä symbolit";
+"Label widget" = "Tunniste";
+"Number of reads in the chart" = "Lukukertojen määrä kaaviossa";
+"Color of download" = "Latauksen väri";
+"Color of upload" = "Lähetyksen väri";
+"Monospaced font" = "Kiinteäleveyksinen fontti";
+"Reverse order" = "Käänteinen järjestys";
+"Chart history" = "Kaavion historia";
+"Default color" = "Oletusväri";
+"Transparent when no activity" = "Läpinäkyvä, kun ei ole toimintaa";
+"Constant color" = "Vakio väri";
+"Custom..." = "Mukautettu...";
+
+// Module Kit
+"Open module settings" = "Avaa moduulin asetukset";
+"Open widget settings" = "Avaa widgetin asetukset";
+"Update interval" = "Päivitysväli";
+"Usage history" = "Käytön historia";
+"Details" = "Tiedot";
+"Top processes" = "Suosituimmat prosessit";
+"Pictogram" = "Piktogrammi";
+"Module" = "Moduuli";
+"Widgets" = "Widgetit";
+"Popup" = "Ponnahdusikkuna";
+"Notifications" = "Ilmoitukset";
+"Merge widgets" = "Yhdistä widgetit";
+"No available widgets to configure" = "Ei muokattavia widgettejä";
+"No options to configure for the popup in this module" = "Ei muokattavia asetuksia tälle moduulille";
+"Process" = "Prosessi";
+"Kill process" = "Lopeta prosessi";
+"Keyboard shortcut" = "Näppäimistön pikanäppäin"; // gemma4:31b
+"Listening..." = "Kuunnellaan..."; // gemma4:31b
+
+// Modules
+"Number of top processes" = "Suosittujen prosessien määrä";
+"Update interval for top processes" = "Suosittujen prosessien päivitysväli";
+"Chart color" = "Kaavion väri";
+"Main chart scaling" = "Pääkaavion skaalaus";
+"Scale value" = "Skaalausarvo";
+"Text widget value" = "Tekstiwidgetin arvo"; // gemma4:31b
+"Combined processes" = "Yhdistetyt prosessit"; // translategemma:4b
+
+// CPU
+"CPU usage" = "Suorittimen käyttö";
+"CPU temperature" = "Suorittimen lämpötila";
+"CPU frequency" = "Suorittimen taajuus";
+"System" = "Järjestelmä";
+"User" = "Käyttäjä";
+"Idle" = "Lepotila";
+"Show usage per core" = "Näytä käyttö ytimittäin";
+"Show hyper-threading cores" = "Näytä hyper-threading-ytimet";
+"Split the value (System/User)" = "Jaa arvo (Järjestelmä/Käyttäjä)";
+"Scheduler limit" = "Ajastimen raja";
+"Speed limit" = "Nopeusraja";
+"Average load" = "Keskimääräinen kuorma";
+"1 minute" = "1 minuutti";
+"5 minutes" = "5 minuuttia";
+"15 minutes" = "15 minuuttia";
+"CPU usage threshold" = "Suorittimen käytön raja";
+"Efficiency cores" = "Tehokkuusytimet";
+"Performance cores" = "Suorituskykyytimet";
+"System color" = "Järjestelmän väri";
+"User color" = "Käyttäjän väri";
+"Idle color" = "Lepotilan väri";
+"Cluster grouping" = "Ryhmien klusterointi";
+"Efficiency cores color" = "E-ytimien väri";
+"Performance cores color" = "P-ytimien väri";
+"Total load" = "Kokonaiskuorma";
+"System load" = "Järjestelmäkuorma";
+"User load" = "Käyttäjäkuorma";
+"Efficiency cores load" = "Tehokkuusytimien kuorma";
+"Performance cores load" = "Suorituskykyytimien kuorma";
+"All cores" = "Kaikki ytimet"; // translategemma:4b
+"Load per core" = "Kuormitus ydintä kohti"; // gemma4:31b
+"Efficiency core" = "Tehokkuusydin"; // gemma4:31b
+"Performance core" = "Suorituskykyydin"; // gemma4:31b
+"Super core" = "Superydin"; // gemma4:31b
+
+// GPU
+"GPU to show" = "Näytettävä GPU";
+"Show GPU type" = "Näytä GPU-tyyppi";
+"GPU utilization" = "GPU:n käyttö";
+"Model" = "Malli";
+"Status" = "Tila";
+"Utilization" = "Käyttöaste";
+"Render utilization" = "Renderöinnin käyttöaste";
+"Tiler utilization" = "Tilerin käyttöaste";
+"GPU usage threshold" = "GPU:n käytön raja";
+"GPU usage is" = "GPU:n käyttö on %0";
+
+// RAM
+"Memory usage" = "Muistin käyttö";
+"Memory pressure" = "Muistipaine";
+"Total" = "Kokonaismäärä";
+"Used" = "Käytetty";
+"App" = "Sovellus";
+"Wired" = "Johdettu";
+"Compressed" = "Pakatut";
+"Free" = "Vapaa";
+"Swap" = "Välimuisti";
+"Split the value (App/Wired/Compressed)" = "Jaa arvo (Sovellus/Johdettu/Pakatut)";
+"RAM utilization threshold" = "RAMin käytön raja";
+"RAM utilization is" = "RAMin käyttö on %0";
+"App color" = "Sovelluksen väri";
+"Wired color" = "Johdettujen väri";
+"Compressed color" = "Pakattujen väri";
+"Free color" = "Vapaan väri";
+"Free memory (less than)" = "Vapaa muisti (alle)";
+"Swap size" = "Välimuistin koko";
+"Free RAM is" = "Vapaa RAM on %0";
+
+// Disk
+"Show removable disks" = "Näytä irrotettavat levyt";
+"Used disk memory" = "%0 / %1 käytössä";
+"Free disk memory" = "%0 / %1 vapaana";
+"Disk to show" = "Näytettävä levy";
+"Open disk" = "Avaa levy";
+"Switch view" = "Vaihda näkymää";
+"Disk utilization threshold" = "Levyn käytön raja";
+"Disk utilization is" = "Levyn käyttö on %0";
+"Read color" = "Luvun väri";
+"Write color" = "Kirjoituksen väri";
+"Disk usage" = "Levyn käyttö";
+"Total read" = "Luettu yhteensä";
+"Total written" = "Kirjoitettu yhteensä";
+"Drives" = "Levyt"; // gemma4:31b
+"SMART data" = "SMART-tiedot"; // gemma4:31b
+"Power cycles" = "Lataussyklien määrä"; // gemma4:31b
+"Power on hours" = "Käyttötunnit"; // gemma4:31b
+
+// Sensors
+"Celsius" = "Celsius";
+"Fahrenheit" = "Fahrenheit";
+"Save the fan speed" = "Tallenna tuulettimen nopeus";
+"Fan" = "Tuuletin";
+"HID sensors" = "HID-anturit";
+"Synchronize fan's control" = "Synkronoi tuulettimen hallinta";
+"Current" = "Virta";
+"Energy" = "Energia";
+"Show unknown sensors" = "Näytä tuntemattomat anturit";
+"Install fan helper" = "Asenna tuuletinavustaja";
+"Uninstall fan helper" = "Poista tuuletinavustaja";
+"Approve in System Settings ▸ Login Items" = "Hyväksy Järjestelmäasetuksissa ▸ Kirjautumiskohteet"; // gemma4:31b
+"Fan helper needs your approval" = "Tuuletinapuohjelma tarvitsee hyväksyntäsi"; // gemma4:31b
+"To control the fans, enable Stats in System Settings ▸ Login Items." = "Hallitaksesi tuulettimia, ota Stats käyttöön kohdassa Järjestelmäasetukset ▸ Kirjautumiskohteet."; // gemma4:31b
+"Open Login Items" = "Avaa kirjautumiskohteet"; // gemma4:31b
+"Could not enable the fan helper" = "Tuulettimen apuohjelmaa ei voitu ottaa käyttöön"; // gemma4:31b
+"Open System Settings ▸ Login Items, make sure Stats is allowed in the background, then try again." = "Avaa Järjestelmäasetukset ▸ Kirjautumiskohteet, varmista, että Stats on sallittu taustalla, ja yritä sitten uudelleen."; // gemma4:31b
+"Fan value" = "Tuulettimen arvo";
+"Turn off fan" = "Sammuta tuuletin";
+"You are going to turn off the fan. This is not recommended action that can damage your mac, are you sure you want to do that?" = "Olet sammuttamassa tuuletinta. Tämä ei ole suositeltavaa ja voi vahingoittaa Maciasi. Haluatko varmasti tehdä tämän?";
+"Sensor threshold" = "Anturin raja";
+"Left fan" = "Vasen tuuletin";
+"Right fan" = "Oikea tuuletin";
+"Fastest fan" = "Nopein tuuletin";
+"Sensor to show" = "Näytettävä anturi"; // gemma4:31b
+
+// Network
+"Uploading" = "Lähetys";
+"Downloading" = "Lataus";
+"Public IP" = "Julkinen IP";
+"Local IP" = "Paikallinen IP";
+"Interface" = "Liitäntä";
+"Physical address" = "Fyysinen osoite";
+"Refresh" = "Päivitä";
+"Network interface" = "Verkkoliitäntä";
+"Total download" = "Ladattu yhteensä";
+"Total upload" = "Lähetetty yhteensä";
+"Reader type" = "Lukijan tyyppi";
+"Interface based" = "Liitäntäpohjainen";
+"Processes based" = "Prosessipohjainen";
+"Reset data usage" = "Nollaa tiedonsiirto";
+"VPN mode" = "VPN-tila";
+"Standard" = "Standardi";
+"Security" = "Turvallisuus";
+"Channel" = "Kanava";
+"Autodetection" = "Automaattinen tunnistus";
+"Widget activation threshold" = "Widgetin aktivoinnin raja";
+"Internet connection" = "Internet-yhteys";
+"Connectivity host" = "Yhteyden isäntä";
+"Leave empty to disable the check" = "Jätä tyhjäksi poistaaksesi tarkistuksen käytöstä";
+"Connectivity history" = "Yhteyshistoria";
+"Auto-refresh public IP address" = "Päivitä julkinen IP-osoite automaattisesti";
+"Every hour" = "Joka tunti";
+"Every 12 hours" = "Joka 12. tunti";
+"Every 24 hours" = "Joka 24. tunti";
+"Last reset" = "Viimeksi nollattu %0 sitten";
+"Latency" = "Viive";
+"Address" = "Osoite"; // translategemma:4b
+"WiFi network" = "WiFi-verkko"; // gemma4:31b
+"Local IP changed" = "Paikallinen IP-osoite on muuttunut"; // translategemma:4b
+"Public IP changed" = "Julkinen IP-osoite on muuttunut"; // translategemma:4b
+"Previous IP" = "Edellinen IP-osoite: %0"; // translategemma:4b
+"New IP" = "Uusi IP: %0"; // gemma4:31b
+"Internet connection lost" = "Internet-yhteys katkesi"; // gemma4:31b
+"Internet connection established" = "Internet-yhteys muodostettu"; // translategemma:4b
+"Show country code instead of emoji" = "Näytä maakoodi emojin sijaan"; // gemma4:31b
+
+// Battery
+"Source" = "Lähde";
+"AC Power" = "Verkkovirta";
+"Battery Power" = "Akkuvirta";
+"Time" = "Aika";
+"Health" = "Kunto";
+"Amperage" = "Ampeerimäärä";
+"Voltage" = "Jännite";
+"Cycles" = "Sykliä";
+"Temperature" = "Lämpötila";
+"Power adapter" = "Virtalähde";
+"Power" = "Teho";
+"Is charging" = "Lataa";
+"Time to discharge" = "Purkamisaika";
+"Time to charge" = "Latausaika";
+"Calculating" = "Lasketaan";
+"Fully charged" = "Täyteen ladattu";
+"Low level notification" = "Matala tason ilmoitus";
+"High level notification" = "Korkea tason ilmoitus";
+"Low battery" = "Akku Vähissä";
+"High battery" = "Akun varaus korkea";
+"Battery remaining" = "%0% jäljellä";
+"Battery remaining to full charge" = "%0% täyteen lataukseen";
+"Percentage" = "Prosentti";
+"Percentage and time" = "Prosentti ja aika";
+"Time and percentage" = "Aika ja prosentti";
+"Time format" = "Ajan muoto";
+"Hide additional information when full" = "Piilota lisätiedot, kun täynnä";
+"Percentage inside the icon" = "Prosentti kuvakkeen sisällä";
+"Charger state inside the battery" = "Lataustila akun sisällä"; // gemma4:31b
+"Max capacity" = "Maksimikapasiteetti"; // gemma4:31b
+"Designed capacity" = "Suunniteltu kapasiteetti"; // gemma4:31b
+"On hold" = "Odotuksessa"; // gemma4:31b
+"On battery" = "Akulla"; // gemma4:31b
+"Plugged in" = "Kytketty"; // gemma4:31b
+"Charging" = "Ladataan"; // gemma4:31b
+
+// Bluetooth
+"No Bluetooth devices are available" = "Bluetooth-laitteita ei ole saatavilla";
+
+// Clock
+"Time zone" = "Aikavyöhyke";
+"Local" = "Paikallinen";
+"Calendar" = "Kalenteri";
+"Show week numbers" = "Näytä viikonumerot"; // translategemma:4b
+"Local time" = "Paikallinen aika";
+"Add new clock" = "Lisää uusi kello"; // translategemma:4b
+"Delete selected clock" = "Poista valittu kello"; // gemma4:31b
+"Help with datetime format" = "Ohje päivämäärän ja kellonajan muotoiluun"; // gemma4:31b
+"Sync with NTP server" = "Synkronointi NTP-palvelimen kanssa"; // gemma4:31b
+"Previous month" = "Edellinen kuukausi"; // gemma4:31b
+"Next month" = "Seuraava kuukausi"; // gemma4:31b
+
+// Colors
+"Based on utilization" = "Perustuu käyttöasteeseen";
+"Based on pressure" = "Perustuu paineeseen";
+"Based on cluster" = "Perustuu klusteriin";
+"System accent" = "Järjestelmän korostus";
+"Monochrome accent" = "Yksivärinen korostus";
+"Clear" = "Kirkas";
+"White" = "Valkoinen";
+"Black" = "Musta";
+"Gray" = "Harmaa";
+"Second gray" = "Toinen harmaa";
+"Dark gray" = "Tumma harmaa";
+"Light gray" = "Vaalea harmaa";
+"Red" = "Punainen";
+"Second red" = "Toinen punainen";
+"Green" = "Vihreä";
+"Second green" = "Toinen vihreä";
+"Blue" = "Sininen";
+"Second blue" = "Toinen sininen";
+"Yellow" = "Keltainen";
+"Second yellow" = "Toinen keltainen";
+"Orange" = "Oranssi";
+"Second orange" = "Toinen oranssi";
+"Purple" = "Violetti";
+"Second purple" = "Toinen violetti";
+"Brown" = "Ruskea";
+"Second brown" = "Toinen ruskea";
+"Cyan" = "Syaani";
+"Magenta" = "Magenta";
+"Pink" = "Vaaleanpunainen";
+"Teal" = "Sinivihreä";
+"Indigo" = "Indigo";

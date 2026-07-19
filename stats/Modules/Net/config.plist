@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Name</key>
+	<string>Network</string>
+	<key>State</key>
+	<true/>
+	<key>Symbol</key>
+	<string>network</string>
+	<key>Widgets</key>
+	<dict>
+		<key>label</key>
+		<dict>
+			<key>Default</key>
+			<false/>
+			<key>Order</key>
+			<integer>0</integer>
+		</dict>
+		<key>speed</key>
+		<dict>
+			<key>Default</key>
+			<true/>
+			<key>Symbols</key>
+			<dict>
+				<key>Output</key>
+				<string>U</string>
+				<key>Input</key>
+				<string>D</string>
+			</dict>
+			<key>Words</key>
+			<dict>
+				<key>Output</key>
+				<string>Upload speed</string>
+				<key>Input</key>
+				<string>Download speed</string>
+			</dict>
+			<key>Order</key>
+			<integer>1</integer>
+		</dict>
+		<key>network_chart</key>
+		<dict>
+			<key>Default</key>
+			<false/>
+			<key>Order</key>
+			<integer>2</integer>
+			<key>Unsupported colors</key>
+			<array>
+				<string>utilization</string>
+				<string>pressure</string>
+				<string>system</string>
+			</array>
+		</dict>
+		<key>state</key>
+		<dict>
+			<key>Default</key>
+			<false/>
+			<key>Order</key>
+			<integer>3</integer>
+			<key>Preview</key>
+			<dict>
+				<key>Value</key>
+				<true/>
+			</dict>
+		</dict>
+		<key>text</key>
+		<dict>
+			<key>Default</key>
+			<false/>
+			<key>Order</key>
+			<integer>4</integer>
+			<key>Preview</key>
+			<dict>
+				<key>Value</key>
+				<string>192.168.0.1</string>
+			</dict>
+		</dict>
+	</dict>
+	<key>Settings</key>
+	<dict>
+		<key>popup</key>
+		<true/>
+		<key>notifications</key>
+		<true/>
+	</dict>
+	<key>Preview</key>
+	<dict>
+		<key>available</key>
+		<true/>
+	</dict>
+</dict>
+</plist>

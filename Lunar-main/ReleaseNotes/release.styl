@@ -1,0 +1,142 @@
+codeColor = #7c698e
+boldColor = #b47b36
+emColor = #de8377
+linkColor = #1DA1F2
+
+codeColorDark = #bfa2d9
+boldColorDark = #e7ad66
+emColorDark = #f59f94
+linkColorDark = #85b3f4
+
+headingColors = {
+  hotfix: #FF2F3C,
+  features: #b97900,
+  improvements: #616187,
+  fixes: #E14283,
+}
+headingColorsDark = {
+  hotfix: #ff2f5c,
+  features: #ffc455,
+  improvements: #c4c4ff,
+  fixes: #fdc0d9,
+}
+mono = ui-monospace, Menlo, monospace
+sansSerif = ui-sans-serif, system-ui, sans-serif
+
+html, body
+  background: rgb(245 245 244)
+  color: #111
+  @media screen and (prefers-color-scheme: dark)
+    background: rgb(30 29 28)
+    color: #eee
+
+body
+  margin: auto
+  padding: 0.6rem 1.5rem
+  max-width: 760px
+
+*
+  font-family: sansSerif
+  font-size: .95rem
+
+th
+  text-align: left
+
+td, th
+  padding: 0.2rem 0.5rem
+
+table
+  background: rgba(100,100,100,0.1)
+
+img
+  width: 80%
+  margin: 1rem auto
+  object-fit: cover
+  border-radius: 12px
+
+video
+  max-width: 80%
+  margin: 1rem auto
+  border-radius: 12px
+  box-shadow: 0px 3px 1rem rgba(0, 0, 0, 0.1)
+
+code, pre
+  font-family: mono
+  color: codeColor
+  @media screen and (prefers-color-scheme: dark)
+    color: codeColorDark
+
+code *
+  font-family: mono
+
+strong
+  color: boldColor
+  @media screen and (prefers-color-scheme: dark)
+    color: boldColorDark
+
+em
+  color: emColor
+  @media screen and (prefers-color-scheme: dark)
+    color: emColorDark
+
+code
+  font-weight: bold
+
+a
+  color: linkColor
+  @media screen and (prefers-color-scheme: dark)
+    color: linkColorDark
+  &:hover
+    color: darken(linkColor, 20%)
+
+h1
+  font-weight: 600
+  background: rgba(0,0,0,0.06)
+  border-radius: 8px
+  padding: 0.7rem
+  width: fit-content
+
+h2
+  font-weight: 200
+  border-top: solid 2px rgba(0,0,0,0.2)
+  padding: 1rem
+h3
+  font-weight: 800
+
+h1, h1 code, h1 strong, h1 em
+  font-size: 1.7rem
+  font-family: mono
+  opacity: 0.8
+
+h2, h2 code, h2 strong, h2 em
+  font-size: 1.4rem
+  opacity: 0.5
+  font-family: mono
+
+h3, h3 code, h3 strong, h3 em
+  font-size: 1.15rem
+  font-family: sansSerif
+
+h4, h4 code, h4 strong, h4 em
+  font-size: 1.1rem
+  font-family: sansSerif
+
+h5, h5 code, h5 strong, h5 em
+  font-size: 1.05rem
+  font-family: sansSerif
+
+for heading in hotfix features improvements fixes
+  h1#{heading}, h2#{heading}, h3#{heading}
+    color: headingColors[heading]
+    opacity: 0.7
+    @media screen and (prefers-color-scheme: dark)
+      color: headingColorsDark[heading]
+      opacity: 1.0
+
+  for num in (1..10)
+    h1#{heading}-{num}, h2#{heading}-{num}, h3#{heading}-{num}
+      color: headingColors[heading]
+      opacity: 0.7
+      @media screen and (prefers-color-scheme: dark)
+        color: headingColorsDark[heading]
+        opacity: 1.0

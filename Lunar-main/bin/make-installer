@@ -1,0 +1,79 @@
+#!/usr/bin/env fish
+set DIR (cd (dirname (status -f)); and pwd)
+if not set -q PROJECT_DIR
+    set PROJECT_DIR (dirname $DIR)
+end
+
+set CODESIGN_CERT "Developer ID Application: Alin Panaitiu (RDDXV84A73)"
+set CODESIGN_CERT_INSTALLER "Developer ID Installer: Alin Panaitiu (RDDXV84A73)"
+set WORK_DIR "$PROJECT_DIR"
+set SCRIPTS_DIR "$PROJECT_DIR/scripts"
+
+set BUILD_DIR "$CODESIGNING_FOLDER_PATH"
+set TMP_DIR /tmp/Lunar
+set RELEASE_DIR "$WORK_DIR/Releases"
+set APPCAST "$RELEASE_DIR/appcast.xml"
+
+set APP_TMP "$TMP_DIR/Lunar.app"
+set APP_VERSION (/usr/libexec/PlistBuddy -c "Print CFBundleShortVersionString" "$APP_TMP/Contents/Info.plist" || exit 1)
+
+function make-installer -a ext
+    set TMP_INSTALLER_DIR "$TMP_DIR/$ext"
+    mkdir -p $TMP_INSTALLER_DIR || exit 1
+
+    set APP_LATEST_INSTALLER "$RELEASE_DIR/Lunar.$ext"
+    set APP_LATEST_INSTALLER_ZIP "$RELEASE_DIR/Lunar.zip"
+    set APP_INSTALLER "$RELEASE_DIR/Lunar-$APP_VERSION.$ext"
+    set APP_INSTALLER_ZIP "$RELEASE_DIR/Lunar-$APP_VERSION.zip"
+    set APP_TMP_INSTALLER "$TMP_INSTALLER_DIR/Lunar-$APP_VERSION.$ext"
+
+    if test -f "$APP_INSTALLER"
+        echo (set_color red)"Deleting $APP_INSTALLER"(set_color normal)
+        rm "$APP_INSTALLER"
+    end
+    if test -f "$APP_LATEST_INSTALLER" && not string match -rq "$CHANNEL" beta
+        echo \n(set_color red)"Deleting $APP_LATEST_INSTALLER"(set_color normal)
+        rm "$APP_LATEST_INSTALLER"
+    end
+    if test -f "$APP_TMP_INSTALLER"
+        echo \n(set_color red)"Deleting $APP_TMP_INSTALLER"(set_color normal)
+        rm "$APP_TMP_INSTALLER"
+    end
+
+    if test "$ext" = pkg
+        pkgbuild --sign $CODESIGN_CERT_INSTALLER --identifier fyi.lunar.Lunar --scripts "$SCRIPTS_DIR" --install-location /Applications --component "$APP_TMP" "$APP_TMP_INSTALLER" || exit 1
+    else if test "$ext" = dmg
+        create-dmg --identity="$CODESIGN_CERT" "$APP_TMP" "$TMP_INSTALLER_DIR" || exit 1
+        set APP_TMP_INSTALLER_CREATED "$TMP_INSTALLER_DIR/Lunar $APP_VERSION.$ext"
+        mv "$APP_TMP_INSTALLER_CREATED" "$APP_TMP_INSTALLER"
+    end
+
+    cp "$APP_TMP_INSTALLER" "$APP_INSTALLER" || exit 1
+
+    if test "$DISABLE_NOTARIZATION" != 1
+        # xcnotary notarize -d alin.p32@gmail.com -k altool "$APP_INSTALLER" || exit 1
+        xcrun notarytool submit "$APP_INSTALLER" --keychain-profile Alin --wait || exit 1
+        xcrun stapler staple "$APP_INSTALLER"
+        spctl --assess -vv --type install "$APP_INSTALLER" || exit 1
+    end
+
+    if not string match -rq "$CHANNEL" beta
+        echo (set_color yellow)"Copying $APP_INSTALLER to $APP_LATEST_INSTALLER"(set_color normal)
+        cp "$APP_INSTALLER" "$APP_LATEST_INSTALLER" || exit 1
+    end
+
+    if test "$ext" = pkg
+        cd "$RELEASE_DIR"
+
+        if test -f "$APP_INSTALLER_ZIP"
+            echo (set_color red)"Deleting $APP_INSTALLER_ZIP"(set_color normal)
+            rm "$APP_INSTALLER_ZIP"
+        end
+
+        zip "$APP_INSTALLER_ZIP" (basename "$APP_INSTALLER")
+        cp "$APP_INSTALLER_ZIP" "$APP_LATEST_INSTALLER_ZIP"
+        cd -
+    end
+end
+
+make-installer $argv

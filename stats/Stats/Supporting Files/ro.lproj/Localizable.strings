@@ -1,0 +1,499 @@
+//
+//  Localizable.strings
+//  Stats
+//
+//  Created by Razvan Luta on 31/01/2021.
+//  Using Swift 5.0.
+//  Running on macOS 10.15.
+//
+//  Copyright © 2020 Serhiy Mytrovtsiy. All rights reserved.
+//
+
+// Modules
+"CPU" = "Procesor"; // translategemma:4b
+"Open CPU settings" = "Deschide setările CPU"; // gemma4:31b
+"GPU" = "GPU";
+"Open GPU settings" = "Deschide setările GPU"; // translategemma:4b
+"RAM" = "RAM";
+"Open RAM settings" = "Deschide setările RAM"; // gemma4:31b
+"Disk" = "Disc"; // gemma4:31b
+"Open Disk settings" = "Deschide setările discului"; // translategemma:4b
+"Sensors" = "Senzori"; // translategemma:4b
+"Open Sensors settings" = "Deschide setările senzorilor"; // translategemma:4b
+"Network" = "Rețea"; // translategemma:4b
+"Open Network settings" = "Deschide setările de rețea"; // gemma4:31b
+"Battery" = "Baterie"; // translategemma:4b
+"Open Battery settings" = "Deschide setările bateriei"; // translategemma:4b
+"Bluetooth" = "Bluetooth";
+"Open Bluetooth settings" = "Deschide setările Bluetooth"; // translategemma:4b
+"Clock" = "Ceas"; // translategemma:4b
+"Open Clock settings" = "Deschide setările ceasului"; // translategemma:4b
+
+// Words
+"Unknown" = "Necunoscut";
+"Version" = "Versiune";
+"Processor" = "Procesor";
+"Memory" = "Memorie";
+"Graphics" = "Grafică";
+"Close" = "Închide";
+"Download" = "Descarcă";
+"Install" = "Instalează";
+"Cancel" = "Anulează";
+"Unavailable" = "Indisponibil";
+"Yes" = "Da";
+"No" = "Nu";
+"Automatic" = "Automat";
+"Manual" = "Instrucțiuni"; // translategemma:4b
+"None" = "Niciunul";
+"Dots" = "Puncte";
+"Arrows" = "Săgeți";
+"Characters" = "Litere";
+"Short" = "Scurt";
+"Long" = "Lung";
+"Statistics" = "Statistici";
+"Max" = "Max";
+"Min" = "Min";
+"Reset" = "Resetează"; // translategemma:4b
+"Alignment" = "Aliniere"; // translategemma:4b
+"Left alignment" = "Stânga"; // translategemma:4b
+"Center alignment" = "Centru"; // translategemma:4b
+"Right alignment" = "Dreapta"; // gemma4:31b
+"Dashboard" = "Tablou de bord"; // gemma4:31b
+"Disabled" = "Dezactivat"; // gemma4:31b
+"Silent" = "Silențios"; // translategemma:4b
+"Units" = "Unități"; // translategemma:4b
+"Fans" = "Ventilatoare"; // gemma4:31b
+"Scaling" = "Scalare"; // translategemma:4b
+"Linear" = "Liniar"; // translategemma:4b
+"Square" = "Pătrat"; // translategemma:4b
+"Cube" = "Cub"; // translategemma:4b
+"Logarithmic" = "Logaritmic"; // translategemma:4b
+"Fixed scale" = "Fix"; // gemma4:31b
+"Cores" = "Nuclee"; // translategemma:4b
+"Core" = "Nucleu"; // translategemma:4b
+"Settings" = "Setări"; // translategemma:4b
+"Name" = "Nume"; // translategemma:4b
+"Format" = "Format";
+"Turn off" = "Dezactivează"; // gemma4:31b
+"Normal" = "Normal";
+"Warning" = "Avertizare"; // gemma4:31b
+"Critical" = "Critic"; // gemma4:31b
+"Usage" = "Utilizare"; // translategemma:4b
+"2 minutes" = "2 minute"; // translategemma:4b
+"3 minutes" = "3 minute"; // translategemma:4b
+"10 minutes" = "10 minute"; // translategemma:4b
+"Separator" = "Delimitor"; // translategemma:4b
+"Read" = "Citire"; // gemma4:31b
+"Write" = "Scriere"; // gemma4:31b
+"Frequency" = "Frecvență"; // translategemma:4b
+"Save" = "Salvează"; // gemma4:31b
+"Run" = "Execută"; // gemma4:31b
+"Stop" = "Oprire"; // gemma4:31b
+"Uninstall" = "Dezinstalează"; // gemma4:31b
+"1 sec" = "1 secundă"; // translategemma:4b
+"2 sec" = "2 secunde"; // translategemma:4b
+"3 sec" = "3 secunde"; // translategemma:4b
+"5 sec" = "5 secunde"; // translategemma:4b
+"10 sec" = "10 secunde"; // translategemma:4b
+"15 sec" = "15 secunde"; // translategemma:4b
+"30 sec" = "30 sec";
+"60 sec" = "60 secunde"; // translategemma:4b
+
+// Setup
+"Stats Setup" = "Configurare Stats"; // gemma4:31b
+"Previous" = "Anterior"; // translategemma:4b
+"Previous page" = "Pagina anterioară"; // translategemma:4b
+"Next" = "Următorul"; // gemma4:31b
+"Next page" = "Pagina următoare"; // translategemma:4b
+"Finish" = "Finalizare"; // gemma4:31b
+"Finish setup" = "Finalizează configurarea"; // gemma4:31b
+"Welcome to Stats" = "Bun venit la Stats"; // gemma4:31b
+"welcome_message" = "Vă mulțumim că folosiți Stats, un monitor de sistem macOS gratuit și cu sursă deschisă pentru bara de meniu."; // gemma4:31b
+"Select preset" = "Selectați prestabilirea"; // gemma4:31b
+"select_preset_message" = "Alegeți un set inițial de module. Puteți personaliza totul mai târziu în Setări."; // gemma4:31b
+"Default" = "Implicit"; // gemma4:31b
+"Basic" = "De bază"; // gemma4:31b
+"Recommended" = "Recomandat"; // gemma4:31b
+"Extended" = "Extins"; // gemma4:31b
+"Start the application automatically when starting your Mac" = "Porniți aplicația automat la pornirea Mac-ului"; // gemma4:31b
+"Do not start the application automatically when starting your Mac" = "Nu lansați aplicația automat la pornirea Mac-ului"; // gemma4:31b
+"Do everything silently in the background (recommended)" = "Execută totul silențios în fundal (recomandat)"; // gemma4:31b
+"Check for a new version on startup" = "Verifică dacă există o versiune nouă la pornire"; // gemma4:31b
+"Check for a new version every day (once a day)" = "Verifică dacă există o versiune nouă în fiecare zi (o dată pe zi)"; // gemma4:31b
+"Check for a new version every week (once a week)" = "Verifică dacă există o versiune nouă în fiecare săptămână (o dată pe săptămână)"; // gemma4:31b
+"Check for a new version every month (once a month)" = "Verifică dacă există o versiune nouă în fiecare lună (o dată pe lună)"; // gemma4:31b
+"Never check for updates (not recommended)" = "Nu verifica niciodată actualizările (nu este recomandat)"; // gemma4:31b
+"The configuration is completed" = "Configurarea este finalizată"; // gemma4:31b
+"finish_setup_message" = "Totul este configurat! \\n Stats este un instrument open source, este gratuit și va rămâne așa. \\n Dacă vă place, puteți susține proiectul, este întotdeauna apreciat!"; // gemma4:31b
+
+// Alerts
+"New version available" = "Versiune nouă disponibilă";
+"Click to install the new version of Stats" = "Click aici pentru a instala noua versiune Stats";
+"Successfully updated" = "Actualizat cu succes";
+"Stats was updated to v" = "Stats a fost actualizat la v%0";
+"Reset settings text" = "Toate setările aplicației vor fi resetate și aplicația va fi repornită. Sunteți sigur că doriți să faceți acest lucru?"; // gemma4:31b
+"Support text" = "Vă mulțumim pentru utilizarea Stats!\n\n Menținerea și îmbunătățirea acestui proiect open-source necesită timp și resurse. Sprijinul dumneavoastră ne ajută să continuăm să oferim o aplicație gratuită și fiabilă pentru toată lumea.\n\nDacă Stats vă este util, vă rugăm să luați în considerare posibilitatea de a face o contribuție. Fiecare bănuț ajută!";
+
+// Settings
+"Open Activity Monitor" = "Deschide Monitorul de Activitate";
+"Report a bug" = "Raportează o eroare";
+"Support the application" = "Susține aplicația";
+"Close application" = "Închide aplicația";
+"Open application settings" = "Deschide setăriile aplicației";
+"Open dashboard" = "Deschide dashboard"; // gemma4:31b
+"No notifications available in this module" = "Nu sunt disponibile notificări în acest modul"; // gemma4:31b
+"Open Calendar" = "Deschide calendarul"; // translategemma:4b
+"Toggle the module" = "Comută modulul"; // gemma4:31b
+"Open System Stats" = "Deschide System Stats"; // gemma4:31b
+
+// Application settings
+"Check for updates" = "Verifică pentru actualizări";
+"At start" = "La pornire";
+"Once per day" = "Odată pe zi";
+"Once per week" = "Odată pe săptămână";
+"Once per month" = "Odată pe lună";
+"Never" = "Niciodată";
+"Check for update" = "Verifică pentru actualizare";
+"Show icon in dock" = "Arată icoana in doc";
+"Start at login" = "Pornește la autentificare";
+"Build number" = "Numărul compilării"; // gemma4:31b
+"Import settings" = "Importă setările"; // gemma4:31b
+"Export settings" = "Exportă setările"; // gemma4:31b
+"Reset settings" = "Resetează setările"; // translategemma:4b
+"Pause the Stats" = "Pauzează Stats"; // gemma4:31b
+"Resume the Stats" = "Reluați Stats"; // gemma4:31b
+"Combined modules" = "Module combinate"; // gemma4:31b
+"Combined details" = "Detalii combinate"; // translategemma:4b
+"Spacing" = "Spațiere"; // gemma4:31b
+"Choose file" = "Alegeți fișierul"; // gemma4:31b
+"Stress tests" = "Teste de stres"; // translategemma:4b
+
+// Dashboard
+"Serial number" = "Număr de serie";
+"Model identifier" = "Identificator model"; // gemma4:31b
+"Production year" = "Anul de producție"; // translategemma:4b
+"Uptime" = "Timp în opererare";
+"Number of cores" = "%0 nuclee"; // translategemma:4b
+"Number of threads" = "%0 fire de execuție"; // gemma4:31b
+"Number of e-cores" = "%0 nuclee de eficiență"; // gemma4:31b
+"Number of p-cores" = "%0 nuclee de performanță"; // translategemma:4b
+"Number of s-cores" = "%0 super nuclee"; // gemma4:31b
+"Disks" = "Discuri"; // translategemma:4b
+"Display" = "Ecran"; // translategemma:4b
+
+// Update
+"The latest version of Stats installed" = "Cea mai recentă versiune de Stats instalată";
+"Downloading..." = "Se descarcă...";
+"Current version: " = "Versiunea curentă: ";
+"Latest version: " = "Versiunea cea mai recentă: ";
+
+// Widgets
+"Color" = "Culoare";
+"Label" = "Etichetă";
+"Box" = "Cutie";
+"Frame" = "Cadru";
+"Value" = "Valoare";
+"Colorize" = "Colorează";
+"Colorize value" = "Colorează valoarea";
+"Additional information" = "Informații suplimentare";
+"Base" = "Baza";
+"Display mode" = "Modul de vizualizare";
+"One row" = "Un rând";
+"Two rows" = "Două rânduri";
+"Mini widget" = "Mini";
+"Line chart widget" = "Grafic liniar"; // gemma4:31b
+"Bar chart widget" = "Diagramă cu bare"; // gemma4:31b
+"Pie chart widget" = "Diagramă circulară"; // gemma4:31b
+"Network chart widget" = "Grafic de rețea"; // gemma4:31b
+"Speed widget" = "Viteză"; // translategemma:4b
+"Battery widget" = "Baterie"; // translategemma:4b
+"Stack widget" = "Stivă"; // translategemma:4b
+"Memory widget" = "Memorie"; // translategemma:4b
+"Static width" = "Lățime statică"; // gemma4:31b
+"Tachometer widget" = "Tachimetru"; // gemma4:31b
+"State widget" = "Widget de stare"; // translategemma:4b
+"Text widget" = "Widget de text"; // translategemma:4b
+"Battery details widget" = "Widget detalii baterie"; // gemma4:31b
+"Show symbols" = "Afișează simbolurile"; // gemma4:31b
+"Label widget" = "Etichetă"; // translategemma:4b
+"Number of reads in the chart" = "Numărul de citiri din grafic"; // gemma4:31b
+"Color of download" = "Culoarea descărcării"; // translategemma:4b
+"Color of upload" = "Culoarea încărcării"; // translategemma:4b
+"Monospaced font" = "Font monospațiat"; // gemma4:31b
+"Reverse order" = "Ordine invers"; // gemma4:31b
+"Chart history" = "Istoricul graficului"; // gemma4:31b
+"Default color" = "Implicit"; // translategemma:4b
+"Transparent when no activity" = "Transparent când nu există activitate"; // gemma4:31b
+"Constant color" = "Constant";
+"Custom..." = "Personalizat...";
+
+// Module Kit
+"Open module settings" = "Deschide setăriile modulului";
+"Open widget settings" = "Deschide setările widgetului"; // gemma4:31b
+"Update interval" = "Intervalul de actualizare";
+"Usage history" = "Istoricul de folosință";
+"Details" = "Detalii";
+"Top processes" = "Procesele de vârf";
+"Pictogram" = "Pictogramă";
+"Module" = "Modul";
+"Widgets" = "Widgeturi";
+"Popup" = "Pop-up";
+"Notifications" = "Notificări";
+"Merge widgets" = "Îmbinați widget-uri";
+"No available widgets to configure" = "Nu există widgeturi disponibile de configurat";
+"No options to configure for the popup in this module" = "Nu există opțiuni de configurat pentru fereastra pop-up din acest modul";
+"Process" = "Proces"; // translategemma:4b
+"Kill process" = "Încheie procesul"; // gemma4:31b
+"Keyboard shortcut" = "Scurtătură de tastatură"; // translategemma:4b
+"Listening..." = "Ascultă..."; // gemma4:31b
+
+// Modules
+"Number of top processes" = "Numărul proceselor de vârf";
+"Update interval for top processes" = "Interval de actualizare pentru procesele de top"; // gemma4:31b
+"Chart color" = "Culoarea graficului"; // translategemma:4b
+"Main chart scaling" = "Scalarea graficului principal"; // gemma4:31b
+"Scale value" = "Valoarea scalei"; // gemma4:31b
+"Text widget value" = "Valoarea widgetului de text"; // gemma4:31b
+"Combined processes" = "Procese grupate"; // gemma4:31b
+
+// CPU
+"CPU usage" = "Utilizarea procesorului";
+"CPU temperature" = "Temperatura procesorului";
+"CPU frequency" = "Frecvența procesorului";
+"System" = "Sistem";
+"User" = "Utilizator";
+"Idle" = "Inactiv";
+"Show usage per core" = "Arată utilizarea pe fiecare nucleu";
+"Show hyper-threading cores" = "Arată nucleurile ce lucrează suplimentar";
+"Split the value (System/User)" = "Împarte valoarea (Sistem/Utilizator)";
+"Scheduler limit" = "Limita planificatorului"; // gemma4:31b
+"Speed limit" = "Limită de viteză"; // gemma4:31b
+"Average load" = "Încărcare medie"; // gemma4:31b
+"1 minute" = "1 minut"; // translategemma:4b
+"5 minutes" = "5 minute"; // translategemma:4b
+"15 minutes" = "15 minute"; // translategemma:4b
+"CPU usage threshold" = "Prag de utilizare CPU"; // gemma4:31b
+"Efficiency cores" = "Nuclee de eficiență"; // translategemma:4b
+"Performance cores" = "Nuclee de performanță"; // translategemma:4b
+"System color" = "Culoare de sistem"; // gemma4:31b
+"User color" = "Culoare utilizator"; // gemma4:31b
+"Idle color" = "Culoare inactivă"; // gemma4:31b
+"Cluster grouping" = "Gruparea clusterelor"; // gemma4:31b
+"Efficiency cores color" = "Culoarea nucleelor de eficiență"; // gemma4:31b
+"Performance cores color" = "Culoare nuclee de performanță"; // gemma4:31b
+"Total load" = "Sarcina totală"; // gemma4:31b
+"System load" = "Sarcina sistemului"; // gemma4:31b
+"User load" = "Sarcina utilizatorului"; // gemma4:31b
+"Efficiency cores load" = "Sarcina nucleelor de eficiență"; // gemma4:31b
+"Performance cores load" = "Sarcina nucleelor de performanță"; // gemma4:31b
+"All cores" = "Toate nucleele"; // translategemma:4b
+"Load per core" = "Sarcină per nucleu"; // gemma4:31b
+"Efficiency core" = "Nucleu de eficiență"; // gemma4:31b
+"Performance core" = "Nucleu de performanță"; // gemma4:31b
+"Super core" = "Super nucleu"; // gemma4:31b
+
+// GPU
+"GPU to show" = "Placa video să fie arătată";
+"Show GPU type" = "Arată tipul de placă video";
+"GPU utilization" = "Utilizarea plăcii video";
+"Model" = "Modelul";
+"Status" = "Statutul";
+"Utilization" = "Gradul de utilizare";
+"Render utilization" = "Utilizare render"; // gemma4:31b
+"Tiler utilization" = "Utilizare tiler"; // gemma4:31b
+"GPU usage threshold" = "Prag de utilizare GPU"; // gemma4:31b
+"GPU usage is" = "Utilizarea GPU este %0"; // gemma4:31b
+
+// RAM
+"Memory usage" = "Memoria folosită";
+"Memory pressure" = "Presiunea memoriei";
+"Total" = "Total";
+"Used" = "Folosit";
+"App" = "Aplicația";
+"Wired" = "Conectat prin cablu";
+"Compressed" = "Comprimat";
+"Free" = "Gratuit";
+"Swap" = "Schimbă";
+"Split the value (App/Wired/Compressed)" = "Împarte valoarea (Aplicația/Conectat prin cablu/Comprimat)";
+"RAM utilization threshold" = "Prag de utilizare RAM"; // gemma4:31b
+"RAM utilization is" = "Utilizarea RAM este %0"; // gemma4:31b
+"App color" = "Culoarea aplicației"; // translategemma:4b
+"Wired color" = "Culoare memorie fixată"; // gemma4:31b
+"Compressed color" = "Culoarea memoriei comprimate"; // gemma4:31b
+"Free color" = "Culoarea spațiului liber"; // gemma4:31b
+"Free memory (less than)" = "Memorie liberă (mai puțin de)"; // gemma4:31b
+"Swap size" = "Dimensiune swap"; // gemma4:31b
+"Free RAM is" = "RAM liber este %0"; // gemma4:31b
+
+// Disk
+"Show removable disks" = "Arată discurile detașabile";
+"Used disk memory" = "%0 din %1 folosită";
+"Free disk memory" = "%0 din %1 disponibilă";
+"Disk to show" = "Discul să fie arătat";
+"Open disk" = "Deschide discul";
+"Switch view" = "Schimbă vederea";
+"Disk utilization threshold" = "Prag de utilizare a discului"; // gemma4:31b
+"Disk utilization is" = "Utilizarea discului este %0"; // gemma4:31b
+"Read color" = "Culoarea citirii"; // gemma4:31b
+"Write color" = "Culoare scriere"; // gemma4:31b
+"Disk usage" = "Utilizarea discului"; // gemma4:31b
+"Total read" = "Total citit"; // translategemma:4b
+"Total written" = "Total scris"; // translategemma:4b
+"Drives" = "Discuri"; // gemma4:31b
+"SMART data" = "Date SMART"; // translategemma:4b
+"Power cycles" = "Număr de cicluri"; // gemma4:31b
+"Power on hours" = "Ore de funcționare"; // gemma4:31b
+
+// Sensors
+"Celsius" = "Celcius"; // translategemma:4b
+"Fahrenheit" = "Fahrenheit";
+"Save the fan speed" = "Salvează viteza ventilatorului"; // gemma4:31b
+"Fan" = "Ventilator"; // gemma4:31b
+"HID sensors" = "Senzori HID"; // gemma4:31b
+"Synchronize fan's control" = "Sincronizează controlul ventilatoarelor"; // gemma4:31b
+"Current" = "Curent"; // gemma4:31b
+"Energy" = "Energie"; // translategemma:4b
+"Show unknown sensors" = "Afișează senzorii necunoscuți"; // gemma4:31b
+"Install fan helper" = "Instalează asistentul pentru ventilator"; // gemma4:31b
+"Uninstall fan helper" = "Dezinstalează asistentul pentru ventilator"; // gemma4:31b
+"Approve in System Settings ▸ Login Items" = "Aprobă în Setări sistem ▸ Elemente de autentificare"; // gemma4:31b
+"Fan helper needs your approval" = "Ajutorul pentru ventilator necesită aprobarea ta"; // gemma4:31b
+"To control the fans, enable Stats in System Settings ▸ Login Items." = "Pentru a controla ventilatoarele, activează Stats în Setări de sistem ▸ Elementele de autentificare."; // gemma4:31b
+"Open Login Items" = "Deschide elementele de autentificare"; // gemma4:31b
+"Could not enable the fan helper" = "Nu s-a putut activa utilitarul pentru ventilator"; // gemma4:31b
+"Open System Settings ▸ Login Items, make sure Stats is allowed in the background, then try again." = "Deschide Setări sistem ▸ Elemente de autentificare, asigură-te că Stats este permis în fundal, apoi încearcă din nou."; // gemma4:31b
+"Fan value" = "Valoarea ventilatorului"; // gemma4:31b
+"Turn off fan" = "Oprește ventilatorul"; // translategemma:4b
+"You are going to turn off the fan. This is not recommended action that can damage your mac, are you sure you want to do that?" = "Sunteți pe cale să opriți ventilatorul. Aceasta nu este o acțiune recomandată care poate deteriora Mac-ul dumneavoastră, sunteți sigur că doriți să faceți acest lucru?"; // gemma4:31b
+"Sensor threshold" = "Pragul senzorului"; // gemma4:31b
+"Left fan" = "Stânga"; // translategemma:4b
+"Right fan" = "Dreapta"; // gemma4:31b
+"Fastest fan" = "Cel mai rapid"; // translategemma:4b
+"Sensor to show" = "Senzor de afișat"; // gemma4:31b
+
+// Network
+"Uploading" = "Incarcă";
+"Downloading" = "Descarcă";
+"Public IP" = "Adresa de IP publică";
+"Local IP" = "Adresa de IP locală";
+"Interface" = "Interfață";
+"Physical address" = "Adresa fizică";
+"Refresh" = "Actualizare"; // gemma4:31b
+"Network interface" = "Interfața rețelei";
+"Total download" = "Totalul descărcat";
+"Total upload" = "Totalul încărcat";
+"Reader type" = "Tipul de cititor";
+"Interface based" = "Bazat pe interfață";
+"Processes based" = "Bazat pe procese";
+"Reset data usage" = "Resetează consumul de date"; // translategemma:4b
+"VPN mode" = "Mod VPN"; // translategemma:4b
+"Standard" = "Standard";
+"Security" = "Securitate"; // translategemma:4b
+"Channel" = "Canal"; // translategemma:4b
+"Autodetection" = "Autodetectare"; // gemma4:31b
+"Widget activation threshold" = "Prag de activare widget"; // gemma4:31b
+"Internet connection" = "Conexiune la internet"; // translategemma:4b
+"Connectivity host" = "Host de conectivitate"; // gemma4:31b
+"Leave empty to disable the check" = "Lăsați gol pentru a dezactiva verificarea"; // gemma4:31b
+"Connectivity history" = "Istoricul conectivității"; // gemma4:31b
+"Auto-refresh public IP address" = "Actualizare automată a adresei IP publice"; // translategemma:4b
+"Every hour" = "La fiecare oră"; // translategemma:4b
+"Every 12 hours" = "La fiecare 12 ore"; // translategemma:4b
+"Every 24 hours" = "La fiecare 24 de ore"; // translategemma:4b
+"Last reset" = "Ultima resetare acum %0"; // gemma4:31b
+"Latency" = "Latență"; // translategemma:4b
+"Address" = "Adresă"; // translategemma:4b
+"WiFi network" = "Rețea WiFi"; // gemma4:31b
+"Local IP changed" = "IP-ul local s-a modificat"; // gemma4:31b
+"Public IP changed" = "Adresa IP publică s-a modificat"; // gemma4:31b
+"Previous IP" = "IP anterior: %0"; // gemma4:31b
+"New IP" = "Noua adresă IP: %0"; // gemma4:31b
+"Internet connection lost" = "Conexiunea la internet pierdută"; // gemma4:31b
+"Internet connection established" = "Conexiunea la internet a fost stabilită"; // translategemma:4b
+"Show country code instead of emoji" = "Afișează codul țării în loc de emoji"; // gemma4:31b
+
+// Battery
+"Source" = "Sursă";
+"AC Power" = "Alimentare AC"; // gemma4:31b
+"Battery Power" = "Puterea bateriei"; // gemma4:31b
+"Time" = "Timp";
+"Health" = "Sănătate";
+"Amperage" = "Amperaj";
+"Voltage" = "Voltaj";
+"Cycles" = "Cicluri";
+"Temperature" = "Temperatură";
+"Power adapter" = "Adaptor de putere prin cablu";
+"Power" = "Putere";
+"Is charging" = "Se încarcă";
+"Time to discharge" = "Timp până la descărcare";
+"Time to charge" = "Timp până la încărcare";
+"Calculating" = "Se calculează";
+"Fully charged" = "Încărcat complet";
+"Low level notification" = "Notificație de nivel scăzut";
+"High level notification" = "Notificare nivel ridicat"; // gemma4:31b
+"Low battery" = "Baterie puțină";
+"High battery" = "Nivel baterie ridicat"; // gemma4:31b
+"Battery remaining" = "%0% rămas";
+"Battery remaining to full charge" = "%0% până la încărcarea completă"; // gemma4:31b
+"Percentage" = "Procentaj";
+"Percentage and time" = "Procentaj și timp";
+"Time and percentage" = "Timp si procentaj";
+"Time format" = "Formatul timpului";
+"Hide additional information when full" = "Ascunde restul informației cand e plină";
+"Percentage inside the icon" = "Procentaj în interiorul pictogramei"; // gemma4:31b
+"Charger state inside the battery" = "Starea încărcării în interiorul bateriei"; // gemma4:31b
+"Max capacity" = "Capacitate maximă"; // gemma4:31b
+"Designed capacity" = "Capacitate proiectată"; // gemma4:31b
+"On hold" = "În așteptare"; // gemma4:31b
+"On battery" = "La baterie"; // gemma4:31b
+"Plugged in" = "Conectat"; // gemma4:31b
+"Charging" = "Încărcare"; // gemma4:31b
+
+// Bluetooth
+"No Bluetooth devices are available" = "Nu sunt disponibile dispozitive Bluetooth"; // gemma4:31b
+
+// Clock
+"Time zone" = "Fus orar"; // translategemma:4b
+"Local" = "Local";
+"Calendar" = "Calendar";
+"Show week numbers" = "Afișează numerele săptămânilor"; // gemma4:31b
+"Local time" = "Ora locală"; // translategemma:4b
+"Add new clock" = "Adaugă ceas nou"; // gemma4:31b
+"Delete selected clock" = "Șterge ceasul selectat"; // translategemma:4b
+"Help with datetime format" = "Ajutor pentru formatul datei și orei"; // gemma4:31b
+"Sync with NTP server" = "Sincronizare cu serverul NTP"; // translategemma:4b
+"Previous month" = "Luna precedentă"; // gemma4:31b
+"Next month" = "Luna următoare"; // gemma4:31b
+
+// Colors
+"Based on utilization" = "Pe baza utilizării"; // gemma4:31b
+"Based on pressure" = "Bazat pe presiune"; // gemma4:31b
+"Based on cluster" = "Bazat pe cluster"; // gemma4:31b
+"System accent" = "Accent de sistem"; // gemma4:31b
+"Monochrome accent" = "Accent monocrom"; // gemma4:31b
+"Clear" = "Transparent"; // gemma4:31b
+"White" = "Alb"; // translategemma:4b
+"Black" = "Negru"; // translategemma:4b
+"Gray" = "Gri"; // translategemma:4b
+"Second gray" = "Al doilea gri"; // translategemma:4b
+"Dark gray" = "Gri închis"; // translategemma:4b
+"Light gray" = "Gri deschis"; // translategemma:4b
+"Red" = "Roșu"; // translategemma:4b
+"Second red" = "Al doilea roșu"; // translategemma:4b
+"Green" = "Verde"; // translategemma:4b
+"Second green" = "Al doilea verde"; // translategemma:4b
+"Blue" = "Albastru"; // translategemma:4b
+"Second blue" = "Al doilea albastru"; // translategemma:4b
+"Yellow" = "Galben"; // translategemma:4b
+"Second yellow" = "Al doilea galben"; // translategemma:4b
+"Orange" = "Portocaliu"; // translategemma:4b
+"Second orange" = "Al doilea portocaliu"; // gemma4:31b
+"Purple" = "Violet"; // translategemma:4b
+"Second purple" = "Al doilea violet"; // translategemma:4b
+"Brown" = "Maro"; // translategemma:4b
+"Second brown" = "Al doilea maro"; // translategemma:4b
+"Cyan" = "Cian"; // translategemma:4b
+"Magenta" = "Magenta";
+"Pink" = "Roz"; // translategemma:4b
+"Teal" = "Turcoaz"; // gemma4:31b
+"Indigo" = "Indigo";

@@ -1,0 +1,499 @@
+//
+//  Localizable.strings
+//  Stats
+//
+//  Created by Serhiy Mytrovtsiy on 27/08/2020.
+//  Using Swift 5.0.
+//  Running on macOS 10.15.
+//
+//  Copyright © 2020 Serhiy Mytrovtsiy. All rights reserved.
+//
+
+// Modules
+"CPU" = "CPU";
+"Open CPU settings" = "CPU 설정 열기";
+"GPU" = "GPU";
+"Open GPU settings" = "GPU 설정 열기";
+"RAM" = "RAM";
+"Open RAM settings" = "RAM 설정 열기";
+"Disk" = "디스크";
+"Open Disk settings" = "디스크 설정 열기";
+"Sensors" = "센서";
+"Open Sensors settings" = "센서 설정 열기";
+"Network" = "네트워크";
+"Open Network settings" = "네트워크 설정 열기";
+"Battery" = "배터리";
+"Open Battery settings" = "배터리 설정 열기";
+"Bluetooth" = "블루투스";
+"Open Bluetooth settings" = "블루투스 설정 열기";
+"Clock" = "시계";
+"Open Clock settings" = "시계 설정 ";
+
+// Words
+"Unknown" = "알 수 없음";
+"Version" = "버전";
+"Processor" = "프로세서";
+"Memory" = "메모리";
+"Graphics" = "그래픽";
+"Close" = "닫기";
+"Download" = "다운로드";
+"Install" = "설치";
+"Cancel" = "취소";
+"Unavailable" = "사용할 수 없음";
+"Yes" = "예";
+"No" = "아니요";
+"Automatic" = "자동";
+"Manual" = "수동";
+"None" = "없음";
+"Dots" = "점";
+"Arrows" = "화살표";
+"Characters" = "문자";
+"Short" = "짧은";
+"Long" = "긴";
+"Statistics" = "통계";
+"Max" = "최대";
+"Min" = "최소";
+"Reset" = "재설정";
+"Alignment" = "정렬";
+"Left alignment" = "왼쪽";
+"Center alignment" = "가운데";
+"Right alignment" = "오른쪽";
+"Dashboard" = "대시보드";
+"Disabled" = "사용 안 함";
+"Silent" = "조용하게";
+"Units" = "단위";
+"Fans" = "팬";
+"Scaling" = "스케일";
+"Linear" = "선형";
+"Square" = "제곱";
+"Cube" = "세제곱";
+"Logarithmic" = "로그";
+"Fixed scale" = "고정 스케일";
+"Cores" = "코어 수";
+"Core" = "코어";
+"Settings" = "설정";
+"Name" = "이름";
+"Format" = "형식";
+"Turn off" = "끄기";
+"Normal" = "정상";
+"Warning" = "주의";
+"Critical" = "위험";
+"Usage" = "사용량";
+"2 minutes" = "2분";
+"3 minutes" = "3분";
+"10 minutes" = "10분";
+"Separator" = "구분선"; // gemma4:31b
+"Read" = "읽기"; // translategemma:4b
+"Write" = "쓰기";
+"Frequency" = "주파수"; // gemma4:31b
+"Save" = "저장"; // translategemma:4b
+"Run" = "실행"; // translategemma:4b
+"Stop" = "중지"; // translategemma:4b
+"Uninstall" = "제거"; // translategemma:4b
+"1 sec" = "1초";
+"2 sec" = "2초";
+"3 sec" = "3초";
+"5 sec" = "5초";
+"10 sec" = "10초";
+"15 sec" = "15초";
+"30 sec" = "30초";
+"60 sec" = "60초";
+
+// Setup
+"Stats Setup" = "Stats 설정";
+"Previous" = "이전";
+"Previous page" = "이전 페이지";
+"Next" = "다음";
+"Next page" = "다음 페이지";
+"Finish" = "완료";
+"Finish setup" = "설정 완료";
+"Welcome to Stats" = "Stats에 오신 것을 환영합니다";
+"welcome_message" = "당신의 메뉴 바를 위한 무료 오픈 소스 macOS 시스템 모니터, Stats를 사용해 주셔서 감사합니다.";
+"Select preset" = "프리셋 선택"; // gemma4:31b
+"select_preset_message" = "시작 모듈 세트를 선택하세요. 나중에 설정에서 모든 것을 맞춤 설정할 수 있습니다."; // gemma4:31b
+"Default" = "기본"; // gemma4:31b
+"Basic" = "기본"; // gemma4:31b
+"Recommended" = "권장"; // gemma4:31b
+"Extended" = "확장"; // gemma4:31b
+"Start the application automatically when starting your Mac" = "Mac 시동 시 애플리케이션 자동 시작";
+"Do not start the application automatically when starting your Mac" = "Mac 시동 시 애플리케이션 자동 시작 안함";
+"Do everything silently in the background (recommended)" = "모든 것을 백그라운드에서 조용하게 처리 (권장)";
+"Check for a new version on startup" = "시작할 때 새 버전 확인";
+"Check for a new version every day (once a day)" = "매일 새 버전 확인 (하루에 한 번)";
+"Check for a new version every week (once a week)" = "주마다 새 버전 확인 (일주일에 한 번)";
+"Check for a new version every month (once a month)" = "달마다 새 버전 확인 (한 달에 한 번)";
+"Never check for updates (not recommended)" = "업데이트 확인 안 함 (추천하지 않음)";
+"The configuration is completed" = "설정이 완료되었습니다";
+"finish_setup_message" = "모든 것이 설정되었습니다! \n Stats는 무료 오픈 소스 도구이며 앞으로도 그럴 것입니다. \n 이 애플리케이션이 마음에 드셨다면 프로젝트를 후원 하실 수 있습니다. 늘 감사합니다!";
+
+// Alerts
+"New version available" = "새로운 버전을 이용할 수 있습니다";
+"Click to install the new version of Stats" = "클릭하여 새 버전의 Stats 설치";
+"Successfully updated" = "성공적으로 업데이트되었습니다";
+"Stats was updated to v" = "Stats가 v%0 버전으로 업데이트되었습니다";
+"Reset settings text" = "모든 애플리케이션 설정이 재설정되고 다시 시작됩니다. 계속 진행하시겠습니까?";
+"Support text" = "Stats를 사용해 주셔서 감사합니다!\n\n 이 오픈 소스 프로젝트를 유지 관리하고 개선하는 데는 시간과 리소스가 필요합니다. 여러분의 지원은 모든 사람에게 신뢰할 수 있는 무료 애플리케이션을 계속 제공하는 데 도움이 됩니다.\n\nStats가 도움이 된다면 기여를 고려해 주세요. 여러분의 작은 도움이 큰 힘이 됩니다!";
+
+// Settings
+"Open Activity Monitor" = "활동 모니터 열기";
+"Report a bug" = "버그 보고";
+"Support the application" = "애플리케이션 후원";
+"Close application" = "애플리케이션 닫기";
+"Open application settings" = "애플리케이션 설정 열기";
+"Open dashboard" = "대시보드 열기";
+"No notifications available in this module" = "이 모듈에서 사용할 수 있는 알림이 없습니다";
+"Open Calendar" = "캘린더 열기";
+"Toggle the module" = "모듈 전환";
+"Open System Stats" = "System Stats 열기"; // gemma4:31b
+
+// Application settings
+"Check for updates" = "업데이트 확인";
+"At start" = "시작할 때";
+"Once per day" = "하루에 한 번";
+"Once per week" = "일주일에 한 번";
+"Once per month" = "한 달에 한 번";
+"Never" = "확인하지 않음";
+"Check for update" = "업데이트 확인";
+"Show icon in dock" = "Dock에 아이콘 표시";
+"Start at login" = "로그인 시 시작";
+"Build number" = "빌드 번호";
+"Import settings" = "설정 불러오기";
+"Export settings" = "설정 내보내기";
+"Reset settings" = "설정 초기화";
+"Pause the Stats" = "Stats 일시정지";
+"Resume the Stats" = "Stats 재개";
+"Combined modules" = "전체 모듈";
+"Combined details" = "전체 세부 정보";
+"Spacing" = "간격";
+"Choose file" = "파일 선택";
+"Stress tests" = "스트레스 테스트 진행하기";
+
+// Dashboard
+"Serial number" = "일련 번호";
+"Model identifier" = "모델 식별자";
+"Production year" = "생산 연도";
+"Uptime" = "가동 시간";
+"Number of cores" = "%0 코어";
+"Number of threads" = "%0 스레드";
+"Number of e-cores" = "%0 효율 코어";
+"Number of p-cores" = "%0 성능 코어";
+"Number of s-cores" = "%0 슈퍼 코어";
+"Disks" = "디스크";
+"Display" = "디스플레이";
+
+// Update
+"The latest version of Stats installed" = "최신 버전의 Stats가 설치되어 있습니다";
+"Downloading..." = "다운로드 중...";
+"Current version: " = "현재 버전:  ";
+"Latest version: " = "최신 버전:    ";
+
+// Widgets
+"Color" = "색상";
+"Label" = "레이블";
+"Box" = "상자";
+"Frame" = "테두리";
+"Value" = "값";
+"Colorize" = "색상화";
+"Colorize value" = "값 색상화";
+"Additional information" = "추가 정보";
+"Base" = "단위";
+"Display mode" = "표기 방식";
+"One row" = "한 줄";
+"Two rows" = "두 줄";
+"Mini widget" = "소형 위젯";
+"Line chart widget" = "선 도표";
+"Bar chart widget" = "막대 도표";
+"Pie chart widget" = "원형 도표";
+"Network chart widget" = "네트워크 도표";
+"Speed widget" = "속도 위젯";
+"Battery widget" = "배터리 위젯";
+"Stack widget" = "스택 위젯";
+"Memory widget" = "메모리 위젯";
+"Static width" = "너비 고정";
+"Tachometer widget" = "반원 도표";
+"State widget" = "상태 위젯";
+"Text widget" = "텍스트 위젯";
+"Battery details widget" = "배터리 세부 정보 위젯";
+"Show symbols" = "기호 표시";
+"Label widget" = "레이블 위젯";
+"Number of reads in the chart" = "도표 행 크기";
+"Color of download" = "다운로드 색상";
+"Color of upload" = "업로드 색상";
+"Monospaced font" = "고정폭 서체";
+"Reverse order" = "역순"; // translategemma:4b
+"Chart history" = "차트 기록"; // translategemma:4b
+"Default color" = "기본"; // gemma4:31b
+"Transparent when no activity" = "활동이 없을 때 투명하게"; // gemma4:31b
+"Constant color" = "고정"; // gemma4:31b
+"Custom..." = "사용자 지정...";
+
+// Module Kit
+"Open module settings" = "모듈 설정 열기";
+"Open widget settings" = "위젯 설정 열기";
+"Update interval" = "업데이트 주기";
+"Usage history" = "사용 기록";
+"Details" = "세부 사항";
+"Top processes" = "상위 프로세스";
+"Pictogram" = "상태 아이콘";
+"Module" = "모듈";
+"Widgets" = "위젯";
+"Popup" = "팝업";
+"Notifications" = "알림";
+"Merge widgets" = "위젯 합치기";
+"No available widgets to configure" = "구성할 위젯이 없습니다";
+"No options to configure for the popup in this module" = "이 모듈은 구성할 팝업 설정이 없습니다.";
+"Process" = "프로세스";
+"Kill process" = "프로세스 강제 종료";
+"Keyboard shortcut" = "키보드 단축키";
+"Listening..." = "듣는 중...";
+
+// Modules
+"Number of top processes" = "상위 프로세스 수";
+"Update interval for top processes" = "상위 프로세스의 업데이트 주기";
+"Chart color" = "도표 색상";
+"Main chart scaling" = "메인 차트 스케일";
+"Scale value" = "스케일 값";
+"Text widget value" = "텍스트 위젯 값"; // translategemma:4b
+"Combined processes" = "통합된 프로세스"; // translategemma:4b
+
+// CPU
+"CPU usage" = "CPU 사용량";
+"CPU temperature" = "CPU 온도";
+"CPU frequency" = "CPU 주파수";
+"System" = "시스템";
+"User" = "사용자";
+"Idle" = "대기";
+"Show usage per core" = "코어당 사용량 표시";
+"Show hyper-threading cores" = "하이퍼스레딩 코어 표시";
+"Split the value (System/User)" = "값 분할 (시스템/사용자)";
+"Scheduler limit" = "스케줄러 제한";
+"Speed limit" = "속도 제한";
+"Average load" = "평균 부하";
+"1 minute" = "1분";
+"5 minutes" = "5분";
+"15 minutes" = "15분";
+"CPU usage threshold" = "CPU 사용량 임계값";
+"Efficiency cores" = "효율 코어";
+"Performance cores" = "성능 코어";
+"System color" = "시스템 색상";
+"User color" = "사용자 색상";
+"Idle color" = "대기 색상";
+"Cluster grouping" = "클러스터 묶기";
+"Efficiency cores color" = "효율 코어 색상";
+"Performance cores color" = "성능 코어 색상";
+"Total load" = "총 부하";
+"System load" = "시스템 부하";
+"User load" = "사용자 부하";
+"Efficiency cores load" = "효율 코어 부하";
+"Performance cores load" = "성능 코어 부하";
+"All cores" = "모든 코어";
+"Load per core" = "코어당 부하";
+"Efficiency core" = "효율 코어";
+"Performance core" = "성능 코어";
+"Super core" = "슈퍼 코어";
+
+// GPU
+"GPU to show" = "표시할 GPU";
+"Show GPU type" = "GPU 유형 표시";
+"GPU utilization" = "GPU 사용률";
+"Model" = "모델";
+"Status" = "상태";
+"Utilization" = "사용률";
+"Render utilization" = "렌더 사용률";
+"Tiler utilization" = "타일 사용률";
+"GPU usage threshold" = "GPU 사용량 임계값";
+"GPU usage is" = "GPU 사용량 %0";
+
+// RAM
+"Memory usage" = "메모리 사용량";
+"Memory pressure" = "메모리 부하";
+"Total" = "전체";
+"Used" = "사용";
+"App" = "앱";
+"Wired" = "연결됨";
+"Compressed" = "압축됨";
+"Free" = "여유";
+"Swap" = "스왑";
+"Split the value (App/Wired/Compressed)" = "값 분할 (앱/연결됨/압축됨)";
+"RAM utilization threshold" = "RAM 사용률 임계값";
+"RAM utilization is" = "RAM 사용률 %0";
+"App color" = "앱 색상";
+"Wired color" = "연결됨 색상";
+"Compressed color" = "압축됨 색상";
+"Free color" = "여유 색상";
+"Free memory (less than)" = "여유 메모리 (설정값 아래로 떨어졌을 때)";
+"Swap size" = "스왑 크기"; // translategemma:4b
+"Free RAM is" = "여유 메모리 %0";
+
+// Disk
+"Show removable disks" = "이동식 디스크 표시";
+"Used disk memory" = "%1 중 %0 사용";
+"Free disk memory" = "%1 중 %0 여유";
+"Disk to show" = "표시할 디스크";
+"Open disk" = "디스크 열기";
+"Switch view" = "보기 전환";
+"Disk utilization threshold" = "디스크 사용률 임계값";
+"Disk utilization is" = "디스크 사용률 %0";
+"Read color" = "읽기 색상";
+"Write color" = "쓰기 색상";
+"Disk usage" = "디스크 사용량";
+"Total read" = "총 읽기";
+"Total written" = "총 쓰기";
+"Drives" = "드라이브"; // translategemma:4b
+"SMART data" = "SMART 데이터"; // translategemma:4b
+"Power cycles" = "전원 사이클 횟수"; // gemma4:31b
+"Power on hours" = "전원 켜짐 시간"; // gemma4:31b
+
+// Sensors
+"Celsius" = "섭씨";
+"Fahrenheit" = "화씨";
+"Save the fan speed" = "팬 속도 저장";
+"Fan" = "팬";
+"HID sensors" = "HID 센서";
+"Synchronize fan's control" = "팬 제어 동기화";
+"Current" = "전류";
+"Energy" = "에너지";
+"Show unknown sensors" = "알 수 없는 센서 표시";
+"Install fan helper" = "팬 헬퍼 설치";
+"Uninstall fan helper" = "팬 헬퍼 제거";
+"Approve in System Settings ▸ Login Items" = "시스템 설정 ▸ 로그인 항목에서 승인"; // gemma4:31b
+"Fan helper needs your approval" = "팬 헬퍼 승인이 필요합니다"; // gemma4:31b
+"To control the fans, enable Stats in System Settings ▸ Login Items." = "팬을 제어하려면 시스템 설정 ▸ 로그인 항목에서 Stats를 활성화하세요."; // gemma4:31b
+"Open Login Items" = "로그인 항목 열기"; // gemma4:31b
+"Could not enable the fan helper" = "팬 헬퍼를 활성화할 수 없습니다"; // gemma4:31b
+"Open System Settings ▸ Login Items, make sure Stats is allowed in the background, then try again." = "시스템 설정 ▸ 로그인 항목을 열고, Stats가 백그라운드에서 허용되었는지 확인한 후 다시 시도하십시오."; // gemma4:31b
+"Fan value" = "팬 값";
+"Turn off fan" = "팬 끄기";
+"You are going to turn off the fan. This is not recommended action that can damage your mac, are you sure you want to do that?" = "팬을 끄려고 합니다. 팬을 끄는 행위는 Mac을 손상시킬 수 있으므로 권장하지 않습니다. 정말 팬을 끄겠습니까?";
+"Sensor threshold" = "센서 임계값"; // translategemma:4b
+"Left fan" = "왼쪽 팬";
+"Right fan" = "오른쪽 팬";
+"Fastest fan" = "가장 빠른 팬";
+"Sensor to show" = "표시할 센서";
+
+// Network
+"Uploading" = "업로드";
+"Downloading" = "다운로드";
+"Public IP" = "공개 IP";
+"Local IP" = "로컬 IP";
+"Interface" = "인터페이스";
+"Physical address" = "MAC 주소";
+"Refresh" = "새로고침";
+"Network interface" = "네트워크 인터페이스";
+"Total download" = "총 다운로드";
+"Total upload" = "총 업로드";
+"Reader type" = "읽기 유형";
+"Interface based" = "인터페이스 기반";
+"Processes based" = "프로세스 기반";
+"Reset data usage" = "데이터 사용량 재설정";
+"VPN mode" = "VPN 모드";
+"Standard" = "표준";
+"Security" = "보안";
+"Channel" = "채널";
+"Autodetection" = "자동 감지";
+"Widget activation threshold" = "위젯 활성화 임계값";
+"Internet connection" = "인터넷 연결";
+"Connectivity host" = "연결성 확인 호스트";
+"Leave empty to disable the check" = "연결성 확인을 비활성화하려면 이 란을 비워 두세요";
+"Connectivity history" = "연결성 기록";
+"Auto-refresh public IP address" = "공개 IP주소 자동으로 새로고침";
+"Every hour" = "매 시간마다";
+"Every 12 hours" = "12시간마다";
+"Every 24 hours" = "24시간마다";
+"Last reset" = "마지막 초기화 이후 %0 경과";
+"Latency" = "레이턴시";
+"Address" = "주소"; // translategemma:4b
+"WiFi network" = "WiFi 네트워크";
+"Local IP changed" = "로컬 IP가 변경되었습니다"; // gemma4:31b
+"Public IP changed" = "공인 IP가 변경되었습니다"; // gemma4:31b
+"Previous IP" = "이전 IP: %0"; // translategemma:4b
+"New IP" = "새로운 IP: %0"; // gemma4:31b
+"Internet connection lost" = "인터넷 연결 끊김"; // gemma4:31b
+"Internet connection established" = "인터넷 연결이 설정되었습니다"; // gemma4:31b
+"Show country code instead of emoji" = "이모티콘 대신 국가 코드 표시하기";
+
+// Battery
+"Source" = "공급원";
+"AC Power" = "AC 전원";
+"Battery Power" = "배터리 전원";
+"Time" = "시간";
+"Health" = "상태";
+"Amperage" = "전류";
+"Voltage" = "전압";
+"Cycles" = "사이클";
+"Temperature" = "온도";
+"Power adapter" = "전원 어댑터";
+"Power" = "전원";
+"Is charging" = "충전 중";
+"Time to discharge" = "방전 시간";
+"Time to charge" = "충전 시간";
+"Calculating" = "계산 중";
+"Fully charged" = "완전히 충전됨";
+"Low level notification" = "낮은 수준 알림";
+"High level notification" = "높은 수준 알림";
+"Low battery" = "낮은 배터리";
+"High battery" = "높은 배터리";
+"Battery remaining" = "%0% 남았습니다";
+"Battery remaining to full charge" = "완전 충전까지 %0%";
+"Percentage" = "백분율";
+"Percentage and time" = "백분율 및 시간";
+"Time and percentage" = "시간 및 백분율";
+"Time format" = "시간 형식";
+"Hide additional information when full" = "완전 충전 시 추가 정보 숨기기";
+"Percentage inside the icon" = "아이콘 속에 백분율";
+"Charger state inside the battery" = "배터리 내부의 충전 상태"; // gemma4:31b
+"Max capacity" = "최대 용량"; // gemma4:31b
+"Designed capacity" = "설계 용량"; // gemma4:31b
+"On hold" = "대기 중"; // gemma4:31b
+"On battery" = "배터리 사용 중"; // gemma4:31b
+"Plugged in" = "전원 연결됨"; // gemma4:31b
+"Charging" = "충전 중"; // gemma4:31b
+
+// Bluetooth
+"No Bluetooth devices are available" = "사용 가능한 블루투스 장치가 없습니다";
+
+// Clock
+"Time zone" = "시간대";
+"Local" = "현지 시각";
+"Calendar" = "캘린더"; // gemma4:31b
+"Show week numbers" = "주 번호 표시"; // gemma4:31b
+"Local time" = "현지 시간"; // translategemma:4b
+"Add new clock" = "새 시계 추가"; // gemma4:31b
+"Delete selected clock" = "선택한 시계 삭제"; // gemma4:31b
+"Help with datetime format" = "날짜 및 시간 형식 도움말"; // gemma4:31b
+"Sync with NTP server" = "NTP 서버와 동기화"; // translategemma:4b
+"Previous month" = "지난달"; // gemma4:31b
+"Next month" = "다음 달"; // gemma4:31b
+
+// Colors
+"Based on utilization" = "사용률 기준";
+"Based on pressure" = "부하량 기준";
+"Based on cluster" = "클러스터 기준";
+"System accent" = "시스템 강조";
+"Monochrome accent" = "단색 강조";
+"Clear" = "투명";
+"White" = "흰색";
+"Black" = "검정";
+"Gray" = "회색";
+"Second gray" = "두 번째 회색";
+"Dark gray" = "진한 회색";
+"Light gray" = "밝은 회색";
+"Red" = "빨강";
+"Second red" = "두 번째 빨강";
+"Green" = "녹색";
+"Second green" = "두 번째 녹색";
+"Blue" = "파랑";
+"Second blue" = "두 번째 파랑";
+"Yellow" = "노랑";
+"Second yellow" = "두 번째 노랑";
+"Orange" = "주황";
+"Second orange" = "두 번째 주황";
+"Purple" = "보라";
+"Second purple" = "두 번째 보라";
+"Brown" = "갈색";
+"Second brown" = "두번 째 갈색";
+"Cyan" = "시안";
+"Magenta" = "마젠타";
+"Pink" = "분홍";
+"Teal" = "암청색";
+"Indigo" = "남색";

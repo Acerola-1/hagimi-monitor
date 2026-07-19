@@ -1,0 +1,63 @@
+disabled_rules:
+  - force_cast # todo
+  - type_name # todo
+  - cyclomatic_complexity # todo
+  - trailing_whitespace
+  - opening_brace
+  - implicit_getter
+  - implicit_optional_initialization
+  - large_tuple
+  - function_body_length
+
+opt_in_rules:
+  - control_statement
+  - empty_count
+  - trailing_newline
+  - colon
+  - comma
+
+identifier_name:
+  min_length: 1
+  excluded:
+    - AppUpdateIntervals
+    - TemperatureUnits
+    - SpeedBase
+    - SensorsWidgetMode
+    - SpeedPictogram
+    - BatteryAdditionals
+    - ShortLong
+    - ReaderUpdateIntervals
+    - NumbersOfProcesses
+    - NetworkReaders
+    - SensorsList
+    - Alignments
+    - _devices
+    - _uuidAddress
+    - AppleSiliconSensorsList
+    - FanValues
+    - CombinedModulesSpacings
+    - BatteryInfo
+    - PublicIPAddressRefreshIntervals
+    - _values
+    - _writeTS
+    - LineChartHistory
+    - SpeedPictogramColor
+    - SensorsWidgetValue
+    - access_token
+    - refresh_token
+    - device_code
+    - user_code
+    - verification_uri_complete
+    - expires_in
+    - NetworkSpeedUnitAuto
+    - NetworkSpeedUnits
+
+line_length: 200
+
+type_body_length:
+  - 700
+  - 1000
+
+file_length:
+  - 1400
+  - 1800

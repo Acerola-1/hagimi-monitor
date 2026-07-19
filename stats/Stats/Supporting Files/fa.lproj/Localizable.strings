@@ -1,0 +1,499 @@
+//
+//  Localizable.strings
+//  Stats
+//
+//  Created by Shayan Alizadeh on 17/11/2022.
+//  Using Swift 5.0.
+//  Running on macOS 13.
+//
+//  Copyright © 2020 Serhiy Mytrovtsiy. All rights reserved.
+//
+
+// Modules
+"CPU" = "سی پی یو";
+"Open CPU settings" = "باز کردن تنظیمات سی پی یو";
+"GPU" = "جی پی یو";
+"Open GPU settings" = "باز کردن تنظیمات جی پی یو";
+"RAM" = "رم";
+"Open RAM settings" = "باز کردن تنظیمات رم";
+"Disk" = "دیسک";
+"Open Disk settings" = "باز کردن تنظیمات دیسک";
+"Sensors" = "سنسور ها";
+"Open Sensors settings" = "باز کردن تنظیمات سنسور ها";
+"Network" = "شبکه";
+"Open Network settings" = "باز کردن تنظیمات شبکه";
+"Battery" = "باتری";
+"Open Battery settings" = "باز کردن تنظیمات باتری";
+"Bluetooth" = "بلوتوث";
+"Open Bluetooth settings" = "باز کردن تنظیمات بلوتوث";
+"Clock" = "ساعت"; // translategemma:4b
+"Open Clock settings" = "باز کردن تنظیمات ساعت"; // translategemma:4b
+
+// Words
+"Unknown" = "نامعلوم";
+"Version" = "نسخه";
+"Processor" = "پردازنده";
+"Memory" = "حافظه";
+"Graphics" = "گرافیک ها";
+"Close" = "بستن";
+"Download" = "دانلود";
+"Install" = "نصب";
+"Cancel" = "لغو";
+"Unavailable" = "غیر قابل دسترس";
+"Yes" = "بله";
+"No" = "خیر";
+"Automatic" = "خودکار";
+"Manual" = "دستی";
+"None" = "هیچ کدام";
+"Dots" = "نقطه ای";
+"Arrows" = "فلش";
+"Characters" = "کرکتر";
+"Short" = "کوتاه";
+"Long" = "بلند";
+"Statistics" = "آمار";
+"Max" = "حداکثر";
+"Min" = "حداقل";
+"Reset" = "ریست";
+"Alignment" = "چینش";
+"Left alignment" = "چپ";
+"Center alignment" = "وسط";
+"Right alignment" = "راست";
+"Dashboard" = "داشبورد";
+"Disabled" = "غیرفعال";
+"Silent" = "حالت سکوت";
+"Units" = "واحد ها";
+"Fans" = "فن ها";
+"Scaling" = "مقیاس بندی";
+"Linear" = "خطی";
+"Square" = "مربع";
+"Cube" = "مکعب";
+"Logarithmic" = "لگاریتمی";
+"Fixed scale" = "ثابت"; // gemma4:31b
+"Cores" = "هسته ها";
+"Core" = "هسته"; // gemma4:31b
+"Settings" = "تنظیمات"; // translategemma:4b
+"Name" = "نام"; // translategemma:4b
+"Format" = "فرمت"; // translategemma:4b
+"Turn off" = "خاموش کردن"; // translategemma:4b
+"Normal" = "عادی"; // gemma4:31b
+"Warning" = "هشدار"; // translategemma:4b
+"Critical" = "بحرانی"; // gemma4:31b
+"Usage" = "میزان استفاده"; // gemma4:31b
+"2 minutes" = "۲ دقیقه"; // translategemma:4b
+"3 minutes" = "۳ دقیقه"; // gemma4:31b
+"10 minutes" = "۱۰ دقیقه"; // gemma4:31b
+"Separator" = "جداکننده"; // gemma4:31b
+"Read" = "خواندن"; // translategemma:4b
+"Write" = "نوشتن"; // translategemma:4b
+"Frequency" = "فرکانس"; // translategemma:4b
+"Save" = "ذخیره"; // translategemma:4b
+"Run" = "اجرا"; // translategemma:4b
+"Stop" = "توقف"; // gemma4:31b
+"Uninstall" = "لغو نصب"; // gemma4:31b
+"1 sec" = "۱ ثانیه"; // translategemma:4b
+"2 sec" = "۲ ثانیه"; // gemma4:31b
+"3 sec" = "۳ ثانیه"; // gemma4:31b
+"5 sec" = "۵ ثانیه"; // gemma4:31b
+"10 sec" = "۱۰ ثانیه"; // gemma4:31b
+"15 sec" = "۱۵ ثانیه"; // gemma4:31b
+"30 sec" = "۳۰ ثانیه"; // gemma4:31b
+"60 sec" = "۶۰ ثانیه"; // gemma4:31b
+
+// Setup
+"Stats Setup" = "نصب Stats";
+"Previous" = "قبلی";
+"Previous page" = "صفحه قبل";
+"Next" = "بعدی";
+"Next page" = "صفحه بعد";
+"Finish" = "پایان";
+"Finish setup" = "پایان نصب";
+"Welcome to Stats" = "به Stats خوش آمدید";
+"welcome_message" = "ممنون از اینکه از Stats که یک اپ مانیتور کردن سیستم برای منو بار مک‌او‌اس هست استفاده می کنید.";
+"Select preset" = "انتخاب پیش‌فرض"; // gemma4:31b
+"select_preset_message" = "یک مجموعه اولیه از ماژول‌ها را انتخاب کنید. بعداً می‌توانید همه چیز را در تنظیمات شخصی‌سازی کنید."; // gemma4:31b
+"Default" = "پیش‌فرض"; // gemma4:31b
+"Basic" = "پایه"; // gemma4:31b
+"Recommended" = "پیشنهادی"; // gemma4:31b
+"Extended" = "گسترده"; // gemma4:31b
+"Start the application automatically when starting your Mac" = "اجرای خودکار در زمان راه‌اندازی مک";
+"Do not start the application automatically when starting your Mac" = "اجرا نشدن خودکار در زمان راه‌اندازی مک";
+"Do everything silently in the background (recommended)" = "همه‌چیز در حالت سکوت در پس‌زمینه انجام شود (پیشنهاد شده)";
+"Check for a new version on startup" = "بررسی برای نسخه‌ی جدید در زمان راه‌اندازی مک";
+"Check for a new version every day (once a day)" = "بررسی روزانه برای نسخه جدید (روزی یک بار)";
+"Check for a new version every week (once a week)" = "بررسی هفتگی برای نسخه جدید (هفته‌ای یک بار)";
+"Check for a new version every month (once a month)" = "بررسی ماهانه برای نسخه جدید (ماهی یک بار)";
+"Never check for updates (not recommended)" = "هیچ وقت نسخه‌ی جدید بررسی نشود (پیشنهاد نمی‌شود)";
+"The configuration is completed" = "پیکربندی کامل شد";
+"finish_setup_message" = "همه چیز آماده است! \n Stats یک ابزار متن باز رایگان است و همیشه رایگان خواهد بود \n اگر از این پروژه راضی بودید می‌توانید از ما حمایت کنید";
+
+// Alerts
+"New version available" = "نسخه‌ی جدید در دسترس است";
+"Click to install the new version of Stats" = "برای نصب نسخه‌ی جدید Stats کلیک کنید";
+"Successfully updated" = "با موفقیت به‌روزرسانی شد";
+"Stats was updated to v" = "Stats به نسخه‌ی v%0 بروزسانی شد  ";
+"Reset settings text" = "تمام تنظیمات اپلیکیشن ریست خواهد شد و اپ دوباره راه‌اندازی خواهد شد، آیا از این کار مطمئنید؟";
+"Support text" = "از اینکه از آمار استفاده می کنید متشکریم!\n\n نگهداری و بهبود این پروژه منبع باز زمان و منابع می طلبد. پشتیبانی شما به ما کمک می‌کند تا به ارائه یک برنامه رایگان و قابل اعتماد برای همه ادامه دهیم.\n\nاگر آمارها را مفید می‌دانید، لطفاً در نظر بگیرید. هر ذره کمک می کند!";
+
+// Settings
+"Open Activity Monitor" = "باز کردن نظارت فعالیت‌ها";
+"Report a bug" = "گزارش باگ";
+"Support the application" = "حمایت از اپلیکیشن";
+"Close application" = "بستن اپلیکیشن";
+"Open application settings" = "بستن تنظیمات اپلیکیشن";
+"Open dashboard" = "باز کردن داشبورد";
+"No notifications available in this module" = "در این ماژول هیچ اعلانی موجود نیست"; // gemma4:31b
+"Open Calendar" = "باز کردن تقویم"; // translategemma:4b
+"Toggle the module" = "تغییر وضعیت ماژول"; // gemma4:31b
+"Open System Stats" = "باز کردن System Stats"; // gemma4:31b
+
+// Application settings
+"Check for updates" = "بررسی برای نسخه‌های جدید";
+"At start" = "در زمان شروع";
+"Once per day" = "یک بار در روز";
+"Once per week" = "یک بار در هفته";
+"Once per month" = "یک بار در ماه";
+"Never" = "هیچ وقت";
+"Check for update" = "بررسی برای نسخه‌ی جدید";
+"Show icon in dock" = "نمایش آیکون در داک";
+"Start at login" = "باز شدن در زمان لاگین";
+"Build number" = "شماره ساخت";
+"Import settings" = "وارد کردن تنظیمات"; // translategemma:4b
+"Export settings" = "صادر کردن تنظیمات"; // gemma4:31b
+"Reset settings" = "ریست تنظیمات";
+"Pause the Stats" = "متوقف کردن Stats";
+"Resume the Stats" = "ادامه‌ی کار Stats";
+"Combined modules" = "ماژول‌های ترکیبی"; // translategemma:4b
+"Combined details" = "جزئیات ترکیبی"; // translategemma:4b
+"Spacing" = "فاصله"; // translategemma:4b
+"Choose file" = "انتخاب فایل"; // gemma4:31b
+"Stress tests" = "تست‌های استرس"; // gemma4:31b
+
+// Dashboard
+"Serial number" = "سریال نامبر";
+"Model identifier" = "شناسه مدل"; // translategemma:4b
+"Production year" = "سال تولید"; // translategemma:4b
+"Uptime" = "زمان روشن بودن";
+"Number of cores" = "%0 هسته‌ها";
+"Number of threads" = "%0 ترد‌ها";
+"Number of e-cores" = "%0 هسته‌های کم‌مصرف";
+"Number of p-cores" = "%0 هسته‌های پرقدرت";
+"Number of s-cores" = "%0 هسته سوپر"; // gemma4:31b
+"Disks" = "دیسک‌ها"; // translategemma:4b
+"Display" = "نمایشگر"; // gemma4:31b
+
+// Update
+"The latest version of Stats installed" = "آخرین نسخه‌ی Stats نصب شده است";
+"Downloading..." = "دانلود...";
+"Current version: " = "نسخه فعلی:  ";
+"Latest version: " = "آخرین نسخه:    ";
+
+// Widgets
+"Color" = "رنگ";
+"Label" = "لیبل";
+"Box" = "جعبه";
+"Frame" = "فریم";
+"Value" = "مقدار";
+"Colorize" = "رنگی";
+"Colorize value" = "مقدار رنگ";
+"Additional information" = "اطلاعات بیشتر";
+"Base" = "پایه";
+"Display mode" = "حالت نمایش";
+"One row" = "یک ردیف";
+"Two rows" = "دو ردیف";
+"Mini widget" = "کوچک";
+"Line chart widget" = "نمودار خطی";
+"Bar chart widget" = "نمودار میله‌ای";
+"Pie chart widget" = "نمودار دایره‌ای";
+"Network chart widget" = "نمودار شبکه";
+"Speed widget" = "سرعت";
+"Battery widget" = "باتری";
+"Stack widget" = "پشته"; // translategemma:4b
+"Memory widget" = "حافظه";
+"Static width" = "عرض ثابت";
+"Tachometer widget" = "تاکومتر";
+"State widget" = "ویجت حالت";
+"Text widget" = "ویجت متن"; // gemma4:31b
+"Battery details widget" = "ویجت جزئیات باتری"; // gemma4:31b
+"Show symbols" = "ویجت نمادها";
+"Label widget" = "لیبل";
+"Number of reads in the chart" = "تعداد خواندن‌ها در نمودار";
+"Color of download" = "رنگ دانلود";
+"Color of upload" = "رنگ آپلود";
+"Monospaced font" = "فونت تک‌فاصله"; // gemma4:31b
+"Reverse order" = "ترتیب معکوس"; // gemma4:31b
+"Chart history" = "تاریخچه نمودار"; // translategemma:4b
+"Default color" = "پیش‌فرض"; // translategemma:4b
+"Transparent when no activity" = "شفاف وقتی فعالیتی نیست"; // gemma4:31b
+"Constant color" = "ثابت"; // translategemma:4b
+"Custom..." = "سفارشی...";
+
+// Module Kit
+"Open module settings" = "باز کردن تنظیمات ماژول‌ها";
+"Open widget settings" = "باز کردن تنظیمات ویجت‌ها";
+"Update interval" = "بروزرسانی زمان‌بندی";
+"Usage history" = "تاریخچه مصرف";
+"Details" = "جزئیات";
+"Top processes" = "بیشترین پردازش‌ها";
+"Pictogram" = "پیکتوگرام";
+"Module" = "مدول";
+"Widgets" = "بزارک ها";
+"Popup" = "پنجره بازشو";
+"Notifications" = "اطلاعیه";
+"Merge widgets" = "ادغام ویجت‌ها";
+"No available widgets to configure" = "ویجتی برای پیکربندی در دسترس نیست";
+"No options to configure for the popup in this module" = "در این ماژول تنظیمی برای پاپ‌آپ موجود نیست";
+"Process" = "فرآیند"; // translategemma:4b
+"Kill process" = "پایان دادن به پروسه"; // gemma4:31b
+"Keyboard shortcut" = "میان‌بر صفحه‌کلید"; // gemma4:31b
+"Listening..." = "در حال گوش دادن..."; // translategemma:4b
+
+// Modules
+"Number of top processes" = "تعداد بالاترین پردازش‌ها";
+"Update interval for top processes" = " بروزرسانی زمان‌بندی برای بالاترین پردازش‌ها";
+"Chart color" = "رنگ نمودار";
+"Main chart scaling" = "مقیاس‌بندی نمودار اصلی"; // translategemma:4b
+"Scale value" = "مقدار مقیاس"; // gemma4:31b
+"Text widget value" = "مقدار ویجت متنی"; // gemma4:31b
+"Combined processes" = "فرآیندهای تجمیع‌شده"; // gemma4:31b
+
+// CPU
+"CPU usage" = "مصرف سی پی یو";
+"CPU temperature" = "دمای سی پی یو";
+"CPU frequency" = "فرکانس سی پی یو";
+"System" = "سیستم";
+"User" = "کاربر";
+"Idle" = "بیکار";
+"Show usage per core" = "نمایش مصرف براساس هسته";
+"Show hyper-threading cores" = "نمایش هسته‌های هایپرتردینگ";
+"Split the value (System/User)" = "جداسازی مقادیر (سیستم/کابر)";
+"Scheduler limit" = "محدودیت برنامه";
+"Speed limit" = "محدودیت سرعت";
+"Average load" = "میانگین بار";
+"1 minute" = "۱ دقیقه";
+"5 minutes" = "۵ دقیقه";
+"15 minutes" = "۱۵ دقیقه";
+"CPU usage threshold" = "آستانه مصرف سی پی یو";
+"Efficiency cores" = "هسته‌های کم‌مصرف";
+"Performance cores" = "هسته‌های پرقدرت";
+"System color" = "رنگ سیستم";
+"User color" = "رنگ کاربر";
+"Idle color" = "رنگ بیکار";
+"Cluster grouping" = "گروه‌بندی کلاستر";
+"Efficiency cores color" = "رنگ هسته‌های کم‌مصرف"; // gemma4:31b
+"Performance cores color" = "رنگ هسته‌های پرقدرت"; // gemma4:31b
+"Total load" = "بار کلی"; // gemma4:31b
+"System load" = "بار سیستم"; // translategemma:4b
+"User load" = "بار کاربر"; // translategemma:4b
+"Efficiency cores load" = "بار هسته‌های کم‌مصرف"; // gemma4:31b
+"Performance cores load" = "بار هسته‌های قدرتمند"; // gemma4:31b
+"All cores" = "همه هسته‌ها"; // gemma4:31b
+"Load per core" = "بار به ازای هر هسته"; // gemma4:31b
+"Efficiency core" = "هسته کم‌مصرف"; // gemma4:31b
+"Performance core" = "هسته عملکرد"; // translategemma:4b
+"Super core" = "هسته سوپر"; // gemma4:31b
+
+// GPU
+"GPU to show" = "نمایش جی پی یو";
+"Show GPU type" = "نمایش نوع جی پی یو";
+"GPU utilization" = "مصرف جی پی یو";
+"Model" = "مدل";
+"Status" = "وضعیت";
+"Utilization" = "استفاده";
+"Render utilization" = "استفاده از رندر";
+"Tiler utilization" = "استفاده از تایلر";
+"GPU usage threshold" = "آستانه مصرف جی پی یو";
+"GPU usage is" = "مصرف جی پی یو %0";
+
+// RAM
+"Memory usage" = "مصرف حافظه";
+"Memory pressure" = "فشار حافظه";
+"Total" = "کل";
+"Used" = "استفاده شده";
+"App" = "اپ‌ها";
+"Wired" = "سیستم‌بندی";
+"Compressed" = "فشرده شده";
+"Free" = "آزاد";
+"Swap" = "تبادل";
+"Split the value (App/Wired/Compressed)" = "جداسازی مقادیر (اپ/سیستم‌بندی/فشرده شده)";
+"RAM utilization threshold" = "آستانه مصرف رم";
+"RAM utilization is" = "مصرف رم %0";
+"App color" = "رنگ اپ";
+"Wired color" = "رنگ سیستم‌بندی";
+"Compressed color" = "رنگ فشرده شده";
+"Free color" = "رنگ آزاد";
+"Free memory (less than)" = "حافظه آزاد (کمتر از)"; // translategemma:4b
+"Swap size" = "حجم Swap"; // gemma4:31b
+"Free RAM is" = "RAM آزاد %0 است"; // gemma4:31b
+
+// Disk
+"Show removable disks" = "نمایش حافظه‌های متصل شده";
+"Used disk memory" = "%0 از %1 استفاده شده";
+"Free disk memory" = "%0 از %1 آزاد است";
+"Disk to show" = "نمایش دیسک";
+"Open disk" = "باز کردن دیسک";
+"Switch view" = "تغییر نمایش";
+"Disk utilization threshold" = "آستانه مصرف دیسک";
+"Disk utilization is" = "مصرف دیسک %0";
+"Read color" = "رنگ خوانش"; // gemma4:31b
+"Write color" = "رنگ نوشتن"; // gemma4:31b
+"Disk usage" = "استفاده از دیسک"; // gemma4:31b
+"Total read" = "مجموع خوانده شده"; // gemma4:31b
+"Total written" = "کل نوشته شده"; // gemma4:31b
+"Drives" = "درایوها"; // translategemma:4b
+"SMART data" = "داده‌های SMART"; // gemma4:31b
+"Power cycles" = "تعداد چرخه ها"; // gemma4:31b
+"Power on hours" = "ساعات کارکرد"; // gemma4:31b
+
+// Sensors
+"Celsius" = "سلسیوس";
+"Fahrenheit" = "فارنهایت";
+"Save the fan speed" = "ذخیره سرعت فن";
+"Fan" = "فن";
+"HID sensors" = "سنسور‌های HID";
+"Synchronize fan's control" = "همگام‌سازی سرعت فن‌ها";
+"Current" = "جریان";
+"Energy" = "انرژی";
+"Show unknown sensors" = "نمایش سنسور‌های ناشناخته";
+"Install fan helper" = "نصب دستیار فن"; // gemma4:31b
+"Uninstall fan helper" = "حذف ابزار کمکی فن"; // gemma4:31b
+"Approve in System Settings ▸ Login Items" = "در تنظیمات سیستم ▸ موارد ورود تایید کنید"; // gemma4:31b
+"Fan helper needs your approval" = "ابزار کمکی فن به تأیید شما نیاز دارد"; // gemma4:31b
+"To control the fans, enable Stats in System Settings ▸ Login Items." = "برای کنترل فن‌ها، Stats را در تنظیمات سیستم ▸ آیتم‌های ورود فعال کنید."; // gemma4:31b
+"Open Login Items" = "باز کردن آیتم‌های ورود"; // gemma4:31b
+"Could not enable the fan helper" = "امکان فعال‌سازی کمک‌کننده فن وجود نداشت"; // gemma4:31b
+"Open System Settings ▸ Login Items, make sure Stats is allowed in the background, then try again." = "تنظیمات سیستم ▸ آیتم‌های ورود را باز کنید، مطمئن شوید که Stats در پس‌زمینه مجاز است، سپس دوباره تلاش کنید."; // gemma4:31b
+"Fan value" = "مقدار فن"; // translategemma:4b
+"Turn off fan" = "خاموش کردن فن"; // gemma4:31b
+"You are going to turn off the fan. This is not recommended action that can damage your mac, are you sure you want to do that?" = "شما قصد دارید فن را خاموش کنید. این اقدام توصیه نمی‌شود و می‌تواند به Mac شما آسیب برساند، آیا مطمئن هستید که می‌خواهید این کار را انجام دهید؟"; // gemma4:31b
+"Sensor threshold" = "آستانه حسگر"; // gemma4:31b
+"Left fan" = "چپ"; // translategemma:4b
+"Right fan" = "راست"; // gemma4:31b
+"Fastest fan" = "سریع‌ترین"; // translategemma:4b
+"Sensor to show" = "حسگر برای نمایش"; // gemma4:31b
+
+// Network
+"Uploading" = "آپلود";
+"Downloading" = "دانلود";
+"Public IP" = "آی پی عمومی";
+"Local IP" = "آی پی محلی";
+"Interface" = "نوع اتصال";
+"Physical address" = "آدرس فیزیکی";
+"Refresh" = "بروزرسانی";
+"Network interface" = "نوع اتصال شبکه";
+"Total download" = "کل دانلود‌ها";
+"Total upload" = "کل آپلود‌ها";
+"Reader type" = "حالت خواننده";
+"Interface based" = "براساس نوع اتصال";
+"Processes based" = "براساس پردازش‌ها";
+"Reset data usage" = "ریست مصرف دیتا";
+"VPN mode" = "حالت وی پی ان";
+"Standard" = "استاندارد";
+"Security" = "امنیت";
+"Channel" = "کانال";
+"Autodetection" = "تشخیص خودکار";
+"Widget activation threshold" = "آستانه فعالسازی ویجت";
+"Internet connection" = "اتصال اینترنت";
+"Connectivity host" = "میزبان اتصال";
+"Leave empty to disable the check" = "خالی بگذارید تا بررسی غیرفعال شود";
+"Connectivity history" = "تاریخچه اتصال"; // translategemma:4b
+"Auto-refresh public IP address" = "به‌روزرسانی خودکار آدرس IP عمومی"; // gemma4:31b
+"Every hour" = "هر ساعت"; // translategemma:4b
+"Every 12 hours" = "هر ۱۲ ساعت"; // translategemma:4b
+"Every 24 hours" = "هر ۲۴ ساعت"; // gemma4:31b
+"Last reset" = "آخرین بازنشانی %0 پیش"; // gemma4:31b
+"Latency" = "تأخیر"; // gemma4:31b
+"Address" = "آدرس"; // translategemma:4b
+"WiFi network" = "شبکه WiFi"; // gemma4:31b
+"Local IP changed" = "IP محلی تغییر کرده است"; // gemma4:31b
+"Public IP changed" = "IP عمومی تغییر کرده است"; // gemma4:31b
+"Previous IP" = "IP قبلی: %0"; // gemma4:31b
+"New IP" = "IP جدید: %0"; // gemma4:31b
+"Internet connection lost" = "اتصال به اینترنت قطع شد"; // gemma4:31b
+"Internet connection established" = "اتصال اینترنت برقرار شد"; // translategemma:4b
+"Show country code instead of emoji" = "نمایش کد کشور به جای ایموجی"; // gemma4:31b
+
+// Battery
+"Source" = "منبع";
+"AC Power" = "برق شهر";
+"Battery Power" = "نیروی باتری";
+"Time" = "زمان";
+"Health" = "سلامت";
+"Amperage" = "آمپر";
+"Voltage" = "ولتاژ";
+"Cycles" = "دوره";
+"Temperature" = "دما";
+"Power adapter" = "آداپتور برق";
+"Power" = "نیرو";
+"Is charging" = "در حال شارژ";
+"Time to discharge" = "زمان خالی شدن شارژ";
+"Time to charge" = "زمان شارژ";
+"Calculating" = "محاسبه";
+"Fully charged" = "شارژ کامل";
+"Low level notification" = "نوتیفیکیشن سطح کم";
+"High level notification" = "نوتیفیکشن سطح زیاد";
+"Low battery" = "باتری کم";
+"High battery" = "باتری زیاد";
+"Battery remaining" = "%0% باقی‌مانده";
+"Battery remaining to full charge" = "%0% تا شارژ کامل";
+"Percentage" = "درصد";
+"Percentage and time" = "درصد و زمان";
+"Time and percentage" = "زمان و درصد";
+"Time format" = "فرمت زمان";
+"Hide additional information when full" = "پنهان کردن اطلاعات اضافه موقع شارژ کامل";
+"Percentage inside the icon" = "درصد داخل آیکون";
+"Charger state inside the battery" = "وضعیت شارژ در داخل باتری"; // translategemma:4b
+"Max capacity" = "حداکثر ظرفیت"; // gemma4:31b
+"Designed capacity" = "ظرفیت طراحی شده"; // gemma4:31b
+"On hold" = "در انتظار"; // gemma4:31b
+"On battery" = "روی باتری"; // gemma4:31b
+"Plugged in" = "متصل"; // gemma4:31b
+"Charging" = "در حال شارژ"; // gemma4:31b
+
+// Bluetooth
+"No Bluetooth devices are available" = "هیچ دیوایس بلوتوثی در دسترس نیست";
+
+// Clock
+"Time zone" = "منطقه زمانی"; // gemma4:31b
+"Local" = "محلی"; // translategemma:4b
+"Calendar" = "تقویم"; // translategemma:4b
+"Show week numbers" = "نمایش شماره‌های هفته"; // gemma4:31b
+"Local time" = "زمان محلی"; // translategemma:4b
+"Add new clock" = "افزودن ساعت جدید"; // gemma4:31b
+"Delete selected clock" = "حذف ساعت انتخاب‌شده"; // translategemma:4b
+"Help with datetime format" = "راهنمای فرمت تاریخ و زمان"; // gemma4:31b
+"Sync with NTP server" = "همگام‌سازی با سرور NTP"; // translategemma:4b
+"Previous month" = "ماه گذشته"; // gemma4:31b
+"Next month" = "ماه بعد"; // gemma4:31b
+
+// Colors
+"Based on utilization" = "بر اساس استفاده";
+"Based on pressure" = "بر اساس فشار";
+"Based on cluster" = "بر اساس کلاستر";
+"System accent" = "اکنست سیستم";
+"Monochrome accent" = "اکسنت تک‌رنگ";
+"Clear" = "روشن";
+"White" = "سفید";
+"Black" = "مشکی";
+"Gray" = "خاکستری";
+"Second gray" = "خاکستری دوم";
+"Dark gray" = "خاکستری تیره";
+"Light gray" = "خاکستری روشن";
+"Red" = "قرمز";
+"Second red" = "قرمز دوم";
+"Green" = "سبز";
+"Second green" = "سبز دوم";
+"Blue" = "آبی";
+"Second blue" = "آبی دوم";
+"Yellow" = "زرد";
+"Second yellow" = "زرد دوم";
+"Orange" = "نارنجی";
+"Second orange" = "نارنجی دوم";
+"Purple" = "بنفش";
+"Second purple" = "بنفش دوم";
+"Brown" = "قهوه‌ای";
+"Second brown" = "قهوه‌ای دوم";
+"Cyan" = "فیروزه‌ای";
+"Magenta" = "ارغوانی";
+"Pink" = "صورتی";
+"Teal" = "کله غازی";
+"Indigo" = "نیلی";

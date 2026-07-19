@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VariablesViewState
+   version = "1.0">
+   <ContextStates>
+      <ContextState
+         contextName = "closure #1 in closure #1 in QuickActionsMenuView.header.getter:QuickActionsMenuView.swift">
+         <PersistentStrings>
+            <PersistentString
+               value = "menuBarClosed">
+            </PersistentString>
+         </PersistentStrings>
+      </ContextState>
+      <ContextState
+         contextName = "HotKeyCenter.sendPressedKeyboardEvent(_:):HotKeyCenter.swift">
+         <PersistentStrings>
+            <PersistentString
+               value = "hotKeys.values.map { $0.hotKeyId }">
+            </PersistentString>
+            <PersistentString
+               value = "hotKeys.keys.map { $0 }">
+            </PersistentString>
+         </PersistentStrings>
+      </ContextState>
+      <ContextState
+         contextName = "HotKeyCenter.register(with:):HotKeyCenter.swift">
+         <PersistentStrings>
+            <PersistentString
+               value = "carbonHotKey">
+            </PersistentString>
+         </PersistentStrings>
+      </ContextState>
+   </ContextStates>
+</VariablesViewState>

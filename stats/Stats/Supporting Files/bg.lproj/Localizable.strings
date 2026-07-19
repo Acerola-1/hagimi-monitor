@@ -1,0 +1,499 @@
+//
+//  Localizable.strings
+//  Stats
+//
+//  Created by Rostislav Raykov on 31/01/2021.
+//  Using Swift 5.0.
+//  Running on macOS 10.15.
+//
+//  Copyright © 2020 Serhiy Mytrovtsiy. All rights reserved.
+//
+
+// Modules
+"CPU" = "Процесор";
+"Open CPU settings" = "Настройки на процесора";
+"GPU" = "Графична карта";
+"Open GPU settings" = "Настройки на графичната карта";
+"RAM" = "RAM";
+"Open RAM settings" = "Настройки на RAM";
+"Disk" = "Диск";
+"Open Disk settings" = "Настройки на диска";
+"Sensors" = "Сензори";
+"Open Sensors settings" = "Настройки на сензорите";
+"Network" = "Мрежа";
+"Open Network settings" = "Настройки на мрежата";
+"Battery" = "Батерия";
+"Open Battery settings" = "Настройки на мрежата";
+"Bluetooth" = "Bluetooth";
+"Open Bluetooth settings" = "Настройки на bluetooth";
+"Clock" = "Часовник"; // translategemma:4b
+"Open Clock settings" = "Отвори настройките на часовника"; // gemma4:31b
+
+// Words
+"Unknown" = "Непознато";
+"Version" = "Версия";
+"Processor" = "Процесор";
+"Memory" = "Памет";
+"Graphics" = "Графика";
+"Close" = "Затваряне";
+"Download" = "Изтегляне";
+"Install" = "Инсталиране";
+"Cancel" = "Отказ";
+"Unavailable" = "Недостъпно";
+"Yes" = "Да";
+"No" = "Не";
+"Automatic" = "Автоматично";
+"Manual" = "Ръчно";
+"None" = "Без";
+"Dots" = "Точки";
+"Arrows" = "Стрелки";
+"Characters" = "Символ";
+"Short" = "Кратко";
+"Long" = "Дълго";
+"Statistics" = "Статистика";
+"Max" = "Макс.";
+"Min" = "Мин.";
+"Reset" = "Зануляване";
+"Alignment" = "Подравняване";
+"Left alignment" = "Ляво";
+"Center alignment" = "Център";
+"Right alignment" = "Дясно";
+"Dashboard" = "Табло";
+"Disabled" = "Изключено";
+"Silent" = "Тихо";
+"Units" = "Единици";
+"Fans" = "Вентилатори";
+"Scaling" = "Скалиране";
+"Linear" = "Линейно";
+"Square" = "Квадратно";
+"Cube" = "Кубично";
+"Logarithmic" = "Логаритмично";
+"Fixed scale" = "Фиксирано"; // gemma4:31b
+"Cores" = "Ядра";
+"Core" = "Ядро"; // gemma4:31b
+"Settings" = "Настройки"; // translategemma:4b
+"Name" = "Име"; // translategemma:4b
+"Format" = "Формат"; // translategemma:4b
+"Turn off" = "Изключи"; // gemma4:31b
+"Normal" = "Нормален"; // translategemma:4b
+"Warning" = "Предупреждение"; // gemma4:31b
+"Critical" = "Критичен"; // translategemma:4b
+"Usage" = "Използване"; // translategemma:4b
+"2 minutes" = "2 минути"; // translategemma:4b
+"3 minutes" = "3 минути"; // translategemma:4b
+"10 minutes" = "10 минути"; // translategemma:4b
+"Separator" = "Разделител"; // translategemma:4b
+"Read" = "Четене"; // gemma4:31b
+"Write" = "Запис"; // gemma4:31b
+"Frequency" = "Честота"; // translategemma:4b
+"Save" = "Запази"; // gemma4:31b
+"Run" = "Стартирай"; // translategemma:4b
+"Stop" = "Спри"; // gemma4:31b
+"Uninstall" = "Деинсталиране"; // translategemma:4b
+"1 sec" = "1 сек"; // gemma4:31b
+"2 sec" = "2 сек"; // gemma4:31b
+"3 sec" = "3 сек"; // gemma4:31b
+"5 sec" = "5 сек"; // gemma4:31b
+"10 sec" = "10 сек"; // gemma4:31b
+"15 sec" = "15 сек"; // gemma4:31b
+"30 sec" = "30 сек"; // gemma4:31b
+"60 sec" = "60 сек"; // gemma4:31b
+
+// Setup
+"Stats Setup" = "Настройки на Stats";
+"Previous" = "Предишно";
+"Previous page" = "Предишна страница";
+"Next" = "Следващо";
+"Next page" = "Следваща страница";
+"Finish" = "Приключване";
+"Finish setup" = "Приключване на настройването";
+"Welcome to Stats" = "Добре дошли в Stats";
+"welcome_message" = "Благодарим Ви, че ползвате Stats, безплатен системен монитор за macOS с отворен код.";
+"Select preset" = "Изберете пресет"; // gemma4:31b
+"select_preset_message" = "Изберете начален комплект от модули. Можете да персонализирате всичко по-късно в Настройките."; // gemma4:31b
+"Default" = "По подразбиране"; // gemma4:31b
+"Basic" = "Основни"; // gemma4:31b
+"Recommended" = "Препоръчано"; // gemma4:31b
+"Extended" = "Разширен"; // gemma4:31b
+"Start the application automatically when starting your Mac" = "Стартирай приложението автоматично при стартиране на вашия Mac";
+"Do not start the application automatically when starting your Mac" = "Не стартирай приложението автоматично при стартиране на вашия Mac";
+"Do everything silently in the background (recommended)" = "Прави всичко тихо във фонов режим (препоръчително)";
+"Check for a new version on startup" = "Проверяване за нова версия при стартиране";
+"Check for a new version every day (once a day)" = "Проверяване за нова версия всеки ден (веднъж на ден)";
+"Check for a new version every week (once a week)" = "Проверяване за нова версия всяка седмица (веднъж на седмица)";
+"Check for a new version every month (once a month)" = "Проверяване за нова версия всеки месец (веднъж на месец)";
+"Never check for updates (not recommended)" = "Без проверяване за нови версии (не се препоръчва)";
+"The configuration is completed" = "Конфигурацията е завършена";
+"finish_setup_message" = "Всичко е настроено! \n Stats е приложение с отворен код, безплатно е и винаги ще бъде. \n Ако ви допада, може да подкрепите проекта, ще сме много благодарни!";
+
+// Alerts
+"New version available" = "Налична е нова версия";
+"Click to install the new version of Stats" = "Натиснете, за да инсталирате новата версия на Stats";
+"Successfully updated" = "Успешно обновяване";
+"Stats was updated to v" = "Stats е обновена до версия v%0";
+"Reset settings text" = "Всички настройки на приложението ще бъдат занулени и приложението ще се рестартира. Сигурни ли сте, че искате това?";
+"Support text" = "Благодарим ви, че използвате Статистики!\n\n Поддържането и подобряването на този проект с отворен код изисква време и ресурси. Вашата подкрепа ни помага да продължим да предоставяме безплатно и надеждно приложение за всички.\n\nАко намирате Stats за полезно, моля, помислете дали да не дадете своя принос. Всяка малка част помага!";
+
+// Settings
+"Open Activity Monitor" = "Отваряне на монитора на активностите";
+"Report a bug" = "Докладване на проблем";
+"Support the application" = "Подкрепа";
+"Close application" = "Затваряне на приложението";
+"Open application settings" = "Отваряне на настройките на приложението";
+"Open dashboard" = "Отваряне на таблото";
+"No notifications available in this module" = "В този модул няма налични известия"; // gemma4:31b
+"Open Calendar" = "Отвори календара"; // translategemma:4b
+"Toggle the module" = "Превключи модула"; // gemma4:31b
+"Open System Stats" = "Отвори System Stats"; // gemma4:31b
+
+// Application settings
+"Check for updates" = "Проверка за обновления";
+"At start" = "При стартиране";
+"Once per day" = "Веднъж на ден";
+"Once per week" = "Веднъж на седмица";
+"Once per month" = "Веднъж на месец";
+"Never" = "Никога";
+"Check for update" = "Проверка за обновления";
+"Show icon in dock" = "Показване на икона в Dock";
+"Start at login" = "Автоматично стартиране";
+"Build number" = "Номер на компилацията"; // gemma4:31b
+"Import settings" = "Импортирай настройките"; // gemma4:31b
+"Export settings" = "Експортирай настройките"; // gemma4:31b
+"Reset settings" = "Зануляване на настройките";
+"Pause the Stats" = "Паузиране на Stats";
+"Resume the Stats" = "Продължаване на Stats";
+"Combined modules" = "Комбинирани модули"; // translategemma:4b
+"Combined details" = "Комбинирани подробности"; // gemma4:31b
+"Spacing" = "Интервал"; // gemma4:31b
+"Choose file" = "Изберете файл"; // translategemma:4b
+"Stress tests" = "Стрес тестове"; // gemma4:31b
+
+// Dashboard
+"Serial number" = "Сериен номер";
+"Model identifier" = "Идентификатор на модела"; // translategemma:4b
+"Production year" = "Година на производство"; // translategemma:4b
+"Uptime" = "Време от последно рестартиране";
+"Number of cores" = "%0 ядра";
+"Number of threads" = "%0 нишки";
+"Number of e-cores" = "%0 ефикасни ядра";
+"Number of p-cores" = "%0 производителни ядра";
+"Number of s-cores" = "%0 супер ядра"; // translategemma:4b
+"Disks" = "Дискове"; // gemma4:31b
+"Display" = "Дисплей"; // translategemma:4b
+
+// Update
+"The latest version of Stats installed" = "Имате най-новата версия на Stats";
+"Downloading..." = "Изтегляне...";
+"Current version: " = "Текуща версия:  ";
+"Latest version: " = "Последна версия:    ";
+
+// Widgets
+"Color" = "Цвят";
+"Label" = "Етикет";
+"Box" = "Непрозрачен фон";
+"Frame" = "Рамка";
+"Value" = "Стойност";
+"Colorize" = "Оцветяване";
+"Colorize value" = "Стойност на оцветяване";
+"Additional information" = "Допълнителна информация";
+"Base" = "Основа";
+"Display mode" = "Режим на преглед";
+"One row" = "Един ред";
+"Two rows" = "Два реда";
+"Mini widget" = "Мини";
+"Line chart widget" = "Линейна диаграма";
+"Bar chart widget" = "Стълбовидна диаграма";
+"Pie chart widget" = "Кръгова диаграма";
+"Network chart widget" = "Мрежова диаграма";
+"Speed widget" = "Скорост";
+"Battery widget" = "Батерия";
+"Stack widget" = "Стек"; // translategemma:4b
+"Memory widget" = "Памет";
+"Static width" = "Постоянна ширина";
+"Tachometer widget" = "Тахометър";
+"State widget" = "Виджет за състояние"; // gemma4:31b
+"Text widget" = "Текстов уиджет"; // gemma4:31b
+"Battery details widget" = "Виджет с подробности за батерията"; // gemma4:31b
+"Show symbols" = "Показване на символи";
+"Label widget" = "Етикет";
+"Number of reads in the chart" = "Брой прочитания в графиката";
+"Color of download" = "Цвят на свалянето";
+"Color of upload" = "Цвят на качването";
+"Monospaced font" = "Моноширинен шрифт"; // gemma4:31b
+"Reverse order" = "Обратен ред"; // translategemma:4b
+"Chart history" = "История на графиката"; // gemma4:31b
+"Default color" = "По подразбиране"; // gemma4:31b
+"Transparent when no activity" = "Прозрачен, когато няма активност"; // translategemma:4b
+"Constant color" = "Постоянен"; // translategemma:4b
+"Custom..." = "Персонализирано...";
+
+// Module Kit
+"Open module settings" = "Отваряне на настройките на модула";
+"Open widget settings" = "Настройки на уиджета";
+"Update interval" = "Интервал на опресняване";
+"Usage history" = "История на използването";
+"Details" = "Подробности";
+"Top processes" = "Топ процеси";
+"Pictogram" = "Пиктограма";
+"Module" = "Модул";
+"Widgets" = "Джаджи";
+"Popup" = "Изскачащ прозорец";
+"Notifications" = "Известия";
+"Merge widgets" = "Сливане на уиджети";
+"No available widgets to configure" = "Няма налични уиджети за конфигуриране";
+"No options to configure for the popup in this module" = "Няма опции за конфигуриране за изскачащият прозорец в този модул";
+"Process" = "Процес"; // translategemma:4b
+"Kill process" = "Прекрати процеса"; // gemma4:31b
+"Keyboard shortcut" = "Клавишна комбинация"; // gemma4:31b
+"Listening..." = "Слушам..."; // translategemma:4b
+
+// Modules
+"Number of top processes" = "Брой топ процеси";
+"Update interval for top processes" = "Интервал на опресняване на топ процесите";
+"Chart color" = "Цвят на графиката";
+"Main chart scaling" = "Мащабиране на основната графика"; // gemma4:31b
+"Scale value" = "Стойност на мащаба"; // translategemma:4b
+"Text widget value" = "Стойност на текстовия виджет"; // gemma4:31b
+"Combined processes" = "Групирани процеси"; // gemma4:31b
+
+// CPU
+"CPU usage" = "Употреба на процесора";
+"CPU temperature" = "Температура на процесора";
+"CPU frequency" = "Честота на процесора";
+"System" = "Система";
+"User" = "Потребител";
+"Idle" = "В покой";
+"Show usage per core" = "Показване на употреба по ядро";
+"Show hyper-threading cores" = "Показване на hyper-threading ядра";
+"Split the value (System/User)" = "Разделяне на стойността (Система/Потребител)";
+"Scheduler limit" = "Ограничение на планировчика"; // gemma4:31b
+"Speed limit" = "Ограничение на скоростта";
+"Average load" = "Средно натоварване";
+"1 minute" = "1 минута";
+"5 minutes" = "5 минути";
+"15 minutes" = "15 минути";
+"CPU usage threshold" = "Праг на използване на CPU"; // gemma4:31b
+"Efficiency cores" = "Ефикасни ядра";
+"Performance cores" = "Производителни ядра";
+"System color" = "Системен цвят";
+"User color" = "Потребителски цвят";
+"Idle color" = "Цвят при неактивност";
+"Cluster grouping" = "Групиране на клъстери"; // gemma4:31b
+"Efficiency cores color" = "Цвят на енергоефективните ядра"; // gemma4:31b
+"Performance cores color" = "Цвят на производителните ядра"; // gemma4:31b
+"Total load" = "Общо натоварване"; // gemma4:31b
+"System load" = "Системно натоварване"; // gemma4:31b
+"User load" = "Потребителско натоварване"; // gemma4:31b
+"Efficiency cores load" = "Натоварване на енергоефективните ядра"; // gemma4:31b
+"Performance cores load" = "Натоварване на производителните ядра"; // gemma4:31b
+"All cores" = "Всички ядра"; // translategemma:4b
+"Load per core" = "Натоварване на ядро"; // gemma4:31b
+"Efficiency core" = "Енергоефективно ядро"; // gemma4:31b
+"Performance core" = "Високопроизводително ядро"; // gemma4:31b
+"Super core" = "Супер ядро"; // gemma4:31b
+
+// GPU
+"GPU to show" = "Показване на графична карта";
+"Show GPU type" = "Показване на вид на графична карта";
+"GPU utilization" = "Утилизация на графичната карта";
+"Model" = "Модел";
+"Status" = "Статус";
+"Utilization" = "Утилизация";
+"Render utilization" = "Използване на render"; // gemma4:31b
+"Tiler utilization" = "Използване на Tiler"; // gemma4:31b
+"GPU usage threshold" = "Праг на използване на GPU"; // gemma4:31b
+"GPU usage is" = "Употребата на грфичната карта е %0";
+
+// RAM
+"Memory usage" = "Заета памет";
+"Memory pressure" = "Натоварване на паметта";
+"Total" = "Общо";
+"Used" = "Заета";
+"App" = "Приложения";
+"Wired" = "Фиксирана"; // gemma4:31b
+"Compressed" = "Компересирана";
+"Free" = "Свободна";
+"Swap" = "Swap";
+"Split the value (App/Wired/Compressed)" = "Разделете стойността (Приложения/Wired/Компересирана)";
+"RAM utilization threshold" = "Праг на утилизацията на паметта";
+"RAM utilization is" = "Утилизацията на паметта е %0";
+"App color" = "Цвят на приложението"; // translategemma:4b
+"Wired color" = "Цвят на зарезервираната памет"; // gemma4:31b
+"Compressed color" = "Цвят на компресираната памет";
+"Free color" = "Цвят на свободната памет";
+"Free memory (less than)" = "Свободна памет (по-малко от)"; // gemma4:31b
+"Swap size" = "Размер на swap"; // gemma4:31b
+"Free RAM is" = "Свободна RAM е %0"; // gemma4:31b
+
+// Disk
+"Show removable disks" = "Показване на преносими дискове";
+"Used disk memory" = "Заето %0 от %1";
+"Free disk memory" = "Свободно %0 от %1";
+"Disk to show" = "Показване на диск";
+"Open disk" = "Отваряне на диск";
+"Switch view" = "Преключване на изглед";
+"Disk utilization threshold" = "Праг на утилизацията на диска";
+"Disk utilization is" = "Утилизацията на диска е %0";
+"Read color" = "Цвят на четенето"; // gemma4:31b
+"Write color" = "Цвят на записа"; // gemma4:31b
+"Disk usage" = "Използване на диска"; // gemma4:31b
+"Total read" = "Общо прочитано"; // gemma4:31b
+"Total written" = "Общо записано"; // gemma4:31b
+"Drives" = "Дискове"; // gemma4:31b
+"SMART data" = "SMART данни"; // gemma4:31b
+"Power cycles" = "Брой цикли"; // gemma4:31b
+"Power on hours" = "Часове работа"; // gemma4:31b
+
+// Sensors
+"Celsius" = "Целзиус";
+"Fahrenheit" = "Фаренхайт";
+"Save the fan speed" = "Запазете скоростта на вентилатора";
+"Fan" = "Вентилатор";
+"HID sensors" = "HID сензори"; // gemma4:31b
+"Synchronize fan's control" = "Синхронизирай управлението на вентилаторите"; // gemma4:31b
+"Current" = "Текущо";
+"Energy" = "Енергия";
+"Show unknown sensors" = "Показване на непознатите сензори";
+"Install fan helper" = "Инсталирай помощник за вентилатора"; // gemma4:31b
+"Uninstall fan helper" = "Деинсталирай помощника за вентилатора"; // gemma4:31b
+"Approve in System Settings ▸ Login Items" = "Одобрете в Системни настройки ▸ Обекти за вход"; // gemma4:31b
+"Fan helper needs your approval" = "Помощникът за вентилатора се нуждае от вашето одобрение"; // gemma4:31b
+"To control the fans, enable Stats in System Settings ▸ Login Items." = "За да контролирате вентилаторите, активирайте Stats в Системни настройки ▸ Обекти за вход."; // gemma4:31b
+"Open Login Items" = "Отвори обекти при вход"; // gemma4:31b
+"Could not enable the fan helper" = "Не успя да се активира помощникът за вентилатора"; // gemma4:31b
+"Open System Settings ▸ Login Items, make sure Stats is allowed in the background, then try again." = "Отворете Системни настройки ▸ Обекти за вход, уверете се, че Stats е разрешен във фонов режим, след това опитайте отново."; // gemma4:31b
+"Fan value" = "Стойност на вентилатора"; // gemma4:31b
+"Turn off fan" = "Изключи вентилатора"; // gemma4:31b
+"You are going to turn off the fan. This is not recommended action that can damage your mac, are you sure you want to do that?" = "Вие ще изключите вентилатора. Това не е препоръчително действие, което може да повреди вашия Mac, сигурни ли сте, че искате да направите това?"; // gemma4:31b
+"Sensor threshold" = "Праг на датчика"; // gemma4:31b
+"Left fan" = "Ляво"; // gemma4:31b
+"Right fan" = "Дясно"; // gemma4:31b
+"Fastest fan" = "Най-бърз"; // gemma4:31b
+"Sensor to show" = "Сензор за показване"; // gemma4:31b
+
+// Network
+"Uploading" = "Качване";
+"Downloading" = "Изтегляне";
+"Public IP" = "Публично IP";
+"Local IP" = "Локално IP";
+"Interface" = "Интерфейс";
+"Physical address" = "Физически адрес";
+"Refresh" = "Опресняване";
+"Network interface" = "Мрежов интерфейс";
+"Total download" = "Общо изтеглено";
+"Total upload" = "Общо качено";
+"Reader type" = "Тип четец";
+"Interface based" = "На база интерфейс";
+"Processes based" = "На база процес";
+"Reset data usage" = "Зануляване";
+"VPN mode" = "VPN режим";
+"Standard" = "Стандарт"; // translategemma:4b
+"Security" = "Криптиране"; // gemma4:31b
+"Channel" = "Канал";
+"Autodetection" = "Автоматично засичане";
+"Widget activation threshold" = "Праг за активация на виджета"; // gemma4:31b
+"Internet connection" = "Интернет връзка";
+"Connectivity host" = "Хост на свързаността"; // gemma4:31b
+"Leave empty to disable the check" = "Оставете празно, за да изключите проверката";
+"Connectivity history" = "История на свързаността"; // gemma4:31b
+"Auto-refresh public IP address" = "Автоматично обновяване на публичния IP адрес"; // translategemma:4b
+"Every hour" = "Всеки час"; // gemma4:31b
+"Every 12 hours" = "На всеки 12 часа"; // gemma4:31b
+"Every 24 hours" = "На всеки 24 часа"; // gemma4:31b
+"Last reset" = "Последно нулиране преди %0"; // gemma4:31b
+"Latency" = "Закъснение"; // gemma4:31b
+"Address" = "Адрес"; // translategemma:4b
+"WiFi network" = "Мрежа WiFi"; // gemma4:31b
+"Local IP changed" = "Локалният IP адрес се промени"; // gemma4:31b
+"Public IP changed" = "Публичният IP адрес се промени"; // gemma4:31b
+"Previous IP" = "Предишен IP адрес: %0"; // gemma4:31b
+"New IP" = "Нов IP адрес: %0"; // gemma4:31b
+"Internet connection lost" = "Интернет връзката е загубена"; // gemma4:31b
+"Internet connection established" = "Интернет връзката е възстановена"; // gemma4:31b
+"Show country code instead of emoji" = "Показвай кода на страната вместо емоджи"; // gemma4:31b
+
+// Battery
+"Source" = "Източник";
+"AC Power" = "Зарядно";
+"Battery Power" = "Батерия";
+"Time" = "Време";
+"Health" = "Здраве";
+"Amperage" = "Сила на тока";
+"Voltage" = "Волтаж";
+"Cycles" = "Цикли";
+"Temperature" = "Температура";
+"Power adapter" = "Зарядно";
+"Power" = "Мощност";
+"Is charging" = "Зарежда се";
+"Time to discharge" = "Време до пълно разреждане";
+"Time to charge" = "Време до пълен заряд";
+"Calculating" = "Пресмята се";
+"Fully charged" = "Пълен заряд";
+"Low level notification" = "Известие за ниско ниво на батерията";
+"High level notification" = "Известие за високо ниво на батерията";
+"Low battery" = "Ниско ниво на батерията";
+"High battery" = "Високо ниво на батерията";
+"Battery remaining" = "Оставащи %0%";
+"Battery remaining to full charge" = "%0% до пълен заряд";
+"Percentage" = "Процент";
+"Percentage and time" = "Процент и време";
+"Time and percentage" = "Време и процент";
+"Time format" = "Формат на времето";
+"Hide additional information when full" = "Скриване на допълнителна информация при пълен заряд";
+"Percentage inside the icon" = "Процент в иконата";
+"Charger state inside the battery" = "Състояние на зареждането вътре в батерията"; // translategemma:4b
+"Max capacity" = "Максимален капацитет"; // gemma4:31b
+"Designed capacity" = "Проектиран капацитет"; // gemma4:31b
+"On hold" = "В изчакване"; // gemma4:31b
+"On battery" = "На батерия"; // gemma4:31b
+"Plugged in" = "Свързан"; // gemma4:31b
+"Charging" = "Зареждане"; // gemma4:31b
+
+// Bluetooth
+"No Bluetooth devices are available" = "Няма налични Bluetooth устройства";
+
+// Clock
+"Time zone" = "Часова зона"; // translategemma:4b
+"Local" = "Локален"; // gemma4:31b
+"Calendar" = "Календар"; // translategemma:4b
+"Show week numbers" = "Покажи номерата на седмиците"; // gemma4:31b
+"Local time" = "Местно време"; // gemma4:31b
+"Add new clock" = "Добави нов часовник"; // gemma4:31b
+"Delete selected clock" = "Изтрий избрания часовник"; // gemma4:31b
+"Help with datetime format" = "Помощ за формата на дата и час"; // gemma4:31b
+"Sync with NTP server" = "Синхронизиране с NTP сървър"; // translategemma:4b
+"Previous month" = "Предишен месец"; // gemma4:31b
+"Next month" = "Следващият месец"; // gemma4:31b
+
+// Colors
+"Based on utilization" = "На база утилизация";
+"Based on pressure" = "На база натоварване";
+"Based on cluster" = "Въз основа на клъстера"; // gemma4:31b
+"System accent" = "Системен акцент";
+"Monochrome accent" = "Едноцветен акцент";
+"Clear" = "Прозрачно";
+"White" = "Бяло";
+"Black" = "Черно";
+"Gray" = "Сиво";
+"Second gray" = "Второ сиво";
+"Dark gray" = "Тъмно сиво";
+"Light gray" = "Светло сиво";
+"Red" = "Червено";
+"Second red" = "Второ червено";
+"Green" = "Зелено";
+"Second green" = "Второ зелено";
+"Blue" = "Синьо";
+"Second blue" = "Второ синьо";
+"Yellow" = "Жълто";
+"Second yellow" = "Второ жълто";
+"Orange" = "Оранжево";
+"Second orange" = "Второ оранжево";
+"Purple" = "Виолетово";
+"Second purple" = "Второ виолетово";
+"Brown" = "Кафяво";
+"Second brown" = "Второ кафяво";
+"Cyan" = "Циан";
+"Magenta" = "Магента";
+"Pink" = "Розово";
+"Teal" = "Изумруд";
+"Indigo" = "Индиго";

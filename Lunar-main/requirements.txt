@@ -1,0 +1,5 @@
+fire
+lxml
+markdown2
+pygments
+md2html-phuker

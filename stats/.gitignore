@@ -1,0 +1,16 @@
+.DS_Store
+
+Pods
+Carthage
+build
+xcuserdata
+
+Stats.dmg
+Stats.app
+create-dmg
+dSYMs.zip
+Stats.dmg.zip
+SMC/smc
+
+Cartfile.resolved
+web
