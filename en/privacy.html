@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Privacy Policy — HagimiMonitor</title>
+    <meta name="description" content="HagimiMonitor Privacy Policy.">
+    <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --page: #0a0a0f; --paper: rgba(255,255,255,0.03); --ink: #f0f0f5;
+            --ink-secondary: #a0a0b0; --ink-tertiary: #606070; --line: rgba(255,255,255,0.08);
+            --brand: #2ECC71; --brand-light: #4ade80;
+            --font-display: 'Noto Serif SC', Georgia, serif;
+            --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            --radius: 20px;
+        }
+        @media (prefers-color-scheme: light) {
+            :root { --page: #f5f5f7; --paper: rgba(0,0,0,0.03); --ink: #1d1d1f;
+                --ink-secondary: #6e6e73; --ink-tertiary: #86868b; --line: rgba(0,0,0,0.08); }
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: var(--font-body); background: var(--page); color: var(--ink);
+            line-height: 1.7; -webkit-font-smoothing: antialiased; padding: 48px 24px; }
+        .container { max-width: 760px; margin: 0 auto; }
+        .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px;
+            text-decoration: none; color: var(--ink); }
+        .brand img { width: 44px; height: 44px; border-radius: 10px; }
+        .brand span { font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; }
+        h1 { font-family: var(--font-display); font-size: 2.2rem; font-weight: 700;
+            margin-bottom: 8px; }
+        .updated { color: var(--ink-tertiary); font-size: 0.9rem; margin-bottom: 40px; }
+        h2 { font-size: 1.35rem; font-weight: 600; margin: 36px 0 14px;
+            color: var(--brand-light); }
+        p, li { color: var(--ink-secondary); margin-bottom: 12px; }
+        ul { padding-left: 24px; }
+        strong { color: var(--ink); font-weight: 600; }
+        a { color: var(--brand); }
+        .card { background: var(--paper); border: 1px solid var(--line);
+            border-radius: var(--radius); padding: 28px 32px; margin-top: 20px; }
+        footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line);
+            color: var(--ink-tertiary); font-size: 0.9rem; }
+        footer a { margin-right: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a class="brand" href="./index.html">
+            <img src="../images/icon-128.png" alt="HagimiMonitor">
+            <span>HagimiMonitor</span>
+        </a>
+
+        <h1>Privacy Policy</h1>
+        <p class="updated">Last updated: July 19, 2026</p>
+
+        <div class="card">
+            <p>HagimiMonitor ("the App") takes your privacy seriously. The App is built on a simple principle: <strong>all data stays on your device. We do not collect, store, or transmit any personal information.</strong></p>
+
+            <h2>We Collect No Data</h2>
+            <p>The App is a local system-monitoring tool. All metrics — CPU, GPU, memory, storage, network, and battery — are <strong>read and displayed locally on your Mac in real time</strong>. They are never sent to any server, logged, or stored.</p>
+
+            <h2>No Tracking or Analytics</h2>
+            <p>The App contains <strong>no</strong> third-party analytics, advertising, or tracking SDKs. We do not collect usage behavior, device identifiers, or any information that could identify you.</p>
+
+            <h2>Network Access</h2>
+            <p>The App accesses the network only in the following case:</p>
+            <ul>
+                <li><strong>Update checks</strong>: The App connects to public GitHub release information over a secure HTTPS connection to check whether a new version is available. This only retrieves public data such as version numbers and <strong>sends none of your personal data</strong>.</li>
+            </ul>
+
+            <h2>Data Storage</h2>
+            <p>The App's preferences (such as theme and visible modules) are stored <strong>locally on your device</strong> using standard macOS mechanisms. They are never synced or uploaded.</p>
+
+            <h2>Children's Privacy</h2>
+            <p>The App is not directed at children under 13 and does not knowingly collect personal information from anyone.</p>
+
+            <h2>Changes to This Policy</h2>
+            <p>If this Privacy Policy changes, we will update this page and revise the "Last updated" date above.</p>
+
+            <h2>Contact Us</h2>
+            <p>If you have any questions about this Privacy Policy, please reach out via our <a href="https://github.com/Acerola-1/hagimi-monitor">GitHub project page</a>.</p>
+        </div>
+
+        <footer>
+            <a href="./index.html">Home</a>
+            <a href="../zh/privacy.html">简体中文</a>
+            <a href="../ja/privacy.html">日本語</a>
+        </footer>
+    </div>
+</body>
+</html>

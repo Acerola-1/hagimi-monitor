@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>プライバシーポリシー — HagimiMonitor</title>
+    <meta name="description" content="HagimiMonitor プライバシーポリシー。">
+    <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@400;700&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --page: #0a0a0f; --paper: rgba(255,255,255,0.03); --ink: #f0f0f5;
+            --ink-secondary: #a0a0b0; --ink-tertiary: #606070; --line: rgba(255,255,255,0.08);
+            --brand: #2ECC71; --brand-light: #4ade80;
+            --font-display: 'Noto Serif SC', Georgia, serif;
+            --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+            --radius: 20px;
+        }
+        @media (prefers-color-scheme: light) {
+            :root { --page: #f5f5f7; --paper: rgba(0,0,0,0.03); --ink: #1d1d1f;
+                --ink-secondary: #6e6e73; --ink-tertiary: #86868b; --line: rgba(0,0,0,0.08); }
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body { font-family: var(--font-body); background: var(--page); color: var(--ink);
+            line-height: 1.8; -webkit-font-smoothing: antialiased; padding: 48px 24px; }
+        .container { max-width: 760px; margin: 0 auto; }
+        .brand { display: flex; align-items: center; gap: 12px; margin-bottom: 40px;
+            text-decoration: none; color: var(--ink); }
+        .brand img { width: 44px; height: 44px; border-radius: 10px; }
+        .brand span { font-family: var(--font-display); font-weight: 700; font-size: 1.25rem; }
+        h1 { font-family: var(--font-display); font-size: 2.2rem; font-weight: 700;
+            margin-bottom: 8px; }
+        .updated { color: var(--ink-tertiary); font-size: 0.9rem; margin-bottom: 40px; }
+        h2 { font-size: 1.35rem; font-weight: 600; margin: 36px 0 14px;
+            color: var(--brand-light); }
+        p, li { color: var(--ink-secondary); margin-bottom: 12px; }
+        ul { padding-left: 24px; }
+        strong { color: var(--ink); font-weight: 600; }
+        a { color: var(--brand); }
+        .card { background: var(--paper); border: 1px solid var(--line);
+            border-radius: var(--radius); padding: 28px 32px; margin-top: 20px; }
+        footer { margin-top: 56px; padding-top: 24px; border-top: 1px solid var(--line);
+            color: var(--ink-tertiary); font-size: 0.9rem; }
+        footer a { margin-right: 16px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <a class="brand" href="./index.html">
+            <img src="../images/icon-128.png" alt="HagimiMonitor">
+            <span>HagimiMonitor</span>
+        </a>
+
+        <h1>プライバシーポリシー</h1>
+        <p class="updated">最終更新日：2026 年 7 月 19 日</p>
+
+        <div class="card">
+            <p>HagimiMonitor（以下「本アプリ」）は、お客様のプライバシーを重視しています。本アプリは、<strong>すべてのデータをお客様のデバイス内に保持し、個人情報を一切収集・保存・送信しない</strong>という原則に基づいて設計されています。</p>
+
+            <h2>データを一切収集しません</h2>
+            <p>本アプリはローカルのシステムモニタリングツールです。CPU、GPU、メモリ、ストレージ、ネットワーク、バッテリーなどのすべての指標は、<strong>お客様の Mac 上でリアルタイムに読み取り・表示されるのみ</strong>で、いかなるサーバーにも送信されず、記録・保存されることもありません。</p>
+
+            <h2>トラッキングや分析を行いません</h2>
+            <p>本アプリには、第三者による分析、広告、トラッキングの SDK は<strong>一切含まれていません</strong>。利用行動、デバイス識別子、その他お客様を特定しうる情報を収集することはありません。</p>
+
+            <h2>ネットワークアクセス</h2>
+            <p>本アプリがネットワークにアクセスするのは、以下の場合のみです：</p>
+            <ul>
+                <li><strong>アップデートの確認</strong>：新しいバージョンの有無を確認するため、安全な HTTPS 接続を通じて公開されている GitHub のリリース情報にアクセスします。この処理ではバージョン番号などの公開情報のみを取得し、<strong>お客様の個人データは一切送信しません</strong>。</li>
+            </ul>
+
+            <h2>データの保存</h2>
+            <p>本アプリの設定（テーマや表示モジュールなど）は、macOS の標準的な仕組みを用いて<strong>お客様のデバイス内にのみ</strong>保存され、同期・アップロードされることはありません。</p>
+
+            <h2>子どものプライバシー</h2>
+            <p>本アプリは 13 歳未満の子どもを対象としておらず、いかなる人物からも意図的に個人情報を収集することはありません。</p>
+
+            <h2>本ポリシーの変更</h2>
+            <p>本プライバシーポリシーに変更があった場合は、本ページを更新し、上記の「最終更新日」を改めます。</p>
+
+            <h2>お問い合わせ</h2>
+            <p>本プライバシーポリシーに関するご質問は、<a href="https://github.com/Acerola-1/hagimi-monitor">GitHub プロジェクトページ</a>よりお問い合わせください。</p>
+        </div>
+
+        <footer>
+            <a href="./index.html">ホーム</a>
+            <a href="../zh/privacy.html">简体中文</a>
+            <a href="../en/privacy.html">English</a>
+        </footer>
+    </div>
+</body>
+</html>
