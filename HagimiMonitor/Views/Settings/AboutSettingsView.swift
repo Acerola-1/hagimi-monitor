@@ -9,7 +9,10 @@ struct AboutSettingsView: View {
     @State private var isExportingLogs = false
     @State private var logExportMessage: String?
 
+    // 仅直接分发版使用:App Store 版不暴露 GitHub Releases 入口(见下方 SettingsRow 注释)。
+    #if DIRECT_DISTRIBUTION
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
+    #endif
     private let issuesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/issues")!
     private let twitterURL = URL(string: "https://x.com/Acerola64175279")!
 
@@ -31,6 +34,10 @@ struct AboutSettingsView: View {
             Spacer(minLength: 0)
 
             SettingsGroup {
+                // 发布版本入口仅在直接分发(GitHub)版显示。App Store 版不得引导用户
+                // 前往 App 外(GitHub Releases)下载安装包——那里正是本 App 的免费分发页,
+                // 在商店版内暴露会被判定为绕过 App Store(Guideline 3.1.1 / 2.3.1)。
+                #if DIRECT_DISTRIBUTION
                 SettingsRow(title: String(localized: "about.release-version")) {
                     Button {
                         NSWorkspace.shared.open(releasesURL)
@@ -40,6 +47,7 @@ struct AboutSettingsView: View {
                     }
                     .compatibleButtonStyle()
                 }
+                #endif
 
                 SettingsRow(title: String(localized: "about.feedback")) {
                     Button {
