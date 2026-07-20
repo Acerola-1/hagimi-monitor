@@ -46,6 +46,7 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     case networkUpload
     case cpuTemperature
     case storageFree
+    case systemPower
 
     static let defaultSelection: [MenuBarMetricKind] = [.cpuUsage]
     static let maximumSelectionCount = 4
@@ -70,6 +71,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             String(localized: "menu-bar-metric.cpu-temperature")
         case .storageFree:
             String(localized: "menu-bar-metric.storage-free")
+        case .systemPower:
+            String(localized: "menu-bar-metric.system-power")
         }
     }
 
@@ -91,6 +94,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             "thermometer.medium"
         case .storageFree:
             "externaldrive"
+        case .systemPower:
+            "bolt.fill"
         }
     }
 
@@ -112,6 +117,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             "TEMP"
         case .storageFree:
             "FREE"
+        case .systemPower:
+            "PWR"
         }
     }
 }
@@ -149,6 +156,11 @@ enum MenuBarMetricFormatter {
     static func capacity(_ value: Double?) -> String {
         guard let value else { return leftPad(unavailable, to: 4) }
         return leftPad(compactCapacity(value), to: 4)
+    }
+
+    static func power(_ value: Double?) -> String {
+        guard let value else { return leftPad(unavailable, to: 4) + "W" }
+        return leftPad("\(Int(max(0, value).rounded()))", to: 3) + "W"
     }
 
     private static func compactCapacity(_ value: Double) -> String {
