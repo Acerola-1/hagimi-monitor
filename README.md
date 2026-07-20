@@ -26,7 +26,8 @@
   <img alt="macOS 15+" src="https://img.shields.io/badge/macOS-15%2B-111827?style=flat-square&logo=apple">
   <img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-M%20series-2ECC71?style=flat-square&logo=apple">
   <img alt="Swift" src="https://img.shields.io/badge/Swift-SwiftUI-F05138?style=flat-square&logo=swift&logoColor=white">
-  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
+  <img alt="License" src="https://img.shields.io/badge/license-AGPL--3.0-blue?style=flat-square">
+  <img alt="Commercial" src="https://img.shields.io/badge/commercial-licensing%20available-2ECC71?style=flat-square">
   <a href="https://x.com/Acerola64175279"><img alt="Follow on X" src="https://img.shields.io/badge/X-@Acerola64175279-000000?style=flat-square&logo=x"></a>
 </p>
 
@@ -149,4 +150,19 @@ xcodebuild -project hagimi-monitor.xcodeproj -scheme HagimiMonitorDirect -config
 
 ## 许可证
 
-MIT
+本项目采用 **GNU AGPL-3.0** 双许可模式：
+
+- **开源使用**：源码公开，任何人可在 [AGPL-3.0](LICENSE) 条款下自由查看、修改、分发。
+  按 AGPL 要求，任何基于本项目的衍生作品（含通过网络提供服务的情形）也必须以
+  AGPL-3.0 开源其完整源码。
+- **商业使用**：如果你希望在**不遵守 AGPL 开源义务**的前提下将本项目用于商业产品
+  （例如闭源分发、上架收费而不公开源码），**必须获取商业授权**。
+  请通过 [GitHub](https://github.com/Acerola-1/hagimi-monitor) 提 Issue 或私信作者洽谈。
+
+版权所有 © 2026 Acerola。保留所有权利。
+
+### 第三方组件
+
+本项目使用的第三方库各自遵循其原始协议，不受本项目 AGPL/商业许可约束：
+
+- **Sparkle**（自更新框架）— MIT 类许可
