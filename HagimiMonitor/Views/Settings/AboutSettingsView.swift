@@ -91,7 +91,6 @@ struct AboutSettingsView: View {
         SettingsIconHeader(
             title: "HagimiMonitor",
             subtitle: String(localized: "about.version") + " \(appVersion)",
-            footnote: String(localized: "about.footnote"),
             imageName: "AboutIcon"
         ) {
             updateAccessory

@@ -129,7 +129,7 @@ struct SettingsIconHeader<Accessory: View>: View {
     init(
         title: String,
         subtitle: String,
-        footnote: String,
+        footnote: String = "",
         imageName: String,
         @ViewBuilder accessory: () -> Accessory = { EmptyView() }
     ) {
@@ -155,9 +155,11 @@ struct SettingsIconHeader<Accessory: View>: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
 
-                Text(footnote)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                if !footnote.isEmpty {
+                    Text(footnote)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
             }
 
             Spacer(minLength: 0)

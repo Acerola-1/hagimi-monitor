@@ -331,28 +331,6 @@
         }
       }
     },
-    "about.footnote": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS Menu Bar Hardware Monitor"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOSメニューバー用ハードウェアモニター"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "macOS 菜单栏硬件监控"
-          }
-        }
-      }
-    },
     "about.found": {
       "extractionState": "stale",
       "localizations": {
