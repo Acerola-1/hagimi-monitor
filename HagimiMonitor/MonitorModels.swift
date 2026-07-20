@@ -52,12 +52,11 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     case storage
     case network
     case battery
-    case power // 仅用于统计数据采集，不在 UI 中显示为独立模块
 
     var id: String { rawValue }
 
-    /// 用户可见的模块（排除 .power 等仅用于内部采集的模块）
-    static let userVisibleCases: [MonitorKind] = allCases.filter { $0 != .power }
+    /// 用户可见的模块
+    static let userVisibleCases: [MonitorKind] = allCases
 
     var title: String {
         switch self {
@@ -73,8 +72,6 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             String(localized: "kind.network")
         case .battery:
             String(localized: "kind.battery")
-        case .power:
-            String(localized: "kind.power")
         }
     }
 
@@ -92,8 +89,6 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             "network"
         case .battery:
             "powerplug"
-        case .power:
-            "bolt.fill"
         }
     }
 
@@ -140,10 +135,6 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
             ]
-        case .power:
-            return [
-                MetricSwitch(id: "power-watts", title: String(localized: "metric.power.watts"), isDefault: true),
-            ]
         }
     }
 }
@@ -188,10 +179,6 @@ struct MonitorModule: Identifiable, Equatable {
             }
             if value <= MonitorConstants.batteryCriticalThreshold { return .critical }
             if value <= MonitorConstants.batteryWarningThreshold { return .warning }
-            return .calm
-        case .power:
-            if value >= MonitorConstants.criticalThreshold { return .critical }
-            if value >= MonitorConstants.warningThreshold { return .warning }
             return .calm
         }
     }
@@ -456,6 +443,8 @@ final class MonitorStore: ObservableObject {
             return MenuBarMetricFormatter.temperature(metricValue("temperature", in: .cpu))
         case .storageFree:
             return MenuBarMetricFormatter.capacity(metricValue("free", in: .storage))
+        case .systemPower:
+            return MenuBarMetricFormatter.power(metricValue("power", in: .battery))
         }
     }
 
@@ -477,6 +466,8 @@ final class MonitorStore: ObservableObject {
             " 88°"
         case .storageFree:
             "128G"
+        case .systemPower:
+            " 12W"
         }
     }
 
@@ -707,8 +698,7 @@ final class MonitorRefreshSchedule {
         tickInterval: TimeInterval = 1,
         intervals: [MonitorKind: TimeInterval] = [
             .cpu: 1, .gpu: 2, .memory: 3,
-            .storage: 10, .network: 1, .battery: 5,
-            .power: 2
+            .storage: 10, .network: 1, .battery: 2
         ]
     ) {
         self.tickInterval = tickInterval

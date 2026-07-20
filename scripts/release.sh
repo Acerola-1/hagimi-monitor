@@ -102,6 +102,85 @@ ORIGIN_BRANCH=$(git branch --show-current)
 RELEASE_BRANCH="release/${VERSION}"
 PBXPROJ="hagimi-monitor.xcodeproj/project.pbxproj"
 NOTES_FILE="RELEASE_NOTES.md"
+GITHUB_REPOSITORY=$(git config --get remote.origin.url | sed -E 's#(git@github.com:|https://github.com/)##; s#\.git$##')
+
+create_pull_request() {
+  if gh pr create \
+    --base main \
+    --head "$RELEASE_BRANCH" \
+    --title "发布 ${TAG}" \
+    --body "$(cat "$NOTES_FILE")"; then
+    return 0
+  fi
+
+  # 某些 gh CLI / GraphQL 认证会错误拒绝 CreatePullRequest；REST 使用同一 Token 可继续发布。
+  echo "gh 创建 PR 失败，改用 GitHub REST API..." >&2
+  gh api --method POST "repos/${GITHUB_REPOSITORY}/pulls" \
+    --raw-field "title=发布 ${TAG}" \
+    --raw-field "head=${RELEASE_BRANCH}" \
+    --raw-field "base=main" \
+    --field "body=@${NOTES_FILE}" \
+    --jq '.html_url'
+}
+
+merge_pull_request() {
+  local pr_url="$1"
+  local pr_number="${pr_url##*/}"
+  local merged
+  local encoded_branch="${RELEASE_BRANCH//\//%2F}"
+
+  if gh pr merge --squash --delete-branch "$pr_url"; then
+    return 0
+  fi
+
+  echo "gh 合并 PR 失败，改用 GitHub REST API..." >&2
+  merged=$(gh api --method PUT "repos/${GITHUB_REPOSITORY}/pulls/${pr_number}/merge" \
+    --raw-field "commit_title=发布 ${TAG}" \
+    --raw-field "merge_method=squash" \
+    --jq '.merged')
+  if [[ "$merged" != "true" ]]; then
+    echo "错误: REST API 未能合并 PR" >&2
+    return 1
+  fi
+
+  # 删除远端发布分支失败不影响已合并的发布。
+  gh api --method DELETE "repos/${GITHUB_REPOSITORY}/git/refs/heads/${encoded_branch}" >/dev/null || \
+    echo "警告: 发布分支 ${RELEASE_BRANCH} 已合并，但未能自动删除远端分支" >&2
+}
+
+sync_original_branch() {
+  local conflicted_files
+  local file
+
+  echo ">>> 切回 ${ORIGIN_BRANCH} 并同步 main..."
+  git checkout "$ORIGIN_BRANCH"
+  git fetch origin main
+
+  if git merge --no-edit origin/main; then
+    git push origin "$ORIGIN_BRANCH"
+    return 0
+  fi
+
+  conflicted_files=$(git diff --name-only --diff-filter=U)
+  if [[ -z "$conflicted_files" ]]; then
+    echo "错误: 合并 main 失败，且未检测到可自动处理的文本冲突" >&2
+    return 1
+  fi
+
+  for file in $conflicted_files; do
+    if [[ "$file" != "$PBXPROJ" && "$file" != "$NOTES_FILE" ]]; then
+      echo "错误: ${file} 存在业务代码冲突，已保留冲突现场供人工处理" >&2
+      return 1
+    fi
+  done
+
+  # 这两个文件只由发布流程生成；回到开发分支时以 main 的最终发布版本为准。
+  echo ">>> 自动解决发布元数据冲突（采用 main 版本）..."
+  git checkout --theirs -- "$PBXPROJ" "$NOTES_FILE"
+  git add "$PBXPROJ" "$NOTES_FILE"
+  git commit --no-edit
+  git push origin "$ORIGIN_BRANCH"
+}
 
 echo "=== 发布 ${TAG} ==="
 
@@ -198,17 +277,13 @@ git push origin "$RELEASE_BRANCH"
 
 # 创建 PR
 echo ">>> 创建 Pull Request..."
-PR_URL=$(gh pr create \
-  --base main \
-  --head "$RELEASE_BRANCH" \
-  --title "发布 ${TAG}" \
-  --body "$(cat "$NOTES_FILE")")
+PR_URL=$(create_pull_request)
 
 echo "PR 已创建: ${PR_URL}"
 
 # 合并 PR（squash，保持 main 线性历史）
 echo ">>> 合并 PR..."
-gh pr merge --squash --delete-branch "$PR_URL"
+merge_pull_request "$PR_URL"
 
 # 拉取 main 并打 tag
 echo ">>> 拉取 main 并打 tag..."
@@ -218,10 +293,7 @@ git tag "$TAG"
 git push origin "$TAG"
 
 # 切回原分支并同步
-echo ">>> 切回 ${ORIGIN_BRANCH} 并同步..."
-git checkout "$ORIGIN_BRANCH"
-git pull origin main --no-edit || true
-git push origin "$ORIGIN_BRANCH"
+sync_original_branch
 
 echo ""
 echo "=== 发布完成 ==="

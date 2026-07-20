@@ -139,6 +139,8 @@ struct MenuBarMetricLabel: View {
             "888°"
         case .storageFree:
             "888G"
+        case .systemPower:
+            "888W"
         }
     }
 

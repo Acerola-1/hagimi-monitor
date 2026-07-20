@@ -48,7 +48,7 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "status", value: isCharging ? "charging" : (connected ? "ac-power" : "on-battery")),
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
                 MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--"),
-                MonitorMetric(name: "power", value: wattString(systemPower)),
+                MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower),
                 MonitorMetric(name: "health", value: smart.healthPercent.map(percent) ?? "--", numericValue: smart.healthPercent),
                 MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--", numericValue: smart.cycleCount.map(Double.init)),
                 MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius)
@@ -68,7 +68,7 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "type", value: "ac-power"),
                 MonitorMetric(name: "status", value: "ac-power"),
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
-                MonitorMetric(name: "power", value: wattString(powerWatts))
+                MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts)
             ],
             samples: seedSamples(100)
         )

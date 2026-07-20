@@ -12,8 +12,7 @@ final class SystemMonitorSampler {
         .memory: MemorySampler(),
         .storage: StorageSampler(),
         .network: NetworkSampler(),
-        .battery: BatterySampler(),
-        .power: PowerSampler()
+        .battery: BatterySampler()
     ]
 
     func sample(previousModules: [MonitorModule]) -> Result<SystemMonitorSnapshot, SamplingError> {
@@ -85,7 +84,6 @@ final class SystemMonitorSampler {
         case .storage: return .storageUnavailable
         case .network: return .networkUnavailable
         case .battery: return .batteryUnavailable
-        case .power: return .powerUnavailable
         }
     }
 }

@@ -17,6 +17,16 @@ struct ModuleSettingsView: View {
                 }
             }
 
+            // 模块关闭后，下方的指标 / 进程 / 重置等选项都失去意义，直接隐藏。
+            if settings.isVisible(kind) {
+                moduleOptions
+            }
+        }
+        .animation(.default, value: settings.isVisible(kind))
+    }
+
+    @ViewBuilder
+    private var moduleOptions: some View {
             SettingsGroup(String(localized: "settings.metrics")) {
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 8),
@@ -121,7 +131,6 @@ struct ModuleSettingsView: View {
                 .padding(.vertical, 10)
                 .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
-        }
     }
 }
 
@@ -168,46 +177,52 @@ struct DisplayModuleSettingsView: View {
                         .labelsHidden()
                 }
 
-                SettingsDivider()
+                if settings.displayModuleVisible {
+                    SettingsDivider()
 
-                SettingsRow(title: String(localized: "settings.include-built-in")) {
-                    Toggle("", isOn: $settings.showBuiltInDisplays)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
+                    SettingsRow(title: String(localized: "settings.include-built-in")) {
+                        Toggle("", isOn: $settings.showBuiltInDisplays)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
                 }
             }
 
-            SettingsGroup(String(localized: "settings.controls")) {
-                SettingsRow(title: String(localized: "settings.brightness")) {
-                    Toggle("", isOn: $settings.displayBrightnessControlEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
+            // 模块关闭后，下方的控制项 / 媒体键 / 说明都失去意义，直接隐藏。
+            if settings.displayModuleVisible {
+                SettingsGroup(String(localized: "settings.controls")) {
+                    SettingsRow(title: String(localized: "settings.brightness")) {
+                        Toggle("", isOn: $settings.displayBrightnessControlEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.volume")) {
+                        Toggle("", isOn: $settings.displayVolumeControlEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.contrast")) {
+                        Toggle("", isOn: $settings.displayContrastControlEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
                 }
 
-                SettingsDivider()
+                MediaKeySettingsSection(
+                    settings: settings,
+                    permission: AccessibilityPermissionService.shared
+                )
 
-                SettingsRow(title: String(localized: "settings.volume")) {
-                    Toggle("", isOn: $settings.displayVolumeControlEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-
-                SettingsDivider()
-
-                SettingsRow(title: String(localized: "settings.contrast")) {
-                    Toggle("", isOn: $settings.displayContrastControlEnabled)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
+                SettingsTip(String(localized: "settings.display.ddc-note"))
             }
-
-            MediaKeySettingsSection(
-                settings: settings,
-                permission: AccessibilityPermissionService.shared
-            )
-
-            SettingsTip(String(localized: "settings.display.ddc-note"))
         }
+        .animation(.default, value: settings.displayModuleVisible)
     }
 }
 #endif

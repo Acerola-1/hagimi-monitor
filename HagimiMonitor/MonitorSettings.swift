@@ -238,8 +238,6 @@ final class MonitorSettings: ObservableObject {
                 return ["IP 地址": "ipv4", "上传": "upload", "下载": "download"]
             case .battery:
                 return ["充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power"]
-            case .power:
-                return ["功率": "power-watts"]
             }
         }()
 

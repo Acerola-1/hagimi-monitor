@@ -9,7 +9,10 @@ struct AboutSettingsView: View {
     @State private var isExportingLogs = false
     @State private var logExportMessage: String?
 
+    // 仅直接分发版使用:App Store 版不暴露 GitHub Releases 入口(见下方 SettingsRow 注释)。
+    #if DIRECT_DISTRIBUTION
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
+    #endif
     private let issuesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/issues")!
     private let twitterURL = URL(string: "https://x.com/Acerola64175279")!
 
@@ -31,6 +34,10 @@ struct AboutSettingsView: View {
             Spacer(minLength: 0)
 
             SettingsGroup {
+                // 发布版本入口仅在直接分发(GitHub)版显示。App Store 版不得引导用户
+                // 前往 App 外(GitHub Releases)下载安装包——那里正是本 App 的免费分发页,
+                // 在商店版内暴露会被判定为绕过 App Store(Guideline 3.1.1 / 2.3.1)。
+                #if DIRECT_DISTRIBUTION
                 SettingsRow(title: String(localized: "about.release-version")) {
                     Button {
                         NSWorkspace.shared.open(releasesURL)
@@ -40,6 +47,7 @@ struct AboutSettingsView: View {
                     }
                     .compatibleButtonStyle()
                 }
+                #endif
 
                 SettingsRow(title: String(localized: "about.feedback")) {
                     Button {
@@ -83,7 +91,6 @@ struct AboutSettingsView: View {
         SettingsIconHeader(
             title: "HagimiMonitor",
             subtitle: String(localized: "about.version") + " \(appVersion)",
-            footnote: String(localized: "about.footnote"),
             imageName: "AboutIcon"
         ) {
             updateAccessory
@@ -99,7 +106,7 @@ struct AboutSettingsView: View {
         VStack(alignment: .trailing, spacing: 6) {
             // 主入口:Sparkle 自更新。点击后由 Sparkle 接管——弹出带更新日志的窗口、
             // App 内下载校验、替换并重启,全程无需用户离开 App。
-            primaryButton(title: String(localized: "about.check-updates")) {
+            primaryButton(title: updateButtonTitle) {
                 updateService.checkForUpdates()
             }
             .disabled(!updateService.canCheckForUpdates)
@@ -118,6 +125,15 @@ struct AboutSettingsView: View {
         EmptyView()
         #endif
     }
+
+    #if DIRECT_DISTRIBUTION
+    private var updateButtonTitle: String {
+        guard let version = updateService.availableUpdateVersion else {
+            return String(localized: "about.check-updates")
+        }
+        return String(localized: "about.update-to-version \(version)")
+    }
+    #endif
 
     @ViewBuilder
     private var exportLogsButton: some View {
