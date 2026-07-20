@@ -14,6 +14,7 @@ Now that direct builds are signed + notarized + stapled, they qualify for Sparkl
 - Replace the old GitHub-API `UpdateChecker` / update banner with Sparkle's standard updater.
 - Add an `UpdateService` wrapper around `SPUStandardUpdaterController`, started at launch for background checks.
 - About page: primary "Check for Updates" drives Sparkle; an always-visible "Download from GitHub" link is the connectivity fallback.
+- Retain a background-detected update in the direct build and show a `NEW` badge beside About in Settings; dismissing Sparkle's window does not clear this reminder.
 - Inject Sparkle Info.plist keys (`SUFeedURL`, `SUPublicEDKey`, `SUEnableInstallerLauncherService`) into the direct build's Debug/Release configs only.
 - CI: produce a notarized ZIP, sign it with Sparkle's EdDSA key, generate `appcast.xml`, upload the ZIP to the release, and deploy the appcast to GitHub Pages. Keep the DMG for browser download.
 - Localize new user-facing text (zh-Hans, en, ja).
@@ -30,6 +31,7 @@ Now that direct builds are signed + notarized + stapled, they qualify for Sparkl
   - `UpdateService.swift` (new): Sparkle wrapper (`#if DIRECT_DISTRIBUTION`).
   - `AppDelegate`: start Sparkle updater at launch (direct only).
   - `AboutSettingsView`: Sparkle primary button + always-visible GitHub fallback link; App Store shows nothing.
+  - `SettingsSidebar`: show a localized `NEW` badge beside About while a direct-build update is available.
   - `SettingsWindowPresenter`, `SettingsRootView`: remove old open-window auto-check and the update banner.
   - Removed: `UpdateChecker.swift`, `UpdateModels.swift`, `UpdateCheckerTests.swift` (superseded by Sparkle).
   - `.github/workflows/release.yml`: ZIP + Sparkle sign + appcast + Pages deploy.

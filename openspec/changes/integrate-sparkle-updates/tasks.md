@@ -17,6 +17,7 @@
 - [x] 3.3 About page: Sparkle primary button + always-visible "Download from GitHub" fallback.
 - [x] 3.4 Remove dead `UpdateChecker` / `UpdateModels` / update banner / tests.
 - [x] 3.5 Add `about.download-from-github` localization (zh-Hans, en, ja).
+- [x] 3.6 Retain Sparkle update availability and show a localized `NEW` badge beside About in direct builds.
 
 ## 4. CI & Hosting
 

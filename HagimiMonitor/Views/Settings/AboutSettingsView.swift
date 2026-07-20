@@ -107,7 +107,7 @@ struct AboutSettingsView: View {
         VStack(alignment: .trailing, spacing: 6) {
             // 主入口:Sparkle 自更新。点击后由 Sparkle 接管——弹出带更新日志的窗口、
             // App 内下载校验、替换并重启,全程无需用户离开 App。
-            primaryButton(title: String(localized: "about.check-updates")) {
+            primaryButton(title: updateButtonTitle) {
                 updateService.checkForUpdates()
             }
             .disabled(!updateService.canCheckForUpdates)
@@ -126,6 +126,15 @@ struct AboutSettingsView: View {
         EmptyView()
         #endif
     }
+
+    #if DIRECT_DISTRIBUTION
+    private var updateButtonTitle: String {
+        guard let version = updateService.availableUpdateVersion else {
+            return String(localized: "about.check-updates")
+        }
+        return String(localized: "about.update-to-version \(version)")
+    }
+    #endif
 
     @ViewBuilder
     private var exportLogsButton: some View {

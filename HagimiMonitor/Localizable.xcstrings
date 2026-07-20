@@ -87,6 +87,28 @@
         }
       }
     },
+    "about.update-to-version %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update to %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ にアップデート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新到 %@"
+          }
+        }
+      }
+    },
     "about.diagnostics": {
       "localizations": {
         "en": {
@@ -5329,6 +5351,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "Beta"
+          }
+        }
+      }
+    },
+    "settings.sidebar.new-badge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NEW"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NEW"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "NEW"
           }
         }
       }

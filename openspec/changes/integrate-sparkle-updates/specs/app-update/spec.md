@@ -29,6 +29,27 @@ Direct-distribution builds SHALL use Sparkle to check, download, verify, and ins
 - **WHEN** Sparkle downloads an update
 - **THEN** it verifies the update against the embedded EdDSA public key before installing
 
+### Requirement: Persistent Update Availability Indicator
+The direct-distribution build SHALL retain the latest update-availability result discovered by Sparkle and display a localized `NEW` badge beside the About item in Settings while an update is available.
+
+#### Scenario: Background check finds an update
+- **WHEN** Sparkle finds a valid update during a scheduled background check
+- **THEN** Settings shows a `NEW` badge beside About
+- **AND** the About page continues to provide the Sparkle update action
+
+#### Scenario: User dismisses the Sparkle update window
+- **WHEN** a user closes Sparkle's update window without installing the discovered update
+- **THEN** the Settings `NEW` badge remains visible
+- **AND** it remains visible after the app is relaunched
+
+#### Scenario: A later check finds no update
+- **WHEN** Sparkle completes a later check without a valid update
+- **THEN** Settings removes the `NEW` badge
+
+#### Scenario: App Store build is running
+- **WHEN** the App Store build is running
+- **THEN** Settings shows no update-availability badge
+
 ### Requirement: GitHub Download Fallback
 The direct build SHALL always show a fallback entry to download from GitHub in a browser, so users who cannot complete the in-app download can still update manually.
 
