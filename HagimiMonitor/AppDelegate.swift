@@ -28,12 +28,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 触发 lazy 初始化
+        // 触发 lazy 初始化。菜单栏面板需在启动即常驻(承载状态项图标);
+        // 快捷键面板则延迟到首次按下快捷键时再创建(见下方 onKeyUp),
+        // 避免开机就构建第二棵完整的 SwiftUI 面板视图树、白白常驻内存。
         _ = store
         _ = fluidPanelController
-        _ = pinnedPanelController
 
-        // 注册全局快捷键:切换钉住面板显隐。
+        // 注册全局快捷键:切换钉住面板显隐。首次触发时惰性创建 pinnedPanelController。
         KeyboardShortcuts.onKeyUp(for: .togglePinnedPanel) { [weak self] in
             MainActor.assumeIsolated {
                 self?.pinnedPanelController.toggle()
