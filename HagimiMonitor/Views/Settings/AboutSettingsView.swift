@@ -16,6 +16,9 @@ struct AboutSettingsView: View {
     private let issuesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/issues")!
     private let xiaohongshuURL = URL(string: "https://www.xiaohongshu.com/user/profile/64a9325200000000110000a6")!
 
+    // 各行附件统一使用相同宽度、左对齐,保证 Releases / 反馈按钮 / 导出日志 的左边缘对齐成一列。
+    private let accessoryColumnWidth: CGFloat = 172
+
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
               !version.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -43,30 +46,29 @@ struct AboutSettingsView: View {
                         NSWorkspace.shared.open(releasesURL)
                     } label: {
                         Label("Releases", systemImage: "shippingbox")
-                            .frame(width: 120, alignment: .leading)
                     }
                     .compatibleButtonStyle()
+                    .frame(width: accessoryColumnWidth, alignment: .leading)
                 }
                 #endif
 
                 SettingsRow(title: String(localized: "about.feedback")) {
-                    Button {
-                        NSWorkspace.shared.open(issuesURL)
-                    } label: {
-                        Label("Issue", systemImage: "exclamationmark.bubble")
-                            .frame(width: 120, alignment: .leading)
-                    }
-                    .compatibleButtonStyle()
-                }
+                    HStack(spacing: 8) {
+                        Button {
+                            NSWorkspace.shared.open(issuesURL)
+                        } label: {
+                            Label("GitHub", systemImage: "exclamationmark.bubble")
+                        }
+                        .compatibleButtonStyle()
 
-                SettingsRow(title: String(localized: "about.follow")) {
-                    Button {
-                        NSWorkspace.shared.open(xiaohongshuURL)
-                    } label: {
-                        Label(String(localized: "about.xiaohongshu"), systemImage: "heart.fill")
-                            .frame(width: 120, alignment: .leading)
+                        Button {
+                            NSWorkspace.shared.open(xiaohongshuURL)
+                        } label: {
+                            Label(String(localized: "about.xiaohongshu"), systemImage: "heart.fill")
+                        }
+                        .compatibleButtonStyle()
                     }
-                    .compatibleButtonStyle()
+                    .frame(width: accessoryColumnWidth, alignment: .leading)
                 }
 
                 SettingsRow(title: String(localized: "about.diagnostics"), subtitle: logExportMessage) {
@@ -147,14 +149,13 @@ struct AboutSettingsView: View {
             if isExportingLogs {
                 ProgressView()
                     .controlSize(.small)
-                    .frame(width: 120, alignment: .leading)
             } else {
                 Label(label, systemImage: "doc.zipper")
-                    .frame(width: 120, alignment: .leading)
             }
         }
         .disabled(isExportingLogs)
         .compatibleButtonStyle()
+        .frame(width: accessoryColumnWidth, alignment: .leading)
     }
 
     private func exportLogs() {

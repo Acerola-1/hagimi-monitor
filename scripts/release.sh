@@ -223,18 +223,6 @@ render_section() {
   echo ""
 }
 
-# 安装说明（中英双语）尾部
-INSTALL_FOOTER=$(cat <<'FOOTER'
----
-
-## 安装说明 / Installation
-
-打开 `.dmg`，将 HagimiMonitor 拖入 `/Applications` 即可使用。应用已通过 Apple 公证，可正常启动。
-
-Open the `.dmg` and drag HagimiMonitor into `/Applications`. The app is notarized by Apple and launches normally.
-FOOTER
-)
-
 if [[ $HAS_CONTENT -eq 1 ]]; then
   echo ">>> 写入发布说明到 ${NOTES_FILE}..."
   {
@@ -250,15 +238,10 @@ if [[ $HAS_CONTENT -eq 1 ]]; then
         echo ""
       done
     fi
-    echo "${INSTALL_FOOTER}"
   } > "$NOTES_FILE"
 else
   echo ">>> 未提供发布说明，写入占位（GitHub 仍会自动追加 commit 列表）"
-  {
-    echo "本次发布 ${TAG}。"
-    echo ""
-    echo "${INSTALL_FOOTER}"
-  } > "$NOTES_FILE"
+  echo "本次发布 ${TAG}。" > "$NOTES_FILE"
 fi
 
 # 创建发布分支并提交

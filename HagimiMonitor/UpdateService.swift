@@ -18,6 +18,11 @@ final class UpdateService: NSObject, ObservableObject {
         static let availableUpdateVersion = "availableUpdateVersion"
     }
 
+    /// 当前 App 版本号，用于判断已发现的更新是否已安装。
+    private static var appVersion: String {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    }
+
     /// 是否可发起检查(下载/安装进行中时 Sparkle 会置为 false),用于禁用按钮避免重复触发。
     @Published private(set) var canCheckForUpdates = false
     @Published private(set) var availableUpdateVersion: String?
@@ -29,7 +34,12 @@ final class UpdateService: NSObject, ObservableObject {
     )
 
     override init() {
-        availableUpdateVersion = UserDefaults.standard.string(forKey: Keys.availableUpdateVersion)
+        let stored = UserDefaults.standard.string(forKey: Keys.availableUpdateVersion)
+        // 启动时清除过时的可用版本：若已更新到该版本，说明更新已完成，不应再提示。
+        if let stored, stored == Self.appVersion {
+            UserDefaults.standard.removeObject(forKey: Keys.availableUpdateVersion)
+        }
+        availableUpdateVersion = (stored == Self.appVersion) ? nil : stored
         super.init()
 
         // startingUpdater: true → 随 App 启动即开始后台定时检查(遵循 Sparkle 默认周期)。

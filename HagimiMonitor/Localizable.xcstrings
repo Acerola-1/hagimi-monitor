@@ -309,28 +309,6 @@
         }
       }
     },
-    "about.follow": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Follow"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フォロー"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关注作者"
-          }
-        }
-      }
-    },
     "about.found": {
       "extractionState": "stale",
       "localizations": {
