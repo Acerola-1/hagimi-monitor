@@ -128,7 +128,9 @@ private final class SettingsWindowTrackingView: NSView {
             return
         }
 
-        Task { @MainActor in
+        // 同步注册(不经 Task 延迟):此回调在窗口真正显示之前触发,
+        // 让标题栏样式与居中在窗口可见前完成,消除首次打开时的闪烁与位置跳变。
+        MainActor.assumeIsolated {
             SettingsWindowPresenter.register(window)
         }
     }
