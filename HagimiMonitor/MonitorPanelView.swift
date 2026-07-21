@@ -101,7 +101,10 @@ struct MonitorPanelView: View {
     }
 
     private func header(theme: MonitorPanelTheme) -> some View {
-        HStack {
+        HStack(spacing: 0) {
+            // 双击展开/收起手势只作用于左侧标题区，避免与右上角的钉住/关闭按钮
+            // 产生手势仲裁：父视图带双击手势时，点击子按钮会被强制等待双击判定
+            // 窗口（约 0.25s），造成点击迟滞。
             HStack(spacing: 5) {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
@@ -111,9 +114,13 @@ struct MonitorPanelView: View {
                 Text("SYSTEM · LIVE")
                     .monitorPanelLabelFont(tracking: 1.1)
                     .foregroundStyle(theme.captionText)
-            }
 
-            Spacer()
+                Spacer(minLength: 0)
+            }
+            .contentShape(Rectangle())
+            .onTapGesture(count: 2) {
+                toggleAllExpansion()
+            }
 
             if showsQuickPanelControls {
                 HStack(spacing: 1) {
@@ -140,10 +147,6 @@ struct MonitorPanelView: View {
             }
         }
         .padding(.horizontal, 2)
-        .contentShape(Rectangle())
-        .onTapGesture(count: 2) {
-            toggleAllExpansion()
-        }
     }
 
     @ViewBuilder
