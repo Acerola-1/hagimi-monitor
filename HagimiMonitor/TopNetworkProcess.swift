@@ -146,14 +146,7 @@ func enrichNetwork(_ rawProcesses: [RawNetworkProcess]) -> [TopNetworkProcess] {
             name = raw.name
         }
 
-        var icon: NSImage? = app?.icon
-        if icon == nil {
-            let path = executablePath(for: raw.pid)
-            if !path.isEmpty {
-                icon = NSWorkspace.shared.icon(forFile: path)
-            }
-        }
-        icon?.size = NSSize(width: 16, height: 16)
+        let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: executablePath(for: raw.pid))
 
         return TopNetworkProcess(
             pid: raw.pid, name: name,

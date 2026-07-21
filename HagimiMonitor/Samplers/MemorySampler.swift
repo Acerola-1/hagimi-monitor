@@ -21,7 +21,7 @@ final class MemorySampler: MonitorSampler {
 
         guard result == KERN_SUCCESS else {
             AppLogger.sampler.error("host_statistics64 failed with result: \(result)")
-            return placeholderModule(.memory, summary: "无法读取")
+            return placeholderModule(.memory, summary: String(localized: "sampler.unavailable"))
         }
 
         let pageSize = Double(vm_kernel_page_size)

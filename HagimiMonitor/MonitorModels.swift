@@ -14,8 +14,8 @@ enum HaloRingSource: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .combined: String(localized: "ring-source.combined")
-        case .cpu: "CPU"
-        case .gpu: "GPU"
+        case .cpu: String(localized: "ring-source.cpu")
+        case .gpu: String(localized: "ring-source.gpu")
         case .memory: String(localized: "ring-source.memory")
         }
     }
@@ -226,6 +226,11 @@ final class MonitorStore: ObservableObject {
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
 
+    /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
+    /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就 spawn ps/nettop、
+    /// 构建大量进程图标」造成的内存/CPU 峰值。
+    private var expandedKindsBySource: [PanelKind: Set<MonitorKind>] = [:]
+
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
@@ -256,7 +261,6 @@ final class MonitorStore: ObservableObject {
         timerCancellable = Timer.publish(every: refreshSchedule.tickInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                AppLogger.ui.debug("Timer tick triggered")
                 self?.advance()
             }
 
@@ -321,10 +325,32 @@ final class MonitorStore: ObservableObject {
     /// 面板消失时调用:移除来源,仅在集合「非空→空」时停止进程采样。
     func panelDidDisappear(_ kind: PanelKind) {
         visiblePanelKinds.remove(kind)
+        expandedKindsBySource[kind] = nil
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
             stopProcSampleTimer()
         }
+    }
+
+    /// 所有可见面板展开模块的并集。进程采样只覆盖这个集合。
+    private var expandedProcessKinds: Set<MonitorKind> {
+        expandedKindsBySource.values.reduce(into: Set<MonitorKind>()) { $0.formUnion($1) }
+    }
+
+    /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证
+    /// 「展开即见数据」;集合收缩时对应类目自然停采(下一轮定时器不再覆盖它)。
+    func updateExpandedKinds(_ kinds: Set<MonitorKind>, for source: PanelKind) {
+        let previous = expandedProcessKinds
+        expandedKindsBySource[source] = kinds
+        let newlyExpanded = expandedProcessKinds.subtracting(previous)
+        guard isPanelVisible, !newlyExpanded.isEmpty else { return }
+        refreshProcesses(for: newlyExpanded)
+    }
+
+    /// 计算实际需要采样的进程类目:展开集合与「设置里开启的进程列表」集合的交集。
+    /// 纯函数,便于单测。
+    static func activeProcessKinds(expanded: Set<MonitorKind>, enabled: Set<MonitorKind>) -> Set<MonitorKind> {
+        expanded.intersection(enabled)
     }
 
     /// 启动进程采样定时器(5 秒间隔)。
@@ -343,9 +369,24 @@ final class MonitorStore: ObservableObject {
         procSampleTimer = nil
     }
 
-    /// 统一刷新所有进程采样:并行执行 4 类采样,避免多个独立定时器导致的密集触发。
-    /// 使用 DispatchGroup 并行采样,全部完成后回主线程更新 @Published 属性。
+    /// 刷新当前展开且开启的进程列表。由 5 秒定时器驱动;未展开任何模块时为空转。
     private func refreshAllProcesses() {
+        refreshProcesses(for: expandedProcessKinds)
+    }
+
+    /// 对指定类目采样(仅限其中设置已开启的列表)。并行执行,全部完成后回主线程
+    /// 更新 @Published 属性。只采「展开 ∩ 设置开启」的类目,避免为不可见的列表
+    /// spawn ps/nettop 子进程、构建图标。
+    private func refreshProcesses(for kinds: Set<MonitorKind>) {
+        var enabled = Set<MonitorKind>()
+        if settings.showMemoryProcesses { enabled.insert(.memory) }
+        if settings.showCPUProcesses { enabled.insert(.cpu) }
+        if settings.showDiskProcesses { enabled.insert(.storage) }
+        if settings.showNetworkProcesses { enabled.insert(.network) }
+
+        let active = Self.activeProcessKinds(expanded: kinds, enabled: enabled)
+        guard !active.isEmpty else { return }
+
         let memoryIncludeSystem = settings.memoryShowSystemProcesses
         let cpuIncludeSystem = settings.cpuShowSystemProcesses
         let diskIncludeSystem = settings.diskShowSystemProcesses
@@ -357,9 +398,8 @@ final class MonitorStore: ObservableObject {
         var diskProcesses: [TopDiskProcess]?
         var networkProcesses: [TopNetworkProcess]?
 
-        // 并行执行 4 类采样,各自独立互不阻塞;只采样用户实际开启的列表,避免
-        // 关闭的列表仍每 5 秒 spawn ps/nettop 子进程空耗 CPU。
-        if settings.showMemoryProcesses {
+        // 并行执行各类采样,各自独立互不阻塞;只采样当前可见(展开)且已开启的列表。
+        if active.contains(.memory) {
             group.enter()
             procSampleQueue.async {
                 let raw = sampleTopMemoryProcesses(includeSystemProcesses: memoryIncludeSystem)
@@ -369,7 +409,7 @@ final class MonitorStore: ObservableObject {
             }
         }
 
-        if settings.showCPUProcesses {
+        if active.contains(.cpu) {
             group.enter()
             procSampleQueue.async {
                 let raw = sampleTopCPUProcesses(includeSystemProcesses: cpuIncludeSystem)
@@ -378,7 +418,7 @@ final class MonitorStore: ObservableObject {
             }
         }
 
-        if settings.showDiskProcesses {
+        if active.contains(.storage) {
             group.enter()
             procSampleQueue.async {
                 let raw = sampleTopDiskProcesses(includeSystemProcesses: diskIncludeSystem)
@@ -387,7 +427,7 @@ final class MonitorStore: ObservableObject {
             }
         }
 
-        if settings.showNetworkProcesses {
+        if active.contains(.network) {
             group.enter()
             procSampleQueue.async {
                 let raw = sampleTopNetworkProcesses(includeSystemProcesses: networkIncludeSystem)
@@ -510,8 +550,6 @@ final class MonitorStore: ObservableObject {
         guard !kinds.isEmpty else {
             return
         }
-        let kindNames = kinds.map { $0.rawValue }.joined(separator: ", ")
-        AppLogger.ui.debug("Advancing modules: \(kindNames, privacy: .public)")
         advance(kinds: kinds)
     }
 

@@ -198,13 +198,8 @@ func enrich(_ rawProcesses: [RawMemoryProcess]) -> [TopMemoryProcess] {
             name = raw.fallbackName
         }
 
-        // 图标:优先 App 自带 bundle 图标,否则按可执行文件路径取。
-        var icon: NSImage? = app?.icon
-        if icon == nil, !raw.path.isEmpty {
-            icon = NSWorkspace.shared.icon(forFile: raw.path)
-        }
-        // 预先缩到展示尺寸,避免 SwiftUI 每帧把 512/1024 的大图实时插值到 16pt。
-        icon?.size = NSSize(width: 16, height: 16)
+        // 图标:走共享的降采样缓存,产出固定 16pt 小位图,避免持有大图 rep。
+        let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)
 
         return TopMemoryProcess(pid: raw.pid, name: name, memoryUsage: raw.memoryUsage, icon: icon)
     }

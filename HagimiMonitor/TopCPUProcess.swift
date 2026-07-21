@@ -126,11 +126,7 @@ func enrichCPU(_ rawProcesses: [RawCPUProcess]) -> [TopCPUProcess] {
             name = raw.fallbackName
         }
 
-        var icon: NSImage? = app?.icon
-        if icon == nil, !raw.path.isEmpty {
-            icon = NSWorkspace.shared.icon(forFile: raw.path)
-        }
-        icon?.size = NSSize(width: 16, height: 16)
+        let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)
 
         return TopCPUProcess(pid: raw.pid, name: name, cpuUsage: raw.cpuUsage, icon: icon)
     }

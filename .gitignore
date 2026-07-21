@@ -74,6 +74,7 @@ build/
 .claude/
 .codex/
 .opencode/
+.qoder/better-loop/
 AGENTS.md
 CLAUDE.md
 .codegraph/

@@ -242,20 +242,42 @@ final class MonitorSettings: ObservableObject {
     }
 
     private func migrateMetrics(_ ids: [String], for kind: MonitorKind) -> [String] {
+        // 旧版使用本地化名称作为 metric ID，新版使用英文 key。
+        // 映射需同时覆盖中文和英文旧 key，确保跨语言升级不丢失设置。
         let mapping: [String: String] = {
             switch kind {
             case .cpu:
-                return ["系统": "system", "用户": "user", "闲置": "idle", "启动时间": "uptime", "温度": "temperature"]
+                return [
+                    // 中文旧 key
+                    "系统": "system", "用户": "user", "闲置": "idle", "启动时间": "uptime", "温度": "temperature",
+                    // 英文旧 key
+                    "System": "system", "User": "user", "Idle": "idle", "Uptime": "uptime", "Temperature": "temperature",
+                ]
             case .gpu:
-                return ["GPU内存": "gpu-memory", "已分配": "allocated", "渲染": "render", "分块": "tiler", "温度": "temperature"]
+                return [
+                    "GPU内存": "gpu-memory", "已分配": "allocated", "渲染": "render", "分块": "tiler", "温度": "temperature",
+                    "GPU Memory": "gpu-memory", "Allocated": "allocated", "Render": "render", "Tiler": "tiler", "Temperature": "temperature",
+                ]
             case .memory:
-                return ["已用": "used", "压力": "pressure", "交换已用": "swap-used", "总量": "total"]
+                return [
+                    "已用": "used", "压力": "pressure", "交换已用": "swap-used", "总量": "total",
+                    "Used": "used", "Pressure": "pressure", "Swap Used": "swap-used", "Total": "total",
+                ]
             case .storage:
-                return ["已用": "used", "可用": "free", "总量": "total"]
+                return [
+                    "已用": "used", "可用": "free", "总量": "total",
+                    "Used": "used", "Free": "free", "Total": "total",
+                ]
             case .network:
-                return ["IP 地址": "ipv4", "上传": "upload", "下载": "download"]
+                return [
+                    "IP 地址": "ipv4", "上传": "upload", "下载": "download",
+                    "IP Address": "ipv4", "Upload": "upload", "Download": "download",
+                ]
             case .battery:
-                return ["充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power"]
+                return [
+                    "充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power",
+                    "Charging Power": "charging-power", "Health": "health", "Cycle Count": "cycle-count", "Temperature": "temperature", "Adapter": "adapter", "Power": "power",
+                ]
             }
         }()
 
