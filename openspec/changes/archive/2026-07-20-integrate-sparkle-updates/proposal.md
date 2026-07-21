@@ -17,6 +17,7 @@ Now that direct builds are signed + notarized + stapled, they qualify for Sparkl
 - Retain a background-detected update in the direct build and show a `NEW` badge beside About in Settings; dismissing Sparkle's window does not clear this reminder.
 - Inject Sparkle Info.plist keys (`SUFeedURL`, `SUPublicEDKey`, `SUEnableInstallerLauncherService`) into the direct build's Debug/Release configs only.
 - CI: produce a notarized ZIP, sign it with Sparkle's EdDSA key, generate `appcast.xml`, upload the ZIP to the release, and deploy the appcast to GitHub Pages. Keep the DMG for browser download.
+- CI injects the monotonically increasing GitHub Actions run number as the direct build's `CFBundleVersion`, so Sparkle can distinguish each release by `sparkle:version`.
 - Localize new user-facing text (zh-Hans, en, ja).
 
 ## Capabilities
@@ -35,6 +36,7 @@ Now that direct builds are signed + notarized + stapled, they qualify for Sparkl
   - `SettingsWindowPresenter`, `SettingsRootView`: remove old open-window auto-check and the update banner.
   - Removed: `UpdateChecker.swift`, `UpdateModels.swift`, `UpdateCheckerTests.swift` (superseded by Sparkle).
   - `.github/workflows/release.yml`: ZIP + Sparkle sign + appcast + Pages deploy.
+  - Direct-release archive metadata: `CFBundleVersion` derives from `GITHUB_RUN_NUMBER`.
   - `Localizable.xcstrings`: `about.download-from-github`.
 - New external dependency: Sparkle 2.x (direct build only). This is HagimiMonitor's first third-party dependency; justified because self-hosted auto-update is impractical to hand-roll and Sparkle is the macOS community standard.
 

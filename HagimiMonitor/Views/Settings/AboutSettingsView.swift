@@ -14,7 +14,7 @@ struct AboutSettingsView: View {
     private let releasesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/releases")!
     #endif
     private let issuesURL = URL(string: "https://github.com/Acerola-1/hagimi-monitor/issues")!
-    private let twitterURL = URL(string: "https://x.com/Acerola64175279")!
+    private let xiaohongshuURL = URL(string: "https://www.xiaohongshu.com/user/profile/64a9325200000000110000a6")!
 
     private var appVersion: String {
         guard let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String,
@@ -61,9 +61,9 @@ struct AboutSettingsView: View {
 
                 SettingsRow(title: String(localized: "about.follow")) {
                     Button {
-                        NSWorkspace.shared.open(twitterURL)
+                        NSWorkspace.shared.open(xiaohongshuURL)
                     } label: {
-                        Label("X / Twitter", systemImage: "at")
+                        Label(String(localized: "about.xiaohongshu"), systemImage: "heart.fill")
                             .frame(width: 120, alignment: .leading)
                     }
                     .compatibleButtonStyle()

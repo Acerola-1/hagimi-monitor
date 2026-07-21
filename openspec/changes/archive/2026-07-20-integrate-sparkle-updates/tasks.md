@@ -27,6 +27,7 @@
 - [x] 4.4 Deploy `appcast.xml` to the `gh-pages` branch.
 - [x] 4.5 Enable GitHub Pages on `gh-pages` (operator action).
 - [x] 4.6 Set the `SPARKLE_PRIVATE_KEY` GitHub Secret (operator action).
+- [x] 4.7 Use `GITHUB_RUN_NUMBER` as the direct-release build number and verify the archived `CFBundleVersion`.
 
 ## 5. Verification
 

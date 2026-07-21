@@ -48,16 +48,28 @@ jobs:
 
       - name: Build & sign (Developer ID)
         run: |
+          # Sparkle 以 CFBundleVersion（而非 MARKETING_VERSION）判断是否有新版本。
+          # 使用 workflow 的单调递增 run number，使归档包和随后生成的 appcast 保持一致。
+          BUILD_NUMBER="$GITHUB_RUN_NUMBER"
+
           xcodebuild -project hagimi-monitor.xcodeproj \
             -scheme HagimiMonitorDirect \
             -configuration Release \
             -arch arm64 \
             -archivePath build/HagimiMonitor.xcarchive \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Developer ID Application" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
             OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
             archive
+
+          APP_INFO="build/HagimiMonitor.xcarchive/Products/Applications/HagimiMonitor.app/Contents/Info.plist"
+          ACTUAL_BUILD_NUMBER="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP_INFO")"
+          if [ "$ACTUAL_BUILD_NUMBER" != "$BUILD_NUMBER" ]; then
+            echo "::error::归档 build number ($ACTUAL_BUILD_NUMBER) 与 GitHub run number ($BUILD_NUMBER) 不一致"
+            exit 1
+          fi
 
       - name: Re-sign Sparkle nested components
         run: |

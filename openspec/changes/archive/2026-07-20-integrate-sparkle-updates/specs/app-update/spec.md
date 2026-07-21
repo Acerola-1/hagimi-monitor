@@ -69,3 +69,16 @@ The release pipeline SHALL publish a Sparkle appcast and a signed update artifac
 - **THEN** a notarized, stapled update ZIP is produced and signed with the Sparkle EdDSA key
 - **AND** an `appcast.xml` referencing that ZIP is generated and deployed to the update feed URL
 - **AND** the DMG remains available for manual browser download
+
+### Requirement: Monotonically Increasing Update Build Version
+The direct-distribution release pipeline SHALL set the archived app's `CFBundleVersion` from GitHub Actions' monotonically increasing `GITHUB_RUN_NUMBER`. The generated appcast SHALL use that same value as `sparkle:version`.
+
+#### Scenario: Consecutive direct releases
+- **WHEN** two direct-distribution release workflows run in sequence
+- **THEN** the later archive has a greater `CFBundleVersion` than the earlier archive
+- **AND** Sparkle recognizes the later release as a valid update when its marketing version differs
+
+#### Scenario: Archive version verification
+- **WHEN** the direct-distribution release archive is built
+- **THEN** the workflow verifies that the archive's `CFBundleVersion` equals `GITHUB_RUN_NUMBER`
+- **AND** the workflow fails before signing or publishing if the values differ
