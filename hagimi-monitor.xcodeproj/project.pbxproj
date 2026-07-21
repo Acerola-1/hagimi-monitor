@@ -478,7 +478,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -515,7 +515,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -536,7 +536,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitorTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -557,7 +557,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitorTests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -576,7 +576,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitorUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -594,7 +594,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitorUITests";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = NO;
@@ -632,7 +632,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				OTHER_LDFLAGS = (
 					"-framework",
 					CoreDisplay,
@@ -681,7 +681,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 0.9.15;
+				MARKETING_VERSION = 0.9.16;
 				OTHER_LDFLAGS = (
 					"-framework",
 					CoreDisplay,
