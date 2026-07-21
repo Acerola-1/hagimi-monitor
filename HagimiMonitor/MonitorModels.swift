@@ -145,6 +145,12 @@ struct MetricSwitch: Identifiable, Hashable {
     let isDefault: Bool
 }
 
+/// 面板来源类型,用于引用计数式可见性判定。
+enum PanelKind: Hashable {
+    case menuBar
+    case pinned
+}
+
 struct MonitorMetric: Identifiable, Equatable {
     let name: String
     let value: String
@@ -217,6 +223,9 @@ final class MonitorStore: ObservableObject {
     /// 面板是否可见,用于按需启停进程采样。
     @Published private(set) var isPanelVisible = false
 
+    /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
+    private var visiblePanelKinds: Set<PanelKind> = []
+
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
@@ -288,17 +297,34 @@ final class MonitorStore: ObservableObject {
             .store(in: &cancellables)
     }
 
-    /// 面板出现时调用:启动进程采样定时器,立即刷新一次。
+    /// 面板出现时调用（菜单栏面板便捷封装）。
     func panelDidAppear() {
-        isPanelVisible = true
-        refreshAllProcesses()
-        startProcSampleTimer()
+        panelDidAppear(.menuBar)
     }
 
-    /// 面板消失时调用:暂停进程采样定时器,保留缓存数据。
+    /// 面板消失时调用（菜单栏面板便捷封装）。
     func panelDidDisappear() {
-        isPanelVisible = false
-        stopProcSampleTimer()
+        panelDidDisappear(.menuBar)
+    }
+
+    /// 面板出现时调用:记录来源,仅在集合「空→非空」时启动进程采样。
+    func panelDidAppear(_ kind: PanelKind) {
+        let wasEmpty = visiblePanelKinds.isEmpty
+        visiblePanelKinds.insert(kind)
+        if wasEmpty {
+            isPanelVisible = true
+            refreshAllProcesses()
+            startProcSampleTimer()
+        }
+    }
+
+    /// 面板消失时调用:移除来源,仅在集合「非空→空」时停止进程采样。
+    func panelDidDisappear(_ kind: PanelKind) {
+        visiblePanelKinds.remove(kind)
+        if visiblePanelKinds.isEmpty {
+            isPanelVisible = false
+            stopProcSampleTimer()
+        }
     }
 
     /// 启动进程采样定时器(5 秒间隔)。

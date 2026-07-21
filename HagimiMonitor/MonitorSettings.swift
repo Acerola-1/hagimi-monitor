@@ -76,6 +76,13 @@ final class MonitorSettings: ObservableObject {
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
+    /// 钉住面板窗口位置持久化。
+    @Published var pinnedPanelOriginX: Double? = nil
+    @Published var pinnedPanelOriginY: Double? = nil
+
+    /// 开机自动显示钉住面板,默认关闭。
+    @Published var pinnedPanelAutoShow: Bool = false
+
     private let defaults: UserDefaults
     private var isUpdatingLaunchAtLogin = false
     private var cancellables = Set<AnyCancellable>()
@@ -114,6 +121,10 @@ final class MonitorSettings: ObservableObject {
         diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? false
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? false
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? false
+
+        pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double
+        pinnedPanelOriginY = defaults.object(forKey: Keys.pinnedPanelOriginY) as? Double
+        pinnedPanelAutoShow = defaults.object(forKey: Keys.pinnedPanelAutoShow) as? Bool ?? false
 
         mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
         mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
@@ -202,6 +213,18 @@ final class MonitorSettings: ObservableObject {
         let target = index + direction
         guard menuBarMetricKinds.indices.contains(target) else { return }
         menuBarMetricKinds.swapAt(index, target)
+    }
+
+    /// 保存钉住面板窗口位置。
+    func savePinnedPanelOrigin(_ origin: CGPoint) {
+        pinnedPanelOriginX = origin.x
+        pinnedPanelOriginY = origin.y
+    }
+
+    /// 读取钉住面板窗口位置,无历史值返回 nil。
+    var pinnedPanelOrigin: CGPoint? {
+        guard let x = pinnedPanelOriginX, let y = pinnedPanelOriginY else { return nil }
+        return CGPoint(x: x, y: y)
     }
 
     private static func validatedMenuBarMetrics(_ rawValues: [String]?) -> [MenuBarMetricKind] {
@@ -444,6 +467,35 @@ final class MonitorSettings: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        $pinnedPanelOriginX
+            .dropFirst()
+            .sink { [weak self] newValue in
+                if let newValue {
+                    self?.persist(newValue, forKey: Keys.pinnedPanelOriginX)
+                } else {
+                    self?.defaults.removeObject(forKey: Keys.pinnedPanelOriginX)
+                }
+            }
+            .store(in: &cancellables)
+
+        $pinnedPanelOriginY
+            .dropFirst()
+            .sink { [weak self] newValue in
+                if let newValue {
+                    self?.persist(newValue, forKey: Keys.pinnedPanelOriginY)
+                } else {
+                    self?.defaults.removeObject(forKey: Keys.pinnedPanelOriginY)
+                }
+            }
+            .store(in: &cancellables)
+
+        $pinnedPanelAutoShow
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.pinnedPanelAutoShow)
+            }
+            .store(in: &cancellables)
     }
 
     private func persist<T>(_ value: T, forKey key: String) {
@@ -499,4 +551,7 @@ private enum Keys {
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let visibleKinds = "settings.visibleKinds"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
+    static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
+    static let pinnedPanelOriginY = "settings.pinnedPanel.originY"
+    static let pinnedPanelAutoShow = "settings.pinnedPanel.autoShow"
 }

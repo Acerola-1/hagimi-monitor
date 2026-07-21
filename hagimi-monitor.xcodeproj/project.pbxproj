@@ -132,6 +132,7 @@
 			);
 			name = HagimiMonitor;
 			packageProductDependencies = (
+				5BB0000000000000000000B2 /* KeyboardShortcuts */,
 			);
 			productName = HagimiMonitor;
 			productReference = 2E0C71892FB19C2D00908371 /* HagimiMonitor.app */;
@@ -202,6 +203,7 @@
 			name = HagimiMonitorDirect;
 			packageProductDependencies = (
 				5AA0000000000000000000A2 /* Sparkle */,
+				5BB0000000000000000000B2 /* KeyboardShortcuts */,
 			);
 			productName = HagimiMonitor;
 			productReference = 2E0C71B52FB1A10000908371 /* HagimiMonitor.app */;
@@ -246,6 +248,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				5AA0000000000000000000A1 /* XCRemoteSwiftPackageReference "Sparkle" */,
+				5BB0000000000000000000B1 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2E0C718A2FB19C2D00908371 /* Products */;
@@ -763,6 +766,14 @@
 				minimumVersion = 2.6.0;
 			};
 		};
+		5BB0000000000000000000B1 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sindresorhus/KeyboardShortcuts";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -770,6 +781,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 5AA0000000000000000000A1 /* XCRemoteSwiftPackageReference "Sparkle" */;
 			productName = Sparkle;
+		};
+		5BB0000000000000000000B2 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BB0000000000000000000B1 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

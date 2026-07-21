@@ -1,3 +1,4 @@
+import KeyboardShortcuts
 import SwiftUI
 
 struct GeneralSettingsView: View {
@@ -39,6 +40,8 @@ struct GeneralSettingsView: View {
             }
 
             MenuBarDisplaySettingsSection(settings: settings, store: store)
+
+            PinnedPanelSettingsSection(settings: settings)
         }
     }
 }
@@ -226,6 +229,27 @@ private struct MenuBarMetricOrderRow: View {
                 .disabled(!canMoveDown)
             }
             .buttonStyle(.bordered)
+        }
+    }
+}
+
+private struct PinnedPanelSettingsSection: View {
+    @ObservedObject var settings: MonitorSettings
+
+    var body: some View {
+        SettingsGroup(String(localized: "settings.pinned-panel")) {
+            SettingsRow(title: String(localized: "settings.pinned-panel.shortcut")) {
+                KeyboardShortcuts.Recorder(for: .togglePinnedPanel)
+                    .frame(width: 150)
+            }
+
+            SettingsDivider()
+
+            SettingsRow(title: String(localized: "settings.pinned-panel.auto-show")) {
+                Toggle("", isOn: $settings.pinnedPanelAutoShow)
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+            }
         }
     }
 }

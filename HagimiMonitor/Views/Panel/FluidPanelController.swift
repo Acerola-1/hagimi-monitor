@@ -504,6 +504,51 @@ extension EnvironmentValues {
     }
 }
 
+// MARK: - PanelRole Environment Key
+
+/// 面板角色环境键,用于区分菜单栏面板与钉住面板。
+enum PanelRoleKey: EnvironmentKey {
+    enum Role: Equatable {
+        case menuBar
+        case pinned
+    }
+
+    static let defaultValue: Role = .menuBar
+}
+
+extension EnvironmentValues {
+    var panelRole: PanelRoleKey.Role {
+        get { self[PanelRoleKey.self] }
+        set { self[PanelRoleKey.self] = newValue }
+    }
+}
+
+// MARK: - DismissPinnedPanel Environment Key
+
+/// 关闭钉住面板的闭包环境键,仅在 panelRole == .pinned 时有效。
+struct DismissPinnedPanelAction: Sendable {
+    let action: @Sendable () -> Void
+
+    init(_ action: @escaping @Sendable () -> Void) {
+        self.action = action
+    }
+
+    func callAsFunction() {
+        action()
+    }
+}
+
+enum DismissPinnedPanelKey: EnvironmentKey {
+    static let defaultValue = DismissPinnedPanelAction({})
+}
+
+extension EnvironmentValues {
+    var dismissPinnedPanel: DismissPinnedPanelAction {
+        get { self[DismissPinnedPanelKey.self] }
+        set { self[DismissPinnedPanelKey.self] = newValue }
+    }
+}
+
 // MARK: - Notification Names
 
 private extension Notification.Name {

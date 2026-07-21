@@ -6494,6 +6494,54 @@
           }
         }
       }
+    },
+    "settings.pinned-panel": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钉住面板"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pinned Panel"
+          }
+        }
+      }
+    },
+    "settings.pinned-panel.shortcut": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快捷键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shortcut"
+          }
+        }
+      }
+    },
+    "settings.pinned-panel.auto-show": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开机自动显示"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show at Login"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

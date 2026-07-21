@@ -11,10 +11,13 @@ struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
+    @Environment(\.panelRole) private var panelRole
+    @Environment(\.dismissPinnedPanel) private var dismissPinnedPanel
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
     @State private var timeString: String = ""
     @State private var timeUpdateTask: Task<Void, Never>?
+    @State private var isHovering = false
 
     var body: some View {
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
@@ -104,6 +107,20 @@ struct MonitorPanelView: View {
 
             Spacer()
 
+            // 钉住面板悬停关闭按钮:仅当 panelRole == .pinned 时显示。
+            if panelRole == .pinned {
+                Button {
+                    dismissPinnedPanel()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption2)
+                        .foregroundStyle(theme.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .opacity(isHovering ? 1 : 0)
+                .animation(.easeInOut(duration: 0.15), value: isHovering)
+            }
+
             Text(timeString)
                 .monitorPanelMonoFont(.caption2, weight: .medium)
                 .foregroundStyle(theme.captionText)
@@ -113,6 +130,9 @@ struct MonitorPanelView: View {
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             toggleAllExpansion()
+        }
+        .onHover { hovering in
+            isHovering = hovering
         }
     }
 

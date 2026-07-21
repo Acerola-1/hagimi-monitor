@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 import SwiftUI
 
 /// App 生命周期代理,持有 `MonitorStore` 和 `FluidPanelController`。
@@ -19,10 +20,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }()
 
+    private(set) lazy var pinnedPanelController: PinnedPanelController = {
+        PinnedPanelController(store: store) { [weak self] in
+            self?.fluidPanelController.dismissPanelForSettings()
+            SettingsWindowPresenter.openFromOutsideSwiftUI()
+        }
+    }()
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 触发 lazy 初始化
         _ = store
         _ = fluidPanelController
+        _ = pinnedPanelController
+
+        // 注册全局快捷键:切换钉住面板显隐。
+        KeyboardShortcuts.onKeyUp(for: .togglePinnedPanel) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.pinnedPanelController.toggle()
+            }
+        }
+
+        // 若「开机自动显示」开启,则启动时显示钉住面板。
+        if store.settings.pinnedPanelAutoShow {
+            pinnedPanelController.show()
+        }
 
         // 启动 Sparkle 自更新(仅直接分发版;App Store 版更新交由商店管理)。
         // 初始化即开始后台定时检查。
