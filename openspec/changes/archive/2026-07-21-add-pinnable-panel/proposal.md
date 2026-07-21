@@ -10,8 +10,8 @@
   - **始终最前**：浮于普通应用窗口之上（`.floating` 层级），不随失焦或点击外部而关闭。
   - **记住位置**：拖动后的窗口位置持久化，下次呼出与 App 重启后恢复到上次位置。
   - **仅当前桌面显示**：不跟随切换虚拟桌面（Spaces），即不启用 all-spaces 行为。
-- 新增**关闭方式**：再次按快捷键切换隐藏；面板悬停时显示一个「取消钉住 / 关闭」按钮点击关闭。
-- 新增**设置项**：快捷键录制控件、（可选）开机自动显示钉住面板开关。
+- 新增**显式入口与关闭方式**：菜单栏面板提供「钉住」按钮；再次按快捷键或点击「取消钉住」按钮隐藏。
+- 新增**设置项**：快捷键录制控件，并明确录制必须包含修饰键。
 - **修改采样可见性判定**：`MonitorStore.isPanelVisible` 由单一布尔改为引用计数式判定，使菜单栏面板与钉住面板任一可见时采样均保持活跃。
 - 所有新增用户可见文案在 `Localizable.xcstrings` 补齐 `zh-Hans` 与 `en`。
 
@@ -27,5 +27,5 @@
 
 - **新增代码**：`PinnedPanelController`（新建，参照 `FluidPanelController` 但反转移动/失焦/层级行为）、全局快捷键封装、钉住相关设置 UI。
 - **依赖**：新增 SPM 依赖 `KeyboardShortcuts`（Sindre Sorhus），底层用 Carbon `RegisterEventHotKey`，无需辅助功能权限，兼容 App Store 沙盒版。
-- **修改**：`MonitorStore`（可见性引用计数）、`AppDelegate`（持有并连接钉住控制器与快捷键）、`MonitorSettings`（快捷键、窗口位置、自动显示持久化）、设置视图、`Localizable.xcstrings`。
+- **修改**：`MonitorStore`（可见性引用计数）、`AppDelegate`（持有并连接钉住控制器与快捷键）、`MonitorSettings`（窗口位置）、设置视图、`Localizable.xcstrings`。
 - **复用**：`MonitorPanelView`、`TransparentWindowBackground`、`CompatibleGlassContainer` 等现有组件直接沿用，macOS 15 / 26 兼容层不变。

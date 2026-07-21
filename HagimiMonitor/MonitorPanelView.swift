@@ -9,15 +9,21 @@ private let panelTimeFormatter: DateFormatter = {
 
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
+    @ObservedObject private var quickPanelPresentation: QuickPanelPresentation
+    private let showsQuickPanelControls: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
-    @Environment(\.panelRole) private var panelRole
-    @Environment(\.dismissPinnedPanel) private var dismissPinnedPanel
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
     @State private var timeString: String = ""
     @State private var timeUpdateTask: Task<Void, Never>?
-    @State private var isHovering = false
+
+    init(store: MonitorStore, quickPanelPresentation: QuickPanelPresentation? = nil) {
+        self.store = store
+        let presentation = quickPanelPresentation ?? QuickPanelPresentation()
+        _quickPanelPresentation = ObservedObject(wrappedValue: presentation)
+        showsQuickPanelControls = quickPanelPresentation != nil
+    }
 
     var body: some View {
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
@@ -79,7 +85,9 @@ struct MonitorPanelView: View {
         .compatibleContainerBackground()
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
         .onAppear {
-            startTimeUpdateTask()
+            if !showsQuickPanelControls {
+                startTimeUpdateTask()
+            }
         }
         .onDisappear {
             timeUpdateTask?.cancel()
@@ -107,32 +115,34 @@ struct MonitorPanelView: View {
 
             Spacer()
 
-            // 钉住面板悬停关闭按钮:仅当 panelRole == .pinned 时显示。
-            if panelRole == .pinned {
-                Button {
-                    dismissPinnedPanel()
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.caption2)
-                        .foregroundStyle(theme.secondaryText)
-                }
-                .buttonStyle(.plain)
-                .opacity(isHovering ? 1 : 0)
-                .animation(.easeInOut(duration: 0.15), value: isHovering)
-            }
+            if showsQuickPanelControls {
+                HStack(spacing: 1) {
+                    QuickPanelControlButton(
+                        imageName: quickPanelPresentation.isPinned ? "pin.fill" : "pin",
+                        help: String(localized: quickPanelPresentation.isPinned ? "panel.unpin" : "panel.pin"),
+                        tint: theme.secondaryText
+                    ) {
+                        quickPanelPresentation.togglePin()
+                    }
 
-            Text(timeString)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
-                .foregroundStyle(theme.captionText)
+                    QuickPanelControlButton(
+                        imageName: "xmark",
+                        help: String(localized: "panel.close"),
+                        tint: .red
+                    ) {
+                        quickPanelPresentation.close()
+                    }
+                }
+            } else {
+                Text(timeString)
+                    .monitorPanelMonoFont(.caption2, weight: .medium)
+                    .foregroundStyle(theme.captionText)
+            }
         }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 1)
+        .padding(.horizontal, 2)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) {
             toggleAllExpansion()
-        }
-        .onHover { hovering in
-            isHovering = hovering
         }
     }
 
@@ -282,6 +292,43 @@ struct MonitorPanelView: View {
     private func openActivityMonitor() {
         let url = URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app")
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
+    }
+}
+
+private struct QuickPanelControlButton: View {
+    let imageName: String
+    let help: String
+    let tint: Color
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: imageName)
+                .font(.caption.weight(.semibold))
+                .frame(width: 22, height: 22)
+                .contentShape(Circle())
+        }
+        .buttonStyle(QuickPanelControlButtonStyle(tint: tint, isHovering: isHovering))
+        .help(help)
+        .onHover { isHovering = $0 }
+    }
+}
+
+private struct QuickPanelControlButtonStyle: ButtonStyle {
+    let tint: Color
+    let isHovering: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        let backgroundOpacity = configuration.isPressed ? 0.34 : (isHovering ? 0.18 : 0)
+
+        configuration.label
+            .foregroundStyle(tint)
+            .background(Circle().fill(tint.opacity(backgroundOpacity)))
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 }
 

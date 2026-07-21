@@ -13,6 +13,12 @@ struct GeneralSettingsView: View {
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
+
+                SettingsDivider()
+
+                SettingsRow(title: String(localized: "settings.quick-access")) {
+                    QuickAccessShortcutRecorder()
+                }
             }
 
             SettingsGroup(String(localized: "settings.appearance")) {
@@ -40,9 +46,71 @@ struct GeneralSettingsView: View {
             }
 
             MenuBarDisplaySettingsSection(settings: settings, store: store)
-
-            PinnedPanelSettingsSection(settings: settings)
         }
+    }
+}
+
+private struct QuickAccessShortcutRecorder: View {
+    @State private var hasShortcut = KeyboardShortcuts.getShortcut(for: .togglePinnedPanel) != nil
+    @State private var isRecording = false
+
+    var body: some View {
+        ZStack {
+            KeyboardShortcuts.Recorder(for: .togglePinnedPanel) { shortcut in
+                hasShortcut = shortcut != nil
+                isRecording = false
+            }
+
+            if !hasShortcut && !isRecording {
+                ShortcutRequirementPlaceholder()
+                    .padding(1)
+                    .allowsHitTesting(false)
+            }
+        }
+        .frame(width: 150, height: 24)
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("KeyboardShortcuts_recorderActiveStatusDidChange"))) { notification in
+            isRecording = notification.userInfo?["isActive"] as? Bool ?? false
+        }
+        .onReceive(NotificationCenter.default.publisher(for: Notification.Name("KeyboardShortcuts_shortcutByNameDidChange"))) { notification in
+            guard (notification.userInfo?["name"] as? KeyboardShortcuts.Name) == .togglePinnedPanel else {
+                return
+            }
+            hasShortcut = KeyboardShortcuts.getShortcut(for: .togglePinnedPanel) != nil
+        }
+    }
+}
+
+private struct ShortcutRequirementPlaceholder: View {
+    var body: some View {
+        HStack(spacing: 3) {
+            ShortcutKeyCap("⌘")
+            Text("/")
+            ShortcutKeyCap("⌃")
+            Text("/")
+            ShortcutKeyCap("⌥")
+            Text("+")
+            Text(String(localized: "settings.quick-access.press-key"))
+                .lineLimit(1)
+        }
+        .font(.caption2.weight(.medium))
+        .foregroundStyle(.tertiary)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(Color(nsColor: .controlBackgroundColor), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+    }
+}
+
+private struct ShortcutKeyCap: View {
+    let symbol: String
+
+    init(_ symbol: String) {
+        self.symbol = symbol
+    }
+
+    var body: some View {
+        Text(symbol)
+            .font(.caption2.weight(.semibold))
+            .frame(minWidth: 15, minHeight: 15)
+            .background(.quaternary.opacity(0.65), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
     }
 }
 
@@ -229,27 +297,6 @@ private struct MenuBarMetricOrderRow: View {
                 .disabled(!canMoveDown)
             }
             .buttonStyle(.bordered)
-        }
-    }
-}
-
-private struct PinnedPanelSettingsSection: View {
-    @ObservedObject var settings: MonitorSettings
-
-    var body: some View {
-        SettingsGroup(String(localized: "settings.pinned-panel")) {
-            SettingsRow(title: String(localized: "settings.pinned-panel.shortcut")) {
-                KeyboardShortcuts.Recorder(for: .togglePinnedPanel)
-                    .frame(width: 150)
-            }
-
-            SettingsDivider()
-
-            SettingsRow(title: String(localized: "settings.pinned-panel.auto-show")) {
-                Toggle("", isOn: $settings.pinnedPanelAutoShow)
-                    .toggleStyle(.switch)
-                    .labelsHidden()
-            }
         }
     }
 }

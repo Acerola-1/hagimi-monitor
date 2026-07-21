@@ -2,22 +2,17 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// 钉住面板控制器:管理一个可拖动、始终最前、失焦不关闭的常驻监控面板。
-///
-/// 与 `FluidPanelController`（菜单栏弹出面板）的关键区别:
-/// - 可拖动（`isMovableByWindowBackground = true`）
-/// - 始终最前（`level = .floating`）
-/// - 失焦不关闭（`windowDidResignKey` 不做关闭）
-/// - 不安装「点击外部关闭」的全局监听
-/// - 位置持久化,重启后恢复
-/// - 仅当前桌面显示（不含 `.canJoinAllSpaces`）
+/// 快捷键面板控制器。默认是失焦即收的临时面板，钉住后才变为常驻窗口。
 @MainActor
 final class PinnedPanelController: NSObject, NSWindowDelegate {
     private let store: MonitorStore
     private let openSettingsAction: () -> Void
 
     private let panel: NSPanel
+    private let presentation = QuickPanelPresentation()
     private var hostingView: NSHostingView<AnyView>?
+    private var localEventMonitor: Any?
+    private var globalEventMonitor: Any?
 
     /// 面板圆角半径,与 FluidPanelController 一致。
     private static let panelCornerRadius: CGFloat = 12
@@ -36,9 +31,20 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         super.init()
 
         configurePanel()
+        presentation.configure(
+            togglePin: { [weak self] in self?.togglePin() },
+            close: { [weak self] in self?.hide(resetPin: true) }
+        )
+        installEventMonitor()
     }
 
     deinit {
+        if let localEventMonitor {
+            NSEvent.removeMonitor(localEventMonitor)
+        }
+        if let globalEventMonitor {
+            NSEvent.removeMonitor(globalEventMonitor)
+        }
         // 若面板仍可见,通知 store 移除引用。
         if panel.isVisible {
             store.panelDidDisappear(.pinned)
@@ -48,10 +54,6 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     // MARK: - Setup
 
     private func configurePanel() {
-        panel.isMovable = false
-        panel.isMovableByWindowBackground = true
-        panel.isFloatingPanel = true
-        panel.level = .floating
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -79,12 +81,10 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         visualEffect.layer?.masksToBounds = true
         panel.contentView = visualEffect
 
-        // 面板内容:MonitorPanelView,注入 panelRole = .pinned 与关闭闭包。
-        let root = MonitorPanelView(store: store)
-            .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
-            .environment(\.panelRole, .pinned)
-            .environment(\.dismissPinnedPanel, DismissPinnedPanelAction { [weak self] in
-                self?.hide()
+        let root = MonitorPanelView(store: store, quickPanelPresentation: presentation)
+            .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action { [weak self] in
+                self?.hide(resetPin: true)
+                self?.openSettingsAction()
             })
             .modifier(PinnedPanelSizeReader { [weak self] size in
                 self?.contentSizeDidChange(to: size)
@@ -113,13 +113,53 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         if intrinsic.width > 1, intrinsic.height > 1 {
             panel.setContentSize(intrinsic)
         }
+
+        updatePresentationMode()
+    }
+
+    private func installEventMonitor() {
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            guard let self, event.window !== self.panel else { return event }
+            self.dismissIfTransient()
+            return event
+        }
+
+        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.dismissIfTransient()
+            }
+        }
+    }
+
+    private func updatePresentationMode() {
+        let isPinned = presentation.isPinned
+        panel.isMovable = true
+        panel.isMovableByWindowBackground = true
+        panel.isFloatingPanel = isPinned
+        panel.level = isPinned ? .floating : .normal
+    }
+
+    private func togglePin() {
+        presentation.togglePinState()
+        // 先提交图钉的视觉状态，再在下一轮 RunLoop 切换窗口层级，避免 AppKit
+        // 的层级调整拖慢按钮反馈。
+        DispatchQueue.main.async { [weak self] in
+            self?.updatePresentationMode()
+        }
+    }
+
+    private func dismissIfTransient() {
+        guard !presentation.isPinned else { return }
+        hide(resetPin: false)
     }
 
     // MARK: - Show / Hide / Toggle
 
-    /// 显示钉住面板:读取记忆位置,做越界回收,非激活方式呈现。
+    /// 显示快捷键面板。每次呼出都从普通状态开始。
     func show() {
         guard !panel.isVisible else { return }
+        presentation.resetPin()
+        updatePresentationMode()
 
         hostingView?.layoutSubtreeIfNeeded()
         let intrinsic = hostingView?.intrinsicContentSize ?? .zero
@@ -150,17 +190,21 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         store.panelDidAppear(.pinned)
     }
 
-    /// 隐藏钉住面板。
-    func hide() {
+    /// 隐藏快捷键面板；关闭后重置为普通状态。
+    func hide(resetPin: Bool = true) {
         guard panel.isVisible else { return }
         panel.orderOut(nil)
         store.panelDidDisappear(.pinned)
+        if resetPin {
+            presentation.resetPin()
+            updatePresentationMode()
+        }
     }
 
-    /// 切换钉住面板显隐。
+    /// 切换快捷键面板显隐。
     func toggle() {
         if panel.isVisible {
-            hide()
+            hide(resetPin: true)
         } else {
             show()
         }
@@ -177,9 +221,11 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.frame.size != size else { return }
-            // 保持当前位置,只更新尺寸。
+            // 固定顶部，内容展开时只向下生长。
             var frame = self.panel.frame
+            let top = frame.maxY
             frame.size = size
+            frame.origin.y = top - size.height
             self.panel.setFrame(frame, display: true)
         }
     }
@@ -222,14 +268,43 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
     nonisolated func windowDidMove(_ notification: Notification) {
         MainActor.assumeIsolated {
-            // 拖动结束后将 origin 写入 MonitorSettings。
             store.settings.savePinnedPanelOrigin(panel.frame.origin)
         }
     }
 
-    // 失焦不关闭,与 FluidPanelController 相反。
     nonisolated func windowDidResignKey(_ notification: Notification) {
-        // 不做任何操作。
+        MainActor.assumeIsolated {
+            dismissIfTransient()
+        }
+    }
+}
+
+@MainActor
+final class QuickPanelPresentation: ObservableObject {
+    @Published private(set) var isPinned = false
+
+    private var togglePinAction: () -> Void = {}
+    private var closeAction: () -> Void = {}
+
+    func configure(togglePin: @escaping () -> Void, close: @escaping () -> Void) {
+        togglePinAction = togglePin
+        closeAction = close
+    }
+
+    func togglePin() {
+        togglePinAction()
+    }
+
+    func togglePinState() {
+        isPinned.toggle()
+    }
+
+    func resetPin() {
+        isPinned = false
+    }
+
+    func close() {
+        closeAction()
     }
 }
 

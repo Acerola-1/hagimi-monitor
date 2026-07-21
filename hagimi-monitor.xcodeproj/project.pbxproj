@@ -132,7 +132,7 @@
 			);
 			name = HagimiMonitor;
 			packageProductDependencies = (
-				5BB0000000000000000000B2 /* KeyboardShortcuts */,
+				5BB0000000000000000000B3 /* KeyboardShortcuts */,
 			);
 			productName = HagimiMonitor;
 			productReference = 2E0C71892FB19C2D00908371 /* HagimiMonitor.app */;
@@ -783,6 +783,11 @@
 			productName = Sparkle;
 		};
 		5BB0000000000000000000B2 /* KeyboardShortcuts */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 5BB0000000000000000000B1 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
+			productName = KeyboardShortcuts;
+		};
+		5BB0000000000000000000B3 /* KeyboardShortcuts */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 5BB0000000000000000000B1 /* XCRemoteSwiftPackageReference "KeyboardShortcuts" */;
 			productName = KeyboardShortcuts;

@@ -43,7 +43,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 状态项内容左右留白,避免图标/文字贴住菜单栏边缘(系统 MenuBarExtra 自带此留白)。
     private static let statusItemHorizontalPadding: CGFloat = 2
 
-    init(store: MonitorStore, openSettings: @escaping () -> Void) {
+    init(
+        store: MonitorStore,
+        openSettings: @escaping () -> Void
+    ) {
         self.store = store
         self.openSettingsAction = openSettings
 
@@ -501,51 +504,6 @@ extension EnvironmentValues {
     var fluidOpenSettings: OpenSettingsActionKey.Action {
         get { self[OpenSettingsActionKey.self] }
         set { self[OpenSettingsActionKey.self] = newValue }
-    }
-}
-
-// MARK: - PanelRole Environment Key
-
-/// 面板角色环境键,用于区分菜单栏面板与钉住面板。
-enum PanelRoleKey: EnvironmentKey {
-    enum Role: Equatable {
-        case menuBar
-        case pinned
-    }
-
-    static let defaultValue: Role = .menuBar
-}
-
-extension EnvironmentValues {
-    var panelRole: PanelRoleKey.Role {
-        get { self[PanelRoleKey.self] }
-        set { self[PanelRoleKey.self] = newValue }
-    }
-}
-
-// MARK: - DismissPinnedPanel Environment Key
-
-/// 关闭钉住面板的闭包环境键,仅在 panelRole == .pinned 时有效。
-struct DismissPinnedPanelAction: Sendable {
-    let action: @Sendable () -> Void
-
-    init(_ action: @escaping @Sendable () -> Void) {
-        self.action = action
-    }
-
-    func callAsFunction() {
-        action()
-    }
-}
-
-enum DismissPinnedPanelKey: EnvironmentKey {
-    static let defaultValue = DismissPinnedPanelAction({})
-}
-
-extension EnvironmentValues {
-    var dismissPinnedPanel: DismissPinnedPanelAction {
-        get { self[DismissPinnedPanelKey.self] }
-        set { self[DismissPinnedPanelKey.self] = newValue }
     }
 }
 

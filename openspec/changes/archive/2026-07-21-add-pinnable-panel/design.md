@@ -14,7 +14,7 @@
 
 **Goals:**
 - 全局快捷键切换钉住面板显隐，快捷键可自定义、可清除、可持久化。
-- 钉住面板可拖动、始终最前、失焦不关闭、悬停显示关闭按钮。
+- 钉住面板可拖动、始终最前、失焦不关闭，并提供显式取消钉住按钮。
 - 窗口位置持久化并在重启后恢复，越界时回收到可见屏幕内。
 - 菜单栏面板与钉住面板共享单一 `MonitorStore`，采样循环唯一。
 - 采样可见性判定改为引用计数，任一面板可见即保持采样。
@@ -51,9 +51,9 @@
 - **呼出定位**：显示时读取存储的 origin；若无历史值则用默认位置（主屏右上或屏幕中心附近）。
 - **越界回收**：定位前用 `NSScreen.screens` 的 `visibleFrame` 校验，若面板矩形不与任何可见区域相交，则夹取回主屏 `visibleFrame` 内（复用 `FluidPanelController.setPanelFrame` 里已有的边界回收思路）。
 
-### 决策 5：关闭方式（快捷键 + 悬停按钮）
+### 决策 5：显式钉住与关闭入口
 - 快捷键做 toggle：可见则 `orderOut` 隐藏，不可见则定位并 `orderFront` 显示（不夺取焦点，用 `orderFrontRegardless` 或非激活显示，保持当前 App 前台）。
-- 悬停关闭按钮：在 `MonitorPanelView` 内新增一个仅「钉住模式」显示的关闭控件，通过环境值或初始化参数区分面板角色，点击回调走 controller 的隐藏逻辑。为避免污染菜单栏面板，用一个 `panelRole` 环境键控制其显隐。
+- 菜单栏面板提供「钉住」图标按钮，点击后关闭菜单栏面板并显示钉住面板；钉住面板提供「取消钉住」图标按钮，点击后隐藏面板。通过环境值区分面板角色并注入相应回调。
 
 ### 决策 6：依赖接入两个 target
 `KeyboardShortcuts` 需同时链接 `HagimiMonitor`（App Store）与 `HagimiMonitorDirect` 两个 target。快捷键功能对两版都开放（非 `#if DIRECT_DISTRIBUTION` 限定）。
@@ -73,14 +73,13 @@
 2. `MonitorStore` 引入引用计数可见性（保留旧 API 封装），加单测。
 3. 新建 `PinnedPanelController` 与位置持久化字段（`MonitorSettings`）。
 4. `AppDelegate` 持有 `pinnedPanelController` 并接线快捷键回调。
-5. 设置界面加入快捷键录制控件与（可选）自动显示开关；补 `Localizable.xcstrings`。
-6. `MonitorPanelView` 加入「钉住模式」悬停关闭控件（按 `panelRole` 显隐）。
+5. 设置界面加入快捷键录制控件及修饰键提示；补 `Localizable.xcstrings`。
+6. `MonitorPanelView` 加入菜单栏「钉住」与钉住面板「取消钉住」控件。
 7. 回归验证菜单栏面板行为不变；`xcodebuild test` 通过后按 `release.sh` 流程发布。
 
 回滚策略：功能自成模块，若出问题可移除快捷键接线与 `PinnedPanelController` 实例化（不影响菜单栏面板与采样主流程）。
 
 ## Open Questions
 
-- 是否需要「开机自动显示钉住面板」开关？（proposal 标记为可选，倾向本期提供一个 UserDefaults 开关，默认关闭。）
 - 默认呼出位置：主屏右上角 vs 屏幕中心？（倾向右上角，贴近钉图直觉，最终以实现时观感为准。）
 - 钉住面板是否需要与菜单栏面板不同的默认宽度或紧凑布局？（本期沿用相同 `MonitorPanelView`，后续按反馈调整。）

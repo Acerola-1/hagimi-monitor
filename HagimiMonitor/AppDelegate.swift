@@ -11,13 +11,13 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var store: MonitorStore = MonitorStore()
     private(set) lazy var fluidPanelController: FluidPanelController = {
-        FluidPanelController(store: store) { [weak self] in
-            // 先关闭面板再打开设置窗口
-            self?.fluidPanelController.dismissPanelForSettings()
-            // 复用 openSettings 环境 action(与 Cmd+, 走同一条路径),
-            // 而非依赖未公开的 showSettingsWindow: selector
-            SettingsWindowPresenter.openFromOutsideSwiftUI()
-        }
+        FluidPanelController(
+            store: store,
+            openSettings: { [weak self] in
+                self?.fluidPanelController.dismissPanelForSettings()
+                SettingsWindowPresenter.openFromOutsideSwiftUI()
+            }
+        )
     }()
 
     private(set) lazy var pinnedPanelController: PinnedPanelController = {
@@ -38,11 +38,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated {
                 self?.pinnedPanelController.toggle()
             }
-        }
-
-        // 若「开机自动显示」开启,则启动时显示钉住面板。
-        if store.settings.pinnedPanelAutoShow {
-            pinnedPanelController.show()
         }
 
         // 启动 Sparkle 自更新(仅直接分发版;App Store 版更新交由商店管理)。

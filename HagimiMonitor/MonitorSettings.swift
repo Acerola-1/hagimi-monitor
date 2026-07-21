@@ -80,9 +80,6 @@ final class MonitorSettings: ObservableObject {
     @Published var pinnedPanelOriginX: Double? = nil
     @Published var pinnedPanelOriginY: Double? = nil
 
-    /// 开机自动显示钉住面板,默认关闭。
-    @Published var pinnedPanelAutoShow: Bool = false
-
     private let defaults: UserDefaults
     private var isUpdatingLaunchAtLogin = false
     private var cancellables = Set<AnyCancellable>()
@@ -124,8 +121,6 @@ final class MonitorSettings: ObservableObject {
 
         pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double
         pinnedPanelOriginY = defaults.object(forKey: Keys.pinnedPanelOriginY) as? Double
-        pinnedPanelAutoShow = defaults.object(forKey: Keys.pinnedPanelAutoShow) as? Bool ?? false
-
         mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
         mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
         mediaKeyShowOSD = defaults.object(forKey: Keys.mediaKeyShowOSD) as? Bool ?? true
@@ -490,12 +485,6 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $pinnedPanelAutoShow
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.pinnedPanelAutoShow)
-            }
-            .store(in: &cancellables)
     }
 
     private func persist<T>(_ value: T, forKey key: String) {
@@ -553,5 +542,4 @@ private enum Keys {
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"
-    static let pinnedPanelAutoShow = "settings.pinnedPanel.autoShow"
 }
