@@ -33,6 +33,17 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private var globalEventMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
 
+    /// 指标(文本)模式下,上一次成功栅格化所用的关键输入。$modules 每秒发布(网络字节
+    /// 几乎每秒都变),但格式化后的菜单栏指标文本往往不变;文字/外观/布局/scale 全等时
+    /// 据此跳过 ImageRenderer 快照,消除「指标模式每秒重绘」这一常驻 CPU 热点。
+    private struct MetricsRenderKey: Equatable {
+        let items: [MenuBarMetricItem]
+        let isDark: Bool
+        let layout: MenuBarMetricLayoutStyle
+        let scale: CGFloat
+    }
+    private var lastMetricsRenderKey: MetricsRenderKey?
+
     /// 面板与菜单栏按钮左边缘对齐时,补偿窗口阴影/边框带来的 2pt 偏移。
     private static let windowBorderSize: CGFloat = 2
 
@@ -169,6 +180,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
                 self.refreshStatusItemImage()
             }
             .store(in: &cancellables)
+        // $modules 每秒发布(网络字节几乎每秒都变)。这里不做去重:环模式的负载等级颜色
+        // (idle/working/busy/stressed)由 haloRingLoadLevel 决定,而 loadAnimator 仅在负载
+        // 变化≥阈值时才驱动刷新,若小幅漂移跨越等级边界会漏刷环色;故环模式仍需 $modules
+        // 每秒兜底刷新。真正昂贵的指标模式 ImageRenderer 快照已由 refreshStatusItemImage
+        // 内部的 MetricsRenderKey 去重挡下,故此处每秒触发的实际开销极低(环模式命中缓存图)。
         store.$modules
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
@@ -365,6 +381,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 该 NSImage 由绘制闭包惰性渲染,系统绘制时会按各屏 scale 原生重画,多屏依旧清晰;
         // 内部读 NSAppearance.currentDrawing() 判定墨色,与 button 外观同步。
         if store.settings.menuBarDisplayMode == .ring {
+            // 切到环形模式时失效指标缓存:之后切回指标模式时,即使文本碰巧与上次
+            // 相同,也得重新栅格化(当前 button.image 已是环形图)。
+            lastMetricsRenderKey = nil
             let image = MenuBarComputeRingIcon.image(
                 load: store.loadAnimator.displayedComputeLoad,
                 darkMode: isDark,
@@ -384,8 +403,20 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             return
         }
 
-        // 指标(文本)模式:无现成位图,仍用 ImageRenderer 快照。autoreleasepool 确保每次
-        // 快照产生的 CG/SVG 中间对象在本次调用结束即释放,不再攒到内存高水位。
+        // 指标(文本)模式:无现成位图,仍用 ImageRenderer 快照。
+        // 先按最大屏 scale 与当前指标文本构造去重键,命中即跳过整套快照渲染。
+        let scale = NSScreen.screens.map(\.backingScaleFactor).max()
+            ?? statusItem.button?.window?.backingScaleFactor
+            ?? NSScreen.main?.backingScaleFactor ?? 2
+        let renderKey = MetricsRenderKey(
+            items: store.menuBarMetricItems,
+            isDark: isDark,
+            layout: store.settings.menuBarMetricLayoutStyle,
+            scale: scale
+        )
+        guard renderKey != lastMetricsRenderKey else { return }
+
+        // autoreleasepool 确保每次快照产生的 CG/SVG 中间对象在本次调用结束即释放,不再攒到内存高水位。
         autoreleasepool {
             let label = MenuBarStatusLabel(store: store, darkMode: isDark)
                 .environment(\.colorScheme, isDark ? .dark : .light)
@@ -397,9 +428,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             // 按所有屏幕里的最大 backingScaleFactor 光栅化:菜单栏在每块屏幕各画一遍,若只按
             // 主屏 scale 烤成位图,到 scale 更高的副屏会被放大而模糊。取最大 scale 后,任何屏幕
             // 都是缩小(清晰)而非放大。point 尺寸 = 像素/scale 不变,故状态项宽度、布局不受影响。
-            let scale = NSScreen.screens.map(\.backingScaleFactor).max()
-                ?? statusItem.button?.window?.backingScaleFactor
-                ?? NSScreen.main?.backingScaleFactor ?? 2
             renderer.scale = scale
 
             // 把选定外观设为当前绘制上下文,使内部的 NSAppearance.currentDrawing() 判定
@@ -416,6 +444,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
             statusItem.button?.image = image
             updateStatusItemLength(pointSize.width)
+            // 仅在成功产出图像后记录去重键:渲染失败(cgImage 为 nil)时保留旧键,下个 tick 会重试。
+            lastMetricsRenderKey = renderKey
         }
     }
 

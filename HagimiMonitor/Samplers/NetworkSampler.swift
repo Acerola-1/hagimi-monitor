@@ -12,6 +12,12 @@ final class NetworkSampler: MonitorSampler {
     private let publicIPLock = NSLock()
     private var isRefreshingPublicIP = false
     private var interfaceTypeCache: [String: CFString] = [:]
+    private var interfaceTypeCacheDate: Date?
+    private let interfaceTypeRefreshInterval: TimeInterval = 30
+
+    // SCDynamicStore 会话:每秒重新 SCDynamicStoreCreate 是无谓开销,进程内只建一次。
+    private lazy var dynamicStore: SCDynamicStore? =
+        SCDynamicStoreCreate(nil, "HagimiMonitor.NetworkSampler" as CFString, nil, nil)
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         let now = Date()
@@ -131,8 +137,6 @@ final class NetworkSampler: MonitorSampler {
             (partial.input + next.input, partial.output + next.output)
         }
 
-        AppLogger.sampler.info("Network interfaces detected: \(totalsByInterface.keys.joined(separator: ", "), privacy: .public), primary: \(primaryName ?? "none", privacy: .public), active: \(activeKey ?? "none", privacy: .public)")
-
         return NetworkInterfaceSnapshot(
             input: total.input,
             output: total.output,
@@ -143,7 +147,7 @@ final class NetworkSampler: MonitorSampler {
     }
 
     private func primaryInterfaceName() -> String? {
-        guard let store = SCDynamicStoreCreate(nil, "HagimiMonitor.NetworkSampler" as CFString, nil, nil) else {
+        guard let store = dynamicStore else {
             return nil
         }
         guard let global = SCDynamicStoreCopyValue(store, "State:/Network/Global/IPv4" as CFString) as? [String: Any],
@@ -240,6 +244,14 @@ final class NetworkSampler: MonitorSampler {
         if let cached = interfaceTypeCache[bsdName] {
             return cached
         }
+        // 缓存未命中:可能是新插入的接口,也可能是 SCNetworkInterfaceCopyAll 里根本不存在的
+        // 虚拟/VPN 主接口。后者若每秒都重扫整表,会每秒触发一次昂贵的 SCNetworkInterfaceCopyAll,
+        // 故对整表重扫加时间闸门:最多每 interfaceTypeRefreshInterval 秒重扫一次。
+        let now = Date()
+        if let last = interfaceTypeCacheDate, now.timeIntervalSince(last) < interfaceTypeRefreshInterval {
+            return nil
+        }
+        interfaceTypeCacheDate = now
         guard let interfaces = SCNetworkInterfaceCopyAll() as? [SCNetworkInterface] else {
             return nil
         }
