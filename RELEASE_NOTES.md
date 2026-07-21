@@ -1,13 +1,10 @@
 ## 更新内容
 
-### 修复
+### 优化与体验
 
-- Sparkle 更新日志无法下载的问题
+- 优化显示器控制稳定性，用 DDC 能力探测取代故障计数禁用逻辑
 
----
+### 代码质量
 
-## 安装说明 / Installation
+- 重构 DDC 故障处理机制
 
-打开 `.dmg`，将 HagimiMonitor 拖入 `/Applications` 即可使用。应用已通过 Apple 公证，可正常启动。
-
-Open the `.dmg` and drag HagimiMonitor into `/Applications`. The app is notarized by Apple and launches normally.

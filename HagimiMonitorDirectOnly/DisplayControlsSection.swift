@@ -237,6 +237,20 @@ private struct DisplayControlGroup: View {
                             tint: tint
                         )
                     }
+
+                    if showsUnsupportedNotice {
+                        HStack(alignment: .top, spacing: 5) {
+                            Image(systemName: "info.circle")
+                                .font(.caption2)
+                                .foregroundStyle(palette.captionText)
+                            Text(String(localized: "display.control-unavailable"))
+                                .monitorPanelCaptionFont(.caption2)
+                                .foregroundStyle(palette.captionText)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .transition(.opacity)
+                    }
                 }
             }
         }
@@ -248,6 +262,15 @@ private struct DisplayControlGroup: View {
             get: { controller.value(for: control, displayID: display.id) },
             set: { controller.setValueAsync($0, for: control, displayID: display.id) }
         )
+    }
+
+    /// 是否展示"此显示器不支持该项控制"的诚实静态提示。仅当某条**已启用且正在显示**的
+    /// 控制被显示器明确判定为不支持(supports == false,由 capability .unsupported 驱动)
+    /// 时才出现——不再对瞬时写入失败报警。
+    private var showsUnsupportedNotice: Bool {
+        (settings.displayBrightnessControlEnabled && !display.supports(.brightness))
+            || (settings.displayVolumeControlEnabled && !display.isBuiltIn && !display.supports(.volume))
+            || (settings.displayContrastControlEnabled && !display.isBuiltIn && !display.supports(.contrast))
     }
 }
 
@@ -320,11 +343,16 @@ final class DisplayControlController: ObservableObject {
     private var settingsObservation: AnyCancellable?
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
+    /// 抓握保护:记录用户最近一次设定的值与时刻。保护窗口内 `value(for:)` 优先返回
+    /// 用户设定值,避免轮询回读(显示器四舍五入/延迟上报)把滑块瞬间弹回造成视觉跳变。
+    private var recentlySetValues: [CGDirectDisplayID: [DisplayControlKind: (value: Double, at: Date)]] = [:]
+    private static let gripWindow: TimeInterval = 4
+
     /// 面板打开且详情展开期间的轮询定时器。系统设置/其他 app 改亮度音量不会
     /// 产生任何通知,DDC 又是只能主动读取的哑协议,唯一能发现外部变化的办法就是
     /// 这段时间内持续轮询;收起或面板隐藏后停掉,避免空转占用 DDC 总线。
     private var pollTimerCancellable: AnyCancellable?
-    private static let pollInterval: TimeInterval = 3
+    private static let pollInterval: TimeInterval = 5
 
     init() {
         changeObserver.start { [weak self] in
@@ -378,6 +406,7 @@ final class DisplayControlController: ObservableObject {
                 // lastWrittenValues 残留导致首次写入被误跳过。
                 for removedID in previousIDs.subtracting(detectedIDs) {
                     self.worker.clearLastValues(displayID: removedID)
+                    self.recentlySetValues[removedID] = nil
                 }
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
@@ -391,6 +420,12 @@ final class DisplayControlController: ObservableObject {
     func value(for control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double {
         if let pendingValue = pendingValues[displayID]?[control] {
             return pendingValue
+        }
+
+        // 抓握保护窗口内优先返回用户设定值,防止轮询回读把滑块弹回。
+        if let recent = recentlySetValues[displayID]?[control],
+           Date().timeIntervalSince(recent.at) < Self.gripWindow {
+            return recent.value
         }
 
         if let display = displays.first(where: { $0.id == displayID }) {
@@ -413,6 +448,7 @@ final class DisplayControlController: ObservableObject {
 
         let key = ControlKey(displayID: displayID, control: control)
         pendingValues[displayID, default: [:]][control] = clampedValue
+        recentlySetValues[displayID, default: [:]][control] = (clampedValue, Date())
         worker.setValue(clampedValue, for: key, display: display, service: service) { [weak self] result in
             Task { @MainActor in
                 self?.handleWriteResult(result)
@@ -440,15 +476,18 @@ final class DisplayControlController: ObservableObject {
         let currentPendingValue = pendingValues[result.key.displayID]?[result.key.control]
         let isCurrentResult = currentPendingValue.map { abs($0 - result.value) < 0.001 } ?? false
 
-        if result.success {
+        switch result.outcome {
+        case .written, .skipped:
+            // 乐观盲写模型:报文上总线(.written)或门禁抑制跳过(.skipped)都视为
+            // 生效,对齐本地真值并刷新抓握窗口。不做写后回读,不可读的显示器不报错。
             updateLocalValue(result.value, for: result.key.control, displayID: result.key.displayID)
             fallbackValues[result.key.displayID, default: [:]][result.key.control] = result.value
-            AppLogger.ui.debug("Write succeeded for display \(result.key.displayID), control: \(result.key.control.storageKey, privacy: .public)")
-        } else {
-            AppLogger.ui.error("Write failed for display \(result.key.displayID), control: \(result.key.control.storageKey, privacy: .public)")
-            if isCurrentResult {
-                markControlUnsupported(result.key.control, displayID: result.key.displayID)
-            }
+            recentlySetValues[result.key.displayID, default: [:]][result.key.control] = (result.value, Date())
+            AppLogger.ui.debug("Write \(String(describing: result.outcome), privacy: .public) for display \(result.key.displayID), control: \(result.key.control.storageKey, privacy: .public)")
+        case .busError:
+            // 瞬时总线错误:绝不冒泡给用户、绝不翻转能力、绝不禁用控制,只做日志。
+            // 滑块保持用户设定值,下次写入(或门禁解除后)自然重试。
+            AppLogger.ui.error("Write bus error for display \(result.key.displayID), control: \(result.key.control.storageKey, privacy: .public)")
         }
 
         guard isCurrentResult else {
@@ -459,14 +498,6 @@ final class DisplayControlController: ObservableObject {
         if pendingValues[result.key.displayID]?.isEmpty == true {
             pendingValues[result.key.displayID] = nil
         }
-    }
-
-    private func markControlUnsupported(_ control: DisplayControlKind, displayID: CGDirectDisplayID) {
-        guard let index = displays.firstIndex(where: { $0.id == displayID }) else {
-            return
-        }
-
-        displays[index].setSupported(false, for: control)
     }
 }
 
@@ -503,15 +534,15 @@ private final class DisplayControlWorker {
                 self.debounceTimers.removeValue(forKey: key)
 
                 if let last = self.lastWrittenValues[key], abs(last - latestValue) < 0.001 {
-                    completion(DisplayWriteResult(key: key, value: latestValue, success: true))
+                    completion(DisplayWriteResult(key: key, value: latestValue, outcome: .written))
                     return
                 }
 
-                let success = service.setValue(latestValue, for: key.control, display: display)
-                if success {
+                let outcome = service.setValue(latestValue, for: key.control, display: display)
+                if outcome.didWrite {
                     self.lastWrittenValues[key] = latestValue
                 }
-                completion(DisplayWriteResult(key: key, value: latestValue, success: success))
+                completion(DisplayWriteResult(key: key, value: latestValue, outcome: outcome))
             }
             self.debounceTimers[key] = timer
             self.queue.asyncAfter(deadline: .now() + self.debounceInterval, execute: timer)
@@ -539,11 +570,31 @@ private final class DisplayControlWorker {
 private nonisolated struct DisplayWriteResult {
     let key: ControlKey
     let value: Double
-    let success: Bool
+    let outcome: DisplayWriteOutcome
+}
+
+/// 乐观盲写的三态语义,取代裸 Bool。核心是**不再做写后回读校验**,因此不存在
+/// "写成功但没执行"的 verified/unverified 区分——那本身就是徒增总线负担的旧模型。
+/// - written:报文已成功上总线(ACK)。乐观视为生效,对齐本地真值并持久化。
+/// - skipped:门禁抑制(睡眠/唤醒/重配置窗口)跳过本次写入。UI 仍显示用户设定值,
+///   但**不**写入去重缓存/持久化,待窗口结束后的下一次写入真正落地。
+/// - busError:重试后报文仍无法上总线(极少数窗口外 hang / 无服务 / 明确不支持)。
+///   瞬时总线错误**绝不**冒泡给用户、绝不翻转能力,只做日志。
+nonisolated enum DisplayWriteOutcome {
+    case written
+    case skipped
+    case busError
+
+    /// 报文是否已被显示器 ACK(用于决定是否更新去重缓存/持久化)。
+    /// 仅 `.written` 为真:`.skipped` 未真正落地,`.busError` 未上总线。
+    var didWrite: Bool { self == .written }
 }
 
 struct ControlledDisplay: Identifiable {
     let id: CGDirectDisplayID
+    /// 检测阶段一次性算出的显示器类型,缓存于模型中。避免每次写入都重新
+    /// classify(会触发 CoreDisplay 字典创建 + 原生亮度探测)造成拖动时的重复开销。
+    let kind: DisplayKind
     let storageID: String
     let name: String
     let isBuiltIn: Bool
@@ -584,17 +635,6 @@ struct ControlledDisplay: Identifiable {
             volume = value
         case .contrast:
             contrast = value
-        }
-    }
-
-    mutating func setSupported(_ isSupported: Bool, for control: DisplayControlKind) {
-        switch control {
-        case .brightness:
-            supportsBrightness = isSupported
-        case .volume:
-            supportsVolume = isSupported
-        case .contrast:
-            supportsContrast = isSupported
         }
     }
 }
@@ -658,10 +698,12 @@ private final class DisplayControlService {
             let storageID = displayStorageID(for: id, name: name, isBuiltIn: isBuiltIn)
 
             let nativeBrightness = useDisplayServices ? displayServices.getBrightness(displayID: id) : nil
-            let hasDDCService = (kind == .externalDDC) && ddc.hasService(for: id)
-            let ddcBrightness = (kind == .externalDDC) ? ddc.read(.brightness, displayID: id, fastFail: true) : nil
-            let ddcVolume = (kind == .externalDDC) ? ddc.read(.volume, displayID: id, fastFail: true) : nil
-            let ddcContrast = (kind == .externalDDC) ? ddc.read(.contrast, displayID: id, fastFail: true) : nil
+            let isDDC = (kind == .externalDDC)
+            // 检测期探测:依据显示器应答的结果码判定能力(supported/unsupported/unknown),
+            // 而非"读到才算支持"。unknown(只写型/暂时性丢包)保持乐观,仍显示、仍可写。
+            let brightnessProbe = isDDC ? ddc.probe(.brightness, displayID: id) : nil
+            let volumeProbe = isDDC ? ddc.probe(.volume, displayID: id) : nil
+            let contrastProbe = isDDC ? ddc.probe(.contrast, displayID: id) : nil
 
             let storedBrightness = storedValue(for: .brightness, displayStorageID: storageID)
             let storedVolume = storedValue(for: .volume, displayStorageID: storageID)
@@ -669,48 +711,51 @@ private final class DisplayControlService {
 
             return ControlledDisplay(
                 id: id,
+                kind: kind,
                 storageID: storageID,
                 name: name,
                 isBuiltIn: isBuiltIn,
+                // 仅当显示器明确回复"不支持"(capability == .unsupported)才置灰;
+                // supported 与 unknown 一律显示可控(乐观,兼顾只写型显示器)。
                 supportsBrightness: useDisplayServices
                     ? (nativeBrightness != nil)
-                    : (ddcBrightness != nil || storedBrightness != nil || hasDDCService),
-                supportsVolume: !useDisplayServices && hasDDCService,
-                supportsContrast: !useDisplayServices && hasDDCService,
+                    : (brightnessProbe?.capability != .unsupported),
+                supportsVolume: isDDC && (volumeProbe?.capability != .unsupported),
+                supportsContrast: isDDC && (contrastProbe?.capability != .unsupported),
                 brightness: nativeBrightness.map { Double($0 * 100) }
-                    ?? ddcBrightness
+                    ?? brightnessProbe?.value
                     ?? storedBrightness
                     ?? DisplayControlKind.brightness.defaultValue,
-                volume: ddcVolume
+                volume: volumeProbe?.value
                     ?? storedVolume
                     ?? DisplayControlKind.volume.defaultValue,
-                contrast: ddcContrast
+                contrast: contrastProbe?.value
                     ?? storedContrast
                     ?? DisplayControlKind.contrast.defaultValue
             )
         }
     }
 
-    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> Bool {
-        guard display.supports(control) else { return false }
+    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome {
+        guard display.supports(control) else { return .busError }
 
-        let kind = classifier.classify(displayID: display.id)
-        let useDisplayServices = (kind == .builtIn || kind == .appleNative)
+        // 使用检测阶段缓存的 kind,不再每次写入都重新分类(重复触发系统探测)。
+        let useDisplayServices = (display.kind == .builtIn || display.kind == .appleNative)
 
         if useDisplayServices {
             switch control {
             case .brightness:
-                return displayServices.setBrightness(displayID: display.id, value: Float(value / 100))
+                return displayServices.setBrightness(displayID: display.id, value: Float(value / 100)) ? .written : .busError
             case .volume, .contrast:
-                return false
+                return .busError
             }
         }
 
-        let success = ddc.write(value, for: control, displayID: display.id)
-        if success {
+        let outcome = ddc.write(value, for: control, displayID: display.id)
+        if outcome.didWrite {
             saveStoredValue(value, for: control, displayStorageID: display.storageID)
         }
-        return success
+        return outcome
     }
 
     private func displayName(for id: CGDirectDisplayID, isBuiltIn: Bool) -> String {

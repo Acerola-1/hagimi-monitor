@@ -309,28 +309,6 @@
         }
       }
     },
-    "about.follow": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Follow"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "フォロー"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关注作者"
-          }
-        }
-      }
-    },
     "about.found": {
       "extractionState": "stale",
       "localizations": {
@@ -752,6 +730,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "内置显示器"
+          }
+        }
+      }
+    },
+    "display.control-unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This display doesn't support this control."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このディスプレイはこのコントロールに対応していません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此显示器不支持该项控制。"
           }
         }
       }

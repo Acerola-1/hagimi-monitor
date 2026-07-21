@@ -201,13 +201,13 @@ jobs:
           if [ -f RELEASE_NOTES.md ]; then
             HTML_FILE="build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.html"
             if command -v pandoc &>/dev/null; then
-              pandoc -f markdown -t html --standalone \
-                "RELEASE_NOTES.md" \
-                -o "$HTML_FILE" || true
+              pandoc -f markdown -t html --standalone "RELEASE_NOTES.md" -o "$HTML_FILE" || true
+              # 注入内联样式,让 Sparkle 更新弹窗显示更美观。
+              sed -i '' 's|<head>|<head><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;color:#333}h2{font-size:15px;margin:0 0 8px}h3{font-size:13px;margin:8px 0 4px}ul{margin:2px 0;padding-left:20px}li{margin:2px 0}</style>|' "$HTML_FILE" || true
             else
               # pandoc 不可用时,将 Markdown 原文包裹在简单 HTML 里作兜底。
               {
-                printf '%s\n' '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><pre>'
+                printf '%s\n' '<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>'
                 cat RELEASE_NOTES.md
                 printf '%s\n' '</pre></body></html>'
               } > "$HTML_FILE"
