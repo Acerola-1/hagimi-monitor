@@ -6472,7 +6472,29 @@
         }
       }
     },
-    "© 2026 Acerola": {}
+    "© 2026 Acerola": {},
+    "about.xiaohongshu": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小红书"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Xiaohongshu"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小紅書"
+          }
+        }
+      }
+    }
   },
   "version": "1.0"
 }
