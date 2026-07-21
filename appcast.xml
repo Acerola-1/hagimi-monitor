@@ -3,14 +3,29 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>0.9.14</title>
-            <pubDate>Tue, 21 Jul 2026 02:39:25 +0000</pubDate>
-            <sparkle:version>54</sparkle:version>
-            <sparkle:shortVersionString>0.9.14</sparkle:shortVersionString>
+            <title>0.9.15</title>
+            <pubDate>Tue, 21 Jul 2026 02:50:28 +0000</pubDate>
+            <sparkle:version>55</sparkle:version>
+            <sparkle:shortVersionString>0.9.15</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink>https://acerola-1.github.io/hagimi-monitor/HagimiMonitor-v0.9.14.html</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.14/HagimiMonitor-v0.9.14.zip" length="4121053" type="application/octet-stream" sparkle:edSignature="/wDywNC6EeMOSZLCmrBmSZkP7G557nG6Is1tn1Rnr1UW1Ms2Z7ek4Y/an5YeAWRewODkgBXtfG9DnKum4Lv0Ag=="/>
+            <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><pre>
+## 更新内容
+
+### 修复
+
+- Sparkle 更新日志无法下载的问题
+
+---
+
+## 安装说明 / Installation
+
+打开 `.dmg`，将 HagimiMonitor 拖入 `/Applications` 即可使用。应用已通过 Apple 公证，可正常启动。
+
+Open the `.dmg` and drag HagimiMonitor into `/Applications`. The app is notarized by Apple and launches normally.
+</pre></body></html>
+]]></description>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.15/HagimiMonitor-v0.9.15.zip" length="4121078" type="application/octet-stream" sparkle:edSignature="rq1MWGQFtcaoLShZWDBGwia9yIq/6yrnEXoDTcWUdqnYmt/GXr9A6ELrL0X2t8zQw0QlWjckqEARaRfPw5b2CQ=="/>
         </item>
     </channel>
 </rss>
