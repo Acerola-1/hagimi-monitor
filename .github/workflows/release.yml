@@ -220,6 +220,7 @@ jobs:
           "$SPARKLE_BIN/generate_appcast" \
             --ed-key-file "$RUNNER_TEMP/sparkle_ed_private_key" \
             --download-url-prefix "$DL_PREFIX/" \
+            --embed-release-notes \
             build/appcast
 
           rm -f "$RUNNER_TEMP/sparkle_ed_private_key"
