@@ -3,29 +3,26 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>0.9.15</title>
-            <pubDate>Tue, 21 Jul 2026 02:50:28 +0000</pubDate>
-            <sparkle:version>55</sparkle:version>
-            <sparkle:shortVersionString>0.9.15</sparkle:shortVersionString>
+            <title>0.9.16</title>
+            <pubDate>Tue, 21 Jul 2026 05:55:22 +0000</pubDate>
+            <sparkle:version>56</sparkle:version>
+            <sparkle:shortVersionString>0.9.16</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><pre>
+            <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 修复
+### 优化与体验
 
-- Sparkle 更新日志无法下载的问题
+- 优化显示器控制稳定性，用 DDC 能力探测取代故障计数禁用逻辑
 
----
+### 代码质量
 
-## 安装说明 / Installation
+- 重构 DDC 故障处理机制
 
-打开 `.dmg`，将 HagimiMonitor 拖入 `/Applications` 即可使用。应用已通过 Apple 公证，可正常启动。
-
-Open the `.dmg` and drag HagimiMonitor into `/Applications`. The app is notarized by Apple and launches normally.
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.15/HagimiMonitor-v0.9.15.zip" length="4121078" type="application/octet-stream" sparkle:edSignature="rq1MWGQFtcaoLShZWDBGwia9yIq/6yrnEXoDTcWUdqnYmt/GXr9A6ELrL0X2t8zQw0QlWjckqEARaRfPw5b2CQ=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.16/HagimiMonitor-v0.9.16.zip" length="4124899" type="application/octet-stream" sparkle:edSignature="RUmGGT6QRP28wAQjmC8/etHhYNErRB8rYxHY9awy5vnZVyhxIFd8SPwVYZcWFKQewo+agFSpx515k+J31uopBw=="/>
         </item>
     </channel>
 </rss>
