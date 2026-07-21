@@ -1,5 +1,8 @@
-## ADDED Requirements
+# monitor-panel Specification
 
+## Purpose
+Defines the monitor panel's localization, layout, and content behavior: how metrics are displayed, localized, and configured across languages.
+## Requirements
 ### Requirement: App 根据系统语言自动切换中英文
 应用 SHALL 检测系统首选语言，当系统语言为英文时所有 UI 文案显示英文，为中文时显示中文。
 
@@ -136,15 +139,18 @@ The panel SHALL handle long metric values, localized labels, display names, netw
 - **WHEN** localized labels or button titles are longer than their Chinese baseline text
 - **THEN** the panel keeps readable spacing and avoids text overlap in collapsed and expanded states
 
-### Requirement: Localizable.xcstrings 包含完整中英文翻译
-`Localizable.xcstrings` SHALL 包含所有 UI 文案、指标名称、错误提示、状态文本的中英文翻译。
+### Requirement: Localizable.xcstrings 包含完整中英日翻译
+`Localizable.xcstrings` SHALL 包含所有 UI 文案、指标名称、错误提示、状态文本的中英日翻译。
 
 #### Scenario: 英文系统下打开设置
 - **WHEN** 系统在英文环境下运行
 - **THEN** `Localizable.xcstrings` 中所有 key 均有英文翻译
 - **AND** 不存在未翻译而回退到中文的文本
 
-## MODIFIED Requirements
+#### Scenario: 日文系统下使用面板
+- **WHEN** 系统在日文环境下运行
+- **THEN** `Localizable.xcstrings` 中所有 key 均有日文翻译
+- **AND** 不存在未翻译而回退到中文或英文的文本
 
 ### Requirement: Correct Metric Labels
 Metric labels SHALL be accurate and localized.
@@ -221,3 +227,19 @@ Each module's expanded metrics SHALL be configurable through settings.
 - **AND** charging power is enabled in settings
 - **AND** the device is on battery power
 - **THEN** charging power is not shown because it has no meaningful value
+
+### Requirement: 菜单栏面板文案本地化
+菜单栏下拉面板中的所有文案 SHALL 支持本地化，包括面板标题、右键菜单和钉住/关闭操作。
+
+#### Scenario: 面板按钮和标题
+- **WHEN** 用户打开菜单栏面板
+- **THEN** "活动监视器" 显示为 "Activity Monitor" / "アクティビティモニタ"
+- **AND** "设置" 显示为 "Settings" / "設定"
+- **AND** "SYSTEM · LIVE" 通过 `String(localized:)` 引用
+
+#### Scenario: 面板钉住和关闭操作
+- **WHEN** 用户右键点击面板标题栏
+- **THEN** "钉住面板" 显示为 "Pin Panel" / "パネルをピン留め"
+- **AND** "取消钉住" 显示为 "Unpin Panel" / "ピン留めを解除"
+- **AND** "关闭面板" 显示为 "Close Panel" / "パネルを閉じる"
+

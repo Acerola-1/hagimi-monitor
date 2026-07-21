@@ -9,7 +9,7 @@ final class GPUSampler: MonitorSampler {
     func sample(previous: MonitorModule?) -> MonitorModule {
         guard let reading = gpuReading() else {
             AppLogger.sampler.error("gpuReading() returned nil, GPU data unavailable")
-            return placeholderModule(.gpu, summary: "无法读取")
+            return placeholderModule(.gpu, summary: String(localized: "sampler.unavailable"))
         }
 
         let utilization = min(100, max(0, reading.utilization))

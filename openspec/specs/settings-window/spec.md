@@ -1,51 +1,33 @@
-## ADDED Requirements
+# settings-window Specification
 
+## Purpose
+Defines the settings window's localization, layout, and content behavior: how settings UI is displayed and localized across languages.
+## Requirements
 ### Requirement: 设置页面所有文案支持本地化
-设置窗口中的所有 UI 文案 SHALL 通过 `String(localized:)` 接入 `Localizable.xcstrings`，支持中英文自动切换。
+设置窗口中的所有 UI 文案 SHALL 通过 `String(localized:)` 接入 `Localizable.xcstrings`，支持中英日自动切换。关于页的硬编码文本（Releases 按钮、版权声明）SHALL 同样走本地化系统。
 
 #### Scenario: 侧栏导航显示
 - **WHEN** 用户打开设置窗口
-- **THEN** 侧栏导航项根据系统语言显示中文或英文
-- **AND** "常规" 显示为 "General"
-- **AND** "监控模块" 显示为 "Modules"
-- **AND** "显示器" 显示为 "Display"
-- **AND** "关于" 显示为 "About"
+- **THEN** 侧栏导航项根据系统语言显示中文、英文或日文
+- **AND** "常规" 显示为 "General" / "一般"
+- **AND** "监控模块" 显示为 "Modules" / "モジュール"
+- **AND** "显示器" 显示为 "Display" / "ディスプレイ"
+- **AND** "关于" 显示为 "About" / "概要"
+- **AND** "Beta" 标签显示为 "Beta" / "ベータ"
 
-#### Scenario: 常规设置页面
-- **WHEN** 用户进入"常规"设置页
-- **THEN** 所有分组标题和控件标签显示英文
-- **AND** "开机自启" 显示为 "Launch at Login"
-- **AND** "外观" 显示为 "Appearance"
-- **AND** "主题" 显示为 "Theme"
-- **AND** "配色" 显示为 "Color Scheme"
-- **AND** "菜单栏" 显示为 "Menu Bar"
-- **AND** "负载环" 显示为 "Halo Ring"
-- **AND** 主题选项 "跟随系统"/"浅色"/"深色" 显示为 "System"/"Light"/"Dark"
-- **AND** 配色选项 "平衡"/"活力" 显示为 "Balanced"/"Vibrant"
+#### Scenario: 关于页面硬编码文本修复
+- **WHEN** 用户进入关于页面
+- **THEN** "Releases" 按钮标签通过 `String(localized:)` 引用本地化 key
+- **AND** "© 2026 Acerola" 版权声明通过 `String(localized:)` 引用本地化 key
+- **AND** 日文环境下显示对应日文翻译
 
-#### Scenario: 模块设置页面
-- **WHEN** 用户进入任一模块设置页
-- **THEN** "在面板中显示" 显示为 "Show in Panel"
-- **AND** "监测项目" 显示为 "Metrics"
-- **AND** "最多选择 N 项用于主面板展示" 显示为 "Select up to N metrics to display in the panel."
-- **AND** "重置默认值" 显示为 "Reset Defaults"
-
-#### Scenario: 显示器设置页面（Direct build）
-- **WHEN** 用户进入"显示器"设置页（Direct build）
-- **THEN** "包含内置显示器" 显示为 "Include Built-in Display"
-- **AND** "控制项" 显示为 "Controls"
-- **AND** "亮度"/"音量"/"对比度" 显示为 "Brightness"/"Volume"/"Contrast"
-
-#### Scenario: 关于设置页面
-- **WHEN** 用户进入"关于"设置页
-- **THEN** "发布版本" 显示为 "Release Version"
-- **AND** "检查更新" 显示为 "Check for Updates"
-- **AND** "正在检查..." 显示为 "Checking..."
-- **AND** "已是最新" 显示为 "Up to Date"
-- **AND** "再次检查" 显示为 "Check Again"
-- **AND** "下载更新" 显示为 "Download Update"
-- **AND** "重试" 显示为 "Retry"
-- **AND** "未知" 显示为 "Unknown"
+#### Scenario: 快速呼出设置本地化
+- **WHEN** 用户进入常规设置页
+- **THEN** "快速呼出" 显示为 "Quick Access" / "クイックアクセス"
+- **AND** "点按录制" 显示为 "Click to record" / "クリックして録音"
+- **AND** "按下快捷键…" 显示为 "Press keys…" / "ショートカットキーを押す…"
+- **AND** "按下按键" 显示为 "Press key" / "キーを押す"
+- **AND** "清除快捷键" 显示为 "Clear shortcut" / "ショートカットをクリア"
 
 ### Requirement: 菜单栏面板文案本地化
 菜单栏下拉面板中的所有文案 SHALL 支持本地化。
@@ -54,7 +36,7 @@
 - **WHEN** 用户打开菜单栏面板
 - **THEN** "活动监视器" 显示为 "Activity Monitor"
 - **AND** "设置" 显示为 "Settings"
-- **AND** "SYSTEM · LIVE" 保持英文（已是英文）
+- **AND** "SYSTEM · LIVE" 通过 `String(localized:)` 引用
 
 #### Scenario: 网络模块标题
 - **WHEN** 网络模块在面板中展示
@@ -71,8 +53,6 @@
 - **WHEN** 存储模块展开显示卷详情
 - **THEN** "系统盘" 显示为 "System"
 - **AND** "已用"/"可用"/"总量" 显示为 "Used"/"Free"/"Total"
-
-## MODIFIED Requirements
 
 ### Requirement: 模块详情包含可见性开关与"检测项目"设置组
 每个 `MonitorKind` 的详情页 SHALL 包含可见性开关与「检测项目」设置组。
@@ -94,3 +74,4 @@
 - **AND** 侧栏使用 `.listStyle(.sidebar)` 保持 macOS sidebar 语义
 - **AND** 侧栏宽度为 `164`
 - **AND** 不出现额外的空白 split 列
+

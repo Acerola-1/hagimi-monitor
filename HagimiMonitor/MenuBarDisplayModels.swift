@@ -102,23 +102,23 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     var menuBarPrefix: String {
         switch self {
         case .cpuUsage:
-            "CPU"
+            String(localized: "menu-bar-metric-prefix.cpu-usage")
         case .gpuUsage:
-            "GPU"
+            String(localized: "menu-bar-metric-prefix.gpu-usage")
         case .memoryUsage:
-            "MEM"
+            String(localized: "menu-bar-metric-prefix.memory-usage")
         case .batteryLevel:
-            "BAT"
+            String(localized: "menu-bar-metric-prefix.battery-level")
         case .networkDownload:
             ""
         case .networkUpload:
             ""
         case .cpuTemperature:
-            "TEMP"
+            String(localized: "menu-bar-metric-prefix.cpu-temperature")
         case .storageFree:
-            "FREE"
+            String(localized: "menu-bar-metric-prefix.storage-free")
         case .systemPower:
-            "PWR"
+            String(localized: "menu-bar-metric-prefix.system-power")
         }
     }
 }

@@ -45,7 +45,7 @@ struct AboutSettingsView: View {
                     Button {
                         NSWorkspace.shared.open(releasesURL)
                     } label: {
-                        Label("Releases", systemImage: "shippingbox")
+                        Label(String(localized: "Releases"), systemImage: "shippingbox")
                     }
                     .compatibleButtonStyle()
                     .frame(width: accessoryColumnWidth, alignment: .leading)
@@ -76,7 +76,7 @@ struct AboutSettingsView: View {
                 }
             }
 
-            Text("© 2026 Acerola")
+            Text(String(localized: "© 2026 Acerola"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)

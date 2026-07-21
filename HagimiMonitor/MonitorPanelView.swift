@@ -88,10 +88,21 @@ struct MonitorPanelView: View {
             if !showsQuickPanelControls {
                 startTimeUpdateTask()
             }
+            // 上报当前展开集合:面板重开时 @State 可能保留上次展开项,
+            // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
+            store.updateExpandedKinds(expandedKinds, for: panelSource)
         }
         .onDisappear {
             timeUpdateTask?.cancel()
         }
+        .onChange(of: expandedKinds) { _, newValue in
+            store.updateExpandedKinds(newValue, for: panelSource)
+        }
+    }
+
+    /// 本面板对应的进程采样来源。带快捷面板控件的是钉住面板,否则是菜单栏面板。
+    private var panelSource: PanelKind {
+        showsQuickPanelControls ? .pinned : .menuBar
     }
 
     private var panelBackgroundColor: Color {
@@ -111,7 +122,7 @@ struct MonitorPanelView: View {
                     .frame(width: 5, height: 5)
                     .compatiblePulseEffect()
 
-                Text("SYSTEM · LIVE")
+                Text(String(localized: "SYSTEM · LIVE"))
                     .monitorPanelLabelFont(tracking: 1.1)
                     .foregroundStyle(theme.captionText)
 
