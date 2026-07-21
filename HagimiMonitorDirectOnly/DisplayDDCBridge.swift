@@ -9,16 +9,25 @@ import OSLog
 
 private let displayDDCLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "DisplayDDC")
 
+/// 探测结果:能力判定 +(若可读)当前百分比值。
+struct DDCProbeResult {
+    let capability: DDCCapability
+    let value: Double?
+}
+
 final class DisplayDDCBridge {
     private var servicesByDisplayID: [CGDirectDisplayID: DDCService] = [:]
     private var maxValues: [ControlKey: UInt16] = [:]
+    /// 每个控制"生效"过的 VCP 码缓存。检测阶段一旦确定,运行期只用它单码读写,
+    /// 不再遍历多候选 × 满重试去占用总线(保持总线安静)。
     private var controlCodes: [ControlKey: DDCVCPCode] = [:]
-    private let registry = DDCFaultRegistry()
+    private let capabilities = DDCCapabilityStore()
+    private let gate = DDCEnvironmentGate.shared
 
     func refresh(displayIDs: [CGDirectDisplayID]) {
         let knownIDs = Set(servicesByDisplayID.keys)
         for id in knownIDs.subtracting(displayIDs) {
-            registry.reset(displayID: id)
+            capabilities.reset(displayID: id)
         }
         servicesByDisplayID = Arm64DDCMatcher().matchedServices(for: displayIDs)
     }
@@ -27,54 +36,100 @@ final class DisplayDDCBridge {
         servicesByDisplayID[displayID] != nil
     }
 
-    func read(_ control: DisplayControlKind, displayID: CGDirectDisplayID, fastFail: Bool = false) -> Double? {
-        guard let service = servicesByDisplayID[displayID] else {
-            displayDDCLog.debug("No DDC service for display \(displayID, privacy: .public)")
-            return nil
-        }
+    func capability(_ control: DisplayControlKind, displayID: CGDirectDisplayID) -> DDCCapability {
+        capabilities.capability(ControlKey(displayID: displayID, control: control))
+    }
 
+    /// 检测期探测:遍历候选 VCP 码读一次,依据显示器应答的**结果码**判定能力。
+    /// - 任一候选回复"支持"(0x00 且 max>0)→ supported,缓存该码与 max,返回当前值。
+    /// - 无候选支持,但有候选明确回复"不支持"(0x01)→ unsupported(唯一会置灰的确定性负例)。
+    /// - 无任何有效应答 → unknown(乐观:仍显示、仍可写)。
+    func probe(_ control: DisplayControlKind, displayID: CGDirectDisplayID) -> DDCProbeResult {
         let key = ControlKey(displayID: displayID, control: control)
-        if registry.isDisabled(key) {
-            return nil
+        guard let service = servicesByDisplayID[displayID] else {
+            capabilities.set(.unknown, for: key)
+            return DDCProbeResult(capability: .unknown, value: nil)
+        }
+        // 抑制窗口内不打扰总线:沿用既有能力判断,值未知留待下次刷新校正。
+        if gate.isSuppressed {
+            return DDCProbeResult(capability: capabilities.capability(key), value: nil)
         }
 
+        var sawUnsupported = false
         for vcp in orderedCandidates(for: key) {
-            let useLongDelay = registry.shouldUseLongerDelay(key)
-            let retries = fastFail ? 2 : 5
-            guard let values = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, longerDelay: useLongDelay, maxRetries: retries),
-                  values.max > 0
-            else {
+            guard let reply = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, retries: 3) else {
+                continue
+            }
+            if reply.resultCode == 0x01 {
+                sawUnsupported = true
+                continue
+            }
+            guard reply.resultCode == 0x00, reply.max > 0 else {
                 continue
             }
 
-            let safeMax = DDCRawConversion.sanitize(max: values.max)
-            let safeCurrent = min(values.current, safeMax)
+            let safeMax = DDCRawConversion.sanitize(max: reply.max)
+            let safeCurrent = min(reply.current, safeMax)
             maxValues[key] = safeMax
             controlCodes[key] = vcp
-            registry.recordReadSuccess(key)
-
+            capabilities.set(.supported, for: key)
             let percentage = DDCRawConversion.percent(raw: safeCurrent, max: safeMax)
-
             displayDDCLog.notice(
-                "Read DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) raw \(values.current, privacy: .public)/\(values.max, privacy: .public) safe \(safeCurrent, privacy: .public)/\(safeMax, privacy: .public) percentage \(percentage, privacy: .public)"
+                "Probe DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) -> supported \(percentage, privacy: .public)%"
             )
-            return percentage
+            return DDCProbeResult(capability: .supported, value: percentage)
         }
 
-        displayDDCLog.warning("Failed to read DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public)")
-        registry.recordReadFailure(key)
-        return nil
+        let capability: DDCCapability = sawUnsupported ? .unsupported : .unknown
+        capabilities.set(capability, for: key)
+        displayDDCLog.notice(
+            "Probe DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) -> \(String(describing: capability), privacy: .public)"
+        )
+        return DDCProbeResult(capability: capability, value: nil)
     }
 
-    func write(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) -> Bool {
+    /// 轮询读:用缓存的生效码单码读一次(重试 3)。仅用于异步校正 UI 数值。
+    /// 读不到返回 nil——绝不因此改变能力判断或向用户报错(只写型显示器很常见)。
+    func read(_ control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
+        let key = ControlKey(displayID: displayID, control: control)
         guard let service = servicesByDisplayID[displayID] else {
-            displayDDCLog.warning("No DDC service while writing display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public)")
-            return false
+            return nil
+        }
+        if gate.isSuppressed {
+            return nil
         }
 
+        guard let vcp = controlCodes[key] ?? DDCVCPCode.candidates(for: control).first else {
+            return nil
+        }
+        guard let reply = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, retries: 3),
+              reply.resultCode == 0x00, reply.max > 0
+        else {
+            return nil
+        }
+
+        let safeMax = DDCRawConversion.sanitize(max: reply.max)
+        let safeCurrent = min(reply.current, safeMax)
+        maxValues[key] = safeMax
+        return DDCRawConversion.percent(raw: safeCurrent, max: safeMax)
+    }
+
+    /// 乐观盲写:用缓存生效码(或候选码)写入,写几遍抗丢包,**不做写后回读校验**。
+    /// - 门禁抑制(睡眠/唤醒/重配置窗口)→ .skipped:不缓存该值,窗口结束后再写。
+    /// - 显示器明确不支持该控制 → .busError:防御性跳过(正常情况下 UI 已置灰、不会调用)。
+    /// - 报文成功上总线 → .written;全部候选都未能上总线 → .busError。
+    /// 无论何种结果,瞬时失败都不冒泡给用户(见上层 handleWriteResult 的乐观处理)。
+    func write(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) -> DisplayWriteOutcome {
         let key = ControlKey(displayID: displayID, control: control)
-        if registry.isDisabled(key) {
-            return false
+        guard let service = servicesByDisplayID[displayID] else {
+            displayDDCLog.warning("No DDC service while writing display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public)")
+            return .busError
+        }
+        if gate.isSuppressed {
+            return .skipped
+        }
+        if capabilities.capability(key) == .unsupported {
+            return .busError
         }
 
         let maxValue = maxValues[key] ?? 100
@@ -83,11 +138,6 @@ final class DisplayDDCBridge {
             ddcValue = Swift.max(1, ddcValue)
         }
 
-        // 音量降到 0 时不再写 0x8D(audioMuteScreenBlank):很多显示器不支持
-        // 这条 VCP,写失败会让本次 mute 完全失效,且后续 markControlUnsupported
-        // 会把整个音量控制禁用掉。
-        // 对齐 MonitorControl 默认行为(prefs.enableMuteUnmute = false):
-        // mute 直接写 audioSpeakerVolume(0x62) = 0,绝大多数显示器都支持。
         for vcp in orderedCandidates(for: key) {
             let success = DDCTransport.write(service: service.service, vcpCode: vcp.rawValue, value: ddcValue)
             displayDDCLog.notice(
@@ -95,13 +145,10 @@ final class DisplayDDCBridge {
             )
             if success {
                 controlCodes[key] = vcp
-                registry.recordWriteSuccess(key)
-                return true
+                return .written
             }
         }
-
-        registry.recordWriteFailure(key)
-        return false
+        return .busError
     }
 
     private func orderedCandidates(for key: ControlKey) -> [DDCVCPCode] {
@@ -133,100 +180,71 @@ private enum DDCVCPCode: UInt8 {
 }
 
 private enum DDCTransport {
+    /// 结构上有效的「Get VCP Feature Reply」帧解析结果。resultCode 交给调用方判定:
+    /// 0x00 = 支持, 0x01 = 不支持。current/max 仅在 resultCode==0x00 时有意义。
+    struct Reply {
+        let resultCode: UInt8
+        let current: UInt16
+        let max: UInt16
+    }
+
     private static let sevenBitAddress: UInt8 = 0x37
     private static let dataAddress: UInt8 = 0x51
 
-    static func read(service: IOAVService, vcpCode: UInt8, longerDelay: Bool = false, maxRetries: Int = 5) -> (current: UInt16, max: UInt16)? {
+    /// per-call 看门狗超时。仅让**当前这一次**调用放弃等待并返回失败,
+    /// **不设置任何全局/跨调用状态**——因此绝不会像旧熔断那样把后续调用一并锁死。
+    /// 睡眠/唤醒/重配置这些真正会 hang 的窗口已由 DDCEnvironmentGate 从源头拦截,
+    /// 这里只是极少数窗口外 hang 的兜底,保证单条串行队列不被无限期占死。
+    private static let callTimeout: DispatchTimeInterval = .seconds(2)
+
+    /// 专用 serial I/O 队列:看门狗超时后被遗弃的 hang 任务留在这里,不与下一次并发。
+    private static let ioQueue = DispatchQueue(label: "hagimi.ddc.io")
+
+    static func read(service: IOAVService, vcpCode: UInt8, retries: Int = 3) -> Reply? {
         var send = [vcpCode]
         var reply = [UInt8](repeating: 0, count: 11)
-        guard communicate(service: service, send: &send, reply: &reply, longerDelay: longerDelay, maxRetries: maxRetries) else {
+        guard communicate(service: service, send: &send, reply: &reply, retries: retries) else {
+            return nil
+        }
+        // 校验帧结构,过滤串扰/损坏应答:reply[2] 应为 0x02(feature reply op code),
+        // reply[4] 应回显请求的 VCP code。结果码 reply[3] 不在此判定,交给调用方区分
+        // "支持/不支持",以便正确构建能力模型(而非把不支持当读失败)。
+        guard reply[2] == 0x02, reply[4] == vcpCode else {
             return nil
         }
         let maxValue = (UInt16(reply[6]) << 8) + UInt16(reply[7])
         let currentValue = (UInt16(reply[8]) << 8) + UInt16(reply[9])
-        return (currentValue, maxValue)
+        return Reply(resultCode: reply[3], current: currentValue, max: maxValue)
     }
 
-    static func write(service: IOAVService, vcpCode: UInt8, value: UInt16, maxRetries: Int = 5) -> Bool {
+    static func write(service: IOAVService, vcpCode: UInt8, value: UInt16, retries: Int = 3) -> Bool {
         var send = [vcpCode, UInt8(value >> 8), UInt8(value & 0xFF)]
         var reply: [UInt8] = []
-        return communicate(service: service, send: &send, reply: &reply, maxRetries: maxRetries)
+        return communicate(service: service, send: &send, reply: &reply, retries: retries)
     }
 
-    private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], longerDelay: Bool = false, maxRetries: Int = 5) -> Bool {
-        // IOAVServiceReadI2C 是阻塞内核调用,异常时(热插拔/唤醒)可能长时间不返回。
-        // 派到 serial ioQueue 执行 + semaphore 超时保护,避免拖死调用方的 hagimi.ddc.global 队列连累 UI。
-        // 超时后开启熔断(circuit breaker):冷却期内直接 fast-fail,不再往可能已被 hang 任务
-        // 占死的 ioQueue 派活,把"后续每次调用都白等到超时"降为"每个冷却周期仅探测一次"。
-        if circuitIsOpen() {
-            return false
-        }
-
-        // escaping 闭包不能捕获 inout,故拷贝 send/reply 后异步、完成回写(报文仅十几字节)。
+    private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], retries: Int) -> Bool {
+        // IOAVServiceReadI2C/WriteI2C 是阻塞内核调用,异常时可能长时间不返回。
+        // 派到 serial ioQueue 执行 + semaphore 超时保护,超时仅放弃本次调用(返回 false),
+        // 不设任何跨调用状态,故不会级联。escaping 闭包不能捕获 inout,拷贝后异步、完成回写。
         var sendCopy = send
         var replyCopy = reply
         let semaphore = DispatchSemaphore(value: 0)
         var result = false
-        Self.ioQueue.async {
-            result = communicateUnlocked(
-                service: service,
-                send: &sendCopy,
-                reply: &replyCopy,
-                longerDelay: longerDelay,
-                maxRetries: maxRetries
-            )
+        ioQueue.async {
+            result = communicateUnlocked(service: service, send: &sendCopy, reply: &replyCopy, retries: retries)
             semaphore.signal()
         }
-        if semaphore.wait(timeout: .now() + Self.communicateTimeout) == .timedOut {
-            tripCircuit()
-            displayDDCLog.error("DDC communicate timed out after \(Self.communicateTimeoutSeconds, privacy: .public)s; circuit opened for \(Self.circuitCooldownSeconds, privacy: .public)s to avoid queue starvation")
+        if semaphore.wait(timeout: .now() + callTimeout) == .timedOut {
+            displayDDCLog.error("DDC call timed out; abandoning this call only (no global lockout)")
             return false
         }
-        resetCircuit()
         send = sendCopy
         reply = replyCopy
         return result
     }
 
-    // MARK: - Circuit Breaker
-
-    private static let circuitLock = NSLock()
-    private nonisolated(unsafe) static var circuitOpenUntil: DispatchTime?
-
-    /// 熔断冷却时长。> communicateTimeout,确保上一个 hang 任务大概率已退出再放行探测。
-    private static let circuitCooldownSeconds: Int = 10
-
-    private static func circuitIsOpen() -> Bool {
-        circuitLock.lock()
-        defer { circuitLock.unlock() }
-        guard let until = circuitOpenUntil else { return false }
-        if DispatchTime.now() >= until {
-            circuitOpenUntil = nil
-            return false
-        }
-        return true
-    }
-
-    private static func tripCircuit() {
-        circuitLock.lock()
-        circuitOpenUntil = .now() + .seconds(circuitCooldownSeconds)
-        circuitLock.unlock()
-    }
-
-    private static func resetCircuit() {
-        circuitLock.lock()
-        circuitOpenUntil = nil
-        circuitLock.unlock()
-    }
-
-    /// 专用 serial I/O 队列,保证一次只跑一个 I/O(被遗弃的超时 I/O 不会与下次并发)。
-    private static let ioQueue = DispatchQueue(label: "hagimi.ddc.io")
-
-    /// 超时熔断阈值。覆盖正常最坏情况(多 VCP 候选码 × maxRetries ≈ 0.95s)留足余量。
-    private static let communicateTimeoutSeconds: Int = 3
-    private static var communicateTimeout: DispatchTimeInterval { .seconds(communicateTimeoutSeconds) }
-
-    private static func communicateUnlocked(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], longerDelay: Bool, maxRetries: Int) -> Bool {
+    private static func communicateUnlocked(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], retries: Int) -> Bool {
         let dataAddress = Self.dataAddress
         var success = false
         var packet = [UInt8(0x80 | (send.count + 1)), UInt8(send.count)] + send + [0]
@@ -235,7 +253,7 @@ private enum DDCTransport {
             : Self.sevenBitAddress << 1 ^ dataAddress
         packet[packet.count - 1] = checksum(seed: checksumSeed, data: packet, start: 0, end: packet.count - 2)
 
-        for _ in 0..<maxRetries {
+        for _ in 0..<Swift.max(1, retries) {
             for _ in 0..<2 {
                 usleep(10_000)
                 let packetCount = UInt32(packet.count)
@@ -258,7 +276,7 @@ private enum DDCTransport {
                     return true
                 }
             } else {
-                usleep(longerDelay ? 150_000 : 50_000)
+                usleep(50_000)
                 let replyCount = UInt32(reply.count)
                 success = reply.withUnsafeMutableBufferPointer { buffer in
                     guard let baseAddress = buffer.baseAddress else {

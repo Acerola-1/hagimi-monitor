@@ -734,6 +734,28 @@
         }
       }
     },
+    "display.control-unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This display doesn't support this control."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "このディスプレイはこのコントロールに対応していません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此显示器不支持该项控制。"
+          }
+        }
+      }
+    },
     "display.controls-disabled": {
       "localizations": {
         "en": {
