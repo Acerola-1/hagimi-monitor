@@ -199,19 +199,18 @@ jobs:
           # generate_appcast 通过与 ZIP 同名的 .html 文件关联 release notes,
           # 不支持 .md;需用 markdown 转换工具将 Markdown 转 HTML。
           if [ -f RELEASE_NOTES.md ]; then
+            HTML_FILE="build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.html"
             if command -v pandoc &>/dev/null; then
               pandoc -f markdown -t html --standalone \
                 "RELEASE_NOTES.md" \
-                -o "build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.html" || true
+                -o "$HTML_FILE" || true
             else
               # pandoc 不可用时,将 Markdown 原文包裹在简单 HTML 里作兜底。
-              cat > "build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.html" <<'HTML_WRAP'
-<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><pre>
-HTML_WRAP
-              cat RELEASE_NOTES.md >> "build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.html"
-              cat >> "build/appcast/HagimiMonitor-${GITHUB_REF_NAME}.html" <<'HTML_WRAP'
-</pre></body></html>
-HTML_WRAP
+              {
+                printf '%s\n' '<!DOCTYPE html><html><head><meta charset="utf-8"></head><body><pre>'
+                cat RELEASE_NOTES.md
+                printf '%s\n' '</pre></body></html>'
+              } > "$HTML_FILE"
             fi
           fi
 
