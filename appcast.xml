@@ -3,14 +3,14 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>0.9.12</title>
-            <pubDate>Tue, 21 Jul 2026 02:16:13 +0000</pubDate>
-            <sparkle:version>48</sparkle:version>
-            <sparkle:shortVersionString>0.9.12</sparkle:shortVersionString>
+            <title>0.9.14</title>
+            <pubDate>Tue, 21 Jul 2026 02:39:25 +0000</pubDate>
+            <sparkle:version>54</sparkle:version>
+            <sparkle:shortVersionString>0.9.14</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink>https://acerola-1.github.io/hagimi-monitor/HagimiMonitor-v0.9.12.md</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.12/HagimiMonitor-v0.9.12.zip" length="4121043" type="application/octet-stream" sparkle:edSignature="zJQjEj7e6HjsDF9/mtA9MjY5LWNrXm9zLiEc76t/L9z3RJtcljrOJ+dxc3MKqfajoqIl/WI3JgCuy/PN9jTJCQ=="/>
+            <sparkle:releaseNotesLink>https://acerola-1.github.io/hagimi-monitor/HagimiMonitor-v0.9.14.html</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.14/HagimiMonitor-v0.9.14.zip" length="4121053" type="application/octet-stream" sparkle:edSignature="/wDywNC6EeMOSZLCmrBmSZkP7G557nG6Is1tn1Rnr1UW1Ms2Z7ek4Y/an5YeAWRewODkgBXtfG9DnKum4Lv0Ag=="/>
         </item>
     </channel>
 </rss>
