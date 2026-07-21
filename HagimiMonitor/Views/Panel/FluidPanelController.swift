@@ -43,7 +43,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 状态项内容左右留白,避免图标/文字贴住菜单栏边缘(系统 MenuBarExtra 自带此留白)。
     private static let statusItemHorizontalPadding: CGFloat = 2
 
-    init(store: MonitorStore, openSettings: @escaping () -> Void) {
+    init(
+        store: MonitorStore,
+        openSettings: @escaping () -> Void
+    ) {
         self.store = store
         self.openSettingsAction = openSettings
 

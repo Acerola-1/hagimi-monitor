@@ -106,6 +106,22 @@ struct SettingsTests {
         #expect(restored.menuBarMetricKinds == [.gpuUsage, .cpuUsage])
     }
 
+    @MainActor
+    @Test func pinnedPanelOriginPersists() async throws {
+        let suiteName = "pinnedPanelOriginPersists"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let settings = MonitorSettings(defaults: defaults)
+        #expect(settings.pinnedPanelOrigin == nil)
+
+        settings.savePinnedPanelOrigin(CGPoint(x: 320, y: 180))
+        try await Task.sleep(for: .milliseconds(50))
+
+        let restored = MonitorSettings(defaults: defaults)
+        #expect(restored.pinnedPanelOrigin == CGPoint(x: 320, y: 180))
+    }
+
     @Test func legacyRingSourceMigratesToCombined() {
         let defaults = UserDefaults(suiteName: "legacyRingSourceMigratesToCombined")!
         defaults.removePersistentDomain(forName: "legacyRingSourceMigratesToCombined")

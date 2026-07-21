@@ -1,4 +1,5 @@
 import AppKit
+import KeyboardShortcuts
 import SwiftUI
 
 /// App 生命周期代理,持有 `MonitorStore` 和 `FluidPanelController`。
@@ -10,19 +11,35 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var store: MonitorStore = MonitorStore()
     private(set) lazy var fluidPanelController: FluidPanelController = {
-        FluidPanelController(store: store) { [weak self] in
-            // 先关闭面板再打开设置窗口
+        FluidPanelController(
+            store: store,
+            openSettings: { [weak self] in
+                self?.fluidPanelController.dismissPanelForSettings()
+                SettingsWindowPresenter.openFromOutsideSwiftUI()
+            }
+        )
+    }()
+
+    private(set) lazy var pinnedPanelController: PinnedPanelController = {
+        PinnedPanelController(store: store) { [weak self] in
             self?.fluidPanelController.dismissPanelForSettings()
-            // 复用 openSettings 环境 action(与 Cmd+, 走同一条路径),
-            // 而非依赖未公开的 showSettingsWindow: selector
             SettingsWindowPresenter.openFromOutsideSwiftUI()
         }
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // 触发 lazy 初始化
+        // 触发 lazy 初始化。菜单栏面板需在启动即常驻(承载状态项图标);
+        // 快捷键面板则延迟到首次按下快捷键时再创建(见下方 onKeyUp),
+        // 避免开机就构建第二棵完整的 SwiftUI 面板视图树、白白常驻内存。
         _ = store
         _ = fluidPanelController
+
+        // 注册全局快捷键:切换钉住面板显隐。首次触发时惰性创建 pinnedPanelController。
+        KeyboardShortcuts.onKeyUp(for: .togglePinnedPanel) { [weak self] in
+            MainActor.assumeIsolated {
+                self?.pinnedPanelController.toggle()
+            }
+        }
 
         // 启动 Sparkle 自更新(仅直接分发版;App Store 版更新交由商店管理)。
         // 初始化即开始后台定时检查。
