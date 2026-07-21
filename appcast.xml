@@ -3,32 +3,24 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>0.9.17</title>
-            <pubDate>Tue, 21 Jul 2026 09:22:40 +0000</pubDate>
-            <sparkle:version>57</sparkle:version>
-            <sparkle:shortVersionString>0.9.17</sparkle:shortVersionString>
+            <title>0.9.18</title>
+            <pubDate>Tue, 21 Jul 2026 16:23:56 +0000</pubDate>
+            <sparkle:version>58</sparkle:version>
+            <sparkle:shortVersionString>0.9.18</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 新功能
-
-- 全局快捷键快速呼出监控面板，默认失焦即收，钉住后常驻桌面
-- 自绘快捷键录制器，设置中自定义快捷键
-
-### 修复
-
-- 解决双击标题区手势仲裁导致按钮响应迟滞
-
 ### 优化与体验
 
-- 优化设置窗口首次打开的位置与闪烁问题
-- 延迟钉住面板初始化以节省内存
+- 补全中英日三语本地化，消除界面残留硬编码文本
+- 进程列表按需采样并复用图标降采样缓存，降低面板内存与 CPU 占用
+- 菜单栏指标模式渲染去重、网络采样复用系统会话，削减常驻开销
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.17/HagimiMonitor-v0.9.17.zip" length="4257979" type="application/octet-stream" sparkle:edSignature="dolrRGrrbKNVK/wCMZENiiWF5UTv27vXIR3CmuPqMC3jKN7TWF8/W+/t7Nap3iy5zvnEVhVzDzmphnzJEtA8Cw=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.18/HagimiMonitor-v0.9.18.zip" length="4264632" type="application/octet-stream" sparkle:edSignature="0Hieriapht/rExqpfBtLsieTW5JMJYORZqYJCKMsEGT7PjG9Pq3vSrUYMk8oceujgU0/w8TrimZizvtT3V8KBw=="/>
         </item>
     </channel>
 </rss>
