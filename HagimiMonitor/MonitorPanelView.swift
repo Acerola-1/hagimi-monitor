@@ -859,12 +859,14 @@ private struct BatteryGlassRow: View, Equatable {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
+                // 充电时用 `battery.100percent.bolt`(电池中间带闪电)静态图标表示充电状态,
+                // 不再叠加 `.variableColor.iterative` 持续动画——该动画会让 SwiftUI 视图图每帧
+                // 重渲染整棵面板树,是面板展开时 CPU 高占用的根因之一。图标本身已足够表达充电语义。
                 Image(systemName: powerSymbol)
                     .font(.callout.weight(.semibold))
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(tint)
                     .frame(width: 18)
-                    .compatibleVariableColorEffect(isActive: isCharging)
 
                 Text(String(localized: "kind.battery") + ":")
                     .monitorPanelMetricLabelFont()
