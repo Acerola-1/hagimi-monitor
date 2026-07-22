@@ -3,24 +3,22 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>0.9.18</title>
-            <pubDate>Tue, 21 Jul 2026 16:23:56 +0000</pubDate>
-            <sparkle:version>58</sparkle:version>
-            <sparkle:shortVersionString>0.9.18</sparkle:shortVersionString>
+            <title>0.9.19</title>
+            <pubDate>Wed, 22 Jul 2026 02:04:11 +0000</pubDate>
+            <sparkle:version>59</sparkle:version>
+            <sparkle:shortVersionString>0.9.19</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 优化与体验
+### 修复
 
-- 补全中英日三语本地化，消除界面残留硬编码文本
-- 进程列表按需采样并复用图标降采样缓存，降低面板内存与 CPU 占用
-- 菜单栏指标模式渲染去重、网络采样复用系统会话，削减常驻开销
+- 窗口与内容展开收起同步动画
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.18/HagimiMonitor-v0.9.18.zip" length="4264632" type="application/octet-stream" sparkle:edSignature="0Hieriapht/rExqpfBtLsieTW5JMJYORZqYJCKMsEGT7PjG9Pq3vSrUYMk8oceujgU0/w8TrimZizvtT3V8KBw=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v0.9.19/HagimiMonitor-v0.9.19.zip" length="4269362" type="application/octet-stream" sparkle:edSignature="YItdB/BXP7k9LNiNhBhaREfrEAOx4C9FLxbF+sPdjXasFHfCiPXlBXjhsZIODmKAj6KTjhyBsSRMgnH4RHoFAw=="/>
         </item>
     </channel>
 </rss>
