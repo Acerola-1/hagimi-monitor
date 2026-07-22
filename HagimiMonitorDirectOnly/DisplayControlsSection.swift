@@ -11,9 +11,10 @@ struct DisplayControlsSection: View {
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
 
-    // 与其他 metric 行统一曲线/时长(MonitorPanelView.setExpansion 用同一条),
-    // 保证展开/折叠手感一致,窗口逐帧跟随不打架。
-    private let expansionAnimation = Animation.smooth(duration: 0.18)
+    // 与其他 metric 行统一曲线/时长(MonitorPanelView.setExpansion 与
+    // FluidPanelController 的窗口补间用同一条),保证展开/折叠手感一致,
+    // 内容(CollapsibleDetail)与窗口边框并行动画到同一终值、严丝合缝。
+    private let expansionAnimation = Animation.easeInOut(duration: MonitorConstants.panelExpansionDuration)
 
     var body: some View {
         let palette = MonitorPalette(
@@ -62,7 +63,7 @@ struct DisplayControlsSection: View {
                 toggleExpansion()
             }
 
-            if isExpanded {
+            CollapsibleDetail(isExpanded: isExpanded) {
                 detailContent(
                     visibleDisplays: visibleDisplays,
                     hasControls: hasControls,
@@ -71,7 +72,6 @@ struct DisplayControlsSection: View {
                 )
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
-                .transition(.detailDisclosure)
             }
         }
         .onAppear {
