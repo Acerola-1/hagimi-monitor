@@ -284,11 +284,13 @@ struct MonitorPanelView: View {
         }
     }
 
-    /// 由 SwiftUI 对布局做补间(卡片撑开、下方按钮平滑下推),窗口层逐帧跟随内容尺寸
-    /// (`FluidPanelController.contentSizeDidChange` 用 `animate: false` 贴合每帧高度),
-    /// 二者不抢锚点。曲线 / 时长对齐原始 dev 版本,保持一致的展开手感。
+    /// 展开区的「布局高度」由 `CollapsibleDetail` 从 0 补间到自然高度(见其说明),
+    /// 窗口层(`FluidPanelController`)用**完全相同**的时长与 easeInOut 曲线并行动画到同一
+    /// 终值。外层 GeometryReader 只上报一次终值、无法逐帧跟随,只有两边同时同速才能
+    /// 边框与内容一起伸缩。故此处必须用 `MonitorConstants.panelExpansionDuration` + easeInOut,
+    /// 与窗口侧 `NSAnimationContext` 严格一致。
     private func setExpansion(_ mutate: () -> Void) {
-        withAnimation(.smooth(duration: 0.18)) {
+        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
             mutate()
         }
     }
@@ -411,7 +413,7 @@ private struct MetricGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            if isExpanded, !details.isEmpty {
+            CollapsibleDetail(isExpanded: isExpanded && !details.isEmpty) {
                 Group {
                     if let storageVolumes {
                         StorageVolumeDetailList(volumes: storageVolumes, kind: module.kind, tint: tint, theme: theme)
@@ -432,7 +434,6 @@ private struct MetricGlassRow: View, Equatable {
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
-                .transition(.detailDisclosure)
             }
         }
         .contentShape(Rectangle())
@@ -798,7 +799,7 @@ private struct NetworkGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            if isExpanded, hasExpandableContent {
+            CollapsibleDetail(isExpanded: isExpanded && hasExpandableContent) {
                 VStack(spacing: 9) {
                     if !detailMetrics.isEmpty {
                         MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
@@ -809,7 +810,6 @@ private struct NetworkGlassRow: View, Equatable {
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
-                .transition(.detailDisclosure)
             }
         }
         .contentShape(Rectangle())
@@ -893,11 +893,10 @@ private struct BatteryGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            if canExpand && isExpanded {
+            CollapsibleDetail(isExpanded: canExpand && isExpanded) {
                 MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
-                    .transition(.detailDisclosure)
             }
         }
         .contentShape(Rectangle())
@@ -1523,12 +1522,48 @@ private struct ProcessIcon: View {
     }
 }
 
-extension AnyTransition {
-    /// 统一的展开/折叠过渡:插入与移除对称,都用「微缩放(顶部锚定)+ 淡入淡出」。
-    /// 对称很关键——移除若只用 `.opacity`,缺少几何锚点,SwiftUI 对容器高度的回收
-    /// 处理与插入不一致,窗口逐帧跟随时底部按钮会「跳」回来;补上同样的 scale 锚点
-    /// 后,收起与展开镜像对称,观感一致顺滑。
-    static var detailDisclosure: AnyTransition {
-        .opacity.combined(with: .scale(scale: 0.98, anchor: .top))
+// MARK: - Collapsible Detail
+
+/// 高度揭示式展开容器,替代此前的 `.opacity + .scale` 过渡。
+///
+/// 旧过渡的问题:scale / opacity 都是「渲染层变换」,不改变布局占位——展开区一插入就
+/// 按完整高度占位,容器(进而窗口)高度会「瞬间」跳到终点,随后内容才在已定型的空间里
+/// 淡入/缩放,肉眼看到「边框先到位、内容再补上」的错位闪烁;收起时镜像反过来。
+///
+/// 方案:内容常驻(以测出自然高度),再把「布局高度」本身从 0 补间到自然高度并裁剪。
+/// 这样容器高度随动画逐帧真实增长,`FluidPanelSizeReader` 的 GeometryReader 得以逐帧
+/// 上报中间高度,`FluidPanelController` 的窗口层随之逐帧跟随——内外一起展开/收起。
+///
+/// 供各 metric 行与 `DisplayControlsSection`(Direct 目标)共用,故非 private。
+struct CollapsibleDetail<Content: View>: View {
+    private let isExpanded: Bool
+    private let content: Content
+
+    /// 内容的自然高度。内容始终挂载并被 GeometryReader 测量,故在首次展开前就已就绪,
+    /// 保证 `withAnimation` 能从 0 补间到该高度,而不是等测量回填后「跳」到终点。
+    @State private var contentHeight: CGFloat = 0
+
+    init(isExpanded: Bool, @ViewBuilder content: () -> Content) {
+        self.isExpanded = isExpanded
+        self.content = content()
+    }
+
+    var body: some View {
+        content
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { contentHeight = geometry.size.height }
+                        .onChange(of: geometry.size.height) { _, newValue in
+                            contentHeight = newValue
+                        }
+                }
+            )
+            // 折叠时钳到 0 高度;顶部对齐 + 裁剪,使内容随高度增长自上而下「卷出」。
+            .frame(height: isExpanded ? contentHeight : 0, alignment: .top)
+            .opacity(isExpanded ? 1 : 0)
+            .clipped()
+            // 折叠状态(高度 0、不可见)不参与点击,避免拦截行的展开手势。
+            .allowsHitTesting(isExpanded)
     }
 }

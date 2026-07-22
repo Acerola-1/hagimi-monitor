@@ -322,11 +322,20 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     ///
     /// 不能 guard panel.isVisible:size reader 的首次 onAppear 常在面板可见之前(init
     /// 布局阶段)触发,若丢弃则窗口尺寸永远停在默认值、之后 onChange 不再触发。
+    ///
+    /// 动画分工(关键):外层 `.background(GeometryReader)` 只在展开/收起时上报一次
+    /// **终值**(不逐帧),故这里不能靠「逐帧 animate:false 贴合」补出平滑——那只会
+    /// 让窗口一步瞬跳到终点。改为:面板可见且高度变化显著(展开/收起)时,用与内容
+    /// (`MonitorPanelView.setExpansion` / `CollapsibleDetail`)完全一致的时长与 easeInOut
+    /// 曲线做窗口补间;二者从同一时刻并行动画到同一终值,窗口高度(t)≈内容高度(t),
+    /// 边框与内容一起伸缩、不裁剪不留空。指标微调(<阈值)仍瞬时贴合,不触发多余动画。
     private func contentSizeDidChange(to size: CGSize) {
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.frame.size != size else { return }
-            self.setPanelFrame(size: size, animate: false)
+            let delta = abs(self.panel.frame.height - size.height)
+            let animate = self.panel.isVisible && delta > 8
+            self.setPanelFrame(size: size, animate: animate)
         }
     }
 
@@ -358,7 +367,17 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         guard newFrame != panel.frame else { return }
-        panel.setFrame(newFrame, display: true, animate: animate)
+        if animate {
+            // 与内容侧 `withAnimation(.easeInOut(panelExpansionDuration))` 完全同时长同曲线,
+            // 使窗口高度补间与 CollapsibleDetail 的高度补间并行、逐帧对齐。
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = MonitorConstants.panelExpansionDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                panel.animator().setFrame(newFrame, display: true)
+            }
+        } else {
+            panel.setFrame(newFrame, display: true, animate: false)
+        }
     }
 
     /// 构造状态项 label 视图:内嵌尺寸读取器,内容宽度变化时更新 `statusItem.length`,

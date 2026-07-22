@@ -25,6 +25,13 @@ enum MonitorConstants {
     static let panelMaxWidth: Double = 460
     static let rowCornerRadius = 14.0
 
+    // MARK: - Panel Expansion
+    // 子栏目展开/收起动画时长。内容(SwiftUI `CollapsibleDetail` 的 frame 高度补间)
+    // 与窗口层(`FluidPanelController` 的 setFrame 动画)必须用这一同一时长与
+    // easeInOut 曲线并行动画到同一终值——外层 GeometryReader 只上报一次终值、无法
+    // 逐帧跟随,只有两边同时同速才能边框与内容严丝合缝一起伸缩。
+    static let panelExpansionDuration: TimeInterval = 0.15
+
     // MARK: - Animation Durations
     static let cpuAnimationDuration = 0.30
     static let batteryAnimationDuration = 2.20
