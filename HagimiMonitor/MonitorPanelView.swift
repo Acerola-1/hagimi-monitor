@@ -17,6 +17,8 @@ struct MonitorPanelView: View {
     @State private var expandedKinds: Set<MonitorKind> = []
     @State private var timeString: String = ""
     @State private var timeUpdateTask: Task<Void, Never>?
+    /// header 小猫客串彩蛋（致敬 RunCat）。仅菜单栏下拉面板参与，钉住面板不触发。
+    @StateObject private var cameoModel = HeaderCatCameoModel()
 
     init(store: MonitorStore, quickPanelPresentation: QuickPanelPresentation? = nil) {
         self.store = store
@@ -83,7 +85,24 @@ struct MonitorPanelView: View {
             .background(panelBackgroundColor)
         }
         .compatibleContainerBackground()
+        .overlay {
+            // 点一下后弹出的 RunCat 致谢卡片(面板内 overlay,避免系统 sheet 抢焦点关面板)。
+            if cameoModel.showThanks {
+                CatThanksCard(onClose: { cameoModel.showThanks = false })
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: cameoModel.showThanks)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
+        .onChange(of: store.isPanelVisible) { _, visible in
+            // 面板由隐藏→可见:菜单栏面板摧骰子决定是否客串;隐藏时清理。
+            guard !showsQuickPanelControls else { return }
+            if visible {
+                cameoModel.panelDidAppear()
+            } else {
+                cameoModel.panelDidDisappear()
+            }
+        }
         .onAppear {
             if !showsQuickPanelControls {
                 startTimeUpdateTask()
@@ -152,9 +171,20 @@ struct MonitorPanelView: View {
                     }
                 }
             } else {
-                Text(timeString)
-                    .monitorPanelMonoFont(.caption2, weight: .medium)
-                    .foregroundStyle(theme.captionText)
+                // 小猫客串紧贴在时间左侧。只在可见时才占位，隐藏时不留空隙、时间正常靠右。
+                // 该分支是标题子 HStack 的兄弟节点，不受「双击展开」手势影响。
+                HStack(spacing: 6) {
+                    if cameoModel.isVisible {
+                        HeaderCatCameo(
+                            model: cameoModel,
+                            tint: theme.captionText
+                        )
+                    }
+
+                    Text(timeString)
+                        .monitorPanelMonoFont(.caption2, weight: .medium)
+                        .foregroundStyle(theme.captionText)
+                }
             }
         }
         .padding(.horizontal, 2)

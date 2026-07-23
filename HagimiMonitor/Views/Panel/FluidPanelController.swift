@@ -176,8 +176,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // tick,避免白白触发 ImageRenderer 快照(见 refreshStatusItemImage 指标分支)。
         store.loadAnimator.$displayedComputeLoad
             .sink { [weak self] _ in
-                guard let self, self.store.settings.menuBarDisplayMode == .ring else { return }
-                self.refreshStatusItemImage()
+                guard let self else { return }
+                switch self.store.settings.menuBarDisplayMode {
+                case .ring:
+                    self.refreshStatusItemImage()
+                case .metrics:
+                    break
+                }
             }
             .store(in: &cancellables)
         // $modules 每秒发布(网络字节几乎每秒都变)。这里不做去重:环模式的负载等级颜色

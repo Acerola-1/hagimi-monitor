@@ -258,6 +258,7 @@ final class MonitorStore: ObservableObject {
                 self.objectWillChange.send()
             }
             .store(in: &cancellables)
+
         timerCancellable = Timer.publish(every: refreshSchedule.tickInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
