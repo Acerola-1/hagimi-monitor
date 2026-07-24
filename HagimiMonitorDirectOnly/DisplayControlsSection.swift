@@ -7,6 +7,10 @@ import SwiftUI
 struct DisplayControlsSection: View {
     @ObservedObject var settings: MonitorSettings
     let isPanelVisible: Bool
+    /// 展开/收起前调用,置位窗口层的一次性动画标记,使窗口补间与本行内容
+    /// (CollapsibleDetail)并行同步。本行走独立的 @State 展开路径,不经 MonitorPanelView
+    /// 的 setExpansion,故需单独注入该回调;缺省空实现便于预览/独立使用。
+    var beginExpansionAnimation: () -> Void = {}
     @StateObject private var controller = DisplayControlController()
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
@@ -143,6 +147,9 @@ struct DisplayControlsSection: View {
     /// 现已改用自建 NSPanel,该分支过时且有害——瞬间 toggle 会与 chevron 旋转、内容
     /// transition 的时间线打架,造成「收一半停顿再补完」的卡顿。两版本统一即可。
     private func toggleExpansion() {
+        // 与其他指标行一致:置位一次性标记,使窗口层对本次展开走补间(而非瞬跳),
+        // 与下方 CollapsibleDetail 的高度补间并行同步。
+        beginExpansionAnimation()
         withAnimation(expansionAnimation) {
             isExpanded.toggle()
         }
