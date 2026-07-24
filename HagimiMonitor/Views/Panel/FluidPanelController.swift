@@ -384,7 +384,15 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
                 panel.animator().setFrame(newFrame, display: true)
             }
         } else {
-            panel.setFrame(newFrame, display: true, animate: false)
+            // 数据驱动的即时贴合:用 0 时长动画组提交(而非 setFrame(animate:false))。
+            // 关键:进程列表(尤其磁盘/网络,行数随采样在 0→2→5 间变动)展开后异步到达的
+            // 高度变化,若此时展开补间仍在进行,`setFrame(animate:false)` 会被仍在逐帧推进的
+            // 补间「覆盖」回旧终值(表现为容器过高留白或过矮把底部按钮裁掉,直到下个采样周期才纠正)。
+            // 0 时长动画组会抢占并取消在途补间,令最新内容高度立即生效。
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0
+                panel.animator().setFrame(newFrame, display: true)
+            }
         }
     }
 

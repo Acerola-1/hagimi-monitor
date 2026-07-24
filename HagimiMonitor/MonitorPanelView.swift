@@ -15,6 +15,10 @@ struct MonitorPanelView: View {
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
+    /// 已「放大为方形大卡片」的模块集合。纯视图层状态,与 expandedKinds 平级、互不干扰:
+    /// 命中该集合的行改渲染为铺满面板宽度的方卡,其余行仍是一图流单行、自然向下顺延。
+    /// 支持同时放大多张卡片,便于钉在桌面时只保留一两个主功能。
+    @State private var enlargedKinds: Set<MonitorKind> = []
     @State private var timeString: String = ""
     @State private var timeUpdateTask: Task<Void, Never>?
     /// header 小猫客串彩蛋（致敬 RunCat）。仅菜单栏下拉面板参与，钉住面板不触发。
@@ -111,16 +115,24 @@ struct MonitorPanelView: View {
             if !showsQuickPanelControls {
                 startTimeUpdateTask()
             }
-            // 上报当前展开集合:面板重开时 @State 可能保留上次展开项,
+            // 上报当前需进程采样的集合(展开 ∪ 放大):面板重开时 @State 可能保留上次选项,
             // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
-            store.updateExpandedKinds(expandedKinds, for: panelSource)
+            reportActiveProcessKinds()
         }
         .onDisappear {
             timeUpdateTask?.cancel()
         }
-        .onChange(of: expandedKinds) { _, newValue in
-            store.updateExpandedKinds(newValue, for: panelSource)
+        .onChange(of: expandedKinds) { _, _ in
+            reportActiveProcessKinds()
         }
+        .onChange(of: enlargedKinds) { _, _ in
+            reportActiveProcessKinds()
+        }
+    }
+
+    /// 需进程采样的类目集 = 行内展开 ∪ 放大为卡片:两者都会渲染 top 进程列表。
+    private func reportActiveProcessKinds() {
+        store.updateExpandedKinds(expandedKinds.union(enlargedKinds), for: panelSource)
     }
 
     /// 本面板对应的进程采样来源。带快捷面板控件的是钉住面板,否则是菜单栏面板。
@@ -194,8 +206,36 @@ struct MonitorPanelView: View {
         .padding(.horizontal, 2)
     }
 
+    /// 行入口:命中放大集合渲染方卡,否则渲染一图流单行并叠加悬停「放大」浮标。
     @ViewBuilder
     private func row(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
+        if enlargedKinds.contains(module.kind) {
+            MetricCardView(
+                module: module,
+                theme: theme,
+                details: enabledMetrics(for: module),
+                topMemoryProcesses: store.topMemoryProcesses,
+                showMemoryProcesses: store.settings.showMemoryProcesses,
+                topCPUProcesses: store.topCPUProcesses,
+                showCPUProcesses: store.settings.showCPUProcesses,
+                topDiskProcesses: store.topDiskProcesses,
+                showDiskProcesses: store.settings.showDiskProcesses,
+                topNetworkProcesses: store.topNetworkProcesses,
+                showNetworkProcesses: store.settings.showNetworkProcesses,
+                onRestore: { toggleEnlarged(module.kind) }
+            )
+            .equatable()
+        } else {
+            compactRow(for: module, theme: theme)
+                .modifier(RowEnlargeAffordance(
+                    tint: theme.moduleTint(for: module.kind),
+                    onEnlarge: { toggleEnlarged(module.kind) }
+                ))
+        }
+    }
+
+    @ViewBuilder
+    private func compactRow(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
         switch module.kind {
         case .cpu:
             MetricGlassRow(
@@ -289,6 +329,21 @@ struct MonitorPanelView: View {
                 expandedKinds.remove(kind)
             } else {
                 expandedKinds.insert(kind)
+            }
+        }
+    }
+
+    /// 放大/还原某行为方卡。与行内展开共用同一套窗口同步动画(beginExpansionAnimation +
+    /// panelExpansionDuration + easeInOut),使方卡展开/收起时窗口高度与内容高度逐帧对齐。
+    /// 放大时同步清除该行的行内展开态:方卡已自带丰富内容,无需再保留展开,也避免还原后直接展开。
+    private func toggleEnlarged(_ kind: MonitorKind) {
+        store.beginExpansionAnimation()
+        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            if enlargedKinds.contains(kind) {
+                enlargedKinds.remove(kind)
+            } else {
+                enlargedKinds.insert(kind)
+                expandedKinds.remove(kind)
             }
         }
     }
@@ -466,7 +521,7 @@ private struct MetricGlassRow: View, Equatable {
                             if module.kind == .cpu, showCPUProcesses {
                                 CPUProcessList(processes: topCPUProcesses, theme: theme)
                             }
-                            if module.kind == .storage, showDiskProcesses, !topDiskProcesses.isEmpty {
+                            if module.kind == .storage, showDiskProcesses {
                                 InlineDiskProcessList(processes: topDiskProcesses, theme: theme)
                             }
                         }
@@ -535,12 +590,19 @@ private struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
     let kind: MonitorKind
     let theme: MonitorPanelTheme
+    /// true=行内展开紧凑样式(小字体 + 28pt 缩进对齐图标列);false=方卡放大样式(大字体、无缩进)。
+    var isCompact: Bool = true
 
     /// 需要占满整行的长值字段(IP、启动时间等):它们的 value 太长,
     /// 塞进两列会撑破列宽或触发不可控换行,故显式整行、排到网格末尾。
     private static let fullRowMetricIDs: Set<String> = [
         "ipv4", "ipv6", "public-ip", "uptime", "adapter"
     ]
+
+    private var leadingInset: CGFloat { isCompact ? 28 : 0 }
+    private var rowSpacing: CGFloat { isCompact ? MetricGridMetrics.rowSpacing : 11 }
+    private var labelStyle: Font.TextStyle { isCompact ? .footnote : .subheadline }
+    private var valueStyle: Font.TextStyle { isCompact ? .footnote : .title3 }
 
     private var shortMetrics: [MonitorMetric] {
         metrics.filter { !Self.fullRowMetricIDs.contains($0.name) }
@@ -551,22 +613,22 @@ private struct MetricDetailGrid: View {
     }
 
     var body: some View {
-        VStack(spacing: 7) {
+        VStack(spacing: isCompact ? 7 : 11) {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, 28)
+                .padding(.leading, leadingInset)
 
             content
-                .padding(.leading, 28)
+                .padding(.leading, leadingInset)
         }
     }
 
     // 固定两列 Grid:每列 label 左对齐、value 右对齐到列右边界,
     // 短值因此落在两条稳定竖直轴上,眼睛可顺列下扫;长值统一在下方整行区。
     private var content: some View {
-        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: MetricGridMetrics.rowSpacing) {
+        VStack(alignment: .leading, spacing: rowSpacing) {
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: rowSpacing) {
                 ForEach(Array(rowPairs.enumerated()), id: \.offset) { _, pair in
                     GridRow {
                         metricCell(pair.0)
@@ -605,7 +667,7 @@ private struct MetricDetailGrid: View {
 
         return HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
             Text(labelText)
-                .monitorPanelCaptionFont(.footnote)
+                .monitorPanelCaptionFont(labelStyle)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
                 .layoutPriority(1)
@@ -613,9 +675,10 @@ private struct MetricDetailGrid: View {
             Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
             Text(valueText)
-                .monitorPanelMonoFont(.footnote, weight: .semibold)
+                .monitorPanelMonoFont(valueStyle, weight: .semibold)
                 .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
+                .minimumScaleFactor(isCompact ? 1 : 0.6)
                 .layoutPriority(2)
                 .help(valueText)
                 .contentShape(Rectangle())
@@ -798,7 +861,7 @@ private struct NetworkGlassRow: View, Equatable {
     }
 
     private var hasExpandableContent: Bool {
-        !detailMetrics.isEmpty || (showNetworkProcesses && !topNetworkProcesses.isEmpty)
+        !detailMetrics.isEmpty || showNetworkProcesses
     }
 
     var body: some View {
@@ -844,7 +907,7 @@ private struct NetworkGlassRow: View, Equatable {
                     if !detailMetrics.isEmpty {
                         MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     }
-                    if showNetworkProcesses, !topNetworkProcesses.isEmpty {
+                    if showNetworkProcesses {
                         InlineNetworkProcessList(processes: topNetworkProcesses, theme: theme)
                     }
                 }
@@ -1041,6 +1104,334 @@ private func localizedNetworkInterface(_ summary: String) -> String {
     let key = "network-interface.\(summary)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? summary : localized
+}
+
+// MARK: - Enlarged Metric Card
+
+/// 一图流单行上悬停显示的「放大」浮标:平时完全隐藏、不占布局、不影响美观,
+/// 鼠标移入行时在右上角淡入一个小圆钮,点它把该行放大为方卡。浮标自身是 Button,
+/// 会消费点击、不会冒泡到行的「单击展开」手势;淡入淡出为一次性过渡,静置零开销。
+private struct RowEnlargeAffordance: ViewModifier {
+    let tint: Color
+    let onEnlarge: () -> Void
+    @State private var isHovering = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(alignment: .topTrailing) {
+                if isHovering {
+                    Button(action: onEnlarge) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 9, weight: .bold))
+                            .frame(width: 18, height: 18)
+                            .background(Circle().fill(.thinMaterial))
+                            .contentShape(Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(tint)
+                    .padding(5)
+                    .transition(.opacity)
+                    .help(String(localized: "panel.enlarge"))
+                }
+            }
+            .onHover { isHovering = $0 }
+            .animation(.easeInOut(duration: 0.12), value: isHovering)
+    }
+}
+
+/// 放大态下铺满面板宽度的方形大卡片。复用现有数据源(MonitorModule)与组件
+/// (SparklineChart / ProgressMeter / MetricDetailGrid / theme 缓存);卡片会展示已开启的 top 进程列表,
+/// 故需与行内展开一样参与进程采样上报。做成 Equatable,未变化时跳过重绘,与各 metric 行一致。
+private struct MetricCardView: View, Equatable {
+    let module: MonitorModule
+    let theme: MonitorPanelTheme
+    var details: [MonitorMetric] = []
+    var topMemoryProcesses: [TopMemoryProcess] = []
+    var showMemoryProcesses = false
+    var topCPUProcesses: [TopCPUProcess] = []
+    var showCPUProcesses = false
+    var topDiskProcesses: [TopDiskProcess] = []
+    var showDiskProcesses = false
+    var topNetworkProcesses: [TopNetworkProcess] = []
+    var showNetworkProcesses = false
+    var onRestore: (() -> Void)?
+
+    // theme 完全由 (preference, colorScheme) 决定;闭包不参与相等判定。
+    static func == (lhs: MetricCardView, rhs: MetricCardView) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.details == rhs.details
+            && lhs.topMemoryProcesses == rhs.topMemoryProcesses
+            && lhs.showMemoryProcesses == rhs.showMemoryProcesses
+            && lhs.topCPUProcesses == rhs.topCPUProcesses
+            && lhs.showCPUProcesses == rhs.showCPUProcesses
+            && lhs.topDiskProcesses == rhs.topDiskProcesses
+            && lhs.showDiskProcesses == rhs.showDiskProcesses
+            && lhs.topNetworkProcesses == rhs.topNetworkProcesses
+            && lhs.showNetworkProcesses == rhs.showNetworkProcesses
+    }
+
+    private var tint: Color {
+        theme.moduleTint(for: module.kind)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            hero
+            if !details.isEmpty {
+                MetricDetailGrid(metrics: details, kind: module.kind, theme: theme, isCompact: false)
+            }
+            if let section = processSection {
+                CardProcessList(
+                    items: section.items,
+                    metricColumns: section.columns,
+                    separator: theme.rowSeparator(for: module.kind),
+                    theme: theme
+                )
+            }
+        }
+        .padding(16)
+        // 高度随内容自适应:内容多(CPU/内存带图表+进程)则高,内容少(电源/网络)则矮,
+        // 不再强制方形以免底部大片留白;同时避免自测宽度回写高度与窗口跟随动画相互干扰。
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: module.kind.symbol)
+                .font(.title3.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(tint)
+
+            Text(module.kind.title)
+                .font(.headline)
+                .foregroundStyle(theme.primaryText)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            Button(action: { onRestore?() }) {
+                Image(systemName: "arrow.down.right.and.arrow.up.left")
+                    .font(.system(size: 10, weight: .bold))
+                    .frame(width: 22, height: 22)
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(theme.secondaryText)
+            .help(String(localized: "panel.restore"))
+        }
+    }
+
+    @ViewBuilder
+    private var hero: some View {
+        switch module.kind {
+        case .cpu, .gpu:
+            HStack(alignment: .center, spacing: 12) {
+                bigValue(percentText)
+                SparklineChart(samples: module.samples, tint: tint)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 72)
+            }
+        case .memory, .storage:
+            VStack(alignment: .leading, spacing: 12) {
+                bigValue(percentText)
+                ProgressMeter(value: module.value, tint: tint, theme: theme)
+                    .frame(height: 10)
+            }
+        case .network:
+            VStack(alignment: .leading, spacing: 14) {
+                Text(localizedNetworkInterface(module.summary))
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.valueText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                HStack(spacing: 22) {
+                    cardRate(symbol: "arrow.down", value: metricValue("download"))
+                    cardRate(symbol: "arrow.up", value: metricValue("upload"))
+                }
+            }
+        case .battery:
+            VStack(alignment: .leading, spacing: 10) {
+                bigValue(hasBattery ? percentText : metricValue("power"))
+                if hasBattery {
+                    cardRate(symbol: "powermeter", value: metricValue("power"))
+                }
+            }
+        }
+    }
+
+    private func bigValue(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 46, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(theme.valueText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func cardRate(symbol: String, value: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.callout.weight(.bold))
+                .foregroundStyle(tint)
+            Text(value)
+                .monitorPanelMonoFont(.title3, weight: .semibold)
+                .foregroundStyle(theme.valueText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    /// 按当前模块类型返回已开启的 top 进程小节(items + 数值列数):未开启时返回 nil。
+    /// 四类列表统一固定 5 行位置:真实数据从上往下填,空位由 CardProcessList 统一补“—”占位。
+    private var processSection: (items: [CardProcessItem], columns: Int)? {
+        switch module.kind {
+        case .cpu:
+            guard showCPUProcesses else { return nil }
+            let items = topCPUProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: nil, text: String(format: "%.1f%%", proc.cpuUsage))
+                ])
+            }
+            return (items, 1)
+        case .memory:
+            guard showMemoryProcesses else { return nil }
+            let items = topMemoryProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: nil, text: byteCountString(Int64(proc.memoryUsage), countStyle: .memory))
+                ])
+            }
+            return (items, 1)
+        case .storage:
+            guard showDiskProcesses else { return nil }
+            let items = topDiskProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: "↑", text: byteCountString(Int64(proc.bytesWritten))),
+                    CardProcessMetric(symbol: "↓", text: byteCountString(Int64(proc.bytesRead)))
+                ])
+            }
+            return (items, 2)
+        case .network:
+            guard showNetworkProcesses else { return nil }
+            let items = topNetworkProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: "↑", text: byteCountString(Int64(proc.upload))),
+                    CardProcessMetric(symbol: "↓", text: byteCountString(Int64(proc.download)))
+                ])
+            }
+            return (items, 2)
+        case .gpu, .battery:
+            return nil
+        }
+    }
+
+    private var percentText: String {
+        "\(Int(module.value.rounded()))%"
+    }
+
+    /// 当前模块是否为真电池(非台式机外接电源):决定大卡英雄区显示电量百分比还是直接显功耗。
+    private var hasBattery: Bool {
+        module.metrics.first { $0.name == "type" }?.value == "battery"
+    }
+
+    private func metricValue(_ name: String) -> String {
+        module.metrics.first { $0.name == name }?.value ?? "--"
+    }
+}
+
+// MARK: - Card Process List
+
+private struct CardProcessMetric {
+    let symbol: String?
+    let text: String
+}
+
+private struct CardProcessItem: Identifiable {
+    let id: Int
+    let icon: NSImage?
+    let name: String
+    let metrics: [CardProcessMetric]
+    var isPlaceholder = false
+}
+
+/// 方卡专用的 top 进程列表:与行内版统一取自同一数据,但图标/字体更大、不再缩进 28pt,
+/// 与卡片内其他内容左对齐。单值(CPU/内存)只显一列,双值(磁盘/网络)显↑/↓两列。
+/// 固定 5 行:真实数据从上往下填,空位显“—”占位,高度永远不变、无加载跳变。
+private struct CardProcessList: View {
+    let items: [CardProcessItem]
+    var metricColumns: Int = 1
+    let separator: Color
+    let theme: MonitorPanelTheme
+
+    private static let rowCount = 5
+
+    private var placeholderItem: CardProcessItem {
+        CardProcessItem(
+            id: -1,
+            icon: nil,
+            name: "—",
+            metrics: Array(repeating: CardProcessMetric(symbol: nil, text: "—"), count: max(1, metricColumns)),
+            isPlaceholder: true
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Rectangle()
+                .fill(separator)
+                .frame(height: 1)
+
+            VStack(spacing: 8) {
+                // 按下标固定 5 个槽位:每个槽位要么真实行、要么“—”占位,数据到达为同槽位内容替换,
+                // 高度恒定、不触发窗口二次动画。
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    row(for: index < items.count ? items[index] : placeholderItem)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: items.count)
+        }
+    }
+
+    private func row(for item: CardProcessItem) -> some View {
+        HStack(spacing: 9) {
+            if item.isPlaceholder {
+                Color.clear
+                    .frame(width: 20, height: 20)
+            } else {
+                ProcessIcon(icon: item.icon, theme: theme)
+                    .frame(width: 20, height: 20)
+            }
+
+            Text(item.name)
+                .monitorPanelCaptionFont(.subheadline)
+                .foregroundStyle(item.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.primaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 6)
+
+            HStack(spacing: 12) {
+                ForEach(Array(item.metrics.enumerated()), id: \.offset) { _, metric in
+                    HStack(spacing: 3) {
+                        if let symbol = metric.symbol {
+                            Text(symbol)
+                                .monitorPanelMonoFont(.footnote, weight: .medium)
+                        }
+                        Text(metric.text)
+                            .monitorPanelMonoFont(.footnote, weight: .semibold)
+                            .frame(minWidth: 56, alignment: .trailing)
+                    }
+                }
+            }
+            .foregroundStyle(item.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.secondaryText)
+            .layoutPriority(1)
+        }
+    }
 }
 
 // MARK: - Transparent Window Background
@@ -1345,8 +1736,8 @@ private struct MemoryProcessList: View {
     let processes: [TopMemoryProcess]
     let theme: MonitorPanelTheme
 
-    /// 数据未就绪时预留的占位行数。内存采样恒返回 top 5,预留 5 行留白使展开一次到位。
-    private static let reservedRowCount = 5
+    /// 固定展示 top 5 个位置:真实数据从上往下填,空位显“—”占位。
+    private static let rowCount = 5
 
     var body: some View {
         VStack(spacing: 5) {
@@ -1356,13 +1747,9 @@ private struct MemoryProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                if processes.isEmpty {
-                    // 留白占位:结构与真实行一致(clear 图标位 + 空文本行),只预留高度、不画内容。
-                    ForEach(0 ..< Self.reservedRowCount, id: \.self) { _ in
-                        ProcessPlaceholderRow()
-                    }
-                } else {
-                    ForEach(processes) { proc in
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    if index < processes.count {
+                        let proc = processes[index]
                         HStack(spacing: 6) {
                             ProcessIcon(icon: proc.icon, theme: theme)
                                 .frame(width: 16, height: 16)
@@ -1382,12 +1769,13 @@ private struct MemoryProcessList: View {
                                 .fixedSize(horizontal: true, vertical: false)
                                 .layoutPriority(1)
                         }
+                    } else {
+                        ProcessPlaceholderRow(theme: theme)
                     }
                 }
             }
             .padding(.leading, 28)
-            // 空→有数据时原位淡入,高度不变(5 占位 ↔ 5 真实行),不触发窗口二次动画。
-            .animation(.easeInOut(duration: 0.2), value: processes.isEmpty)
+            .animation(.easeInOut(duration: 0.2), value: processes.count)
         }
     }
 }
@@ -1398,8 +1786,8 @@ private struct CPUProcessList: View {
     let processes: [TopCPUProcess]
     let theme: MonitorPanelTheme
 
-    /// 数据未就绪时预留的占位行数。CPU 采样恒返回 top 5,预留 5 行留白使展开一次到位。
-    private static let reservedRowCount = 5
+    /// 固定展示 top 5 个位置:真实数据从上往下填,空位显“—”占位。
+    private static let rowCount = 5
 
     var body: some View {
         VStack(spacing: 5) {
@@ -1409,13 +1797,9 @@ private struct CPUProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                if processes.isEmpty {
-                    // 留白占位:结构与真实行一致(clear 图标位 + 空文本行),只预留高度、不画内容。
-                    ForEach(0 ..< Self.reservedRowCount, id: \.self) { _ in
-                        ProcessPlaceholderRow()
-                    }
-                } else {
-                    ForEach(processes) { proc in
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    if index < processes.count {
+                        let proc = processes[index]
                         HStack(spacing: 6) {
                             ProcessIcon(icon: proc.icon, theme: theme)
                                 .frame(width: 16, height: 16)
@@ -1435,26 +1819,33 @@ private struct CPUProcessList: View {
                                 .fixedSize(horizontal: true, vertical: false)
                                 .layoutPriority(1)
                         }
+                    } else {
+                        ProcessPlaceholderRow(theme: theme)
                     }
                 }
             }
             .padding(.leading, 28)
-            // 空→有数据时原位淡入,高度不变(5 占位 ↔ 5 真实行),不触发窗口二次动画。
-            .animation(.easeInOut(duration: 0.2), value: processes.isEmpty)
+            .animation(.easeInOut(duration: 0.2), value: processes.count)
         }
     }
 }
 
-/// 进程行「留白」占位:与真实行同结构(16pt 图标位 + 一行文本高度),仅预留高度、不画内容。
-/// 用于 CPU/内存列表数据到达前撑住高度,使展开动画一次到位。
+/// 进程行“—”占位(单值列版,用于 CPU/内存):与真实行同结构(16pt 图标位 + 一行文本),
+/// 图标位留空、名称与数值位显淡色横杠,撑住高度并告知“空位”。
 private struct ProcessPlaceholderRow: View {
+    let theme: MonitorPanelTheme
+
     var body: some View {
         HStack(spacing: 6) {
             Color.clear
                 .frame(width: 16, height: 16)
-            Text(" ")
+            Text("—")
                 .monitorPanelCaptionFont(.footnote)
+                .foregroundStyle(theme.secondaryText.opacity(0.5))
             Spacer(minLength: 4)
+            Text("—")
+                .monitorPanelMonoFont(.caption2, weight: .medium)
+                .foregroundStyle(theme.secondaryText.opacity(0.5))
         }
     }
 }
@@ -1472,12 +1863,18 @@ private struct ProcessRowData: Identifiable {
     let upText: String
     /// 下行/读取 值(不含箭头)
     let downText: String
+    var isPlaceholder = false
 }
 
-/// 磁盘 I/O 进程列表。
+/// 固定 5 行的“—”占位行数据:磁盘/网络无数据或不足 5 行时填充。
+private let processDashRow = ProcessRowData(id: -1, name: "—", icon: nil, upText: "—", downText: "—", isPlaceholder: true)
+
+/// 磁盘 I/O 进程列表。固定 5 行位置:真实数据从上往下填,空位显“—”,高度恒定无加载跳变。
 struct InlineDiskProcessList: View {
     let processes: [TopDiskProcess]
     let theme: MonitorPanelTheme
+
+    private static let rowCount = 5
 
     private var rows: [ProcessRowData] {
         processes.enumerated().map { index, proc in
@@ -1499,19 +1896,22 @@ struct InlineDiskProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                ForEach(rows) { row in
-                    ProcessRowView(row: row, theme: theme)
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
             .padding(.leading, 28)
+            .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
 }
 
-/// 网络流量进程列表。
+/// 网络流量进程列表。固定 5 行位置:真实数据从上往下填,空位显“—”,高度恒定无加载跳变。
 struct InlineNetworkProcessList: View {
     let processes: [TopNetworkProcess]
     let theme: MonitorPanelTheme
+
+    private static let rowCount = 5
 
     private var rows: [ProcessRowData] {
         processes.enumerated().map { index, proc in
@@ -1533,28 +1933,34 @@ struct InlineNetworkProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                ForEach(rows) { row in
-                    ProcessRowView(row: row, theme: theme)
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
             .padding(.leading, 28)
+            .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
 }
 
-/// 通用进程行渲染。
+/// 通用进程行渲染。isPlaceholder 为真时渲染“—”空位行(清图标 + 淡色横杠)。
 private struct ProcessRowView: View {
     let row: ProcessRowData
     let theme: MonitorPanelTheme
 
     var body: some View {
         HStack(spacing: 6) {
-            ProcessIcon(icon: row.icon, theme: theme)
-                .frame(width: 16, height: 16)
+            if row.isPlaceholder {
+                Color.clear
+                    .frame(width: 16, height: 16)
+            } else {
+                ProcessIcon(icon: row.icon, theme: theme)
+                    .frame(width: 16, height: 16)
+            }
 
             Text(row.name)
                 .monitorPanelCaptionFont(.footnote)
-                .foregroundStyle(theme.primaryText)
+                .foregroundStyle(row.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.primaryText)
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -1566,7 +1972,7 @@ private struct ProcessRowView: View {
                 metricColumn(symbol: "↑", value: row.upText)
                 metricColumn(symbol: "↓", value: row.downText)
             }
-            .foregroundStyle(theme.secondaryText)
+            .foregroundStyle(row.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.secondaryText)
             .lineLimit(1)
             .layoutPriority(1)
         }
