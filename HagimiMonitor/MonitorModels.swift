@@ -226,6 +226,12 @@ final class MonitorStore: ObservableObject {
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
 
+    /// 一次性展开动画标记。用户展开/收起时置位,仅供窗口层
+    /// (FluidPanelController / PinnedPanelController)读取:用户 toggle 后的第一次尺寸上报
+    /// 消费该标记、走补间动画;其后由进程数据到达/定时刷新引起的尺寸变化不再置位,
+    /// 故瞬时贴合、不与展开动画叠加(避免二次高度跳变与掉帧)。非 @Published:仅内部协调。
+    private var pendingExpansionAnimation = false
+
     /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
     /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就 spawn ps/nettop、
     /// 构建大量进程图标」造成的内存/CPU 峰值。
@@ -336,6 +342,18 @@ final class MonitorStore: ObservableObject {
     /// 所有可见面板展开模块的并集。进程采样只覆盖这个集合。
     private var expandedProcessKinds: Set<MonitorKind> {
         expandedKindsBySource.values.reduce(into: Set<MonitorKind>()) { $0.formUnion($1) }
+    }
+
+    /// 由 SwiftUI 侧在 `withAnimation` 展开/收起时调用,置位一次性动画标记。
+    func beginExpansionAnimation() {
+        pendingExpansionAnimation = true
+    }
+
+    /// 由窗口层在处理内容尺寸变化时调用:返回并清除标记。true 表示本次变化源自用户
+    /// toggle、应走补间;false 表示数据驱动的尺寸变化、应瞬时贴合。
+    func consumeExpansionAnimationFlag() -> Bool {
+        defer { pendingExpansionAnimation = false }
+        return pendingExpansionAnimation
     }
 
     /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证

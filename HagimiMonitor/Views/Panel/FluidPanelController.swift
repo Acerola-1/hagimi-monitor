@@ -339,7 +339,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.frame.size != size else { return }
             let delta = abs(self.panel.frame.height - size.height)
-            let animate = self.panel.isVisible && delta > 8
+            // 仅用户 toggle 后的首次尺寸上报走补间;数据到达/定时刷新引起的变化
+            // 瞬时贴合,不与展开动画叠加二次动画。
+            let userToggled = self.store.consumeExpansionAnimationFlag()
+            let animate = self.panel.isVisible && delta > 8 && userToggled
             self.setPanelFrame(size: size, animate: animate)
         }
     }

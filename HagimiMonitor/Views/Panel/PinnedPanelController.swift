@@ -226,9 +226,10 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
             let top = frame.maxY
             frame.size = size
             frame.origin.y = top - size.height
-            // 展开/收起（高度变化显著）时用与内容 `CollapsibleDetail` 完全一致的时长/
-            // easeInOut 曲线并行补间，边框与内容一起伸缩；指标微调仍瞬时贴合。
-            if self.panel.isVisible, abs(self.panel.frame.height - size.height) > 8 {
+            // 展开/收起（高度变化显著）且源自用户 toggle 时，用与内容 `CollapsibleDetail`
+            // 完全一致的时长/easeInOut 曲线并行补间；数据到达/定时刷新引起的变化瞬时贴合。
+            let userToggled = self.store.consumeExpansionAnimationFlag()
+            if self.panel.isVisible, abs(self.panel.frame.height - size.height) > 8, userToggled {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = MonitorConstants.panelExpansionDuration
                     context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)

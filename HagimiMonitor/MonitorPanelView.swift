@@ -47,7 +47,11 @@ struct MonitorPanelView: View {
 
                 #if DISPLAY_CONTROL
                 if store.settings.displayModuleVisible {
-                    DisplayControlsSection(settings: store.settings, isPanelVisible: store.isPanelVisible)
+                    DisplayControlsSection(
+                        settings: store.settings,
+                        isPanelVisible: store.isPanelVisible,
+                        beginExpansionAnimation: { store.beginExpansionAnimation() }
+                    )
                         .compatibleGlassEffectID("display-controls", in: glassNamespace)
                 }
                 #endif
@@ -320,6 +324,9 @@ struct MonitorPanelView: View {
     /// 边框与内容一起伸缩。故此处必须用 `MonitorConstants.panelExpansionDuration` + easeInOut,
     /// 与窗口侧 `NSAnimationContext` 严格一致。
     private func setExpansion(_ mutate: () -> Void) {
+        // 置位一次性动画标记:紧接着的首次内容尺寸上报会被窗口层消费、走补间;
+        // 而展开后进程数据回来/定时刷新引起的尺寸变化不再置位,瞬时贴合,不与此次展开叠加。
+        store.beginExpansionAnimation()
         withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
             mutate()
         }
@@ -450,10 +457,13 @@ private struct MetricGlassRow: View, Equatable {
                     } else {
                         VStack(spacing: 9) {
                             MetricDetailGrid(metrics: details, kind: module.kind, theme: theme)
-                            if module.kind == .memory, showMemoryProcesses, !topMemoryProcesses.isEmpty {
+                            // CPU / 内存采样恒返回 top 5,故展开时无条件挂载列表(数据未到
+                            // 先用留白占位预留高度),使展开一次到位、数据到达后原位淡入,
+                            // 不产生二次高度跳变。磁盘采样需采样间隔才有增量,可能为空,仍按需挂载。
+                            if module.kind == .memory, showMemoryProcesses {
                                 MemoryProcessList(processes: topMemoryProcesses, theme: theme)
                             }
-                            if module.kind == .cpu, showCPUProcesses, !topCPUProcesses.isEmpty {
+                            if module.kind == .cpu, showCPUProcesses {
                                 CPUProcessList(processes: topCPUProcesses, theme: theme)
                             }
                             if module.kind == .storage, showDiskProcesses, !topDiskProcesses.isEmpty {
@@ -1335,6 +1345,9 @@ private struct MemoryProcessList: View {
     let processes: [TopMemoryProcess]
     let theme: MonitorPanelTheme
 
+    /// 数据未就绪时预留的占位行数。内存采样恒返回 top 5,预留 5 行留白使展开一次到位。
+    private static let reservedRowCount = 5
+
     var body: some View {
         VStack(spacing: 5) {
             Rectangle()
@@ -1343,29 +1356,38 @@ private struct MemoryProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                ForEach(processes) { proc in
-                    HStack(spacing: 6) {
-                        ProcessIcon(icon: proc.icon, theme: theme)
-                            .frame(width: 16, height: 16)
+                if processes.isEmpty {
+                    // 留白占位:结构与真实行一致(clear 图标位 + 空文本行),只预留高度、不画内容。
+                    ForEach(0 ..< Self.reservedRowCount, id: \.self) { _ in
+                        ProcessPlaceholderRow()
+                    }
+                } else {
+                    ForEach(processes) { proc in
+                        HStack(spacing: 6) {
+                            ProcessIcon(icon: proc.icon, theme: theme)
+                                .frame(width: 16, height: 16)
 
-                        Text(proc.name)
-                            .monitorPanelCaptionFont(.footnote)
-                            .foregroundStyle(theme.primaryText)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            Text(proc.name)
+                                .monitorPanelCaptionFont(.footnote)
+                                .foregroundStyle(theme.primaryText)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
 
-                        Spacer(minLength: 4)
+                            Spacer(minLength: 4)
 
-                        Text(byteCountString(Int64(proc.memoryUsage), countStyle: .memory))
-                            .monitorPanelMonoFont(.caption2, weight: .medium)
-                            .foregroundStyle(theme.secondaryText)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .layoutPriority(1)
+                            Text(byteCountString(Int64(proc.memoryUsage), countStyle: .memory))
+                                .monitorPanelMonoFont(.caption2, weight: .medium)
+                                .foregroundStyle(theme.secondaryText)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
+                        }
                     }
                 }
             }
             .padding(.leading, 28)
+            // 空→有数据时原位淡入,高度不变(5 占位 ↔ 5 真实行),不触发窗口二次动画。
+            .animation(.easeInOut(duration: 0.2), value: processes.isEmpty)
         }
     }
 }
@@ -1376,6 +1398,9 @@ private struct CPUProcessList: View {
     let processes: [TopCPUProcess]
     let theme: MonitorPanelTheme
 
+    /// 数据未就绪时预留的占位行数。CPU 采样恒返回 top 5,预留 5 行留白使展开一次到位。
+    private static let reservedRowCount = 5
+
     var body: some View {
         VStack(spacing: 5) {
             Rectangle()
@@ -1384,29 +1409,52 @@ private struct CPUProcessList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                ForEach(processes) { proc in
-                    HStack(spacing: 6) {
-                        ProcessIcon(icon: proc.icon, theme: theme)
-                            .frame(width: 16, height: 16)
+                if processes.isEmpty {
+                    // 留白占位:结构与真实行一致(clear 图标位 + 空文本行),只预留高度、不画内容。
+                    ForEach(0 ..< Self.reservedRowCount, id: \.self) { _ in
+                        ProcessPlaceholderRow()
+                    }
+                } else {
+                    ForEach(processes) { proc in
+                        HStack(spacing: 6) {
+                            ProcessIcon(icon: proc.icon, theme: theme)
+                                .frame(width: 16, height: 16)
 
-                        Text(proc.name)
-                            .monitorPanelCaptionFont(.footnote)
-                            .foregroundStyle(theme.primaryText)
-                            .lineLimit(1)
-                            .truncationMode(.tail)
+                            Text(proc.name)
+                                .monitorPanelCaptionFont(.footnote)
+                                .foregroundStyle(theme.primaryText)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
 
-                        Spacer(minLength: 4)
+                            Spacer(minLength: 4)
 
-                        Text(String(format: "%.1f%%", proc.cpuUsage))
-                            .monitorPanelMonoFont(.caption2, weight: .medium)
-                            .foregroundStyle(theme.secondaryText)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-                            .layoutPriority(1)
+                            Text(String(format: "%.1f%%", proc.cpuUsage))
+                                .monitorPanelMonoFont(.caption2, weight: .medium)
+                                .foregroundStyle(theme.secondaryText)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
+                        }
                     }
                 }
             }
             .padding(.leading, 28)
+            // 空→有数据时原位淡入,高度不变(5 占位 ↔ 5 真实行),不触发窗口二次动画。
+            .animation(.easeInOut(duration: 0.2), value: processes.isEmpty)
+        }
+    }
+}
+
+/// 进程行「留白」占位:与真实行同结构(16pt 图标位 + 一行文本高度),仅预留高度、不画内容。
+/// 用于 CPU/内存列表数据到达前撑住高度,使展开动画一次到位。
+private struct ProcessPlaceholderRow: View {
+    var body: some View {
+        HStack(spacing: 6) {
+            Color.clear
+                .frame(width: 16, height: 16)
+            Text(" ")
+                .monitorPanelCaptionFont(.footnote)
+            Spacer(minLength: 4)
         }
     }
 }
