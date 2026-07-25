@@ -321,6 +321,60 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   </div>
 </section>
 
+<!-- Menu Bar Styles -->
+<section class="bar-styles" id="bar-styles">
+  <div class="section-inner fade-in">
+    <div class="bar-hero">
+      <div class="bar-ring-wrap">
+        <svg class="bar-ring-svg" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="5.4"/>
+          <circle id="ringArc" cx="60" cy="60" r="50" fill="none"
+            stroke="#1d1d1f" stroke-width="8.8" stroke-linecap="round"
+            stroke-dasharray="314" stroke-dashoffset="220"
+            transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="19.2" fill="rgba(0,0,0,0.04)"/>
+          <circle id="ringDot" cx="60" cy="60" r="14" fill="#148057"/>
+        </svg>
+      </div>
+      <div class="bar-hero-text">
+        <h2>综合评估系统压力<br>精准反馈</h2>
+        <p class="lead">负载环融合 CPU、GPU 与内存压力，通过 Softmax 聚合算法生成综合分数。颜色随负载状态实时变化——绿色空闲、蓝色工作、橙色繁忙、红色高压。</p>
+        <p class="lead" style="margin-top:14px;color:var(--accent);font-weight:500;font-size:14px;">如果你不喜欢，没关系——我们另有多种样式供选择 ↓</p>
+      </div>
+    </div>
+    <div class="bar-alt-title">其他菜单栏样式</div>
+    <div class="bar-grid">
+      <div class="bar-card">
+        <div class="bar-card-img"><img src="../images/bar_img/图标.png" alt="图标模式"></div>
+        <div class="bar-card-text"><span class="bar-label">图标</span><br><span class="bar-desc">经典图标，简洁不打扰</span></div>
+      </div>
+      <div class="bar-card">
+        <div class="bar-card-img"><img src="../images/bar_img/文字.png" alt="文字模式"></div>
+        <div class="bar-card-text"><span class="bar-label">文字</span><br><span class="bar-desc">数值直显，精确掌握使用率</span></div>
+      </div>
+      <div class="bar-card">
+        <div class="bar-card-img"><img src="../images/bar_img/紧凑.png" alt="紧凑模式"></div>
+        <div class="bar-card-text"><span class="bar-label">紧凑</span><br><span class="bar-desc">更窄占用，为小屏而生</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+(function(){
+  var arc = document.getElementById('ringArc');
+  var dot = document.getElementById('ringDot');
+  if(!arc||!dot) return;
+  var C = 2 * Math.PI * 50, load = 30, target = 30;
+  var colors = [[0,'#148057'],[25,'#008c6b'],[50,'#cc700f'],[78,'#c71f1a']];
+  function gc(l){ for(var i=colors.length-1;i>=0;i--){ if(l>=colors[i][0]) return colors[i][1]; } return colors[0][1]; }
+  function render(){ arc.setAttribute('stroke-dasharray',C.toFixed(1)); arc.setAttribute('stroke-dashoffset',(C-(load/100)*C).toFixed(1)); dot.setAttribute('fill',gc(load)); }
+  function step(){ var d=target-load; if(Math.abs(d)<.5){load=target;}else{load+=d*.12;} render(); requestAnimationFrame(step); }
+  function nt(){ target=Math.random()*85+5; setTimeout(nt,2000+Math.random()*3000); }
+  render(); requestAnimationFrame(step); setTimeout(nt,1500);
+})();
+</script>
+
 <!-- Lightweight -->
 <section class="lightweight" id="lightweight">
   <div class="section-inner fade-in">
@@ -380,90 +434,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   </div>
 </section>
 
-<!-- Menu Bar Styles -->
-<section class="bar-styles" id="bar-styles">
-  <div class="section-inner fade-in">
-    <div class="bar-hero">
-      <div class="bar-ring-wrap">
-        <svg class="bar-ring-svg" viewBox="0 0 120 120">
-          <!-- Track -->
-          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="5.4"/>
-          <!-- Arc -->
-          <circle id="ringArc" cx="60" cy="60" r="50" fill="none"
-            stroke="#1d1d1f" stroke-width="8.8" stroke-linecap="round"
-            stroke-dasharray="314" stroke-dashoffset="220"
-            transform="rotate(-90 60 60)"/>
-          <!-- Halo -->
-          <circle cx="60" cy="60" r="19.2" fill="rgba(0,0,0,0.04)"/>
-          <!-- Dot -->
-          <circle id="ringDot" cx="60" cy="60" r="14" fill="#148057"/>
-        </svg>
-      </div>
-      <div class="bar-hero-text">
-        <h2>综合评估系统压力<br>精准反馈</h2>
-        <p class="lead">负载环融合 CPU、GPU 与内存压力，通过 Softmax 聚合算法生成综合分数。颜色随负载状态实时变化——绿色空闲、蓝色工作、橙色繁忙、红色高压。</p>
-        <p class="lead" style="margin-top:14px;color:var(--accent);font-weight:500;font-size:14px;">如果你不喜欢，没关系——我们另有多种样式供选择 ↓</p>
-      </div>
-    </div>
-    <div class="bar-alt-title">其他菜单栏样式</div>
-    <div class="bar-grid">
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/图标.png" alt="图标模式"></div>
-        <div class="bar-card-text"><span class="bar-label">图标</span><br><span class="bar-desc">经典图标，简洁不打扰</span></div>
-      </div>
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/文字.png" alt="文字模式"></div>
-        <div class="bar-card-text"><span class="bar-label">文字</span><br><span class="bar-desc">数值直显，精确掌握使用率</span></div>
-      </div>
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/紧凑.png" alt="紧凑模式"></div>
-        <div class="bar-card-text"><span class="bar-label">紧凑</span><br><span class="bar-desc">更窄占用，为小屏而生</span></div>
-      </div>
-    </div>
-  </div>
-</section>
 
-<script>
-// Animated load ring simulation
-(function(){
-  var arc = document.getElementById('ringArc');
-  var dot = document.getElementById('ringDot');
-  if(!arc||!dot) return;
-  var circumference = 2 * Math.PI * 50; // r=50
-  var load = 30;
-  var target = 30;
-  var colors = [
-    [0,'#148057'],   // idle: deep green
-    [25,'#008c6b'],  // working: teal green
-    [50,'#cc700f'],  // busy: orange
-    [78,'#c71f1a']   // stressed: red
-  ];
-  function getColor(l){
-    for(var i=colors.length-1;i>=0;i--){ if(l>=colors[i][0]) return colors[i][1]; }
-    return colors[0][1];
-  }
-  function render(){
-    var offset = circumference - (load/100)*circumference;
-    arc.setAttribute('stroke-dasharray', circumference.toFixed(1));
-    arc.setAttribute('stroke-dashoffset', offset.toFixed(1));
-    dot.setAttribute('fill', getColor(load));
-  }
-  function step(){
-    var delta = target - load;
-    if(Math.abs(delta)<0.5){ load=target; }
-    else{ load += delta * 0.12; }
-    render();
-    requestAnimationFrame(step);
-  }
-  function newTarget(){
-    target = Math.random()*85 + 5;
-    setTimeout(newTarget, 2000 + Math.random()*3000);
-  }
-  render();
-  requestAnimationFrame(step);
-  setTimeout(newTarget, 1500);
-})();
-</script>
 
 <!-- Download -->
 <section class="download" id="download">
