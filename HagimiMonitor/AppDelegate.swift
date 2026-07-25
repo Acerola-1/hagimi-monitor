@@ -10,6 +10,7 @@ import SwiftUI
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var store: MonitorStore = MonitorStore()
+
     private(set) lazy var fluidPanelController: FluidPanelController = {
         FluidPanelController(
             store: store,
@@ -21,10 +22,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
 
     private(set) lazy var pinnedPanelController: PinnedPanelController = {
-        PinnedPanelController(store: store) { [weak self] in
+        PinnedPanelController(store: store, openSettings: { [weak self] in
             self?.fluidPanelController.dismissPanelForSettings()
             SettingsWindowPresenter.openFromOutsideSwiftUI()
-        }
+        })
     }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {

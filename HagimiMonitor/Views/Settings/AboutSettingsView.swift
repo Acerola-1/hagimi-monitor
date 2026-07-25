@@ -8,6 +8,7 @@ struct AboutSettingsView: View {
     #endif
     @State private var isExportingLogs = false
     @State private var logExportMessage: String?
+    @State private var isShowingLicenses = false
 
     // 仅直接分发版使用:App Store 版不暴露 GitHub Releases 入口(见下方 SettingsRow 注释)。
     #if DIRECT_DISTRIBUTION
@@ -74,6 +75,17 @@ struct AboutSettingsView: View {
                 SettingsRow(title: String(localized: "about.diagnostics"), subtitle: logExportMessage) {
                     exportLogsButton
                 }
+
+                // 开源软件声明:与诊断日志同款行样式,右侧按钮弹出第三方开源软件/素材列表。
+                SettingsRow(title: String(localized: "about.open-source")) {
+                    Button {
+                        isShowingLicenses = true
+                    } label: {
+                        Label(String(localized: "about.open-source.view"), systemImage: "list.bullet.rectangle")
+                    }
+                    .compatibleButtonStyle()
+                    .frame(width: accessoryColumnWidth, alignment: .leading)
+                }
             }
 
             Text(String(localized: "© 2026 Acerola"))
@@ -86,6 +98,9 @@ struct AboutSettingsView: View {
         .padding(.horizontal, 36)
         .padding(.bottom, 28)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .sheet(isPresented: $isShowingLicenses) {
+            OpenSourceLicensesView(onClose: { isShowingLicenses = false })
+        }
     }
 
     @ViewBuilder

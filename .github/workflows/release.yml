@@ -246,4 +246,7 @@ jobs:
           publish_dir: build/appcast
           publish_branch: gh-pages
           keep_files: true
-          exclude_assets: '*.zip,*.md,*.html'
+          # 仅排除 generate_appcast 产出的版本更新日志文件（HagimiMonitor-v*.html）。
+          # 注意：exclude_assets 会把匹配项从 keep_files 的保留列表中剔除，
+          # 若写成 *.html 会连官网入口 index.html 一并删除，导致根路径 404。
+          exclude_assets: '*.zip,*.md,HagimiMonitor-*.html'

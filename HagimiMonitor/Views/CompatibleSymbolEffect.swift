@@ -20,36 +20,11 @@ struct CompatiblePulseEffect: ViewModifier {
     }
 }
 
-// MARK: - Compatible Variable Color Effect
-
-/// 跨版本兼容的 variableColor 动画。macOS 26+ 使用原生 `.symbolEffect(.variableColor.iterative)`，
-/// macOS 15 上降级为静态图标（充电时仅改变 opacity 提示状态）。
-struct CompatibleVariableColorEffect: ViewModifier {
-    var isActive: Bool
-
-    func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
-            content
-                .symbolEffect(.variableColor.iterative, isActive: isActive)
-        } else {
-            content
-                .opacity(isActive ? 1.0 : 0.7)
-                .animation(.easeInOut(duration: 0.3), value: isActive)
-        }
-    }
-}
-
 // MARK: - View Extensions
 
 extension View {
     /// 跨版本兼容的脉冲动画替代。
     func compatiblePulseEffect() -> some View {
         modifier(CompatiblePulseEffect())
-    }
-
-    /// 跨版本兼容的 variableColor 动画替代。
-    /// - Parameter isActive: 是否激活动画（如充电状态）。
-    func compatibleVariableColorEffect(isActive: Bool) -> some View {
-        modifier(CompatibleVariableColorEffect(isActive: isActive))
     }
 }

@@ -176,8 +176,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // tick,避免白白触发 ImageRenderer 快照(见 refreshStatusItemImage 指标分支)。
         store.loadAnimator.$displayedComputeLoad
             .sink { [weak self] _ in
-                guard let self, self.store.settings.menuBarDisplayMode == .ring else { return }
-                self.refreshStatusItemImage()
+                guard let self else { return }
+                switch self.store.settings.menuBarDisplayMode {
+                case .ring:
+                    self.refreshStatusItemImage()
+                case .metrics:
+                    break
+                }
             }
             .store(in: &cancellables)
         // $modules 每秒发布(网络字节几乎每秒都变)。这里不做去重:环模式的负载等级颜色
@@ -334,7 +339,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.frame.size != size else { return }
             let delta = abs(self.panel.frame.height - size.height)
-            let animate = self.panel.isVisible && delta > 8
+            // 仅用户 toggle 后的首次尺寸上报走补间;数据到达/定时刷新引起的变化
+            // 瞬时贴合,不与展开动画叠加二次动画。
+            let userToggled = self.store.consumeExpansionAnimationFlag()
+            let animate = self.panel.isVisible && delta > 8 && userToggled
             self.setPanelFrame(size: size, animate: animate)
         }
     }
@@ -376,7 +384,15 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
                 panel.animator().setFrame(newFrame, display: true)
             }
         } else {
-            panel.setFrame(newFrame, display: true, animate: false)
+            // 数据驱动的即时贴合:用 0 时长动画组提交(而非 setFrame(animate:false))。
+            // 关键:进程列表(尤其磁盘/网络,行数随采样在 0→2→5 间变动)展开后异步到达的
+            // 高度变化,若此时展开补间仍在进行,`setFrame(animate:false)` 会被仍在逐帧推进的
+            // 补间「覆盖」回旧终值(表现为容器过高留白或过矮把底部按钮裁掉,直到下个采样周期才纠正)。
+            // 0 时长动画组会抢占并取消在途补间,令最新内容高度立即生效。
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0
+                panel.animator().setFrame(newFrame, display: true)
+            }
         }
     }
 

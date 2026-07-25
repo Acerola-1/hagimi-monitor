@@ -226,16 +226,23 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
             let top = frame.maxY
             frame.size = size
             frame.origin.y = top - size.height
-            // 展开/收起（高度变化显著）时用与内容 `CollapsibleDetail` 完全一致的时长/
-            // easeInOut 曲线并行补间，边框与内容一起伸缩；指标微调仍瞬时贴合。
-            if self.panel.isVisible, abs(self.panel.frame.height - size.height) > 8 {
+            // 展开/收起（高度变化显著）且源自用户 toggle 时，用与内容 `CollapsibleDetail`
+            // 完全一致的时长/easeInOut 曲线并行补间；数据到达/定时刷新引起的变化瞬时贴合。
+            let userToggled = self.store.consumeExpansionAnimationFlag()
+            if self.panel.isVisible, abs(self.panel.frame.height - size.height) > 8, userToggled {
                 NSAnimationContext.runAnimationGroup { context in
                     context.duration = MonitorConstants.panelExpansionDuration
                     context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
                     self.panel.animator().setFrame(frame, display: true)
                 }
             } else {
-                self.panel.setFrame(frame, display: true)
+                // 数据驱动的即时贴合:用 0 时长动画组抢占并取消可能仍在进行的展开补间,
+                // 否则进程列表(磁盘/网络行数随采样变动)展开后异步到达的高度变化会被在途补间
+                // 覆盖回旧终值(表现为容器过高留白或过矮裁掉底部按钮),直到下个采样周期才纠正。
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0
+                    self.panel.animator().setFrame(frame, display: true)
+                }
             }
         }
     }

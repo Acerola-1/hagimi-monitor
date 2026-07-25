@@ -226,6 +226,12 @@ final class MonitorStore: ObservableObject {
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
 
+    /// 一次性展开动画标记。用户展开/收起时置位,仅供窗口层
+    /// (FluidPanelController / PinnedPanelController)读取:用户 toggle 后的第一次尺寸上报
+    /// 消费该标记、走补间动画;其后由进程数据到达/定时刷新引起的尺寸变化不再置位,
+    /// 故瞬时贴合、不与展开动画叠加(避免二次高度跳变与掉帧)。非 @Published:仅内部协调。
+    private var pendingExpansionAnimation = false
+
     /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
     /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就 spawn ps/nettop、
     /// 构建大量进程图标」造成的内存/CPU 峰值。
@@ -258,6 +264,7 @@ final class MonitorStore: ObservableObject {
                 self.objectWillChange.send()
             }
             .store(in: &cancellables)
+
         timerCancellable = Timer.publish(every: refreshSchedule.tickInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -337,6 +344,18 @@ final class MonitorStore: ObservableObject {
         expandedKindsBySource.values.reduce(into: Set<MonitorKind>()) { $0.formUnion($1) }
     }
 
+    /// 由 SwiftUI 侧在 `withAnimation` 展开/收起时调用,置位一次性动画标记。
+    func beginExpansionAnimation() {
+        pendingExpansionAnimation = true
+    }
+
+    /// 由窗口层在处理内容尺寸变化时调用:返回并清除标记。true 表示本次变化源自用户
+    /// toggle、应走补间;false 表示数据驱动的尺寸变化、应瞬时贴合。
+    func consumeExpansionAnimationFlag() -> Bool {
+        defer { pendingExpansionAnimation = false }
+        return pendingExpansionAnimation
+    }
+
     /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证
     /// 「展开即见数据」;集合收缩时对应类目自然停采(下一轮定时器不再覆盖它)。
     func updateExpandedKinds(_ kinds: Set<MonitorKind>, for source: PanelKind) {
@@ -344,7 +363,35 @@ final class MonitorStore: ObservableObject {
         expandedKindsBySource[source] = kinds
         let newlyExpanded = expandedProcessKinds.subtracting(previous)
         guard isPanelVisible, !newlyExpanded.isEmpty else { return }
-        refreshProcesses(for: newlyExpanded)
+        refreshProcesses(for: newlyExpanded) { [weak self] in
+            guard let self else { return }
+            // 网络:首采的 nettop 仅建立基线(因无前一快照,增量为空),完成后立即
+            // 链式再采一次即可算出增量,避免干等下一个 5s 定时。不用固定延时是
+            // 因为 nettop 单次耗时 1-2s 不确定,按完成回调链式接力最稳。
+            guard newlyExpanded.contains(.network),
+                  self.isPanelVisible,
+                  self.expandedProcessKinds.contains(.network),
+                  self.topNetworkProcesses.isEmpty else { return }
+            self.refreshProcesses(for: [.network])
+        }
+        // 磁盘读写量是两次快照的增量:首采只建基线、常返空。磁盘采样本身极快,故用
+        // 0.6s 定时补采(需一个测量窗口),把磁盘 TOP 从「干等 5s 定时」缩短到 ~0.6s 出数。
+        if newlyExpanded.contains(.storage) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
+                guard let self, self.isPanelVisible, self.expandedProcessKinds.contains(.storage) else { return }
+                self.refreshProcesses(for: [.storage])
+            }
+        }
+    }
+
+    /// 当前设置里已开启进程列表的类目集合。
+    private func enabledProcessKinds() -> Set<MonitorKind> {
+        var enabled = Set<MonitorKind>()
+        if settings.showMemoryProcesses { enabled.insert(.memory) }
+        if settings.showCPUProcesses { enabled.insert(.cpu) }
+        if settings.showDiskProcesses { enabled.insert(.storage) }
+        if settings.showNetworkProcesses { enabled.insert(.network) }
+        return enabled
     }
 
     /// 计算实际需要采样的进程类目:展开集合与「设置里开启的进程列表」集合的交集。
@@ -377,15 +424,14 @@ final class MonitorStore: ObservableObject {
     /// 对指定类目采样(仅限其中设置已开启的列表)。并行执行,全部完成后回主线程
     /// 更新 @Published 属性。只采「展开 ∩ 设置开启」的类目,避免为不可见的列表
     /// spawn ps/nettop 子进程、构建图标。
-    private func refreshProcesses(for kinds: Set<MonitorKind>) {
-        var enabled = Set<MonitorKind>()
-        if settings.showMemoryProcesses { enabled.insert(.memory) }
-        if settings.showCPUProcesses { enabled.insert(.cpu) }
-        if settings.showDiskProcesses { enabled.insert(.storage) }
-        if settings.showNetworkProcesses { enabled.insert(.network) }
+    private func refreshProcesses(for kinds: Set<MonitorKind>, completion: (() -> Void)? = nil) {
+        let enabled = enabledProcessKinds()
 
         let active = Self.activeProcessKinds(expanded: kinds, enabled: enabled)
-        guard !active.isEmpty else { return }
+        guard !active.isEmpty else {
+            completion?()
+            return
+        }
 
         let memoryIncludeSystem = settings.memoryShowSystemProcesses
         let cpuIncludeSystem = settings.cpuShowSystemProcesses
@@ -443,6 +489,7 @@ final class MonitorStore: ObservableObject {
             if let c = cpuProcesses { self.topCPUProcesses = c }
             if let d = diskProcesses { self.topDiskProcesses = d }
             if let n = networkProcesses { self.topNetworkProcesses = n }
+            completion?()
         }
     }
 
