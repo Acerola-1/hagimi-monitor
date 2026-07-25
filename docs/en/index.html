@@ -77,7 +77,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 /* ============ Hero ============ */
 .hero{
-  padding:140px 0 100px;
+  padding:120px 0 80px;
   display:flex;align-items:center;
 }
 .hero .section-inner{
@@ -95,17 +95,18 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   padding:11px 14px;font-size:14px;font-weight:500;background:#fff;
 }
 .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;}
-.hero-right{flex:0 0 460px;display:flex;justify-content:flex-end;align-items:center;padding-right:20px;}
-.fan{position:relative;width:380px;height:460px;}
+.hero-right{flex:0 0 480px;display:flex;justify-content:center;align-items:center;}
+.fan{position:relative;width:440px;height:500px;}
 .fan img{
-  position:absolute;width:340px;border-radius:20px;
-  box-shadow:none;
+  position:absolute;width:320px;border-radius:20px;
+  box-shadow:0 20px 60px -20px rgba(29,29,31,.25);
   transform-origin:bottom center;
-  left:50%;margin-left:-170px;
-  clip-path:inset(4px round 20px);
+  left:50%;margin-left:-160px;
+  clip-path:inset(0 round 20px);
 }
-.fan .back{transform:translate(-50px,22px) rotate(-8deg) scale(.96);z-index:1;opacity:.92;}
-.fan .front{transform:translate(40px,-8px) rotate(6deg);z-index:2;}
+.fan .back{transform:translate(-60px,30px) rotate(-8deg) scale(.9);z-index:1;opacity:.82;}
+.fan .mid{transform:translate(0,10px) rotate(0deg) scale(.95);z-index:2;opacity:.92;}
+.fan .front{transform:translate(60px,-10px) rotate(6deg);z-index:3;}
 
 /* ============ Lightweight ============ */
 .lightweight{text-align:center;background:#fff;}
@@ -314,8 +315,9 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
     </div>
     <div class="hero-right fade-in">
       <div class="fan">
-        <img class="back" src="../images/vitality-dark.png" alt="Vibrant dark theme panel">
-        <img class="front" src="../images/vitality-light.png" alt="Vibrant light theme panel">
+        <img class="back" src="../images/vitality-dark.png" alt="Vibrant dark theme">
+        <img class="mid" src="../images/balance-light.png" alt="Balanced light theme">
+        <img class="front" src="../images/vitality-light.png" alt="Vibrant light theme">
       </div>
     </div>
   </div>
