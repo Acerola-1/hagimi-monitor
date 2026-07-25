@@ -4734,46 +4734,24 @@
         }
       }
     },
-    "panel.enlarge": {
+    "panel.close": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Enlarge"
+            "value": "Close"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "拡大"
+            "value": "閉じる"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "放大"
-          }
-        }
-      }
-    },
-    "panel.restore": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restore"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "元に戻す"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "还原"
+            "value": "关闭"
           }
         }
       }
