@@ -16,10 +16,22 @@
 
 <p align="center">
   <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest"><strong>Download Latest</strong></a> ·
+  <a href="https://apps.apple.com/app/hagimimonitor/id6792169908"><strong>App Store</strong></a> ·
+  <a href="#editions">Editions</a> ·
   <a href="#highlights">Highlights</a> ·
   <a href="#screenshots">Screenshots</a> ·
   <a href="#installation">Installation</a> ·
   <a href="#build">Build</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest">
+    <img alt="Download from GitHub" src="https://img.shields.io/badge/GitHub-Free%20Download-2ECC71?style=for-the-badge&logo=github&logoColor=white" height="42">
+  </a>
+  &nbsp;
+  <a href="https://apps.apple.com/app/hagimimonitor/id6792169908">
+    <img alt="Download on the App Store" src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/en-us?size=250x83" height="42">
+  </a>
 </p>
 
 <p align="center">
@@ -90,6 +102,22 @@ Adjust brightness, volume, and contrast for external displays from the menu bar 
 ### Native Swift, Lightweight Resident
 
 Built with Swift / SwiftUI and optimized for Apple Silicon. Daily memory footprint is around 50 MB, making it suitable as a long-running menu bar status panel.
+
+## Editions
+
+HagimiMonitor offers two ways to get it, with an identical core monitoring experience:
+
+| Feature | GitHub (Free) | App Store (Support) |
+| --- | :---: | :---: |
+| Seven monitoring modules (CPU / GPU / Memory / Storage / Network / Battery / Display info) | ✅ | ✅ |
+| Statistics · Health score · Event detection | ✅ | ✅ |
+| Dual themes · Glassmorphism UI | ✅ | ✅ |
+| External display control (DDC/CI brightness / volume / contrast) | ✅ | ❌ Sandbox limit |
+| Media key capture | ✅ | ❌ Sandbox limit |
+| Updates | Built-in auto-update | App Store updates |
+| Price | Free | Paid · Support the developer |
+
+> 💚 **The App Store edition is a token of thanks**: both editions share the exact same core experience. If HagimiMonitor helps you and you don't need the out-of-sandbox display controls, buying it on the [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) is like leaving a coffee — a small, sincere way to support and encourage an indie developer. Whichever edition you choose, thank you all the same.
 
 ## Installation
 

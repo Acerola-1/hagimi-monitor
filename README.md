@@ -16,10 +16,22 @@
 
 <p align="center">
   <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest"><strong>下载最新版</strong></a> ·
+  <a href="https://apps.apple.com/app/hagimimonitor/id6792169908"><strong>App Store</strong></a> ·
+  <a href="#版本选择">版本选择</a> ·
   <a href="#功能亮点">功能亮点</a> ·
   <a href="#截图">截图</a> ·
   <a href="#安装">安装</a> ·
   <a href="#构建">构建</a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest">
+    <img alt="从 GitHub 免费下载" src="https://img.shields.io/badge/GitHub-%E5%85%8D%E8%B4%B9%E4%B8%8B%E8%BD%BD-2ECC71?style=for-the-badge&logo=github&logoColor=white" height="42">
+  </a>
+  &nbsp;
+  <a href="https://apps.apple.com/app/hagimimonitor/id6792169908">
+    <img alt="Download on the App Store" src="https://tools.applemediaservices.com/api/badges/download-on-the-app-store/black/zh-cn?size=250x83" height="42">
+  </a>
 </p>
 
 <p align="center">
@@ -90,6 +102,22 @@ HagimiMonitor 会围绕系统状态提供更多长期视角：
 ### Swift 原生，轻量常驻
 
 应用使用 Swift / SwiftUI 原生开发，面向 Apple Silicon 优化。日常常驻内存约 50 MB，适合作为长期挂在菜单栏里的系统状态面板。
+
+## 版本选择
+
+HagimiMonitor 提供两种获取方式，核心监控体验完全一致：
+
+| 功能 | GitHub 版（免费） | App Store 版（打赏支持） |
+| --- | :---: | :---: |
+| 七大监控模块（CPU / GPU / 内存 / 存储 / 网络 / 电池 / 显示器信息） | ✅ | ✅ |
+| 历史统计 · 健康评分 · 事件检测 | ✅ | ✅ |
+| 双主题 · 玻璃拟态界面 | ✅ | ✅ |
+| 外接显示器控制（DDC/CI 亮度 / 音量 / 对比度） | ✅ | ❌ 沙箱限制 |
+| 媒体键接管 | ✅ | ❌ 沙箱限制 |
+| 更新方式 | 内置自动更新 | App Store 更新 |
+| 价格 | 免费 | 付费 · 支持开发者 |
+
+> 💚 **App Store 版，是一份心意**：两个版本的核心体验完全一致。如果 HagimiMonitor 帮到了你，而你又不需要沙箱外的显示器控制功能，欢迎在 [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) 购买。它更像一杯咖啡，是对独立开发者持续维护的一份支持与鼓励。无论你选择哪个版本，都同样感谢。
 
 ## 安装
 
