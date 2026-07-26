@@ -77,7 +77,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 /* ============ Hero ============ */
 .hero{
-  padding:140px 0 100px;
+  padding:120px 0 80px;
   display:flex;align-items:center;
 }
 .hero .section-inner{
@@ -95,17 +95,24 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   padding:11px 14px;font-size:14px;font-weight:500;background:#fff;
 }
 .dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;}
-.hero-right{flex:0 0 460px;display:flex;justify-content:flex-end;align-items:center;padding-right:20px;}
-.fan{position:relative;width:380px;height:460px;}
+.hero-right{flex:0 0 520px;display:flex;justify-content:center;align-items:center;padding-left:40px;}
+.fan{position:relative;width:480px;height:460px;overflow:visible;}
 .fan img{
   position:absolute;width:340px;border-radius:20px;
-  box-shadow:none;
-  transform-origin:bottom center;
+  box-shadow:0 16px 48px -12px rgba(29,29,31,.22);
+  transform-origin:center bottom;
   left:50%;margin-left:-170px;
-  clip-path:inset(4px round 20px);
+  top:50%;margin-top:-240px;
+  clip-path:inset(0 round 20px);
+  transition:transform .55s cubic-bezier(.34,1.56,.64,1),opacity .4s ease,box-shadow .4s ease;
 }
-.fan .back{transform:translate(-50px,22px) rotate(-8deg) scale(.96);z-index:1;opacity:.92;}
-.fan .front{transform:translate(40px,-8px) rotate(6deg);z-index:2;}
+.fan .front{transform:translate(0,0) rotate(0deg) scale(1);z-index:3;}
+.fan .back{transform:translate(-58px,30px) rotate(-9deg) scale(.88);z-index:1;opacity:.82;}
+.fan .mid{transform:translate(58px,30px) rotate(9deg) scale(.88);z-index:2;opacity:.82;}
+/* Hover: fully separated, enlarged */
+.fan:hover .front{transform:translate(0,-5px) rotate(0deg) scale(1.02);box-shadow:0 24px 64px -16px rgba(29,29,31,.3);}
+.fan:hover .back{transform:translate(-175px,-5px) rotate(0deg) scale(1.02);opacity:1;box-shadow:0 24px 64px -16px rgba(29,29,31,.3);}
+.fan:hover .mid{transform:translate(175px,-5px) rotate(0deg) scale(1.02);opacity:1;box-shadow:0 24px 64px -16px rgba(29,29,31,.3);}
 
 /* ============ Lightweight ============ */
 .lightweight{text-align:center;background:#fff;}
@@ -181,7 +188,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 .download-actions{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;}
 .btn-primary{
   display:inline-flex;align-items:center;gap:8px;
-  padding:14px 32px;
+  padding:14px 32px;white-space:nowrap;
   background:var(--ink);color:#fff;
   text-decoration:none;border-radius:8px;
   font-size:15px;font-weight:600;
@@ -192,7 +199,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 .btn-primary svg{width:18px;height:18px;}
 .btn-store{
   display:inline-flex;align-items:center;gap:8px;
-  padding:14px 32px;
+  padding:14px 32px;white-space:nowrap;
   background:#fff;color:var(--ink);
   text-decoration:none;border-radius:8px;
   font-size:15px;font-weight:600;
@@ -236,14 +243,21 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 /* ============ Responsive ============ */
 @media(max-width:900px){
-  .hero .section-inner{flex-direction:column;text-align:center;}
+  .hero .section-inner{flex-direction:column-reverse;text-align:center;gap:24px;}
   .hero-right{flex:none;width:100%;}
-  .fan{width:280px;height:360px;margin:0 auto;}
-  .fan img{width:260px;}
+  .fan{width:320px;height:320px;margin:0 auto;}
+  .fan img{width:200px;margin-left:-100px;margin-top:-150px;}
+  .fan .back{transform:translate(-36px,20px) rotate(-9deg) scale(.86);}
+  .fan .mid{transform:translate(36px,20px) rotate(9deg) scale(.86);}
+  .fan .front{transform:translate(0,0) rotate(0deg) scale(1);}
+  .fan:hover .back{transform:translate(-180px,-8px) rotate(0deg) scale(.84);}
+  .fan:hover .mid{transform:translate(180px,-8px) rotate(0deg) scale(.84);}
+  .fan:hover .front{transform:translate(0,-8px) rotate(0deg) scale(.84);}
   .hero-chips{grid-template-columns:1fr 1fr;}
   .themes-stage{flex-direction:column;gap:32px;}
   .swap-icon{display:none;}
   .gallery-grid{grid-template-columns:repeat(2,1fr);}
+  .gallery-cell.center{grid-column:1/3;}
   .stats{gap:28px;}
   .bar-hero{flex-direction:column;text-align:center;gap:32px;}
   .bar-ring-wrap{flex:none;}
@@ -253,6 +267,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   .nav-links{display:none;}
   .hero-chips{grid-template-columns:1fr;}
   .gallery-grid{grid-template-columns:1fr 1fr;}
+  .gallery-cell.center{grid-column:1/3;}
   .bar-grid{grid-template-columns:1fr;}
   .download-actions{flex-direction:column;align-items:center;}
 }
@@ -314,12 +329,43 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
     </div>
     <div class="hero-right fade-in">
       <div class="fan">
-        <img class="back" src="../images/vitality-dark.png" alt="Vibrant ダークテーマ">
-        <img class="front" src="../images/vitality-light.png" alt="Vibrant ライトテーマ">
+        <img class="back" src="../images/vitality-dark.png" alt="Vibrant ダーク">
+        <img class="mid" src="../images/balance-light.png" alt="Balanced ライト">
+        <img class="front" src="../images/vitality-light.png" alt="Vibrant ライト">
       </div>
     </div>
   </div>
 </section>
+
+<!-- Menu Bar Styles -->
+<section class="bar-styles" id="bar-styles">
+  <div class="section-inner fade-in">
+    <div class="bar-hero">
+      <div class="bar-ring-wrap">
+        <svg class="bar-ring-svg" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="5.4"/>
+          <circle id="ringArc" cx="60" cy="60" r="50" fill="none" stroke="#1d1d1f" stroke-width="8.8" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="220" transform="rotate(-90 60 60)"/>
+          <circle cx="60" cy="60" r="19.2" fill="rgba(0,0,0,0.04)"/>
+          <circle id="ringDot" cx="60" cy="60" r="14" fill="#148057"/>
+        </svg>
+      </div>
+      <div class="bar-hero-text">
+        <h2>システム圧力を総合評価<br>正確にフィードバック</h2>
+        <p class="lead">負荷リングは CPU、GPU、メモリ圧力を Softmax 集約で統合スコア化。色がリアルタイムで変化——緑はアイドル、ティールは稼働、オレンジはビジー、赤は高負荷。</p>
+        <p class="lead" style="margin-top:14px;color:var(--accent);font-weight:500;font-size:14px;">お好みでなければ、他のスタイルもご用意しています ↓</p>
+      </div>
+    </div>
+    <div class="bar-alt-title">その他のメニューバースタイル</div>
+    <div class="bar-grid">
+      <div class="bar-card"><div class="bar-card-img"><img src="../images/bar_img/图标.png" alt="アイコン"></div><div class="bar-card-text"><span class="bar-label">アイコン</span><br><span class="bar-desc">クラシック、シンプルで控えめ</span></div></div>
+      <div class="bar-card"><div class="bar-card-img"><img src="../images/bar_img/文字.png" alt="テキスト"></div><div class="bar-card-text"><span class="bar-label">テキスト</span><br><span class="bar-desc">数値表示で正確な使用率を確認</span></div></div>
+      <div class="bar-card"><div class="bar-card-img"><img src="../images/bar_img/紧凑.png" alt="コンパクト"></div><div class="bar-card-text"><span class="bar-label">コンパクト</span><br><span class="bar-desc">省スペース、小画面向け</span></div></div>
+    </div>
+  </div>
+</section>
+<script>
+(function(){var arc=document.getElementById('ringArc'),dot=document.getElementById('ringDot');if(!arc||!dot)return;var C=2*Math.PI*50,load=30,target=30,colors=[[0,'#148057'],[25,'#008c6b'],[50,'#cc700f'],[78,'#c71f1a']];function gc(l){for(var i=colors.length-1;i>=0;i--){if(l>=colors[i][0])return colors[i][1];}return colors[0][1];}function render(){arc.setAttribute('stroke-dasharray',C.toFixed(1));arc.setAttribute('stroke-dashoffset',(C-(load/100)*C).toFixed(1));dot.setAttribute('fill',gc(load));}function step(){var d=target-load;if(Math.abs(d)<.5){load=target;}else{load+=d*.12;}render();requestAnimationFrame(step);}function nt(){target=Math.random()*85+5;setTimeout(nt,2000+Math.random()*3000);}render();requestAnimationFrame(step);setTimeout(nt,1500);})();
+</script>
 
 <!-- Lightweight -->
 <section class="lightweight" id="lightweight">
@@ -380,65 +426,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   </div>
 </section>
 
-<!-- Menu Bar Styles -->
-<section class="bar-styles" id="bar-styles">
-  <div class="section-inner fade-in">
-    <div class="bar-hero">
-      <div class="bar-ring-wrap">
-        <svg class="bar-ring-svg" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="5.4"/>
-          <circle id="ringArc" cx="60" cy="60" r="50" fill="none"
-            stroke="#1d1d1f" stroke-width="8.8" stroke-linecap="round"
-            stroke-dasharray="314" stroke-dashoffset="220"
-            transform="rotate(-90 60 60)"/>
-          <circle cx="60" cy="60" r="19.2" fill="rgba(0,0,0,0.04)"/>
-          <circle id="ringDot" cx="60" cy="60" r="14" fill="#148057"/>
-        </svg>
-      </div>
-      <div class="bar-hero-text">
-        <h2>システム圧力を総合評価<br>正確にフィードバック</h2>
-        <p class="lead">負荷リングは CPU、GPU、メモリ圧力を Softmax 集約で統合スコア化。色がリアルタイムで変化——緑はアイドル、青は稼働、オレンジはビジー、赤は高負荷。</p>
-        <p class="lead" style="margin-top:14px;color:var(--accent);font-weight:500;font-size:14px;">お好みでなければ、他のスタイルもご用意しています ↓</p>
-      </div>
-    </div>
-    <div class="bar-alt-title">その他のメニューバースタイル</div>
-    <div class="bar-grid">
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/图标.png" alt="アイコンモード"></div>
-        <div class="bar-card-text"><span class="bar-label">アイコン</span><br><span class="bar-desc">クラシックアイコン、シンプルで控えめ</span></div>
-      </div>
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/文字.png" alt="テキストモード"></div>
-        <div class="bar-card-text"><span class="bar-label">テキスト</span><br><span class="bar-desc">数値表示で正確な使用率を確認</span></div>
-      </div>
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/紧凑.png" alt="コンパクトモード"></div>
-        <div class="bar-card-text"><span class="bar-label">コンパクト</span><br><span class="bar-desc">省スペース、小画面向け</span></div>
-      </div>
-    </div>
-  </div>
-</section>
 
-<script>
-(function(){
-  var arc = document.getElementById('ringArc');
-  var dot = document.getElementById('ringDot');
-  if(!arc||!dot) return;
-  var circumference = 2 * Math.PI * 50;
-  var load = 30, target = 30;
-  var colors = [[0,'#148057'],[25,'#008c6b'],[50,'#cc700f'],[78,'#c71f1a']];
-  function getColor(l){ for(var i=colors.length-1;i>=0;i--){ if(l>=colors[i][0]) return colors[i][1]; } return colors[0][1]; }
-  function render(){
-    var offset = circumference - (load/100)*circumference;
-    arc.setAttribute('stroke-dasharray', circumference.toFixed(1));
-    arc.setAttribute('stroke-dashoffset', offset.toFixed(1));
-    dot.setAttribute('fill', getColor(load));
-  }
-  function step(){ var d=target-load; if(Math.abs(d)<0.5){load=target;}else{load+=d*0.12;} render(); requestAnimationFrame(step); }
-  function newTarget(){ target=Math.random()*85+5; setTimeout(newTarget,2000+Math.random()*3000); }
-  render(); requestAnimationFrame(step); setTimeout(newTarget,1500);
-})();
-</script>
 
 <!-- Download -->
 <section class="download" id="download">
