@@ -97,6 +97,8 @@ final class MonitorSettings: ObservableObject {
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     /// 呼出面板时默认展开的模块集合(逐模块设置,非全局开关)。
     @Published private(set) var defaultExpandedKinds: Set<MonitorKind> = []
+    /// 在面板中以大卡片呈现的模块集合(逐模块设置;不在集合内 = 列表行)。
+    @Published private(set) var cardStyleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
     /// 钉住面板窗口位置持久化。
@@ -162,6 +164,10 @@ final class MonitorSettings: ObservableObject {
             defaultExpandedKinds = Set(storedExpanded.compactMap(MonitorKind.init(rawValue:)))
         }
 
+        if let storedCardKinds = defaults.array(forKey: Keys.cardStyleKinds) as? [String] {
+            cardStyleKinds = Set(storedCardKinds.compactMap(MonitorKind.init(rawValue:)))
+        }
+
         var loadedMetrics: [MonitorKind: Set<String>] = [:]
         for kind in MonitorKind.allCases {
             let key = Keys.enabledMetricsPrefix + kind.rawValue
@@ -198,6 +204,18 @@ final class MonitorSettings: ObservableObject {
             defaultExpandedKinds.insert(kind)
         } else {
             defaultExpandedKinds.remove(kind)
+        }
+    }
+
+    func isCardStyle(_ kind: MonitorKind) -> Bool {
+        cardStyleKinds.contains(kind)
+    }
+
+    func setCardStyle(_ isOn: Bool, for kind: MonitorKind) {
+        if isOn {
+            cardStyleKinds.insert(kind)
+        } else {
+            cardStyleKinds.remove(kind)
         }
     }
 
@@ -538,6 +556,14 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $cardStyleKinds
+            .dropFirst()
+            .sink { [weak self] newValue in
+                let values = newValue.map(\.rawValue)
+                self?.persist(values, forKey: Keys.cardStyleKinds)
+            }
+            .store(in: &cancellables)
+
         $enabledMetrics
             .dropFirst()
             .sink { [weak self] newValue in
@@ -609,6 +635,7 @@ private enum Keys {
     /// 旧版键名,仅用于读取迁移,不再写入。
     static let legacyMenuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
     static let defaultExpandedKinds = "settings.panel.defaultExpandedKinds"
+    static let cardStyleKinds = "settings.panel.cardStyleKinds"
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let displayControlsExpandedByDefault = "settings.display.expandedByDefault"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"

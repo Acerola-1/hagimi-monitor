@@ -106,6 +106,44 @@ struct SettingsTests {
         #expect(restored.menuBarMetricKinds == [.gpuUsage, .cpuUsage])
     }
 
+    @Test func defaultExpandedKindsDefaultsToEmptyAndPersists() async throws {
+        let suiteName = "defaultExpandedKindsDefaultsToEmptyAndPersists"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let settings = MonitorSettings(defaults: defaults)
+        #expect(settings.defaultExpandedKinds.isEmpty)
+
+        settings.setExpandedByDefault(true, for: .cpu)
+        settings.setExpandedByDefault(true, for: .network)
+        settings.setExpandedByDefault(false, for: .cpu)
+        try await Task.sleep(for: .milliseconds(50))
+
+        let restored = MonitorSettings(defaults: defaults)
+        #expect(restored.defaultExpandedKinds == [.network])
+        #expect(restored.isExpandedByDefault(.network))
+        #expect(!restored.isExpandedByDefault(.cpu))
+    }
+
+    @Test func cardStyleKindsDefaultsToEmptyAndPersists() async throws {
+        let suiteName = "cardStyleKindsDefaultsToEmptyAndPersists"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let settings = MonitorSettings(defaults: defaults)
+        #expect(settings.cardStyleKinds.isEmpty)
+
+        settings.setCardStyle(true, for: .cpu)
+        settings.setCardStyle(true, for: .memory)
+        settings.setCardStyle(false, for: .memory)
+        try await Task.sleep(for: .milliseconds(50))
+
+        let restored = MonitorSettings(defaults: defaults)
+        #expect(restored.cardStyleKinds == [.cpu])
+        #expect(restored.isCardStyle(.cpu))
+        #expect(!restored.isCardStyle(.memory))
+    }
+
     @MainActor
     @Test func pinnedPanelOriginPersists() async throws {
         let suiteName = "pinnedPanelOriginPersists"

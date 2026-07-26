@@ -16,20 +16,39 @@ struct ModuleSettingsView: View {
                     .labelsHidden()
                 }
 
-                // 模块隐藏后「默认展开」无意义,随 moduleOptions 一起隐藏。
+                // 模块隐藏后「显示方式/默认展开」无意义,随 moduleOptions 一起隐藏。
                 if settings.isVisible(kind) {
                     SettingsDivider()
 
-                    SettingsRow(
-                        title: String(localized: "settings.expand-by-default"),
-                        subtitle: String(localized: "settings.expand-by-default.subtitle")
-                    ) {
-                        Toggle("", isOn: Binding(
-                            get: { settings.isExpandedByDefault(kind) },
-                            set: { settings.setExpandedByDefault($0, for: kind) }
-                        ))
-                        .toggleStyle(.switch)
+                    SettingsRow(title: String(localized: "settings.display-style")) {
+                        Picker(String(localized: "settings.display-style"), selection: Binding(
+                            get: { settings.isCardStyle(kind) ? ModuleDisplayStyle.card : .list },
+                            set: { settings.setCardStyle($0 == .card, for: kind) }
+                        )) {
+                            Text(String(localized: "settings.display-style.list")).tag(ModuleDisplayStyle.list)
+                            Text(String(localized: "settings.display-style.card")).tag(ModuleDisplayStyle.card)
+                        }
                         .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
+                    }
+
+                    // 卡片内容常显,「默认展开」对其无意义:隐藏开关但不清除持久值,
+                    // 切回列表行即恢复生效。
+                    if !settings.isCardStyle(kind) {
+                        SettingsDivider()
+
+                        SettingsRow(
+                            title: String(localized: "settings.expand-by-default"),
+                            subtitle: String(localized: "settings.expand-by-default.subtitle")
+                        ) {
+                            Toggle("", isOn: Binding(
+                                get: { settings.isExpandedByDefault(kind) },
+                                set: { settings.setExpandedByDefault($0, for: kind) }
+                            ))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                        }
                     }
                 }
             }
@@ -176,6 +195,12 @@ struct ModuleSettingsView: View {
                 : metric
         }
     }
+}
+
+/// 设置页分段选择器的 UI 局部枚举:存储层仍是 cardStyleKinds 集合(见 MonitorSettings)。
+private enum ModuleDisplayStyle: Hashable {
+    case list
+    case card
 }
 
 private struct MetricSelectionRow: View {

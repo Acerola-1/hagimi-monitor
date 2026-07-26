@@ -81,6 +81,8 @@ struct DisplayControlsSection: View {
         .onAppear {
             controller.attach(settings: settings)
             controller.refreshAsync()
+            // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
+            isExpanded = settings.displayControlsExpandedByDefault
             controller.setPolling(active: isPanelVisible && isExpanded)
         }
         // MonitorPanelView 只创建一次、常驻在 NSPanel 里,显隐只是窗口级 order,
@@ -92,6 +94,10 @@ struct DisplayControlsSection: View {
         .onChange(of: isPanelVisible) { _, newValue in
             if newValue {
                 controller.refreshAsync()
+            } else {
+                // 面板隐藏后重置为「默认展开」设置:不可见期间直接赋值(无动画),
+                // 下次呼出即已是设定的初始状态,与 MonitorPanelView 的重置时机一致。
+                isExpanded = settings.displayControlsExpandedByDefault
             }
             controller.setPolling(active: newValue && isExpanded)
         }
@@ -100,6 +106,19 @@ struct DisplayControlsSection: View {
                 controller.refreshAsync()
             }
             controller.setPolling(active: isPanelVisible && newValue)
+        }
+        .onChange(of: settings.displayControlsExpandedByDefault) { _, newValue in
+            // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
+            // 钉住面板开着改设置时可见,走与手动展开同一补间节奏直接预览。
+            guard isExpanded != newValue else { return }
+            if isPanelVisible {
+                beginExpansionAnimation()
+                withAnimation(expansionAnimation) {
+                    isExpanded = newValue
+                }
+            } else {
+                isExpanded = newValue
+            }
         }
         .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
     }
