@@ -15,6 +15,42 @@ struct ModuleSettingsView: View {
                     .toggleStyle(.switch)
                     .labelsHidden()
                 }
+
+                // 模块隐藏后「显示方式/默认展开」无意义,随 moduleOptions 一起隐藏。
+                if settings.isVisible(kind) {
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.display-style")) {
+                        Picker(String(localized: "settings.display-style"), selection: Binding(
+                            get: { settings.isCardStyle(kind) ? ModuleDisplayStyle.card : .list },
+                            set: { settings.setCardStyle($0 == .card, for: kind) }
+                        )) {
+                            Text(String(localized: "settings.display-style.list")).tag(ModuleDisplayStyle.list)
+                            Text(String(localized: "settings.display-style.card")).tag(ModuleDisplayStyle.card)
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
+                    }
+
+                    // 卡片内容常显,「默认展开」对其无意义:隐藏开关但不清除持久值,
+                    // 切回列表行即恢复生效。
+                    if !settings.isCardStyle(kind) {
+                        SettingsDivider()
+
+                        SettingsRow(
+                            title: String(localized: "settings.expand-by-default"),
+                            subtitle: String(localized: "settings.expand-by-default.subtitle")
+                        ) {
+                            Toggle("", isOn: Binding(
+                                get: { settings.isExpandedByDefault(kind) },
+                                set: { settings.setExpandedByDefault($0, for: kind) }
+                            ))
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                        }
+                    }
+                }
             }
 
             // 模块关闭后，下方的指标 / 进程 / 重置等选项都失去意义，直接隐藏。
@@ -32,7 +68,7 @@ struct ModuleSettingsView: View {
                     GridItem(.flexible(), spacing: 8),
                     GridItem(.flexible(), spacing: 8)
                 ], spacing: 0) {
-                    ForEach(kind.availableMetrics) { metric in
+                    ForEach(availableMetrics) { metric in
                         let isSelected = settings.isMetricEnabled(metric.id, for: kind)
                         MetricSelectionRow(
                             title: metric.title,
@@ -47,6 +83,19 @@ struct ModuleSettingsView: View {
 
             if kind == .memory {
                 SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.memory.primary-metric")) {
+                        Picker(String(localized: "settings.memory.primary-metric"), selection: $settings.memoryPrimaryMetric) {
+                            ForEach(MemoryPrimaryMetricPreference.allCases) { metric in
+                                Text(metric.title).tag(metric)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
+                    }
+
+                    SettingsDivider()
+
                     SettingsRow(title: String(localized: "settings.show-memory-processes")) {
                         Toggle("", isOn: $settings.showMemoryProcesses)
                             .toggleStyle(.switch)
@@ -132,6 +181,26 @@ struct ModuleSettingsView: View {
                 .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
     }
+
+    /// 监测项目列表与面板实际显示保持一致:压力模式下面板里「压力」槽位
+    /// 实际显示「使用率」,列表同步换名;开关仍存储在 pressure id 上,
+    /// 两种模式共用同一槽位状态,来回切换不丢设置。
+    private var availableMetrics: [MetricSwitch] {
+        guard kind == .memory, settings.memoryPrimaryMetric == .pressure else {
+            return kind.availableMetrics
+        }
+        return kind.availableMetrics.map { metric in
+            metric.id == "pressure"
+                ? MetricSwitch(id: metric.id, title: String(localized: "metric.memory.usage"), isDefault: metric.isDefault)
+                : metric
+        }
+    }
+}
+
+/// 设置页分段选择器的 UI 局部枚举:存储层仍是 cardStyleKinds 集合(见 MonitorSettings)。
+private enum ModuleDisplayStyle: Hashable {
+    case list
+    case card
 }
 
 private struct MetricSelectionRow: View {
@@ -182,6 +251,17 @@ struct DisplayModuleSettingsView: View {
 
                     SettingsRow(title: String(localized: "settings.include-built-in")) {
                         Toggle("", isOn: $settings.showBuiltInDisplays)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(
+                        title: String(localized: "settings.expand-by-default"),
+                        subtitle: String(localized: "settings.expand-by-default.subtitle")
+                    ) {
+                        Toggle("", isOn: $settings.displayControlsExpandedByDefault)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }

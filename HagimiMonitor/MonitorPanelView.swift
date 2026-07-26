@@ -99,6 +99,11 @@ struct MonitorPanelView: View {
         .animation(.easeInOut(duration: 0.2), value: cameoModel.showThanks)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
         .onChange(of: store.isPanelVisible) { _, visible in
+            // 面板隐藏后重置为各模块的「默认展开」设置:不可见期间直接赋值(无动画),
+            // 窗口在后台瞬时贴合新高度,下次呼出即已是设定的初始状态、无二次跳变。
+            if !visible {
+                applyDefaultExpansion()
+            }
             // 面板由隐藏→可见:菜单栏面板摧骰子决定是否客串;隐藏时清理。
             guard !showsQuickPanelControls else { return }
             if visible {
@@ -107,10 +112,17 @@ struct MonitorPanelView: View {
                 cameoModel.panelDidDisappear()
             }
         }
+        .onChange(of: store.settings.defaultExpandedKinds) { _, _ in
+            // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
+            // 钉住面板开着改设置时可见,直接预览展开/收起效果。
+            applyDefaultExpansion()
+        }
         .onAppear {
             if !showsQuickPanelControls {
                 startTimeUpdateTask()
             }
+            // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
+            applyDefaultExpansion()
             // 上报当前需进程采样的集合(展开 ∪ 放大):面板重开时 @State 可能保留上次选项,
             // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
             reportActiveProcessKinds()
@@ -121,11 +133,17 @@ struct MonitorPanelView: View {
         .onChange(of: expandedKinds) { _, _ in
             reportActiveProcessKinds()
         }
+        .onChange(of: store.settings.cardStyleKinds) { _, _ in
+            // 显示方式变更:卡片模块常显进程列表,需立即重报采样集合;
+            // 尺寸变化属配置驱动,不置位展开补间标记,窗口走瞬时贴合路径。
+            reportActiveProcessKinds()
+        }
     }
 
-    /// 需进程采样的类目集 = 行内展开的模块(展开时才渲染 top 进程列表)。
+    /// 需进程采样的类目集 = 行内展开的模块 ∪ 卡片模块(卡片常显进程列表,视同展开)。
     private func reportActiveProcessKinds() {
-        store.updateExpandedKinds(expandedKinds, for: panelSource)
+        let cardKinds = store.settings.cardStyleKinds.intersection(visibleKinds)
+        store.updateExpandedKinds(expandedKinds.union(cardKinds), for: panelSource)
     }
 
     /// 本面板对应的进程采样来源。带快捷面板控件的是钉住面板,否则是菜单栏面板。
@@ -201,7 +219,30 @@ struct MonitorPanelView: View {
 
     @ViewBuilder
     private func row(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
-        compactRow(for: module, theme: theme)
+        // 显示方式为「大卡片」的模块渲染常显卡片,无展开/收起交互;其余走紧凑行。
+        if store.settings.cardStyleKinds.contains(module.kind) {
+            card(for: module, theme: theme)
+        } else {
+            compactRow(for: module, theme: theme)
+        }
+    }
+
+    @ViewBuilder
+    private func card(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
+        MetricCardView(
+            module: module,
+            theme: theme,
+            details: enabledMetrics(for: module),
+            topMemoryProcesses: store.topMemoryProcesses,
+            showMemoryProcesses: store.settings.showMemoryProcesses,
+            topCPUProcesses: store.topCPUProcesses,
+            showCPUProcesses: store.settings.showCPUProcesses,
+            topDiskProcesses: store.topDiskProcesses,
+            showDiskProcesses: store.settings.showDiskProcesses,
+            topNetworkProcesses: store.topNetworkProcesses,
+            showNetworkProcesses: store.settings.showNetworkProcesses
+        )
+        .equatable()
     }
 
     @ViewBuilder
@@ -234,11 +275,14 @@ struct MonitorPanelView: View {
             }
             .equatable()
         case .memory:
+            let pressureMode = store.settings.memoryPrimaryMetric == .pressure
             MetricGlassRow(
                 module: module,
                 theme: theme,
-                detail: module.summary,
-                details: enabledMetrics(for: module),
+                detail: pressureMode ? memoryPressureText(for: module) : module.summary,
+                // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
+                samples: pressureMode ? module.pressureSamples : [],
+                details: memoryMetrics(for: module, pressureMode: pressureMode),
                 isExpanded: expandedKinds.contains(module.kind),
                 topMemoryProcesses: store.topMemoryProcesses,
                 showMemoryProcesses: store.settings.showMemoryProcesses
@@ -289,6 +333,24 @@ struct MonitorPanelView: View {
         return module.metrics.filter { enabledIds.contains($0.name) }
     }
 
+    /// 内存头部主值的压力等级文案(已本地化)。
+    private func memoryPressureText(for module: MonitorModule) -> String {
+        let raw = module.metrics.first { $0.name == "pressure" }?.value ?? "--"
+        return localizedMemoryPressure(raw)
+    }
+
+    /// 压力模式下头部已显示压力等级,展开列表里的「压力」行原位换成「使用率」行,
+    /// 两个指标仅交换显示位置,设置里的「压力」开关继续控制该槽位。
+    private func memoryMetrics(for module: MonitorModule, pressureMode: Bool) -> [MonitorMetric] {
+        let metrics = enabledMetrics(for: module)
+        guard pressureMode else { return metrics }
+        return metrics.map { metric in
+            metric.name == "pressure"
+                ? MonitorMetric(name: "usage", value: module.summary, numericValue: module.value)
+                : metric
+        }
+    }
+
     private func defaultMetricIds(for kind: MonitorKind) -> Set<String> {
         Set(kind.availableMetrics.filter { $0.isDefault }.map { $0.id })
     }
@@ -309,22 +371,40 @@ struct MonitorPanelView: View {
     private var visibleKinds: [MonitorKind] {
         store.modules.map(\.kind)
     }
-
-    /// 当前是否所有可见 row 都处于展开状态。
-    /// 空 modules 时为 false——没有 row 可展开,双击不应被视为"已全开"。
-    private var allVisibleRowsExpanded: Bool {
-        !visibleKinds.isEmpty
-        && visibleKinds.allSatisfy { expandedKinds.contains($0) }
+    
+    /// 参与展开/收起机制的列表行 kind 集合 = 可见 − 卡片(卡片常显,不参与展开)。
+    private var listKinds: [MonitorKind] {
+        visibleKinds.filter { !store.settings.cardStyleKinds.contains($0) }
     }
-
-    /// 残留 expandedKinds 里的不可见 kind 不影响判定;全展开分支用可见集合覆盖,顺便清掉残留。
+    
+    /// 当前是否所有列表行都处于展开状态。
+    /// 空集时为 false——没有行可展开,双击不应被视为「已全开」。
+    private var allVisibleRowsExpanded: Bool {
+        !listKinds.isEmpty
+        && listKinds.allSatisfy { expandedKinds.contains($0) }
+    }
+    
+    /// 残留 expandedKinds 里的不可见/卡片 kind 不影响判定;全展开分支用列表行集合覆盖,顺便清掉残留。
     private func toggleAllExpansion() {
         setExpansion {
             if allVisibleRowsExpanded {
                 expandedKinds.removeAll()
             } else {
-                expandedKinds = Set(visibleKinds)
+                expandedKinds = Set(listKinds)
             }
+        }
+    }
+    
+    /// 把展开状态重置为「各模块默认展开设置 ∩ 列表行」(卡片不参与,顺便清掉残留 kind)。
+    /// 面板隐藏时直接赋值,不走 setExpansion——无需动画,也不置位窗口补间标记;
+    /// 面板可见时(钉住面板开着改设置)走 setExpansion,与手动展开同一补间节奏。
+    private func applyDefaultExpansion() {
+        let target = store.settings.defaultExpandedKinds.intersection(listKinds)
+        guard expandedKinds != target else { return }
+        if store.isPanelVisible {
+            setExpansion { expandedKinds = target }
+        } else {
+            expandedKinds = target
         }
     }
 
@@ -501,7 +581,16 @@ private struct MetricGlassRow: View, Equatable {
                 SparklineChart(samples: samples, tint: tint)
                     .frame(width: 56, height: 18)
             }
-        case .memory, .storage:
+        case .memory:
+            // 压力模式才会传入 samples(压力历史):有则画曲线,无则维持使用率占比进度条。
+            if !samples.isEmpty {
+                SparklineChart(samples: samples, tint: tint)
+                    .frame(width: 56, height: 18)
+            } else {
+                ProgressMeter(value: module.value, tint: tint, theme: theme)
+                    .frame(width: 56, height: 3)
+            }
+        case .storage:
             ProgressMeter(value: module.value, tint: tint, theme: theme)
                 .frame(width: 56, height: 3)
         case .network, .battery:
@@ -1059,6 +1148,291 @@ private func localizedNetworkInterface(_ summary: String) -> String {
     let key = "network-interface.\(summary)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? summary : localized
+}
+
+// MARK: - Metric Card
+
+/// 大卡片:显示方式设为「大卡片」的模块的常显形态(hero 主值 + 指标网格 + TOP 进程)。
+/// 无任何手势/按钮——显示方式是静态配置,面板内交互仍只有列表行的点击展开一层。
+/// 源自已弃用的悬停放大方案(61febc61),剥离了浮标/还原按钮与 enlargedKinds 交互态。
+private struct MetricCardView: View, Equatable {
+    let module: MonitorModule
+    let theme: MonitorPanelTheme
+    var details: [MonitorMetric] = []
+    var topMemoryProcesses: [TopMemoryProcess] = []
+    var showMemoryProcesses = false
+    var topCPUProcesses: [TopCPUProcess] = []
+    var showCPUProcesses = false
+    var topDiskProcesses: [TopDiskProcess] = []
+    var showDiskProcesses = false
+    var topNetworkProcesses: [TopNetworkProcess] = []
+    var showNetworkProcesses = false
+
+    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段。
+    static func == (lhs: MetricCardView, rhs: MetricCardView) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.details == rhs.details
+            && lhs.topMemoryProcesses == rhs.topMemoryProcesses
+            && lhs.showMemoryProcesses == rhs.showMemoryProcesses
+            && lhs.topCPUProcesses == rhs.topCPUProcesses
+            && lhs.showCPUProcesses == rhs.showCPUProcesses
+            && lhs.topDiskProcesses == rhs.topDiskProcesses
+            && lhs.showDiskProcesses == rhs.showDiskProcesses
+            && lhs.topNetworkProcesses == rhs.topNetworkProcesses
+            && lhs.showNetworkProcesses == rhs.showNetworkProcesses
+    }
+
+    private var tint: Color {
+        theme.moduleTint(for: module.kind)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            hero
+            if !details.isEmpty {
+                MetricDetailGrid(metrics: details, kind: module.kind, theme: theme, isCompact: false)
+            }
+            if let section = processSection {
+                CardProcessList(
+                    items: section.items,
+                    metricColumns: section.columns,
+                    separator: theme.rowSeparator(for: module.kind),
+                    theme: theme
+                )
+            }
+        }
+        .padding(16)
+        // 高度随内容自适应:内容多(CPU/内存带图表+进程)则高,内容少(电源/网络)则矮,
+        // 不强制方形以免底部大片留白;同时避免自测宽度回写高度与窗口跟随动画相互干扰。
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            Image(systemName: module.kind.symbol)
+                .font(.title3.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(tint)
+
+            Text(module.kind.title)
+                .font(.headline)
+                .foregroundStyle(theme.primaryText)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+        }
+    }
+
+    @ViewBuilder
+    private var hero: some View {
+        switch module.kind {
+        case .cpu, .gpu:
+            HStack(alignment: .center, spacing: 12) {
+                bigValue(percentText)
+                SparklineChart(samples: module.samples, tint: tint)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 72)
+            }
+        case .memory, .storage:
+            VStack(alignment: .leading, spacing: 12) {
+                bigValue(percentText)
+                ProgressMeter(value: module.value, tint: tint, theme: theme)
+                    .frame(height: 10)
+            }
+        case .network:
+            VStack(alignment: .leading, spacing: 14) {
+                Text(localizedNetworkInterface(module.summary))
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(theme.valueText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                HStack(spacing: 22) {
+                    cardRate(symbol: "arrow.down", value: metricValue("download"))
+                    cardRate(symbol: "arrow.up", value: metricValue("upload"))
+                }
+            }
+        case .battery:
+            VStack(alignment: .leading, spacing: 10) {
+                bigValue(hasBattery ? percentText : metricValue("power"))
+                if hasBattery {
+                    cardRate(symbol: "powermeter", value: metricValue("power"))
+                }
+            }
+        }
+    }
+
+    private func bigValue(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 46, weight: .semibold, design: .rounded))
+            .monospacedDigit()
+            .foregroundStyle(theme.valueText)
+            .lineLimit(1)
+            .minimumScaleFactor(0.5)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private func cardRate(symbol: String, value: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: symbol)
+                .font(.callout.weight(.bold))
+                .foregroundStyle(tint)
+            Text(value)
+                .monitorPanelMonoFont(.title3, weight: .semibold)
+                .foregroundStyle(theme.valueText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+    }
+
+    /// 按当前模块类型返回已开启的 top 进程小节(items + 数值列数):未开启时返回 nil。
+    /// 四类列表统一固定 5 行位置:真实数据从上往下填,空位由 CardProcessList 统一补“—”占位。
+    private var processSection: (items: [CardProcessItem], columns: Int)? {
+        switch module.kind {
+        case .cpu:
+            guard showCPUProcesses else { return nil }
+            let items = topCPUProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: nil, text: String(format: "%.1f%%", proc.cpuUsage))
+                ])
+            }
+            return (items, 1)
+        case .memory:
+            guard showMemoryProcesses else { return nil }
+            let items = topMemoryProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: nil, text: byteCountString(Int64(proc.memoryUsage), countStyle: .memory))
+                ])
+            }
+            return (items, 1)
+        case .storage:
+            guard showDiskProcesses else { return nil }
+            let items = topDiskProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: "↑", text: byteCountString(Int64(proc.bytesWritten))),
+                    CardProcessMetric(symbol: "↓", text: byteCountString(Int64(proc.bytesRead)))
+                ])
+            }
+            return (items, 2)
+        case .network:
+            guard showNetworkProcesses else { return nil }
+            let items = topNetworkProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: "↑", text: byteCountString(Int64(proc.upload))),
+                    CardProcessMetric(symbol: "↓", text: byteCountString(Int64(proc.download)))
+                ])
+            }
+            return (items, 2)
+        case .gpu, .battery:
+            return nil
+        }
+    }
+
+    private var percentText: String {
+        "\(Int(module.value.rounded()))%"
+    }
+
+    /// 当前模块是否为真电池(非台式机外接电源):决定大卡英雄区显示电量百分比还是直接显功耗。
+    private var hasBattery: Bool {
+        module.metrics.first { $0.name == "type" }?.value == "battery"
+    }
+
+    private func metricValue(_ name: String) -> String {
+        module.metrics.first { $0.name == name }?.value ?? "--"
+    }
+}
+
+// MARK: - Card Process List
+
+private struct CardProcessMetric {
+    let symbol: String?
+    let text: String
+}
+
+private struct CardProcessItem: Identifiable {
+    let id: Int
+    let icon: NSImage?
+    let name: String
+    let metrics: [CardProcessMetric]
+    var isPlaceholder = false
+}
+
+/// 方卡专用的 top 进程列表:与行内版统一取自同一数据,但图标/字体更大、不再缩进 28pt,
+/// 与卡片内其他内容左对齐。单值(CPU/内存)只显一列,双值(磁盘/网络)显↑/↓两列。
+/// 固定 5 行:真实数据从上往下填,空位显“—”占位,高度永远不变、无加载跳变。
+private struct CardProcessList: View {
+    let items: [CardProcessItem]
+    var metricColumns: Int = 1
+    let separator: Color
+    let theme: MonitorPanelTheme
+
+    private static let rowCount = 5
+
+    private var placeholderItem: CardProcessItem {
+        CardProcessItem(
+            id: -1,
+            icon: nil,
+            name: "—",
+            metrics: Array(repeating: CardProcessMetric(symbol: nil, text: "—"), count: max(1, metricColumns)),
+            isPlaceholder: true
+        )
+    }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            Rectangle()
+                .fill(separator)
+                .frame(height: 1)
+
+            VStack(spacing: 8) {
+                // 按下标固定 5 个槽位:每个槽位要么真实行、要么“—”占位,数据到达为同槽位内容替换,
+                // 高度恒定、不触发窗口二次动画。
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    row(for: index < items.count ? items[index] : placeholderItem)
+                }
+            }
+            .animation(.easeInOut(duration: 0.2), value: items.count)
+        }
+    }
+
+    private func row(for item: CardProcessItem) -> some View {
+        HStack(spacing: 9) {
+            if item.isPlaceholder {
+                Color.clear
+                    .frame(width: 20, height: 20)
+            } else {
+                ProcessIcon(icon: item.icon, theme: theme)
+                    .frame(width: 20, height: 20)
+            }
+
+            Text(item.name)
+                .monitorPanelCaptionFont(.subheadline)
+                .foregroundStyle(item.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.primaryText)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 6)
+
+            HStack(spacing: 12) {
+                ForEach(Array(item.metrics.enumerated()), id: \.offset) { _, metric in
+                    HStack(spacing: 3) {
+                        if let symbol = metric.symbol {
+                            Text(symbol)
+                                .monitorPanelMonoFont(.footnote, weight: .medium)
+                        }
+                        Text(metric.text)
+                            .monitorPanelMonoFont(.footnote, weight: .semibold)
+                            .frame(minWidth: 56, alignment: .trailing)
+                    }
+                }
+            }
+            .foregroundStyle(item.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.secondaryText)
+            .layoutPriority(1)
+        }
+    }
 }
 
 // MARK: - Transparent Window Background

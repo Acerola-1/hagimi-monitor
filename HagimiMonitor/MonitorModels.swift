@@ -167,6 +167,10 @@ struct MonitorModule: Identifiable, Equatable {
     var metrics: [MonitorMetric]
     var samples: [Double]
     var pressure: MemoryPressureLevel? = nil
+    /// 连续内存压力百分比(0-100,口径同活动监视器压力图),仅内存模块有值。
+    var pressureValue: Double? = nil
+    /// 压力百分比历史序列,与 samples 同法滚动积累,供压力模式下的迷你曲线使用。
+    var pressureSamples: [Double] = []
 
     var id: MonitorKind { kind }
 
@@ -546,6 +550,9 @@ final class MonitorStore: ObservableObject {
             return MenuBarMetricFormatter.fixedPercentage(moduleValue(.gpu))
         case .memoryUsage:
             return MenuBarMetricFormatter.fixedPercentage(moduleValue(.memory))
+        case .memoryPressure:
+            // 连续压力百分比,口径同面板压力曲线(活动监视器压力图)。
+            return MenuBarMetricFormatter.fixedPercentage(allModules.first { $0.kind == .memory }?.pressureValue)
         case .batteryLevel:
             return MenuBarMetricFormatter.fixedPercentage(moduleValue(.battery))
         case .networkDownload:
@@ -569,6 +576,8 @@ final class MonitorStore: ObservableObject {
             "34%"
         case .memoryUsage:
             "61%"
+        case .memoryPressure:
+            "23%"
         case .batteryLevel:
             "76%"
         case .networkDownload:

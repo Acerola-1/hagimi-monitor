@@ -38,6 +38,9 @@ final class SystemMonitorSampler {
                 if let previous {
                     var updated = module
                     updated.samples = Array((previous.samples + [module.value]).suffix(MonitorConstants.sparklineMaxPoints))
+                    if let pressureValue = module.pressureValue {
+                        updated.pressureSamples = Array((previous.pressureSamples + [pressureValue]).suffix(MonitorConstants.sparklineMaxPoints))
+                    }
                     modulesByKind[kind] = updated
                 } else {
                     modulesByKind[kind] = module

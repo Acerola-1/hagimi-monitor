@@ -37,6 +37,7 @@ final class MemorySampler: MonitorSampler {
         let percentage = total > 0 ? (used / total) * 100 : 0
         let swap = swapUsage()
         let pressure = memoryPressure()
+        let pressurePercent = memoryPressurePercent()
 
         // 提取 swapins/swapouts（累计页面计数）
         let swapins = Int64(stats.swapins)
@@ -56,7 +57,9 @@ final class MemorySampler: MonitorSampler {
                 MonitorMetric(name: "swapouts", value: String(swapouts), numericValue: Double(swapouts))
             ],
             samples: seedSamples(percentage),
-            pressure: pressure.level
+            pressure: pressure.level,
+            pressureValue: pressurePercent,
+            pressureSamples: pressurePercent.map(seedSamples) ?? []
         )
     }
 
@@ -92,6 +95,19 @@ final class MemorySampler: MonitorSampler {
         default:
             return .normal
         }
+    }
+
+    /// 连续内存压力百分比。kern.memorystatus_level 是系统内存健康水位(0-100),
+    /// 100 - 水位即活动监视器「内存压力」图的口径；离散压力等级几乎恒为正常,
+    /// 画曲线没有信息量,故曲线用连续值。
+    private func memoryPressurePercent() -> Double? {
+        var level = Int32(0)
+        var size = MemoryLayout<Int32>.size
+        let result = sysctlbyname("kern.memorystatus_level", &level, &size, nil, 0)
+        guard result == 0 else {
+            return nil
+        }
+        return min(100, max(0, 100 - Double(level)))
     }
 
     private func swapUsage() -> SwapUsage? {
