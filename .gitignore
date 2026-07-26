@@ -78,3 +78,6 @@ build/
 AGENTS.md
 CLAUDE.md
 .codegraph/
+
+# 私人工具（促销码发放，本地自用）
+promo-codes.html
