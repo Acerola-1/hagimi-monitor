@@ -15,6 +15,23 @@ struct ModuleSettingsView: View {
                     .toggleStyle(.switch)
                     .labelsHidden()
                 }
+
+                // 模块隐藏后「默认展开」无意义,随 moduleOptions 一起隐藏。
+                if settings.isVisible(kind) {
+                    SettingsDivider()
+
+                    SettingsRow(
+                        title: String(localized: "settings.expand-by-default"),
+                        subtitle: String(localized: "settings.expand-by-default.subtitle")
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.isExpandedByDefault(kind) },
+                            set: { settings.setExpandedByDefault($0, for: kind) }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                    }
+                }
             }
 
             // 模块关闭后，下方的指标 / 进程 / 重置等选项都失去意义，直接隐藏。
@@ -32,7 +49,7 @@ struct ModuleSettingsView: View {
                     GridItem(.flexible(), spacing: 8),
                     GridItem(.flexible(), spacing: 8)
                 ], spacing: 0) {
-                    ForEach(kind.availableMetrics) { metric in
+                    ForEach(availableMetrics) { metric in
                         let isSelected = settings.isMetricEnabled(metric.id, for: kind)
                         MetricSelectionRow(
                             title: metric.title,
@@ -47,6 +64,19 @@ struct ModuleSettingsView: View {
 
             if kind == .memory {
                 SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.memory.primary-metric")) {
+                        Picker(String(localized: "settings.memory.primary-metric"), selection: $settings.memoryPrimaryMetric) {
+                            ForEach(MemoryPrimaryMetricPreference.allCases) { metric in
+                                Text(metric.title).tag(metric)
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.segmented)
+                        .frame(width: 190)
+                    }
+
+                    SettingsDivider()
+
                     SettingsRow(title: String(localized: "settings.show-memory-processes")) {
                         Toggle("", isOn: $settings.showMemoryProcesses)
                             .toggleStyle(.switch)
@@ -132,6 +162,20 @@ struct ModuleSettingsView: View {
                 .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
     }
+
+    /// 监测项目列表与面板实际显示保持一致:压力模式下面板里「压力」槽位
+    /// 实际显示「使用率」,列表同步换名;开关仍存储在 pressure id 上,
+    /// 两种模式共用同一槽位状态,来回切换不丢设置。
+    private var availableMetrics: [MetricSwitch] {
+        guard kind == .memory, settings.memoryPrimaryMetric == .pressure else {
+            return kind.availableMetrics
+        }
+        return kind.availableMetrics.map { metric in
+            metric.id == "pressure"
+                ? MetricSwitch(id: metric.id, title: String(localized: "metric.memory.usage"), isDefault: metric.isDefault)
+                : metric
+        }
+    }
 }
 
 private struct MetricSelectionRow: View {
@@ -182,6 +226,17 @@ struct DisplayModuleSettingsView: View {
 
                     SettingsRow(title: String(localized: "settings.include-built-in")) {
                         Toggle("", isOn: $settings.showBuiltInDisplays)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(
+                        title: String(localized: "settings.expand-by-default"),
+                        subtitle: String(localized: "settings.expand-by-default.subtitle")
+                    ) {
+                        Toggle("", isOn: $settings.displayControlsExpandedByDefault)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }

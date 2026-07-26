@@ -131,7 +131,7 @@ struct MenuBarMetricLabel: View {
 
     private func reservedNumericValue(for kind: MenuBarMetricKind) -> String {
         switch kind {
-        case .cpuUsage, .gpuUsage, .memoryUsage, .batteryLevel:
+        case .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure, .batteryLevel:
             "100%"
         case .networkDownload, .networkUpload:
             "888M"

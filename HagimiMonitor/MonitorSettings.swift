@@ -49,6 +49,25 @@ enum MonitorColorSchemePreference: String, CaseIterable, Identifiable {
     }
 }
 
+/// 内存卡片头部主显示指标:压力等级(默认)或使用率。
+/// 仅交换显示位置,不影响 severity / 负载环等由使用率驱动的逻辑。
+/// case 顺序即设置页分段选择器的展示顺序。
+enum MemoryPrimaryMetricPreference: String, CaseIterable, Identifiable {
+    case pressure
+    case usage
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .pressure:
+            String(localized: "memory-primary-metric.pressure")
+        case .usage:
+            String(localized: "memory-primary-metric.usage")
+        }
+    }
+}
+
 final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false
     @Published var themePreference: AppThemePreference = .system
@@ -59,6 +78,7 @@ final class MonitorSettings: ObservableObject {
     @Published var menuBarMetricLayoutStyle: MenuBarMetricLayoutStyle = .icon
     @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
+    @Published var displayControlsExpandedByDefault: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
     @Published var displayVolumeControlEnabled: Bool = true
     @Published var displayContrastControlEnabled: Bool = false
@@ -67,6 +87,7 @@ final class MonitorSettings: ObservableObject {
     @Published var mediaKeyShowOSD: Bool = true
     @Published var showMemoryProcesses: Bool = true
     @Published var memoryShowSystemProcesses: Bool = false
+    @Published var memoryPrimaryMetric: MemoryPrimaryMetricPreference = .pressure
     @Published var showCPUProcesses: Bool = true
     @Published var cpuShowSystemProcesses: Bool = false
     @Published var showDiskProcesses: Bool = true
@@ -74,6 +95,8 @@ final class MonitorSettings: ObservableObject {
     @Published var showNetworkProcesses: Bool = true
     @Published var networkShowSystemProcesses: Bool = false
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
+    /// 呼出面板时默认展开的模块集合(逐模块设置,非全局开关)。
+    @Published private(set) var defaultExpandedKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
     /// 钉住面板窗口位置持久化。
@@ -107,11 +130,14 @@ final class MonitorSettings: ObservableObject {
 
         showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
         displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? false
+        displayControlsExpandedByDefault = defaults.object(forKey: Keys.displayControlsExpandedByDefault) as? Bool ?? false
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
         showMemoryProcesses = defaults.object(forKey: Keys.showMemoryProcesses) as? Bool ?? true
         memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? false
+        let memoryPrimaryMetricRawValue = defaults.string(forKey: Keys.memoryPrimaryMetric) ?? MemoryPrimaryMetricPreference.pressure.rawValue
+        memoryPrimaryMetric = MemoryPrimaryMetricPreference(rawValue: memoryPrimaryMetricRawValue) ?? .pressure
         showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? true
         cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? false
         showDiskProcesses = defaults.object(forKey: Keys.showDiskProcesses) as? Bool ?? true
@@ -130,6 +156,10 @@ final class MonitorSettings: ObservableObject {
             visibleKinds = Set(kinds)
         } else {
             visibleKinds = Set(MonitorKind.userVisibleCases)
+        }
+
+        if let storedExpanded = defaults.array(forKey: Keys.defaultExpandedKinds) as? [String] {
+            defaultExpandedKinds = Set(storedExpanded.compactMap(MonitorKind.init(rawValue:)))
         }
 
         var loadedMetrics: [MonitorKind: Set<String>] = [:]
@@ -156,6 +186,18 @@ final class MonitorSettings: ObservableObject {
             visibleKinds.insert(kind)
         } else {
             visibleKinds.remove(kind)
+        }
+    }
+
+    func isExpandedByDefault(_ kind: MonitorKind) -> Bool {
+        defaultExpandedKinds.contains(kind)
+    }
+
+    func setExpandedByDefault(_ isOn: Bool, for kind: MonitorKind) {
+        if isOn {
+            defaultExpandedKinds.insert(kind)
+        } else {
+            defaultExpandedKinds.remove(kind)
         }
     }
 
@@ -368,6 +410,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $displayControlsExpandedByDefault
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.displayControlsExpandedByDefault)
+            }
+            .store(in: &cancellables)
+
         $displayBrightnessControlEnabled
             .dropFirst()
             .sink { [weak self] newValue in
@@ -424,6 +473,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $memoryPrimaryMetric
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.memoryPrimaryMetric)
+            }
+            .store(in: &cancellables)
+
         $showCPUProcesses
             .dropFirst()
             .sink { [weak self] newValue in
@@ -471,6 +527,14 @@ final class MonitorSettings: ObservableObject {
             .sink { [weak self] newValue in
                 let values = newValue.map(\.rawValue)
                 self?.persist(values, forKey: Keys.visibleKinds)
+            }
+            .store(in: &cancellables)
+
+        $defaultExpandedKinds
+            .dropFirst()
+            .sink { [weak self] newValue in
+                let values = newValue.map(\.rawValue)
+                self?.persist(values, forKey: Keys.defaultExpandedKinds)
             }
             .store(in: &cancellables)
 
@@ -544,7 +608,9 @@ private enum Keys {
     static let menuBarMetricLayoutStyle = "settings.menuBar.metricLayoutStyle"
     /// 旧版键名,仅用于读取迁移,不再写入。
     static let legacyMenuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
+    static let defaultExpandedKinds = "settings.panel.defaultExpandedKinds"
     static let displayModuleVisible = "settings.display.moduleVisible"
+    static let displayControlsExpandedByDefault = "settings.display.expandedByDefault"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
     static let displayVolumeControlEnabled = "settings.display.volumeControlEnabled"
@@ -554,6 +620,7 @@ private enum Keys {
     static let mediaKeyShowOSD = "settings.mediaKey.showOSD"
     static let showMemoryProcesses = "settings.memory.showProcesses"
     static let memoryShowSystemProcesses = "settings.memory.showSystemProcesses"
+    static let memoryPrimaryMetric = "settings.memory.primaryMetric"
     static let showCPUProcesses = "settings.cpu.showProcesses"
     static let cpuShowSystemProcesses = "settings.cpu.showSystemProcesses"
     static let showDiskProcesses = "settings.disk.showProcesses"

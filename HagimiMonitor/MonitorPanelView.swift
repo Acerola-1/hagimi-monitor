@@ -99,6 +99,11 @@ struct MonitorPanelView: View {
         .animation(.easeInOut(duration: 0.2), value: cameoModel.showThanks)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
         .onChange(of: store.isPanelVisible) { _, visible in
+            // 面板隐藏后重置为各模块的「默认展开」设置:不可见期间直接赋值(无动画),
+            // 窗口在后台瞬时贴合新高度,下次呼出即已是设定的初始状态、无二次跳变。
+            if !visible {
+                applyDefaultExpansion()
+            }
             // 面板由隐藏→可见:菜单栏面板摧骰子决定是否客串;隐藏时清理。
             guard !showsQuickPanelControls else { return }
             if visible {
@@ -107,10 +112,17 @@ struct MonitorPanelView: View {
                 cameoModel.panelDidDisappear()
             }
         }
+        .onChange(of: store.settings.defaultExpandedKinds) { _, _ in
+            // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
+            // 钉住面板开着改设置时可见,直接预览展开/收起效果。
+            applyDefaultExpansion()
+        }
         .onAppear {
             if !showsQuickPanelControls {
                 startTimeUpdateTask()
             }
+            // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
+            applyDefaultExpansion()
             // 上报当前需进程采样的集合(展开 ∪ 放大):面板重开时 @State 可能保留上次选项,
             // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
             reportActiveProcessKinds()
@@ -234,11 +246,14 @@ struct MonitorPanelView: View {
             }
             .equatable()
         case .memory:
+            let pressureMode = store.settings.memoryPrimaryMetric == .pressure
             MetricGlassRow(
                 module: module,
                 theme: theme,
-                detail: module.summary,
-                details: enabledMetrics(for: module),
+                detail: pressureMode ? memoryPressureText(for: module) : module.summary,
+                // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
+                samples: pressureMode ? module.pressureSamples : [],
+                details: memoryMetrics(for: module, pressureMode: pressureMode),
                 isExpanded: expandedKinds.contains(module.kind),
                 topMemoryProcesses: store.topMemoryProcesses,
                 showMemoryProcesses: store.settings.showMemoryProcesses
@@ -289,6 +304,24 @@ struct MonitorPanelView: View {
         return module.metrics.filter { enabledIds.contains($0.name) }
     }
 
+    /// 内存头部主值的压力等级文案(已本地化)。
+    private func memoryPressureText(for module: MonitorModule) -> String {
+        let raw = module.metrics.first { $0.name == "pressure" }?.value ?? "--"
+        return localizedMemoryPressure(raw)
+    }
+
+    /// 压力模式下头部已显示压力等级,展开列表里的「压力」行原位换成「使用率」行,
+    /// 两个指标仅交换显示位置,设置里的「压力」开关继续控制该槽位。
+    private func memoryMetrics(for module: MonitorModule, pressureMode: Bool) -> [MonitorMetric] {
+        let metrics = enabledMetrics(for: module)
+        guard pressureMode else { return metrics }
+        return metrics.map { metric in
+            metric.name == "pressure"
+                ? MonitorMetric(name: "usage", value: module.summary, numericValue: module.value)
+                : metric
+        }
+    }
+
     private func defaultMetricIds(for kind: MonitorKind) -> Set<String> {
         Set(kind.availableMetrics.filter { $0.isDefault }.map { $0.id })
     }
@@ -325,6 +358,19 @@ struct MonitorPanelView: View {
             } else {
                 expandedKinds = Set(visibleKinds)
             }
+        }
+    }
+
+    /// 把展开状态重置为「各模块默认展开设置 ∩ 当前可见模块」(顺便清掉残留 kind)。
+    /// 面板隐藏时直接赋值,不走 setExpansion——无需动画,也不置位窗口补间标记;
+    /// 面板可见时(钉住面板开着改设置)走 setExpansion,与手动展开同一补间节奏。
+    private func applyDefaultExpansion() {
+        let target = store.settings.defaultExpandedKinds.intersection(visibleKinds)
+        guard expandedKinds != target else { return }
+        if store.isPanelVisible {
+            setExpansion { expandedKinds = target }
+        } else {
+            expandedKinds = target
         }
     }
 
@@ -501,7 +547,16 @@ private struct MetricGlassRow: View, Equatable {
                 SparklineChart(samples: samples, tint: tint)
                     .frame(width: 56, height: 18)
             }
-        case .memory, .storage:
+        case .memory:
+            // 压力模式才会传入 samples(压力历史):有则画曲线,无则维持使用率占比进度条。
+            if !samples.isEmpty {
+                SparklineChart(samples: samples, tint: tint)
+                    .frame(width: 56, height: 18)
+            } else {
+                ProgressMeter(value: module.value, tint: tint, theme: theme)
+                    .frame(width: 56, height: 3)
+            }
+        case .storage:
             ProgressMeter(value: module.value, tint: tint, theme: theme)
                 .frame(width: 56, height: 3)
         case .network, .battery:

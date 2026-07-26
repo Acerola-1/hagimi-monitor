@@ -41,6 +41,7 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     case cpuUsage
     case gpuUsage
     case memoryUsage
+    case memoryPressure
     case batteryLevel
     case networkDownload
     case networkUpload
@@ -61,6 +62,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             String(localized: "menu-bar-metric.gpu-usage")
         case .memoryUsage:
             String(localized: "menu-bar-metric.memory-usage")
+        case .memoryPressure:
+            String(localized: "menu-bar-metric.memory-pressure")
         case .batteryLevel:
             String(localized: "menu-bar-metric.battery-level")
         case .networkDownload:
@@ -84,6 +87,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             "display"
         case .memoryUsage:
             "memorychip"
+        case .memoryPressure:
+            "gauge.medium"
         case .batteryLevel:
             "battery.75percent"
         case .networkDownload:
@@ -107,6 +112,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             String(localized: "menu-bar-metric-prefix.gpu-usage")
         case .memoryUsage:
             String(localized: "menu-bar-metric-prefix.memory-usage")
+        case .memoryPressure:
+            String(localized: "menu-bar-metric-prefix.memory-pressure")
         case .batteryLevel:
             String(localized: "menu-bar-metric-prefix.battery-level")
         case .networkDownload:
