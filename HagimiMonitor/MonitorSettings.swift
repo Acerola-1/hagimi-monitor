@@ -67,11 +67,11 @@ final class MonitorSettings: ObservableObject {
     @Published var mediaKeyShowOSD: Bool = true
     @Published var showMemoryProcesses: Bool = true
     @Published var memoryShowSystemProcesses: Bool = false
-    @Published var showCPUProcesses: Bool = false
+    @Published var showCPUProcesses: Bool = true
     @Published var cpuShowSystemProcesses: Bool = false
-    @Published var showDiskProcesses: Bool = false
+    @Published var showDiskProcesses: Bool = true
     @Published var diskShowSystemProcesses: Bool = false
-    @Published var showNetworkProcesses: Bool = false
+    @Published var showNetworkProcesses: Bool = true
     @Published var networkShowSystemProcesses: Bool = false
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
@@ -112,11 +112,11 @@ final class MonitorSettings: ObservableObject {
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
         showMemoryProcesses = defaults.object(forKey: Keys.showMemoryProcesses) as? Bool ?? true
         memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? false
-        showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? false
+        showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? true
         cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? false
-        showDiskProcesses = defaults.object(forKey: Keys.showDiskProcesses) as? Bool ?? false
+        showDiskProcesses = defaults.object(forKey: Keys.showDiskProcesses) as? Bool ?? true
         diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? false
-        showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? false
+        showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? false
 
         pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double
