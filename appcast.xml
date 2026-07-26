@@ -3,22 +3,30 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.0.1</title>
-            <pubDate>Sun, 26 Jul 2026 10:59:24 +0000</pubDate>
-            <sparkle:version>61</sparkle:version>
-            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+            <title>1.1.0</title>
+            <pubDate>Sun, 26 Jul 2026 13:42:28 +0000</pubDate>
+            <sparkle:version>62</sparkle:version>
+            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
+### 新功能
+
+- 大卡片显示方式：每个监测项目可在设置中切换「列表行 / 大卡片」，大卡片常显大字主值、实时走势与 TOP 进程，呼出面板即一眼扫读，无需点击展开
+- 默认展开：每个监测项目可单独设置呼出面板时默认处于展开状态
+- 内存压力显示模式：内存模块主指标可在「压力等级 / 使用率」间切换，压力模式下右侧显示与活动监视器同口径的连续压力曲线
+- 菜单栏新增「内存压力」指标（连续压力百分比，定宽对齐）
+
 ### 优化与体验
 
-- 更新部分默认配置选项
+- 面板走势图新增坐标轴参照（X 轴实线 + Y 轴渐隐），填充渐变更清晰
+- 大卡片 TOP 进程列表固定 5 行占位，数据加载过程高度不跳变
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.0.1/HagimiMonitor-v1.0.1.zip" length="4307779" type="application/octet-stream" sparkle:edSignature="7isaedPRq9+Ns/n0lCeln+hiI0wfqYHPKxgmIKZNbSm8bNflMvAyl6XSp0qJLl/za3mkGaNbGffn60mBy5RTAw=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.0/HagimiMonitor-v1.1.0.zip" length="4339474" type="application/octet-stream" sparkle:edSignature="MTM0ikXhIZAxGSbOrhLsQSIugwk5c8xl01gwPT7HVAZQyAk9pFJSwQs1EtsUTEYQRJYTfPQo1VnB2msxiBbwDQ=="/>
         </item>
     </channel>
 </rss>
