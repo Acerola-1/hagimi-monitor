@@ -3,30 +3,28 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.1.0</title>
-            <pubDate>Sun, 26 Jul 2026 13:42:28 +0000</pubDate>
-            <sparkle:version>62</sparkle:version>
-            <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+            <title>1.1.1</title>
+            <pubDate>Mon, 27 Jul 2026 02:01:31 +0000</pubDate>
+            <sparkle:version>63</sparkle:version>
+            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 新功能
+### 修复
 
-- 大卡片显示方式：每个监测项目可在设置中切换「列表行 / 大卡片」，大卡片常显大字主值、实时走势与 TOP 进程，呼出面板即一眼扫读，无需点击展开
-- 默认展开：每个监测项目可单独设置呼出面板时默认处于展开状态
-- 内存压力显示模式：内存模块主指标可在「压力等级 / 使用率」间切换，压力模式下右侧显示与活动监视器同口径的连续压力曲线
-- 菜单栏新增「内存压力」指标（连续压力百分比，定宽对齐）
+- 修复 App Store 版 TOP 进程列表因沙盒限制无数据仍占位显示的问题（CPU / 内存 / 存储 / 网络）
+- 修复 App Store 版勾选 CPU 温度后不显示的问题（沙盒无法读取 SMC，选项不再展示）
 
 ### 优化与体验
 
-- 面板走势图新增坐标轴参照（X 轴实线 + Y 轴渐隐），填充渐变更清晰
-- 大卡片 TOP 进程列表固定 5 行占位，数据加载过程高度不跳变
+- App Store 版设置页与菜单栏指标仅保留沙盒环境下真实可用的功能
+- README 与官网新增 GitHub 直连版 / App Store 版功能对比说明
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.0/HagimiMonitor-v1.1.0.zip" length="4339474" type="application/octet-stream" sparkle:edSignature="MTM0ikXhIZAxGSbOrhLsQSIugwk5c8xl01gwPT7HVAZQyAk9pFJSwQs1EtsUTEYQRJYTfPQo1VnB2msxiBbwDQ=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.1/HagimiMonitor-v1.1.1.zip" length="4339615" type="application/octet-stream" sparkle:edSignature="kCtpkl7OVQzYa+YP2V18ImifIBSbEA+yQFwkrkudfTE4aCjHQw+a+Bp/AD/6LTMWK96yu3ayNsuJmJdw06DNBA=="/>
         </item>
     </channel>
 </rss>
