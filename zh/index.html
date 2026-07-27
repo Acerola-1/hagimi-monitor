@@ -181,6 +181,27 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 .bar-card .bar-desc{font-size:12px;color:var(--muted);margin-top:4px;}
 @keyframes ring-pulse{0%,100%{opacity:1;}50%{opacity:.7;}}
 
+/* ============ Compare ============ */
+.compare h2{font-size:clamp(30px,4vw,40px);}
+.compare .lead{margin-top:14px;}
+.compare-scroll{overflow-x:auto;margin-top:36px;}
+.compare-table{
+  width:100%;min-width:560px;
+  border-collapse:separate;border-spacing:0;
+  background:#fff;border:1px solid var(--border);border-radius:14px;
+  overflow:hidden;
+}
+.compare-table th,.compare-table td{
+  padding:14px 20px;font-size:14px;text-align:center;
+  border-top:1px solid var(--border);
+}
+.compare-table thead th{border-top:none;background:#fafafa;font-weight:600;}
+.compare-table td:first-child,.compare-table th:first-child{text-align:left;}
+.compare-table td:first-child{font-weight:500;}
+.compare-yes{color:var(--green);font-weight:600;}
+.compare-no{color:#c71f1a;font-weight:600;}
+.compare-note{font-size:12px;color:var(--muted);margin-top:14px;}
+
 /* ============ Download ============ */
 .download{background:#fff;text-align:center;}
 .download h2{font-size:clamp(32px,4.5vw,46px);margin-bottom:16px;}
@@ -452,6 +473,31 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 
 
+<!-- Compare -->
+<section class="compare" id="compare">
+  <div class="section-inner fade-in">
+    <div class="kicker">版本对比</div>
+    <h2>两个版本，如何选择</h2>
+    <p class="lead">GitHub 直连版功能完整；App Store 版受沙盒限制，部分功能不可用。</p>
+    <div class="compare-scroll">
+      <table class="compare-table">
+        <thead>
+          <tr><th>功能</th><th>GitHub 直连版</th><th>App Store 版</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>六大监控模块（CPU / GPU / 内存 / 存储 / 网络 / 电池）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>历史统计 · 健康评分 · 事件检测</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>双主题 · 多种菜单栏样式</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>显示器控制（亮度 / 音量 / 对比度 · 媒体键）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
+          <tr><td>TOP 进程监控（CPU / 内存 / 存储 / 网络 TOP 进程）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
+          <tr><td>温度传感器读取（CPU 温度）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="compare-note">由于 App Store 沙盒限制，部分功能无法在沙盒环境中正常工作，因此功能不完整。</p>
+  </div>
+</section>
+
 <!-- Download -->
 <section class="download" id="download">
   <div class="section-inner fade-in">
@@ -468,7 +514,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
         App Store 支持购买
       </a>
     </div>
-    <p class="download-note">GitHub 开源免费，功能完全一致 · App Store 版是一份心意，感谢你的支持</p>
+    <p class="download-note">GitHub 开源免费，功能完整 · App Store 版是一份心意，感谢你的支持</p>
   </div>
 </section>
 
