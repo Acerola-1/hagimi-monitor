@@ -33,6 +33,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private var globalEventMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
 
+    /// 内容侧最近一次上报的自然尺寸(未经封顶)。showPanel 用它定位首帧:
+    /// 内容包在 ScrollView 里后,hostingView.intrinsicContentSize 不再可靠反映
+    /// 内容高度,而 size reader 的首次上报在 init 布局阶段就已发生。
+    private var lastReportedContentSize: CGSize = .zero
+
     /// 指标(文本)模式下,上一次成功栅格化所用的关键输入。$modules 每秒发布(网络字节
     /// 几乎每秒都变),但格式化后的菜单栏指标文本往往不变;文字/外观/布局/scale 全等时
     /// 据此跳过 ImageRenderer 快照,消除「指标模式每秒重绘」这一常驻 CPU 热点。
@@ -50,6 +55,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 面板圆角半径。由 window 层的 NSVisualEffectView / hosting layer 裁剪,
     /// 恢复系统 popover 般的圆角外观(自建 borderless 窗口默认是方角)。
     private static let panelCornerRadius: CGFloat = 12
+
+    /// 面板底部距屏幕可视区下缘(Dock 上沿)的最小留白。
+    private static let panelBottomMargin: CGFloat = 10
 
     /// 状态项内容左右留白,避免图标/文字贴住菜单栏边缘(系统 MenuBarExtra 自带此留白)。
     private static let statusItemHorizontalPadding: CGFloat = 2
@@ -298,12 +306,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     private func showPanel() {
         // 先让 SwiftUI 布局出内容固有尺寸,再据此定位窗口,避免首帧尺寸跳变。
-        // 用 intrinsicContentSize(NSHostingView 返回 SwiftUI 理想尺寸),不能用
-        // fittingSize——hosting 被四边约束钉在 contentView 上,fittingSize 会解算成
-        // 窗口现尺寸甚至 0,导致面板 0×0 看不见(这正是「有高亮但没面板」的根因)。
+        // 优先用 size reader 上报的自然尺寸(init 布局阶段即已上报);内容包在
+        // ScrollView 里后 intrinsicContentSize 不再反映内容高度,仅作兜底。
         hostingView?.layoutSubtreeIfNeeded()
         let intrinsic = hostingView?.intrinsicContentSize ?? .zero
-        let size = (intrinsic.width > 1 && intrinsic.height > 1) ? intrinsic : panel.frame.size
+        let size: CGSize
+        if lastReportedContentSize.width > 1, lastReportedContentSize.height > 1 {
+            size = lastReportedContentSize
+        } else if intrinsic.width > 1, intrinsic.height > 1 {
+            size = intrinsic
+        } else {
+            size = panel.frame.size
+        }
         setPanelFrame(size: size, animate: false)
 
         store.panelDidAppear()
@@ -351,6 +365,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 曲线做窗口补间;二者从同一时刻并行动画到同一终值,窗口高度(t)≈内容高度(t),
     /// 边框与内容一起伸缩、不裁剪不留空。指标微调(<阈值)仍瞬时贴合,不触发多余动画。
     private func contentSizeDidChange(to size: CGSize) {
+        lastReportedContentSize = size
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, self.panel.frame.size != size else { return }
@@ -371,6 +386,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         let buttonFrame = buttonWindow.frame
+        var size = size
+
+        // 底部封顶:高度不超过「菜单栏下沿 → 屏幕可视区底部(Dock 上沿)」的可用
+        // 空间。超出部分由内容侧的 ScrollView(FluidPanelSizeReader)滚动展示,
+        // 避免模块全部展开时面板伸到屏幕外。
+        if let screen = buttonWindow.screen {
+            let available = buttonFrame.minY - screen.visibleFrame.minY - Self.panelBottomMargin
+            if available > 0 {
+                size.height = min(size.height, available)
+            }
+        }
+
         var origin = buttonFrame.origin
 
         // macOS 坐标原点在左下:origin.y 减去窗口高度,使顶边钉在菜单栏下沿,
@@ -530,33 +557,41 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
 /// 读取 SwiftUI 内容固有尺寸并回调。内容瞬时上报尺寸,高度动画交给窗口层。
 ///
-/// modifier 顺序对齐 FluidMenuBarExtra 的 `RootViewModifier`,三者缺一不可:
+/// 内容包在纵向 ScrollView 里:窗口高度被 setPanelFrame 封顶(屏幕可用空间不够)时,
+/// 超出部分可滚动查看;未封顶时窗口高度 = 内容高度,ScrollView 不可滚动
+/// (`.scrollBounceBehavior(.basedOnSize)` 同时去掉未溢出时的回弹),行为与无 ScrollView 时一致。
+/// GeometryReader 测的仍是 ScrollView **内部**内容的自然尺寸,不受封顶影响,
+/// 因此现有的「尺寸上报 → 窗口补间」动画链路不变。
+///
+/// modifier 顺序对齐 FluidMenuBarExtra 的 `RootViewModifier`:
 /// 1. `.background(GeometryReader)` 放在 `.fixedSize()` **之前**——测的是内容自然
-///    布局尺寸,不受后面 `.frame(maxHeight:.infinity)` 拉伸影响;
+///    布局尺寸,不受外层拉伸影响;
 /// 2. `.fixedSize()` 固定内容为固有尺寸;
-/// 3. `.frame(maxWidth/Height:.infinity, alignment: .top)` 让内容在被窗口拉伸的
-///    hosting 里顶部对齐——窗口高度动画时内容从顶部展开,而非居中跳变。
-///    实现者此前把 `.fixedSize()` 放在测量之前、且缺少顶对齐 frame,是动画观感丢失的原因之一。
+/// 3. 外层 `.frame(maxWidth/Height:.infinity, alignment: .top)` 让 ScrollView 在被
+///    窗口拉伸的 hosting 里顶部对齐——窗口高度动画时内容从顶部展开,而非居中跳变。
 private struct FluidPanelSizeReader: ViewModifier {
     let onChange: (CGSize) -> Void
 
     func body(content: Content) -> some View {
-        content
-            // 关键:必须忽略安全区。窗口是 `.titled`,SwiftUI 默认把顶部标题栏区域
-            // 当安全区留白——内容被下顶(顶部大空白),底部溢出窗口(按钮被裁掉)。
-            // 对齐 FluidMenuBarExtra 的 RootViewModifier,填掉标题栏空间。
-            .edgesIgnoringSafeArea(.all)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear { onChange(geometry.size) }
-                        .onChange(of: geometry.size) { _, newValue in
-                            onChange(newValue)
-                        }
-                }
-            )
-            .fixedSize()
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+        ScrollView(.vertical) {
+            content
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear { onChange(geometry.size) }
+                            .onChange(of: geometry.size) { _, newValue in
+                                onChange(newValue)
+                            }
+                    }
+                )
+                .fixedSize()
+        }
+        .scrollBounceBehavior(.basedOnSize)
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+        // 关键:必须忽略安全区。窗口是 `.titled`,SwiftUI 默认把顶部标题栏区域
+        // 当安全区留白——内容被下顶(顶部大空白),底部溢出窗口(按钮被裁掉)。
+        // 对齐 FluidMenuBarExtra 的 RootViewModifier,填掉标题栏空间。
+        .edgesIgnoringSafeArea(.all)
     }
 }
 
