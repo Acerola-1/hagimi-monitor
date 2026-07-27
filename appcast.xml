@@ -3,22 +3,32 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.1.2</title>
-            <pubDate>Mon, 27 Jul 2026 09:10:22 +0000</pubDate>
-            <sparkle:version>64</sparkle:version>
-            <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
+            <title>1.1.3</title>
+            <pubDate>Mon, 27 Jul 2026 15:44:30 +0000</pubDate>
+            <sparkle:version>65</sparkle:version>
+            <sparkle:shortVersionString>1.1.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
+### 新功能
+
+- 菜单栏图标右键菜单增加设置选项
+
+### 修复
+
+- 修正菜单栏存储容量与展开面板指标不一致:统一改用 1000 进制,与系统保持一致(感谢 @TowardLights 在 #77 的反馈)
+
 ### 优化与体验
 
-- 存储空间计算方式更新，由严格空闲字节修改为可清除空间，与系统保持统一（感谢 @LyTensis 在 #72 的反馈）
+- 面板高度按屏幕可用空间自动封顶,超出部分改为面板内部滚动
+- 面板打开时预热网络/磁盘 TOP 基线,缩短展开后的出数延迟
+- 优化面板滚动体验:header 固定不滚动、隐藏滚动条、上下边缘渐隐
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.2/HagimiMonitor-v1.1.2.zip" length="4340445" type="application/octet-stream" sparkle:edSignature="VrwtvAu71ENLcHsZlxxgxZhyUSShAOvjt6DgTDfpNsNA1ZEsei2IQa+4CHsQ/JuAoX/zT27jv7Q1fIGPS6lDBQ=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.3/HagimiMonitor-v1.1.3.zip" length="4352449" type="application/octet-stream" sparkle:edSignature="zzIKP5Wc6DQ6jFl2YtGDAFrdHgkKNdJULQCS7gq+hvA0n8Z7jDvkMaQvKT9fuYAGacYrxWoIcTlsdosAigbxCQ=="/>
         </item>
     </channel>
 </rss>
