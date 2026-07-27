@@ -213,7 +213,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func installEventMonitors() {
-        // 左键单击即时切换面板;右键弹出上下文菜单(含退出)。
+        // 左键单击即时切换面板;右键弹出上下文菜单(含设置与退出)。
         localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self,
                   let button = self.statusItem.button,
@@ -257,6 +257,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     private func showStatusItemContextMenu(for button: NSStatusBarButton, event: NSEvent) {
         let menu = NSMenu(title: "HagimiMonitor")
+
+        let settingsItem = NSMenuItem(
+            title: String(localized: "contextMenu.settings"),
+            action: #selector(openSettingsFromMenu(_:)),
+            keyEquivalent: ","
+        )
+        settingsItem.keyEquivalentModifierMask = [.command]
+        settingsItem.target = self
+        menu.addItem(settingsItem)
+
+        menu.addItem(.separator())
+
         let quitItem = NSMenuItem(
             title: String(localized: "menu.quit"),
             action: #selector(terminateApplication(_:)),
@@ -266,6 +278,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         quitItem.target = self
         menu.addItem(quitItem)
         NSMenu.popUpContextMenu(menu, with: event, for: button)
+    }
+
+    @objc private func openSettingsFromMenu(_ sender: Any?) {
+        openSettingsAction()
     }
 
     @objc private func terminateApplication(_ sender: Any?) {

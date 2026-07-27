@@ -3704,6 +3704,28 @@
         }
       }
     },
+    "contextMenu.settings": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置"
+          }
+        }
+      }
+    },
     "menu.settings": {
       "localizations": {
         "en": {
