@@ -13,11 +13,16 @@ final class StorageSampler: MonitorSampler {
             let rootURL = URL(fileURLWithPath: "/")
             let values = try rootURL.resourceValues(forKeys: [
                 .volumeTotalCapacityKey,
-                .volumeAvailableCapacityKey
+                .volumeAvailableCapacityKey,
+                .volumeAvailableCapacityForImportantUsageKey
             ])
             let attributes = try FileManager.default.attributesOfFileSystem(forPath: "/")
             let total = Double(values.volumeTotalCapacity ?? Int((attributes[.systemSize] as? NSNumber)?.int64Value ?? 0))
-            let free = Double(values.volumeAvailableCapacity ?? Int((attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? 0))
+            // 优先用 ForImportantUsage(含 purgeable 空间),与系统设置/Finder 的「可用」口径一致
+            let importantFree = values.volumeAvailableCapacityForImportantUsage ?? 0
+            let free = importantFree > 0
+                ? Double(importantFree)
+                : Double(values.volumeAvailableCapacity ?? Int((attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? 0))
             let used = max(0, total - free)
             let percentage = total > 0 ? (used / total) * 100 : 0
 
@@ -130,13 +135,14 @@ final class StorageSampler: MonitorSampler {
     }
 
     private func detectExternalVolumes() -> [ExternalVolume] {
-        guard let volumeURLs = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey, .volumeNameKey, .volumeIsInternalKey, .volumeIsEjectableKey], options: []) else {
+        let volumeKeys: [URLResourceKey] = [.volumeTotalCapacityKey, .volumeAvailableCapacityKey, .volumeAvailableCapacityForImportantUsageKey, .volumeNameKey, .volumeIsInternalKey, .volumeIsEjectableKey]
+        guard let volumeURLs = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: volumeKeys, options: []) else {
             return []
         }
 
         var volumes: [ExternalVolume] = []
         for url in volumeURLs {
-            guard let values = try? url.resourceValues(forKeys: [.volumeTotalCapacityKey, .volumeAvailableCapacityKey, .volumeNameKey, .volumeIsInternalKey, .volumeIsEjectableKey]),
+            guard let values = try? url.resourceValues(forKeys: Set(volumeKeys)),
                   let totalCapacity = values.volumeTotalCapacity,
                   let availableCapacity = values.volumeAvailableCapacity,
                   let name = values.volumeName,
@@ -146,7 +152,9 @@ final class StorageSampler: MonitorSampler {
             }
 
             let total = Double(totalCapacity)
-            let free = Double(availableCapacity)
+            // 与主卷一致,优先取含 purgeable 的可用容量
+            let importantFree = values.volumeAvailableCapacityForImportantUsage ?? 0
+            let free = importantFree > 0 ? Double(importantFree) : Double(availableCapacity)
             let used = max(0, total - free)
 
             guard total > 0 else { continue }
