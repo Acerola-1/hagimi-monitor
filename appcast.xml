@@ -3,28 +3,22 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.1.1</title>
-            <pubDate>Mon, 27 Jul 2026 02:01:31 +0000</pubDate>
-            <sparkle:version>63</sparkle:version>
-            <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
+            <title>1.1.2</title>
+            <pubDate>Mon, 27 Jul 2026 09:10:22 +0000</pubDate>
+            <sparkle:version>64</sparkle:version>
+            <sparkle:shortVersionString>1.1.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 修复
-
-- 修复 App Store 版 TOP 进程列表因沙盒限制无数据仍占位显示的问题（CPU / 内存 / 存储 / 网络）
-- 修复 App Store 版勾选 CPU 温度后不显示的问题（沙盒无法读取 SMC，选项不再展示）
-
 ### 优化与体验
 
-- App Store 版设置页与菜单栏指标仅保留沙盒环境下真实可用的功能
-- README 与官网新增 GitHub 直连版 / App Store 版功能对比说明
+- 存储空间计算方式更新，由严格空闲字节修改为可清除空间，与系统保持统一（感谢 @LyTensis 在 #72 的反馈）
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.1/HagimiMonitor-v1.1.1.zip" length="4339615" type="application/octet-stream" sparkle:edSignature="kCtpkl7OVQzYa+YP2V18ImifIBSbEA+yQFwkrkudfTE4aCjHQw+a+Bp/AD/6LTMWK96yu3ayNsuJmJdw06DNBA=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.2/HagimiMonitor-v1.1.2.zip" length="4340445" type="application/octet-stream" sparkle:edSignature="VrwtvAu71ENLcHsZlxxgxZhyUSShAOvjt6DgTDfpNsNA1ZEsei2IQa+4CHsQ/JuAoX/zT27jv7Q1fIGPS6lDBQ=="/>
         </item>
     </channel>
 </rss>
