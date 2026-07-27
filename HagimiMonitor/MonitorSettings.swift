@@ -289,7 +289,10 @@ final class MonitorSettings: ObservableObject {
 
         var result: [MenuBarMetricKind] = []
         for rawValue in rawValues {
-            guard let kind = MenuBarMetricKind(rawValue: rawValue), !result.contains(kind) else {
+            // 旧值里可能残留当前版本不可用的指标(如沙盒版的 CPU 温度),一并过滤。
+            guard let kind = MenuBarMetricKind(rawValue: rawValue),
+                  MenuBarMetricKind.userSelectableCases.contains(kind),
+                  !result.contains(kind) else {
                 continue
             }
             result.append(kind)

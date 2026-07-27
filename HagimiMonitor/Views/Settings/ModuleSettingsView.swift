@@ -96,6 +96,8 @@ struct ModuleSettingsView: View {
 
                     SettingsDivider()
 
+                    // App Store 沙盒版无法采样他进程,隐藏进程列表相关设置。
+                    #if DIRECT_DISTRIBUTION
                     SettingsRow(title: String(localized: "settings.show-memory-processes")) {
                         Toggle("", isOn: $settings.showMemoryProcesses)
                             .toggleStyle(.switch)
@@ -109,9 +111,12 @@ struct ModuleSettingsView: View {
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
+                    #endif
                 }
             }
 
+            // App Store 沙盒版无法采样他进程,隐藏 CPU 进程列表设置。
+            #if DIRECT_DISTRIBUTION
             if kind == .cpu {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-cpu-processes")) {
@@ -129,7 +134,10 @@ struct ModuleSettingsView: View {
                     }
                 }
             }
+            #endif
 
+            // App Store 沙盒版无法采样他进程,隐藏存储进程列表设置。
+            #if DIRECT_DISTRIBUTION
             if kind == .storage {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-disk-processes")) {
@@ -147,7 +155,10 @@ struct ModuleSettingsView: View {
                     }
                 }
             }
+            #endif
 
+            // App Store 沙盒版无法采样网络他进程,隐藏网络进程列表设置。
+            #if DIRECT_DISTRIBUTION
             if kind == .network {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-network-processes")) {
@@ -165,6 +176,7 @@ struct ModuleSettingsView: View {
                     }
                 }
             }
+            #endif
 
             if #available(macOS 26, *) {
                 Button(String(localized: "settings.reset-defaults")) {

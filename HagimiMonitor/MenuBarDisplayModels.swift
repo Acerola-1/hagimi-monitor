@@ -52,6 +52,16 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     static let defaultSelection: [MenuBarMetricKind] = [.cpuUsage]
     static let maximumSelectionCount = 4
 
+    /// 用户可选的菜单栏指标。温度依赖 SMC(AppleSMC user client),App Store
+    /// 沙盒版无法读取,故仅 DISPLAY_CONTROL 版本提供 CPU 温度选项。
+    static let userSelectableCases: [MenuBarMetricKind] = {
+        #if DISPLAY_CONTROL
+        return allCases
+        #else
+        return allCases.filter { $0 != .cpuTemperature }
+        #endif
+    }()
+
     var id: String { rawValue }
 
     var title: String {

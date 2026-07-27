@@ -105,7 +105,7 @@ Built with Swift / SwiftUI and optimized for Apple Silicon. Daily memory footpri
 
 ## Editions
 
-HagimiMonitor offers two ways to get it, with an identical core monitoring experience:
+HagimiMonitor offers two ways to get it, with the same core monitoring experience; due to App Store sandbox restrictions, some features are only available in the GitHub direct edition:
 
 | Feature | GitHub (Free) | App Store (Support) |
 | --- | :---: | :---: |
@@ -114,10 +114,14 @@ HagimiMonitor offers two ways to get it, with an identical core monitoring exper
 | Dual themes · Glassmorphism UI | ✅ | ✅ |
 | External display control (DDC/CI brightness / volume / contrast) | ✅ | ❌ Sandbox limit |
 | Media key capture | ✅ | ❌ Sandbox limit |
+| Top process monitoring (CPU / Memory / Storage / Network top processes) | ✅ | ❌ Sandbox limit |
+| Temperature sensor reading (CPU temperature) | ✅ | ❌ Sandbox limit |
 | Updates | Built-in auto-update | App Store updates |
 | Price | Free | Paid · Support the developer |
 
-> 💚 **The App Store edition is a token of thanks**: both editions share the exact same core experience. If HagimiMonitor helps you and you don't need the out-of-sandbox display controls, buying it on the [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) is like leaving a coffee — a small, sincere way to support and encourage an indie developer. Whichever edition you choose, thank you all the same.
+> Due to App Store sandbox restrictions, some features cannot work properly in the sandboxed environment, so the App Store edition is not feature-complete.
+
+> 💚 **The App Store edition is a token of thanks**: both editions share the same core monitoring experience. If HagimiMonitor helps you and you don't need the out-of-sandbox features — display control, top process monitoring, temperature reading — buying it on the [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) is like leaving a coffee — a small, sincere way to support and encourage an indie developer. Whichever edition you choose, thank you all the same.
 
 ## Installation
 
@@ -125,15 +129,7 @@ HagimiMonitor offers two ways to get it, with an identical core monitoring exper
 2. Open the DMG and drag HagimiMonitor into the Applications folder
 3. Launch it from Launchpad or Applications
 
-## Allowing Unsigned Apps
-
-HagimiMonitor is currently not notarized by Apple, so macOS may block it. After installation, run in Terminal:
-
-```bash
-sudo xattr -cr /Applications/HagimiMonitor.app
-```
-
-Then launch normally.
+The app is notarized by Apple and opens directly after download.
 
 ## Requirements
 

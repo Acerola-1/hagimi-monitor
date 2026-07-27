@@ -95,13 +95,18 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     var availableMetrics: [MetricSwitch] {
         switch self {
         case .cpu:
-            return [
+            // 温度读数来自 SMC(IOServiceOpen AppleSMC),App Store 沙盒版被拒,
+            // CPUSampler 也只在 DISPLAY_CONTROL 下产出该指标,选项列表同步门控。
+            var metrics = [
                 MetricSwitch(id: "system", title: String(localized: "metric.cpu.system"), isDefault: true),
                 MetricSwitch(id: "user", title: String(localized: "metric.cpu.user"), isDefault: true),
                 MetricSwitch(id: "idle", title: String(localized: "metric.cpu.idle"), isDefault: true),
                 MetricSwitch(id: "uptime", title: String(localized: "metric.cpu.uptime"), isDefault: true),
-                MetricSwitch(id: "temperature", title: String(localized: "metric.cpu.temperature"), isDefault: false),
             ]
+            #if DISPLAY_CONTROL
+            metrics.append(MetricSwitch(id: "temperature", title: String(localized: "metric.cpu.temperature"), isDefault: false))
+            #endif
+            return metrics
         case .gpu:
             return [
                 MetricSwitch(id: "gpu-memory", title: String(localized: "metric.gpu.gpu-memory"), isDefault: true),
@@ -389,13 +394,19 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 当前设置里已开启进程列表的类目集合。
+    /// App Store 沙盒版无法采样他进程资源(proc_pid_rusage/nettop 均被沙盒拒绝),
+    /// 故仅直连版启用进程采样;沙盒版恒返回空集,彻底停止 TOP 进程采样。
     private func enabledProcessKinds() -> Set<MonitorKind> {
+        #if DIRECT_DISTRIBUTION
         var enabled = Set<MonitorKind>()
         if settings.showMemoryProcesses { enabled.insert(.memory) }
         if settings.showCPUProcesses { enabled.insert(.cpu) }
         if settings.showDiskProcesses { enabled.insert(.storage) }
         if settings.showNetworkProcesses { enabled.insert(.network) }
         return enabled
+        #else
+        return []
+        #endif
     }
 
     /// 计算实际需要采样的进程类目:展开集合与「设置里开启的进程列表」集合的交集。
