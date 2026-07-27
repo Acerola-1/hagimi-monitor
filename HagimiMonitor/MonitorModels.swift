@@ -242,8 +242,9 @@ final class MonitorStore: ObservableObject {
     private var pendingExpansionAnimation = false
 
     /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
-    /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就 spawn ps/nettop、
-    /// 构建大量进程图标」造成的内存/CPU 峰值。
+    /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就构建大量进程
+    /// 图标」造成的内存/CPU 峰值。例外:网络/磁盘这两个增量型采样会在面板打开时
+    /// 预热一次基线快照(见 prewarmProcessBaselines),以缩短展开后的出数延迟。
     private var expandedKindsBySource: [PanelKind: Set<MonitorKind>] = [:]
 
     private var allModules: [MonitorModule]
@@ -334,6 +335,7 @@ final class MonitorStore: ObservableObject {
         if wasEmpty {
             isPanelVisible = true
             refreshAllProcesses()
+            prewarmProcessBaselines()
             startProcSampleTimer()
         }
     }
@@ -434,6 +436,33 @@ final class MonitorStore: ObservableObject {
     /// 刷新当前展开且开启的进程列表。由 5 秒定时器驱动;未展开任何模块时为空转。
     private func refreshAllProcesses() {
         refreshProcesses(for: expandedProcessKinds)
+    }
+
+    /// 面板打开时为增量型 TOP 采样(网络/磁盘)预热基线快照。
+    /// 两者的基线是跨调用持久的全局快照:提前建好后,用户展开时首次采样即可
+    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s),磁盘从
+    /// 「0.6s 补采」变为展开即出数;基线窗口=打开面板以来的时长,速率也更准。
+    /// 这是对「按需采样」原则的有限放宽:仅面板可见时触发一次、只覆盖设置里
+    /// 开启了 TOP 列表的类目、丢弃返回值(不 enrich、不建图标),后台常驻仍零开销;
+    /// 沙盒版 enabledProcessKinds() 恒返回空集,天然不受影响。
+    private func prewarmProcessBaselines() {
+        let enabled = enabledProcessKinds()
+        // 已展开的类目走 updateExpandedKinds 的正常采样链路(含链式/延时补采),无需预热。
+        let expanded = expandedProcessKinds
+        let targets = Set([MonitorKind.network, .storage].filter {
+            enabled.contains($0) && !expanded.contains($0)
+        })
+        guard !targets.isEmpty else { return }
+
+        procSampleQueue.async {
+            // 磁盘快照极快、先执行;nettop 耗时 1~2s,排在后面以免阻塞串行队列。
+            if targets.contains(.storage) {
+                _ = sampleTopDiskProcesses()
+            }
+            if targets.contains(.network) {
+                _ = sampleTopNetworkProcesses()
+            }
+        }
     }
 
     /// 对指定类目采样(仅限其中设置已开启的列表)。并行执行,全部完成后回主线程
