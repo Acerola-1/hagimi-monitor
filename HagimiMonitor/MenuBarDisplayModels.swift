@@ -186,8 +186,9 @@ enum MenuBarMetricFormatter {
         var scaled = safeValue
         var unitIndex = 0
 
+        // 容量用1000进制(.file口径),与面板/Finder/系统设置的存储显示一致。
         while scaled >= 999.5, unitIndex < units.count - 1 {
-            scaled /= 1024
+            scaled /= 1000
             unitIndex += 1
         }
 
