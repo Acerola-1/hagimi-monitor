@@ -34,9 +34,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private var cancellables: Set<AnyCancellable> = []
 
     /// 内容侧最近一次上报的自然尺寸(未经封顶)。showPanel 用它定位首帧:
-    /// 内容包在 ScrollView 里后,hostingView.intrinsicContentSize 不再可靠反映
-    /// 内容高度,而 size reader 的首次上报在 init 布局阶段就已发生。
+    /// hosting 的 sizingOptions 为空,intrinsicContentSize 不可靠,
+    /// 而 size reader 的首次上报在 init 布局阶段就已发生。
     private var lastReportedContentSize: CGSize = .zero
+
+    /// 向 SwiftUI 侧下发布局约束(内容高度上限)。面板主体据此自行封顶并在
+    /// 内部 ScrollView 滚动,header 固定在外、不参与滚动。
+    private let layoutMetrics = FluidPanelLayoutMetrics()
 
     /// 指标(文本)模式下,上一次成功栅格化所用的关键输入。$modules 每秒发布(网络字节
     /// 几乎每秒都变),但格式化后的菜单栏指标文本往往不变;文字/外观/布局/scale 全等时
@@ -133,8 +137,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         visualEffect.layer?.masksToBounds = true
         panel.contentView = visualEffect
 
-        // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包。
-        let root = MonitorPanelView(store: store)
+        // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
+        let root = FluidPanelRootView(store: store, metrics: layoutMetrics)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
             .modifier(FluidPanelSizeReader { [weak self] size in
                 self?.contentSizeDidChange(to: size)
@@ -305,6 +309,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func showPanel() {
+        // 先同步高度上限(可能换了屏幕/Dock 变化),再让 SwiftUI 布局。
+        updateContentHeightCap()
         // 先让 SwiftUI 布局出内容固有尺寸,再据此定位窗口,避免首帧尺寸跳变。
         // 优先用 size reader 上报的自然尺寸(init 布局阶段即已上报);内容包在
         // ScrollView 里后 intrinsicContentSize 不再反映内容高度,仅作兜底。
@@ -378,6 +384,17 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
     }
 
+    /// 把「菜单栏下沿 → 屏幕可视区底部」的可用高度下发给内容侧:面板主体据此
+    /// 自行封顶(header 固定,主体在内部 ScrollView 滚动),上报的自然尺寸随之
+    /// 不再超限,窗口层的 clamp 仅作兜底。
+    private func updateContentHeightCap() {
+        guard let buttonWindow = statusItem.button?.window,
+              let screen = buttonWindow.screen else { return }
+        let available = buttonWindow.frame.minY - screen.visibleFrame.minY - Self.panelBottomMargin
+        guard available > 0, layoutMetrics.maxContentHeight != available else { return }
+        layoutMetrics.maxContentHeight = available
+    }
+
     private func setPanelFrame(size: CGSize, animate: Bool) {
         guard let buttonWindow = statusItem.button?.window else {
             panel.setContentSize(size)
@@ -385,12 +402,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             return
         }
 
+        updateContentHeightCap()
         let buttonFrame = buttonWindow.frame
         var size = size
 
-        // 底部封顶:高度不超过「菜单栏下沿 → 屏幕可视区底部(Dock 上沿)」的可用
-        // 空间。超出部分由内容侧的 ScrollView(FluidPanelSizeReader)滚动展示,
-        // 避免模块全部展开时面板伸到屏幕外。
+        // 底部封顶兜底:内容侧已据 layoutMetrics 自行封顶,正常不会超限;此处
+        // 再 clamp 一道,防 header 高度未测定等瞬态下的首帧溢出。
         if let screen = buttonWindow.screen {
             let available = buttonFrame.minY - screen.visibleFrame.minY - Self.panelBottomMargin
             if available > 0 {
@@ -557,41 +574,72 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
 /// 读取 SwiftUI 内容固有尺寸并回调。内容瞬时上报尺寸,高度动画交给窗口层。
 ///
-/// 内容包在纵向 ScrollView 里:窗口高度被 setPanelFrame 封顶(屏幕可用空间不够)时,
-/// 超出部分可滚动查看;未封顶时窗口高度 = 内容高度,ScrollView 不可滚动
-/// (`.scrollBounceBehavior(.basedOnSize)` 同时去掉未溢出时的回弹),行为与无 ScrollView 时一致。
-/// GeometryReader 测的仍是 ScrollView **内部**内容的自然尺寸,不受封顶影响,
-/// 因此现有的「尺寸上报 → 窗口补间」动画链路不变。
+/// 滚动已下移到 MonitorPanelView 内部(header 固定、仅主体滚动,据
+/// `\.panelMaxContentHeight` 自行封顶),故此处测到的自然尺寸已含封顶效果。
 ///
-/// modifier 顺序对齐 FluidMenuBarExtra 的 `RootViewModifier`:
+/// modifier 顺序对齐 FluidMenuBarExtra 的 `RootViewModifier`,三者缺一不可:
 /// 1. `.background(GeometryReader)` 放在 `.fixedSize()` **之前**——测的是内容自然
-///    布局尺寸,不受外层拉伸影响;
+///    布局尺寸,不受后面 `.frame(maxHeight:.infinity)` 拉伸影响;
 /// 2. `.fixedSize()` 固定内容为固有尺寸;
-/// 3. 外层 `.frame(maxWidth/Height:.infinity, alignment: .top)` 让 ScrollView 在被
-///    窗口拉伸的 hosting 里顶部对齐——窗口高度动画时内容从顶部展开,而非居中跳变。
+/// 3. `.frame(maxWidth/Height:.infinity, alignment: .top)` 让内容在被窗口拉伸的
+///    hosting 里顶部对齐——窗口高度动画时内容从顶部展开,而非居中跳变。
 private struct FluidPanelSizeReader: ViewModifier {
     let onChange: (CGSize) -> Void
 
     func body(content: Content) -> some View {
-        ScrollView(.vertical) {
-            content
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear { onChange(geometry.size) }
-                            .onChange(of: geometry.size) { _, newValue in
-                                onChange(newValue)
-                            }
-                    }
-                )
-                .fixedSize()
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-        // 关键:必须忽略安全区。窗口是 `.titled`,SwiftUI 默认把顶部标题栏区域
-        // 当安全区留白——内容被下顶(顶部大空白),底部溢出窗口(按钮被裁掉)。
-        // 对齐 FluidMenuBarExtra 的 RootViewModifier,填掉标题栏空间。
-        .edgesIgnoringSafeArea(.all)
+        content
+            // 关键:必须忽略安全区。窗口是 `.titled`,SwiftUI 默认把顶部标题栏区域
+            // 当安全区留白——内容被下顶(顶部大空白),底部溢出窗口(按钮被裁掉)。
+            // 对齐 FluidMenuBarExtra 的 RootViewModifier,填掉标题栏空间。
+            .edgesIgnoringSafeArea(.all)
+            .background(
+                GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { onChange(geometry.size) }
+                        .onChange(of: geometry.size) { _, newValue in
+                            onChange(newValue)
+                        }
+                }
+            )
+            .fixedSize()
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+    }
+}
+
+// MARK: - Layout Metrics / Root View
+
+/// 控制器 → SwiftUI 的布局约束通道。目前只有一项:内容总高度上限
+/// (菜单栏下沿到屏幕可视区底部的可用空间)。
+@MainActor
+final class FluidPanelLayoutMetrics: ObservableObject {
+    @Published var maxContentHeight: CGFloat = .infinity
+}
+
+/// 根视图包装:观察 layoutMetrics 并把高度上限注入环境。单独包一层是因为
+/// `.environment` 的值在 rootView 构造时就固定了,需要一个观察者视图在
+/// 上限变化(换屏/Dock 变化)时重新注入。
+private struct FluidPanelRootView: View {
+    let store: MonitorStore
+    @ObservedObject var metrics: FluidPanelLayoutMetrics
+
+    var body: some View {
+        MonitorPanelView(store: store)
+            .environment(\.panelMaxContentHeight, metrics.maxContentHeight)
+    }
+}
+
+// MARK: - Panel Max Content Height Environment Key
+
+/// 面板内容总高度上限。MonitorPanelView 据此计算主体 ScrollView 的 maxHeight,
+/// 使 header 固定、仅主体滚动。默认 .infinity(钉住面板等其他宿主不封顶)。
+enum PanelMaxContentHeightKey: EnvironmentKey {
+    static let defaultValue: CGFloat = .infinity
+}
+
+extension EnvironmentValues {
+    var panelMaxContentHeight: CGFloat {
+        get { self[PanelMaxContentHeightKey.self] }
+        set { self[PanelMaxContentHeightKey.self] = newValue }
     }
 }
 

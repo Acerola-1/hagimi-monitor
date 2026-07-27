@@ -7,16 +7,33 @@ private let panelTimeFormatter: DateFormatter = {
     return formatter
 }()
 
+/// 主体 ScrollView 两端是否还有被裁内容,驱动上下渐隐遮罩。
+private struct BodyScrollEdges: Equatable {
+    let top: Bool
+    let bottom: Bool
+}
+
 struct MonitorPanelView: View {
     @ObservedObject var store: MonitorStore
     @ObservedObject private var quickPanelPresentation: QuickPanelPresentation
     private let showsQuickPanelControls: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
+    /// 内容总高度上限(由 FluidPanelController 注入,钉住面板等其他宿主为 .infinity)。
+    /// 据此封顶主体 ScrollView,使 header 固定、仅主体滚动。
+    @Environment(\.panelMaxContentHeight) private var maxContentHeight
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
     @State private var timeString: String = ""
     @State private var timeUpdateTask: Task<Void, Never>?
+    /// header 实测高度,用于从内容总高上限换算主体 ScrollView 的 maxHeight。
+    @State private var headerHeight: CGFloat = 0
+    /// 主体是否已向上滚动:控制顶部渐隐遮罩。仅滚动后启用,避免未滚动时
+    /// 误伤第一张卡片的顶边。
+    @State private var isBodyScrolled = false
+    /// 主体下方是否还有未滚到的内容:控制底部渐隐遮罩。滚到底/未溢出时
+    /// 关闭,保证底部按钮清晰不被误伤。
+    @State private var bodyHasMoreBelow = false
     /// header 小猫客串彩蛋（致敬 RunCat）。仅菜单栏下拉面板参与，钉住面板不触发。
     @StateObject private var cameoModel = HeaderCatCameoModel()
 
@@ -25,6 +42,14 @@ struct MonitorPanelView: View {
         let presentation = quickPanelPresentation ?? QuickPanelPresentation()
         _quickPanelPresentation = ObservedObject(wrappedValue: presentation)
         showsQuickPanelControls = quickPanelPresentation != nil
+    }
+
+    /// 主体 ScrollView 的高度上限:内容总高上限减去 header、上下内边距(10×2)
+    /// 与 header—主体间距(6)。header 首帧尚未测定时偏大,由窗口层 clamp 兜底。
+    /// 无上限(钉住面板等宿主)时返 nil,不施加约束。
+    private var scrollBodyMaxHeight: CGFloat? {
+        guard maxContentHeight != .infinity else { return nil }
+        return max(120, maxContentHeight - headerHeight - 26)
     }
 
     var body: some View {
@@ -39,45 +64,90 @@ struct MonitorPanelView: View {
             VStack(spacing: 6) {
                 header(theme: theme)
                     .transaction { $0.animation = nil }
-
-                ForEach(store.modules) { module in
-                    row(for: module, theme: theme)
-                        .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
-                }
-
-                #if DISPLAY_CONTROL
-                if store.settings.displayModuleVisible {
-                    DisplayControlsSection(
-                        settings: store.settings,
-                        isPanelVisible: store.isPanelVisible,
-                        beginExpansionAnimation: { store.beginExpansionAnimation() }
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onAppear { headerHeight = geometry.size.height }
+                                .onChange(of: geometry.size.height) { _, newValue in
+                                    headerHeight = newValue
+                                }
+                        }
                     )
-                        .compatibleGlassEffectID("display-controls", in: glassNamespace)
-                }
-                #endif
 
-                HStack(spacing: 8) {
-                    Button {
-                        openActivityMonitor()
-                    } label: {
-                        Label(String(localized: "panel.activity-monitor"), systemImage: "waveform.path.ecg")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .compatibleButtonStyle()
-                    .buttonBorderShape(.capsule)
+                // 主体(模块列表+底部按钮)包在 ScrollView 里:未超高时 ScrollView
+                // 理想高度=内容高度、不可滚动,行为与无 ScrollView 时一致;
+                // 触封顶时仅主体滚动,header 固定不动。
+                ScrollView(.vertical) {
+                    VStack(spacing: 6) {
+                        ForEach(store.modules) { module in
+                            row(for: module, theme: theme)
+                                .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
+                        }
 
-                    Button {
-                        fluidOpenSettings()
-                    } label: {
-                        Label(String(localized: "panel.settings"), systemImage: "gearshape")
-                            .frame(maxWidth: .infinity)
+                        #if DISPLAY_CONTROL
+                        if store.settings.displayModuleVisible {
+                            DisplayControlsSection(
+                                settings: store.settings,
+                                isPanelVisible: store.isPanelVisible,
+                                beginExpansionAnimation: { store.beginExpansionAnimation() }
+                            )
+                                .compatibleGlassEffectID("display-controls", in: glassNamespace)
+                        }
+                        #endif
+
+                        HStack(spacing: 8) {
+                            Button {
+                                openActivityMonitor()
+                            } label: {
+                                Label(String(localized: "panel.activity-monitor"), systemImage: "waveform.path.ecg")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .compatibleButtonStyle()
+                            .buttonBorderShape(.capsule)
+
+                            Button {
+                                fluidOpenSettings()
+                            } label: {
+                                Label(String(localized: "panel.settings"), systemImage: "gearshape")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .compatibleButtonStyle()
+                            .buttonBorderShape(.capsule)
+                        }
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(theme.primaryText)
+                        .padding(.top, 2)
                     }
-                    .compatibleButtonStyle()
-                    .buttonBorderShape(.capsule)
                 }
-                .font(.body.weight(.medium))
-                .foregroundStyle(theme.primaryText)
-                .padding(.top, 2)
+                .scrollBounceBehavior(.basedOnSize)
+                // 隐藏滚动条:展开/收起时内容高度频繁变化,滚动条会随之闪现,观感差;
+                // 面板内容有限且封顶场景少见,不依赖滚动条提示位置。
+                .scrollIndicators(.never)
+                .onScrollGeometryChange(for: BodyScrollEdges.self) { geometry in
+                    BodyScrollEdges(
+                        top: geometry.contentOffset.y > 1,
+                        bottom: geometry.contentOffset.y + geometry.containerSize.height
+                            < geometry.contentSize.height - 1
+                    )
+                } action: { _, edges in
+                    isBodyScrolled = edges.top
+                    bodyHasMoreBelow = edges.bottom
+                }
+                // 上下渐隐遮罩:对应边缘外还有内容时,圆角卡片滑到边界不再被直线
+                // 硬切,而是在 12pt 内渐隐消失;贴边/未溢出时渐隐段高度为 0,
+                // 首尾内容(第一张卡片/底部按钮)不受影响。
+                .mask(
+                    VStack(spacing: 0) {
+                        LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
+                            .frame(height: isBodyScrolled ? 12 : 0)
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
+                            .frame(height: bodyHasMoreBelow ? 12 : 0)
+                    }
+                    .animation(.easeInOut(duration: 0.15), value: isBodyScrolled)
+                    .animation(.easeInOut(duration: 0.15), value: bodyHasMoreBelow)
+                )
+                .frame(maxHeight: scrollBodyMaxHeight)
             }
             .padding(10)
             .frame(
