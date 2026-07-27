@@ -65,6 +65,7 @@ docs/MonitorControl-main
 docs/Lunar-main
 docs/FluidMenuBarExtra-main
 docs/RunCatNeo
+docs/hagimi-promo-2880
 .omo/
 
 # Build output
@@ -74,7 +75,7 @@ build/
 .claude/
 .codex/
 .opencode/
-.qoder/better-loop/
+.qoder/
 AGENTS.md
 CLAUDE.md
 .codegraph/
