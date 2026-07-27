@@ -105,7 +105,7 @@ HagimiMonitor 会围绕系统状态提供更多长期视角：
 
 ## 版本选择
 
-HagimiMonitor 提供两种获取方式，核心监控体验完全一致：
+HagimiMonitor 提供两种获取方式，核心监控体验一致；受 App Store 沙箱限制，部分功能仅 GitHub 直连版提供：
 
 | 功能 | GitHub 版（免费） | App Store 版（打赏支持） |
 | --- | :---: | :---: |
@@ -114,10 +114,14 @@ HagimiMonitor 提供两种获取方式，核心监控体验完全一致：
 | 双主题 · 玻璃拟态界面 | ✅ | ✅ |
 | 外接显示器控制（DDC/CI 亮度 / 音量 / 对比度） | ✅ | ❌ 沙箱限制 |
 | 媒体键接管 | ✅ | ❌ 沙箱限制 |
+| TOP 进程监控（CPU / 内存 / 存储 / 网络 TOP 进程） | ✅ | ❌ 沙箱限制 |
+| 温度传感器读取（CPU 温度） | ✅ | ❌ 沙箱限制 |
 | 更新方式 | 内置自动更新 | App Store 更新 |
 | 价格 | 免费 | 付费 · 支持开发者 |
 
-> 💚 **App Store 版，是一份心意**：两个版本的核心体验完全一致。如果 HagimiMonitor 帮到了你，而你又不需要沙箱外的显示器控制功能，欢迎在 [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) 购买。它更像一杯咖啡，是对独立开发者持续维护的一份支持与鼓励。无论你选择哪个版本，都同样感谢。
+> 由于 App Store 沙盒限制，部分功能无法在沙盒环境中正常工作，因此 App Store 版功能不完整。
+
+> 💚 **App Store 版，是一份心意**：两个版本的核心监控体验一致。如果 HagimiMonitor 帮到了你，而你又不需要显示器控制、TOP 进程监控、温度读取这些沙箱外功能，欢迎在 [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) 购买。它更像一杯咖啡，是对独立开发者持续维护的一份支持与鼓励。无论你选择哪个版本，都同样感谢。
 
 ## 安装
 
@@ -125,15 +129,7 @@ HagimiMonitor 提供两种获取方式，核心监控体验完全一致：
 2. 打开 DMG，将 HagimiMonitor 拖入 Applications 文件夹
 3. 从 Launchpad 或 Applications 启动
 
-## 未公证应用放行
-
-HagimiMonitor 目前未经过 Apple 公证，macOS 可能会阻止打开。安装后在终端执行：
-
-```bash
-sudo xattr -cr /Applications/HagimiMonitor.app
-```
-
-之后即可正常启动。
+应用已通过 Apple 公证，下载后可直接打开。
 
 ## 系统要求
 

@@ -106,23 +106,23 @@ struct HagimiMonitorTests {
         #expect(networkAddressSummary([]) == "--")
     }
 
-    @Test func monitorColorSchemeDefaultsToBalanced() {
+    @Test func monitorColorSchemeDefaultsToVibrant() {
         let defaults = UserDefaults(suiteName: "HagimiMonitorTests.colorScheme.default")!
         defaults.removePersistentDomain(forName: "HagimiMonitorTests.colorScheme.default")
 
         let settings = MonitorSettings(defaults: defaults)
 
-        #expect(settings.colorSchemePreference == .balanced)
+        #expect(settings.colorSchemePreference == .vibrant)
     }
 
     @Test func monitorColorSchemeLoadsPersistedValue() {
         let defaults = UserDefaults(suiteName: "HagimiMonitorTests.colorScheme.persisted")!
         defaults.removePersistentDomain(forName: "HagimiMonitorTests.colorScheme.persisted")
-        defaults.set(MonitorColorSchemePreference.vibrant.rawValue, forKey: "settings.colorSchemePreference")
+        defaults.set(MonitorColorSchemePreference.balanced.rawValue, forKey: "settings.colorSchemePreference")
 
         let settings = MonitorSettings(defaults: defaults)
 
-        #expect(settings.colorSchemePreference == .vibrant)
+        #expect(settings.colorSchemePreference == .balanced)
     }
 
     @Test func monitorColorSchemeFallsBackForUnknownValue() {
@@ -132,6 +132,6 @@ struct HagimiMonitorTests {
 
         let settings = MonitorSettings(defaults: defaults)
 
-        #expect(settings.colorSchemePreference == .balanced)
+        #expect(settings.colorSchemePreference == .vibrant)
     }
 }

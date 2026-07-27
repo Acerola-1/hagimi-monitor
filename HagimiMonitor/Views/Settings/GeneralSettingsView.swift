@@ -303,7 +303,7 @@ private struct MenuBarDisplaySettingsSection: View {
                 SettingsDivider()
 
                 VStack(spacing: 0) {
-                    ForEach(MenuBarMetricKind.allCases) { kind in
+                    ForEach(MenuBarMetricKind.userSelectableCases) { kind in
                         MenuBarMetricSelectionRow(
                             kind: kind,
                             isSelected: settings.isMenuBarMetricSelected(kind),
@@ -312,7 +312,7 @@ private struct MenuBarDisplaySettingsSection: View {
                             settings.setMenuBarMetric(kind, selected: !settings.isMenuBarMetricSelected(kind))
                         }
 
-                        if kind != MenuBarMetricKind.allCases.last {
+                        if kind != MenuBarMetricKind.userSelectableCases.last {
                             SettingsDivider()
                         }
                     }

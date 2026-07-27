@@ -550,6 +550,8 @@ private struct MetricGlassRow: View, Equatable {
                             // CPU / 内存采样恒返回 top 5,故展开时无条件挂载列表(数据未到
                             // 先用留白占位预留高度),使展开一次到位、数据到达后原位淡入,
                             // 不产生二次高度跳变。磁盘采样需采样间隔才有增量,可能为空,仍按需挂载。
+                            // App Store 沙盒版无法采样他进程,整体隐藏 TOP 进程列表。
+                            #if DIRECT_DISTRIBUTION
                             if module.kind == .memory, showMemoryProcesses {
                                 MemoryProcessList(processes: topMemoryProcesses, theme: theme)
                             }
@@ -559,6 +561,7 @@ private struct MetricGlassRow: View, Equatable {
                             if module.kind == .storage, showDiskProcesses {
                                 InlineDiskProcessList(processes: topDiskProcesses, theme: theme)
                             }
+                            #endif
                         }
                     }
                 }
@@ -905,7 +908,12 @@ private struct NetworkGlassRow: View, Equatable {
     }
 
     private var hasExpandableContent: Bool {
+        #if DIRECT_DISTRIBUTION
         !detailMetrics.isEmpty || showNetworkProcesses
+        #else
+        // App Store 沙盒版不展示网络 TOP 进程,只依据地址类指标判定是否可展开。
+        !detailMetrics.isEmpty
+        #endif
     }
 
     var body: some View {
@@ -951,9 +959,12 @@ private struct NetworkGlassRow: View, Equatable {
                     if !detailMetrics.isEmpty {
                         MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     }
+                    // App Store 沙盒版无法采样网络他进程(nettop 被拒),隐藏网络 TOP 进程列表。
+                    #if DIRECT_DISTRIBUTION
                     if showNetworkProcesses {
                         InlineNetworkProcessList(processes: topNetworkProcesses, theme: theme)
                     }
+                    #endif
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
@@ -1291,6 +1302,10 @@ private struct MetricCardView: View, Equatable {
     /// 按当前模块类型返回已开启的 top 进程小节(items + 数值列数):未开启时返回 nil。
     /// 四类列表统一固定 5 行位置:真实数据从上往下填,空位由 CardProcessList 统一补“—”占位。
     private var processSection: (items: [CardProcessItem], columns: Int)? {
+        #if !DIRECT_DISTRIBUTION
+        // App Store 沙盒版无法采样他进程,大卡片不渲染 TOP 进程小节。
+        return nil
+        #else
         switch module.kind {
         case .cpu:
             guard showCPUProcesses else { return nil }
@@ -1329,6 +1344,7 @@ private struct MetricCardView: View, Equatable {
         case .gpu, .battery:
             return nil
         }
+        #endif
     }
 
     private var percentText: String {

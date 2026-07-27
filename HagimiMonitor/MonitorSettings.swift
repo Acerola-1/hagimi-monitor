@@ -34,17 +34,17 @@ enum AppThemePreference: String, CaseIterable, Identifiable {
 }
 
 enum MonitorColorSchemePreference: String, CaseIterable, Identifiable {
-    case balanced
     case vibrant
+    case balanced
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .balanced:
-            String(localized: "color-scheme.balanced")
         case .vibrant:
             String(localized: "color-scheme.vibrant")
+        case .balanced:
+            String(localized: "color-scheme.balanced")
         }
     }
 }
@@ -71,7 +71,7 @@ enum MemoryPrimaryMetricPreference: String, CaseIterable, Identifiable {
 final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false
     @Published var themePreference: AppThemePreference = .system
-    @Published var colorSchemePreference: MonitorColorSchemePreference = .balanced
+    @Published var colorSchemePreference: MonitorColorSchemePreference = .vibrant
     @Published var ringSource: HaloRingSource = .combined
     @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
     @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
@@ -115,8 +115,8 @@ final class MonitorSettings: ObservableObject {
         let themeRawValue = defaults.string(forKey: Keys.themePreference) ?? AppThemePreference.system.rawValue
         themePreference = AppThemePreference(rawValue: themeRawValue) ?? .system
 
-        let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.balanced.rawValue
-        colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .balanced
+        let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.vibrant.rawValue
+        colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .vibrant
 
         ringSource = .combined
 
@@ -289,7 +289,10 @@ final class MonitorSettings: ObservableObject {
 
         var result: [MenuBarMetricKind] = []
         for rawValue in rawValues {
-            guard let kind = MenuBarMetricKind(rawValue: rawValue), !result.contains(kind) else {
+            // 旧值里可能残留当前版本不可用的指标(如沙盒版的 CPU 温度),一并过滤。
+            guard let kind = MenuBarMetricKind(rawValue: rawValue),
+                  MenuBarMetricKind.userSelectableCases.contains(kind),
+                  !result.contains(kind) else {
                 continue
             }
             result.append(kind)
