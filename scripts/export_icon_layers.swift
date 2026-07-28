@@ -14,13 +14,13 @@ guard args.count == 3, kinds.contains(args[1]) else {
 let canvas: CGFloat = 1024
 let center = CGPoint(x: canvas / 2, y: canvas / 2)
 
-// 几何规范：源码 18px 画布按比例放大到图标网格（环半径维持 241 适配 824 内容区）
-// 源码: ring dia 13, arc lineWidth ~2.17(中载), track 1.35, core dia ~3.95, backplate +1.8
-let ringRadius: CGFloat = 241
-let arcWidth: CGFloat = 76        // 2.17/13 × 482 ≈ 80,微调至 76 保持弧线优雅
-let trackWidth: CGFloat = 47      // 1.35/2.17 × 76
-let dotRadius: CGFloat = 73       // 3.95/13 × 241
-let backplateRadius: CGFloat = 106 // 5.75/13 × 241
+// 几何规范：源码 18px 画布按比例放大到图标网格，整体再放大 15% 提升图标存在感
+// 源码: ring dia 13, arc lineWidth ~2.31(75%负载), track 1.35, core dia ~3.95, backplate +1.8
+let ringRadius: CGFloat = 277
+let arcWidth: CGFloat = 80        // 86 收至 80,减弱圆头端点在缺口处的视觉膨胀
+let trackWidth: CGFloat = 48      // 1.35/2.31 × 80
+let dotRadius: CGFloat = 84       // 73 × 1.15
+let backplateRadius: CGFloat = 122 // 106 × 1.15
 
 let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
 guard let ctx = CGContext(data: nil, width: Int(canvas), height: Int(canvas),
@@ -47,10 +47,10 @@ case "ring-dark", "ring-light":
     ctx.setLineWidth(trackWidth)
     ctx.strokeEllipse(in: circle(ringRadius))
 
-    // 2. 负载弧:源码从 90°(顶部)顺时针,取 75% 负载 → 270°,缺口=左上象限
+    // 2. 负载弧:源码从 90°(顶部)顺时针,扫角 240° → 下端点收在 8 点钟位置,缺口 8点⇒12点
     let arcPath = CGMutablePath()
     arcPath.addArc(center: center, radius: ringRadius,
-                   startAngle: rad(90), endAngle: rad(-180), clockwise: true)
+                   startAngle: rad(90), endAngle: rad(-150), clockwise: true)
     ctx.addPath(arcPath)
     ctx.setStrokeColor(ink.copy(alpha: 0.95)!)
     ctx.setLineWidth(arcWidth)
@@ -66,8 +66,8 @@ case "backplate-dark", "backplate-light":
     ctx.fillEllipse(in: circle(backplateRadius))
 
 default:
-    // 核心点:用户指定 #2D9578,两种外观共用
-    ctx.setFillColor(CGColor(srgbRed: 0.176, green: 0.584, blue: 0.471, alpha: 1))
+    // 核心点:#3BEC64,两种外观共用
+    ctx.setFillColor(CGColor(srgbRed: 0.231, green: 0.925, blue: 0.392, alpha: 1))
     ctx.fillEllipse(in: circle(dotRadius))
 }
 
