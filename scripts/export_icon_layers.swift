@@ -14,13 +14,13 @@ guard args.count == 3, kinds.contains(args[1]) else {
 let canvas: CGFloat = 1024
 let center = CGPoint(x: canvas / 2, y: canvas / 2)
 
-// 几何规范：源码 18px 画布按比例放大到图标网格，整体再放大 15% 提升图标存在感
+// 几何规范：源码 18px 画布按比例放大到图标网格,环外缘顶到 Apple 圆形安全框(半径342)
 // 源码: ring dia 13, arc lineWidth ~2.31(75%负载), track 1.35, core dia ~3.95, backplate +1.8
-let ringRadius: CGFloat = 277
-let arcWidth: CGFloat = 80        // 86 收至 80,减弱圆头端点在缺口处的视觉膨胀
-let trackWidth: CGFloat = 48      // 1.35/2.31 × 80
-let dotRadius: CGFloat = 84       // 73 × 1.15
-let backplateRadius: CGFloat = 122 // 106 × 1.15
+let ringRadius: CGFloat = 299     // 299 + 86/2 = 342 = 官方圆形网格框
+let arcWidth: CGFloat = 86
+let trackWidth: CGFloat = 52      // 1.35/2.31 × 86
+let dotRadius: CGFloat = 84       // 中心保持不随环放大
+let backplateRadius: CGFloat = 122
 
 let colorSpace = CGColorSpace(name: CGColorSpace.sRGB)!
 guard let ctx = CGContext(data: nil, width: Int(canvas), height: Int(canvas),
