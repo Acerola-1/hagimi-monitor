@@ -1112,13 +1112,16 @@ private struct BatteryGlassRow: View, Equatable {
 
                 Spacer(minLength: 4)
 
+                // 双 pill 常驻:⚡(充电功率)+ 仪表(整机功耗)。成对出现互相注解——
+                // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
+                // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
+                // 台式机无电池无充电概念,只显功耗 pill。
                 if hasBattery {
-                    MetricPill(systemImage: powerPillIcon, text: powerPillValue, theme: theme)
-                        .layoutPriority(0)
-                } else {
-                    MetricPill(systemImage: powerPillIcon, text: value("power"), theme: theme)
+                    PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
                         .layoutPriority(0)
                 }
+                PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
+                    .layoutPriority(0)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1167,12 +1170,11 @@ private struct BatteryGlassRow: View, Equatable {
         }
     }
 
-    private var powerPillIcon: String {
-        return "powermeter"
-    }
-
-    private var powerPillValue: String {
-        return value("power")
+    /// CHG pill 内容:充电中显充电功率,其余状态(电池供电/插电直供)显占位符。
+    private var chargingPillValue: String {
+        guard isCharging else { return "-" }
+        let raw = rawValue("charging-power")
+        return raw == "--" ? "-" : raw
     }
 
     private var summaryText: String {
@@ -1184,9 +1186,8 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var detailMetrics: [MonitorMetric] {
-        let names = isConnectedToPower
-            ? ["charging-power", "health", "cycle-count", "temperature"]
-            : ["health", "cycle-count", "temperature"]
+        // 充电功率已上移到行首常驻 CHG pill,明细不再重复展示。
+        let names = ["health", "cycle-count", "temperature"]
 
         let enabledNames = Set(details.map(\.name))
 
@@ -1212,10 +1213,6 @@ private struct BatteryGlassRow: View, Equatable {
 
     private func rawValue(_ name: String) -> String {
         module.metrics.first { $0.name == name }?.value ?? "--"
-    }
-
-    private var isConnectedToPower: Bool {
-        rawValue("status") != "on-battery"
     }
 }
 
@@ -1648,21 +1645,27 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
     }
 }
 
-private struct MetricPill: View {
-    let systemImage: String
-    let text: String
+/// 电源行专用的定宽 pill:符号标识(⚡充电 / 仪表功耗)+ 数值。
+/// 定宽保证数值位数变化/充电状态切换时行内元素不抖动。
+private struct PowerLabelPill: View {
+    let symbol: String
+    let value: String
     let theme: MonitorPanelTheme
 
     var body: some View {
-        Label(text, systemImage: systemImage)
-            .labelStyle(.titleAndIcon)
-            .font(.system(.footnote, design: .monospaced).weight(.medium))
-            .monospacedDigit()
-            .foregroundStyle(theme.secondaryText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            // Compact status pill: fixed width keeps battery row controls from shifting during live updates.
-            .frame(width: 72, alignment: .trailing)
+        HStack(spacing: 4) {
+            Image(systemName: symbol)
+                .font(.caption2.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(theme.secondaryText.opacity(0.72))
+            Text(value)
+                .foregroundStyle(theme.secondaryText)
+        }
+        .font(.system(.footnote, design: .monospaced).weight(.medium))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.75)
+        .frame(width: 74, alignment: .trailing)
     }
 }
 

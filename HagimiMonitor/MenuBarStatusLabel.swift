@@ -146,12 +146,14 @@ struct MenuBarMetricLabel: View {
 
     /// 紧凑模式的双层列宽:取「标签」与「数值最大可能宽度」两者中较宽的一个,
     /// 保证上下两行都不会因为对方更宽而在切换时左右跳动。
+    /// +2 与 valueWidth 同源:测量与渲染的亚像素取整差异会让实测宽度卡在边界,
+    /// 差零点几 pt 时数值被截断成「9…」,预留余量兜底。
     private func compactCellWidth(for kind: MenuBarMetricKind) -> CGFloat {
         let labelWidth = (textPrefix(for: kind) as NSString)
             .size(withAttributes: [.font: compactLabelMeasuringFont]).width
         let valueWidth = (reservedNumericValue(for: kind) as NSString)
             .size(withAttributes: [.font: compactValueMeasuringFont]).width
-        return ceil(max(labelWidth, valueWidth))
+        return ceil(max(labelWidth, valueWidth)) + 2
     }
 
     private var labelFont: Font {
@@ -159,7 +161,7 @@ struct MenuBarMetricLabel: View {
     }
 
     private var measuringFont: NSFont {
-        NSFont.monospacedDigitSystemFont(ofSize: fontSize, weight: .medium)
+        Self.roundedMeasuringFont(size: fontSize, weight: .medium, monospacedDigit: true)
     }
 
     private var compactLabelFont: Font {
@@ -171,11 +173,25 @@ struct MenuBarMetricLabel: View {
     }
 
     private var compactLabelMeasuringFont: NSFont {
-        NSFont.systemFont(ofSize: compactLabelFontSize, weight: .semibold)
+        Self.roundedMeasuringFont(size: compactLabelFontSize, weight: .semibold, monospacedDigit: false)
     }
 
     private var compactValueMeasuringFont: NSFont {
-        NSFont.monospacedDigitSystemFont(ofSize: compactValueFontSize, weight: .bold)
+        Self.roundedMeasuringFont(size: compactValueFontSize, weight: .bold, monospacedDigit: true)
+    }
+
+    /// 与显示字体同为 rounded 设计的测量字体。此前用默认 SF 测、SF Rounded 显:
+    /// rounded 的数字字形略宽,测量系统性偏小,定宽框在取整边界上放不下实际
+    /// 渲染结果,数值偶发被截断成「9…」(紧凑模式温度尤其明显)。
+    private static func roundedMeasuringFont(size: CGFloat, weight: NSFont.Weight, monospacedDigit: Bool) -> NSFont {
+        let base = monospacedDigit
+            ? NSFont.monospacedDigitSystemFont(ofSize: size, weight: weight)
+            : NSFont.systemFont(ofSize: size, weight: weight)
+        guard let descriptor = base.fontDescriptor.withDesign(.rounded),
+              let font = NSFont(descriptor: descriptor, size: size) else {
+            return base
+        }
+        return font
     }
 
     private var fontSize: CGFloat { 12 }

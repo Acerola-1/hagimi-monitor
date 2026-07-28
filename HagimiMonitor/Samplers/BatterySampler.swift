@@ -100,7 +100,11 @@ final class BatterySampler: MonitorSampler {
 
         let cycleCount = lookupInt("CycleCount")
         let designCapacity = lookupDouble("DesignCapacity")
-        let maxCapacity = lookupDouble("AppleRawMaxCapacity")
+        // 健康度口径必须与系统设置「最大容量」一致：系统用的是经 powerd 校准平滑的
+        // NominalChargeCapacity；AppleRawMaxCapacity 是电池芯片的瞬时原始满充容量，
+        // 随温度/近期充放波动，普遍偏低 1~3 个百分点，会导致与系统显示不一致。
+        let maxCapacity = lookupDouble("NominalChargeCapacity")
+            ?? lookupDouble("AppleRawMaxCapacity")
             ?? lookupDouble("MaxCapacity")
         let voltage = lookupDouble("Voltage")
         let amperage = lookupDouble("Amperage")
@@ -189,6 +193,13 @@ final class BatterySampler: MonitorSampler {
         guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any] else {
             return nil
+        }
+
+        // 优先用固件直接给出的整机负载(mW):实测与 SystemPowerIn − |BatteryPower|
+        // 逐位相等(固件同口径),但免去差值法两字段采样瞬间错位导致差值为负、
+        // 只能返 nil 的失真;且充电/直供/电池三态下都直接有效。
+        if let systemLoad = doubleValue(value["SystemLoad"]), systemLoad > 0 {
+            return systemLoad / 1_000
         }
 
         guard let powerIn = doubleValue(value["SystemPowerIn"]), powerIn > 0 else {
