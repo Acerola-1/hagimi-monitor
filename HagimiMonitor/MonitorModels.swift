@@ -135,7 +135,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             ]
         case .battery:
             return [
-                MetricSwitch(id: "charging-power", title: String(localized: "metric.battery.charging-power"), isDefault: true),
+                // 充电功率已改为电源行常驻 CHG pill 展示,不再作为可开关的明细项。
                 MetricSwitch(id: "health", title: String(localized: "metric.battery.health"), isDefault: true),
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
