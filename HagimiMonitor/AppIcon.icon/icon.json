@@ -17,19 +17,31 @@
       "layers" : [
         {
           "glass" : true,
-          "hidden" : false,
-          "image-name" : "dot.png",
-          "name" : "dot"
+          "image-name" : "core-dot.png",
+          "name" : "core-dot"
+        },
+        {
+          "glass" : false,
+          "image-name-specializations" : [
+            {
+              "value" : "backplate-light.png"
+            },
+            {
+              "appearance" : "dark",
+              "value" : "backplate-dark.png"
+            }
+          ],
+          "name" : "backplate"
         },
         {
           "glass" : true,
           "image-name-specializations" : [
             {
-              "value" : "ring-light.png"
+              "value" : "ring-light2.png"
             },
             {
               "appearance" : "dark",
-              "value" : "ring.png"
+              "value" : "ring-dark.png"
             }
           ],
           "name" : "ring"
