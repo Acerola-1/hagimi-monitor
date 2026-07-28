@@ -7,7 +7,10 @@ on:
 
 jobs:
   build-and-release:
-    runs-on: macos-15
+    # macos-26 镜像自带 Xcode 26.6。macos-15 镜像最高只到 26.3,其 ibtoold 编译
+    # Icon Composer 图标包(AppIcon.icon)必崩(CompileAssetCatalogVariant 失败),
+    # 26.6 已修复,与本地构建环境一致。
+    runs-on: macos-26
     permissions:
       contents: write
     env:
@@ -16,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.3.app/Contents/Developer
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: Import signing certificate
         env:
