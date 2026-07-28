@@ -195,6 +195,13 @@ final class BatterySampler: MonitorSampler {
             return nil
         }
 
+        // 优先用固件直接给出的整机负载(mW):实测与 SystemPowerIn − |BatteryPower|
+        // 逐位相等(固件同口径),但免去差值法两字段采样瞬间错位导致差值为负、
+        // 只能返 nil 的失真;且充电/直供/电池三态下都直接有效。
+        if let systemLoad = doubleValue(value["SystemLoad"]), systemLoad > 0 {
+            return systemLoad / 1_000
+        }
+
         guard let powerIn = doubleValue(value["SystemPowerIn"]), powerIn > 0 else {
             if let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 {
                 return abs(bp) / 1_000
