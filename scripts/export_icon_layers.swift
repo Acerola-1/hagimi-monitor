@@ -1,11 +1,12 @@
 // 按 MenuBarComputeRingIcon.swift 真实结构导出图标图层（1024 透明 PNG）
-// 结构: 淡色全圆轨道 + 270°负载弧(顶部起顺时针) + 中心背板环 + 绿色核心点
-// 用法: swift export_layers.swift <ring-dark|ring-light|backplate-dark|backplate-light|dot> <output.png>
+// 结构: 淡色全圆轨道 + 240°负载弧(顶部起顺时针) + 中心背板环 + 绿色核心点
+// 用法: swift export_layers.swift <ring-dark|ring-light|backplate-dark|backplate-light|dot|composite-full> <output.png>
+// composite-full: 满幅合成版(深色背景铺满方形,无边距无圆角),供关于页 AboutIcon 等靠 clipShape 切圆角的场景
 import AppKit
 import CoreGraphics
 
 let args = CommandLine.arguments
-let kinds = ["ring-dark", "ring-light", "backplate-dark", "backplate-light", "dot"]
+let kinds = ["ring-dark", "ring-light", "backplate-dark", "backplate-light", "dot", "composite-full"]
 guard args.count == 3, kinds.contains(args[1]) else {
     fputs("usage: export_layers <\(kinds.joined(separator: "|"))> <output.png>\n", stderr)
     exit(1)
@@ -66,9 +67,39 @@ case "backplate-dark", "backplate-light":
     ctx.fillEllipse(in: circle(backplateRadius))
 
 default:
-    // 核心点:#3BEC64,两种外观共用
-    ctx.setFillColor(CGColor(srgbRed: 0.231, green: 0.925, blue: 0.392, alpha: 1))
-    ctx.fillEllipse(in: circle(dotRadius))
+    if args[1] == "composite-full" {
+        // 满幅合成:背景铺满 + 四层结构整体放大(环外缘占满幅 82%,与标准图标内容占比一致)
+        let k: CGFloat = 1.228   // 342×k ≈ 420 = 512×0.82
+        // 背景:顶亮底暗深色渐变(近似 icon.json 的 automatic-gradient)
+        let bg = CGGradient(colorsSpace: colorSpace, colors: [
+            CGColor(srgbRed: 0.115, green: 0.120, blue: 0.132, alpha: 1),
+            CGColor(srgbRed: 0.070, green: 0.074, blue: 0.082, alpha: 1),
+        ] as CFArray, locations: [0, 1])!
+        ctx.drawLinearGradient(bg, start: CGPoint(x: center.x, y: canvas),
+                               end: CGPoint(x: center.x, y: 0), options: [])
+        // 轨道
+        ctx.setStrokeColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.34))
+        ctx.setLineWidth(trackWidth * k)
+        ctx.strokeEllipse(in: circle(ringRadius * k))
+        // 负载弧
+        let arcPath = CGMutablePath()
+        arcPath.addArc(center: center, radius: ringRadius * k,
+                       startAngle: rad(90), endAngle: rad(-150), clockwise: true)
+        ctx.addPath(arcPath)
+        ctx.setStrokeColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.95))
+        ctx.setLineWidth(arcWidth * k)
+        ctx.setLineCap(.round)
+        ctx.strokePath()
+        // 背板 + 核心点
+        ctx.setFillColor(CGColor(srgbRed: 0.04, green: 0.045, blue: 0.05, alpha: 1))
+        ctx.fillEllipse(in: circle(backplateRadius * k))
+        ctx.setFillColor(CGColor(srgbRed: 0.231, green: 0.925, blue: 0.392, alpha: 1))
+        ctx.fillEllipse(in: circle(dotRadius * k))
+    } else {
+        // 核心点:#3BEC64,两种外观共用
+        ctx.setFillColor(CGColor(srgbRed: 0.231, green: 0.925, blue: 0.392, alpha: 1))
+        ctx.fillEllipse(in: circle(dotRadius))
+    }
 }
 
 guard let outCG = ctx.makeImage() else { fputs("cannot render\n", stderr); exit(1) }
