@@ -68,8 +68,9 @@ case "backplate-dark", "backplate-light":
 
 default:
     if args[1] == "composite-full" {
-        // 满幅合成:背景铺满 + 四层结构整体放大(环外缘占满幅 82%,与标准图标内容占比一致)
-        let k: CGFloat = 1.228   // 342×k ≈ 420 = 512×0.82
+        // 满幅合成:背景铺满 + 四层结构几何与 icon.json 完全一致。
+        // AboutIcon 和 .icon 同样是整张图被圆角裁切,不得额外缩放,
+        // 否则与启动台/Dock 的真实图标比例不一致。
         // 背景:顶亮底暗深色渐变(近似 icon.json 的 automatic-gradient)
         let bg = CGGradient(colorsSpace: colorSpace, colors: [
             CGColor(srgbRed: 0.115, green: 0.120, blue: 0.132, alpha: 1),
@@ -79,22 +80,22 @@ default:
                                end: CGPoint(x: center.x, y: 0), options: [])
         // 轨道
         ctx.setStrokeColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.34))
-        ctx.setLineWidth(trackWidth * k)
-        ctx.strokeEllipse(in: circle(ringRadius * k))
+        ctx.setLineWidth(trackWidth)
+        ctx.strokeEllipse(in: circle(ringRadius))
         // 负载弧
         let arcPath = CGMutablePath()
-        arcPath.addArc(center: center, radius: ringRadius * k,
+        arcPath.addArc(center: center, radius: ringRadius,
                        startAngle: rad(90), endAngle: rad(-150), clockwise: true)
         ctx.addPath(arcPath)
         ctx.setStrokeColor(CGColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.95))
-        ctx.setLineWidth(arcWidth * k)
+        ctx.setLineWidth(arcWidth)
         ctx.setLineCap(.round)
         ctx.strokePath()
         // 背板 + 核心点
         ctx.setFillColor(CGColor(srgbRed: 0.04, green: 0.045, blue: 0.05, alpha: 1))
-        ctx.fillEllipse(in: circle(backplateRadius * k))
+        ctx.fillEllipse(in: circle(backplateRadius))
         ctx.setFillColor(CGColor(srgbRed: 0.231, green: 0.925, blue: 0.392, alpha: 1))
-        ctx.fillEllipse(in: circle(dotRadius * k))
+        ctx.fillEllipse(in: circle(dotRadius))
     } else {
         // 核心点:#3BEC64,两种外观共用
         ctx.setFillColor(CGColor(srgbRed: 0.231, green: 0.925, blue: 0.392, alpha: 1))
