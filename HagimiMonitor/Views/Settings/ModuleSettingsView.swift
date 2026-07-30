@@ -16,7 +16,7 @@ struct ModuleSettingsView: View {
                     .labelsHidden()
                 }
 
-                // 模块隐藏后「显示方式/默认展开」无意义,随 moduleOptions 一起隐藏。
+                // 模块隐藏后「显示方式」无意义,随 moduleOptions 一起隐藏。
                 if settings.isVisible(kind) {
                     SettingsDivider()
 
@@ -32,24 +32,6 @@ struct ModuleSettingsView: View {
                         .pickerStyle(.segmented)
                         .frame(width: 190)
                     }
-
-                    // 卡片内容常显,「默认展开」对其无意义:隐藏开关但不清除持久值,
-                    // 切回列表行即恢复生效。
-                    if !settings.isCardStyle(kind) {
-                        SettingsDivider()
-
-                        SettingsRow(
-                            title: String(localized: "settings.expand-by-default"),
-                            subtitle: String(localized: "settings.expand-by-default.subtitle")
-                        ) {
-                            Toggle("", isOn: Binding(
-                                get: { settings.isExpandedByDefault(kind) },
-                                set: { settings.setExpandedByDefault($0, for: kind) }
-                            ))
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                        }
-                    }
                 }
             }
 
@@ -64,6 +46,24 @@ struct ModuleSettingsView: View {
     @ViewBuilder
     private var moduleOptions: some View {
             SettingsGroup(String(localized: "settings.metrics")) {
+                // 「默认展开」融入「监测项目」卡:开关决定是否自动摊开,网格决定摊开后显示哪些项,
+                // 一张卡承载「展开 →(下列)监测项目」的因果整体。仅列表行有意义,卡片常显明细故隐藏。
+                if !settings.isCardStyle(kind) {
+                    SettingsRow(
+                        title: String(localized: "settings.expand-by-default"),
+                        subtitle: String(localized: "settings.expand-by-default.subtitle")
+                    ) {
+                        Toggle("", isOn: Binding(
+                            get: { settings.isExpandedByDefault(kind) },
+                            set: { settings.setExpandedByDefault($0, for: kind) }
+                        ))
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                    }
+
+                    SettingsDivider()
+                }
+
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 8),
                     GridItem(.flexible(), spacing: 8)
@@ -178,6 +178,23 @@ struct ModuleSettingsView: View {
             }
             #endif
 
+            // 功率流(Beta):双渠道均可用(数据源为 IORegistry 只读属性,沙盒允许),故不加 DIRECT_DISTRIBUTION 门控。
+            if kind == .battery {
+                SettingsGroup {
+                    SettingsRow(
+                        title: String(localized: "settings.battery.show-power-flow"),
+                        subtitle: String(localized: "settings.battery.show-power-flow.subtitle")
+                    ) {
+                        HStack(spacing: 6) {
+                            PowerFlowBetaBadge()
+                            Toggle("", isOn: $settings.batteryShowPowerFlow)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
+                    }
+                }
+            }
+
             if #available(macOS 26, *) {
                 Button(String(localized: "settings.reset-defaults")) {
                     settings.resetMetrics(for: kind)
@@ -206,6 +223,18 @@ struct ModuleSettingsView: View {
                 ? MetricSwitch(id: metric.id, title: String(localized: "metric.memory.usage"), isDefault: metric.isDefault)
                 : metric
         }
+    }
+}
+
+/// 小号 Beta 胶囊徐章:用于标注实验性设置项(如功率流),与侧边栏 BetaBadge 同样式。
+private struct PowerFlowBetaBadge: View {
+    var body: some View {
+        Text(String(localized: "settings.sidebar.beta-badge"))
+            .font(.system(size: 9, weight: .semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(.secondary.opacity(0.15), in: Capsule())
     }
 }
 

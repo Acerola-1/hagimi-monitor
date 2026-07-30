@@ -94,6 +94,8 @@ final class MonitorSettings: ObservableObject {
     @Published var diskShowSystemProcesses: Bool = false
     @Published var showNetworkProcesses: Bool = true
     @Published var networkShowSystemProcesses: Bool = false
+    /// 功率流图开关(Beta):电源模块展开区的功率流可视化,默认开启,双渠道(含沙盒)均可用。
+    @Published var batteryShowPowerFlow: Bool = true
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     /// 呼出面板时默认展开的模块集合(逐模块设置,非全局开关)。
     @Published private(set) var defaultExpandedKinds: Set<MonitorKind> = []
@@ -146,6 +148,7 @@ final class MonitorSettings: ObservableObject {
         diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? false
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? false
+        batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
 
         pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double
         pinnedPanelOriginY = defaults.object(forKey: Keys.pinnedPanelOriginY) as? Double
@@ -543,6 +546,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $batteryShowPowerFlow
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.batteryShowPowerFlow)
+            }
+            .store(in: &cancellables)
+
         $visibleKinds
             .dropFirst()
             .sink { [weak self] newValue in
@@ -657,6 +667,7 @@ private enum Keys {
     static let diskShowSystemProcesses = "settings.disk.showSystemProcesses"
     static let showNetworkProcesses = "settings.network.showProcesses"
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
+    static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let visibleKinds = "settings.visibleKinds"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"

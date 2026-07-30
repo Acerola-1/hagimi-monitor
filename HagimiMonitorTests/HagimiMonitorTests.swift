@@ -134,4 +134,15 @@ struct HagimiMonitorTests {
 
         #expect(settings.colorSchemePreference == .vibrant)
     }
+
+    @Test func batteryAvailableMetricsExcludePowerFlowChain() {
+        let ids = MonitorKind.battery.availableMetrics.map(\.id)
+        // 转换损耗已从可开关指标中移除:功率流图承载功率数据,指标网格只留健康度/循环/温度。
+        #expect(!ids.contains("loss"))
+        // 功率流数据链(power-in/battery-flow/time-remaining)不是可开关的明细项,
+        // 不应出现在指标网格的可选列表里。
+        #expect(!ids.contains("power-in"))
+        #expect(!ids.contains("battery-flow"))
+        #expect(!ids.contains("time-remaining"))
+    }
 }

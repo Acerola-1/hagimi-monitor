@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import OSLog
+import IOKit.ps
 
 enum HaloRingSource: String, CaseIterable, Identifiable {
     case combined
@@ -251,6 +252,9 @@ final class MonitorStore: ObservableObject {
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
     private var procSampleTimer: AnyCancellable?
+    /// 电源状态(交流/电池、充电与否)变化通知源。插拔电源时系统即时回调,
+    /// 立刻重采电池模块,让菜单栏图标(充电闪电)与充电功率无需等下一个 2s 采样周期。
+    private var powerSourceRunLoopSource: CFRunLoopSource?
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
@@ -280,6 +284,8 @@ final class MonitorStore: ObservableObject {
             .sink { [weak self] _ in
                 self?.advance()
             }
+
+        startPowerSourceMonitoring()
 
         // 进程采样定时器:面板可见时启动,不可见时暂停。
         // 统一为单个定时器,并行执行 4 类采样,避免多个独立定时器导致的密集触发。
@@ -546,7 +552,31 @@ final class MonitorStore: ObservableObject {
     deinit {
         timerCancellable?.cancel()
         procSampleTimer?.cancel()
+        if let powerSourceRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSourceRunLoopSource, .defaultMode)
+        }
         cancellables.removeAll()
+    }
+
+    /// 注册电源状态变化通知:插拔适配器/充电状态翻转时立即重采电池。
+    /// 回调在主运行循环触发(与采样定时器同线程),故可直接调 advance,无数据竞争。
+    /// C 函数指针回调不能捕获上下文,通过 context 传入 self 的非持有指针。
+    private func startPowerSourceMonitoring() {
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        guard let source = IOPSNotificationCreateRunLoopSource({ ctx in
+            guard let ctx else { return }
+            Unmanaged<MonitorStore>.fromOpaque(ctx).takeUnretainedValue().powerSourceDidChange()
+        }, context)?.takeRetainedValue() else {
+            AppLogger.sampler.warning("Failed to create power source notification run loop source")
+            return
+        }
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        powerSourceRunLoopSource = source
+    }
+
+    /// 电源状态变化时立即重采电池,不影响其他模块的既定节奏。
+    private func powerSourceDidChange() {
+        advance(kinds: [.battery])
     }
 
     var selectedModule: MonitorModule {

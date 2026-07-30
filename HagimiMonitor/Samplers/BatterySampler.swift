@@ -10,6 +10,11 @@ final class BatterySampler: MonitorSampler {
     private var powerTelemetryService: io_service_t = IO_OBJECT_NULL
     private var didSearchPowerTelemetryService = false
 
+    // 健康度平滑状态:健康度真实变化以天/周为尺度,充放电时的抖动纯属测量噪声。
+    // 系统设置显示的是 powerd 低通滤波后的值,这里用 EMA + 整数迟滞复刻其稳定性。
+    private var smoothedHealthRatio: Double?   // 平滑后的 maxCapacity/designCapacity
+    private var displayedHealthPercent: Double? // 当前对外显示的整数百分比
+
     deinit {
         if powerTelemetryService != IO_OBJECT_NULL {
             IOObjectRelease(powerTelemetryService)
@@ -33,11 +38,26 @@ final class BatterySampler: MonitorSampler {
         let connected = sourceState == kIOPSACPowerValue
 
         let smart = smartBatteryInfo()
+        let stableHealth = stabilizedHealth(smart.healthPercent)
         let adapterWatts = smart.adapterWatts ?? externalAdapterWatts()
         let chargingPower = connected
             ? (smart.telemetryChargingWatts ?? smart.chargingPowerWatts)
             : nil
         let systemPower = smart.systemPowerWatts ?? powerTelemetryWatts()
+
+        // 功率流:适配器实际输入、电池流向(正=充电/负=放电)。
+        let powerIn = connected ? smart.powerInWatts : nil
+        let batteryFlow = smart.batteryFlowWatts
+        // 剩余时间(分钟):充电中取充满耗时,电池供电取可用时长;-1 表示系统仍在估算。
+        let timeRemaining: Int? = {
+            if isCharging {
+                return (description[kIOPSTimeToFullChargeKey] as? Int).flatMap { $0 > 0 ? $0 : nil }
+            }
+            if !connected {
+                return (description[kIOPSTimeToEmptyKey] as? Int).flatMap { $0 > 0 ? $0 : nil }
+            }
+            return nil
+        }()
 
         return MonitorModule(
             kind: .battery,
@@ -49,9 +69,13 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
                 MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--"),
                 MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower),
-                MonitorMetric(name: "health", value: smart.healthPercent.map(percent) ?? "--", numericValue: smart.healthPercent),
+                MonitorMetric(name: "health", value: stableHealth.map(percent) ?? "--", numericValue: stableHealth),
                 MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--", numericValue: smart.cycleCount.map(Double.init)),
-                MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius)
+                MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius),
+                // 功率流数据链(不进指标网格,由展开区功率流图消费)
+                MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn),
+                MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow),
+                MonitorMetric(name: "time-remaining", value: timeRemaining.map { "\($0)" } ?? "--", numericValue: timeRemaining.map(Double.init))
             ],
             samples: seedSamples(percentage)
         )
@@ -72,6 +96,39 @@ final class BatterySampler: MonitorSampler {
             ],
             samples: seedSamples(100)
         )
+    }
+
+    /// 健康度稳定化:EMA 平滑消除瞬时噪声 + 整数迟滞防止边界横跳。
+    ///
+    /// 系统设置的「最大容量」是 powerd 校准平滑后的结果,IOKit 只能读到电池芯片的
+    /// 瞬时原始容量(NominalChargeCapacity/AppleRawMaxCapacity),随温度、内阻、近期
+    /// 充放电波动 ±1~2%。真实健康度以天/周为尺度衰减,所以充放电时的抖动全是噪声。
+    ///
+    /// 两道处理:
+    ///   1. EMA(α=0.05):对底层比值做低通,新样本仅占 5%,需连续多次同向偏移才移动。
+    ///   2. 整数迟滞(0.6%):平滑值距当前显示整数超过 0.6 个百分点才翻页,避免 88/89 横跳。
+    private func stabilizedHealth(_ raw: Double?) -> Double? {
+        guard let raw else { return displayedHealthPercent }
+
+        let ratio = raw / 100
+        let alpha = 0.05
+        if let previous = smoothedHealthRatio {
+            smoothedHealthRatio = previous + alpha * (ratio - previous)
+        } else {
+            smoothedHealthRatio = ratio // 首次采样直接采纳,避免冷启动缓慢爬升
+        }
+        let smoothedPercent = (smoothedHealthRatio ?? ratio) * 100
+
+        guard let displayed = displayedHealthPercent else {
+            let rounded = smoothedPercent.rounded()
+            displayedHealthPercent = rounded
+            return rounded
+        }
+        // 迟滞:仅当平滑值越过 显示值±0.6 才更新整数,否则维持不变
+        if abs(smoothedPercent - displayed) >= 0.6 {
+            displayedHealthPercent = smoothedPercent.rounded()
+        }
+        return displayedHealthPercent
     }
 
     private func smartBatteryInfo() -> SmartBatteryInfo {
@@ -112,6 +169,8 @@ final class BatterySampler: MonitorSampler {
         let systemPowerWatts = systemPowerWatts(service)
         let chargingPowerWatts = chargingPowerWatts(service)
         let telemetryChargingWatts = telemetryChargingWatts(service)
+        let powerInWatts = powerInWatts(service)
+        let batteryFlowWatts = batteryFlowWatts(service)
         let temperature = lookupDouble("Temperature").map { $0 / 100 }
         let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
             min(100, max(0, maxCapacity / designCapacity * 100))
@@ -132,7 +191,9 @@ final class BatterySampler: MonitorSampler {
             systemPowerWatts: systemPowerWatts,
             chargingPowerWatts: chargingPowerWatts,
             temperatureCelsius: temperature,
-            telemetryChargingWatts: telemetryChargingWatts
+            telemetryChargingWatts: telemetryChargingWatts,
+            powerInWatts: powerInWatts,
+            batteryFlowWatts: batteryFlowWatts
         )
     }
 
@@ -152,10 +213,13 @@ final class BatterySampler: MonitorSampler {
     }
 
     private func chargingPowerWatts(_ service: io_service_t) -> Double? {
-        // 优先用 PowerTelemetryData.BatteryPower（电池包级别，准确）
+        // 优先用 PowerTelemetryData.BatteryPower（电池包级别，准确）。
+        // 注意符号约定因机型/系统而异：实测本机充电时 BatteryPower 为正值
+        // （= SystemPowerIn − SystemLoad，流入电池的功率），旧代码只认 bp<0 会漏判。
+        // 充电功率仅在 isCharging 为真时展示，故此处取绝对值（充放电流量的量级）即可。
         if let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
-           let bp = signedDoubleValue(value["BatteryPower"]), bp < 0 {
+           let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 {
             return abs(bp) / 1_000
         }
         // Fallback: ChargerData 的 ChargingCurrent * ChargingVoltage
@@ -170,12 +234,34 @@ final class BatterySampler: MonitorSampler {
     }
 
     private func telemetryChargingWatts(_ service: io_service_t) -> Double? {
+        // 同 chargingPowerWatts：取 BatteryPower 绝对值作充电功率，兼容正/负符号约定。
         guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
-              let bp = signedDoubleValue(value["BatteryPower"]), bp < 0 else {
+              let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 else {
             return nil
         }
         return abs(bp) / 1_000
+    }
+
+    /// 适配器实际输入功率(W):PowerTelemetryData.SystemPowerIn,仅插电时有意义。
+    private func powerInWatts(_ service: io_service_t) -> Double? {
+        guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any],
+              let powerIn = doubleValue(value["SystemPowerIn"]), powerIn > 0 else {
+            return nil
+        }
+        return powerIn / 1_000
+    }
+
+    /// 电池流向功率(W,带符号):固件口径 BatteryPower 负值为充电,
+    /// 对外统一翻转为「正=充入电池,负=电池放电」,与功率流图的箭头方向一致。
+    private func batteryFlowWatts(_ service: io_service_t) -> Double? {
+        guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any],
+              let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 else {
+            return nil
+        }
+        return -bp / 1_000
     }
 
     private func powerTelemetryWatts() -> Double? {
@@ -305,4 +391,6 @@ private struct SmartBatteryInfo {
     var chargingPowerWatts: Double?
     var temperatureCelsius: Double?
     var telemetryChargingWatts: Double?
+    var powerInWatts: Double?
+    var batteryFlowWatts: Double?
 }
