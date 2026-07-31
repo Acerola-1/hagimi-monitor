@@ -89,7 +89,9 @@ final class SMCReader {
         case "ui16 ":
             return Double(UInt16(byteArray[0]) * 256 + UInt16(byteArray[1]))
         case "flt ":
-            let floatValue: Float = byteArray.withUnsafeBytes { $0.load(fromByteOffset: 0, as: Float.self) }
+            // byteArray 是 [UInt8](仅 1 字节对齐),load(as: Float.self) 假定 4 字节对齐属未定义
+            // 行为;用 loadUnaligned 从任意偏移安全读取。
+            let floatValue: Float = byteArray.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: Float.self) }
             return Double(floatValue)
         default:
             return nil

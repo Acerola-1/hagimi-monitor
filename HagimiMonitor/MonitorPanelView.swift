@@ -1962,12 +1962,16 @@ private final class TransparentBackgroundView: NSView {
 
 // MARK: - Metric Pill
 
+/// 外置卷 JSON 解码器。JSONDecoder 默认无跨解码状态,共享一个实例即可,
+/// 避免每次面板刷新解析存储卷时都新建。仅主线程(SwiftUI body)调用,无并发问题。
+private let externalVolumeDecoder = JSONDecoder()
+
 private func parseExternalVolumes(_ context: String?) -> [StorageVolumeInfo] {
     guard let context, let data = context.data(using: .utf8) else {
         return []
     }
 
-    if let payload = try? JSONDecoder().decode([ExternalVolumePayload].self, from: data) {
+    if let payload = try? externalVolumeDecoder.decode([ExternalVolumePayload].self, from: data) {
         return payload.enumerated().map { index, volume in
             StorageVolumeInfo(
                 id: "external-\(index)-\(volume.name)",
@@ -2326,7 +2330,7 @@ private struct ProcessRowData: Identifiable {
 private let processDashRow = ProcessRowData(id: -1, name: "—", icon: nil, upText: "—", downText: "—", isPlaceholder: true)
 
 /// 磁盘 I/O 进程列表。固定 5 行位置:真实数据从上往下填,空位显“—”,高度恒定无加载跳变。
-struct InlineDiskProcessList: View {
+private struct InlineDiskProcessList: View {
     let processes: [TopDiskProcess]
     let theme: MonitorPanelTheme
 
@@ -2363,7 +2367,7 @@ struct InlineDiskProcessList: View {
 }
 
 /// 网络流量进程列表。固定 5 行位置:真实数据从上往下填,空位显“—”,高度恒定无加载跳变。
-struct InlineNetworkProcessList: View {
+private struct InlineNetworkProcessList: View {
     let processes: [TopNetworkProcess]
     let theme: MonitorPanelTheme
 

@@ -48,8 +48,12 @@ final class NetworkSampler: MonitorSampler {
         }
 
         let delta = max(0.1, now.timeIntervalSince(previousBytes.timestamp))
-        let upload = Double(bytes.output &- previousBytes.output) / delta
-        let download = Double(bytes.input &- previousBytes.input) / delta
+        // 计数器回绕/主接口切换会使累计字节数下降,此时该方向增量按 0 计,
+        // 避免无保护的减法回绕出巨值、瞬时冲到满格(与磁盘采样口径一致)。
+        let uploadBytes = bytes.output >= previousBytes.output ? bytes.output - previousBytes.output : 0
+        let downloadBytes = bytes.input >= previousBytes.input ? bytes.input - previousBytes.input : 0
+        let upload = Double(uploadBytes) / delta
+        let download = Double(downloadBytes) / delta
         let value = min(100, log10(max(1, upload + download)) * 14)
 
         return MonitorModule(

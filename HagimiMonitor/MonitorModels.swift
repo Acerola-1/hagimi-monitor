@@ -288,7 +288,7 @@ final class MonitorStore: ObservableObject {
         startPowerSourceMonitoring()
 
         // 进程采样定时器:面板可见时启动,不可见时暂停。
-        // 统一为单个定时器,并行执行 4 类采样,避免多个独立定时器导致的密集触发。
+        // 统一为单个定时器串行驱动 4 类采样,避免多个独立定时器导致的密集触发。
         // init 时不采样,首次采样在 panelDidAppear() 中触发。
 
         settings.$memoryShowSystemProcesses
@@ -494,7 +494,10 @@ final class MonitorStore: ObservableObject {
         var diskProcesses: [TopDiskProcess]?
         var networkProcesses: [TopNetworkProcess]?
 
-        // 并行执行各类采样,各自独立互不阻塞;只采样当前可见(展开)且已开启的列表。
+        // 各类采样在 procSampleQueue(串行队列)上顺序执行;只采样当前可见(展开)且已开启的列表。
+        // 注意:磁盘/网络的 TOP 采样各自维护一份文件级全局快照(previousDiskSnapshot /
+        // previousNetworkSnapshot,无锁)以计算增量,其线程安全正是依赖本队列的串行性——
+        // 切勿把 procSampleQueue 改成并发队列,否则会引入难复现的数据竞争。
         if active.contains(.memory) {
             group.enter()
             procSampleQueue.async {
