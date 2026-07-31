@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 自适应方位悬停抽屉（可拖拽沙盘）</title>
+<style>
+  /* ====== 设计令牌：对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A;
+    --tint-mem: #42A39A;
+    --tint-net: #43A6A0;
+    --tint-bat: #65AF52;
+    --tint-lock: #D27A4A;
+    --tint-awake: #5D8CF0;
+    --row-radius: 14px;
+    --gap: 10px;          /* 面板与抽屉的间距 */
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  /* ====== 模拟 macOS 菜单栏 ====== */
+  .menubar {
+    position: fixed; top: 0; left: 0; right: 0; height: 26px; z-index: 5;
+    display: flex; align-items: center; gap: 16px;
+    padding: 0 14px;
+    background: rgba(20, 22, 30, 0.6);
+    backdrop-filter: blur(30px);
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.08);
+    font-size: 11.5px; color: var(--text-secondary);
+  }
+  .menubar .apple { font-size: 13px; }
+  .menubar .app-name { font-weight: 650; }
+  .menubar .spacer { flex: 1; }
+  .menubar .status-icon { opacity: 0.85; display: flex; align-items: center; }
+  .menubar .status-icon.ours {
+    background: rgba(122, 145, 180, 0.25);
+    border-radius: 4px; padding: 1px 5px;
+  }
+
+  /* ====== 说明浮层 ====== */
+  .guide {
+    position: fixed; left: 16px; top: 42px; z-index: 4;
+    width: 250px;
+    background: rgba(20, 22, 30, 0.72);
+    backdrop-filter: blur(24px);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px; padding: 13px 15px;
+    font-size: 11.5px; line-height: 1.8; color: var(--text-caption);
+  }
+  .guide b { color: var(--text-secondary); font-weight: 600; }
+  .guide h2 { font-size: 12.5px; color: var(--text-primary); margin-bottom: 5px; font-weight: 650; }
+  .guide .kbd {
+    display: inline-block; padding: 0 5px; border-radius: 4px;
+    background: rgba(255, 255, 255, 0.09); border: 0.5px solid rgba(255,255,255,0.12);
+    font-size: 10px; color: var(--text-secondary);
+  }
+
+  /* ====== 方位状态 HUD ====== */
+  .hud {
+    position: fixed; left: 16px; bottom: 16px; z-index: 4;
+    display: flex; align-items: center; gap: 10px;
+    background: rgba(20, 22, 30, 0.72);
+    backdrop-filter: blur(24px);
+    border: 0.5px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px; padding: 9px 13px;
+    font-size: 11.5px; color: var(--text-caption);
+  }
+  .hud .dir {
+    display: flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 7px;
+    background: rgba(122, 145, 180, 0.2);
+    font-size: 13px; color: var(--text-primary);
+  }
+  .hud b { color: var(--text-secondary); font-weight: 600; }
+
+  /* ====== 面板包装层（拖拽载体，把手/抽屉挂其上）====== */
+  .panel-wrap { position: absolute; z-index: 3; width: 320px; }
+
+  .panel {
+    position: relative; z-index: 2;
+    width: 320px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 6px;
+    cursor: grab;
+  }
+  .panel.dragging { cursor: grabbing; }
+  .panel-header { display: flex; align-items: center; padding: 2px 2px 0; }
+  .live-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #6BBF59; margin-right: 5px;
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .panel-header .sys { font-size: 9px; letter-spacing: 1.1px; color: var(--text-caption); font-weight: 500; }
+  .panel-header .time { margin-left: auto; font-size: 10px; color: var(--text-caption); }
+
+  .row {
+    background: var(--row-glass); border-radius: var(--row-radius);
+    border: 0.5px solid rgba(255, 255, 255, 0.06);
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  }
+  .row .dot { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .row .label { font-size: 12px; font-weight: 600; }
+  .row .meter { flex: 1; height: 3px; border-radius: 2px; background: var(--track-fill); overflow: hidden; }
+  .row .meter > div { height: 100%; border-radius: 2px; }
+  .row .value { font-size: 12px; font-weight: 600; color: var(--text-value); width: 52px; text-align: right; }
+
+  .btnrow { display: flex; gap: 8px; padding-top: 2px; }
+  .cap {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: 30px; border-radius: 15px;
+    background: var(--row-glass); border: 0.5px solid rgba(255,255,255,0.08);
+    font-size: 11.5px; font-weight: 550; color: var(--text-primary);
+    cursor: pointer; user-select: none;
+  }
+  .cap:hover { background: rgba(122, 145, 180, 0.2); }
+
+  /* ====== 把手：四个方位复用同一元素 ====== */
+  .handle {
+    position: absolute; z-index: 1;
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 3px;
+    transition: background 0.2s ease, opacity 0.25s ease;
+    cursor: pointer;
+  }
+  .handle::before {
+    /* 扩大 hover 热区（不可见） */
+    content: ''; position: absolute; inset: -12px;
+  }
+  .handle:hover, .handle.hot { background: rgba(255, 255, 255, 0.4); }
+  /* 方位几何：把手贴在面板对应边的外侧 */
+  .handle.p-bottom { left: 50%; transform: translateX(-50%); bottom: -11px; width: 44px; height: 5px; }
+  .handle.p-top    { left: 50%; transform: translateX(-50%); top: -11px;    width: 44px; height: 5px; }
+  .handle.p-right  { top: 50%;  transform: translateY(-50%); right: -11px;  width: 5px;  height: 44px; }
+  .handle.p-left   { top: 50%;  transform: translateY(-50%); left: -11px;   width: 5px;  height: 44px; }
+
+  .handle .badge {
+    position: absolute;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--tint-awake); box-shadow: 0 0 6px var(--tint-awake);
+    opacity: 0; transform: scale(0.4);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .handle .badge.show { opacity: 1; transform: scale(1); }
+  .handle.p-bottom .badge, .handle.p-top .badge { top: 50%; margin-top: -2.5px; right: -11px; }
+  .handle.p-right .badge, .handle.p-left .badge { left: 50%; margin-left: -2.5px; top: -11px; }
+
+  /* ====== 抽屉：方位类切换布局 ====== */
+  .drawer {
+    position: absolute; z-index: 2;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 16px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    padding: 10px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.3, 0.9, 0.4, 1);
+  }
+  .drawer.open { opacity: 1; pointer-events: auto; }
+  /* 底 / 顶：横向卡（与面板等宽），左右：纵向窄卡 */
+  .drawer.p-bottom { top: calc(100% + var(--gap)); left: 0; width: 320px; transform: translateY(-6px); }
+  .drawer.p-top    { bottom: calc(100% + var(--gap)); left: 0; width: 320px; transform: translateY(6px); }
+  .drawer.p-right  { left: calc(100% + var(--gap)); top: 0; width: 156px; transform: translateX(-6px); }
+  .drawer.p-left   { right: calc(100% + var(--gap)); top: 0; width: 156px; transform: translateX(6px); }
+  .drawer.open.p-bottom, .drawer.open.p-top { transform: translateY(0); }
+  .drawer.open.p-right, .drawer.open.p-left { transform: translateX(0); }
+
+  .drawer-title {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 9.5px; color: var(--text-caption); letter-spacing: 0.8px;
+    margin-bottom: 7px;
+  }
+  .drawer-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--row-separator), transparent); }
+
+  .tools-grid { display: grid; gap: 8px; }
+  .drawer.p-bottom .tools-grid, .drawer.p-top .tools-grid { grid-template-columns: 1fr 1fr; }
+  .drawer.p-right .tools-grid, .drawer.p-left .tools-grid { grid-template-columns: 1fr; }
+
+  .tool {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 10px; border-radius: 12px;
+    background: var(--row-glass);
+    border: 0.5px solid rgba(255, 255, 255, 0.07);
+    cursor: pointer; user-select: none;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .tool:hover { background: rgba(122, 145, 180, 0.19); }
+  .tool .ticon {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.07);
+    transition: background 0.2s ease;
+  }
+  .tool .ticon svg { display: block; }
+  .tool .ticon svg * { stroke: var(--text-secondary); transition: stroke 0.2s ease; }
+  .tool .tname { font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .tool .tstate { font-size: 9.5px; color: var(--text-caption); margin-top: 1px; white-space: nowrap; }
+  .tool.on[data-tool="lock"]  { border-color: rgba(210, 122, 74, 0.55); box-shadow: inset 0 0 0 0.5px rgba(210,122,74,0.3), 0 0 14px rgba(210,122,74,0.12); }
+  .tool.on[data-tool="awake"] { border-color: rgba(93, 140, 240, 0.55); box-shadow: inset 0 0 0 0.5px rgba(93,140,240,0.3), 0 0 14px rgba(93,140,240,0.12); }
+  .tool.on[data-tool="lock"]  .ticon { background: rgba(210, 122, 74, 0.18); }
+  .tool.on[data-tool="awake"] .ticon { background: rgba(93, 140, 240, 0.18); }
+  .tool.on[data-tool="lock"]  .ticon svg * { stroke: var(--tint-lock); }
+  .tool.on[data-tool="awake"] .ticon svg * { stroke: var(--tint-awake); }
+  .tool.on[data-tool="lock"]  .tstate { color: var(--tint-lock); }
+  .tool.on[data-tool="awake"] .tstate { color: var(--tint-awake); }
+</style>
+</head>
+<body>
+
+<!-- 模拟 macOS 菜单栏 -->
+<div class="menubar">
+  <span class="apple"></span>
+  <span class="app-name">访达</span>
+  <span>文件</span><span>编辑</span><span>显示</span>
+  <span class="spacer"></span>
+  <span class="status-icon ours mono" title="HagimiMonitor">◔ 34%</span>
+  <span class="status-icon">🔋</span>
+  <span class="status-icon mono">周四 14:32</span>
+</div>
+
+<!-- 说明 -->
+<div class="guide">
+  <h2>自适应方位 · 悬停抽屉沙盘</h2>
+  <b>拖拽面板</b>到屏幕各处，把手会自动换边：<br>
+  优先级 <b>底 → 右 → 左 → 顶</b>，哪边放得下抽屉就挂哪边。<br>
+  <b>悬停把手</b>呼出抽屉；点击工具切换激活态，<br>
+  激活后把手旁会出现<b>角标</b>。
+</div>
+
+<!-- 方位 HUD -->
+<div class="hud">
+  <span class="dir" id="hudDir">↓</span>
+  <span id="hudText">抽屉方位：<b>底部</b>（下方空间充足）</span>
+</div>
+
+<!-- 面板 + 把手 + 抽屉 -->
+<div class="panel-wrap" id="wrap">
+  <div class="panel" id="panel">
+    <div class="panel-header"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">14:32</span></div>
+    <div class="row"><span class="dot" style="background:var(--tint-cpu)"></span><span class="label">处理器</span><div class="meter"><div style="width:34%;background:var(--tint-cpu)"></div></div><span class="value mono">34%</span></div>
+    <div class="row"><span class="dot" style="background:var(--tint-mem)"></span><span class="label">内存</span><div class="meter"><div style="width:58%;background:var(--tint-mem)"></div></div><span class="value mono">58%</span></div>
+    <div class="row"><span class="dot" style="background:var(--tint-net)"></span><span class="label">网络</span><div class="meter"><div style="width:12%;background:var(--tint-net)"></div></div><span class="value mono">2.1 M</span></div>
+    <div class="row"><span class="dot" style="background:var(--tint-bat)"></span><span class="label">电池</span><div class="meter"><div style="width:76%;background:var(--tint-bat)"></div></div><span class="value mono">76%</span></div>
+    <div class="btnrow">
+      <div class="cap">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1 6h2l1.5-3.5L7 9.5 8.5 6H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        活动监视器
+      </div>
+      <div class="cap">
+        <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M9.5 2.5l-1 1M3.5 8.5l-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+        设置
+      </div>
+    </div>
+  </div>
+
+  <div class="handle p-bottom" id="handle"><span class="badge" id="badge"></span></div>
+
+  <div class="drawer p-bottom" id="drawer">
+    <div class="drawer-title">小工具</div>
+    <div class="tools-grid">
+      <div class="tool" data-tool="lock">
+        <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="6" width="9" height="6" rx="1.5" stroke-width="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke-width="1.2"/><circle cx="7" cy="9" r="0.9" stroke-width="1.1"/></svg></span>
+        <span class="tmeta"><span class="tname">键盘锁定</span><br><span class="tstate" data-on="已锁定 · 点击解锁" data-off="未启用">未启用</span></span>
+      </div>
+      <div class="tool" data-tool="awake">
+        <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3.2" stroke-width="1.2"/><path d="M7 1v1.3M7 11.7V13M1 7h1.3M11.7 7H13M2.9 2.9l.9.9M10.2 10.2l.9.9M11.1 2.9l-.9.9M3.8 10.2l-.9.9" stroke-width="1.1" stroke-linecap="round"/></svg></span>
+        <span class="tmeta"><span class="tname">防休眠</span><br><span class="tstate" data-on="激活中" data-off="未启用">未启用</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const wrap = document.getElementById('wrap');
+  const panel = document.getElementById('panel');
+  const handle = document.getElementById('handle');
+  const drawer = document.getElementById('drawer');
+  const badge = document.getElementById('badge');
+  const hudDir = document.getElementById('hudDir');
+  const hudText = document.getElementById('hudText');
+
+  const GAP = 10;          // 面板-抽屉间距
+  const MARGIN = 8;        // 抽屉与屏幕边缘的最小留白
+  const MENUBAR = 26;      // 顶部菜单栏高度（对应真实实现里的 NSScreen.visibleFrame）
+  // 抽屉在各方位的占位需求（横向卡 / 纵向窄卡的实测尺寸）
+  const NEED = { bottom: 118, top: 118, right: 166, left: 166 }; // 高或宽 + GAP
+  const DIR_META = {
+    bottom: { arrow: '↓', label: '底部' },
+    right:  { arrow: '→', label: '右侧' },
+    left:   { arrow: '←', label: '左侧' },
+    top:    { arrow: '↑', label: '顶部' },
+  };
+
+  /* ====== 方位决策：底 → 右 → 左 → 顶 ====== */
+  let placement = 'bottom';
+  function computePlacement() {
+    const r = panel.getBoundingClientRect();
+    const spaces = {
+      bottom: window.innerHeight - r.bottom - MARGIN,
+      right:  window.innerWidth - r.right - MARGIN,
+      left:   r.left - MARGIN,
+      top:    r.top - MENUBAR - MARGIN,
+    };
+    const order = ['bottom', 'right', 'left', 'top'];
+    let next = order.find(d => spaces[d] >= NEED[d]) || 'bottom';
+    if (next !== placement) {
+      // 换边时先收抽屉，避免它在旧方位残影中横跳
+      closeDrawer(true);
+      placement = next;
+      for (const el of [handle, drawer]) {
+        el.classList.remove('p-bottom', 'p-right', 'p-left', 'p-top');
+        el.classList.add('p-' + placement);
+      }
+    }
+    const m = DIR_META[placement];
+    hudDir.textContent = m.arrow;
+    hudText.innerHTML = `抽屉方位：<b>${m.label}</b>（可用 ${Math.max(0, Math.round(spaces[placement]))}px / 需 ${NEED[placement]}px）`;
+  }
+
+  /* ====== 拖拽面板 ====== */
+  // 初始位置：模拟菜单栏面板，挂在状态项下方偏右
+  let px = window.innerWidth - 320 - 120, py = MENUBAR + 8;
+  function applyPos() {
+    px = Math.min(Math.max(px, 4), window.innerWidth - 324);
+    py = Math.min(Math.max(py, MENUBAR + 4), window.innerHeight - panel.offsetHeight - 4);
+    wrap.style.left = px + 'px';
+    wrap.style.top = py + 'px';
+    computePlacement();
+  }
+  let drag = null;
+  panel.addEventListener('pointerdown', e => {
+    if (e.target.closest('.cap')) return;
+    drag = { x: e.clientX - px, y: e.clientY - py };
+    panel.classList.add('dragging');
+    panel.setPointerCapture(e.pointerId);
+  });
+  panel.addEventListener('pointermove', e => {
+    if (!drag) return;
+    px = e.clientX - drag.x;
+    py = e.clientY - drag.y;
+    applyPos();
+  });
+  panel.addEventListener('pointerup', () => { drag = null; panel.classList.remove('dragging'); });
+  window.addEventListener('resize', applyPos);
+
+  /* ====== 悬停开合（共享宽限计时，避免把手→抽屉的途中误关） ====== */
+  let closeTimer = null;
+  function openDrawer() {
+    clearTimeout(closeTimer);
+    drawer.classList.add('open');
+    handle.classList.add('hot');
+    syncBadge();
+  }
+  function closeDrawer(instant) {
+    clearTimeout(closeTimer);
+    const doClose = () => {
+      drawer.classList.remove('open');
+      handle.classList.remove('hot');
+      syncBadge();
+    };
+    instant ? doClose() : (closeTimer = setTimeout(doClose, 260));
+  }
+  for (const el of [handle, drawer]) {
+    el.addEventListener('mouseenter', openDrawer);
+    el.addEventListener('mouseleave', () => closeDrawer(false));
+  }
+
+  /* ====== 工具激活态 + 角标 ====== */
+  function anyOn() { return document.querySelector('.tool.on') !== null; }
+  function syncBadge() {
+    badge.classList.toggle('show', anyOn() && !drawer.classList.contains('open'));
+  }
+  document.querySelectorAll('.tool').forEach(tool => {
+    tool.addEventListener('click', () => {
+      tool.classList.toggle('on');
+      const state = tool.querySelector('.tstate');
+      state.textContent = tool.classList.contains('on') ? state.dataset.on : state.dataset.off;
+      syncBadge();
+    });
+  });
+
+  applyPos();
+
+  // 调试钩子：供自动化截图定位面板（不影响交互）
+  window.__setPanelPos = (x, y) => { px = x; py = y; applyPos(); };
+  window.__openDrawer = openDrawer;
+
+  // 演示参数：?demo=bottom|right|left|top 预置面板位置，附带 &open 展开抽屉，&on 激活防休眠
+  const q = new URLSearchParams(location.search);
+  const demo = q.get('demo');
+  if (demo) {
+    const W = window.innerWidth, H = window.innerHeight, ph = panel.offsetHeight;
+    const pos = {
+      bottom: [W - 444, MENUBAR + 8],                 // 状态项下方，下方充足
+      right:  [(W - 320) / 2, H - ph - 12],           // 贴底居中 → 右侧
+      left:   [W - 328, H - ph - 12],                 // 贴底贴右 → 左侧
+      top:    [(W - 320) / 2, H - ph - 12],           // 配合窄窗口时演示顶部兜底
+    }[demo];
+    if (pos) window.__setPanelPos(pos[0], pos[1]);
+    if (q.has('on')) {
+      const t = document.querySelector('.tool[data-tool="awake"]');
+      t.click();
+    }
+    if (q.has('open')) openDrawer();
+  }
+</script>
+
+</body>
+</html>
