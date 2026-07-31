@@ -38,8 +38,8 @@ struct MenuBarMetricLabel: View {
 
     var body: some View {
         HStack(spacing: interCellSpacing) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                cell(for: item, isTrailing: index == items.count - 1)
+            ForEach(items) { item in
+                cell(for: item)
             }
         }
         .font(labelFont)
@@ -49,24 +49,22 @@ struct MenuBarMetricLabel: View {
     }
 
     /// 每个指标占一个独立的固定宽度单元:前缀(SF 图标 / CPU / ↑↓ 等)固定在左侧,
-    /// 数值放进按「最大可能值」测得的定宽框、**左对齐**贴住前缀。短值时预留的
-    /// 空白落在尾部,与指标间距合并成更大的「组间空隙」,视觉上数字始终跟自己的
-    /// 前缀成一组。每格宽度仍固定,相邻指标位置不会左右抖动。
-    /// 末位指标是整个菜单栏图标的右边缘,身后没有下一个指标可供分组,固定宽度
-    /// 预留的尾部空白会直接变成图标右侧的空洞留白,故末位不做定宽预留,按实际
-    /// 内容收紧,消除该处的空间浪费。
+    /// 数值放进按「最大可能值」测得的定宽框(等宽数字字体)、**统一左对齐**贴住前缀。
+    /// 每格宽度恒定,数值在最大/最小值间切换、乃至位数变化(9%→100%、0B→1.5M)时
+    /// 都不改变格宽,故整个菜单栏图标宽度稳定、不左右抖动。
+    ///
+    /// 所有指标(含末位)一律左对齐,是为了让每个指标的「前缀→数值」间距完全一致:
+    /// 若单独把末位改成右对齐,末位短值时预留空白会落在图标与数值之间,该处间距
+    /// 明显大于其它指标、视觉突兀。代价是末位短值时预留空白落在整个图标最右侧,
+    /// 形成一小段恒定留白(不抖动)——这是「间距一致 + 宽度稳定」下不可避免的取舍。
     @ViewBuilder
-    private func cell(for item: MenuBarMetricItem, isTrailing: Bool) -> some View {
+    private func cell(for item: MenuBarMetricItem) -> some View {
         switch layoutStyle {
         case .icon, .text:
             HStack(spacing: symbolSpacing) {
                 leading(for: item.kind)
-                if isTrailing {
-                    Text(numericValue(for: item))
-                } else {
-                    Text(numericValue(for: item))
-                        .frame(width: valueWidth(for: item.kind), alignment: .leading)
-                }
+                Text(numericValue(for: item))
+                    .frame(width: valueWidth(for: item.kind), alignment: .leading)
             }
         case .compact:
             compactCell(for: item)
@@ -203,10 +201,10 @@ struct MenuBarMetricLabel: View {
     private var compactValueFontSize: CGFloat { 10 }
 
     /// 指标之间的间距。
-    private var interCellSpacing: CGFloat { 6 }
+    private var interCellSpacing: CGFloat { 4 }
 
     /// 前缀与数值之间的间距(图标比文字略需留白)。
     private var symbolSpacing: CGFloat {
-        layoutStyle == .icon ? 3 : 2
+        layoutStyle == .icon ? 2 : 2
     }
 }
