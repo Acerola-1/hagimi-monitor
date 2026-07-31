@@ -91,7 +91,10 @@ struct MenuBarMetricLabel: View {
     private func leading(for kind: MenuBarMetricKind) -> some View {
         switch layoutStyle {
         case .icon:
+            // icon 字号比文本小 1pt,让数字视觉上比 icon 略大一圈(贴近 iStat Menus
+            // "数字突出、icon 作标识" 的视觉权重);父级 .font 不继承到此。
             Image(systemName: kind.symbol)
+                .font(.system(size: iconFontSize, weight: .medium))
         default:
             Text(textPrefix(for: kind))
         }
@@ -192,7 +195,11 @@ struct MenuBarMetricLabel: View {
         return font
     }
 
-    private var fontSize: CGFloat { 12 }
+    private var fontSize: CGFloat { 11 }
+
+    /// icon 字号:固定 9pt,始终比数字(fontSize=11pt)小 2pt,让数字视觉上更突出。
+    /// 不能用 fontSize - 1 跟随,因为文本调字号时不应带动 icon。
+    private var iconFontSize: CGFloat { 9 }
 
     /// 紧凑模式上层标签字号:比数值小一档,弱化标签、突出数值。
     private var compactLabelFontSize: CGFloat { 7 }
@@ -201,7 +208,7 @@ struct MenuBarMetricLabel: View {
     private var compactValueFontSize: CGFloat { 10 }
 
     /// 指标之间的间距。
-    private var interCellSpacing: CGFloat { 4 }
+    private var interCellSpacing: CGFloat { 2 }
 
     /// 前缀与数值之间的间距(图标比文字略需留白)。
     private var symbolSpacing: CGFloat {
