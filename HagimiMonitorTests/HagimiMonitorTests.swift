@@ -41,6 +41,13 @@ struct HagimiMonitorTests {
         #expect(module.severity == .calm)
     }
 
+    @Test func systemPowerCalculationUsesSignedBatteryPowerForCharging() {
+        let result = systemPowerWattsFromTelemetry(systemPowerIn: 1200, batteryPower: -200)
+
+        #expect(result != nil)
+        #expect(abs(result! - 1.0) < 0.0001)
+    }
+
     @Test func placeholderMetricNamesAreStableKeys() {
         let module = MonitorModule.placeholder(kind: .cpu)
 
