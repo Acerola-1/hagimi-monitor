@@ -596,7 +596,8 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    /// 对指定类目采样(仅限其中设置已开启的列表)。并行执行,全部完成后回主线程
+    /// 对指定类目采样(仅限其中设置已开启的列表)。各类采样在 procSampleQueue 上
+    /// 串行执行(串行是磁盘/网络全局快照无锁安全的前提),全部完成后回主线程
     /// 更新 @Published 属性。只采「展开 ∩ 设置开启」的类目,避免为不可见的列表
     /// spawn ps/nettop 子进程、构建图标。
     private func refreshProcesses(for kinds: Set<MonitorKind>, completion: (() -> Void)? = nil) {
