@@ -32,7 +32,7 @@ final class BatterySampler: MonitorSampler {
         let sourceState = description[kIOPSPowerSourceStateKey] as? String
         let connected = sourceState == kIOPSACPowerValue
 
-        let smart = smartBatteryInfo()
+        let smart = smartBatteryInfo(isCharging: isCharging)
         let adapterWatts = smart.adapterWatts ?? externalAdapterWatts()
         let chargingPower = connected
             ? (smart.telemetryChargingWatts ?? smart.chargingPowerWatts)
@@ -74,7 +74,7 @@ final class BatterySampler: MonitorSampler {
         )
     }
 
-    private func smartBatteryInfo() -> SmartBatteryInfo {
+    private func smartBatteryInfo(isCharging: Bool) -> SmartBatteryInfo {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard service != IO_OBJECT_NULL else {
             return SmartBatteryInfo()
@@ -110,8 +110,8 @@ final class BatterySampler: MonitorSampler {
         let amperage = lookupDouble("Amperage")
         let adapterWatts = adapterWatts(service)
         let systemPowerWatts = systemPowerWatts(service)
-        let chargingPowerWatts = chargingPowerWatts(service)
-        let telemetryChargingWatts = telemetryChargingWatts(service)
+        let chargingPowerWatts = chargingPowerWatts(service, isCharging: isCharging)
+        let telemetryChargingWatts = telemetryChargingWatts(service, isCharging: isCharging)
         let temperature = lookupDouble("Temperature").map { $0 / 100 }
         let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
             min(100, max(0, maxCapacity / designCapacity * 100))
@@ -151,16 +151,22 @@ final class BatterySampler: MonitorSampler {
         return doubleValue(details[kIOPSPowerAdapterWattsKey])
     }
 
-    private func chargingPowerWatts(_ service: io_service_t) -> Double? {
-        // 优先用 PowerTelemetryData.BatteryPower（电池包级别，准确）
+    private func chargingPowerWatts(_ service: io_service_t, isCharging: Bool) -> Double? {
+        // 优先用 PowerTelemetryData.BatteryPower（电池包级别，准确）。
+        // BatteryPower 的符号在不同硬件 / macOS 版本上并不一致，
+        // 因此用 IOPS 的充电状态判断方向，只把绝对值当作充电功率。
         if let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
-           let bp = signedDoubleValue(value["BatteryPower"]), bp < 0 {
-            return abs(bp) / 1_000
+           let watts = interpretedChargingPowerWatts(
+               batteryPowerMilliwatts: signedDoubleValue(value["BatteryPower"]),
+               isCharging: isCharging
+           ) {
+            return watts
         }
         // Fallback: ChargerData 的 ChargingCurrent * ChargingVoltage
         // 注意 ChargingVoltage 是单节电芯电压，结果会偏低
-        guard let value = IORegistryEntryCreateCFProperty(service, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
+        guard isCharging,
+              let value = IORegistryEntryCreateCFProperty(service, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
               let current = doubleValue(value["ChargingCurrent"]),
               let voltage = doubleValue(value["ChargingVoltage"]) else {
@@ -169,13 +175,15 @@ final class BatterySampler: MonitorSampler {
         return nonZeroWatts(current * voltage / 1_000_000)
     }
 
-    private func telemetryChargingWatts(_ service: io_service_t) -> Double? {
+    private func telemetryChargingWatts(_ service: io_service_t, isCharging: Bool) -> Double? {
         guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
-            .takeRetainedValue() as? [String: Any],
-              let bp = signedDoubleValue(value["BatteryPower"]), bp < 0 else {
+            .takeRetainedValue() as? [String: Any] else {
             return nil
         }
-        return abs(bp) / 1_000
+        return interpretedChargingPowerWatts(
+            batteryPowerMilliwatts: signedDoubleValue(value["BatteryPower"]),
+            isCharging: isCharging
+        )
     }
 
     private func powerTelemetryWatts() -> Double? {
