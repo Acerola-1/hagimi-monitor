@@ -58,8 +58,9 @@ enum MonitorKind: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
-    /// 用户可见的模块。风扇模块按运行时 fanAvailable 单独门控,不在此暴露。
-    static let userVisibleCases: [MonitorKind] = allCases.filter { $0 != .fan }
+    /// 用户可见的模块。风扇模块的显隐由 fanAvailable(机器物理属性)决定,
+    /// settings UI 不暴露勾选入口;若想隐藏(罕见),仍可走 visibleKinds 手动关。
+    static let userVisibleCases: [MonitorKind] = allCases
 
     var title: String {
         switch self {
@@ -829,7 +830,13 @@ final class MonitorStore: ObservableObject {
     }
 
     private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
-        modules.filter { settings.isVisible($0.kind) }
+        modules.filter { module in
+            guard settings.isVisible(module.kind) else { return false }
+            // 风扇二次门控:即便 settings 不挡,机器无风扇时也不该显示行
+            // (此时 applyFanModule 也不会插入,这里仅是兜底)。
+            if module.kind == .fan { return fanAvailable }
+            return true
+        }
     }
 }
 
