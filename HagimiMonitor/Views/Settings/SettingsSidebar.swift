@@ -31,7 +31,7 @@ struct SettingsSidebar: View {
 
                 #if DISPLAY_CONTROL
                 HStack(spacing: 6) {
-                    Label(String(localized: "settings.sidebar.display"), systemImage: "display")
+                    Label(String(localized: "settings.sidebar.display"), systemImage: "slider.horizontal.below.rectangle")
                     BetaBadge()
                 }
                 .tag(SettingsRoute.displayModule)
