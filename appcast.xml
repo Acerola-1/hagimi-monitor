@@ -3,10 +3,10 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.1.4</title>
-            <pubDate>Tue, 28 Jul 2026 15:33:19 +0000</pubDate>
-            <sparkle:version>69</sparkle:version>
-            <sparkle:shortVersionString>1.1.4</sparkle:shortVersionString>
+            <title>1.1.5</title>
+            <pubDate>Sat, 01 Aug 2026 16:51:48 +0000</pubDate>
+            <sparkle:version>70</sparkle:version>
+            <sparkle:shortVersionString>1.1.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
@@ -14,27 +14,47 @@
 
 ### 新功能
 
-- 菜单栏图标右键菜单新增快捷设置入口
+- 新增风扇转速指标（SMC 读取 + 菜单栏 + 面板可视化）
+- 新增钉住面板：全局快捷键呼出、可拖动、始终最前、位置持久化
+- 新增内存压力显示模式（主指标切换 + 压力曲线 + 菜单栏指标）
+- 新增模块显示方式（列表行/大卡片）与逐模块默认展开
+- 菜单栏图标右键菜单新增「设置」入口
+- 添加小猫客串彩蛋及开源许可页面
 
 ### 修复
 
-- 电池健康度口径与系统设置对齐
-- 菜单栏存储容量改用 1000 进制，与面板显示一致
-- 修正紧凑模式下菜单栏数值截断（测量字体对齐 SF Rounded）
+- 修复 MacBook Air M4 充电功率无法正常显示（感谢 @WZL975 反馈 #86，PR #87 修复）
+- 菜单栏存储容量改用 1000 进制与面板对齐，存储采样优先使用含 purgeable 的可用容量
+- 电池健康度与系统设置口径对齐
+- 菜单栏指标测量字体对齐 SF Rounded，消除紧凑模式数值截断
+- 关于页 AboutIcon 环比例与新图标显示修复
+- 修复双击标题区手势仲裁导致按钮响应迟滞
+- 修复 Cmd 点击状态项无法触发系统拖动重排
+- 修复风扇行不进面板（visibleKinds 默认不含 .fan）
+- 修复官网入口 index.html 被误删
 
 ### 优化与体验
 
-- 电池行升级为双 pill：⚡充电功率与仪表功耗常驻显示
-- 整机功耗优先读取 SystemLoad 遥测字段，消除差值法瞬态失真
-- 应用图标全面重做：圆角合规 + 液态玻璃 + 亮暗双外观
-- 面板滚动体验优化：header 固定不滚、隐藏滚动条、上下边缘渐隐
-- 面板打开时预热网络/磁盘 TOP 基线缩短出数延迟；高度按屏幕可用空间封顶
+- 风扇监控完善：状态判断 + 告警 + sparkline Y 轴修正 + 沙盒门控
+- 菜单栏 icon 模式仿 iStat Menus 紧凑排布，指标单元统一左对齐
+- 面板体验优化：header 固定、隐藏滚动条、上下边缘渐隐、预热网络/磁盘 TOP 基线、封顶高度
+- 配色 vibrant 模式消除撞色（风扇靛蓝、显示器紫红），默认改为活力
+- 显示器控制图标 display → slider.horizontal.below.rectangle
+- 功率流三角布局落地 + 电源设置 Beta 开关，电池行改双 pill，移除转换损耗
+- 补全中英日三语本地化，消除硬编码字符串
+- 性能优化：进程图标降采样缓存、菜单栏渲染去重、网络采样复用、延迟钉住面板初始化
+- 媒体键接管：未授权时整组置灰 + 授权提示卡常驻
 
-感谢 @NaiveTomcat 在 #58 中的反馈（电池功率读数困惑），本次双 pill 优化正是对此的回应 🙏
+### 代码质量
+
+- 硬化代码质量 P0：串行不变式/计数器回绕/对齐 UB/共享解码器/访问级别
+- 硬化代码质量 P0 补全：refreshProcesses 注释「并行」→「串行」
+- 硬化代码质量 P1：移除死代码 ioKitError、菜单栏定宽测量静态缓存
+- 用 DDC 能力探测取代故障计数禁用逻辑
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.4/HagimiMonitor-v1.1.4.zip" length="3688744" type="application/octet-stream" sparkle:edSignature="uXnKqhJH1bZlId49qiXLYHnVkuV5Ixqx/LW1nXQUOImh0A2RJqWw0XutVghWB4t/h4U3GUJqkBKr1HZGZvMhDw=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.5/HagimiMonitor-v1.1.5.zip" length="3729557" type="application/octet-stream" sparkle:edSignature="yrkSuH8+XgK/ijDvPXSuXzMHFCnnvbht1SACbmHQ/Q2TgUlkbsMG09EyMuchjQOi/EjsT+L5WiLgd4bPHT8sCg=="/>
         </item>
     </channel>
 </rss>
