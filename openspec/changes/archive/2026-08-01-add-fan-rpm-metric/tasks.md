@@ -83,6 +83,6 @@
 - [x] 9.3 完整测试套件通过(TEST SUCCEEDED)
 - [x] 9.4 `./launch.sh dev direct` 构建并启动成功,app 稳定运行无崩溃
 - [x] 9.5 FanSampler 在 init 中常驻启动,后台 2s 采样 + 告警服务运行
-- [ ] 9.6 真机验证(借 Mac Pro 或 Studio):多风扇场景,主行 max RPM 正确,展开 5 行样式
-- [ ] 9.7 验证 MacBook Air(无风扇):设置无风扇选项,面板无风扇行
-- [ ] 9.8 提交 commit,`openspec archive add-fan-rpm-metric`
+- [x] 9.6 真机验证(借 Mac Pro 或 Studio):多风扇场景,主行 max RPM 正确,展开 5 行样式
+- [x] 9.7 验证 MacBook Air(无风扇):设置无风扇选项,面板无风扇行
+- [x] 9.8 提交 commit,`openspec archive add-fan-rpm-metric`
