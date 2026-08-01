@@ -187,10 +187,7 @@ final class MonitorSettings: ObservableObject {
     }
 
     func isVisible(_ kind: MonitorKind) -> Bool {
-        // 风扇:settings 不暴露勾选入口,默认可见;实际显隐由 MonitorStore
-        // 在 visibleModules 二次门控 fanAvailable。无风扇机型不显示。
-        if kind == .fan { return true }
-        return visibleKinds.contains(kind)
+        visibleKinds.contains(kind)
     }
 
     func setVisible(_ isVisible: Bool, for kind: MonitorKind) {
