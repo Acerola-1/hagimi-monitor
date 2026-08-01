@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 功率流替代形式对比</title>
+<style>
+  /* ====== 设计令牌：对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-bat: #65AF52;
+    --sev-warn: #B8872E;
+    --sev-crit: #D94848;
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px 16px 48px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  /* ====== 原型控制 ====== */
+  .proto-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .proto-tabs { display: flex; background: rgba(255,255,255,0.07); border-radius: 9px; padding: 2px; }
+  .proto-tabs button {
+    border: none; background: transparent;
+    color: rgba(255,255,255,0.55);
+    font-size: 11.5px; font-family: inherit;
+    padding: 5px 14px; border-radius: 7px; cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .proto-tabs button.active { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.92); font-weight: 600; }
+  .proto-cap { font-size: 10.5px; color: rgba(255,255,255,0.35); }
+
+  /* ====== 变体卡：340pt 面板宽度语境 ====== */
+  .variant {
+    width: 340px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255,255,255,0.12);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.40);
+    padding: 10px;
+  }
+  .variant-tag {
+    display: flex; align-items: baseline; gap: 7px;
+    padding: 2px 2px 8px;
+  }
+  .variant-tag .vt { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-secondary); }
+  .variant-tag .vd { font-size: 9.5px; color: rgba(255,255,255,0.40); }
+
+  /* 电源行（与正式版一致的行头） */
+  .row { background: var(--row-glass); border-radius: var(--row-radius); border: 0.5px solid rgba(255,255,255,0.06); }
+  .row-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+  .row-head .icon { width: 18px; display: flex; justify-content: center; flex-shrink: 0; }
+  .row-head .label { font-size: 12px; font-weight: 600; }
+  .row-head .value { font-size: 12px; font-weight: 600; color: var(--text-value); }
+  .row-head .spacer { flex: 1; }
+  .pill {
+    width: 74px; display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+    font-size: 11px; font-weight: 500; color: var(--text-secondary); flex-shrink: 0;
+  }
+  .pill .psym { opacity: 0.72; font-size: 9px; }
+
+  .detail { padding: 0 10px 10px; }
+  .detail .sep { height: 1px; background: var(--row-separator); margin-left: 28px; margin-bottom: 9px; }
+  .viz { margin-left: 28px; width: 272px; }
+  .viz-note { font-size: 10px; color: var(--text-caption); margin-top: 7px; line-height: 1.5; }
+  .viz-note.crit { color: var(--sev-crit); }
+
+  /* ====== 变体 B：收支双条 ====== */
+  .bal-row { display: flex; align-items: center; gap: 8px; height: 20px; }
+  .bal-row .bl { width: 30px; font-size: 10px; color: var(--text-caption); flex-shrink: 0; }
+  .bal-track {
+    flex: 1; height: 7px; border-radius: 4px;
+    background: var(--track-fill);
+    overflow: hidden;
+    display: flex;
+    position: relative;
+  }
+  .bal-seg { height: 100%; position: relative; overflow: hidden; transition: width 0.55s cubic-bezier(0.3,0.9,0.4,1); }
+  .bal-seg + .bal-seg { box-shadow: inset 1.5px 0 0 rgba(0,0,0,0.35); }
+  /* 流动微光：表达"这是流量不是存量" */
+  .bal-seg::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.28) 50%, transparent 80%);
+    background-size: 200% 100%;
+    animation: shimmer 2.4s linear infinite;
+  }
+  @keyframes shimmer { from { background-position: 160% 0; } to { background-position: -60% 0; } }
+  .bal-val { width: 44px; text-align: right; font-size: 10.5px; font-weight: 600; color: var(--text-secondary); flex-shrink: 0; }
+  .bal-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 7px; margin-left: 38px; }
+  .bal-chip { display: flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--text-caption); }
+  .bal-chip i { width: 6px; height: 6px; border-radius: 2px; flex-shrink: 0; }
+  .bal-chip b { font-weight: 600; color: var(--text-secondary); }
+
+  /* ====== 变体 C：电源环 ====== */
+  .ring-wrap { display: flex; align-items: center; gap: 16px; }
+  .ring-side { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .ring-stat { display: flex; align-items: baseline; }
+  .ring-stat .rl { font-size: 10px; color: var(--text-caption); }
+  .ring-stat .rv { margin-left: auto; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="proto-ctl">
+  <div class="proto-tabs" id="tabs">
+    <button data-s="charging" class="active">充电中</button>
+    <button data-s="battery">电池供电</button>
+    <button data-s="insufficient">适配器不足</button>
+  </div>
+  <div class="proto-cap">功率流替代形式对比 · 数据源同为 PowerTelemetryData（沙盒可用）</div>
+</div>
+
+<!-- ============ 变体 A：能量带（迷你 Sankey） ============ -->
+<div class="variant">
+  <div class="variant-tag"><span class="vt">A · 能量带</span><span class="vd">来源→去向的连续绸带，粗细 ∝ 瓦数 · SwiftUI: 单 Canvas 贝塞尔填充</span></div>
+  <div class="row">
+    <div class="row-head" data-head></div>
+    <div class="detail">
+      <div class="sep"></div>
+      <div class="viz"><svg id="sankey" width="272" height="118" style="overflow:visible"></svg></div>
+      <div class="viz-note" data-note></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 变体 B：收支双条 ============ -->
+<div class="variant">
+  <div class="variant-tag"><span class="vt">B · 收支双条</span><span class="vd">来源/去向各一条堆叠条，同一比例尺 · SwiftUI: 纯布局零 Canvas</span></div>
+  <div class="row">
+    <div class="row-head" data-head></div>
+    <div class="detail">
+      <div class="sep"></div>
+      <div class="viz" id="balance"></div>
+      <div class="viz-note" data-note></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 变体 C：电源环 ============ -->
+<div class="variant">
+  <div class="variant-tag"><span class="vt">C · 电源环</span><span class="vd">与菜单栏负载环同语言，轨道粒子定向 · SwiftUI: 单 Canvas 圆弧</span></div>
+  <div class="row">
+    <div class="row-head" data-head></div>
+    <div class="detail">
+      <div class="sep"></div>
+      <div class="viz ring-wrap">
+        <svg id="ring" width="96" height="96" style="overflow:visible"></svg>
+        <div class="ring-side" id="ring-side"></div>
+      </div>
+      <div class="viz-note" data-note></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TINT = { bat: '#65AF52', crit: '#D94848', warn: '#B8872E', sys: 'rgba(255,255,255,0.60)', loss: 'rgba(255,255,255,0.26)' };
+
+/* ====== 场景数据（与正式版数据链一致：全部来自 PowerTelemetryData） ====== */
+const SCENARIOS = {
+  charging: {
+    summary: '82%', icon: 'bolt',
+    pillChg: '30.4W', pillPwr: '24.6W',
+    sources: [ { name: '适配器', w: 58.2, color: 'rgba(255,255,255,0.55)' } ],
+    sinks:   [ { name: '系统', w: 24.6, color: TINT.sys },
+               { name: '电池 +', w: 30.4, color: TINT.bat },
+               { name: '损耗', w: 3.2, color: TINT.loss } ],
+    ring: { sys: 24.6, batFlow: +30.4, adapterIn: 58.2, rated: 96, level: 0.82 },
+    note: '约 52 分钟充满', crit: false,
+  },
+  battery: {
+    summary: '76%', icon: 'b75',
+    pillChg: '-', pillPwr: '18.4W',
+    sources: [ { name: '电池', w: 18.7, color: TINT.bat } ],
+    sinks:   [ { name: '系统', w: 18.4, color: TINT.sys },
+               { name: '损耗', w: 0.3, color: TINT.loss } ],
+    ring: { sys: 18.4, batFlow: -18.7, adapterIn: null, rated: null, level: 0.76 },
+    note: '预计可用 6 小时 20 分', crit: false,
+  },
+  insufficient: {
+    summary: '64%', icon: 'b50',
+    pillChg: '-', pillPwr: '41.5W',
+    sources: [ { name: '适配器', w: 29.8, color: TINT.warn, maxed: true },
+               { name: '电池', w: 12.4, color: TINT.crit } ],
+    sinks:   [ { name: '系统', w: 41.5, color: TINT.crit },
+               { name: '损耗', w: 0.7, color: TINT.loss } ],
+    ring: { sys: 41.5, batFlow: -12.4, adapterIn: 29.8, rated: 30, level: 0.64, crit: true },
+    note: '适配器已达上限，电池正在补电', crit: true,
+  },
+};
+let current = 'charging';
+
+const BAT_ICONS = {
+  bolt: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="9.4" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/><path d="M7.4 3.2 5.2 7h1.7l-.7 3.6L9 6.6H7.2l.9-3.4z" fill="#fff" stroke="rgba(0,0,0,0.45)" stroke-width="0.5"/></svg>`,
+  b75:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="7" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+  b50:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="4.8" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+};
+
+/* ====== 行头 + 备注（三个变体共用） ====== */
+function renderHeads(s) {
+  const head = `
+    <span class="icon">${BAT_ICONS[s.icon]}</span>
+    <span class="label">电源:</span><span class="value mono">${s.summary}</span>
+    <span class="spacer"></span>
+    <span class="pill mono"><span class="psym">⚡︎</span>${s.pillChg}</span>
+    <span class="pill mono"><span class="psym">◔</span>${s.pillPwr}</span>`;
+  document.querySelectorAll('[data-head]').forEach((el) => el.innerHTML = head);
+  document.querySelectorAll('[data-note]').forEach((el) => {
+    el.textContent = s.note;
+    el.classList.toggle('crit', s.crit);
+  });
+}
+
+/* ====== 变体 A：能量带（迷你 Sankey） ====== */
+function renderSankey(s) {
+  const W = 272, H = 118;
+  const x0 = 66, x1 = 206;             /* 绸带起止 x（两侧留标签位） */
+  const mx = (x0 + x1) / 2;
+  const total = s.sources.reduce((a, b) => a + b.w, 0);
+  const pxPerW = Math.min(1.1, 34 / total); /* 绸带总厚度预算 34px */
+  const th = (w) => Math.max(2.5, w * pxPerW);
+  const gap = 12;
+
+  /* 垂直布局：源/汇各自按厚度+间距居中 */
+  const layout = (items) => {
+    const hs = items.map((it) => th(it.w));
+    const totalH = hs.reduce((a, b) => a + b, 0) + gap * (items.length - 1);
+    let y = (H - totalH) / 2;
+    return items.map((it, i) => { const c = y + hs[i] / 2; y += hs[i] + gap; return { ...it, h: hs[i], cy: c }; });
+  };
+  const src = layout(s.sources);
+  const snk = layout(s.sinks);
+
+  /* 绸带分配：按比例把每个源切给每个汇（源少汇多或反之都成立） */
+  let defs = '', bands = '', dashes = '', labels = '';
+  let bandId = 0;
+  /* 每个源、汇维护已用厚度偏移 */
+  src.forEach((so) => so.used = 0);
+  snk.forEach((si) => si.used = 0);
+
+  src.forEach((so) => {
+    snk.forEach((si) => {
+      const w = so.w * (si.w / total) * (total / s.sources.reduce((a,b)=>a+b.w,0));
+      /* 单源时 = si.w；多源时按源占比切汇 */
+      const share = so.w / total;
+      const bw = si.w * share;
+      if (bw < 0.15) return;
+      const h0 = th(bw * (so.h / th(so.w)) / (bw / so.w) * (bw / so.w)) ; /* 厚度按瓦数 */
+      const t0 = so.h * (bw / so.w);
+      const t1 = si.h * (bw / si.w);
+      const sy = so.cy - so.h / 2 + so.used + t0 / 2;
+      const ty = si.cy - si.h / 2 + si.used + t1 / 2;
+      so.used += t0; si.used += t1;
+
+      const id = `g${bandId++}`;
+      defs += `<linearGradient id="${id}" x1="0" y1="0" x2="1" y2="0">
+        <stop offset="0" stop-color="${so.color}" stop-opacity="0.42"/>
+        <stop offset="1" stop-color="${si.color}" stop-opacity="0.50"/>
+      </linearGradient>`;
+      bands += `<path d="M${x0} ${sy - t0/2} C ${mx} ${sy - t0/2} ${mx} ${ty - t1/2} ${x1} ${ty - t1/2}
+                        L ${x1} ${ty + t1/2} C ${mx} ${ty + t1/2} ${mx} ${sy + t0/2} ${x0} ${sy + t0/2} Z"
+                 fill="url(#${id})"/>`;
+      /* 中线流动虚线：速度 ∝ 瓦数 */
+      const dur = Math.max(1.2, Math.min(5, 70 / Math.max(bw, 4)));
+      dashes += `<path d="M${x0} ${sy} C ${mx} ${sy} ${mx} ${ty} ${x1} ${ty}" fill="none"
+                   stroke="rgba(255,255,255,0.55)" stroke-width="1.2" stroke-linecap="round"
+                   stroke-dasharray="4 14" opacity="${Math.min(0.9, 0.35 + bw / 40)}">
+                   <animate attributeName="stroke-dashoffset" from="18" to="0" dur="${dur.toFixed(2)}s" repeatCount="indefinite"/>
+                 </path>`;
+    });
+  });
+
+  /* 端点标签：名称 + 瓦数 */
+  src.forEach((so) => {
+    labels += `<text x="${x0 - 8}" y="${so.cy - 3}" text-anchor="end" font-size="9.5" fill="rgba(255,255,255,0.68)">${so.name}${so.maxed ? ' ⚠' : ''}</text>
+               <text x="${x0 - 8}" y="${so.cy + 9}" text-anchor="end" font-size="11" font-weight="600" fill="rgba(255,255,255,0.90)" font-family="SF Mono,ui-monospace,Menlo,monospace">${so.w.toFixed(1)}W</text>
+               <rect x="${x0 - 3}" y="${so.cy - so.h/2}" width="3" height="${so.h}" rx="1.5" fill="${so.color}"/>`;
+  });
+  snk.forEach((si) => {
+    labels += `<text x="${x1 + 8}" y="${si.cy - 3}" font-size="9.5" fill="rgba(255,255,255,0.68)">${si.name}</text>
+               <text x="${x1 + 8}" y="${si.cy + 9}" font-size="11" font-weight="600" fill="rgba(255,255,255,0.90)" font-family="SF Mono,ui-monospace,Menlo,monospace">${si.w.toFixed(1)}W</text>
+               <rect x="${x1}" y="${si.cy - si.h/2}" width="3" height="${si.h}" rx="1.5" fill="${si.color}"/>`;
+  });
+
+  document.getElementById('sankey').innerHTML = `<defs>${defs}</defs>${bands}${dashes}${labels}`;
+}
+
+/* ====== 变体 B：收支双条 ====== */
+function renderBalance(s) {
+  const total = s.sources.reduce((a, b) => a + b.w, 0);
+  const seg = (it) => `<div class="bal-seg" style="width:${(it.w / total) * 100}%;background:${it.color}"></div>`;
+  const chips = (items) => items.map((it) =>
+    `<span class="bal-chip"><i style="background:${it.color}"></i>${it.name} <b class="mono">${it.w.toFixed(1)}W</b></span>`).join('');
+  document.getElementById('balance').innerHTML = `
+    <div class="bal-row">
+      <span class="bl">来源</span>
+      <div class="bal-track">${s.sources.map(seg).join('')}</div>
+      <span class="bal-val mono">${total.toFixed(1)}W</span>
+    </div>
+    <div class="bal-row">
+      <span class="bl">去向</span>
+      <div class="bal-track">${s.sinks.map(seg).join('')}</div>
+      <span class="bal-val mono">${s.sinks.reduce((a,b)=>a+b.w,0).toFixed(1)}W</span>
+    </div>
+    <div class="bal-legend">${chips(s.sources)}${chips(s.sinks)}</div>`;
+}
+
+/* ====== 变体 C：电源环 ====== */
+function renderRing(s) {
+  const r = s.ring;
+  const C = 48, R1 = 40, R2 = 30;   /* 外环=整机负载表盘，内环=电量 */
+  const arc = (radius, startDeg, sweepDeg) => {
+    const a0 = (startDeg - 90) * Math.PI / 180;
+    const a1 = (startDeg + sweepDeg - 90) * Math.PI / 180;
+    const large = sweepDeg > 180 ? 1 : 0;
+    return `M ${C + radius * Math.cos(a0)} ${C + radius * Math.sin(a0)}
+            A ${radius} ${radius} 0 ${large} 1 ${C + radius * Math.cos(a1)} ${C + radius * Math.sin(a1)}`;
+  };
+  /* 外环表盘：270°，量程 = 适配器铭牌或 60W */
+  const range = r.rated ?? 60;
+  const sweep = Math.min(270, (r.sys / range) * 270);
+  const sysColor = r.crit ? TINT.crit : (r.sys / range > 0.75 ? TINT.warn : TINT.sys);
+  /* 内环电量 */
+  const lvSweep = 270 * r.level;
+  const lvColor = r.crit ? TINT.crit : TINT.bat;
+  /* 轨道粒子：充电顺时针、放电逆时针，速度 ∝ |batFlow| */
+  const charging = r.batFlow > 0;
+  const flow = Math.abs(r.batFlow);
+  const dur = Math.max(2, Math.min(8, 90 / Math.max(flow, 5)));
+  const orbitPath = arc(35, -135, 270);
+  let particles = '';
+  if (flow > 0.05) {
+    for (let i = 0; i < 3; i++) {
+      const begin = (-(dur / 3) * i).toFixed(2);
+      particles += `<circle r="1.7" fill="${charging ? TINT.bat : (r.crit ? TINT.crit : TINT.bat)}">
+        <animateMotion dur="${dur.toFixed(2)}s" begin="${begin}s" repeatCount="indefinite"
+          path="${orbitPath}" ${charging ? '' : 'keyPoints="1;0" keyTimes="0;1"'}/>
+      </circle>`;
+    }
+  }
+  document.getElementById('ring').innerHTML = `
+    <path d="${arc(R1, -135, 270)}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="5" stroke-linecap="round"/>
+    <path d="${arc(R1, -135, Math.max(2, sweep))}" fill="none" stroke="${sysColor}" stroke-width="5" stroke-linecap="round"/>
+    <path d="${arc(R2, -135, 270)}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="3.5" stroke-linecap="round"/>
+    <path d="${arc(R2, -135, Math.max(2, lvSweep))}" fill="none" stroke="${lvColor}" stroke-width="3.5" stroke-linecap="round" stroke-opacity="0.85"/>
+    ${particles}
+    <text x="${C}" y="${C - 1}" text-anchor="middle" font-size="15" font-weight="650" fill="rgba(255,255,255,0.92)" font-family="SF Mono,ui-monospace,Menlo,monospace">${r.sys.toFixed(1)}</text>
+    <text x="${C}" y="${C + 12}" text-anchor="middle" font-size="8.5" fill="rgba(255,255,255,0.55)">系统 W</text>`;
+
+  const stat = (l, v, color) => `<div class="ring-stat"><span class="rl">${l}</span><span class="rv mono" ${color ? `style="color:${color}"` : ''}>${v}</span></div>`;
+  document.getElementById('ring-side').innerHTML =
+    stat('适配器输入', r.adapterIn != null ? `${r.adapterIn.toFixed(1)}W` : '—', r.crit ? TINT.warn : null) +
+    stat('电池流向', `${r.batFlow > 0 ? '+' : '−'}${Math.abs(r.batFlow).toFixed(1)}W`, r.crit ? TINT.crit : (charging ? TINT.bat : null)) +
+    stat('电量', `${Math.round(r.level * 100)}%`, null);
+}
+
+/* ====== 渲染 + 切换 ====== */
+function render(key) {
+  const s = SCENARIOS[key];
+  renderHeads(s);
+  renderSankey(s);
+  renderBalance(s);
+  renderRing(s);
+}
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || btn.dataset.s === current) return;
+  current = btn.dataset.s;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b === btn));
+  render(current);
+});
+render(current);
+</script>
+</body>
+</html>

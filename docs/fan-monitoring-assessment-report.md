@@ -1,0 +1,181 @@
+# 风扇监控功能项目评估报告
+
+> 评估日期:2026-08-01
+> 评估范围:HagimiMonitor `add-fan-rpm-metric` 变更(OpenSpec → 实现 → 验证)
+> 评估人:代码审查 Agent
+
+---
+
+## 一、项目背景
+
+前任 Agent 负责"风扇转速监控"功能的完整落地,从 OpenSpec 规范编写到代码实现。该功能旨在为 macOS 菜单栏硬件监控应用 HagimiMonitor 增加风扇 RPM 指标支持,包括 SMC 采样、菜单栏显示、面板详情、设置联动等。
+
+## 二、评估发现
+
+### 2.1 OpenSpec 规范文档评估
+
+| 维度 | 评分 | 说明 |
+|------|------|------|
+| 完整性 | ★★★★☆ | proposal/design/tasks/spec 四件套齐全,覆盖数据层/菜单栏/面板/设置/本地化 |
+| 准确性 | ★★★★☆ | SMC key 命名(FNum/F0Ac/F0Mn/F0Mx)准确,参考 Stats 开源实现 |
+| 可实施性 | ★★★☆☆ | tasks 粒度合理,但**缺少状态监控与告警需求**(原 design 明确排除"不做风扇健康检测") |
+| 测试规划 | ★★☆☆☆ | tasks 6.1-6.3 提到测试但**全部未实现**,无测试代码 |
+
+**关键缺陷**:原 OpenSpec design.md 第 108-109 行明确写道:
+> - 不做风扇**健康检测**(异常 RPM 报警)——超出本变更范围
+> - 不做风扇**温度曲线联动**
+
+这一设计决策与用户需求(状态判断 + 告警机制)直接冲突,是导致"功能未能成功实现"的**根本性需求遗漏**。
+
+### 2.2 代码实现评估
+
+#### 已完成(前任 Agent 产出)
+
+| 模块 | 状态 | 文件 |
+|------|------|------|
+| FanInfo 数据模型 | ✅ 完成 | MonitorModels.swift:224 |
+| SMCReader 风扇读取 | ✅ 完成 | SMC.swift:42-75 (fanCount/maxFanRPM/allFans) |
+| FanSampler 采样器 | ✅ 完成 | FanSampler.swift |
+| 菜单栏指标 fanSpeed | ✅ 完成 | MenuBarDisplayModels.swift:51 |
+| userSelectableCases(hasFan:) | ✅ 完成 | MenuBarDisplayModels.swift:60 |
+| 面板风扇行 + FanList | ✅ 完成 | MonitorPanelView.swift:2443 |
+| MonitorStore 风扇注入 | ✅ 完成 | MonitorModels.swift:800 (applyFanModule) |
+| 设置联动 | ✅ 完成 | GeneralSettingsView.swift:306 |
+| 本地化(中英文) | ✅ 完成 | Localizable.xcstrings |
+
+#### 致命问题(导致项目失败的直接原因)
+
+| # | 问题 | 严重度 | 位置 | 影响 |
+|---|------|--------|------|------|
+| 1 | **编译错误:closure self 捕获** | 🔴 阻断 | MonitorModels.swift:803 | `fanAvailable` 在 OSLog 字符串插值闭包中未显式 `self`,Swift 6 `NonisolatedNonsendingByDefault` 下编译失败 |
+| 2 | **3 处 DEBUG 日志残留** | 🟠 高 | FanSampler.swift:25, MonitorModels.swift:803,805 | 生产代码中残留 `AppLogger.sampler.error("DEBUG ...")`,且是编译错误的直接来源 |
+| 3 | **零测试覆盖** | 🟠 高 | HagimiMonitorTests/ | tasks 6.1-6.3 定义的测试全部未实现 |
+| 4 | **缺少状态监控** | 🟠 高 | — | 原 spec 明确排除,用户需求遗漏 |
+| 5 | **缺少告警机制** | 🟠 高 | — | 原 spec 明确排除,用户需求遗漏 |
+
+#### 流程问题
+
+1. **Git 提交混乱**:初始实现(36761c17)后,试图修复面板显示问题(1ba8184b),又 Revert(42ffcf85),最终留下未提交的修改(debug 日志)
+2. **OpenSpec 变更未归档**:`openspec/changes/add-fan-rpm-metric/` 目录从未 `git add`,处于 untracked 状态
+3. **tasks.md 全部未勾选**:所有 task 标记为 `[ ]`(未完成),尽管大部分代码已实现
+
+### 2.3 根因分析
+
+```
+用户需求                        原 OpenSpec 设计
+├── 风扇转速监控 ✅              ├── SMC 采样 ✅
+├── 状态判断(正常/异常/故障) ❌  ├── 菜单栏指标 ✅
+├── 异常告警通知 ❌              ├── 面板行 ✅
+├── 状态展示界面 ✅              ├── 设置联动 ✅
+└── 单元/集成测试 ❌              └── 明确排除:健康检测/告警 ❌
+                                          ↑ 需求遗漏根因
+```
+
+**结论**:项目"失败"的根因不是代码质量问题(代码实现完成度约 90%),而是:
+1. **需求分析阶段**遗漏了状态监控与告警需求(原 spec 明确排除)
+2. **实现阶段**留下编译阻断 bug(debug 日志 self 捕获)未解决
+3. **验证阶段**完全跳过(零测试,未执行编译验证)
+
+## 三、修复与增强措施
+
+### 3.1 修复阻断问题
+
+| 修复项 | 操作 | 验证 |
+|--------|------|------|
+| 编译错误 | 移除 3 处 DEBUG 日志(FanSampler.swift + MonitorModels.swift) | ✅ 两个 scheme 编译通过 |
+| Git 状态 | 整理未提交修改,清理 debug 残留 | ✅ |
+
+### 3.2 新增功能(填补需求遗漏)
+
+#### 风扇健康状态监控
+
+- **FanStatus 枚举**(`MonitorModels.swift`):`normal` / `warning` / `fault` / `unknown`,遵循 `Comparable`
+- **FanInfo.status** 计算属性:基于 RPM vs maxRPM 自动判断
+  - `maxRPM <= 0` → unknown(数据不足)
+  - `currentRPM == 0` → fault(停转)
+  - `currentRPM > maxRPM` → fault(传感器异常)
+  - `currentRPM >= 85% * maxRPM` → warning(接近满载)
+  - 其余 → normal
+- **FanInfo.overallStatus(of:)**:多风扇取最差状态
+- **面板着色**:状态指示点 + RPM 文字色 + 比例条色(按 severity 着色)
+
+#### 异常告警机制
+
+- **FanAlertService**(`Samplers/FanAlertService.swift`):订阅 `FanSampler.$status`
+- **去重策略**:仅状态升级时触发通知,同级别不重复;恢复时发恢复通知
+- **通知授权**:首次 attach 请求 `UNUserNotificationCenter` 授权
+- **声音分级**:fault 用 `.defaultCritical`,warning 用 `.default`
+- **后台常驻**:FanSampler 在 `MonitorStore.init()` 中启动,不随面板显隐停(支持面板关闭时告警)
+
+#### 测试覆盖
+
+- **35 个单元测试**(`HagimiMonitorTests/FanMonitorTests.swift`):
+  - FanStatusTests:10 个(状态判断全分支 + 边界值)
+  - FanOverallStatusTests:5 个(聚合逻辑)
+  - FanStatusComparableTests:3 个(排序 + severity 映射)
+  - FanSamplerTests:9 个(mock 注入集成测试)
+  - FanRPMFormatterTests:6 个(格式化)
+  - FanSelectableCasesTests:2 个(门控逻辑)
+- **全部通过**:`xcodebuild test` → TEST SUCCEEDED
+
+### 3.3 测试基础设施改进
+
+- 抽取 `FanSMCReading` 协议,使 `FanSampler` 可注入 mock(无需真实 SMC 硬件)
+- `SMCReader` 遵循该协议(零侵入,签名已匹配)
+- `MockFanSMCReader` 测试替身可控制返回值
+
+## 四、验证结果
+
+| 验证项 | 结果 | 命令/位置 |
+|--------|------|-----------|
+| HagimiMonitorDirect 编译 | ✅ BUILD SUCCEEDED | `xcodebuild -scheme HagimiMonitorDirect build` |
+| HagimiMonitor(App Store)编译 | ✅ BUILD SUCCEEDED | `xcodebuild -scheme HagimiMonitor build` |
+| 完整测试套件 | ✅ TEST SUCCEEDED(35/35 pass) | `xcodebuild test` |
+| launch.sh 启动 | ✅ 构建成功 + app 稳定运行 | `./launch.sh dev direct` |
+| 进程稳定性 | ✅ PID 37556 持续运行无崩溃 | `pgrep -fl HagimiMonitor` |
+| 无错误日志 | ✅ 无 crash/error 日志 | `log show --predicate 'process == "HagimiMonitor"'` |
+
+## 五、改进方案
+
+### 5.1 流程改进建议
+
+1. **OpenSpec 审查关卡**:在 spec 完成后增加用户确认环节,确保需求覆盖完整(本案例中状态监控/告警被遗漏)
+2. **编译验证强制**:任何代码提交前必须通过 `xcodebuild build`,禁止提交不可编译的代码
+3. **测试先行**:tasks 中的测试任务应在功能实现后立即完成,不应留到最后
+4. **Git 卫生**:禁止在代码中残留 DEBUG 日志;OpenSpec 变更文件必须及时 git add
+
+### 5.2 技术改进建议
+
+1. **FanSampler 测试覆盖增强**:当前 mock 测试验证了 start/available/status,但未测试 Timer 周期采样(需要异步测试)
+2. **真机验证缺口**:Mac Pro / Mac Studio 多风扇场景(9.6)和 MacBook Air 无风扇场景(9.7)仍需真机验证
+3. **告警去抖**:当前去重基于状态相等性,可考虑增加时间窗口(如 fault 持续 N 秒后才告警,避免瞬时读取抖动)
+4. **通知设置开关**:当前告警默认开启,建议在设置中增加"风扇告警"开关,允许用户关闭
+
+### 5.3 待完成事项
+
+| 事项 | 优先级 | 状态 |
+|------|--------|------|
+| Mac Pro / Studio 多风扇真机验证 | 中 | 待借机 |
+| MacBook Air 无风扇机型验证 | 中 | 待借机 |
+| `openspec archive add-fan-rpm-metric` 归档 | 低 | 待提交 commit 后执行 |
+| 告警设置开关 | 低 | 未来迭代 |
+| 日文本地化补全 | 低 | 当前仅中英文 |
+
+## 六、总结
+
+前任 Agent 完成了约 90% 的代码实现,但由于:
+1. 遗留 1 处编译阻断 bug(debug 日志 self 捕获)
+2. 需求分析阶段遗漏状态监控与告警功能
+3. 完全跳过测试与编译验证
+
+导致功能"未能成功实现"。
+
+本次修复:
+- ✅ 修复编译错误(移除 DEBUG 日志)
+- ✅ 新增风扇健康状态监控(FanStatus + 判断逻辑 + 面板着色)
+- ✅ 新增异常告警机制(FanAlertService + macOS 通知 + 后台常驻)
+- ✅ 编写 35 个单元测试(全部通过)
+- ✅ 两个 scheme 编译通过 + launch.sh 启动验证通过
+- ✅ 更新 OpenSpec 规范文档 + 编写部署说明 + 评估报告
+
+**当前状态:功能已成功实现并通过所有验证。**

@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 小工具抽屉入口方案对比</title>
+<style>
+  /* ====== 设计令牌：对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A;
+    --tint-gpu: #5D8CF0;
+    --tint-mem: #42A39A;
+    --tint-net: #43A6A0;
+    --tint-bat: #65AF52;
+    --tint-lock: #D27A4A;
+    --tint-awake: #5D8CF0;
+    --sev-warn: #B8872E;
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    padding: 40px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  h1 { text-align: center; font-size: 20px; font-weight: 700; letter-spacing: 0.5px; }
+  .sub { text-align: center; font-size: 12px; color: var(--text-caption); margin-top: 8px; line-height: 1.7; }
+  .sub b { color: var(--text-secondary); font-weight: 600; }
+
+  .stage {
+    margin-top: 36px;
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 48px 56px;
+  }
+  .variant { width: 380px; display: flex; flex-direction: column; align-items: center; }
+  .vhead {
+    align-self: stretch;
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 14px; padding-left: 4px;
+  }
+  .vhead .tag {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    background: var(--row-glass); border: 0.5px solid rgba(255,255,255,0.12);
+    border-radius: 6px; padding: 2px 7px; color: var(--text-secondary);
+  }
+  .vhead .name { font-size: 14px; font-weight: 650; }
+  .vhead .hint { margin-left: auto; font-size: 10.5px; color: var(--text-caption); }
+
+  /* mock 区固定高度，保证四个方案纵向对齐、抽屉展开不推挤说明文字 */
+  .mock { position: relative; height: 430px; width: 100%; display: flex; justify-content: center; }
+
+  /* ====== 面板本体 ====== */
+  .panel {
+    position: relative;
+    width: 320px;
+    align-self: flex-start;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    padding: 10px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .panel-header { display: flex; align-items: center; padding: 2px 2px 0; }
+  .live-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #6BBF59; margin-right: 5px;
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .panel-header .sys { font-size: 9px; letter-spacing: 1.1px; color: var(--text-caption); font-weight: 500; }
+  .panel-header .time { margin-left: auto; font-size: 10px; color: var(--text-caption); }
+
+  .row {
+    background: var(--row-glass); border-radius: var(--row-radius);
+    border: 0.5px solid rgba(255, 255, 255, 0.06);
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+  }
+  .row .dot { width: 8px; height: 8px; border-radius: 3px; flex-shrink: 0; }
+  .row .label { font-size: 12px; font-weight: 600; }
+  .row .meter { flex: 1; height: 3px; border-radius: 2px; background: var(--track-fill); overflow: hidden; }
+  .row .meter > div { height: 100%; border-radius: 2px; }
+  .row .value { font-size: 12px; font-weight: 600; color: var(--text-value); width: 52px; text-align: right; }
+
+  /* 底部胶囊按钮排 */
+  .btnrow { display: flex; gap: 8px; padding-top: 2px; }
+  .cap {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: 30px; border-radius: 15px;
+    background: var(--row-glass); border: 0.5px solid rgba(255,255,255,0.08);
+    font-size: 11.5px; font-weight: 550; color: var(--text-primary);
+    cursor: pointer; user-select: none; white-space: nowrap;
+    transition: background 0.18s ease, border-color 0.18s ease;
+    position: relative;
+  }
+  .cap:hover { background: rgba(122, 145, 180, 0.2); }
+  .cap svg { flex-shrink: 0; opacity: 0.9; }
+  .cap.tools-btn.open {
+    background: rgba(122, 145, 180, 0.28);
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+  /* 抽屉收起但有工具激活时的角标 */
+  .cap .badge {
+    position: absolute; top: 5px; right: 9px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--tint-awake);
+    box-shadow: 0 0 6px var(--tint-awake);
+    opacity: 0; transform: scale(0.4);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .cap .badge.show { opacity: 1; transform: scale(1); }
+
+  /* ====== 工具项（通用）====== */
+  .tools-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tool {
+    display: flex; align-items: center; gap: 9px;
+    padding: 9px 10px; border-radius: 12px;
+    background: var(--row-glass);
+    border: 0.5px solid rgba(255, 255, 255, 0.07);
+    cursor: pointer; user-select: none;
+    transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .tool:hover { background: rgba(122, 145, 180, 0.19); }
+  .tool .ticon {
+    width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255, 255, 255, 0.07);
+    transition: background 0.2s ease;
+  }
+  .tool .ticon svg { display: block; }
+  .tool .ticon svg * { stroke: var(--text-secondary); transition: stroke 0.2s ease; }
+  .tool .tmeta { min-width: 0; }
+  .tool .tname { font-size: 11.5px; font-weight: 600; white-space: nowrap; }
+  .tool .tstate { font-size: 9.5px; color: var(--text-caption); margin-top: 1px; white-space: nowrap; }
+  .tool.on[data-tool="lock"]  { border-color: rgba(210, 122, 74, 0.55); box-shadow: inset 0 0 0 0.5px rgba(210,122,74,0.3), 0 0 14px rgba(210,122,74,0.12); }
+  .tool.on[data-tool="awake"] { border-color: rgba(93, 140, 240, 0.55); box-shadow: inset 0 0 0 0.5px rgba(93,140,240,0.3), 0 0 14px rgba(93,140,240,0.12); }
+  .tool.on[data-tool="lock"]  .ticon { background: rgba(210, 122, 74, 0.18); }
+  .tool.on[data-tool="awake"] .ticon { background: rgba(93, 140, 240, 0.18); }
+  .tool.on[data-tool="lock"]  .ticon svg * { stroke: var(--tint-lock); }
+  .tool.on[data-tool="awake"] .ticon svg * { stroke: var(--tint-awake); }
+  .tool.on[data-tool="lock"]  .tstate { color: var(--tint-lock); }
+  .tool.on[data-tool="awake"] .tstate { color: var(--tint-awake); }
+
+  .drawer-title {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 9.5px; color: var(--text-caption); letter-spacing: 0.8px;
+    margin-bottom: 7px;
+  }
+  .drawer-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--row-separator), transparent); }
+
+  /* ====== A：内嵌抽屉 ====== */
+  .drawer-inline {
+    display: grid; grid-template-rows: 0fr; opacity: 0;
+    transition: grid-template-rows 0.32s cubic-bezier(0.3, 0.9, 0.4, 1), opacity 0.24s ease;
+  }
+  .drawer-inline.open { grid-template-rows: 1fr; opacity: 1; }
+  .drawer-inline > .clip { overflow: hidden; }
+  .drawer-inline .inner { padding-top: 8px; }
+  .drawer-inline .inner .sep { height: 1px; background: var(--row-separator); margin-bottom: 8px; }
+
+  /* ====== B：外部分离卡片 ====== */
+  .drawer-external {
+    position: absolute;
+    left: 50%; transform: translateX(-50%) translateY(-6px);
+    width: 320px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 18px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    padding: 10px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.24s ease, transform 0.28s cubic-bezier(0.3, 0.9, 0.4, 1);
+  }
+  .drawer-external.open { opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0); }
+
+  /* ====== C：侧边 hover 呼出 ====== */
+  .side-zone {
+    position: absolute; top: 0; bottom: 0; left: 100%; width: 26px;
+    /* 把手 + 透明热区，hover 进入即可呼出侧栏 */
+  }
+  .side-handle {
+    position: absolute; top: 50%; left: 4px; transform: translateY(-50%);
+    width: 5px; height: 44px; border-radius: 3px;
+    background: rgba(255, 255, 255, 0.16);
+    transition: background 0.2s ease, height 0.2s ease;
+  }
+  .side-handle .badge {
+    position: absolute; top: -9px; left: 50%; transform: translateX(-50%) scale(0.4);
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--tint-awake); box-shadow: 0 0 6px var(--tint-awake);
+    opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .side-handle .badge.show { opacity: 1; transform: translateX(-50%) scale(1); }
+  .side-wrap:hover .side-handle { background: rgba(255, 255, 255, 0.34); height: 56px; }
+  .side-drawer {
+    position: absolute; top: 8px; left: calc(100% + 8px);
+    width: 148px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 16px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    padding: 9px;
+    opacity: 0; transform: translateX(-8px); pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.3, 0.9, 0.4, 1);
+  }
+  .side-wrap:hover .side-drawer, .side-drawer:hover {
+    opacity: 1; transform: translateX(0); pointer-events: auto;
+  }
+  .side-drawer .tools-grid { grid-template-columns: 1fr; }
+
+  /* ====== D：底边把手 ====== */
+  .bottom-zone {
+    position: absolute; top: 100%; left: 0; right: 0; height: 30px;
+    display: flex; justify-content: center;
+  }
+  .bottom-handle {
+    margin-top: 5px;
+    width: 44px; height: 5px; border-radius: 3px;
+    background: rgba(255, 255, 255, 0.16);
+    position: relative;
+    transition: background 0.2s ease, width 0.2s ease;
+  }
+  .bottom-handle .badge {
+    position: absolute; top: 50%; left: calc(100% + 7px); transform: translateY(-50%) scale(0.4);
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--tint-awake); box-shadow: 0 0 6px var(--tint-awake);
+    opacity: 0; transition: opacity 0.25s ease, transform 0.25s ease;
+  }
+  .bottom-handle .badge.show { opacity: 1; transform: translateY(-50%) scale(1); }
+  .bottom-wrap:hover .bottom-handle { background: rgba(255, 255, 255, 0.34); width: 56px; }
+  .bottom-drawer {
+    position: absolute; top: calc(100% + 14px); left: 50%;
+    transform: translateX(-50%) translateY(-6px);
+    width: 320px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 18px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+    padding: 10px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.22s ease, transform 0.26s cubic-bezier(0.3, 0.9, 0.4, 1);
+  }
+  .bottom-wrap:hover .bottom-drawer, .bottom-drawer:hover {
+    opacity: 1; pointer-events: auto; transform: translateX(-50%) translateY(0);
+  }
+
+  /* 说明区 */
+  .notes {
+    align-self: stretch;
+    margin-top: 2px; padding: 0 4px;
+    font-size: 11px; color: var(--text-caption); line-height: 1.75;
+    list-style: none;
+  }
+  .notes li { padding-left: 16px; position: relative; }
+  .notes li::before { content: '·'; position: absolute; left: 5px; }
+  .notes li.good::before { content: '✓'; color: var(--tint-bat); font-size: 9px; top: 1px; }
+  .notes li.bad::before { content: '✕'; color: var(--sev-warn); font-size: 9px; top: 1px; }
+</style>
+</head>
+<body>
+
+<h1>小工具抽屉 · 入口方案对比</h1>
+<p class="sub">
+  两个内置工具：<b>键盘锁定</b>（Direct 版）与 <b>防休眠</b>（双版本）。点击工具块可切换激活态，<br>
+  激活后收起抽屉，观察各方案的<b>角标提示</b>。C / D 为 hover 呼出，无需按钮。
+</p>
+
+<div class="stage">
+
+  <!-- ============ 方案 A：底部按钮 + 内嵌抽屉 ============ -->
+  <section class="variant" data-variant="a">
+    <div class="vhead">
+      <span class="tag">A</span><span class="name">内嵌抽屉</span>
+      <span class="hint">点「工具」，面板向下长高</span>
+    </div>
+    <div class="mock">
+      <div class="panel">
+        <div class="panel-header"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">14:32</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-cpu)"></span><span class="label">处理器</span><div class="meter"><div style="width:34%;background:var(--tint-cpu)"></div></div><span class="value mono">34%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-mem)"></span><span class="label">内存</span><div class="meter"><div style="width:58%;background:var(--tint-mem)"></div></div><span class="value mono">58%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-net)"></span><span class="label">网络</span><div class="meter"><div style="width:12%;background:var(--tint-net)"></div></div><span class="value mono">2.1 M</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-bat)"></span><span class="label">电池</span><div class="meter"><div style="width:76%;background:var(--tint-bat)"></div></div><span class="value mono">76%</span></div>
+        <div class="btnrow">
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1 6h2l1.5-3.5L7 9.5 8.5 6H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            活动监视器
+          </div>
+          <div class="cap tools-btn" data-role="toggle">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M8.6 1.7a2.6 2.6 0 0 0-3.3 3.3L1.6 8.7a1.2 1.2 0 0 0 1.7 1.7l3.7-3.7a2.6 2.6 0 0 0 3.3-3.3L8.5 5.2 6.8 3.5l1.8-1.8Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+            工具
+            <span class="badge" data-role="badge"></span>
+          </div>
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M9.5 2.5l-1 1M3.5 8.5l-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            设置
+          </div>
+        </div>
+        <div class="drawer-inline" data-role="drawer">
+          <div class="clip"><div class="inner">
+            <div class="sep"></div>
+            <div class="drawer-title">小工具</div>
+            <div class="tools-grid">
+              <div class="tool" data-tool="lock">
+                <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="6" width="9" height="6" rx="1.5" stroke-width="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke-width="1.2"/><circle cx="7" cy="9" r="0.9" stroke-width="1.1"/></svg></span>
+                <span class="tmeta"><span class="tname">键盘锁定</span><br><span class="tstate" data-role="state" data-on="已锁定 · 点击解锁" data-off="未启用">未启用</span></span>
+              </div>
+              <div class="tool" data-tool="awake">
+                <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3.2" stroke-width="1.2"/><path d="M7 1v1.3M7 11.7V13M1 7h1.3M11.7 7H13M2.9 2.9l.9.9M10.2 10.2l.9.9M11.1 2.9l-.9.9M3.8 10.2l-.9.9" stroke-width="1.1" stroke-linecap="round"/></svg></span>
+                <span class="tmeta"><span class="tname">防休眠</span><br><span class="tstate" data-role="state" data-on="激活中" data-off="未启用">未启用</span></span>
+              </div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li class="good">最贴合现有架构：复用面板"内容变高→窗口跟随"动画，成本最低</li>
+      <li class="good">入口显式可发现，抽屉与面板一体，视觉最稳</li>
+      <li class="bad">面板本就偏长时，再长高会加剧纵向压力</li>
+    </ul>
+  </section>
+
+  <!-- ============ 方案 B：外部分离卡片 ============ -->
+  <section class="variant" data-variant="b">
+    <div class="vhead">
+      <span class="tag">B</span><span class="name">外部分离卡片</span>
+      <span class="hint">点「工具」，下方弹出独立玻璃卡</span>
+    </div>
+    <div class="mock">
+      <div class="panel" style="position:relative">
+        <div class="panel-header"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">14:32</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-cpu)"></span><span class="label">处理器</span><div class="meter"><div style="width:34%;background:var(--tint-cpu)"></div></div><span class="value mono">34%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-mem)"></span><span class="label">内存</span><div class="meter"><div style="width:58%;background:var(--tint-mem)"></div></div><span class="value mono">58%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-net)"></span><span class="label">网络</span><div class="meter"><div style="width:12%;background:var(--tint-net)"></div></div><span class="value mono">2.1 M</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-bat)"></span><span class="label">电池</span><div class="meter"><div style="width:76%;background:var(--tint-bat)"></div></div><span class="value mono">76%</span></div>
+        <div class="btnrow">
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1 6h2l1.5-3.5L7 9.5 8.5 6H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            活动监视器
+          </div>
+          <div class="cap tools-btn" data-role="toggle">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M8.6 1.7a2.6 2.6 0 0 0-3.3 3.3L1.6 8.7a1.2 1.2 0 0 0 1.7 1.7l3.7-3.7a2.6 2.6 0 0 0 3.3-3.3L8.5 5.2 6.8 3.5l1.8-1.8Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>
+            工具
+            <span class="badge" data-role="badge"></span>
+          </div>
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M9.5 2.5l-1 1M3.5 8.5l-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            设置
+          </div>
+        </div>
+        <div class="drawer-external" style="top: calc(100% + 8px);" data-role="drawer">
+          <div class="drawer-title">小工具</div>
+          <div class="tools-grid">
+            <div class="tool" data-tool="lock">
+              <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="6" width="9" height="6" rx="1.5" stroke-width="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke-width="1.2"/><circle cx="7" cy="9" r="0.9" stroke-width="1.1"/></svg></span>
+              <span class="tmeta"><span class="tname">键盘锁定</span><br><span class="tstate" data-role="state" data-on="已锁定 · 点击解锁" data-off="未启用">未启用</span></span>
+            </div>
+            <div class="tool" data-tool="awake">
+              <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3.2" stroke-width="1.2"/><path d="M7 1v1.3M7 11.7V13M1 7h1.3M11.7 7H13M2.9 2.9l.9.9M10.2 10.2l.9.9M11.1 2.9l-.9.9M3.8 10.2l-.9.9" stroke-width="1.1" stroke-linecap="round"/></svg></span>
+              <span class="tmeta"><span class="tname">防休眠</span><br><span class="tstate" data-role="state" data-on="激活中" data-off="未启用">未启用</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li class="good">"抽屉"隐喻最强，主面板高度零扰动，视觉有呼吸感</li>
+      <li class="good">Liquid Glass 分离形状有先例（glassEffectID 变形），观感高级</li>
+      <li class="bad">实现上需扩窗口或开子窗口，点击外部关面板的判定要额外处理</li>
+    </ul>
+  </section>
+
+  <!-- ============ 方案 C：侧边 hover 呼出 ============ -->
+  <section class="variant" data-variant="c">
+    <div class="vhead">
+      <span class="tag">C</span><span class="name">侧边 hover 呼出</span>
+      <span class="hint">悬停右侧把手，无需按钮</span>
+    </div>
+    <div class="mock">
+      <div class="panel side-wrap">
+        <div class="panel-header"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">14:32</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-cpu)"></span><span class="label">处理器</span><div class="meter"><div style="width:34%;background:var(--tint-cpu)"></div></div><span class="value mono">34%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-mem)"></span><span class="label">内存</span><div class="meter"><div style="width:58%;background:var(--tint-mem)"></div></div><span class="value mono">58%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-net)"></span><span class="label">网络</span><div class="meter"><div style="width:12%;background:var(--tint-net)"></div></div><span class="value mono">2.1 M</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-bat)"></span><span class="label">电池</span><div class="meter"><div style="width:76%;background:var(--tint-bat)"></div></div><span class="value mono">76%</span></div>
+        <div class="btnrow">
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1 6h2l1.5-3.5L7 9.5 8.5 6H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            活动监视器
+          </div>
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M9.5 2.5l-1 1M3.5 8.5l-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            设置
+          </div>
+        </div>
+        <div class="side-zone">
+          <div class="side-handle"><span class="badge" data-role="badge"></span></div>
+        </div>
+        <div class="side-drawer" data-role="drawer">
+          <div class="drawer-title">小工具</div>
+          <div class="tools-grid">
+            <div class="tool" data-tool="lock">
+              <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="6" width="9" height="6" rx="1.5" stroke-width="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke-width="1.2"/><circle cx="7" cy="9" r="0.9" stroke-width="1.1"/></svg></span>
+              <span class="tmeta"><span class="tname">键盘锁定</span><br><span class="tstate" data-role="state" data-on="已锁定" data-off="未启用">未启用</span></span>
+            </div>
+            <div class="tool" data-tool="awake">
+              <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3.2" stroke-width="1.2"/><path d="M7 1v1.3M7 11.7V13M1 7h1.3M11.7 7H13M2.9 2.9l.9.9M10.2 10.2l.9.9M11.1 2.9l-.9.9M3.8 10.2l-.9.9" stroke-width="1.1" stroke-linecap="round"/></svg></span>
+              <span class="tmeta"><span class="tname">防休眠</span><br><span class="tstate" data-role="state" data-on="激活中" data-off="未启用">未启用</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li class="good">零按钮占用，底部按钮排维持双列现状</li>
+      <li class="bad">可发现性最弱：把手很细，新用户几乎不会知道</li>
+      <li class="bad">hover 意外触发/误关频繁；面板贴屏幕右缘时侧栏没地方弹</li>
+    </ul>
+  </section>
+
+  <!-- ============ 方案 D：底边把手 hover 呼出 ============ -->
+  <section class="variant" data-variant="d">
+    <div class="vhead">
+      <span class="tag">D</span><span class="name">底边把手呼出</span>
+      <span class="hint">悬停面板下缘把手，无需按钮</span>
+    </div>
+    <div class="mock">
+      <div class="panel bottom-wrap">
+        <div class="panel-header"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">14:32</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-cpu)"></span><span class="label">处理器</span><div class="meter"><div style="width:34%;background:var(--tint-cpu)"></div></div><span class="value mono">34%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-mem)"></span><span class="label">内存</span><div class="meter"><div style="width:58%;background:var(--tint-mem)"></div></div><span class="value mono">58%</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-net)"></span><span class="label">网络</span><div class="meter"><div style="width:12%;background:var(--tint-net)"></div></div><span class="value mono">2.1 M</span></div>
+        <div class="row"><span class="dot" style="background:var(--tint-bat)"></span><span class="label">电池</span><div class="meter"><div style="width:76%;background:var(--tint-bat)"></div></div><span class="value mono">76%</span></div>
+        <div class="btnrow">
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><path d="M1 6h2l1.5-3.5L7 9.5 8.5 6H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            活动监视器
+          </div>
+          <div class="cap">
+            <svg width="11" height="11" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M9.5 2.5l-1 1M3.5 8.5l-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>
+            设置
+          </div>
+        </div>
+        <div class="bottom-zone">
+          <div class="bottom-handle"><span class="badge" data-role="badge"></span></div>
+        </div>
+        <div class="bottom-drawer" data-role="drawer">
+          <div class="drawer-title">小工具</div>
+          <div class="tools-grid">
+            <div class="tool" data-tool="lock">
+              <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="2.5" y="6" width="9" height="6" rx="1.5" stroke-width="1.2"/><path d="M4.5 6V4.5a2.5 2.5 0 0 1 5 0V6" stroke-width="1.2"/><circle cx="7" cy="9" r="0.9" stroke-width="1.1"/></svg></span>
+              <span class="tmeta"><span class="tname">键盘锁定</span><br><span class="tstate" data-role="state" data-on="已锁定 · 点击解锁" data-off="未启用">未启用</span></span>
+            </div>
+            <div class="tool" data-tool="awake">
+              <span class="ticon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3.2" stroke-width="1.2"/><path d="M7 1v1.3M7 11.7V13M1 7h1.3M11.7 7H13M2.9 2.9l.9.9M10.2 10.2l.9.9M11.1 2.9l-.9.9M3.8 10.2l-.9.9" stroke-width="1.1" stroke-linecap="round"/></svg></span>
+              <span class="tmeta"><span class="tname">防休眠</span><br><span class="tstate" data-role="state" data-on="激活中" data-off="未启用">未启用</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <ul class="notes">
+      <li class="good">零按钮占用，且抽屉从底边推出、方向语义与"面板下方"一致</li>
+      <li class="good">把手常驻可见 + 角标寄生其上，可发现性略好于 C</li>
+      <li class="bad">hover 触发在 NSPanel 上需 tracking area，误触/丢失焦点问题同 C</li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+  // 每个 variant 内：toggle 按钮开合抽屉（A/B），工具块切激活态，
+  // 角标 = 有任一工具激活 且 抽屉当前不可见。
+  document.querySelectorAll('.variant').forEach(v => {
+    const toggle = v.querySelector('[data-role="toggle"]');
+    const drawer = v.querySelector('[data-role="drawer"]');
+    const badge  = v.querySelector('[data-role="badge"]');
+    const isHoverVariant = !toggle; // C / D 无按钮
+
+    function anyOn() { return v.querySelector('.tool.on') !== null; }
+    function drawerOpen() { return drawer.classList.contains('open'); }
+    function syncBadge() {
+      // hover 方案的抽屉可见性由 CSS 控制，角标只看激活态；
+      // 按钮方案则要求"激活 且 抽屉收起"才显示角标。
+      const show = isHoverVariant ? anyOn() : (anyOn() && !drawerOpen());
+      badge.classList.toggle('show', show);
+    }
+
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        drawer.classList.toggle('open');
+        toggle.classList.toggle('open', drawerOpen());
+        syncBadge();
+      });
+    }
+
+    v.querySelectorAll('.tool').forEach(tool => {
+      tool.addEventListener('click', () => {
+        tool.classList.toggle('on');
+        const state = tool.querySelector('[data-role="state"]');
+        state.textContent = tool.classList.contains('on') ? state.dataset.on : state.dataset.off;
+        syncBadge();
+      });
+    });
+  });
+</script>
+
+</body>
+</html>

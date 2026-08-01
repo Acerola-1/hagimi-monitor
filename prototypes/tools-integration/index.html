@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 小工具集成方案对比（状态区 vs 操作区）</title>
+<style>
+  /* ====== 设计令牌：对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A;
+    --tint-gpu: #5D8CF0;
+    --tint-mem: #42A39A;
+    --tint-net: #43A6A0;
+    --tint-bat: #65AF52;
+    --accent: #4E7FD9;          /* displayTint · balanced，controls 强调色 */
+    --tint-lock: #D27A4A;       /* 键盘锁定强调色（暖，表“注意/锁”） */
+    --tint-awake: #5D8CF0;      /* 防休眠强调色（冷，表“保持点亮”） */
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    padding: 40px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  h1 { text-align: center; font-size: 20px; font-weight: 700; letter-spacing: 0.4px; }
+  .sub { text-align: center; font-size: 12px; color: var(--text-caption); margin-top: 8px; line-height: 1.7; max-width: 720px; margin-left: auto; margin-right: auto; }
+  .sub b { color: var(--text-secondary); font-weight: 600; }
+  .legend { text-align:center; margin-top:14px; font-size:11px; color:var(--text-caption); }
+  .legend .k { display:inline-flex; align-items:center; gap:5px; margin:0 10px; }
+  .legend .swatch { width:22px; height:10px; border-radius:3px; }
+  .legend .s-status { background: linear-gradient(90deg, var(--tint-mem), transparent); }
+  .legend .s-action { background: var(--accent); box-shadow:0 0 8px var(--accent); }
+
+  .stage { margin-top: 34px; display: flex; flex-wrap: wrap; justify-content: center; gap: 44px 48px; }
+  .variant { width: 330px; display: flex; flex-direction: column; align-items: center; }
+  .vhead { align-self: stretch; display: flex; align-items: baseline; gap: 8px; margin-bottom: 13px; padding-left: 2px; }
+  .vhead .tag { font-size: 11px; font-weight: 800; letter-spacing: 1px; background: var(--row-glass); border: 0.5px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 2px 7px; color: var(--text-secondary); }
+  .vhead .name { font-size: 14px; font-weight: 650; }
+
+  /* ====== 面板 ====== */
+  .panel {
+    width: 300px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 18px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    padding: 9px;
+    display: flex; flex-direction: column; gap: 6px;
+    position: relative;
+  }
+  .p-head { display: flex; align-items: center; padding: 2px 3px 0; }
+  .live-dot { width: 5px; height: 5px; border-radius: 50%; background: #6BBF59; margin-right: 5px; animation: pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .p-head .sys { font-size: 9px; letter-spacing: 1.1px; color: var(--text-caption); font-weight: 600; }
+  .p-head .time { margin-left: auto; font-size: 10px; color: var(--text-caption); }
+
+  /* 监控行（只读仪表：图标+名+值+meter，无任何开关） */
+  .mrow {
+    display: flex; align-items: center; gap: 10px; padding: 9px 10px;
+    border-radius: var(--row-radius); background: var(--row-glass);
+    border: 0.5px solid rgba(255, 255, 255, 0.05);
+  }
+  .mrow .ic { width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0; opacity: 0.95; }
+  .mrow .lbl { font-size: 12.5px; font-weight: 600; }
+  .mrow .val { font-size: 12.5px; font-weight: 600; color: var(--text-value); margin-left: 2px; }
+  .mrow .meter { flex: 1; height: 3px; border-radius: 2px; background: var(--track-fill); overflow: hidden; margin-left: 4px; }
+  .mrow .meter > div { height: 100%; border-radius: 2px; }
+
+  /* 底部操作按钮排（原生胶囊，操作区基调） */
+  .actions { display: flex; gap: 8px; padding-top: 2px; }
+  .cap {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    height: 30px; border-radius: 15px; background: var(--row-glass);
+    border: 0.5px solid rgba(255,255,255,0.10); font-size: 11.5px; font-weight: 550;
+    color: var(--text-primary); cursor: pointer; user-select: none; white-space: nowrap;
+    transition: background 0.16s, border-color 0.16s, box-shadow 0.16s;
+  }
+  .cap:hover { background: rgba(122,145,180,0.2); }
+  .cap svg { flex-shrink: 0; opacity: 0.9; }
+
+  /* 强分隔：状态区 ↔ 操作区 的语义分界线 */
+  .zone-div { display:flex; align-items:center; gap:8px; padding: 2px 4px 0; }
+  .zone-div .t { font-size: 9px; letter-spacing: 1px; color: var(--text-caption); font-weight: 700; text-transform: uppercase; opacity:0.9; }
+  .zone-div .line { flex:1; height:1px; background: linear-gradient(90deg, var(--row-separator), transparent); }
+
+  /* ====== 通用：点亮式 toggle 磁贴（Control Center 语言） ====== */
+  .tile {
+    flex: 1; display: flex; align-items: center; gap: 9px;
+    padding: 9px 10px; border-radius: 13px;
+    background: var(--row-glass); border: 0.5px solid rgba(255,255,255,0.08);
+    cursor: pointer; user-select: none;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+  }
+  .tile:hover { background: rgba(122,145,180,0.18); }
+  .tile .badge {
+    width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(255,255,255,0.09);
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  .tile .badge svg { display:block; }
+  .tile .badge svg * { stroke: var(--text-secondary); transition: stroke 0.2s; }
+  .tile .meta { min-width: 0; }
+  .tile .nm { font-size: 11.5px; font-weight: 650; white-space: nowrap; }
+  .tile .st { font-size: 9.5px; color: var(--text-caption); margin-top: 1px; white-space: nowrap; }
+  /* 点亮态：整块染色发光 + 圆标满色 */
+  .tile.on[data-accent="lock"]  { background: rgba(210,122,74,0.16); border-color: rgba(210,122,74,0.55); box-shadow: 0 0 0 0.5px rgba(210,122,74,0.3) inset; }
+  .tile.on[data-accent="awake"] { background: rgba(93,140,240,0.16); border-color: rgba(93,140,240,0.55); box-shadow: 0 0 0 0.5px rgba(93,140,240,0.3) inset; }
+  .tile.on[data-accent="lock"]  .badge { background: var(--tint-lock); box-shadow: 0 0 12px rgba(210,122,74,0.55); }
+  .tile.on[data-accent="awake"] .badge { background: var(--tint-awake); box-shadow: 0 0 12px rgba(93,140,240,0.55); }
+  .tile.on .badge svg * { stroke: #fff; }
+  .tile.on[data-accent="lock"]  .st { color: var(--tint-lock); }
+  .tile.on[data-accent="awake"] .st { color: var(--tint-awake); }
+
+  /* ====== 变体 C：独立分区标题 ====== */
+  .sec-title { display:flex; align-items:center; gap:7px; font-size:9.5px; letter-spacing:0.6px; color:var(--text-caption); font-weight:700; padding: 0 2px; }
+  .sec-title svg { opacity:0.85; }
+  .sec-wrap { background: rgba(255,255,255,0.03); border:0.5px solid rgba(255,255,255,0.07); border-radius: 15px; padding: 9px; display:flex; flex-direction:column; gap:8px; }
+
+  /* ====== 变体 B：底部可切换态按钮 ====== */
+  .cap.toggle .kbd-ic, .cap.toggle .cup-ic { transition: opacity 0.2s; }
+  .cap.toggle.on[data-accent="lock"]  { background: rgba(210,122,74,0.22); border-color: rgba(210,122,74,0.6); color:#fff; box-shadow:0 0 14px rgba(210,122,74,0.22); }
+  .cap.toggle.on[data-accent="awake"] { background: rgba(93,140,240,0.22); border-color: rgba(93,140,240,0.6); color:#fff; box-shadow:0 0 14px rgba(93,140,240,0.22); }
+  .cap.toggle.on svg * { stroke:#fff; }
+  .cap .miniled { width:5px; height:5px; border-radius:50%; background: transparent; margin-left:1px; }
+  .cap.toggle.on[data-accent="lock"] .miniled { background:#fff; box-shadow:0 0 6px #fff; }
+  .cap.toggle.on[data-accent="awake"] .miniled { background:#fff; box-shadow:0 0 6px #fff; }
+
+  /* ====== 变体 D：右键菜单 mock ====== */
+  .menu-wrap { position: relative; }
+  .ctx-menu {
+    position: absolute; top: 18px; right: -8px; width: 208px;
+    background: rgba(40, 42, 52, 0.72);
+    backdrop-filter: blur(30px) saturate(1.4);
+    -webkit-backdrop-filter: blur(30px) saturate(1.4);
+    border: 0.5px solid rgba(255,255,255,0.14);
+    border-radius: 10px; padding: 5px; box-shadow: 0 18px 44px rgba(0,0,0,0.5);
+    font-size: 12.5px;
+  }
+  .mi { display:flex; align-items:center; gap:8px; padding: 5px 8px; border-radius: 6px; color: var(--text-primary); cursor:pointer; }
+  .mi:hover { background: var(--accent); }
+  .mi .check { width: 14px; text-align:center; color: var(--text-primary); font-weight:700; opacity:0; }
+  .mi.on .check { opacity:1; }
+  .mi .mlbl { flex:1; }
+  .mi .sc { color: var(--text-caption); font-size: 11px; }
+  .mi:hover .sc { color: rgba(255,255,255,0.8); }
+  .mi.header { color: var(--text-caption); font-size:10px; letter-spacing:0.6px; text-transform:uppercase; cursor:default; padding-bottom:2px; }
+  .mi.header:hover { background:transparent; }
+  .msep { height:1px; background: rgba(255,255,255,0.12); margin: 4px 6px; }
+  .cursor-hint { position:absolute; top: 6px; right: 26px; font-size: 16px; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5)); }
+
+  .notes { align-self: stretch; margin-top: 12px; padding: 0 2px; font-size: 11px; color: var(--text-caption); line-height: 1.7; list-style: none; }
+  .notes li { padding-left: 15px; position: relative; }
+  .notes li::before { content: '·'; position: absolute; left: 4px; }
+  .notes li.good::before { content: '✓'; color: var(--tint-bat); font-size: 9px; top: 1px; }
+  .notes li.bad::before  { content: '✕'; color: #B8872E; font-size: 9px; top: 1px; }
+</style>
+</head>
+<body>
+
+<h1>小工具集成 · 四方向对比</h1>
+<p class="sub">
+  核心原则：<b>形式即语义</b>。监控行是<b>只读仪表</b>（连续、被动）；键盘锁定/防休眠是<b>主动开关</b>。
+  两者必须用不同控件语言、并在信息架构上分区——这正是 macOS 控制中心的做法。下面每个方案都放在真实面板语境里，点击工具可切换「点亮态」。
+</p>
+<div class="legend">
+  <span class="k"><span class="swatch s-status"></span>状态区（只读仪表）</span>
+  <span class="k"><span class="swatch s-action"></span>操作区（点亮式开关）</span>
+</div>
+
+<div class="stage" id="stage"></div>
+
+<script>
+  // 监控行（三行示意）
+  function monitorRows() {
+    return `
+      <div class="mrow"><span class="ic" style="background:var(--tint-cpu)"></span><span class="lbl">处理器</span><span class="val mono">18%</span><div class="meter"><div style="width:18%;background:var(--tint-cpu)"></div></div></div>
+      <div class="mrow"><span class="ic" style="background:var(--tint-mem)"></span><span class="lbl">内存</span><span class="val mono">61%</span><div class="meter"><div style="width:61%;background:var(--tint-mem)"></div></div></div>
+      <div class="mrow"><span class="ic" style="background:var(--tint-bat)"></span><span class="lbl">电源</span><span class="val mono">90%</span><div class="meter"><div style="width:90%;background:var(--tint-bat)"></div></div></div>`;
+  }
+  const svgKbd = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="2" y="4.5" width="12" height="8" rx="1.6" stroke-width="1.3"/><path d="M4.5 7h0M7 7h0M9.5 7h0M4.5 9.5h7" stroke-width="1.3" stroke-linecap="round"/></svg>`;
+  const svgCup = `<svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 6h7v3a3.5 3.5 0 0 1-7 0V6Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.5 6.8h1.6a1.4 1.4 0 0 1 0 2.8h-.4" stroke-width="1.3"/><path d="M5.5 3.2c-.4.5-.4 1 0 1.5M8 3.2c-.4.5-.4 1 0 1.5" stroke-width="1.2" stroke-linecap="round"/></svg>`;
+  const svgActivity = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 6h2l1.5-3.5L7 9.5 8.5 6H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  const svgGear = `<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M9.5 2.5l-1 1M3.5 8.5l-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>`;
+
+  function tile(accent, name, stOff, stOn, on) {
+    const svg = accent === 'lock' ? svgKbd : svgCup;
+    return `<div class="tile ${on?'on':''}" data-accent="${accent}" data-st-off="${stOff}" data-st-on="${stOn}">
+      <span class="badge">${svg}</span>
+      <span class="meta"><span class="nm">${name}</span><br><span class="st">${on?stOn:stOff}</span></span>
+    </div>`;
+  }
+
+  const variants = [
+    { tag:'A', name:'控制中心风开关条', build: () => `
+      <div class="panel">
+        <div class="p-head"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">10:36</span></div>
+        ${monitorRows()}
+        <div class="zone-div"><span class="t">快捷开关</span><span class="line"></span></div>
+        <div style="display:flex; gap:8px;">
+          ${tile('lock','键盘锁定','未启用','已锁定 · 点击解锁', false)}
+          ${tile('awake','防休眠','未启用','激活中', true)}
+        </div>
+        <div class="actions">
+          <div class="cap">${svgActivity} 活动监视器</div>
+          <div class="cap">${svgGear} 设置</div>
+        </div>
+      </div>`,
+      notes:[['good','最贴合 Apple status/action 分区：有明确「快捷开关」小标题分界'],['good','点亮态整块染色发光，一眼区别于监控行；易扩成网格'],['bad','比监控行多占一行高度']] },
+
+    { tag:'B', name:'并入底部操作排', build: () => `
+      <div class="panel">
+        <div class="p-head"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">10:36</span></div>
+        ${monitorRows()}
+        <div class="actions" style="flex-wrap:wrap;">
+          <div class="cap toggle" data-accent="lock" data-st-off="" data-st-on="">${svgKbd}<span>键盘锁</span><span class="miniled"></span></div>
+          <div class="cap toggle on" data-accent="awake" data-st-off="" data-st-on="">${svgCup}<span>防休眠</span><span class="miniled"></span></div>
+        </div>
+        <div class="actions">
+          <div class="cap">${svgActivity} 活动监视器</div>
+          <div class="cap">${svgGear} 设置</div>
+        </div>
+      </div>`,
+      notes:[['good','最省高度、最轻；工具与「活动监视器/设置」同属操作区，逻辑自洽'],['good','激活填色+小灯，明显是可切换态而非监控'],['bad','按钮排偏「密」，工具多了要换行；信息比磁贴少（无状态副文案）']] },
+
+    { tag:'C', name:'独立工具磁贴分区', build: () => `
+      <div class="panel">
+        <div class="p-head"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">10:36</span></div>
+        ${monitorRows()}
+        <div class="sec-wrap">
+          <div class="sec-title">${svgActivity.replace('12','11')} 工具 · TOOLS</div>
+          <div style="display:flex; gap:8px;">
+            ${tile('lock','键盘锁定','未启用','已锁定', false)}
+            ${tile('awake','防休眠','未启用','激活中', true)}
+          </div>
+        </div>
+        <div class="actions">
+          <div class="cap">${svgActivity} 活动监视器</div>
+          <div class="cap">${svgGear} 设置</div>
+        </div>
+      </div>`,
+      notes:[['good','独立感最强：像控制中心的一个独立模块，与监控主题彻底分离'],['good','有分区容器+标题，扩展多工具时最规整（可网格）'],['bad','占高度最多；容器套容器略重']] },
+
+    { tag:'D', name:'菜单栏右键菜单集成', build: () => `
+      <div class="panel menu-wrap">
+        <div class="p-head"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">10:36</span></div>
+        ${monitorRows()}
+        <div class="actions">
+          <div class="cap">${svgActivity} 活动监视器</div>
+          <div class="cap">${svgGear} 设置</div>
+        </div>
+        <div class="cursor-hint">🖱️</div>
+        <div class="ctx-menu">
+          <div class="mi header">快捷开关</div>
+          <div class="mi" data-menu="lock"><span class="check">✓</span><span class="mlbl">键盘锁定</span><span class="sc">⌥⌘L</span></div>
+          <div class="mi on" data-menu="awake"><span class="check">✓</span><span class="mlbl">防休眠</span><span class="sc">⌥⌘K</span></div>
+          <div class="msep"></div>
+          <div class="mi"><span class="check"></span><span class="mlbl">设置…</span><span class="sc">⌘,</span></div>
+          <div class="mi"><span class="check"></span><span class="mlbl">退出</span><span class="sc">⌘Q</span></div>
+        </div>
+      </div>`,
+      notes:[['good','完全不占面板：原生 NSMenu，工具作带勾选项，右键状态项即出'],['good','实现极稳、极省事；适合「不常用但要能快速切」的定位'],['bad','可发现性弱（藏在右键里）；无点亮式视觉，激活态只有勾选']] },
+  ];
+
+  const stage = document.getElementById('stage');
+  variants.forEach(v => {
+    const el = document.createElement('section');
+    el.className = 'variant';
+    el.innerHTML = `<div class="vhead"><span class="tag">${v.tag}</span><span class="name">${v.name}</span></div>
+      <div class="mock">${v.build()}</div>
+      <ul class="notes">${v.notes.map(n=>`<li class="${n[0]}">${n[1]}</li>`).join('')}</ul>`;
+    stage.appendChild(el);
+  });
+
+  // 交互：磁贴 / 底部 toggle 按钮切换点亮态
+  function toggleTile(t) {
+    t.classList.toggle('on');
+    const st = t.querySelector('.st');
+    if (st) st.textContent = t.classList.contains('on') ? t.dataset.stOn : t.dataset.stOff;
+  }
+  document.querySelectorAll('.tile').forEach(t => t.addEventListener('click', () => toggleTile(t)));
+  document.querySelectorAll('.cap.toggle').forEach(c => c.addEventListener('click', () => c.classList.toggle('on')));
+  document.querySelectorAll('.mi[data-menu]').forEach(m => m.addEventListener('click', () => m.classList.toggle('on')));
+</script>
+
+</body>
+</html>

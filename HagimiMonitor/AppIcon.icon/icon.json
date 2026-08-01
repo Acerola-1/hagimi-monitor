@@ -1,17 +1,7 @@
 {
-  "fill-specializations" : [
-    {
-      "value" : {
-        "automatic-gradient" : "srgb:0.93000,0.94500,0.96000,1.00000"
-      }
-    },
-    {
-      "appearance" : "dark",
-      "value" : {
-        "automatic-gradient" : "srgb:0.09000,0.09500,0.10500,1.00000"
-      }
-    }
-  ],
+  "fill" : {
+    "automatic-gradient" : "srgb:0.09000,0.09500,0.10500,1.00000"
+  },
   "groups" : [
     {
       "layers" : [
@@ -22,28 +12,12 @@
         },
         {
           "glass" : false,
-          "image-name-specializations" : [
-            {
-              "value" : "backplate-light.png"
-            },
-            {
-              "appearance" : "dark",
-              "value" : "backplate-dark.png"
-            }
-          ],
+          "image-name" : "backplate-dark.png",
           "name" : "backplate"
         },
         {
           "glass" : true,
-          "image-name-specializations" : [
-            {
-              "value" : "ring-light2.png"
-            },
-            {
-              "appearance" : "dark",
-              "value" : "ring-dark.png"
-            }
-          ],
+          "image-name" : "ring-dark.png",
           "name" : "ring"
         }
       ],

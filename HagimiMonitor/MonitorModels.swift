@@ -2,6 +2,7 @@ import Foundation
 import SwiftUI
 import Combine
 import OSLog
+import IOKit.ps
 
 enum HaloRingSource: String, CaseIterable, Identifiable {
     case combined
@@ -52,11 +53,13 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     case storage
     case network
     case battery
+    /// 风扇:独立于 SystemMonitorSampler,数据由 FanSampler 注入,仅 fanAvailable 时存在。
+    case fan
 
     var id: String { rawValue }
 
-    /// 用户可见的模块
-    static let userVisibleCases: [MonitorKind] = allCases
+    /// 用户可见的模块。风扇模块按运行时 fanAvailable 单独门控,不在此暴露。
+    static let userVisibleCases: [MonitorKind] = allCases.filter { $0 != .fan }
 
     var title: String {
         switch self {
@@ -72,6 +75,8 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             String(localized: "kind.network")
         case .battery:
             String(localized: "kind.battery")
+        case .fan:
+            String(localized: "kind.fan")
         }
     }
 
@@ -89,6 +94,8 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             "network"
         case .battery:
             "powerplug"
+        case .fan:
+            "fan.fill"
         }
     }
 
@@ -140,6 +147,9 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
             ]
+        case .fan:
+            // 风扇行无子指标开关,展开区直接显示所有风扇(由 FanList 渲染)。
+            return []
         }
     }
 }
@@ -164,6 +174,81 @@ struct MonitorMetric: Identifiable, Equatable {
     var id: String { name }
 }
 
+/// 风扇运行状态。基于 RPM 与 min/max 范围判断,用于告警门控与面板着色。
+/// 判断规则见 `FanInfo.status`。
+enum FanStatus: Equatable, Comparable {
+    /// 正常:RPM > 0 且未接近最大值(< 85% maxRPM)。
+    case normal
+    /// 警告:RPM 接近最大值(>= 85% maxRPM),散热压力高。
+    case warning
+    /// 故障:RPM = 0(停转)或 RPM > maxRPM(传感器读数异常)。
+    case fault
+    /// 未知:缺少 maxRPM 数据,无法判断。
+    case unknown
+
+    /// 状态严重度排序,用于取多风扇中最差状态。unknown 排在 normal 之下(无法判断 ≠ 正常)。
+    var rank: Int {
+        switch self {
+        case .unknown: return 0
+        case .normal: return 1
+        case .warning: return 2
+        case .fault: return 3
+        }
+    }
+
+    /// 映射到全局 MonitorSeverity,复用面板已有的着色/标题体系。
+    var severity: MonitorSeverity {
+        switch self {
+        case .normal, .unknown: return .calm
+        case .warning: return .warning
+        case .fault: return .critical
+        }
+    }
+
+    var title: String {
+        switch self {
+        case .normal: String(localized: "fan.status.normal")
+        case .warning: String(localized: "fan.status.warning")
+        case .fault: String(localized: "fan.status.fault")
+        case .unknown: String(localized: "fan.status.unknown")
+        }
+    }
+
+    static func < (lhs: FanStatus, rhs: FanStatus) -> Bool {
+        lhs.rank < rhs.rank
+    }
+}
+
+/// 单个风扇读数。由 FanSampler 从 SMC F0Ac/F0Mn/F0Mx 等键读出。
+/// 面板展开区按此数组渲染多风扇列表;菜单栏只取 max(currentRPM)。
+struct FanInfo: Identifiable, Equatable {
+    let id: Int
+    let name: String
+    let currentRPM: Int
+    let minRPM: Int
+    let maxRPM: Int
+
+    /// 根据当前 RPM 与 min/max 范围判断风扇运行状态。
+    /// - RPM = 0 → fault(停转;有风扇的 Mac 在唤醒时 RPM 至少 ~1000)
+    /// - RPM > maxRPM → fault(传感器读数异常)
+    /// - RPM >= 85% maxRPM → warning(接近满载,散热压力高)
+    /// - maxRPM <= 0 → unknown(SMC 未提供上限,无法判断)
+    /// - 其余 → normal
+    var status: FanStatus {
+        if maxRPM <= 0 { return .unknown }
+        if currentRPM == 0 { return .fault }
+        if currentRPM > maxRPM { return .fault }
+        if Double(currentRPM) >= Double(maxRPM) * 0.85 { return .warning }
+        return .normal
+    }
+
+    /// 取多个风扇中最差的状态(用于整体风扇系统健康度)。
+    static func overallStatus(of fans: [FanInfo]) -> FanStatus {
+        guard let worst = fans.map(\.status).max() else { return .unknown }
+        return worst
+    }
+}
+
 struct MonitorModule: Identifiable, Equatable {
     let kind: MonitorKind
     var context: String? = nil
@@ -176,6 +261,9 @@ struct MonitorModule: Identifiable, Equatable {
     var pressureValue: Double? = nil
     /// 压力百分比历史序列,与 samples 同法滚动积累,供压力模式下的迷你曲线使用。
     var pressureSamples: [Double] = []
+    /// 多风扇读数(仅风扇模块有值)。面板展开区按此数组渲染所有风扇;
+    /// 菜单栏只取 max(currentRPM)。独立于 metrics 字段,避免冲撞统一采样契约。
+    var fans: [FanInfo]? = nil
 
     var id: MonitorKind { kind }
 
@@ -194,6 +282,9 @@ struct MonitorModule: Identifiable, Equatable {
             }
             if value <= MonitorConstants.batteryCriticalThreshold { return .critical }
             if value <= MonitorConstants.batteryWarningThreshold { return .warning }
+            return .calm
+        case .fan:
+            // 风扇无严重度概念(没有"过载"阈值);永远 calm,避免误报警。
             return .calm
         }
     }
@@ -251,12 +342,26 @@ final class MonitorStore: ObservableObject {
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
     private var procSampleTimer: AnyCancellable?
+    /// 电源状态(交流/电池、充电与否)变化通知源。插拔电源时系统即时回调,
+    /// 立刻重采电池模块,让菜单栏图标(充电闪电)与充电功率无需等下一个 2s 采样周期。
+    private var powerSourceRunLoopSource: CFRunLoopSource?
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var isSampling = false
     private var pendingSampleKinds: Set<MonitorKind> = []
+    /// 风扇采样器(独立于 SystemMonitorSampler,因为它读 SMC 而非 Mach,
+    /// 且输出是「多风扇列表」而非「单模块值」)。
+    private let fanSampler = FanSampler()
+    /// 当前所有风扇读数。fans 为空 = 该机无风扇 / 读取失败 / 面板未启动采样。
+    /// 由 fanSampler.$fans Combine sink 同步更新。
+    @Published private(set) var fans: [FanInfo] = []
+    /// 风扇系统整体状态(由 FanSampler 发布,告警服务与面板着色订阅)。
+    @Published private(set) var fanStatus: FanStatus = .unknown
+    /// 目标机型是否有风扇(由 FNum 启动时一次性检测决定)。
+    /// UI 用此值决定:面板是否插入风扇行、设置选单是否显示风扇选项。
+    var fanAvailable: Bool { fanSampler.available }
 
     init() {
         let settings = MonitorSettings()
@@ -281,8 +386,10 @@ final class MonitorStore: ObservableObject {
                 self?.advance()
             }
 
+        startPowerSourceMonitoring()
+
         // 进程采样定时器:面板可见时启动,不可见时暂停。
-        // 统一为单个定时器,并行执行 4 类采样,避免多个独立定时器导致的密集触发。
+        // 统一为单个定时器串行驱动 4 类采样,避免多个独立定时器导致的密集触发。
         // init 时不采样,首次采样在 panelDidAppear() 中触发。
 
         settings.$memoryShowSystemProcesses
@@ -316,6 +423,28 @@ final class MonitorStore: ObservableObject {
                 self?.refreshAllProcessesIfNeeded()
             }
             .store(in: &cancellables)
+
+        // 风扇采样:仅在面板可见时启用,避免无谓的 SMC 读取。
+        fanSampler.$fans
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newFans in
+                self?.fans = newFans
+            }
+            .store(in: &cancellables)
+
+        // 风扇状态订阅:同步到 store.fanStatus,供面板着色与告警服务使用。
+        fanSampler.$status
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newStatus in
+                self?.fanStatus = newStatus
+            }
+            .store(in: &cancellables)
+
+        // 风扇后台采样:启动即常驻,不随面板显隐启停。
+        // 原因:告警服务需在面板关闭时也能检测风扇异常(停转/过载)并通知用户。
+        // SMC 读取(FNum/F0Ac)极轻量(单次 IOConnectCall),2s 周期对功耗无感。
+        fanSampler.start()
+        FanAlertService.shared.attach(to: fanSampler)
     }
 
     /// 面板出现时调用（菜单栏面板便捷封装）。
@@ -337,6 +466,7 @@ final class MonitorStore: ObservableObject {
             refreshAllProcesses()
             prewarmProcessBaselines()
             startProcSampleTimer()
+            // FanSampler 已在 init 中常驻启动(支持后台告警),此处无需再 start。
         }
     }
 
@@ -347,6 +477,7 @@ final class MonitorStore: ObservableObject {
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
             stopProcSampleTimer()
+            // FanSampler 常驻运行(后台告警),面板关闭时不停止。
         }
     }
 
@@ -465,7 +596,8 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    /// 对指定类目采样(仅限其中设置已开启的列表)。并行执行,全部完成后回主线程
+    /// 对指定类目采样(仅限其中设置已开启的列表)。各类采样在 procSampleQueue 上
+    /// 串行执行(串行是磁盘/网络全局快照无锁安全的前提),全部完成后回主线程
     /// 更新 @Published 属性。只采「展开 ∩ 设置开启」的类目,避免为不可见的列表
     /// spawn ps/nettop 子进程、构建图标。
     private func refreshProcesses(for kinds: Set<MonitorKind>, completion: (() -> Void)? = nil) {
@@ -488,7 +620,10 @@ final class MonitorStore: ObservableObject {
         var diskProcesses: [TopDiskProcess]?
         var networkProcesses: [TopNetworkProcess]?
 
-        // 并行执行各类采样,各自独立互不阻塞;只采样当前可见(展开)且已开启的列表。
+        // 各类采样在 procSampleQueue(串行队列)上顺序执行;只采样当前可见(展开)且已开启的列表。
+        // 注意:磁盘/网络的 TOP 采样各自维护一份文件级全局快照(previousDiskSnapshot /
+        // previousNetworkSnapshot,无锁)以计算增量,其线程安全正是依赖本队列的串行性——
+        // 切勿把 procSampleQueue 改成并发队列,否则会引入难复现的数据竞争。
         if active.contains(.memory) {
             group.enter()
             procSampleQueue.async {
@@ -546,7 +681,31 @@ final class MonitorStore: ObservableObject {
     deinit {
         timerCancellable?.cancel()
         procSampleTimer?.cancel()
+        if let powerSourceRunLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSourceRunLoopSource, .defaultMode)
+        }
         cancellables.removeAll()
+    }
+
+    /// 注册电源状态变化通知:插拔适配器/充电状态翻转时立即重采电池。
+    /// 回调在主运行循环触发(与采样定时器同线程),故可直接调 advance,无数据竞争。
+    /// C 函数指针回调不能捕获上下文,通过 context 传入 self 的非持有指针。
+    private func startPowerSourceMonitoring() {
+        let context = Unmanaged.passUnretained(self).toOpaque()
+        guard let source = IOPSNotificationCreateRunLoopSource({ ctx in
+            guard let ctx else { return }
+            Unmanaged<MonitorStore>.fromOpaque(ctx).takeUnretainedValue().powerSourceDidChange()
+        }, context)?.takeRetainedValue() else {
+            AppLogger.sampler.warning("Failed to create power source notification run loop source")
+            return
+        }
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
+        powerSourceRunLoopSource = source
+    }
+
+    /// 电源状态变化时立即重采电池,不影响其他模块的既定节奏。
+    private func powerSourceDidChange() {
+        advance(kinds: [.battery])
     }
 
     var selectedModule: MonitorModule {
@@ -605,6 +764,9 @@ final class MonitorStore: ObservableObject {
             return MenuBarMetricFormatter.capacity(metricValue("free", in: .storage))
         case .systemPower:
             return MenuBarMetricFormatter.power(metricValue("power", in: .battery))
+        case .fanSpeed:
+            // 取多风扇的 max RPM;fans 为空(无风扇 / 未采样)走 unavailable 占位。
+            return MenuBarMetricFormatter.fanRPM(fans.map { $0.currentRPM }.max())
         }
     }
 
@@ -630,6 +792,8 @@ final class MonitorStore: ObservableObject {
             "128G"
         case .systemPower:
             " 12W"
+        case .fanSpeed:
+            "3200"
         }
     }
 
@@ -680,6 +844,10 @@ final class MonitorStore: ObservableObject {
             if allModules != snapshot.modules {
                 allModules = snapshot.modules
             }
+            // 注入风扇模块:仅在 fanAvailable 时插入,位置固定在 GPU 之后、内存之前。
+            // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
+            // 把它的输出合成成 MonitorModule.fan 填入 allModules。
+            applyFanModule()
             let newVisibleModules = visibleModules(from: allModules)
             if modules != newVisibleModules {
                 modules = newVisibleModules
@@ -707,8 +875,48 @@ final class MonitorStore: ObservableObject {
         loadAnimator.updateTarget(combinedComputeLoad)
     }
 
+    /// 把 FanSampler 的输出合成成 .fan MonitorModule,插入到 allModules:
+    /// - fanAvailable == false:无模块可插入,直接返回(panel 不会显示风扇行)
+    /// - fanAvailable == true:替换 allModules 中的 .fan 占位 / 新插入到 GPU 之后、内存之前
+    /// 风扇 RPM 历史用 [Double] 装进 samples,供 sparkline 使用。
+    private func applyFanModule() {
+        // 先读取旧 fan 模块的 RPM 历史(必须在 removeAll 之前,否则丢失累计采样)。
+        let previousSamples = allModules.first(where: { $0.kind == .fan })?.samples ?? []
+        // 移除已存在的 .fan 占位 / 旧数据
+        allModules.removeAll { $0.kind == .fan }
+        guard fanAvailable else { return }
+
+        let currentFans = fans
+        let maxRPM = currentFans.map(\.currentRPM).max() ?? 0
+        // 面板展示带 RPM 单位;菜单栏走 MenuBarMetricFormatter.fanRPM() 不受影响。
+        let summary = maxRPM > 0 ? "\(maxRPM) RPM" : "—"
+        // 累计 RPM 历史(滚动窗口与 sparklineMaxPoints 对齐)。
+        let newSamples = Array((previousSamples + [Double(maxRPM)]).suffix(MonitorConstants.sparklineMaxPoints))
+
+        var fanModule = MonitorModule(
+            kind: .fan,
+            value: Double(maxRPM),
+            summary: summary,
+            metrics: [],
+            samples: newSamples
+        )
+        fanModule.fans = currentFans
+
+        // 插入到 GPU 之后、内存之前(若 allModules 中无 GPU/内存则追加到末尾)
+        if let gpuIdx = allModules.firstIndex(where: { $0.kind == .gpu }) {
+            // 找 GPU 之后的第一个非 fan 项插入(避免重复)
+            let insertIdx = allModules[(gpuIdx + 1)...].firstIndex(where: { $0.kind != .fan }) ?? allModules.endIndex
+            allModules.insert(fanModule, at: min(insertIdx, allModules.endIndex))
+        } else {
+            allModules.append(fanModule)
+        }
+    }
+
     private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
-        modules.filter { settings.isVisible($0.kind) }
+        // .fan 不走 settings.visibleKinds 过滤:它不在 userVisibleCases 中(不由用户开关),
+        // 而是由 applyFanModule() 按 fanAvailable 自动门控——有风扇的机型自动显示,
+        // 无风扇的机型 applyFanModule 不插入,此处自然不会出现。
+        modules.filter { $0.kind == .fan || settings.isVisible($0.kind) }
     }
 }
 

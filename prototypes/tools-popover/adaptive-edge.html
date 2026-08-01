@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · NSPopover 自适应方位（下方不够→侧边）</title>
+<style>
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A;
+    --tint-gpu: #A855F7;
+    --tint-mem: #42A39A;
+    --tint-sto: #9A865E;
+    --tint-net: #43A6A0;
+    --tint-bat: #65AF52;
+    --tint-lock: #D27A4A;
+    --tint-awake: #5D8CF0;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 25% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 90% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    padding: 40px 24px 80px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  h1 { font-size: 19px; font-weight: 700; }
+  .sub { text-align:center; font-size:12px; color:var(--text-caption); margin-top:8px; line-height:1.7; max-width:640px; }
+  .sub b { color: var(--text-value); font-weight:600; }
+
+  .stage { margin-top: 38px; display:flex; flex-wrap:wrap; gap: 60px 70px; justify-content:center; align-items:flex-start; }
+  .scene { display:flex; flex-direction:column; align-items:flex-start; }
+  .scene .cap-label { font-size:12px; color:var(--text-caption); margin-bottom:16px; align-self:center; }
+  .scene .cap-label b { color: var(--tint-awake); font-weight:650; }
+
+  /* 屏幕舞台：画出可视区，直观看出“下方没空间” */
+  .screen { position: relative; border-radius: 12px; }
+  .screen.tall { padding-bottom: 26px; }
+  .screen-edge { position:absolute; left:-10px; right:-10px; bottom:0; border-top: 1px dashed rgba(255,255,255,0.25); }
+  .screen-edge span { position:absolute; right:0; top:4px; font-size:9px; color:rgba(255,255,255,0.4); letter-spacing:0.5px; }
+
+  .panel {
+    width: 300px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3); -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 18px; border: 0.5px solid rgba(255,255,255,0.12);
+    box-shadow: 0 20px 50px rgba(0,0,0,0.45);
+    padding: 9px; display:flex; flex-direction:column; gap:6px;
+  }
+  .p-head { display:flex; align-items:center; padding:2px 3px 0; }
+  .live-dot { width:5px;height:5px;border-radius:50%;background:#6BBF59;margin-right:5px; }
+  .p-head .sys { font-size:9px; letter-spacing:1.1px; color:var(--text-caption); font-weight:600; }
+  .p-head .time { margin-left:auto; font-size:10px; color:var(--text-caption); }
+
+  .mrow { display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:14px; background:var(--row-glass); border:0.5px solid rgba(255,255,255,0.05); }
+  .mrow .ic { width:15px;height:15px;border-radius:5px;flex-shrink:0; }
+  .mrow .lbl { font-size:12px; font-weight:600; }
+  .mrow .val { font-size:12px; font-weight:600; color:var(--text-value); margin-left:auto; }
+
+  .actions { display:flex; gap:8px; padding-top:2px; position: relative; }
+  .cap { flex:1; display:flex; align-items:center; justify-content:center; gap:5px; height:30px; border-radius:15px; background:var(--row-glass); border:0.5px solid rgba(255,255,255,0.10); font-size:11px; font-weight:550; color:var(--text-primary); white-space:nowrap; position: relative; }
+  .cap svg { opacity:0.9; }
+  .cap.tools-entry.open { background:rgba(122,145,180,0.28); border-color:rgba(255,255,255,0.22); }
+
+  /* ====== popover（液态玻璃 · 系统绘制风）====== */
+  .popover {
+    position:absolute; width: 232px; z-index: 5;
+    background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+    backdrop-filter: blur(50px) saturate(1.8); -webkit-backdrop-filter: blur(50px) saturate(1.8);
+    border-radius:16px; border:0.5px solid rgba(255,255,255,0.18);
+    box-shadow: 0 12px 34px rgba(0,0,0,0.38), inset 0 0.5px 0 rgba(255,255,255,0.35);
+    padding:10px;
+  }
+  /* 朝下弹：位于按钮下方、居中；箭头在顶部指上 */
+  .popover.below { top: calc(100% + 11px); left: 50%; transform: translateX(-50%); }
+  .popover.below .arrow { top:-6px; left:50%; transform:translateX(-50%) rotate(45deg); border-left:0.5px solid rgba(255,255,255,0.18); border-top:0.5px solid rgba(255,255,255,0.18); }
+  /* 朝右弹：位于按钮右侧、纵向居中；箭头在左侧指左 */
+  .popover.side { left: calc(100% + 11px); top: 50%; transform: translateY(-50%); }
+  .popover.side .arrow { left:-6px; top:50%; transform:translateY(-50%) rotate(45deg); border-left:0.5px solid rgba(255,255,255,0.18); border-bottom:0.5px solid rgba(255,255,255,0.18); }
+  .popover .arrow { position:absolute; width:12px; height:12px; background:rgba(255,255,255,0.14); border-radius:3px 0 0 0; }
+
+  .po-title { display:flex; align-items:center; gap:6px; font-size:10px; letter-spacing:0.8px; color:var(--text-caption); font-weight:700; text-transform:uppercase; margin-bottom:9px; padding:0 1px; }
+
+  .tile { display:flex; align-items:center; gap:10px; padding:9px 10px; border-radius:12px; background:rgba(255,255,255,0.06); border:0.5px solid rgba(255,255,255,0.10); }
+  .tile + .tile { margin-top:7px; }
+  .tile .badge { width:30px;height:30px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.10); }
+  .tile .badge svg * { stroke: var(--text-caption); }
+  .tile .meta { flex:1; min-width:0; }
+  .tile .nm { font-size:12px; font-weight:650; }
+  .tile .st { font-size:9.5px; color:var(--text-caption); margin-top:1px; }
+  .tile .sw { width:34px;height:20px;border-radius:10px;background:rgba(255,255,255,0.16);position:relative;flex-shrink:0; }
+  .tile .sw::after { content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.3);transition:transform 0.2s; }
+  .tile.on[data-accent="awake"] { background:rgba(93,140,240,0.16); border-color:rgba(93,140,240,0.5); }
+  .tile.on[data-accent="awake"] .badge { background:var(--tint-awake); box-shadow:0 0 13px rgba(93,140,240,0.6); }
+  .tile.on[data-accent="awake"] .badge svg * { stroke:#fff; }
+  .tile.on[data-accent="awake"] .st { color:var(--tint-awake); }
+  .tile.on[data-accent="awake"] .sw { background:var(--tint-awake); }
+  .tile.on[data-accent="awake"] .sw::after { transform:translateX(14px); }
+
+  .hint { margin-top: 34px; font-size:11.5px; color:var(--text-caption); text-align:center; line-height:1.8; max-width:640px; }
+  .hint b { color: var(--text-value); }
+  .hint code { font-family:"SF Mono",monospace; background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px; font-size:10.5px; color:var(--text-value); }
+</style>
+</head>
+<body>
+
+<h1>面板过长？自动去侧边</h1>
+<p class="sub">
+  <code>NSPopover</code> 首选朝下弹（<code>preferredEdge: .maxY</code>）；一旦<b>下方空间不足</b>，它会<b>自动翻到侧边</b>（或上方），
+  <b>箭头随之重指入口</b>——你之前喜欢的"底→右→左→顶"自适应，这里是<b>系统原生自带</b>，零几何计算。
+</p>
+
+<div class="stage">
+  <!-- 情形 1：下方有空间 → 朝下 -->
+  <div class="scene">
+    <div class="cap-label">下方空间充足 → <b>朝下弹出</b></div>
+    <div class="screen">
+      <div class="panel">
+        <div class="p-head"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">10:36</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-cpu)"></span><span class="lbl">处理器</span><span class="val mono">18%</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-mem)"></span><span class="lbl">内存</span><span class="val mono">61%</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-bat)"></span><span class="lbl">电源</span><span class="val mono">90%</span></div>
+        <div class="actions">
+          <div class="cap">监视器</div>
+          <div class="cap tools-entry open">工具
+            <div class="popover below">
+              <div class="arrow"></div>
+              <div class="po-title">工具</div>
+              <div class="tile" data-accent="lock"><span class="badge"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="2" y="4.5" width="12" height="8" rx="1.6" stroke-width="1.3"/><path d="M4.5 9.5h7" stroke-width="1.3" stroke-linecap="round"/></svg></span><span class="meta"><div class="nm">键盘锁定</div><div class="st">未启用</div></span><span class="sw"></span></div>
+              <div class="tile on" data-accent="awake"><span class="badge"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 6h7v3a3.5 3.5 0 0 1-7 0V6Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.5 6.8h1.6a1.4 1.4 0 0 1 0 2.8" stroke-width="1.3"/></svg></span><span class="meta"><div class="nm">防休眠</div><div class="st">激活中</div></span><span class="sw"></span></div>
+            </div>
+          </div>
+          <div class="cap">设置</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 情形 2：面板过长贴近屏幕底 → 朝右 -->
+  <div class="scene">
+    <div class="cap-label">面板过长 · 下方顶到屏幕边 → <b>朝侧边弹出</b></div>
+    <div class="screen tall">
+      <div class="panel">
+        <div class="p-head"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">10:36</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-cpu)"></span><span class="lbl">处理器</span><span class="val mono">18%</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-gpu)"></span><span class="lbl">GPU</span><span class="val mono">47%</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-mem)"></span><span class="lbl">内存</span><span class="val mono">61%</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-sto)"></span><span class="lbl">存储</span><span class="val mono">59%</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-net)"></span><span class="lbl">网络</span><span class="val mono">2.1M</span></div>
+        <div class="mrow"><span class="ic" style="background:var(--tint-bat)"></span><span class="lbl">电源</span><span class="val mono">90%</span></div>
+        <div class="actions">
+          <div class="cap">监视器</div>
+          <div class="cap tools-entry open">工具
+            <div class="popover side">
+              <div class="arrow"></div>
+              <div class="po-title">工具</div>
+              <div class="tile" data-accent="lock"><span class="badge"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="2" y="4.5" width="12" height="8" rx="1.6" stroke-width="1.3"/><path d="M4.5 9.5h7" stroke-width="1.3" stroke-linecap="round"/></svg></span><span class="meta"><div class="nm">键盘锁定</div><div class="st">未启用</div></span><span class="sw"></span></div>
+              <div class="tile on" data-accent="awake"><span class="badge"><svg width="15" height="15" viewBox="0 0 16 16" fill="none"><path d="M3.5 6h7v3a3.5 3.5 0 0 1-7 0V6Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.5 6.8h1.6a1.4 1.4 0 0 1 0 2.8" stroke-width="1.3"/></svg></span><span class="meta"><div class="nm">防休眠</div><div class="st">激活中</div></span><span class="sw"></span></div>
+            </div>
+          </div>
+          <div class="cap">设置</div>
+        </div>
+      </div>
+      <div class="screen-edge"><span>屏幕下边缘</span></div>
+    </div>
+  </div>
+</div>
+
+<p class="hint">
+  一行代码的事：<code>popover.show(relativeTo: 工具按钮.bounds, of: 工具按钮, preferredEdge: .maxY)</code>。
+  下方不够 → 系统自动选 <b>.maxX/.minX/.minY</b> 里放得下的那条边，箭头自动重指。<br>
+  这正是我上次在"自适应沙盘"里<b>手搓</b>的那套逻辑——用官方组件，它<b>免费且更稳</b>。
+</p>
+
+</body>
+</html>

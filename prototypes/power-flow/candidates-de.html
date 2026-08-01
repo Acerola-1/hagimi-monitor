@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 功率流候选 D/E（避开 AlDente Sankey）</title>
+<style>
+  /* ====== 设计令牌：对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-bat: #65AF52;
+    --sev-warn: #B8872E;
+    --sev-crit: #D94848;
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px 16px 48px;
+    -webkit-font-smoothing: antialiased;
+    color: rgba(255,255,255,0.96);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  .proto-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .proto-tabs { display: flex; background: rgba(255,255,255,0.07); border-radius: 9px; padding: 2px; }
+  .proto-tabs button {
+    border: none; background: transparent;
+    color: rgba(255,255,255,0.55);
+    font-size: 11.5px; font-family: inherit;
+    padding: 5px 14px; border-radius: 7px; cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .proto-tabs button.active { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.92); font-weight: 600; }
+  .proto-cap { font-size: 10.5px; color: rgba(255,255,255,0.35); }
+
+  .variant {
+    width: 340px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255,255,255,0.12);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.40);
+    padding: 10px;
+  }
+  .variant-tag { display: flex; align-items: baseline; gap: 7px; padding: 2px 2px 8px; }
+  .variant-tag .vt { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-secondary); }
+  .variant-tag .vd { font-size: 9.5px; color: rgba(255,255,255,0.40); }
+
+  .row { background: var(--row-glass); border-radius: var(--row-radius); border: 0.5px solid rgba(255,255,255,0.06); }
+  .row-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+  .row-head .icon { width: 18px; display: flex; justify-content: center; flex-shrink: 0; }
+  .row-head .label { font-size: 12px; font-weight: 600; }
+  .row-head .value { font-size: 12px; font-weight: 600; color: var(--text-value); }
+  .row-head .spacer { flex: 1; }
+  .pill {
+    width: 74px; display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+    font-size: 11px; font-weight: 500; color: var(--text-secondary); flex-shrink: 0;
+  }
+  .pill .psym { opacity: 0.72; font-size: 9px; }
+
+  .detail { padding: 0 10px 10px; }
+  .detail .sep { height: 1px; background: var(--row-separator); margin-left: 28px; margin-bottom: 9px; }
+  .viz { margin-left: 28px; width: 272px; }
+  .viz-note { font-size: 10px; color: var(--text-caption); margin-top: 7px; line-height: 1.5; }
+  .viz-note.crit { color: var(--sev-crit); }
+
+  /* D 图例 */
+  .tide-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 6px; }
+  .tide-chip { display: flex; align-items: center; gap: 4px; font-size: 9.5px; color: var(--text-caption); }
+  .tide-chip i { width: 6px; height: 6px; border-radius: 2px; flex-shrink: 0; }
+  .tide-chip b { font-weight: 600; color: var(--text-secondary); }
+</style>
+</head>
+<body>
+
+<div class="proto-ctl">
+  <div class="proto-tabs" id="tabs">
+    <button data-s="charging" class="active">充电中</button>
+    <button data-s="battery">电池供电</button>
+    <button data-s="insufficient">适配器不足</button>
+  </div>
+  <div class="proto-cap">候选 D / E · 均避开 AlDente 的 Sankey 绸带形式 · 数据源 PowerTelemetryData</div>
+</div>
+
+<!-- ============ D · 功率潮汐 ============ -->
+<div class="variant">
+  <div class="variant-tag"><span class="vt">D · 功率潮汐</span><span class="vd">近 60s 镜像堆叠：上=供给 下=消耗，上下对称即守恒 · SwiftUI: Canvas 面积填充</span></div>
+  <div class="row">
+    <div class="row-head" data-head></div>
+    <div class="detail">
+      <div class="sep"></div>
+      <div class="viz">
+        <svg id="tide" width="272" height="112" style="overflow:visible"></svg>
+        <div class="tide-legend" id="tide-legend"></div>
+      </div>
+      <div class="viz-note" data-note></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ E · 电路单线图 ============ -->
+<div class="variant">
+  <div class="variant-tag"><span class="vt">E · 电路单线图</span><span class="vd">母线+端子+方向电流，工程图气质，无盒子无绸带 · SwiftUI: 单 Canvas 线条</span></div>
+  <div class="row">
+    <div class="row-head" data-head></div>
+    <div class="detail">
+      <div class="sep"></div>
+      <div class="viz"><svg id="circuit" width="272" height="122" style="overflow:visible"></svg></div>
+      <div class="viz-note" data-note></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TINT = { bat: '#65AF52', crit: '#D94848', warn: '#B8872E' };
+const C_ADAPTER = 'rgba(255,255,255,0.40)';   /* 供给·适配器：中性 */
+const C_SYSTEM  = 'rgba(255,255,255,0.62)';   /* 消耗·系统：中性亮 */
+const C_LOSS    = 'rgba(255,255,255,0.18)';   /* 消耗·损耗：暗 */
+/* 绿色 = 电池参与的流量（上半区=放电，下半区=充电），红色 = 告警态 */
+
+/* ====== 场景（含 60s 合成历史，讲述状态切换的叙事） ====== */
+function seriesCharging() {
+  /* 前 1/3 电池供电（系统 ~12W），t=20 插电：适配器爬升，开始充电 */
+  const out = [];
+  for (let t = 0; t < 60; t++) {
+    if (t < 20) {
+      const sys = 11 + Math.sin(t * 0.8) * 1.5 + (t % 7 === 0 ? 2 : 0);
+      out.push({ adapter: 0, discharge: sys + 0.3, system: sys, charge: 0, loss: 0.3 });
+    } else {
+      const k = Math.min(1, (t - 20) / 6);                 /* PD 协商爬升 */
+      const sys = 22 + Math.sin(t * 0.6) * 2.5 + (t > 45 ? 2 : 0);
+      const chg = 30.4 * k * (1 - (t - 20) / 220);          /* 充电功率缓降 */
+      const loss = 0.5 + 2.7 * k;
+      out.push({ adapter: sys + chg + loss, discharge: 0, system: sys, charge: chg, loss });
+    }
+  }
+  return out;
+}
+function seriesBattery() {
+  /* 前 1/3 插电直供，t=20 拔电：全部改由电池放电承担 */
+  const out = [];
+  for (let t = 0; t < 60; t++) {
+    const sys = 17 + Math.sin(t * 0.7) * 2 + (t % 11 === 0 ? 2.5 : 0);
+    if (t < 20) out.push({ adapter: sys + 0.8, discharge: 0, system: sys, charge: 0, loss: 0.8 });
+    else out.push({ adapter: 0, discharge: sys + 0.3, system: sys, charge: 0, loss: 0.3 });
+  }
+  return out;
+}
+function seriesInsufficient() {
+  /* t=25 编译开始：系统需求超出 30W 小适配器，电池放电补缺口且缺口扩大 */
+  const out = [];
+  for (let t = 0; t < 60; t++) {
+    const base = t < 25 ? 20 + Math.sin(t * 0.5) * 2 : Math.min(41.5, 22 + (t - 25) * 1.4) + Math.sin(t) * 1.5;
+    const adapter = Math.min(29.8, base + 0.7);
+    const gap = Math.max(0, base + 0.7 - adapter);
+    out.push({ adapter, discharge: gap, system: base, charge: 0, loss: 0.7 });
+  }
+  return out;
+}
+
+const SCENARIOS = {
+  charging: {
+    summary: '82%', icon: 'bolt', pillChg: '30.4W', pillPwr: '24.6W',
+    series: seriesCharging(), crit: false,
+    now: { adapter: 58.2, discharge: 0, system: 24.6, charge: 30.4, loss: 3.2 },
+    note: '约 52 分钟充满',
+    circuit: { mode: 'charging', adapter: 58.2, rated: '96W', system: 24.6, bat: +30.4, level: 0.82 },
+  },
+  battery: {
+    summary: '76%', icon: 'b75', pillChg: '-', pillPwr: '18.4W',
+    series: seriesBattery(), crit: false,
+    now: { adapter: 0, discharge: 18.7, system: 18.4, charge: 0, loss: 0.3 },
+    note: '预计可用 6 小时 20 分',
+    circuit: { mode: 'battery', adapter: null, rated: null, system: 18.4, bat: -18.7, level: 0.76 },
+  },
+  insufficient: {
+    summary: '64%', icon: 'b50', pillChg: '-', pillPwr: '41.5W',
+    series: seriesInsufficient(), crit: true,
+    now: { adapter: 29.8, discharge: 12.4, system: 41.5, charge: 0, loss: 0.7 },
+    note: '适配器已达上限，电池正在补电',
+    circuit: { mode: 'insufficient', adapter: 29.8, rated: '30W', system: 41.5, bat: -12.4, level: 0.64 },
+  },
+};
+let current = 'charging';
+
+const BAT_ICONS = {
+  bolt: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="9.4" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/><path d="M7.4 3.2 5.2 7h1.7l-.7 3.6L9 6.6H7.2l.9-3.4z" fill="#fff" stroke="rgba(0,0,0,0.45)" stroke-width="0.5"/></svg>`,
+  b75:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="7" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+  b50:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="4.8" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+};
+
+function renderHeads(s) {
+  const head = `
+    <span class="icon">${BAT_ICONS[s.icon]}</span>
+    <span class="label">电源:</span><span class="value mono">${s.summary}</span>
+    <span class="spacer"></span>
+    <span class="pill mono"><span class="psym">⚡︎</span>${s.pillChg}</span>
+    <span class="pill mono"><span class="psym">◔</span>${s.pillPwr}</span>`;
+  document.querySelectorAll('[data-head]').forEach((el) => el.innerHTML = head);
+  document.querySelectorAll('[data-note]').forEach((el) => {
+    el.textContent = s.note;
+    el.classList.toggle('crit', s.crit);
+  });
+}
+
+/* ====== D · 功率潮汐 ====== */
+function renderTide(s) {
+  const W = 272, H = 112, mid = H / 2, half = 44;
+  const n = s.series.length;
+  const x = (i) => (i / (n - 1)) * (W - 14) + 2;   /* 右侧留 12px 给 now 点 */
+  const dischargeColor = s.crit ? TINT.crit : TINT.bat;
+
+  const maxTotal = Math.max(...s.series.map((p) =>
+    Math.max(p.adapter + p.discharge, p.system + p.charge + p.loss)), 1);
+  const sc = half / maxTotal;
+
+  /* 层多边形：沿上边沿正向 + 沿下边沿(前一层)反向 */
+  const layer = (lowFn, highFn, up) => {
+    let pts = '';
+    for (let i = 0; i < n; i++) pts += `${x(i).toFixed(1)},${(mid + (up ? -1 : 1) * highFn(s.series[i]) * sc).toFixed(1)} `;
+    for (let i = n - 1; i >= 0; i--) pts += `${x(i).toFixed(1)},${(mid + (up ? -1 : 1) * lowFn(s.series[i]) * sc).toFixed(1)} `;
+    return pts;
+  };
+  const edge = (fn, up) => {
+    let d = '';
+    for (let i = 0; i < n; i++) d += `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${(mid + (up ? -1 : 1) * fn(s.series[i]) * sc).toFixed(1)} `;
+    return d;
+  };
+
+  let h = '';
+  /* 上半区·供给：适配器贴基线，电池放电叠其上（绿=电池在出力） */
+  h += `<polygon points="${layer((p) => 0, (p) => p.adapter, true)}" fill="${C_ADAPTER}" fill-opacity="0.55"/>`;
+  h += `<polygon points="${layer((p) => p.adapter, (p) => p.adapter + p.discharge, true)}" fill="${dischargeColor}" fill-opacity="0.60"/>`;
+  /* 下半区·消耗：系统贴基线，充电叠其上（绿=流入电池），损耗最外 */
+  h += `<polygon points="${layer((p) => 0, (p) => p.system, false)}" fill="${C_SYSTEM}" fill-opacity="0.34"/>`;
+  h += `<polygon points="${layer((p) => p.system, (p) => p.system + p.charge, false)}" fill="${TINT.bat}" fill-opacity="0.62"/>`;
+  h += `<polygon points="${layer((p) => p.system + p.charge, (p) => p.system + p.charge + p.loss, false)}" fill="${C_LOSS}"/>`;
+  /* 供给总量描边（轮廓感） + 基线 */
+  h += `<path d="${edge((p) => p.adapter + p.discharge, true)}" fill="none" stroke="rgba(255,255,255,0.50)" stroke-width="1"/>`;
+  h += `<line x1="2" y1="${mid}" x2="${W - 12}" y2="${mid}" stroke="rgba(255,255,255,0.22)" stroke-width="1"/>`;
+  /* now 脉冲点（右缘，供给总量处） */
+  const nowY = mid - (s.now.adapter + s.now.discharge) * sc;
+  h += `<circle cx="${W - 12}" cy="${nowY}" r="2.2" fill="#fff" opacity="0.9">
+          <animate attributeName="opacity" values="0.9;0.3;0.9" dur="2s" repeatCount="indefinite"/>
+        </circle>`;
+  /* 半区标注 + 时间标 */
+  h += `<text x="4" y="12" font-size="8.5" fill="rgba(255,255,255,0.45)">供给 ▲</text>
+        <text x="4" y="${H - 5}" font-size="8.5" fill="rgba(255,255,255,0.45)">消耗 ▼</text>
+        <text x="${W - 12}" y="12" text-anchor="end" font-size="8.5" fill="rgba(255,255,255,0.35)">60s → 现在</text>`;
+  document.getElementById('tide').innerHTML = h;
+
+  /* 图例（带当前值；为 0 的流量隐藏，但布局固定顺序） */
+  const chips = [
+    { name: '适配器', v: s.now.adapter, c: C_ADAPTER },
+    { name: '电池放电', v: s.now.discharge, c: dischargeColor },
+    { name: '系统', v: s.now.system, c: C_SYSTEM },
+    { name: '充入电池', v: s.now.charge, c: TINT.bat },
+    { name: '损耗', v: s.now.loss, c: 'rgba(255,255,255,0.30)' },
+  ].filter((c) => c.v > 0.05);
+  document.getElementById('tide-legend').innerHTML = chips.map((c) =>
+    `<span class="tide-chip"><i style="background:${c.c}"></i>${c.name} <b class="mono">${c.v.toFixed(1)}W</b></span>`).join('');
+}
+
+/* ====== E · 电路单线图 ====== */
+function renderCircuit(s) {
+  const c = s.circuit;
+  const railY = 46, x0 = 14, x1 = 258, jx = 136, batY = 96;
+  const active = c.mode === 'insufficient' ? TINT.crit : (c.mode === 'battery' ? TINT.bat : 'rgba(255,255,255,0.80)');
+  const adColor = c.mode === 'insufficient' ? TINT.warn : 'rgba(255,255,255,0.80)';
+
+  /* 电流段：轨道细线 + 流动虚线 + 中点方向箭头 */
+  const seg = (d, color, watts, { dim = false, arrowAt = null, arrowDeg = 0 } = {}) => {
+    let out = `<path d="${d}" fill="none" stroke="rgba(255,255,255,0.14)" stroke-width="1.2"/>`;
+    if (dim || watts < 0.05) return out;
+    const dur = Math.max(0.8, Math.min(4, 55 / Math.max(watts, 5)));
+    out += `<path d="${d}" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round"
+              stroke-dasharray="5 9" stroke-opacity="0.9">
+              <animate attributeName="stroke-dashoffset" from="14" to="0" dur="${dur.toFixed(2)}s" repeatCount="indefinite"/>
+            </path>`;
+    if (arrowAt) {
+      out += `<path d="M-3.4 -2.6 L2.6 0 L-3.4 2.6 Z" fill="${color}"
+                transform="translate(${arrowAt[0]} ${arrowAt[1]}) rotate(${arrowDeg})"/>`;
+    }
+    return out;
+  };
+  /* 端子：空心圆 + 名称 + 数值 */
+  const terminal = (x, y, color) => `<circle cx="${x}" cy="${y}" r="3" fill="#191c24" stroke="${color}" stroke-width="1.4"/>`;
+  const tlabel = (x, y, anchor, name, val, valColor) => `
+    <text x="${x}" y="${y}" text-anchor="${anchor}" font-size="9" fill="rgba(255,255,255,0.60)">${name}</text>
+    <text x="${x}" y="${y + 13}" text-anchor="${anchor}" font-size="12" font-weight="650"
+      fill="${valColor}" font-family="SF Mono,ui-monospace,Menlo,monospace">${val}</text>`;
+
+  let h = '';
+  const onAC = c.mode !== 'battery';
+
+  /* 母线左段：适配器 → 汇流点 */
+  h += seg(`M${x0} ${railY} H${jx}`, adColor, onAC ? (c.adapter ?? 0) : 0,
+           { dim: !onAC, arrowAt: onAC ? [(x0 + jx) / 2, railY] : null, arrowDeg: 0 });
+  /* 母线右段：汇流点 → 系统 */
+  h += seg(`M${jx} ${railY} H${x1}`, active, c.system, { arrowAt: [(jx + x1) / 2, railY], arrowDeg: 0 });
+  /* 电池支路：充电向下 / 放电向上 */
+  const batFlow = Math.abs(c.bat);
+  if (c.bat > 0) {
+    h += seg(`M${jx} ${railY} V${batY - 8}`, TINT.bat, batFlow, { arrowAt: [jx, (railY + batY) / 2], arrowDeg: 90 });
+  } else {
+    h += seg(`M${jx} ${batY - 8} V${railY}`, c.mode === 'insufficient' ? TINT.crit : TINT.bat, batFlow,
+             { arrowAt: [jx, (railY + batY) / 2], arrowDeg: -90 });
+  }
+  /* 汇流点 + 端子 */
+  h += `<circle cx="${jx}" cy="${railY}" r="2.4" fill="rgba(255,255,255,0.75)"/>`;
+  h += terminal(x0, railY, adColor) + terminal(x1, railY, active);
+
+  /* 电池符号端子（IEC 风格双横线） */
+  const batColor = c.mode === 'insufficient' ? TINT.crit : TINT.bat;
+  h += `<line x1="${jx - 8}" y1="${batY - 6}" x2="${jx + 8}" y2="${batY - 6}" stroke="${batColor}" stroke-width="1.8"/>
+        <line x1="${jx - 4}" y1="${batY - 1.5}" x2="${jx + 4}" y2="${batY - 1.5}" stroke="${batColor}" stroke-width="1.8"/>`;
+
+  /* 标签 */
+  const adName = c.rated ? `适配器 · ${c.rated}${c.mode === 'insufficient' ? ' ⚠' : ''}` : '适配器';
+  h += tlabel(x0, 22, 'start', adName, onAC ? `${c.adapter.toFixed(1)}W` : '—',
+              c.mode === 'insufficient' ? TINT.warn : 'rgba(255,255,255,0.90)');
+  h += tlabel(x1, 22, 'end', '系统', `${c.system.toFixed(1)}W`,
+              c.mode === 'insufficient' ? TINT.crit : 'rgba(255,255,255,0.90)');
+  h += tlabel(jx + 14, batY - 4, 'start', `电池 ${Math.round(c.level * 100)}%`,
+              `${c.bat > 0 ? '+' : '−'}${batFlow.toFixed(1)}W`,
+              c.bat > 0 ? TINT.bat : (c.mode === 'insufficient' ? TINT.crit : 'rgba(255,255,255,0.90)'));
+  /* 充电呼吸辉光（电池符号处） */
+  if (c.bat > 0) {
+    h += `<circle cx="${jx}" cy="${batY - 4}" r="14" fill="${TINT.bat}" opacity="0.10">
+            <animate attributeName="opacity" values="0.06;0.18;0.06" dur="3s" repeatCount="indefinite"/>
+          </circle>`;
+  }
+  document.getElementById('circuit').innerHTML = h;
+}
+
+/* ====== 渲染 + 切换 ====== */
+function render(key) {
+  const s = SCENARIOS[key];
+  renderHeads(s);
+  renderTide(s);
+  renderCircuit(s);
+}
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || btn.dataset.s === current) return;
+  current = btn.dataset.s;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b === btn));
+  render(current);
+});
+render(current);
+</script>
+</body>
+</html>

@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 功率流候选 F/G（非图表 · 非流向图）</title>
+<style>
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --tint-bat: #65AF52;
+    --sev-warn: #B8872E;
+    --sev-crit: #D94848;
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 32px 16px 48px;
+    -webkit-font-smoothing: antialiased;
+    color: rgba(255,255,255,0.96);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  .proto-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .proto-tabs { display: flex; background: rgba(255,255,255,0.07); border-radius: 9px; padding: 2px; }
+  .proto-tabs button {
+    border: none; background: transparent;
+    color: rgba(255,255,255,0.55);
+    font-size: 11.5px; font-family: inherit;
+    padding: 5px 14px; border-radius: 7px; cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .proto-tabs button.active { background: rgba(255,255,255,0.14); color: rgba(255,255,255,0.92); font-weight: 600; }
+  .proto-cap { font-size: 10.5px; color: rgba(255,255,255,0.35); }
+
+  .variant {
+    width: 340px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255,255,255,0.12);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.40);
+    padding: 10px;
+  }
+  .variant-tag { display: flex; align-items: baseline; gap: 7px; padding: 2px 2px 8px; }
+  .variant-tag .vt { font-size: 11px; font-weight: 700; letter-spacing: 0.5px; color: var(--text-secondary); }
+  .variant-tag .vd { font-size: 9.5px; color: rgba(255,255,255,0.40); }
+
+  .row { background: var(--row-glass); border-radius: var(--row-radius); border: 0.5px solid rgba(255,255,255,0.06); }
+  .row-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+  .row-head .icon { width: 18px; display: flex; justify-content: center; flex-shrink: 0; }
+  .row-head .label { font-size: 12px; font-weight: 600; }
+  .row-head .value { font-size: 12px; font-weight: 600; color: var(--text-value); }
+  .row-head .spacer { flex: 1; }
+  .pill {
+    width: 74px; display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+    font-size: 11px; font-weight: 500; color: var(--text-secondary); flex-shrink: 0;
+  }
+  .pill .psym { opacity: 0.72; font-size: 9px; }
+
+  .detail { padding: 0 10px 10px; }
+  .detail .sep { height: 1px; background: var(--row-separator); margin-left: 28px; margin-bottom: 9px; }
+  .viz { margin-left: 28px; width: 272px; }
+  .viz-note { font-size: 10px; color: var(--text-caption); margin-top: 7px; line-height: 1.5; }
+  .viz-note.crit { color: var(--sev-crit); }
+
+  /* ====== G · 能量方程 ====== */
+  .eq-head { display: flex; align-items: baseline; gap: 8px; }
+  .eq-head .ehl { font-size: 10px; color: var(--text-caption); letter-spacing: 0.3px; }
+  .eq-head .ehv { font-size: 27px; font-weight: 700; letter-spacing: -0.5px; color: rgba(255,255,255,0.94); }
+  .eq-head .ehv .u { font-size: 13px; font-weight: 500; color: var(--text-caption); margin-left: 2px; }
+  .eq-line { display: flex; align-items: flex-start; gap: 7px; margin-top: 9px; }
+  .eq-op { font-size: 14px; color: rgba(255,255,255,0.40); font-weight: 500; padding-top: 1px; flex-shrink: 0; }
+  .eq-term { display: flex; flex-direction: column; gap: 3px; }
+  .eq-term .tv { font-size: 14px; font-weight: 650; color: var(--text-secondary); white-space: nowrap; }
+  .eq-term .tn { font-size: 9.5px; color: var(--text-caption); white-space: nowrap; }
+  .eq-term .tbar { height: 3px; border-radius: 2px; position: relative; overflow: hidden; }
+  .eq-term .tbar::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(100deg, transparent 25%, rgba(255,255,255,0.35) 50%, transparent 75%);
+    background-size: 220% 100%;
+    animation: eqshimmer 2.6s linear infinite;
+  }
+  @keyframes eqshimmer { from { background-position: 170% 0; } to { background-position: -70% 0; } }
+</style>
+</head>
+<body>
+
+<div class="proto-ctl">
+  <div class="proto-tabs" id="tabs">
+    <button data-s="charging" class="active">充电中</button>
+    <button data-s="battery">电池供电</button>
+    <button data-s="insufficient">适配器不足</button>
+  </div>
+  <div class="proto-cap">候选 F / G · 非图表、非流向图 · 数据源 PowerTelemetryData</div>
+</div>
+
+<!-- ============ F · 电池能量舱 ============ -->
+<div class="variant">
+  <div class="variant-tag"><span class="vt">F · 电池能量舱</span><span class="vd">电池实体插画：液面=电量，波浪气泡=充放 · SwiftUI: Canvas 波形+粒子</span></div>
+  <div class="row">
+    <div class="row-head" data-head></div>
+    <div class="detail">
+      <div class="sep"></div>
+      <div class="viz"><svg id="cell" width="272" height="118" style="overflow:visible"></svg></div>
+      <div class="viz-note" data-note></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ G · 能量方程 ============ -->
+<div class="variant">
+  <div class="variant-tag"><span class="vt">G · 能量方程</span><span class="vd">守恒式排版直书，下划线长度 ∝ 瓦数 · SwiftUI: 纯文本布局零 Canvas</span></div>
+  <div class="row">
+    <div class="row-head" data-head></div>
+    <div class="detail">
+      <div class="sep"></div>
+      <div class="viz" id="equation"></div>
+      <div class="viz-note" data-note></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TINT = { bat: '#65AF52', crit: '#D94848', warn: '#B8872E' };
+const C_SYS = 'rgba(255,255,255,0.55)';
+const C_LOSS = 'rgba(255,255,255,0.24)';
+
+const SCENARIOS = {
+  charging: {
+    summary: '82%', icon: 'bolt', pillChg: '30.4W', pillPwr: '24.6W',
+    level: 0.82, crit: false,
+    cell: { adapterLabel: '适配器 · 96W', adapterW: '58.2W', sysW: '24.6W',
+            flow: '+30.4W', flowColor: TINT.bat, liquid: TINT.bat,
+            leftActive: true, rightActive: true, bubbles: true, drainWave: false },
+    note: '约 52 分钟充满',
+    eq: {
+      headLabel: '适配器输入', headV: 58.2,
+      terms: [
+        { op: '=', name: '系统', v: 24.6, c: C_SYS },
+        { op: '+', name: '充入电池', v: 30.4, c: TINT.bat },
+        { op: '+', name: '损耗', v: 3.2, c: C_LOSS },
+      ],
+    },
+  },
+  battery: {
+    summary: '76%', icon: 'b75', pillChg: '-', pillPwr: '18.4W',
+    level: 0.76, crit: false,
+    cell: { adapterLabel: '适配器', adapterW: '—', sysW: '18.4W',
+            flow: '−18.7W', flowColor: 'rgba(255,255,255,0.85)', liquid: TINT.bat,
+            leftActive: false, rightActive: true, bubbles: false, drainWave: true },
+    note: '预计可用 6 小时 20 分',
+    eq: {
+      headLabel: '电池输出', headV: 18.7,
+      terms: [
+        { op: '=', name: '系统', v: 18.4, c: C_SYS },
+        { op: '+', name: '损耗', v: 0.3, c: C_LOSS },
+      ],
+    },
+  },
+  insufficient: {
+    summary: '64%', icon: 'b50', pillChg: '-', pillPwr: '41.5W',
+    level: 0.64, crit: true,
+    cell: { adapterLabel: '适配器 · 30W ⚠', adapterW: '29.8W', sysW: '41.5W',
+            flow: '−12.4W', flowColor: TINT.crit, liquid: TINT.crit,
+            leftActive: true, rightActive: true, bubbles: false, drainWave: true,
+            leftColor: TINT.warn, rightColor: TINT.crit },
+    note: '适配器已达上限，电池正在补电',
+    eq: {
+      headLabel: '系统需求', headV: 41.5, headColor: TINT.crit,
+      terms: [
+        { op: '=', name: '适配器 · 已上限', v: 29.8, c: TINT.warn },
+        { op: '+', name: '电池补电', v: 12.4, c: TINT.crit },
+        { op: '−', name: '损耗', v: 0.7, c: C_LOSS },
+      ],
+    },
+  },
+};
+let current = 'charging';
+
+const BAT_ICONS = {
+  bolt: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="9.4" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/><path d="M7.4 3.2 5.2 7h1.7l-.7 3.6L9 6.6H7.2l.9-3.4z" fill="#fff" stroke="rgba(0,0,0,0.45)" stroke-width="0.5"/></svg>`,
+  b75:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="7" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+  b50:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="4.8" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+};
+
+function renderHeads(s) {
+  const head = `
+    <span class="icon">${BAT_ICONS[s.icon]}</span>
+    <span class="label">电源:</span><span class="value mono">${s.summary}</span>
+    <span class="spacer"></span>
+    <span class="pill mono"><span class="psym">⚡︎</span>${s.pillChg}</span>
+    <span class="pill mono"><span class="psym">◔</span>${s.pillPwr}</span>`;
+  document.querySelectorAll('[data-head]').forEach((el) => el.innerHTML = head);
+  document.querySelectorAll('[data-note]').forEach((el) => {
+    el.textContent = s.note;
+    el.classList.toggle('crit', s.crit);
+  });
+}
+
+/* ====== F · 电池能量舱 ====== */
+function wavePath(x0, yTop, width, period, amp, depth) {
+  /* 从 (x0,yTop) 起的正弦波，向下闭合成可填充形状 */
+  let d = `M ${x0} ${yTop}`;
+  const half = period / 2;
+  const n = Math.ceil(width / half);
+  d += ` q ${period / 4} ${-amp * 2} ${half} 0`;
+  for (let i = 1; i < n; i++) d += ` t ${half} 0`;
+  d += ` v ${depth} h ${-half * n} Z`;
+  return d;
+}
+
+function renderCell(s) {
+  const c = s.cell;
+  /* 电池几何：主体 (88,24) 96×58 r13，右侧电极 */
+  const bx = 88, by = 24, bw = 96, bh = 58, inset = 4;
+  const ix = bx + inset, iy = by + inset, iw = bw - inset * 2, ih = bh - inset * 2;
+  const liquidTop = iy + ih * (1 - s.level);
+  const leftC = c.leftColor ?? 'rgba(255,255,255,0.70)';
+  const rightC = c.rightColor ?? 'rgba(255,255,255,0.70)';
+
+  /* 波浪两层：主浪 + 副浪（半周期错相、更慢更淡）。放电时波幅更小更平静 */
+  const amp = c.bubbles ? 3 : (c.drainWave ? 2 : 1.2);
+  const wave1 = wavePath(ix - 44, liquidTop, iw + 88, 44, amp, ih + 10);
+  const wave2 = wavePath(ix - 66, liquidTop + 1.5, iw + 110, 52, amp * 0.7, ih + 10);
+
+  /* 气泡（仅充电）：从液底升到液面 */
+  let bubbles = '';
+  if (c.bubbles) {
+    const defsB = [ [ix + 18, 2.0, 2.8, 0 ], [ix + 44, 1.4, 3.4, 1.1 ], [ix + 66, 1.7, 2.5, 0.6 ], [ix + 32, 1.2, 3.8, 2.0 ] ];
+    for (const [cx, r, dur, delay] of defsB) {
+      bubbles += `<circle cx="${cx}" r="${r}" fill="rgba(255,255,255,0.45)">
+        <animate attributeName="cy" values="${iy + ih - 4};${liquidTop + 5}" dur="${dur}s" begin="${delay}s" repeatCount="indefinite"/>
+        <animate attributeName="opacity" values="0;0.8;0" dur="${dur}s" begin="${delay}s" repeatCount="indefinite"/>
+      </circle>`;
+    }
+  }
+
+  /* 箭羽（chevron）三连：方向朝电池（充电左侧）或离开电池（右侧恒向系统） */
+  const chevron = (x, y, color, delay, dur) => `
+    <path d="M ${x} ${y - 4.5} l 5 4.5 l -5 4.5" fill="none" stroke="${color}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <animate attributeName="opacity" values="0.12;1;0.12" dur="${dur}s" begin="${delay}s" repeatCount="indefinite"/>
+    </path>`;
+  const chevronRow = (x, y, color, dur) => chevron(x, y, color, 0, dur) + chevron(x + 8, y, color, dur * 0.18, dur) + chevron(x + 16, y, color, dur * 0.36, dur);
+
+  let h = '';
+  /* 左列：适配器 */
+  h += `<text x="6" y="42" font-size="9" fill="rgba(255,255,255,${c.leftActive ? 0.60 : 0.35})">${c.adapterLabel}</text>
+        <text x="6" y="58" font-size="13" font-weight="650" fill="${c.leftActive ? (c.leftColor ?? 'rgba(255,255,255,0.90)') : 'rgba(255,255,255,0.35)'}"
+          font-family="SF Mono,ui-monospace,Menlo,monospace">${c.adapterW}</text>`;
+  if (c.leftActive) h += chevronRow(60, 53, leftC, 1.3);
+
+  /* 右列：系统 */
+  h += `<text x="266" y="42" text-anchor="end" font-size="9" fill="rgba(255,255,255,0.60)">系统</text>
+        <text x="266" y="58" text-anchor="end" font-size="13" font-weight="650" fill="${c.rightColor ?? 'rgba(255,255,255,0.90)'}"
+          font-family="SF Mono,ui-monospace,Menlo,monospace">${c.sysW}</text>`;
+  if (c.rightActive) h += chevronRow(198, 53, rightC, 1.1);
+
+  /* 电池流向徽标（电池上方，正=充入 负=输出） */
+  h += `<text x="${bx + bw / 2}" y="16" text-anchor="middle" font-size="11.5" font-weight="650" fill="${c.flowColor}"
+          font-family="SF Mono,ui-monospace,Menlo,monospace">${c.flow}</text>`;
+
+  /* 电池本体 */
+  h += `<defs>
+          <clipPath id="cellClip"><rect x="${ix}" y="${iy}" width="${iw}" height="${ih}" rx="9"/></clipPath>
+          <linearGradient id="liquidGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="${c.liquid}" stop-opacity="0.85"/>
+            <stop offset="1" stop-color="${c.liquid}" stop-opacity="0.55"/>
+          </linearGradient>
+        </defs>`;
+  h += `<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="13" fill="rgba(255,255,255,0.045)"
+          stroke="rgba(255,255,255,0.22)" stroke-width="1.4"/>
+        <rect x="${bx + bw + 2.5}" y="${by + bh / 2 - 9}" width="6.5" height="18" rx="3" fill="rgba(255,255,255,0.22)"/>`;
+  /* 液体（裁剪进内腔） */
+  h += `<g clip-path="url(#cellClip)">
+          <path d="${wave2}" fill="${c.liquid}" opacity="0.30">
+            <animateTransform attributeName="transform" type="translate" from="0 0" to="52 0" dur="6.5s" repeatCount="indefinite"/>
+          </path>
+          <path d="${wave1}" fill="url(#liquidGrad)">
+            <animateTransform attributeName="transform" type="translate" from="0 0" to="44 0" dur="3.8s" repeatCount="indefinite"/>
+          </path>
+          ${bubbles}
+        </g>`;
+  /* 内高光 */
+  h += `<rect x="${bx + 3}" y="${by + 3}" width="${bw - 6}" height="${bh - 6}" rx="10" fill="none"
+          stroke="rgba(255,255,255,0.08)" stroke-width="1"/>`;
+  /* 电量大字（液面上下自动对比：用描边保证可读） */
+  h += `<text x="${bx + bw / 2}" y="${by + bh / 2 + 6}" text-anchor="middle" font-size="17" font-weight="700"
+          fill="rgba(255,255,255,0.95)" stroke="rgba(0,0,0,0.25)" stroke-width="0.6" paint-order="stroke"
+          font-family="SF Mono,ui-monospace,Menlo,monospace">${s.summary}</text>`;
+
+  document.getElementById('cell').innerHTML = h;
+}
+
+/* ====== G · 能量方程 ====== */
+function renderEquation(s) {
+  const e = s.eq;
+  const total = e.terms.reduce((a, t) => a + t.v, 0);
+  const budget = 210; /* 下划线总宽度预算(px)，按占比分配 */
+  const terms = e.terms.map((t) => `
+    <span class="eq-op">${t.op}</span>
+    <span class="eq-term">
+      <span class="tv mono">${t.v.toFixed(1)}<span style="font-size:9.5px;color:var(--text-caption)">W</span></span>
+      <span class="tn">${t.name}</span>
+      <span class="tbar" style="width:${Math.max(10, (t.v / total) * budget)}px;background:${t.c}"></span>
+    </span>`).join('');
+  document.getElementById('equation').innerHTML = `
+    <div class="eq-head">
+      <span class="ehl">${e.headLabel}</span>
+      <span class="ehv mono" ${e.headColor ? `style="color:${e.headColor}"` : ''}>${e.headV.toFixed(1)}<span class="u">W</span></span>
+    </div>
+    <div class="eq-line">${terms}</div>`;
+}
+
+/* ====== 渲染 + 切换 ====== */
+function render(key) {
+  const s = SCENARIOS[key];
+  renderHeads(s);
+  renderCell(s);
+  renderEquation(s);
+}
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || btn.dataset.s === current) return;
+  current = btn.dataset.s;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b === btn));
+  render(current);
+});
+render(current);
+</script>
+</body>
+</html>

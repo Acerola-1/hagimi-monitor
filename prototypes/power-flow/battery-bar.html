@@ -1,0 +1,571 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 功率流：全宽电量条版</title>
+<style>
+  /* ====== 设计令牌：对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A;
+    --tint-gpu: #5D8CF0;
+    --tint-mem: #42A39A;
+    --tint-sto: #9A865E;
+    --tint-net: #43A6A0;
+    --tint-bat: #65AF52;
+    --sev-warn: #B8872E;
+    --sev-crit: #D94848;
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+    padding: 36px 16px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  .panel {
+    width: 340px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .panel-header { display: flex; align-items: center; padding: 2px 2px 0; }
+  .live-dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: #6BBF59; margin-right: 5px;
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .panel-header .sys { font-size: 9px; letter-spacing: 1.1px; color: var(--text-caption); font-weight: 500; }
+  .panel-header .time { margin-left: auto; font-size: 10px; color: var(--text-caption); }
+
+  .row { background: var(--row-glass); border-radius: var(--row-radius); border: 0.5px solid rgba(255, 255, 255, 0.06); }
+  .row-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+  .row-head .icon { width: 18px; display: flex; justify-content: center; flex-shrink: 0; }
+  .row-head .icon svg { display: block; }
+  .row-head .label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .row-head .value { font-size: 12px; font-weight: 600; color: var(--text-value); white-space: nowrap; }
+  .row-head .spacer { flex: 1; min-width: 4px; }
+  .spark { width: 56px; height: 18px; flex-shrink: 0; }
+  .meter { width: 56px; height: 3px; border-radius: 2px; background: var(--track-fill); overflow: hidden; flex-shrink: 0; }
+  .meter > div { height: 100%; border-radius: 2px; }
+  .pill {
+    width: 74px; display: flex; align-items: center; justify-content: flex-end; gap: 4px;
+    font-size: 11px; font-weight: 500; color: var(--text-secondary); flex-shrink: 0;
+  }
+  .pill .psym { opacity: 0.72; font-size: 9px; }
+  .pill.charging .psym { color: var(--tint-bat); opacity: 1; }
+
+  .detail { padding: 0 10px 9px; }
+  .detail .sep { height: 1px; background: var(--row-separator); margin-left: 28px; margin-bottom: 8px; }
+
+  .grid {
+    margin-left: 28px;
+    margin-bottom: 10px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    column-gap: 16px;
+    row-gap: 7px;
+  }
+  .gcell { display: flex; align-items: baseline; font-size: 11px; }
+  .gcell .gl { color: var(--text-caption); }
+  .gcell .gv { margin-left: auto; color: var(--text-secondary); font-weight: 500; }
+
+  .sec-title {
+    margin-left: 28px;
+    display: flex; align-items: center; gap: 7px;
+    font-size: 10px; color: var(--text-caption);
+    letter-spacing: 0.3px; margin-bottom: 7px;
+  }
+  .sec-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--row-separator), transparent); }
+
+  /* ====== 功率流 · 全宽电量条（图高 94，旧三角布局 118 + ETA 行）======
+     上排：适配器 ─ 汇流 ─ 系统；短 stub 垂直连到底部全宽电池条。
+     电池条填充 = 电量百分比，任何状态都承载信息（含 idle 直供态）。 */
+  .flow { margin-left: 28px; }
+  .flow-rail { position: relative; width: 272px; height: 94px; }
+  .flow-rail svg.edges { position: absolute; inset: 0; overflow: visible; }
+
+  .fnode {
+    position: absolute;
+    top: 4px;
+    height: 44px;
+    border-radius: 10px;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.085), rgba(255, 255, 255, 0.028));
+    border: 0.5px solid rgba(255, 255, 255, 0.11);
+    box-shadow:
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.10),
+      0 5px 14px rgba(0, 0, 0, 0.30);
+    padding: 5px 8px 6px;
+    transition: opacity 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  .fnode .fh { display: flex; align-items: center; gap: 3px; margin-bottom: 1.5px; }
+  .fnode .fh svg { flex-shrink: 0; display: block; opacity: 0.85; }
+  .fnode .fl {
+    font-size: 8.5px; color: var(--text-caption);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    letter-spacing: 0.2px;
+  }
+  .fnode .fv { font-size: 13.5px; font-weight: 650; color: var(--text-value); white-space: nowrap; letter-spacing: -0.2px; }
+  .fnode .fv .u { font-size: 9px; font-weight: 500; color: var(--text-caption); margin-left: 1.5px; }
+
+  .fnode .fbar {
+    margin-top: 3px; height: 2.5px; border-radius: 2px;
+    background: rgba(255, 255, 255, 0.07); overflow: hidden;
+  }
+  .fnode .fbar > div {
+    height: 100%; border-radius: 2px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.35), rgba(255,255,255,0.60));
+    transition: width 0.6s cubic-bezier(0.3, 0.9, 0.4, 1), background 0.3s ease;
+  }
+
+  #fn-adapter { left: 0; width: 96px; }
+  #fn-system { right: 0; width: 96px; }
+
+  .fnode.dimmed { opacity: 0.35; }
+  .fnode.warn { border-color: rgba(184, 135, 46, 0.55); }
+  .fnode.warn .fv { color: var(--sev-warn); }
+  .fnode.alert { border-color: rgba(217, 72, 72, 0.55); }
+  .fnode.alert .fv { color: var(--sev-crit); }
+
+  /* ---- 全宽电池条 ---- */
+  .batbar {
+    position: absolute;
+    left: 0; right: 0; bottom: 0;
+    height: 30px;
+    border-radius: 9px;
+    background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.022));
+    border: 0.5px solid rgba(255, 255, 255, 0.11);
+    box-shadow:
+      inset 0 0.5px 0 rgba(255, 255, 255, 0.09),
+      0 5px 14px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  /* 内部电量填充：宽度 = SOC */
+  .batbar .fill {
+    position: absolute; inset: 0;
+    border-radius: 8.5px;
+    background: linear-gradient(90deg, rgba(101, 175, 82, 0.16), rgba(101, 175, 82, 0.30));
+    transition: width 0.7s cubic-bezier(0.3, 0.9, 0.4, 1), background 0.4s ease;
+  }
+  /* 填充前缘刻度：上下两段短亮线、中段镂空，避免横穿条内文字（否则像一根光标） */
+  .batbar .fill::after {
+    content: '';
+    position: absolute; right: 0; top: 0; bottom: 0;
+    width: 1.5px; border-radius: 1px;
+    background: linear-gradient(180deg,
+      rgba(101, 175, 82, 0.9) 0%, rgba(101, 175, 82, 0.9) 24%,
+      transparent 24%, transparent 76%,
+      rgba(101, 175, 82, 0.9) 76%, rgba(101, 175, 82, 0.9) 100%);
+  }
+  .batbar.crit .fill { background: linear-gradient(90deg, rgba(217, 72, 72, 0.14), rgba(217, 72, 72, 0.28)); }
+  .batbar.crit .fill::after {
+    background: linear-gradient(180deg,
+      rgba(217, 72, 72, 0.9) 0%, rgba(217, 72, 72, 0.9) 24%,
+      transparent 24%, transparent 76%,
+      rgba(217, 72, 72, 0.9) 76%, rgba(217, 72, 72, 0.9) 100%);
+  }
+
+  .batbar .bb-content {
+    position: relative;
+    height: 100%;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 10px;
+  }
+  .batbar .bb-label {
+    font-size: 8.5px; color: var(--text-caption);
+    letter-spacing: 0.2px; white-space: nowrap;
+  }
+  .batbar .bb-state {
+    margin-left: auto;
+    display: flex; align-items: baseline; gap: 6px;
+    white-space: nowrap;
+  }
+  .batbar .bb-watt { font-size: 12px; font-weight: 650; color: var(--text-value); letter-spacing: -0.2px; }
+  .batbar .bb-watt .u { font-size: 9px; font-weight: 500; color: var(--text-caption); margin-left: 1px; }
+  .batbar .bb-watt.pos { color: var(--tint-bat); }
+  .batbar .bb-watt.crit-c { color: var(--sev-crit); }
+  .batbar .bb-note { font-size: 9.5px; color: var(--text-caption); }
+  .batbar .bb-note.crit-c { color: var(--sev-crit); }
+
+  .batbar.glow-charge {
+    border-color: rgba(101, 175, 82, 0.42);
+    animation: breath 3s ease-in-out infinite;
+  }
+  @keyframes breath {
+    0%,100% { box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.09), 0 0 6px rgba(101, 175, 82, 0.10); }
+    50%     { box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.09), 0 0 15px rgba(101, 175, 82, 0.32); }
+  }
+  .batbar.crit {
+    border-color: rgba(217, 72, 72, 0.55);
+    animation: breath-crit 2.2s ease-in-out infinite;
+  }
+  @keyframes breath-crit {
+    0%,100% { box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.08), 0 0 5px rgba(217, 72, 72, 0.10); }
+    50%     { box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.08), 0 0 13px rgba(217, 72, 72, 0.30); }
+  }
+
+  .proto-ctl { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .proto-tabs { display: flex; background: rgba(255, 255, 255, 0.07); border-radius: 9px; padding: 2px; }
+  .proto-tabs button {
+    border: none; background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 11.5px; font-family: inherit;
+    padding: 5px 12px; border-radius: 7px; cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  .proto-tabs button.active { background: rgba(255, 255, 255, 0.14); color: rgba(255, 255, 255, 0.92); font-weight: 600; }
+  .proto-cap { font-size: 10.5px; color: rgba(255, 255, 255, 0.35); }
+</style>
+</head>
+<body>
+
+<div class="panel">
+  <div class="panel-header">
+    <div class="live-dot"></div>
+    <div class="sys">SYSTEM · LIVE</div>
+    <div class="time mono" id="clock">14:32</div>
+  </div>
+
+  <!-- CPU -->
+  <div class="row"><div class="row-head">
+    <span class="icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tint-cpu)" stroke-width="1.3"><rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="5.4" y="5.4" width="3.2" height="3.2" rx="0.6" fill="var(--tint-cpu)" stroke="none"/><path d="M5 3V1M9 3V1M5 13v-2M9 13v-2M3 5H1M3 9H1M13 5h-2M13 9h-2"/></svg></span>
+    <span class="label">CPU:</span><span class="value mono">12%</span>
+    <span class="spacer"></span>
+    <svg class="spark" viewBox="0 0 56 18"><polyline points="0,13 6,12 12,14 18,9 24,11 30,6 36,10 42,8 48,12 56,10" fill="none" stroke="var(--tint-cpu)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+  </div></div>
+
+  <!-- GPU -->
+  <div class="row"><div class="row-head">
+    <span class="icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tint-gpu)" stroke-width="1.3"><rect x="1.5" y="3.5" width="11" height="7" rx="1.5"/><circle cx="5.4" cy="7" r="1.8"/><path d="M9.4 5.4v3.2M11 5.4v3.2"/></svg></span>
+    <span class="label">GPU:</span><span class="value mono">7%</span>
+    <span class="spacer"></span>
+    <svg class="spark" viewBox="0 0 56 18"><polyline points="0,14 8,13 16,14 22,12 28,13 34,11 40,13 46,12 56,13" fill="none" stroke="var(--tint-gpu)" stroke-width="1.4" stroke-linejoin="round"/></svg>
+  </div></div>
+
+  <!-- 内存 -->
+  <div class="row"><div class="row-head">
+    <span class="icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tint-mem)" stroke-width="1.3"><rect x="1.5" y="4" width="11" height="6" rx="1"/><path d="M4 10v2M7 10v2M10 10v2M4 4V2.5M7 4V2.5M10 4V2.5"/></svg></span>
+    <span class="label">内存:</span><span class="value mono">61%</span>
+    <span class="spacer"></span>
+    <div class="meter"><div style="width:61%;background:var(--tint-mem)"></div></div>
+  </div></div>
+
+  <!-- 存储 -->
+  <div class="row"><div class="row-head">
+    <span class="icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tint-sto)" stroke-width="1.3"><ellipse cx="7" cy="3.5" rx="5" ry="1.8"/><path d="M2 3.5v7c0 1 2.2 1.8 5 1.8s5-.8 5-1.8v-7"/><path d="M2 7c0 1 2.2 1.8 5 1.8S12 8 12 7"/></svg></span>
+    <span class="label">存储:</span><span class="value mono">72%</span>
+    <span class="spacer"></span>
+    <div class="meter"><div style="width:72%;background:var(--tint-sto)"></div></div>
+  </div></div>
+
+  <!-- 网络 -->
+  <div class="row"><div class="row-head">
+    <span class="icon"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="var(--tint-net)" stroke-width="1.3" stroke-linecap="round"><path d="M1.5 5.5a8 8 0 0 1 11 0M3.5 8a5 5 0 0 1 7 0M5.5 10.4a2.2 2.2 0 0 1 3 0"/><circle cx="7" cy="12.2" r="0.8" fill="var(--tint-net)" stroke="none"/></svg></span>
+    <span class="label">网络:</span><span class="value mono">Wi-Fi</span>
+    <span class="spacer"></span>
+    <span class="pill mono"><span class="psym">↓</span>1.2 MB/s</span>
+    <span class="pill mono"><span class="psym">↑</span>86 KB/s</span>
+  </div></div>
+
+  <!-- ============ 电源行（展开态） ============ -->
+  <div class="row" id="battery-row">
+    <div class="row-head">
+      <span class="icon" id="bat-icon"></span>
+      <span class="label">电源:</span><span class="value mono" id="bat-summary">82%</span>
+      <span class="spacer"></span>
+      <span class="pill mono" id="pill-chg-wrap"><span class="psym">⚡︎</span><span id="pill-chg">30.4W</span></span>
+      <span class="pill mono"><span class="psym">◔</span><span id="pill-pwr">24.6W</span></span>
+    </div>
+
+    <div class="detail">
+      <div class="sep"></div>
+
+      <div class="grid">
+        <div class="gcell"><span class="gl">健康度</span><span class="gv mono">92%</span></div>
+        <div class="gcell"><span class="gl">循环次数</span><span class="gv mono">118</span></div>
+        <div class="gcell"><span class="gl">温度</span><span class="gv mono" id="g-temp">31°C</span></div>
+        <div class="gcell"><span class="gl">转换损耗</span><span class="gv mono" id="g-loss">3.2 W</span></div>
+      </div>
+
+      <div class="sec-title">功率流</div>
+      <div class="flow">
+        <!-- 上排：适配器 ─ 汇流点 ─ 系统；下方全宽电池条（填充=电量），
+             短 stub 垂直连接。ETA/状态语收进条内右侧，不再单独占行。 -->
+        <div class="flow-rail">
+          <svg class="edges" id="edges" viewBox="0 0 272 94"></svg>
+
+          <div class="fnode" id="fn-adapter">
+            <div class="fh">
+              <svg width="8" height="8" viewBox="0 0 10 10" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="1.1" stroke-linecap="round"><path d="M3 1v2.4M7 1v2.4M2.2 3.4h5.6v1.8a2.8 2.8 0 0 1-5.6 0z"/><path d="M5 8v1.4"/></svg>
+              <div class="fl" id="fa-label">适配器·96W</div>
+            </div>
+            <div class="fv mono" id="fa-value">58.2<span class="u">W</span></div>
+            <div class="fbar"><div id="fa-bar" style="width:60%"></div></div>
+          </div>
+
+          <div class="fnode" id="fn-system">
+            <div class="fh">
+              <svg width="9" height="9" viewBox="0 0 10 10" fill="none" stroke="rgba(255,255,255,0.75)" stroke-width="1.1"><rect x="2" y="2" width="6" height="6" rx="1.2"/><rect x="4" y="4" width="2" height="2" rx="0.4" fill="rgba(255,255,255,0.75)" stroke="none"/></svg>
+              <div class="fl">系统负载</div>
+            </div>
+            <div class="fv mono" id="fs-value">24.6<span class="u">W</span></div>
+          </div>
+
+          <div class="batbar" id="batbar">
+            <div class="fill" id="bb-fill" style="width:82%"></div>
+            <div class="bb-content">
+              <div class="bb-label">电池</div>
+              <div class="bb-state">
+                <span class="bb-watt mono" id="bb-watt">+30.4<span class="u">W</span></span>
+                <span class="bb-note" id="bb-note">约 52 分钟充满</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 原型控制（非产品 UI）-->
+<div class="proto-ctl">
+  <div class="proto-tabs" id="tabs">
+    <button data-s="charging" class="active">充电中</button>
+    <button data-s="idle">直供·已充满</button>
+    <button data-s="battery">电池供电</button>
+    <button data-s="insufficient">适配器不足</button>
+  </div>
+  <div class="proto-cap">全宽电量条布局 · 图高 94pt（旧三角 118pt + ETA 行）· 条内填充 = 电量，idle 态显示「已充满 · 直供」</div>
+</div>
+
+<script>
+const TINT = { bat: '#65AF52', crit: '#D94848', warn: '#B8872E', white: 'rgba(255,255,255,0.85)' };
+
+const SCENARIOS = {
+  charging: {
+    summary: '82%',
+    adapter: { label: '适配器·96W', in: 58.2, max: 96, dimmed: false },
+    system: 24.6,
+    battery: { w: 30.4, dir: 'in', level: 0.82 },
+    note: '约 52 分钟充满',
+    loss: 3.2, temp: 31,
+    icon: 'bolt',
+  },
+  idle: {
+    summary: '100%',
+    adapter: { label: '适配器·96W', in: 24.9, max: 96, dimmed: false },
+    system: 24.6,
+    battery: { w: 0, dir: 'idle', level: 1.0 },
+    note: '已充满 · 适配器直供',
+    loss: 0.3, temp: 29,
+    icon: 'full',
+  },
+  battery: {
+    summary: '76%',
+    adapter: { label: '适配器', in: 0, max: 96, dimmed: true },
+    system: 18.4,
+    battery: { w: 18.7, dir: 'out', level: 0.76 },
+    note: '预计可用 6 小时 20 分',
+    loss: 0.3, temp: 30,
+    icon: 'b75',
+  },
+  insufficient: {
+    summary: '64%',
+    adapter: { label: '已达上限', in: 29.8, max: 30, dimmed: false, maxed: true },
+    system: 41.5,
+    battery: { w: 12.4, dir: 'out', crit: true, level: 0.64 },
+    note: '适配器已达上限 · 电池补电',
+    loss: 0.7, temp: 36,
+    icon: 'b50',
+  },
+};
+let current = 'charging';
+
+const BAT_ICONS = {
+  bolt: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="9.4" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/><path d="M7.4 3.2 5.2 7h1.7l-.7 3.6L9 6.6H7.2l.9-3.4z" fill="#fff" stroke="rgba(0,0,0,0.45)" stroke-width="0.5"/></svg>`,
+  full: `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="9.4" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+  b75:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="7" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+  b50:  `<svg width="16" height="14" viewBox="0 0 16 14" fill="none"><rect x="0.7" y="3.7" width="12" height="6.6" rx="1.8" stroke="${TINT.bat}" stroke-width="1.2"/><rect x="2" y="5" width="4.8" height="4" rx="0.9" fill="${TINT.bat}"/><path d="M14.4 5.6v2.8c.9-.2 1.3-.7 1.3-1.4s-.4-1.2-1.3-1.4z" fill="${TINT.bat}"/></svg>`,
+};
+
+/* ====== 几何：上排导管 y=26；stub 从汇流点 (136,26) 垂直到电池条顶缘 (136,62) ======
+   适配器右缘 96 → 汇流 136；汇流 136 → 系统左缘 176。电池条 top=64（bottom:0, h=30, rail h=94）。 */
+const RAIL_Y = 26;
+const JX = 136;
+const SEG_L = { x0: 96, x1: 130 };
+const SEG_R = { x0: 142, x1: 176 };
+const STUB = { y0: 32, y1: 61 };
+
+const flowWidth = (w) => Math.max(1.8, Math.min(4.5, 1.3 + w / 16));
+
+/* 导管：底轨 + 辉光 + 芯线 + 流动虚线。d 的方向即流向。 */
+function conduit(d, watts, color) {
+  const w = flowWidth(watts);
+  const dur = Math.max(0.7, Math.min(3.5, 45 / Math.max(watts, 5)));
+  let h = '';
+  h += `<path d="${d}" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="${w + 2.4}" stroke-linecap="round"/>`;
+  h += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w + 2}" stroke-linecap="round" stroke-opacity="0.16" filter="url(#soft-glow)"/>`;
+  h += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-opacity="0.32"/>`;
+  h += `<path d="${d}" fill="none" stroke="${color}" stroke-width="${w}" stroke-linecap="round" stroke-opacity="0.9"
+          stroke-dasharray="4 8">
+          <animate attributeName="stroke-dashoffset" from="12" to="0" dur="${dur.toFixed(2)}s" repeatCount="indefinite"/>
+        </path>`;
+  return h;
+}
+const idleTrack = (d) =>
+  `<path d="${d}" fill="none" stroke="rgba(255,255,255,0.06)" stroke-width="3" stroke-linecap="round"/>`;
+
+const dH = (seg) => `M${seg.x0} ${RAIL_Y} L${seg.x1} ${RAIL_Y}`;
+const dDown = `M${JX} ${STUB.y0} L${JX} ${STUB.y1}`;
+const dUp = `M${JX} ${STUB.y1} L${JX} ${STUB.y0}`;
+
+function renderEdges(key) {
+  const s = SCENARIOS[key];
+  let h = `<defs>
+    <filter id="soft-glow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="2"/>
+    </filter>
+  </defs>`;
+
+  if (key === 'charging') {
+    h += conduit(dH(SEG_L), s.adapter.in, TINT.white);   /* 输入 */
+    h += conduit(dH(SEG_R), s.system, TINT.white);       /* 负载 */
+    h += conduit(dDown, s.battery.w, TINT.bat);          /* 向下充电 */
+  } else if (key === 'idle') {
+    h += conduit(dH(SEG_L), s.adapter.in, TINT.white);   /* 直供：左右等粗 */
+    h += conduit(dH(SEG_R), s.system, TINT.white);
+    h += idleTrack(dDown);                               /* 电池旁路：暗轨道 */
+  } else if (key === 'battery') {
+    h += idleTrack(dH(SEG_L));                           /* 无输入 */
+    h += conduit(dH(SEG_R), s.system, TINT.bat);         /* 电池驱动负载 */
+    h += conduit(dUp, s.battery.w, TINT.bat);            /* 向上放电 */
+  } else {
+    h += conduit(dH(SEG_L), s.adapter.in, TINT.warn);    /* 输入卡上限 */
+    h += conduit(dH(SEG_R), s.system, TINT.crit);        /* 负载超输入 */
+    h += conduit(dUp, s.battery.w, TINT.crit);           /* 电池向上补电 */
+  }
+
+  /* 汇流点圆点 */
+  h += `<circle cx="${JX}" cy="${RAIL_Y}" r="2.4" fill="rgba(255,255,255,0.35)"/>`;
+  document.getElementById('edges').innerHTML = h;
+}
+
+/* ====== 数值补间 ====== */
+const tweens = new Map();
+function tweenNumber(el, target, fmt, durMs = 450) {
+  const prev = tweens.get(el) ?? { value: target };
+  const from = prev.value;
+  if (prev.raf) cancelAnimationFrame(prev.raf);
+  const t0 = performance.now();
+  const state = { value: from, raf: 0 };
+  tweens.set(el, state);
+  const step = (now) => {
+    const t = Math.min(1, (now - t0) / durMs);
+    const eased = 1 - Math.pow(1 - t, 3);
+    state.value = from + (target - from) * eased;
+    el.innerHTML = fmt(state.value);
+    if (t < 1) state.raf = requestAnimationFrame(step);
+  };
+  state.raf = requestAnimationFrame(step);
+}
+const wattHTML = (v) => `${v.toFixed(1)}<span class="u">W</span>`;
+
+const $ = (id) => document.getElementById(id);
+function renderValues(key) {
+  const s = SCENARIOS[key];
+
+  $('bat-icon').innerHTML = BAT_ICONS[s.icon];
+  $('bat-summary').textContent = s.summary;
+  $('pill-chg-wrap').classList.toggle('charging', s.battery.dir === 'in');
+  $('pill-chg').textContent = s.battery.dir === 'in' ? `${s.battery.w.toFixed(1)}W` : '-';
+  $('pill-pwr').textContent = `${s.system.toFixed(1)}W`;
+
+  const fa = $('fn-adapter');
+  fa.classList.toggle('dimmed', s.adapter.dimmed);
+  fa.classList.toggle('warn', !!s.adapter.maxed);
+  $('fa-label').textContent = s.adapter.label;
+  if (s.adapter.dimmed) {
+    $('fa-value').innerHTML = '—';
+    $('fa-bar').style.width = '0%';
+  } else {
+    tweenNumber($('fa-value'), s.adapter.in, wattHTML);
+    $('fa-bar').style.width = `${Math.min(100, (s.adapter.in / s.adapter.max) * 100)}%`;
+  }
+
+  $('fn-system').classList.toggle('alert', key === 'insufficient');
+  tweenNumber($('fs-value'), s.system, wattHTML);
+
+  /* ---- 电池条 ---- */
+  const bar = $('batbar');
+  bar.classList.toggle('glow-charge', s.battery.dir === 'in');
+  bar.classList.toggle('crit', !!s.battery.crit);
+  $('bb-fill').style.width = `${(s.battery.level * 100).toFixed(0)}%`;
+
+  const watt = $('bb-watt');
+  watt.classList.toggle('pos', s.battery.dir === 'in');
+  watt.classList.toggle('crit-c', !!s.battery.crit);
+  if (s.battery.dir === 'idle') {
+    watt.innerHTML = '';               /* idle：不显 0W/—，由状态语承载信息 */
+  } else {
+    const sign = s.battery.dir === 'in' ? '+' : '−';
+    tweenNumber(watt, s.battery.w, (v) => `${sign}${wattHTML(v)}`);
+  }
+
+  const note = $('bb-note');
+  note.textContent = s.note;
+  note.classList.toggle('crit-c', !!s.battery.crit);
+
+  $('g-temp').textContent = `${s.temp}°C`;
+  $('g-loss').textContent = `${s.loss.toFixed(1)} W`;
+}
+
+document.getElementById('tabs').addEventListener('click', (e) => {
+  const btn = e.target.closest('button');
+  if (!btn || btn.dataset.s === current) return;
+  current = btn.dataset.s;
+  document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b === btn));
+  renderEdges(current);
+  renderValues(current);
+});
+
+function tick() {
+  const d = new Date();
+  $('clock').textContent = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+}
+setInterval(tick, 1000);
+
+tick();
+renderEdges(current);
+renderValues(current);
+</script>
+</body>
+</html>

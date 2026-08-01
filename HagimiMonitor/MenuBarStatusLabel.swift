@@ -38,8 +38,8 @@ struct MenuBarMetricLabel: View {
 
     var body: some View {
         HStack(spacing: interCellSpacing) {
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, item in
-                cell(for: item, isTrailing: index == items.count - 1)
+            ForEach(items) { item in
+                cell(for: item)
             }
         }
         .font(labelFont)
@@ -49,24 +49,22 @@ struct MenuBarMetricLabel: View {
     }
 
     /// 每个指标占一个独立的固定宽度单元:前缀(SF 图标 / CPU / ↑↓ 等)固定在左侧,
-    /// 数值放进按「最大可能值」测得的定宽框、**左对齐**贴住前缀。短值时预留的
-    /// 空白落在尾部,与指标间距合并成更大的「组间空隙」,视觉上数字始终跟自己的
-    /// 前缀成一组。每格宽度仍固定,相邻指标位置不会左右抖动。
-    /// 末位指标是整个菜单栏图标的右边缘,身后没有下一个指标可供分组,固定宽度
-    /// 预留的尾部空白会直接变成图标右侧的空洞留白,故末位不做定宽预留,按实际
-    /// 内容收紧,消除该处的空间浪费。
+    /// 数值放进按「最大可能值」测得的定宽框(等宽数字字体)、**统一左对齐**贴住前缀。
+    /// 每格宽度恒定,数值在最大/最小值间切换、乃至位数变化(9%→100%、0B→1.5M)时
+    /// 都不改变格宽,故整个菜单栏图标宽度稳定、不左右抖动。
+    ///
+    /// 所有指标(含末位)一律左对齐,是为了让每个指标的「前缀→数值」间距完全一致:
+    /// 若单独把末位改成右对齐,末位短值时预留空白会落在图标与数值之间,该处间距
+    /// 明显大于其它指标、视觉突兀。代价是末位短值时预留空白落在整个图标最右侧,
+    /// 形成一小段恒定留白(不抖动)——这是「间距一致 + 宽度稳定」下不可避免的取舍。
     @ViewBuilder
-    private func cell(for item: MenuBarMetricItem, isTrailing: Bool) -> some View {
+    private func cell(for item: MenuBarMetricItem) -> some View {
         switch layoutStyle {
         case .icon, .text:
             HStack(spacing: symbolSpacing) {
                 leading(for: item.kind)
-                if isTrailing {
-                    Text(numericValue(for: item))
-                } else {
-                    Text(numericValue(for: item))
-                        .frame(width: valueWidth(for: item.kind), alignment: .leading)
-                }
+                Text(numericValue(for: item))
+                    .frame(width: valueWidth(for: item.kind), alignment: .leading)
             }
         case .compact:
             compactCell(for: item)
@@ -78,7 +76,7 @@ struct MenuBarMetricLabel: View {
     /// 避免数值位数变化(如 8% → 18%)时上下两行、乃至整个图标宽度跟着跳动。
     private func compactCell(for item: MenuBarMetricItem) -> some View {
         VStack(alignment: .center, spacing: -1) {
-            Text(textPrefix(for: item.kind))
+            Text(Self.textPrefix(for: item.kind))
                 .font(compactLabelFont)
             Text(numericValue(for: item))
                 .font(compactValueFont)
@@ -93,14 +91,18 @@ struct MenuBarMetricLabel: View {
     private func leading(for kind: MenuBarMetricKind) -> some View {
         switch layoutStyle {
         case .icon:
+            // icon 字号比文本小 1pt,让数字视觉上比 icon 略大一圈(贴近 iStat Menus
+            // "数字突出、icon 作标识" 的视觉权重);父级 .font 不继承到此。
             Image(systemName: kind.symbol)
+                .font(.system(size: Self.iconFontSize, weight: .medium))
         default:
-            Text(textPrefix(for: kind))
+            Text(Self.textPrefix(for: kind))
         }
     }
 
     /// 文字前缀:带 `menuBarPrefix` 的直接用,网络无前缀则用方向箭头。
-    private func textPrefix(for kind: MenuBarMetricKind) -> String {
+    /// 输入与实例状态无关,故为 static(静态列宽缓存初始化时也需调用)。
+    private static func textPrefix(for kind: MenuBarMetricKind) -> String {
         switch kind {
         case .networkDownload:
             "↓"
@@ -121,15 +123,16 @@ struct MenuBarMetricLabel: View {
         return value.trimmingCharacters(in: .whitespaces)
     }
 
-    /// 数值框固定宽度:按该指标可能达到的最宽字符串测量(等宽数字字体),
-    /// 保证数值在最大/最小值间切换时右对齐、右边缘不动。
+    /// 数值框固定宽度:按该指标可能达到的最宽字符串一次性测得并缓存(等宽数字字体),
+    /// 保证数值在最大/最小值间切换时右对齐、右边缘不动。每个渲染周期直接查表,
+    /// 不再重复重建 NSFont 与测量固定字符串。
     private func valueWidth(for kind: MenuBarMetricKind) -> CGFloat {
-        let sample = reservedNumericValue(for: kind)
-        let width = (sample as NSString).size(withAttributes: [.font: measuringFont]).width
-        return ceil(width) + 2
+        Self.valueWidths[kind]!
     }
 
-    private func reservedNumericValue(for kind: MenuBarMetricKind) -> String {
+    /// 各指标为定宽框预留的「最宽可能值」——横排数值框与紧凑列宽都以此为测量样本。
+    /// 输入与实例状态无关,故为 static。
+    private static func reservedNumericValue(for kind: MenuBarMetricKind) -> String {
         switch kind {
         case .cpuUsage, .gpuUsage, .memoryUsage, .memoryPressure, .batteryLevel:
             "100%"
@@ -141,6 +144,8 @@ struct MenuBarMetricLabel: View {
             "888G"
         case .systemPower:
             "888W"
+        case .fanSpeed:
+            "9999"
         }
     }
 
@@ -149,36 +154,55 @@ struct MenuBarMetricLabel: View {
     /// +2 与 valueWidth 同源:测量与渲染的亚像素取整差异会让实测宽度卡在边界,
     /// 差零点几 pt 时数值被截断成「9…」,预留余量兜底。
     private func compactCellWidth(for kind: MenuBarMetricKind) -> CGFloat {
-        let labelWidth = (textPrefix(for: kind) as NSString)
-            .size(withAttributes: [.font: compactLabelMeasuringFont]).width
-        let valueWidth = (reservedNumericValue(for: kind) as NSString)
-            .size(withAttributes: [.font: compactValueMeasuringFont]).width
-        return ceil(max(labelWidth, valueWidth)) + 2
+        Self.compactCellWidths[kind]!
     }
 
     private var labelFont: Font {
-        .system(size: fontSize, weight: .medium, design: .rounded).monospacedDigit()
-    }
-
-    private var measuringFont: NSFont {
-        Self.roundedMeasuringFont(size: fontSize, weight: .medium, monospacedDigit: true)
+        .system(size: Self.fontSize, weight: .medium, design: .rounded).monospacedDigit()
     }
 
     private var compactLabelFont: Font {
-        .system(size: compactLabelFontSize, weight: .semibold, design: .rounded)
+        .system(size: Self.compactLabelFontSize, weight: .semibold, design: .rounded)
     }
 
     private var compactValueFont: Font {
-        .system(size: compactValueFontSize, weight: .bold, design: .rounded).monospacedDigit()
+        .system(size: Self.compactValueFontSize, weight: .bold, design: .rounded).monospacedDigit()
     }
 
-    private var compactLabelMeasuringFont: NSFont {
-        Self.roundedMeasuringFont(size: compactLabelFontSize, weight: .semibold, monospacedDigit: false)
-    }
+    // MARK: - 静态缓存(消除每渲染周期重建 NSFont + 重复测量固定字符串的热点)
 
-    private var compactValueMeasuringFont: NSFont {
-        Self.roundedMeasuringFont(size: compactValueFontSize, weight: .bold, monospacedDigit: true)
-    }
+    /// 测量用 NSFont 按固定字号/字重/是否等宽数字各复用一个实例。字号在进程内恒定,
+    /// 故用 static let 一次性构造,避免每次 body 都走 `roundedMeasuringFont` 新建字体。
+    private static let measuringFont: NSFont =
+        roundedMeasuringFont(size: fontSize, weight: .medium, monospacedDigit: true)
+    private static let compactLabelMeasuringFont: NSFont =
+        roundedMeasuringFont(size: compactLabelFontSize, weight: .semibold, monospacedDigit: false)
+    private static let compactValueMeasuringFont: NSFont =
+        roundedMeasuringFont(size: compactValueFontSize, weight: .bold, monospacedDigit: true)
+
+    /// 横排模式(icon/text)各指标的数值定宽:按该指标最宽保留值一次性测得,进程内复用。
+    private static let valueWidths: [MenuBarMetricKind: CGFloat] = {
+        var cache: [MenuBarMetricKind: CGFloat] = [:]
+        for kind in MenuBarMetricKind.allCases {
+            let sample = reservedNumericValue(for: kind)
+            let width = (sample as NSString).size(withAttributes: [.font: measuringFont]).width
+            cache[kind] = ceil(width) + 2
+        }
+        return cache
+    }()
+
+    /// 紧凑模式各指标的列宽:取「标签宽度」与「数值最大宽度」中较宽者,一次性测得并复用。
+    private static let compactCellWidths: [MenuBarMetricKind: CGFloat] = {
+        var cache: [MenuBarMetricKind: CGFloat] = [:]
+        for kind in MenuBarMetricKind.allCases {
+            let labelWidth = (textPrefix(for: kind) as NSString)
+                .size(withAttributes: [.font: compactLabelMeasuringFont]).width
+            let valueWidth = (reservedNumericValue(for: kind) as NSString)
+                .size(withAttributes: [.font: compactValueMeasuringFont]).width
+            cache[kind] = ceil(max(labelWidth, valueWidth)) + 2
+        }
+        return cache
+    }()
 
     /// 与显示字体同为 rounded 设计的测量字体。此前用默认 SF 测、SF Rounded 显:
     /// rounded 的数字字形略宽,测量系统性偏小,定宽框在取整边界上放不下实际
@@ -194,19 +218,23 @@ struct MenuBarMetricLabel: View {
         return font
     }
 
-    private var fontSize: CGFloat { 12 }
+    private static var fontSize: CGFloat { 11 }
+
+    /// icon 字号:固定 9pt,始终比数字(fontSize=11pt)小 2pt,让数字视觉上更突出。
+    /// 不能用 fontSize - 1 跟随,因为文本调字号时不应带动 icon。
+    private static var iconFontSize: CGFloat { 9 }
 
     /// 紧凑模式上层标签字号:比数值小一档,弱化标签、突出数值。
-    private var compactLabelFontSize: CGFloat { 7 }
+    private static var compactLabelFontSize: CGFloat { 7 }
 
     /// 紧凑模式下层数值字号:菜单栏 22pt 高度预算内,双层叠加后仍留有余量。
-    private var compactValueFontSize: CGFloat { 10 }
+    private static var compactValueFontSize: CGFloat { 10 }
 
     /// 指标之间的间距。
-    private var interCellSpacing: CGFloat { 6 }
+    private var interCellSpacing: CGFloat { 2 }
 
     /// 前缀与数值之间的间距(图标比文字略需留白)。
     private var symbolSpacing: CGFloat {
-        layoutStyle == .icon ? 3 : 2
+        layoutStyle == .icon ? 2 : 2
     }
 }

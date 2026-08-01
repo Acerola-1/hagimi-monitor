@@ -390,7 +390,21 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: expandedKinds.contains(module.kind),
+                isPanelVisible: store.isPanelVisible,
+                showPowerFlow: store.settings.batteryShowPowerFlow
+            ) {
+                toggleExpansion(for: module.kind)
+            }
+            .equatable()
+        case .fan:
+            MetricGlassRow(
+                module: module,
+                theme: theme,
+                detail: module.summary,
+                samples: module.samples,
+                isExpanded: expandedKinds.contains(module.kind),
+                fans: module.fans
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -556,6 +570,7 @@ private struct MetricGlassRow: View, Equatable {
     var isExpanded = false
     var topMemoryProcesses: [TopMemoryProcess] = []
     var showMemoryProcesses = true
+    var fans: [FanInfo]? = nil
     var topCPUProcesses: [TopCPUProcess] = []
     var showCPUProcesses = true
     var topDiskProcesses: [TopDiskProcess] = []
@@ -578,10 +593,24 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.showCPUProcesses == rhs.showCPUProcesses
             && lhs.topDiskProcesses == rhs.topDiskProcesses
             && lhs.showDiskProcesses == rhs.showDiskProcesses
+            && lhs.fans == rhs.fans
     }
 
     private var tint: Color {
         theme.moduleTint(for: module.kind)
+    }
+
+    /// 风扇展开区是否可展示。单风扇时主行已显示 RPM,展开无意义,故仅多风扇可展开。
+    /// 非 fan 模块不由此属性门控(走 details / fans 原有逻辑)。
+    private var fanDetailAvailable: Bool {
+        guard module.kind == .fan else { return false }
+        return (fans?.count ?? 0) > 1
+    }
+
+    /// 展开区是否有内容可显示(统一门控:fan 看 fanDetailAvailable,其余看原逻辑)。
+    private var detailAvailable: Bool {
+        if module.kind == .fan { return fanDetailAvailable }
+        return !details.isEmpty || (fans?.isEmpty == false)
     }
 
     var body: some View {
@@ -610,9 +639,11 @@ private struct MetricGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            CollapsibleDetail(isExpanded: isExpanded && !details.isEmpty) {
+            CollapsibleDetail(isExpanded: isExpanded && detailAvailable) {
                 Group {
-                    if let storageVolumes {
+                    if module.kind == .fan, let fans, !fans.isEmpty {
+                        FanList(fans: fans, theme: theme)
+                    } else if let storageVolumes {
                         StorageVolumeDetailList(volumes: storageVolumes, kind: module.kind, tint: tint, theme: theme)
                     } else {
                         VStack(spacing: 9) {
@@ -641,6 +672,8 @@ private struct MetricGlassRow: View, Equatable {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            // 单风扇时主行已展示 RPM,无展开内容,点击不切换展开状态。
+            guard detailAvailable else { return }
             toggleExpansion?()
         }
         .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
@@ -668,6 +701,20 @@ private struct MetricGlassRow: View, Equatable {
                 .frame(width: 56, height: 3)
         case .network, .battery:
             EmptyView()
+        case .fan:
+            // 风扇主行右侧:有 RPM 历史则画 sparkline,否则显示当前 max RPM 数字。
+            // Y 轴用风扇硬件 min~max 范围归一化(如 2317~6550),而非默认 0~100,
+            // 这样日常 ~2500 RPM 的线不会贴顶,转速变化也能被放大可见。
+            if !samples.isEmpty {
+                let fanMin = Double(fans?.map(\.minRPM).min() ?? 0)
+                let fanMax = Double(fans?.map(\.maxRPM).max() ?? 100)
+                SparklineChart(samples: samples, tint: tint, minValue: fanMin, maxValue: fanMax)
+                    .frame(width: 56, height: 18)
+            } else {
+                Text(module.summary)
+                    .monitorPanelMonoFont(weight: .semibold)
+                    .foregroundStyle(theme.valueText)
+            }
         }
     }
 
@@ -1070,6 +1117,11 @@ private struct BatteryGlassRow: View, Equatable {
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
     var isExpanded = false
+    /// 面板是否可见,用于门控功率流粒子动画:仅「可见且展开」时才驱动动画,
+    /// 收起/隐藏时渲染静态帧,避免 CollapsibleDetail 常驻内容在后台空转重绘。
+    var isPanelVisible = false
+    /// 功率流图开关(Beta,settings.battery.showPowerFlow):关闭后展开区仅保留指标网格。
+    var showPowerFlow = true
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
@@ -1078,6 +1130,8 @@ private struct BatteryGlassRow: View, Equatable {
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
+            && lhs.isPanelVisible == rhs.isPanelVisible
+            && lhs.showPowerFlow == rhs.showPowerFlow
     }
 
     private var tint: Color {
@@ -1127,9 +1181,26 @@ private struct BatteryGlassRow: View, Equatable {
             .padding(.vertical, 8)
 
             CollapsibleDetail(isExpanded: canExpand && isExpanded) {
-                MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 9)
+                VStack(spacing: 9) {
+                    MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
+                    // 指标网格(健康度/温度/循环/损耗)与功率流图之间用带标题的分区分隔线
+                    // 明确隔开。功率流是电源模块的展开区亮点,双渠道(含沙盒)均可用——
+                    // 数据全部来自 BatterySampler 读 AppleSmartBattery/PowerTelemetryData 的
+                    // IORegistry 只读属性,不涉及他进程采样或私有 API,沙盒允许。
+                    // 由设置项 batteryShowPowerFlow(Beta)门控,关闭后展开区仅剩指标网格。
+                    if showPowerFlow {
+                        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
+                            .padding(.top, 3)
+                        PowerFlowDiagram(
+                            module: module,
+                            theme: theme,
+                            tint: tint,
+                            animate: isPanelVisible && isExpanded
+                        )
+                    }
+                }
+                .padding(.horizontal, 10)
+                .padding(.bottom, 9)
             }
         }
         .contentShape(Rectangle())
@@ -1198,7 +1269,12 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var canExpand: Bool {
-        !detailMetrics.isEmpty
+        // 指标全关时,只有功率流开启且有功耗值,展开区才仍有内容可显示。
+        !detailMetrics.isEmpty || (showPowerFlow && numericValue("power") != nil)
+    }
+
+    private func numericValue(_ name: String) -> Double? {
+        module.metrics.first { $0.name == name }?.numericValue
     }
 
     private func value(_ name: String) -> String {
@@ -1220,6 +1296,341 @@ private func localizedBatteryState(_ id: String) -> String {
     let key = "battery-state.\(id)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? id : localized
+}
+
+// MARK: - Power Flow
+
+/// 展开区分区标题:一段小标题 + 贯穿分隔线,用来把上方的电池指标网格
+/// (健康度/温度/循环/损耗)与下方的功率流图、耗电排行明确切分成独立区块。
+private struct PowerSectionHeader: View {
+    let title: String
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text(title)
+                .monitorPanelLabelFont(tracking: 0.8)
+                .foregroundStyle(theme.captionText)
+                .fixedSize()
+            Rectangle()
+                .fill(theme.rowSeparator(for: .battery))
+                .frame(height: 1)
+        }
+    }
+}
+
+/// 功率流图:适配器 → 系统 / 电池 三节点静态流向图(展开区,指标网格之下)。
+/// 数据全部来自 BatterySampler 的遥测指标(power-in / power / battery-flow / status),
+/// 沙盒版同样可用。刻意不做粒子/循环动画:CollapsibleDetail 内容常驻挂载,
+/// 持续动画在面板收起后仍会驱动整树重绘(与充电图标去动画同一根因)。
+private struct PowerFlowDiagram: View {
+    let module: MonitorModule
+    let theme: MonitorPanelTheme
+    let tint: Color
+    /// 是否驱动粒子动画:仅「面板可见且电源行展开」时为 true。收起/隐藏时渲染静态帧,
+    /// 避免 CollapsibleDetail 常驻内容在后台以 60fps 空转。动画全部封闭在 Canvas 内
+    /// (TimelineView 只驱动 Canvas,节点是其兄弟静态层),不会波及整棵面板视图树。
+    var animate: Bool = false
+
+    private static let nodeWidth: CGFloat = 98
+    private static let nodeHeight: CGFloat = 42
+    private static let diagramHeight: CGFloat = 118
+
+    var body: some View {
+        if systemWatts != nil {
+            VStack(spacing: 6) {
+                ZStack {
+                    edgesLayer
+                    nodesLayer
+                }
+                .frame(height: Self.diagramHeight)
+
+                if let etaText {
+                    Text(etaText)
+                        .monitorPanelMonoFont(.caption2, weight: .medium)
+                        .foregroundStyle(theme.captionText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.leading, 4)
+                }
+            }
+        }
+    }
+
+    // MARK: 边与粒子(Canvas,唯一的动画层)
+
+    @ViewBuilder
+    private var edgesLayer: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            if animate {
+                TimelineView(.animation) { timeline in
+                    Canvas { context, size in
+                        drawEdges(&context, width: size.width, time: timeline.date.timeIntervalSinceReferenceDate)
+                    }
+                    .frame(width: width)
+                }
+            } else {
+                Canvas { context, size in
+                    drawEdges(&context, width: size.width, time: 0)
+                }
+            }
+        }
+    }
+
+    /// 在 Canvas 内绘制:底层轨道 + 流动粒子 + 充电呼吸辉光。全部按当前电源状态着色/定向。
+    private func drawEdges(_ context: inout GraphicsContext, width: CGFloat, time: TimeInterval) {
+        let nodeW = Self.nodeWidth
+        let topY = Self.nodeHeight / 2
+        let junction = CGPoint(x: width / 2, y: topY)
+        let adapterRight = CGPoint(x: nodeW, y: topY)
+        let systemLeft = CGPoint(x: width - nodeW, y: topY)
+        let batteryTop = CGPoint(x: width / 2, y: Self.diagramHeight - Self.nodeHeight)
+
+        let track = neutralEdge.opacity(0.5)
+        let faint = neutralEdge.opacity(0.16)
+
+        // S1 适配器 → 汇流点(左半段):插电时活跃;脱离适配器只留暗轨道。
+        drawSegment(&context, from: adapterRight, to: junction,
+                    track: connected ? track : faint,
+                    particle: connected ? tint : nil,
+                    watts: systemWatts ?? 0, time: time, reversed: false)
+
+        // S2 汇流点 → 系统(右半段):系统始终在耗电,恒活跃。
+        drawSegment(&context, from: junction, to: systemLeft,
+                    track: track, particle: tint,
+                    watts: systemWatts ?? 0, time: time, reversed: false)
+
+        // S3 汇流点 ↕ 电池:充电向下、放电向上、无流动只留轨道。方向由充电状态决定。
+        if hasBattery {
+            switch flowDirection {
+            case .charging:
+                drawSegment(&context, from: junction, to: batteryTop,
+                            track: tint.opacity(0.4), particle: tint,
+                            watts: batteryMagnitude, time: time, reversed: false)
+            case .discharging:
+                drawSegment(&context, from: batteryTop, to: junction,
+                            track: tint.opacity(0.4), particle: tint,
+                            watts: batteryMagnitude, time: time, reversed: false)
+            case .idle:
+                drawSegment(&context, from: junction, to: batteryTop,
+                            track: faint, particle: nil, watts: 0, time: time, reversed: false)
+            }
+
+            // 充电呼吸辉光:画在电池节点中心正下方(节点静态层会叠在其上)。
+            if isCharging {
+                let batteryCenter = CGPoint(x: width / 2, y: Self.diagramHeight - Self.nodeHeight / 2)
+                let pulse = animate ? (0.5 + 0.5 * sin(time * 2.2)) : 0.5
+                let glowRadius = 26.0 + 8.0 * pulse
+                let glow = Path(ellipseIn: CGRect(x: batteryCenter.x - glowRadius, y: batteryCenter.y - glowRadius,
+                                                  width: glowRadius * 2, height: glowRadius * 2))
+                context.fill(glow, with: .radialGradient(
+                    Gradient(colors: [tint.opacity(0.18 * (0.6 + 0.4 * pulse)), .clear]),
+                    center: batteryCenter, startRadius: 0, endRadius: glowRadius))
+            }
+        }
+
+        // 汇流点圆点。
+        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.4, y: junction.y - 2.4, width: 4.8, height: 4.8))
+        context.fill(dot, with: .color(neutralEdge.opacity(0.5)))
+    }
+
+    /// 绘制一条线段:底层轨道 + 若干沿线流动的粒子(数量/速度 ∝ 瓦数)。
+    private func drawSegment(_ context: inout GraphicsContext, from: CGPoint, to: CGPoint,
+                             track: Color, particle: Color?, watts: Double,
+                             time: TimeInterval, reversed: Bool) {
+        var line = Path()
+        line.move(to: from)
+        line.addLine(to: to)
+        context.stroke(line, with: .color(track), style: StrokeStyle(lineWidth: 2, lineCap: .round))
+
+        guard let particle, watts >= 0.05 else { return }
+        let count = max(2, min(5, Int((watts / 8).rounded())))
+        // 每秒循环数:瓦数越大越快,钳制在优雅区间。静态帧(time=0)给固定排布。
+        let cyclesPerSecond = min(0.6, max(0.14, watts / 45))
+        for i in 0..<count {
+            let base = animate ? time * cyclesPerSecond : 0
+            var phase = (base + Double(i) / Double(count)).truncatingRemainder(dividingBy: 1)
+            if phase < 0 { phase += 1 }
+            let t = reversed ? 1 - phase : phase
+            let pos = CGPoint(x: from.x + (to.x - from.x) * t, y: from.y + (to.y - from.y) * t)
+            let halo = Path(ellipseIn: CGRect(x: pos.x - 4.5, y: pos.y - 4.5, width: 9, height: 9))
+            context.fill(halo, with: .color(particle.opacity(0.16)))
+            let core = Path(ellipseIn: CGRect(x: pos.x - 2.1, y: pos.y - 2.1, width: 4.2, height: 4.2))
+            context.fill(core, with: .color(particle))
+        }
+    }
+
+    // MARK: 节点(静态 SwiftUI 层,不随动画重建)
+
+    private var nodesLayer: some View {
+        GeometryReader { geo in
+            let width = geo.size.width
+            let topY = Self.nodeHeight / 2
+            ZStack {
+                node(
+                    label: adapterLabel,
+                    value: adapterValueText,
+                    valueColor: theme.valueText,
+                    stroke: .clear
+                )
+                .opacity(connected ? 1 : 0.4)
+                .position(x: Self.nodeWidth / 2, y: topY)
+
+                node(
+                    label: String(localized: "panel.power-flow.system"),
+                    value: wattString(systemWatts),
+                    valueColor: theme.valueText,
+                    stroke: .clear
+                )
+                .position(x: width - Self.nodeWidth / 2, y: topY)
+
+                if hasBattery {
+                    node(
+                        label: String(localized: "panel.power-flow.battery"),
+                        value: batteryFlowText,
+                        valueColor: theme.valueText,
+                        stroke: batteryNodeStroke
+                    )
+                    .position(x: width / 2, y: Self.diagramHeight - Self.nodeHeight / 2)
+                }
+            }
+        }
+    }
+
+    // MARK: 数据
+
+    private var hasBattery: Bool {
+        rawValue("type") == "battery"
+    }
+
+    private var status: String {
+        rawValue("status")
+    }
+
+    private var connected: Bool {
+        status == "charging" || status == "ac-power"
+    }
+
+    private var systemWatts: Double? {
+        numericValue("power")
+    }
+
+    private var powerInWatts: Double? {
+        numericValue("power-in")
+    }
+
+    /// 电池流向方向。**只依据 IOPS 的充电/连接状态判定,不看 BatteryPower 符号**——
+    /// 后者符号在不同机型/系统上不一致(实测 macOS 27 放电时为负),会把放电误判成充电。
+    /// status 由 BatterySampler 依据 kIOPSIsChargingKey / kIOPSPowerSourceStateKey 产出,可靠。
+    private enum FlowDirection { case charging, discharging, idle }
+
+    private var flowDirection: FlowDirection {
+        switch status {
+        case "charging": return .charging
+        case "on-battery": return .discharging
+        default: return .idle // ac-power:插电且不充电(如满电)
+        }
+    }
+
+    private var isCharging: Bool { flowDirection == .charging }
+    private var isDischarging: Bool { flowDirection == .discharging }
+
+    /// 电池流向功率幅度(恒非负)。放电时若遥测尚未刷新(拔电瞬间为 0),用系统负载兜底
+    /// ——脱离适配器后系统功耗必然全部由电池提供,不可能为 0。
+    private var batteryMagnitude: Double {
+        let flow = abs(numericValue("battery-flow") ?? 0)
+        switch flowDirection {
+        case .discharging: return flow >= 0.05 ? flow : (systemWatts ?? 0)
+        case .charging: return flow
+        case .idle: return 0
+        }
+    }
+
+    private var adapterLabel: String {
+        let base = String(localized: "panel.power-flow.adapter")
+        let rated = rawValue("adapter")
+        return rated == "--" ? base : "\(base) · \(rated)"
+    }
+
+    /// 适配器节点数值:未插电显「—」;插电但 SystemPowerIn 尚未由固件填出(USB-C PD
+    /// 协商/遥测预热窗口)显「采集中」,而非空白或 0——如实表达「已连接、读数在路上」。
+    private var adapterValueText: String {
+        guard connected else { return "—" }
+        if let powerInWatts { return wattString(powerInWatts) }
+        return String(localized: "panel.power-flow.collecting")
+    }
+
+    private var batteryFlowText: String {
+        switch flowDirection {
+        case .charging: return "+" + wattString(batteryMagnitude)
+        case .discharging: return "−" + wattString(batteryMagnitude)
+        case .idle: return "—" // 插电满电不充不放:无流动显「—」,而非 0 W
+        }
+    }
+
+    private var etaText: String? {
+        guard let minutes = numericValue("time-remaining").map(Int.init), minutes > 0 else { return nil }
+        let text = Self.durationFormatter.string(from: TimeInterval(minutes * 60)) ?? "\(minutes) min"
+        if status == "charging" {
+            return String(format: String(localized: "panel.power-flow.eta-full"), text)
+        }
+        if status == "on-battery" {
+            return String(format: String(localized: "panel.power-flow.eta-empty"), text)
+        }
+        return nil
+    }
+
+    private static let durationFormatter: DateComponentsFormatter = {
+        let formatter = DateComponentsFormatter()
+        formatter.allowedUnits = [.hour, .minute]
+        formatter.unitsStyle = .short
+        return formatter
+    }()
+
+    // MARK: 配色
+
+    private var neutralEdge: Color {
+        theme.rowSeparator(for: .battery)
+    }
+
+    private var batteryNodeStroke: Color {
+        isCharging ? tint.opacity(0.5) : .clear
+    }
+
+    // MARK: 节点子视图
+
+    private func node(label: String, value: String, valueColor: Color, stroke: Color) -> some View {
+        VStack(spacing: 2) {
+            Text(label)
+                .monitorPanelCaptionFont(.caption2)
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Text(value)
+                .monitorPanelMonoFont(.footnote, weight: .semibold)
+                .foregroundStyle(valueColor)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 5)
+        .padding(.horizontal, 4)
+        .frame(width: Self.nodeWidth, height: Self.nodeHeight)
+        .background(
+            RoundedRectangle(cornerRadius: 9)
+                .fill(theme.palette.trackFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 9)
+                .stroke(stroke, lineWidth: 1)
+        )
+    }
+
+    private func rawValue(_ name: String) -> String {
+        module.metrics.first { $0.name == name }?.value ?? "--"
+    }
+
+    private func numericValue(_ name: String) -> Double? {
+        module.metrics.first { $0.name == name }?.numericValue
+    }
 }
 
 private func localizedNetworkInterface(_ summary: String) -> String {
@@ -1340,6 +1751,16 @@ private struct MetricCardView: View, Equatable {
                     cardRate(symbol: "powermeter", value: metricValue("power"))
                 }
             }
+        case .fan:
+            // 风扇大卡片:大数字 max RPM + sparkline
+            // Y 轴用风扇硬件 min~max 归一化,与列表行 sparkline 保持一致。
+            VStack(alignment: .leading, spacing: 12) {
+                bigValue(percentText)
+                let fanMin = Double(module.fans?.map(\.minRPM).min() ?? 0)
+                let fanMax = Double(module.fans?.map(\.maxRPM).max() ?? 100)
+                SparklineChart(samples: module.samples, tint: tint, minValue: fanMin, maxValue: fanMax)
+                    .frame(height: 36)
+            }
         }
     }
 
@@ -1408,7 +1829,8 @@ private struct MetricCardView: View, Equatable {
                 ])
             }
             return (items, 2)
-        case .gpu, .battery:
+        case .gpu, .battery, .fan:
+            // 风扇大卡片无 TOP 进程小节
             return nil
         }
         #endif
@@ -1596,12 +2018,16 @@ private final class TransparentBackgroundView: NSView {
 
 // MARK: - Metric Pill
 
+/// 外置卷 JSON 解码器。JSONDecoder 默认无跨解码状态,共享一个实例即可,
+/// 避免每次面板刷新解析存储卷时都新建。仅主线程(SwiftUI body)调用,无并发问题。
+private let externalVolumeDecoder = JSONDecoder()
+
 private func parseExternalVolumes(_ context: String?) -> [StorageVolumeInfo] {
     guard let context, let data = context.data(using: .utf8) else {
         return []
     }
 
-    if let payload = try? JSONDecoder().decode([ExternalVolumePayload].self, from: data) {
+    if let payload = try? externalVolumeDecoder.decode([ExternalVolumePayload].self, from: data) {
         return payload.enumerated().map { index, volume in
             StorageVolumeInfo(
                 id: "external-\(index)-\(volume.name)",
@@ -1960,7 +2386,7 @@ private struct ProcessRowData: Identifiable {
 private let processDashRow = ProcessRowData(id: -1, name: "—", icon: nil, upText: "—", downText: "—", isPlaceholder: true)
 
 /// 磁盘 I/O 进程列表。固定 5 行位置:真实数据从上往下填,空位显“—”,高度恒定无加载跳变。
-struct InlineDiskProcessList: View {
+private struct InlineDiskProcessList: View {
     let processes: [TopDiskProcess]
     let theme: MonitorPanelTheme
 
@@ -1997,7 +2423,7 @@ struct InlineDiskProcessList: View {
 }
 
 /// 网络流量进程列表。固定 5 行位置:真实数据从上往下填,空位显“—”,高度恒定无加载跳变。
-struct InlineNetworkProcessList: View {
+private struct InlineNetworkProcessList: View {
     let processes: [TopNetworkProcess]
     let theme: MonitorPanelTheme
 
@@ -2033,7 +2459,74 @@ struct InlineNetworkProcessList: View {
     }
 }
 
-/// 通用进程行渲染。isPlaceholder 为真时渲染“—”空位行(清图标 + 淡色横杠)。
+/// 风扇展开区列表:按实际风扇数量动态渲染行数(无占位行)。
+/// 每行展示 name / current RPM / min-max 比例条 / 状态指示点。
+/// 仅在多风扇(>=2)时渲染;单风扇的主行已展示 RPM,不进入展开区。
+private struct FanList: View {
+    let fans: [FanInfo]
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .fan))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(fans) { fan in
+                    fanRow(fan)
+                }
+            }
+            .padding(.leading, 28)
+        }
+    }
+
+    /// 渲染单个风扇行:状态点 + 名称 + RPM + min-max 比例条。
+    @ViewBuilder
+    private func fanRow(_ fan: FanInfo) -> some View {
+        let ratio = fan.maxRPM > 0 ? min(1.0, Double(fan.currentRPM) / Double(fan.maxRPM)) : 0
+        let status = fan.status
+
+        HStack(spacing: 6) {
+            // 状态指示点:fault=红 / warning=橙 / normal=绿 / unknown=灰
+            Circle()
+                .fill(theme.palette.severityTint(for: status.severity))
+                .frame(width: 5, height: 5)
+            Text(fan.name)
+                .monitorPanelMetricLabelFont()
+                .foregroundStyle(theme.primaryText)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text("\(fan.currentRPM)")
+                .monitorPanelMonoFont(.callout, weight: .semibold)
+                .foregroundStyle(rpmColor(for: status))
+                .lineLimit(1)
+                .monospacedDigit()
+            // min-max 比例条:着色跟随状态(fault/warning 用 severity 色,normal 用模块色)
+            ProgressMeter(value: ratio, tint: progressTint(for: status), theme: theme)
+                .frame(width: 50, height: 3)
+        }
+    }
+
+    /// RPM 数值颜色:fault/warning 用 severity 色,normal/unknown 用默认值色。
+    private func rpmColor(for status: FanStatus) -> Color {
+        switch status {
+        case .fault, .warning: theme.palette.severityTint(for: status.severity)
+        case .normal, .unknown: theme.valueText
+        }
+    }
+
+    /// 比例条着色:fault/warning 用 severity 色,normal/unknown 用风扇模块色。
+    private func progressTint(for status: FanStatus) -> Color {
+        switch status {
+        case .fault, .warning: theme.palette.severityTint(for: status.severity)
+        case .normal, .unknown: theme.moduleTint(for: .fan)
+        }
+    }
+}
+
+/// 通用进程行渲染。isPlaceholder 为真时渲染"—"空位行(清图标 + 淡色横杠)。
 private struct ProcessRowView: View {
     let row: ProcessRowData
     let theme: MonitorPanelTheme

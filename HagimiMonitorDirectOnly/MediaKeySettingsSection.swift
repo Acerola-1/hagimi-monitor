@@ -34,8 +34,12 @@ struct MediaKeySettingsSection: View {
                 }
             }
         }
+        // 未授权时整组置灰不可操作:接管开关开了也不生效,先灰掉避免「开了没反应」
+        // 的困惑;授权入口由下方常驻提示卡提供。
+        .disabled(!permission.isTrusted)
 
-        if anyTakeoverEnabled, !permission.isTrusted {
+        // 提示卡改为未授权即常驻(不再依赖开关状态)——开关已灰掉,这里是唯一授权入口。
+        if !permission.isTrusted {
             permissionHint
         }
     }

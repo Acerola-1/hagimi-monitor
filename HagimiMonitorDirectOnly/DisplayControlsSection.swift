@@ -35,7 +35,7 @@ struct DisplayControlsSection: View {
 
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "display")
+                Image(systemName: "slider.horizontal.below.rectangle")
                     .font(.callout.weight(.semibold))
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(tint)

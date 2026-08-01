@@ -1,7 +1,7 @@
 import Foundation
 import IOKit
 
-final class SMCReader {
+final class SMCReader: FanSMCReading {
     private var conn: io_connect_t = 0
     private static let temperatureKeys = [
         "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"
@@ -35,6 +35,43 @@ final class SMCReader {
         }
         guard !temperatures.isEmpty else { return nil }
         return temperatures.reduce(0, +) / Double(temperatures.count)
+    }
+
+    /// 读取 SMC key `FNum`,返回机器物理风扇数。无风扇机型或读取失败时返回 nil。
+    /// FNum 是机器静态属性,启动时读一次缓存即可,无需每次采样都读。
+    func fanCount() -> Int? {
+        guard let raw = readValue("FNum") else { return nil }
+        let count = Int(raw)
+        return count > 0 ? count : nil
+    }
+
+    /// 读取所有风扇的当前 RPM,返回最大 RPM。任一风扇读取失败跳过(不抛错);
+    /// 全 0 或全失败时返回 nil,UI 应降级为 unavailable 占位。
+    func maxFanRPM() -> Int? {
+        guard let count = fanCount() else { return nil }
+        var maxRPM = 0
+        for i in 0..<count {
+            let key = "F\(i)Ac"
+            if let raw = readValue(key) {
+                let rpm = Int(raw)
+                if rpm > maxRPM { maxRPM = rpm }
+            }
+        }
+        return maxRPM > 0 ? maxRPM : nil
+    }
+
+    /// 读取所有风扇的当前 RPM 与 min/max 范围(供面板展开用)。
+    /// 任一字段失败用 0 占位;返回数组长度 = fanCount。
+    func allFans() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)] {
+        guard let count = fanCount() else { return [] }
+        var result: [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)] = []
+        for i in 0..<count {
+            let current = Int(readValue("F\(i)Ac") ?? 0)
+            let min = Int(readValue("F\(i)Mn") ?? 0)
+            let max = Int(readValue("F\(i)Mx") ?? 0)
+            result.append((id: i, currentRPM: current, minRPM: min, maxRPM: max))
+        }
+        return result
     }
 
     private func readValue(_ key: String) -> Double? {
@@ -88,8 +125,13 @@ final class SMCReader {
             return Double(intValue) / 64.0
         case "ui16 ":
             return Double(UInt16(byteArray[0]) * 256 + UInt16(byteArray[1]))
+        case "ui8 ":
+            // 无符号 8-bit 单字节整数。FNum(风扇数)即此类型,dataSize=1。
+            return Double(byteArray[0])
         case "flt ":
-            let floatValue: Float = byteArray.withUnsafeBytes { $0.load(fromByteOffset: 0, as: Float.self) }
+            // byteArray 是 [UInt8](仅 1 字节对齐),load(as: Float.self) 假定 4 字节对齐属未定义
+            // 行为;用 loadUnaligned 从任意偏移安全读取。
+            let floatValue: Float = byteArray.withUnsafeBytes { $0.loadUnaligned(fromByteOffset: 0, as: Float.self) }
             return Double(floatValue)
         default:
             return nil

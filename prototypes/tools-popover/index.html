@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 外部工具浮层（官方 NSPopover 风 · 液态玻璃）</title>
+<style>
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A;
+    --tint-mem: #42A39A;
+    --tint-bat: #65AF52;
+    --tint-lock: #D27A4A;
+    --tint-awake: #5D8CF0;
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 25% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 90% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    padding: 44px 24px 100px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  h1 { font-size: 19px; font-weight: 700; letter-spacing: 0.4px; }
+  .sub { text-align: center; font-size: 12px; color: var(--text-caption); margin-top: 8px; line-height: 1.7; max-width: 560px; }
+  .sub b { color: var(--text-secondary); font-weight: 600; }
+
+  .scene { margin-top: 40px; position: relative; width: 300px; }
+
+  /* ====== 主监控面板 ====== */
+  .panel {
+    width: 300px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    -webkit-backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 18px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    padding: 9px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .p-head { display: flex; align-items: center; padding: 2px 3px 0; }
+  .live-dot { width: 5px; height: 5px; border-radius: 50%; background: #6BBF59; margin-right: 5px; animation: pulse 2.2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+  .p-head .sys { font-size: 9px; letter-spacing: 1.1px; color: var(--text-caption); font-weight: 600; }
+  .p-head .time { margin-left: auto; font-size: 10px; color: var(--text-caption); }
+
+  .mrow { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: var(--row-radius); background: var(--row-glass); border: 0.5px solid rgba(255,255,255,0.05); }
+  .mrow .ic { width: 16px; height: 16px; border-radius: 5px; flex-shrink: 0; }
+  .mrow .lbl { font-size: 12.5px; font-weight: 600; }
+  .mrow .val { font-size: 12.5px; font-weight: 600; color: var(--text-value); margin-left: 2px; }
+  .mrow .meter { flex: 1; height: 3px; border-radius: 2px; background: var(--track-fill); overflow: hidden; margin-left: 4px; }
+  .mrow .meter > div { height: 100%; border-radius: 2px; }
+
+  .actions { display: flex; gap: 8px; padding-top: 2px; }
+  .cap {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 5px;
+    height: 30px; border-radius: 15px; background: var(--row-glass);
+    border: 0.5px solid rgba(255,255,255,0.10); font-size: 11px; font-weight: 550;
+    color: var(--text-primary); cursor: pointer; user-select: none; white-space: nowrap;
+    transition: background 0.16s, border-color 0.16s, box-shadow 0.16s;
+  }
+  .cap:hover { background: rgba(122,145,180,0.2); }
+  .cap svg { flex-shrink: 0; opacity: 0.9; }
+  /* “工具”入口按钮：popover 打开时高亮 + 角标（有工具激活时） */
+  .cap.tools-entry.open { background: rgba(122,145,180,0.28); border-color: rgba(255,255,255,0.22); }
+  .cap.tools-entry .dot { position:absolute; top:5px; right:12px; width:5px;height:5px;border-radius:50%; background:var(--tint-awake); box-shadow:0 0 6px var(--tint-awake); opacity:0; transition:opacity .2s; }
+  .cap.tools-entry.has-active .dot { opacity:1; }
+  .cap.tools-entry { position: relative; }
+
+  /* ====== 外部 popover（官方 NSPopover 风 · 液态玻璃）====== */
+  .popover-layer { position: absolute; top: calc(100% + 11px); left: 0; right: 0; display: flex; justify-content: center; pointer-events: none; }
+  .popover {
+    position: relative; width: 246px;
+    /* 液态玻璃：更亮更通透的玻璃 + 强饱和 */
+    background: linear-gradient(180deg, rgba(255,255,255,0.14), rgba(255,255,255,0.06));
+    backdrop-filter: blur(50px) saturate(1.8);
+    -webkit-backdrop-filter: blur(50px) saturate(1.8);
+    border-radius: 16px;
+    border: 0.5px solid rgba(255,255,255,0.18);
+    /* 系统 popover 般的柔和弥散阴影（不是浓黑投影）*/
+    box-shadow: 0 12px 34px rgba(0,0,0,0.38), inset 0 0.5px 0 rgba(255,255,255,0.35);
+    padding: 11px 11px 12px;
+    opacity: 0; transform: translateY(-8px) scale(0.96); transform-origin: top center;
+    transition: opacity 0.2s ease, transform 0.26s cubic-bezier(0.32, 0.9, 0.35, 1.1);
+    pointer-events: auto;
+  }
+  .popover.open { opacity: 1; transform: translateY(0) scale(1); }
+  /* 指向“工具”按钮的小箭头（同款液态玻璃）*/
+  .popover .arrow {
+    position: absolute; top: -6px; left: 50%; transform: translateX(-50%) rotate(45deg);
+    width: 12px; height: 12px;
+    background: rgba(255,255,255,0.14);
+    border-left: 0.5px solid rgba(255,255,255,0.18);
+    border-top: 0.5px solid rgba(255,255,255,0.18);
+    border-radius: 3px 0 0 0;
+  }
+  .po-title { display:flex; align-items:center; gap:6px; font-size:10px; letter-spacing:0.8px; color:var(--text-caption); font-weight:700; text-transform:uppercase; margin-bottom:9px; padding: 0 1px; }
+  .po-title svg { opacity: 0.85; }
+
+  /* 点亮式 toggle 磁贴 */
+  .tile { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; background: rgba(255,255,255,0.06); border: 0.5px solid rgba(255,255,255,0.10); cursor: pointer; user-select: none; transition: background 0.2s, border-color 0.2s, box-shadow 0.2s; }
+  .tile + .tile { margin-top: 7px; }
+  .tile:hover { background: rgba(255,255,255,0.11); }
+  .tile .badge { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; display:flex; align-items:center; justify-content:center; background: rgba(255,255,255,0.10); transition: background 0.22s, box-shadow 0.22s; }
+  .tile .badge svg * { stroke: var(--text-secondary); transition: stroke 0.22s; }
+  .tile .meta { flex:1; min-width: 0; }
+  .tile .nm { font-size: 12.5px; font-weight: 650; }
+  .tile .st { font-size: 10px; color: var(--text-caption); margin-top: 1px; }
+  .tile .sw { width: 34px; height: 20px; border-radius: 10px; background: rgba(255,255,255,0.16); position: relative; flex-shrink:0; transition: background 0.22s; }
+  .tile .sw::after { content:''; position:absolute; top:2px; left:2px; width:16px; height:16px; border-radius:50%; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,0.3); transition: transform 0.22s cubic-bezier(0.4,0.6,0.3,1.3); }
+  .tile.on[data-accent="lock"]  { background: rgba(210,122,74,0.16); border-color: rgba(210,122,74,0.5); }
+  .tile.on[data-accent="awake"] { background: rgba(93,140,240,0.16); border-color: rgba(93,140,240,0.5); }
+  .tile.on[data-accent="lock"]  .badge { background: var(--tint-lock); box-shadow: 0 0 13px rgba(210,122,74,0.6); }
+  .tile.on[data-accent="awake"] .badge { background: var(--tint-awake); box-shadow: 0 0 13px rgba(93,140,240,0.6); }
+  .tile.on .badge svg * { stroke: #fff; }
+  .tile.on[data-accent="lock"]  .st { color: var(--tint-lock); }
+  .tile.on[data-accent="awake"] .st { color: var(--tint-awake); }
+  .tile.on[data-accent="lock"]  .sw { background: var(--tint-lock); }
+  .tile.on[data-accent="awake"] .sw { background: var(--tint-awake); }
+  .tile.on .sw::after { transform: translateX(14px); }
+
+  .hint { margin-top: 30px; font-size: 11.5px; color: var(--text-caption); text-align:center; line-height:1.8; max-width: 520px; }
+  .hint b { color: var(--text-secondary); }
+  .hint code { font-family:"SF Mono",monospace; background:rgba(255,255,255,0.08); padding:1px 5px; border-radius:4px; font-size:10.5px; color:var(--text-secondary); }
+</style>
+</head>
+<body>
+
+<h1>放外面 · 官方 NSPopover 风</h1>
+<p class="sub">
+  点面板底部的 <b>「工具」</b> 按钮 → 从面板<b>下方外部</b>弹出一块独立浮层，
+  带<b>箭头指向入口</b>（可发现、不突兀）、独立于监控列表（语义干净）、
+  <b>液态玻璃</b>材质。点开关切换点亮态。
+</p>
+
+<div class="scene">
+  <div class="panel">
+    <div class="p-head"><span class="live-dot"></span><span class="sys">SYSTEM · LIVE</span><span class="time mono">10:36</span></div>
+    <div class="mrow"><span class="ic" style="background:var(--tint-cpu)"></span><span class="lbl">处理器</span><span class="val mono">18%</span><div class="meter"><div style="width:18%;background:var(--tint-cpu)"></div></div></div>
+    <div class="mrow"><span class="ic" style="background:var(--tint-mem)"></span><span class="lbl">内存</span><span class="val mono">61%</span><div class="meter"><div style="width:61%;background:var(--tint-mem)"></div></div></div>
+    <div class="mrow"><span class="ic" style="background:var(--tint-bat)"></span><span class="lbl">电源</span><span class="val mono">90%</span><div class="meter"><div style="width:90%;background:var(--tint-bat)"></div></div></div>
+    <div class="actions">
+      <div class="cap" title="活动监视器">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M1 6h2l1.5-3.5L7 9.5 8.5 6H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>监视器
+      </div>
+      <div class="cap tools-entry has-active open" id="toolsBtn" title="工具">
+        <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.2a2.7 2.7 0 0 0-3.4 3.4L2.3 9.4a1.2 1.2 0 0 0 1.7 1.7l3.8-3.8a2.7 2.7 0 0 0 3.4-3.4L9.4 5.6 8 4.2l1.5-2Z" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/></svg>工具
+        <span class="dot"></span>
+      </div>
+      <div class="cap" title="设置">
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><circle cx="6" cy="6" r="1.8" stroke="currentColor" stroke-width="1.1"/><path d="M6 1v1.4M6 9.6V11M1 6h1.4M9.6 6H11M2.5 2.5l1 1M8.5 8.5l1 1M9.5 2.5l-1 1M3.5 8.5l-1 1" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>设置
+      </div>
+    </div>
+  </div>
+
+  <div class="popover-layer">
+    <div class="popover open" id="popover">
+      <div class="arrow"></div>
+      <div class="po-title">
+        <svg width="11" height="11" viewBox="0 0 14 14" fill="none"><path d="M9.5 2.2a2.7 2.7 0 0 0-3.4 3.4L2.3 9.4a1.2 1.2 0 0 0 1.7 1.7l3.8-3.8a2.7 2.7 0 0 0 3.4-3.4L9.4 5.6 8 4.2l1.5-2Z" stroke="var(--text-caption)" stroke-width="1.1" stroke-linejoin="round"/></svg>
+        工具
+      </div>
+      <div class="tile" data-accent="lock" data-st-off="未启用 · 需辅助功能权限" data-st-on="已锁定 · 再点解锁">
+        <span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect x="2" y="4.5" width="12" height="8" rx="1.6" stroke-width="1.3"/><path d="M4.5 7h0M7 7h0M9.5 7h0M4.5 9.5h7" stroke-width="1.3" stroke-linecap="round"/></svg></span>
+        <span class="meta"><div class="nm">键盘锁定</div><div class="st">未启用 · 需辅助功能权限</div></span>
+        <span class="sw"></span>
+      </div>
+      <div class="tile on" data-accent="awake" data-st-off="未启用" data-st-on="激活中 · 屏幕常亮">
+        <span class="badge"><svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 6h7v3a3.5 3.5 0 0 1-7 0V6Z" stroke-width="1.3" stroke-linejoin="round"/><path d="M10.5 6.8h1.6a1.4 1.4 0 0 1 0 2.8h-.4" stroke-width="1.3"/><path d="M5.5 3.2c-.4.5-.4 1 0 1.5M8 3.2c-.4.5-.4 1 0 1.5" stroke-width="1.2" stroke-linecap="round"/></svg></span>
+        <span class="meta"><div class="nm">防休眠</div><div class="st">激活中 · 屏幕常亮</div></span>
+        <span class="sw"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<p class="hint">
+  实现要点：面板内 <code>「工具」按钮</code> → <code>NSPopover.show(relativeTo:preferredEdge:.maxY)</code>；
+  <b>点击</b>触发（非 hover，修掉首次不弹）；箭头/圆角/玻璃/阴影全系统绘制；
+  macOS 26+ 自动<b>液态玻璃</b>，且独立于面板每秒刷新 → <b>不踩面板行内液态玻璃闪烁坑</b>。
+</p>
+
+<script>
+  const btn = document.getElementById('toolsBtn');
+  const pop = document.getElementById('popover');
+  const entry = btn;
+  function syncActive() {
+    entry.classList.toggle('has-active', !!pop.querySelector('.tile.on'));
+  }
+  btn.addEventListener('click', () => {
+    const open = pop.classList.toggle('open');
+    btn.classList.toggle('open', open);
+  });
+  pop.querySelectorAll('.tile').forEach(t => {
+    t.addEventListener('click', () => {
+      t.classList.toggle('on');
+      t.querySelector('.st').textContent = t.classList.contains('on') ? t.dataset.stOn : t.dataset.stOff;
+      syncActive();
+    });
+  });
+  syncActive();
+</script>
+
+</body>
+</html>

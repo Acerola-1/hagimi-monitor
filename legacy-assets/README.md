@@ -11,8 +11,9 @@
 | `03-redesign-variants/` | 重设计探索 | 矢量重绘三变体对比稿:A 克制霓虹 / B 纯扁平(后被采纳) / C 明亮霓虹,各含 1024+128 |
 | `04-flat-glass-layers/` | 第三代 | 扁平绿环液态玻璃版:Icon Composer 图层资产(ring/ring-light/dot)+icon.json+亮暗渲染预览 |
 | `05-menubar-faithful-270deg/` | 第四代初版 | 菜单栏源码还原首版:270°弧/#2D9578墨绿点/环半径241,含完整图层+icon.json+预览 |
+| `06-light-appearance/` | 浅色外观版 | 定稿几何的浅色变体(浅底+黑弧+白背板):图层/双外观icon.json/docs浅色渲染/预览,后改为双外观统一深底 |
 
-当前线上版本(第四代定稿:整体放大15%、240°弧止于8点钟位、#3BEC64亮绿点)位于 `HagimiMonitor/AppIcon.icon/`,不在此归档;图层导出脚本为 `scripts/export_icon_layers.swift`。
+当前线上版本(第四代定稿:环外缘342顶到官方圆形网格、240°弧止于8点钟位、#3BEC64亮绿点、亮暗双外观统一深色背景)位于 `HagimiMonitor/AppIcon.icon/`,不在此归档;图层导出脚本为 `scripts/export_icon_layers.swift`。
 
 ## posters/ — 海报与宣传图
 
