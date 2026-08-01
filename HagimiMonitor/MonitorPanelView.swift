@@ -397,6 +397,18 @@ struct MonitorPanelView: View {
                 toggleExpansion(for: module.kind)
             }
             .equatable()
+        case .fan:
+            MetricGlassRow(
+                module: module,
+                theme: theme,
+                detail: module.summary,
+                samples: module.samples,
+                isExpanded: expandedKinds.contains(module.kind),
+                fans: module.fans
+            ) {
+                toggleExpansion(for: module.kind)
+            }
+            .equatable()
         }
     }
 
@@ -558,6 +570,7 @@ private struct MetricGlassRow: View, Equatable {
     var isExpanded = false
     var topMemoryProcesses: [TopMemoryProcess] = []
     var showMemoryProcesses = true
+    var fans: [FanInfo]? = nil
     var topCPUProcesses: [TopCPUProcess] = []
     var showCPUProcesses = true
     var topDiskProcesses: [TopDiskProcess] = []
@@ -580,6 +593,7 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.showCPUProcesses == rhs.showCPUProcesses
             && lhs.topDiskProcesses == rhs.topDiskProcesses
             && lhs.showDiskProcesses == rhs.showDiskProcesses
+            && lhs.fans == rhs.fans
     }
 
     private var tint: Color {
@@ -612,9 +626,11 @@ private struct MetricGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            CollapsibleDetail(isExpanded: isExpanded && !details.isEmpty) {
+            CollapsibleDetail(isExpanded: isExpanded && (!details.isEmpty || (fans?.isEmpty == false))) {
                 Group {
-                    if let storageVolumes {
+                    if module.kind == .fan, let fans, !fans.isEmpty {
+                        FanList(fans: fans, theme: theme)
+                    } else if let storageVolumes {
                         StorageVolumeDetailList(volumes: storageVolumes, kind: module.kind, tint: tint, theme: theme)
                     } else {
                         VStack(spacing: 9) {
@@ -670,6 +686,16 @@ private struct MetricGlassRow: View, Equatable {
                 .frame(width: 56, height: 3)
         case .network, .battery:
             EmptyView()
+        case .fan:
+            // 风扇主行右侧:有 RPM 历史则画 sparkline,否则显示当前 max RPM 数字。
+            if !samples.isEmpty {
+                SparklineChart(samples: samples, tint: tint)
+                    .frame(width: 56, height: 18)
+            } else {
+                Text(module.summary)
+                    .monitorPanelMonoFont(weight: .semibold)
+                    .foregroundStyle(theme.valueText)
+            }
         }
     }
 
@@ -1706,6 +1732,13 @@ private struct MetricCardView: View, Equatable {
                     cardRate(symbol: "powermeter", value: metricValue("power"))
                 }
             }
+        case .fan:
+            // 风扇大卡片:大数字 max RPM + sparkline
+            VStack(alignment: .leading, spacing: 12) {
+                bigValue(percentText)
+                SparklineChart(samples: module.samples, tint: tint)
+                    .frame(height: 36)
+            }
         }
     }
 
@@ -1774,7 +1807,8 @@ private struct MetricCardView: View, Equatable {
                 ])
             }
             return (items, 2)
-        case .gpu, .battery:
+        case .gpu, .battery, .fan:
+            // 风扇大卡片无 TOP 进程小节
             return nil
         }
         #endif
@@ -2403,7 +2437,86 @@ private struct InlineNetworkProcessList: View {
     }
 }
 
-/// 通用进程行渲染。isPlaceholder 为真时渲染“—”空位行(清图标 + 淡色横杠)。
+/// 风扇列表展开视图。固定 5 行占位(Mac Pro 8 风扇场景下仅显示前 5),
+/// 每行展示 name / current RPM / min-max 比例条;空位显"—"。参照
+/// `InlineDiskProcessList` 的固定行模式,避免展开/收起的二次高度跳变。
+private struct FanList: View {
+    let fans: [FanInfo]
+    let theme: MonitorPanelTheme
+
+    private static let rowCount = 5
+
+    private struct Row: Identifiable {
+        let id: Int
+        let name: String
+        let currentRPM: Int
+        let maxRPM: Int
+        /// 0-1 之间的当前转速 / 最大转速比例,用于右侧 mini 比例条
+        let ratio: Double
+        let isPlaceholder: Bool
+    }
+
+    private var rows: [Row] {
+        fans.prefix(Self.rowCount).enumerated().map { idx, fan in
+            let ratio = fan.maxRPM > 0 ? min(1.0, Double(fan.currentRPM) / Double(fan.maxRPM)) : 0
+            return Row(
+                id: fan.id,
+                name: fan.name,
+                currentRPM: fan.currentRPM,
+                maxRPM: fan.maxRPM,
+                ratio: ratio,
+                isPlaceholder: false
+            )
+        }
+    }
+
+    private var placeholderRow: Row {
+        Row(id: -1, name: "—", currentRPM: 0, maxRPM: 0, ratio: 0, isPlaceholder: true)
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .fan))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    fanRow(index < rows.count ? rows[index] : placeholderRow)
+                }
+            }
+            .padding(.leading, 28)
+        }
+    }
+
+    @ViewBuilder
+    private func fanRow(_ row: Row) -> some View {
+        HStack(spacing: 6) {
+            if row.isPlaceholder {
+                Text("—")
+                    .monitorPanelMonoFont(.callout, weight: .regular)
+                    .foregroundStyle(theme.secondaryText)
+            } else {
+                Text(row.name)
+                    .monitorPanelMetricLabelFont()
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                Text("\(row.currentRPM)")
+                    .monitorPanelMonoFont(.callout, weight: .semibold)
+                    .foregroundStyle(theme.valueText)
+                    .lineLimit(1)
+                    .monospacedDigit()
+                // min-max 比例条
+                ProgressMeter(value: row.ratio, tint: theme.moduleTint(for: .fan), theme: theme)
+                    .frame(width: 50, height: 3)
+            }
+        }
+    }
+}
+
+/// 通用进程行渲染。isPlaceholder 为真时渲染"—"空位行(清图标 + 淡色横杠)。
 private struct ProcessRowView: View {
     let row: ProcessRowData
     let theme: MonitorPanelTheme

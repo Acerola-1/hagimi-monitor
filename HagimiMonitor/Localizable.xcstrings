@@ -2744,6 +2744,22 @@
         }
       }
     },
+    "kind.fan": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风扇"
+          }
+        }
+      }
+    },
     "mediaKey.brightness-toggle": {
       "localizations": {
         "en": {
@@ -3462,6 +3478,22 @@
       },
       "extractionState": "manual"
     },
+    "menu-bar-metric-prefix.fan-speed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风扇"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FAN"
+          }
+        }
+      }
+    },
     "menu-bar-metric.battery-level": {
       "localizations": {
         "en": {
@@ -3656,6 +3688,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "系统功耗"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.fan-speed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fan Speed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风扇转速"
           }
         }
       }

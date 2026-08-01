@@ -37,6 +37,43 @@ final class SMCReader {
         return temperatures.reduce(0, +) / Double(temperatures.count)
     }
 
+    /// 读取 SMC key `FNum`,返回机器物理风扇数。无风扇机型或读取失败时返回 nil。
+    /// FNum 是机器静态属性,启动时读一次缓存即可,无需每次采样都读。
+    func fanCount() -> Int? {
+        guard let raw = readValue("FNum") else { return nil }
+        let count = Int(raw)
+        return count > 0 ? count : nil
+    }
+
+    /// 读取所有风扇的当前 RPM,返回最大 RPM。任一风扇读取失败跳过(不抛错);
+    /// 全 0 或全失败时返回 nil,UI 应降级为 unavailable 占位。
+    func maxFanRPM() -> Int? {
+        guard let count = fanCount() else { return nil }
+        var maxRPM = 0
+        for i in 0..<count {
+            let key = "F\(i)Ac"
+            if let raw = readValue(key) {
+                let rpm = Int(raw)
+                if rpm > maxRPM { maxRPM = rpm }
+            }
+        }
+        return maxRPM > 0 ? maxRPM : nil
+    }
+
+    /// 读取所有风扇的当前 RPM 与 min/max 范围(供面板展开用)。
+    /// 任一字段失败用 0 占位;返回数组长度 = fanCount。
+    func allFans() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)] {
+        guard let count = fanCount() else { return [] }
+        var result: [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)] = []
+        for i in 0..<count {
+            let current = Int(readValue("F\(i)Ac") ?? 0)
+            let min = Int(readValue("F\(i)Mn") ?? 0)
+            let max = Int(readValue("F\(i)Mx") ?? 0)
+            result.append((id: i, currentRPM: current, minRPM: min, maxRPM: max))
+        }
+        return result
+    }
+
     private func readValue(_ key: String) -> Double? {
         guard conn != 0 else { return nil }
 

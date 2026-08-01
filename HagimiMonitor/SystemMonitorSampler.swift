@@ -87,6 +87,10 @@ final class SystemMonitorSampler {
         case .storage: return .storageUnavailable
         case .network: return .networkUnavailable
         case .battery: return .batteryUnavailable
+        case .fan:
+            // 风扇走独立 FanSampler 管线,不应进入 SystemMonitorSampler;
+            // 兜底返回 batteryUnavailable(实际不会被触发)。
+            return .batteryUnavailable
         }
     }
 }

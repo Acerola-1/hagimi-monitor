@@ -142,6 +142,8 @@ struct MenuBarMetricLabel: View {
             "888G"
         case .systemPower:
             "888W"
+        case .fanSpeed:
+            "9999"
         }
     }
 

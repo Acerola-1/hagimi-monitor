@@ -292,9 +292,9 @@ final class MonitorSettings: ObservableObject {
 
         var result: [MenuBarMetricKind] = []
         for rawValue in rawValues {
-            // 旧值里可能残留当前版本不可用的指标(如沙盒版的 CPU 温度),一并过滤。
+            // 旧值里可能残留当前版本不可用的指标(如沙盒版的 CPU 温度);风扇指标
+            // 保留(不按 hasFan 过滤),无风扇机迁到有风扇机时自动恢复。
             guard let kind = MenuBarMetricKind(rawValue: rawValue),
-                  MenuBarMetricKind.userSelectableCases.contains(kind),
                   !result.contains(kind) else {
                 continue
             }
@@ -344,6 +344,9 @@ final class MonitorSettings: ObservableObject {
                     "充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power",
                     "Charging Power": "charging-power", "Health": "health", "Cycle Count": "cycle-count", "Temperature": "temperature", "Adapter": "adapter", "Power": "power",
                 ]
+            case .fan:
+                // 风扇行无子指标,展开区由 FanList 直接渲染;此处无需迁移映射。
+                return [:]
             }
         }()
 

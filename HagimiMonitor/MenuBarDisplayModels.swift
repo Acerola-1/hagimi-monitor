@@ -48,19 +48,25 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     case cpuTemperature
     case storageFree
     case systemPower
+    case fanSpeed
 
     static let defaultSelection: [MenuBarMetricKind] = [.cpuUsage]
     static let maximumSelectionCount = 4
 
     /// 用户可选的菜单栏指标。温度依赖 SMC(AppleSMC user client),App Store
-    /// 沙盒版无法读取,故仅 DISPLAY_CONTROL 版本提供 CPU 温度选项。
-    static let userSelectableCases: [MenuBarMetricKind] = {
-        #if DISPLAY_CONTROL
-        return allCases
-        #else
-        return allCases.filter { $0 != .cpuTemperature }
+    /// 沙盒版无法读取,故仅 DISPLAY_CONTROL 版本提供 CPU 温度选项。风扇同理,
+    /// 且需机器实际有风扇(FNum > 0),运行时由 `hasFan` 参数门控,无风扇机型设置
+    /// 里看不到该选项。
+    static func userSelectableCases(hasFan: Bool) -> [MenuBarMetricKind] {
+        var cases: [MenuBarMetricKind] = allCases
+        #if !DISPLAY_CONTROL
+        cases.removeAll { $0 == .cpuTemperature }
         #endif
-    }()
+        if !hasFan {
+            cases.removeAll { $0 == .fanSpeed }
+        }
+        return cases
+    }
 
     var id: String { rawValue }
 
@@ -86,6 +92,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             String(localized: "menu-bar-metric.storage-free")
         case .systemPower:
             String(localized: "menu-bar-metric.system-power")
+        case .fanSpeed:
+            String(localized: "menu-bar-metric.fan-speed")
         }
     }
 
@@ -111,6 +119,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             "externaldrive"
         case .systemPower:
             "bolt.fill"
+        case .fanSpeed:
+            "fan.fill"
         }
     }
 
@@ -136,6 +146,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             String(localized: "menu-bar-metric-prefix.storage-free")
         case .systemPower:
             String(localized: "menu-bar-metric-prefix.system-power")
+        case .fanSpeed:
+            String(localized: "menu-bar-metric-prefix.fan-speed")
         }
     }
 }
@@ -178,6 +190,15 @@ enum MenuBarMetricFormatter {
     static func power(_ value: Double?) -> String {
         guard let value else { return leftPad(unavailable, to: 4) + "W" }
         return leftPad("\(Int(max(0, value).rounded()))", to: 3) + "W"
+    }
+
+    /// 风扇转速(单位 RPM)。固定 4 字符右对齐数字,无单位(参考 Stats 菜单栏):
+    /// 9999 作 cap,极端值(Mac Pro 极限散热也很少破 8000 RPM)显示为 9999。
+    /// nil(无风扇 / 读取失败)走 leftPad(unavailable, to: 4) 占位,保持 4 字符宽度。
+    static func fanRPM(_ rpm: Int?) -> String {
+        guard let rpm else { return leftPad(unavailable, to: 4) }
+        let capped = min(rpm, 9999)
+        return String(format: "%4d", capped)
     }
 
     private static func compactCapacity(_ value: Double) -> String {
