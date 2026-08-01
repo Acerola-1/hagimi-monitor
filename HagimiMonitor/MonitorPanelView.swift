@@ -600,6 +600,19 @@ private struct MetricGlassRow: View, Equatable {
         theme.moduleTint(for: module.kind)
     }
 
+    /// 风扇展开区是否可展示。单风扇时主行已显示 RPM,展开无意义,故仅多风扇可展开。
+    /// 非 fan 模块不由此属性门控(走 details / fans 原有逻辑)。
+    private var fanDetailAvailable: Bool {
+        guard module.kind == .fan else { return false }
+        return (fans?.count ?? 0) > 1
+    }
+
+    /// 展开区是否有内容可显示(统一门控:fan 看 fanDetailAvailable,其余看原逻辑)。
+    private var detailAvailable: Bool {
+        if module.kind == .fan { return fanDetailAvailable }
+        return !details.isEmpty || (fans?.isEmpty == false)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -626,7 +639,7 @@ private struct MetricGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            CollapsibleDetail(isExpanded: isExpanded && (!details.isEmpty || (fans?.isEmpty == false))) {
+            CollapsibleDetail(isExpanded: isExpanded && detailAvailable) {
                 Group {
                     if module.kind == .fan, let fans, !fans.isEmpty {
                         FanList(fans: fans, theme: theme)
@@ -659,6 +672,8 @@ private struct MetricGlassRow: View, Equatable {
         }
         .contentShape(Rectangle())
         .onTapGesture {
+            // 单风扇时主行已展示 RPM,无展开内容,点击不切换展开状态。
+            guard detailAvailable else { return }
             toggleExpansion?()
         }
         .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
@@ -688,8 +703,12 @@ private struct MetricGlassRow: View, Equatable {
             EmptyView()
         case .fan:
             // 风扇主行右侧:有 RPM 历史则画 sparkline,否则显示当前 max RPM 数字。
+            // Y 轴用风扇硬件 min~max 范围归一化(如 2317~6550),而非默认 0~100,
+            // 这样日常 ~2500 RPM 的线不会贴顶,转速变化也能被放大可见。
             if !samples.isEmpty {
-                SparklineChart(samples: samples, tint: tint)
+                let fanMin = Double(fans?.map(\.minRPM).min() ?? 0)
+                let fanMax = Double(fans?.map(\.maxRPM).max() ?? 100)
+                SparklineChart(samples: samples, tint: tint, minValue: fanMin, maxValue: fanMax)
                     .frame(width: 56, height: 18)
             } else {
                 Text(module.summary)
@@ -1734,9 +1753,12 @@ private struct MetricCardView: View, Equatable {
             }
         case .fan:
             // 风扇大卡片:大数字 max RPM + sparkline
+            // Y 轴用风扇硬件 min~max 归一化,与列表行 sparkline 保持一致。
             VStack(alignment: .leading, spacing: 12) {
                 bigValue(percentText)
-                SparklineChart(samples: module.samples, tint: tint)
+                let fanMin = Double(module.fans?.map(\.minRPM).min() ?? 0)
+                let fanMax = Double(module.fans?.map(\.maxRPM).max() ?? 100)
+                SparklineChart(samples: module.samples, tint: tint, minValue: fanMin, maxValue: fanMax)
                     .frame(height: 36)
             }
         }
@@ -2437,42 +2459,12 @@ private struct InlineNetworkProcessList: View {
     }
 }
 
-/// 风扇列表展开视图。固定 5 行占位(Mac Pro 8 风扇场景下仅显示前 5),
-/// 每行展示 name / current RPM / min-max 比例条;空位显"—"。参照
-/// `InlineDiskProcessList` 的固定行模式,避免展开/收起的二次高度跳变。
+/// 风扇展开区列表:按实际风扇数量动态渲染行数(无占位行)。
+/// 每行展示 name / current RPM / min-max 比例条 / 状态指示点。
+/// 仅在多风扇(>=2)时渲染;单风扇的主行已展示 RPM,不进入展开区。
 private struct FanList: View {
     let fans: [FanInfo]
     let theme: MonitorPanelTheme
-
-    private static let rowCount = 5
-
-    private struct Row: Identifiable {
-        let id: Int
-        let name: String
-        let currentRPM: Int
-        let maxRPM: Int
-        /// 0-1 之间的当前转速 / 最大转速比例,用于右侧 mini 比例条
-        let ratio: Double
-        let isPlaceholder: Bool
-    }
-
-    private var rows: [Row] {
-        fans.prefix(Self.rowCount).enumerated().map { idx, fan in
-            let ratio = fan.maxRPM > 0 ? min(1.0, Double(fan.currentRPM) / Double(fan.maxRPM)) : 0
-            return Row(
-                id: fan.id,
-                name: fan.name,
-                currentRPM: fan.currentRPM,
-                maxRPM: fan.maxRPM,
-                ratio: ratio,
-                isPlaceholder: false
-            )
-        }
-    }
-
-    private var placeholderRow: Row {
-        Row(id: -1, name: "—", currentRPM: 0, maxRPM: 0, ratio: 0, isPlaceholder: true)
-    }
 
     var body: some View {
         VStack(spacing: 5) {
@@ -2482,36 +2474,54 @@ private struct FanList: View {
                 .padding(.leading, 28)
 
             VStack(spacing: 4) {
-                ForEach(0 ..< Self.rowCount, id: \.self) { index in
-                    fanRow(index < rows.count ? rows[index] : placeholderRow)
+                ForEach(fans) { fan in
+                    fanRow(fan)
                 }
             }
             .padding(.leading, 28)
         }
     }
 
+    /// 渲染单个风扇行:状态点 + 名称 + RPM + min-max 比例条。
     @ViewBuilder
-    private func fanRow(_ row: Row) -> some View {
+    private func fanRow(_ fan: FanInfo) -> some View {
+        let ratio = fan.maxRPM > 0 ? min(1.0, Double(fan.currentRPM) / Double(fan.maxRPM)) : 0
+        let status = fan.status
+
         HStack(spacing: 6) {
-            if row.isPlaceholder {
-                Text("—")
-                    .monitorPanelMonoFont(.callout, weight: .regular)
-                    .foregroundStyle(theme.secondaryText)
-            } else {
-                Text(row.name)
-                    .monitorPanelMetricLabelFont()
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                Spacer(minLength: 8)
-                Text("\(row.currentRPM)")
-                    .monitorPanelMonoFont(.callout, weight: .semibold)
-                    .foregroundStyle(theme.valueText)
-                    .lineLimit(1)
-                    .monospacedDigit()
-                // min-max 比例条
-                ProgressMeter(value: row.ratio, tint: theme.moduleTint(for: .fan), theme: theme)
-                    .frame(width: 50, height: 3)
-            }
+            // 状态指示点:fault=红 / warning=橙 / normal=绿 / unknown=灰
+            Circle()
+                .fill(theme.palette.severityTint(for: status.severity))
+                .frame(width: 5, height: 5)
+            Text(fan.name)
+                .monitorPanelMetricLabelFont()
+                .foregroundStyle(theme.primaryText)
+                .lineLimit(1)
+            Spacer(minLength: 8)
+            Text("\(fan.currentRPM)")
+                .monitorPanelMonoFont(.callout, weight: .semibold)
+                .foregroundStyle(rpmColor(for: status))
+                .lineLimit(1)
+                .monospacedDigit()
+            // min-max 比例条:着色跟随状态(fault/warning 用 severity 色,normal 用模块色)
+            ProgressMeter(value: ratio, tint: progressTint(for: status), theme: theme)
+                .frame(width: 50, height: 3)
+        }
+    }
+
+    /// RPM 数值颜色:fault/warning 用 severity 色,normal/unknown 用默认值色。
+    private func rpmColor(for status: FanStatus) -> Color {
+        switch status {
+        case .fault, .warning: theme.palette.severityTint(for: status.severity)
+        case .normal, .unknown: theme.valueText
+        }
+    }
+
+    /// 比例条着色:fault/warning 用 severity 色,normal/unknown 用风扇模块色。
+    private func progressTint(for status: FanStatus) -> Color {
+        switch status {
+        case .fault, .warning: theme.palette.severityTint(for: status.severity)
+        case .normal, .unknown: theme.moduleTint(for: .fan)
         }
     }
 }

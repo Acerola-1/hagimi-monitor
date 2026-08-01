@@ -1,7 +1,7 @@
 import Foundation
 import IOKit
 
-final class SMCReader {
+final class SMCReader: FanSMCReading {
     private var conn: io_connect_t = 0
     private static let temperatureKeys = [
         "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"
@@ -125,6 +125,9 @@ final class SMCReader {
             return Double(intValue) / 64.0
         case "ui16 ":
             return Double(UInt16(byteArray[0]) * 256 + UInt16(byteArray[1]))
+        case "ui8 ":
+            // 无符号 8-bit 单字节整数。FNum(风扇数)即此类型,dataSize=1。
+            return Double(byteArray[0])
         case "flt ":
             // byteArray 是 [UInt8](仅 1 字节对齐),load(as: Float.self) 假定 4 字节对齐属未定义
             // 行为;用 loadUnaligned 从任意偏移安全读取。
