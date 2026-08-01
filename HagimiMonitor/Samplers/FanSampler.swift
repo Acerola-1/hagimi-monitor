@@ -31,7 +31,18 @@ final class FanSampler {
     /// 告警服务订阅此值,在状态恶化时触发通知。
     @Published private(set) var status: FanStatus = .unknown
 
-    init(smcReader: FanSMCReading? = SMCReader()) {
+    /// SMC 读取器工厂:仅在 DISPLAY_CONTROL(直连版)下创建 SMCReader。
+    /// 沙盒版 IOServiceOpen(AppleSMC) 被 sandbox 拒绝,直接返回 nil,
+    /// 使 fanCount=0 → available=false,风扇模块静默禁用(与 CPU 温度门控一致)。
+    private static func makeSMCReader() -> FanSMCReading? {
+        #if DISPLAY_CONTROL
+        return SMCReader()
+        #else
+        return nil
+        #endif
+    }
+
+    init(smcReader: FanSMCReading? = makeSMCReader()) {
         self.smcReader = smcReader
         // 启动时一次性读取,缓存机器物理风扇数;nil/0 = 无风扇
         self.fanCount = smcReader?.fanCount() ?? 0

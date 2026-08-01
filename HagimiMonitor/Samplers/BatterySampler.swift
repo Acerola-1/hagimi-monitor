@@ -37,7 +37,7 @@ final class BatterySampler: MonitorSampler {
         let sourceState = description[kIOPSPowerSourceStateKey] as? String
         let connected = sourceState == kIOPSACPowerValue
 
-        let smart = smartBatteryInfo()
+        let smart = smartBatteryInfo(isCharging: isCharging)
         let stableHealth = stabilizedHealth(smart.healthPercent)
         let adapterWatts = smart.adapterWatts ?? externalAdapterWatts()
         let chargingPower = connected
@@ -131,7 +131,7 @@ final class BatterySampler: MonitorSampler {
         return displayedHealthPercent
     }
 
-    private func smartBatteryInfo() -> SmartBatteryInfo {
+    private func smartBatteryInfo(isCharging: Bool) -> SmartBatteryInfo {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard service != IO_OBJECT_NULL else {
             return SmartBatteryInfo()
@@ -167,8 +167,8 @@ final class BatterySampler: MonitorSampler {
         let amperage = lookupDouble("Amperage")
         let adapterWatts = adapterWatts(service)
         let systemPowerWatts = systemPowerWatts(service)
-        let chargingPowerWatts = chargingPowerWatts(service)
-        let telemetryChargingWatts = telemetryChargingWatts(service)
+        let chargingPowerWatts = chargingPowerWatts(service, isCharging: isCharging)
+        let telemetryChargingWatts = telemetryChargingWatts(service, isCharging: isCharging)
         let powerInWatts = powerInWatts(service)
         let batteryFlowWatts = batteryFlowWatts(service)
         let temperature = lookupDouble("Temperature").map { $0 / 100 }
@@ -212,19 +212,24 @@ final class BatterySampler: MonitorSampler {
         return doubleValue(details[kIOPSPowerAdapterWattsKey])
     }
 
-    private func chargingPowerWatts(_ service: io_service_t) -> Double? {
+    private func chargingPowerWatts(_ service: io_service_t, isCharging: Bool) -> Double? {
         // 优先用 PowerTelemetryData.BatteryPower（电池包级别，准确）。
         // 注意符号约定因机型/系统而异：实测本机充电时 BatteryPower 为正值
         // （= SystemPowerIn − SystemLoad，流入电池的功率），旧代码只认 bp<0 会漏判。
-        // 充电功率仅在 isCharging 为真时展示，故此处取绝对值（充放电流量的量级）即可。
+        // BatteryPower 的符号在不同硬件 / macOS 版本上并不一致，
+        // 因此用 IOPS 的充电状态判断方向，只把绝对值当作充电功率。
         if let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
-           let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 {
-            return abs(bp) / 1_000
+           let watts = interpretedChargingPowerWatts(
+               batteryPowerMilliwatts: signedDoubleValue(value["BatteryPower"]),
+               isCharging: isCharging
+           ) {
+            return watts
         }
         // Fallback: ChargerData 的 ChargingCurrent * ChargingVoltage
         // 注意 ChargingVoltage 是单节电芯电压，结果会偏低
-        guard let value = IORegistryEntryCreateCFProperty(service, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
+        guard isCharging,
+              let value = IORegistryEntryCreateCFProperty(service, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
               let current = doubleValue(value["ChargingCurrent"]),
               let voltage = doubleValue(value["ChargingVoltage"]) else {
@@ -233,14 +238,16 @@ final class BatterySampler: MonitorSampler {
         return nonZeroWatts(current * voltage / 1_000_000)
     }
 
-    private func telemetryChargingWatts(_ service: io_service_t) -> Double? {
+    private func telemetryChargingWatts(_ service: io_service_t, isCharging: Bool) -> Double? {
         // 同 chargingPowerWatts：取 BatteryPower 绝对值作充电功率，兼容正/负符号约定。
         guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
-            .takeRetainedValue() as? [String: Any],
-              let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 else {
+            .takeRetainedValue() as? [String: Any] else {
             return nil
         }
-        return abs(bp) / 1_000
+        return interpretedChargingPowerWatts(
+            batteryPowerMilliwatts: signedDoubleValue(value["BatteryPower"]),
+            isCharging: isCharging
+        )
     }
 
     /// 适配器实际输入功率(W):PowerTelemetryData.SystemPowerIn,仅插电时有意义。

@@ -54,6 +54,13 @@ func nonZeroWatts(_ value: Double?) -> Double? {
     return value
 }
 
+func interpretedChargingPowerWatts(batteryPowerMilliwatts: Double?, isCharging: Bool) -> Double? {
+    guard isCharging, let batteryPowerMilliwatts else {
+        return nil
+    }
+    return nonZeroWatts(abs(batteryPowerMilliwatts) / 1_000)
+}
+
 private let byteFormatter: ByteCountFormatter = {
     let formatter = ByteCountFormatter()
     formatter.allowedUnits = [.useGB, .useMB]
