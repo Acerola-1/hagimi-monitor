@@ -37,7 +37,7 @@ struct MonitorPalette {
         case .balanced:
             Color(hex: 0x4E7FD9)
         case .vibrant:
-            Color(hex: 0xFF7EB6)
+            Color(hex: 0xC268B8)
         }
     }
 
@@ -158,7 +158,7 @@ struct MonitorPalette {
         case .battery:
             Color(hex: 0x198038)
         case .fan:
-            Color(hex: 0x1192E8)
+            Color(hex: 0x6366F1)
         }
     }
 }
