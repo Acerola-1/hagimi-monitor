@@ -1188,7 +1188,9 @@ private struct BatteryGlassRow: View, Equatable {
                     // 数据全部来自 BatterySampler 读 AppleSmartBattery/PowerTelemetryData 的
                     // IORegistry 只读属性,不涉及他进程采样或私有 API,沙盒允许。
                     // 由设置项 batteryShowPowerFlow(Beta)门控,关闭后展开区仅剩指标网格。
-                    if showPowerFlow {
+                    // 功率流无 power 数据(老款 Mac 读不到 PowerTelemetryData.SystemPower)时整体隐藏,
+                    // 避免只显标题不出图的视觉断裂。canExpand 已用同一条件门控展开动作,渲染侧保持联动。
+                    if showPowerFlow && numericValue("power") != nil {
                         PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
                             .padding(.top, 3)
                         PowerFlowDiagram(
