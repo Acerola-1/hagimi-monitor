@@ -185,8 +185,44 @@ final class NetworkSampler: MonitorSampler {
         return cachedValue
     }
 
+    /// 公网 IP 查询服务列表，按优先级排列。
+    /// ip.3322.net 和 ipinfo.io 在大陆网络下稳定可达；ipify 在部分网络不可达，放最后。
+    private static let publicIPProviders: [String] = [
+        "https://ip.3322.net",
+        "https://ipinfo.io/ip",
+        "https://checkip.amazonaws.com",
+        "https://ifconfig.me/ip",
+        "https://icanhazip.com",
+        "https://api.ipify.org",
+    ]
+
+    /// 使用 inet_pton 严格校验 IPv4/IPv6 字符串，避免把 HTML 错误页(Cloudflare 521 等)误识别为 IP。
+    private static func isValidIP(_ s: String) -> Bool {
+        return s.withCString { ptr in
+            var addr4 = in_addr()
+            var addr6 = in6_addr()
+            return inet_pton(AF_INET, ptr, &addr4) == 1 ||
+                   inet_pton(AF_INET6, ptr, &addr6) == 1
+        }
+    }
+
     private func refreshPublicIP(startedAt: Date) {
-        let url = URL(string: "https://api.ipify.org")!
+        fetchPublicIPFrom(providers: Self.publicIPProviders, startedAt: startedAt)
+    }
+
+    private func fetchPublicIPFrom(providers: [String], startedAt: Date) {
+        guard let provider = providers.first else {
+            // 所有源都失败，保留旧缓存
+            AppLogger.sampler.error("Public IP refresh failed: all providers exhausted")
+            publicIPLock.lock()
+            publicIPCache = (publicIPCache?.ip ?? "--", startedAt)
+            isRefreshingPublicIP = false
+            publicIPLock.unlock()
+            return
+        }
+
+        let remaining = Array(providers.dropFirst())
+        let url = URL(string: provider)!
         var request = URLRequest(url: url)
         request.timeoutInterval = 5
 
@@ -197,18 +233,20 @@ final class NetworkSampler: MonitorSampler {
                 .flatMap { String(data: $0, encoding: .utf8) }?
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            if let error {
-                AppLogger.sampler.error("Public IP refresh failed: \(error.localizedDescription, privacy: .public)")
-            }
-
-            publicIPLock.lock()
-            if let ip, !ip.isEmpty {
+            if let ip, Self.isValidIP(ip) {
+                publicIPLock.lock()
                 publicIPCache = (ip, Date())
+                isRefreshingPublicIP = false
+                publicIPLock.unlock()
             } else {
-                publicIPCache = (publicIPCache?.ip ?? "--", startedAt)
+                if let error {
+                    AppLogger.sampler.warning("Public IP provider \(provider) failed: \(error.localizedDescription, privacy: .public)")
+                } else {
+                    AppLogger.sampler.warning("Public IP provider \(provider) returned invalid response")
+                }
+                // 当前源失败，尝试下一个
+                fetchPublicIPFrom(providers: remaining, startedAt: startedAt)
             }
-            isRefreshingPublicIP = false
-            publicIPLock.unlock()
         }
         task.resume()
     }
