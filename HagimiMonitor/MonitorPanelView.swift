@@ -1824,8 +1824,8 @@ private struct MetricCardView: View, Equatable {
             guard showNetworkProcesses else { return nil }
             let items = topNetworkProcesses.enumerated().map { index, proc in
                 CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
-                    CardProcessMetric(symbol: "↑", text: byteCountString(Int64(proc.upload))),
-                    CardProcessMetric(symbol: "↓", text: byteCountString(Int64(proc.download)))
+                    CardProcessMetric(symbol: "↑", text: bytesPerSecond(Double(proc.upload))),
+                    CardProcessMetric(symbol: "↓", text: bytesPerSecond(Double(proc.download)))
                 ])
             }
             return (items, 2)
@@ -2435,8 +2435,8 @@ private struct InlineNetworkProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                upText: byteCountString(Int64(proc.upload)),
-                downText: byteCountString(Int64(proc.download))
+                upText: bytesPerSecond(Double(proc.upload)),
+                downText: bytesPerSecond(Double(proc.download))
             )
         }
     }

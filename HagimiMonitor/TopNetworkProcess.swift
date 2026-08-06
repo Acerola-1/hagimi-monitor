@@ -5,9 +5,9 @@ import Foundation
 struct TopNetworkProcess: Identifiable, Equatable {
     let pid: pid_t
     let name: String
-    /// 自上次采样以来下载的字节增量。
+    /// 下载速率（字节/秒）。
     let download: Int
-    /// 自上次采样以来上传的字节增量。
+    /// 上传速率（字节/秒）。
     let upload: Int
     let icon: NSImage?
 
@@ -35,9 +35,10 @@ private struct NetworkSnapshotEntry {
 
 /// 网络快照，用于计算增量。
 private var previousNetworkSnapshot: [pid_t: NetworkSnapshotEntry] = [:]
+private var previousNetworkSnapshotTime: Date?
 
 /// 后台采样网络流量最高的 N 个进程。
-/// 使用 `nettop -P -L 1 -n` 获取每个进程的上下行字节，维护快照计算增量。
+/// 使用 `nettop -P -L 1 -n` 获取每个进程的上下行字节，维护快照计算速率（字节/秒）。
 /// 返回的 RawNetworkProcess 不含图标——图标由主线程 enrichNetwork(_:) 补齐。
 func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawNetworkProcess] {
     let task = Process()
@@ -91,7 +92,9 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
         currentList[pid] = NetworkSnapshotEntry(rawName: rawName, download: download, upload: upload)
     }
 
-    // 计算增量
+    // 计算增量与速率（字节/秒）。dt 在此路径上必然 > 0（首次采样已被 continue 拦截），无需额外下限保护。
+    let now = Date()
+    let dt = previousNetworkSnapshotTime.map { now.timeIntervalSince($0) } ?? 0
     var result: [RawNetworkProcess] = []
 
     for (pid, current) in currentList {
@@ -101,6 +104,10 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
 
         // 首次采样没有增量，跳过
         if prev == nil { continue }
+
+        // 将累计字节增量转换为速率（字节/秒），与 Stats 等行业惯例对齐
+        let downloadRate = UInt64(Double(downloadDelta) / dt)
+        let uploadRate = UInt64(Double(uploadDelta) / dt)
         guard downloadDelta > 0 || uploadDelta > 0 else { continue }
 
         // 系统进程过滤
@@ -116,11 +123,12 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
         let name = current.rawName.isEmpty ? "pid \(pid)" : current.rawName
         result.append(RawNetworkProcess(
             pid: pid, name: name,
-            download: downloadDelta, upload: uploadDelta
+            download: downloadRate, upload: uploadRate
         ))
     }
 
     previousNetworkSnapshot = currentList
+    previousNetworkSnapshotTime = now
 
     // 排序: max(download, upload) 降序
     return Array(result.sorted {
