@@ -2,10 +2,13 @@
 
 ### 修复
 
-- 修复公网 IP 在部分网络环境返回错误或不稳定：改为多源 fallback 链（3322.net / ipinfo.io / checkip.amazonaws.com / ifconfig.me / icanhazip / ipify），并新增 inet_pton 严格校验，避免 Cloudflare HTML 错误页被误识别为 IP
-- 修复电源模块功率流在 power 数据缺失时只显标题不出图，改为整体隐藏避免视觉断裂
+- 修复 M1/M2 机内 HDMI 口 DDC 亮度控制失效(MCDP29XX 芯片地址适配)
 
 ### 优化与体验
 
-- 网络进程排行从累计字节增量改为字节/秒速率，与 macOS 活动监视器等行业惯例一致
+- 新增 Gamma 软件调光降级层,DDC 不可用时仍可调节亮度
+
+### 代码质量
+
+- 退出/断开显示器时恢复 Gamma 表,避免残留压暗
 

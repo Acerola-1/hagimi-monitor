@@ -57,7 +57,7 @@ final class DisplayDDCBridge {
 
         var sawUnsupported = false
         for vcp in orderedCandidates(for: key) {
-            guard let reply = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, retries: 3) else {
+            guard let reply = DDCTransport.read(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, retries: 3) else {
                 continue
             }
             if reply.resultCode == 0x01 {
@@ -102,7 +102,7 @@ final class DisplayDDCBridge {
         guard let vcp = controlCodes[key] ?? DDCVCPCode.candidates(for: control).first else {
             return nil
         }
-        guard let reply = DDCTransport.read(service: service.service, vcpCode: vcp.rawValue, retries: 3),
+        guard let reply = DDCTransport.read(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, retries: 3),
               reply.resultCode == 0x00, reply.max > 0
         else {
             return nil
@@ -139,7 +139,7 @@ final class DisplayDDCBridge {
         }
 
         for vcp in orderedCandidates(for: key) {
-            let success = DDCTransport.write(service: service.service, vcpCode: vcp.rawValue, value: ddcValue)
+            let success = DDCTransport.write(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, value: ddcValue)
             displayDDCLog.notice(
                 "Write DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) value \(ddcValue, privacy: .public) success \(success, privacy: .public)"
             )
@@ -188,7 +188,10 @@ private enum DDCTransport {
         let max: UInt16
     }
 
-    private static let sevenBitAddress: UInt8 = 0x37
+    /// DDC/CI 标准 I2C 7-bit 从地址。用于**报文 checksum 计算**,始终为 0x37。
+    /// 注意:传给 IOAVService 的 `chipAddress` 参数可能因 MCDP29XX 芯片而不同(0xB7),
+    /// 但 DDC/CI 协议层的 checksum 始终基于此标准地址。
+    private static let i2cAddress: UInt8 = 0x37
     private static let dataAddress: UInt8 = 0x51
 
     /// per-call 看门狗超时。仅让**当前这一次**调用放弃等待并返回失败,
@@ -200,10 +203,11 @@ private enum DDCTransport {
     /// 专用 serial I/O 队列:看门狗超时后被遗弃的 hang 任务留在这里,不与下一次并发。
     private static let ioQueue = DispatchQueue(label: "hagimi.ddc.io")
 
-    static func read(service: IOAVService, vcpCode: UInt8, retries: Int = 3) -> Reply? {
+    /// 读取 VCP 特征值。chipAddress 由调用方传入(MCDP29XX 芯片用 0xB7,其余 0x37)。
+    static func read(service: IOAVService, chipAddress: UInt8, vcpCode: UInt8, retries: Int = 3) -> Reply? {
         var send = [vcpCode]
         var reply = [UInt8](repeating: 0, count: 11)
-        guard communicate(service: service, send: &send, reply: &reply, retries: retries) else {
+        guard communicate(service: service, chipAddress: chipAddress, send: &send, reply: &reply, retries: retries) else {
             return nil
         }
         // 校验帧结构,过滤串扰/损坏应答:reply[2] 应为 0x02(feature reply op code),
@@ -217,13 +221,14 @@ private enum DDCTransport {
         return Reply(resultCode: reply[3], current: currentValue, max: maxValue)
     }
 
-    static func write(service: IOAVService, vcpCode: UInt8, value: UInt16, retries: Int = 3) -> Bool {
+    /// 写入 VCP 特征值。chipAddress 由调用方传入(MCDP29XX 芯片用 0xB7,其余 0x37)。
+    static func write(service: IOAVService, chipAddress: UInt8, vcpCode: UInt8, value: UInt16, retries: Int = 3) -> Bool {
         var send = [vcpCode, UInt8(value >> 8), UInt8(value & 0xFF)]
         var reply: [UInt8] = []
-        return communicate(service: service, send: &send, reply: &reply, retries: retries)
+        return communicate(service: service, chipAddress: chipAddress, send: &send, reply: &reply, retries: retries)
     }
 
-    private static func communicate(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], retries: Int) -> Bool {
+    private static func communicate(service: IOAVService, chipAddress: UInt8, send: inout [UInt8], reply: inout [UInt8], retries: Int) -> Bool {
         // IOAVServiceReadI2C/WriteI2C 是阻塞内核调用,异常时可能长时间不返回。
         // 派到 serial ioQueue 执行 + semaphore 超时保护,超时仅放弃本次调用(返回 false),
         // 不设任何跨调用状态,故不会级联。escaping 闭包不能捕获 inout,拷贝后异步、完成回写。
@@ -232,7 +237,7 @@ private enum DDCTransport {
         let semaphore = DispatchSemaphore(value: 0)
         var result = false
         ioQueue.async {
-            result = communicateUnlocked(service: service, send: &sendCopy, reply: &replyCopy, retries: retries)
+            result = communicateUnlocked(service: service, chipAddress: chipAddress, send: &sendCopy, reply: &replyCopy, retries: retries)
             semaphore.signal()
         }
         if semaphore.wait(timeout: .now() + callTimeout) == .timedOut {
@@ -244,13 +249,16 @@ private enum DDCTransport {
         return result
     }
 
-    private static func communicateUnlocked(service: IOAVService, send: inout [UInt8], reply: inout [UInt8], retries: Int) -> Bool {
+    /// 底层 DDC/CI 报文收发。chipAddress 传给 IOAVService 内核调用,
+    /// checksum 计算始终用 i2cAddress(0x37)——因为 DDC/CI 协议的 checksum 基于
+    /// I2C 标准从地址,而非芯片路由地址。
+    private static func communicateUnlocked(service: IOAVService, chipAddress: UInt8, send: inout [UInt8], reply: inout [UInt8], retries: Int) -> Bool {
         let dataAddress = Self.dataAddress
         var success = false
         var packet = [UInt8(0x80 | (send.count + 1)), UInt8(send.count)] + send + [0]
         let checksumSeed = send.count == 1
-            ? Self.sevenBitAddress << 1
-            : Self.sevenBitAddress << 1 ^ dataAddress
+            ? Self.i2cAddress << 1
+            : Self.i2cAddress << 1 ^ dataAddress
         packet[packet.count - 1] = checksum(seed: checksumSeed, data: packet, start: 0, end: packet.count - 2)
 
         for _ in 0..<Swift.max(1, retries) {
@@ -263,7 +271,7 @@ private enum DDCTransport {
                     }
                     return IOAVServiceWriteI2C(
                         service,
-                        UInt32(Self.sevenBitAddress),
+                        UInt32(chipAddress),
                         UInt32(dataAddress),
                         baseAddress,
                         packetCount
@@ -284,7 +292,7 @@ private enum DDCTransport {
                     }
                     return IOAVServiceReadI2C(
                         service,
-                        UInt32(Self.sevenBitAddress),
+                        UInt32(chipAddress),
                         0,
                         baseAddress,
                         replyCount
@@ -334,7 +342,8 @@ private final class Arm64DDCMatcher {
                     displayID: displayID,
                     service: service,
                     serviceLocation: registryService.serviceLocation,
-                    matchScore: score
+                    matchScore: score,
+                    chipAddress: registryService.isMCDP29XX ? 0xB7 : 0x37
                 )
                 candidatesByScore[score, default: []].append(candidate)
             }
@@ -358,7 +367,7 @@ private final class Arm64DDCMatcher {
                 usedDisplayIDs.insert(candidate.displayID)
                 usedLocations.insert(candidate.serviceLocation)
                 displayDDCLog.debug(
-                    "Matched DDC service display \(candidate.displayID, privacy: .public) location \(candidate.serviceLocation, privacy: .public) score \(candidate.matchScore, privacy: .public)"
+                    "Matched DDC service display \(candidate.displayID, privacy: .public) location \(candidate.serviceLocation, privacy: .public) score \(candidate.matchScore, privacy: .public) chip \(String(format: "0x%02X", candidate.chipAddress), privacy: .public)"
                 )
             }
         }
@@ -489,6 +498,26 @@ private final class Arm64DDCMatcher {
         }
 
         service.service = avService
+        service.isMCDP29XX = isMCDP29XXProxy(entry: entry)
+    }
+
+    /// 检测 DCPAVServiceProxy 的父链上是否存在 MCDP29XX 转换芯片。
+    /// M1/M2 机内 HDMI 口通过 MCDP29xx 芯片做内部 DP→HDMI 转换,该芯片需要
+    /// 使用 0xB7 作为 chipAddress 而非标准的 0x37,否则 DDC 报文无法到达显示器。
+    /// 这是"HDMI 显示器亮度控制失效"的已知根因(m1ddc/BetterDisplay 均有此适配)。
+    /// 沿父链向上搜索(kIORegistryIterateParents),兼容 EPICProviderClass 属性位于
+    /// 更上层节点的情况,而非仅检查一级父节点。
+    private func isMCDP29XXProxy(entry: io_service_t) -> Bool {
+        guard let value = IORegistryEntrySearchCFProperty(
+            entry,
+            kIOServicePlane,
+            "EPICProviderClass" as CFString,
+            kCFAllocatorDefault,
+            IOOptionBits(kIORegistryIterateParents)
+        ) as? String else {
+            return false
+        }
+        return value == "AppleDCPMCDP29XX"
     }
 
     private func matchScore(displayID: CGDirectDisplayID, registryService: RegistryService) -> Int {
@@ -568,6 +597,9 @@ private struct DDCService {
     let service: IOAVService
     let serviceLocation: Int
     let matchScore: Int
+    /// IOAVService I2C 芯片地址。标准 DDC/CI 用 0x37;M1/M2 机内 HDMI 经 MCDP29xx
+    /// 转换芯片的显示器需用 0xB7,否则报文无法到达显示器。
+    let chipAddress: UInt8
 }
 
 private struct RegistryService {
@@ -577,4 +609,6 @@ private struct RegistryService {
     var ioDisplayLocation = ""
     var service: IOAVService?
     var serviceLocation = 0
+    /// 是否为 MCDP29XX 转换芯片代理(M1/M2 机内 HDMI 口)。
+    var isMCDP29XX = false
 }
