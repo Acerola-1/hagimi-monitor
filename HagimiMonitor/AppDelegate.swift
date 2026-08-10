@@ -57,6 +57,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             MainActor.assumeIsolated {
                 AppLaunchStateTracker.shared.markCleanExit()
                 AppLogStore.shared.flush()
+                // 退出时恢复所有显示器的 gamma 表,避免退出后显示器仍被压暗。
+                // gamma 调光仅存在于 Direct 分发版(对应 HagimiMonitorDirectOnly 目录)。
+                #if DIRECT_DISTRIBUTION
+                GammaDimmingController.shared.resetAll()
+                #endif
             }
         }
     }

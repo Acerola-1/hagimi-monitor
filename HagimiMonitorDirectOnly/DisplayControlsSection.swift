@@ -430,9 +430,11 @@ final class DisplayControlController: ObservableObject {
                 let detectedIDs = Set(detectedDisplays.map { $0.id })
                 // 已移除的显示器:清理 worker 去重状态,避免同 ID 重新接入时
                 // lastWrittenValues 残留导致首次写入被误跳过。
+                // 同时重置 gamma 调光,避免对已断开的显示器残留 gamma 压暗。
                 for removedID in previousIDs.subtracting(detectedIDs) {
                     self.worker.clearLastValues(displayID: removedID)
                     self.recentlySetValues[removedID] = nil
+                    GammaDimmingController.shared.reset(displayID: removedID)
                 }
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
@@ -621,6 +623,9 @@ struct ControlledDisplay: Identifiable {
     /// 检测阶段一次性算出的显示器类型,缓存于模型中。避免每次写入都重新
     /// classify(会触发 CoreDisplay 字典创建 + 原生亮度探测)造成拖动时的重复开销。
     let kind: DisplayKind
+    /// 调光模式:hardware = DDC/DisplayServices 硬件背光;gamma = 软件调光兜底。
+    /// DDC 无服务或显示器明确不支持时自动降级到 gamma,确保用户始终有亮度控制可用。
+    let dimmingMode: DimmingMode
     let storageID: String
     let name: String
     let isBuiltIn: Bool
@@ -711,7 +716,7 @@ private final class DisplayControlService {
         AppLogger.ui.info("Detected \(displayIDs.count) online displays")
         ddc.refresh(displayIDs: displayIDs)
 
-        return displayIDs.compactMap { id -> ControlledDisplay? in
+        let result = displayIDs.compactMap { id -> ControlledDisplay? in
             let kind = classifier.classify(displayID: id)
 
             if kind == .virtual || kind == .dummy || kind == .unsupported {
@@ -735,23 +740,33 @@ private final class DisplayControlService {
             let storedVolume = storedValue(for: .volume, displayStorageID: storageID)
             let storedContrast = storedValue(for: .contrast, displayStorageID: storageID)
 
+            // 调光模式判定:DDC 有服务且未明确不支持 → hardware(乐观);
+            // DDC 无服务或明确不支持 → gamma 软件调光兜底,确保用户始终有亮度控制。
+            let useGammaDimming = isDDC && (!ddc.hasService(for: id) || brightnessProbe?.capability == .unsupported)
+            let dimmingMode: DimmingMode = useGammaDimming ? .gamma : .hardware
+
             return ControlledDisplay(
                 id: id,
                 kind: kind,
+                dimmingMode: dimmingMode,
                 storageID: storageID,
                 name: name,
                 isBuiltIn: isBuiltIn,
-                // 仅当显示器明确回复"不支持"(capability == .unsupported)才置灰;
-                // supported 与 unknown 一律显示可控(乐观,兼顾只写型显示器)。
-                supportsBrightness: useDisplayServices
-                    ? (nativeBrightness != nil)
-                    : (brightnessProbe?.capability != .unsupported),
-                supportsVolume: isDDC && (volumeProbe?.capability != .unsupported),
-                supportsContrast: isDDC && (contrastProbe?.capability != .unsupported),
-                brightness: nativeBrightness.map { Double($0 * 100) }
-                    ?? brightnessProbe?.value
-                    ?? storedBrightness
-                    ?? DisplayControlKind.brightness.defaultValue,
+                // gamma 模式下亮度始终可控(软件调光);hardware 模式仅当明确不支持才置灰。
+                supportsBrightness: useGammaDimming
+                    ? true
+                    : (useDisplayServices
+                        ? (nativeBrightness != nil)
+                        : (brightnessProbe?.capability != .unsupported)),
+                // gamma 模式只支持亮度,不支持音量/对比度。
+                supportsVolume: useGammaDimming ? false : (isDDC && (volumeProbe?.capability != .unsupported)),
+                supportsContrast: useGammaDimming ? false : (isDDC && (contrastProbe?.capability != .unsupported)),
+                brightness: useGammaDimming
+                    ? (storedBrightness ?? 100)
+                    : (nativeBrightness.map { Double($0 * 100) }
+                        ?? brightnessProbe?.value
+                        ?? storedBrightness
+                        ?? DisplayControlKind.brightness.defaultValue),
                 volume: volumeProbe?.value
                     ?? storedVolume
                     ?? DisplayControlKind.volume.defaultValue,
@@ -760,10 +775,32 @@ private final class DisplayControlService {
                     ?? DisplayControlKind.contrast.defaultValue
             )
         }
+
+        // dimmingMode 从 gamma 切回 hardware 时(如 DDC 服务恢复)清除残留的
+        // gamma 调光,避免 reapplyAll 仍对该显示器叠加软件压暗(与硬件背光叠加过暗,
+        // 且 hardware 写入路径不触碰 gamma 状态,用户调到 100% 也无法解除)。
+        for display in result where display.dimmingMode == .hardware {
+            GammaDimmingController.shared.reset(displayID: display.id)
+        }
+        // 先丢弃已断开显示器的调光残留,避免 reapplyAll 对离线显示器做无谓施加。
+        GammaDimmingController.shared.resetDisconnected(onlineIDs: Set(result.map { $0.id }))
+
+        // 睡眠/唤醒/显示器重配置后系统会重置 gamma 表,在每次检测结束时重新施加。
+        GammaDimmingController.shared.reapplyAll()
+
+        return result
     }
 
     func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome {
         guard display.supports(control) else { return .busError }
+
+        // Gamma 软件调光降级路径:DDC 不可用的显示器仍可调亮度(但仅亮度)。
+        if display.dimmingMode == .gamma {
+            guard control == .brightness else { return .busError }
+            GammaDimmingController.shared.setDimming(percent: value, for: display.id)
+            saveStoredValue(value, for: control, displayStorageID: display.storageID)
+            return .written
+        }
 
         // 使用检测阶段缓存的 kind,不再每次写入都重新分类(重复触发系统探测)。
         let useDisplayServices = (display.kind == .builtIn || display.kind == .appleNative)
