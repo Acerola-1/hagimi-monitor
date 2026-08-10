@@ -3,10 +3,10 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.1.6</title>
-            <pubDate>Thu, 06 Aug 2026 06:23:24 +0000</pubDate>
-            <sparkle:version>71</sparkle:version>
-            <sparkle:shortVersionString>1.1.6</sparkle:shortVersionString>
+            <title>1.1.7</title>
+            <pubDate>Mon, 10 Aug 2026 10:41:54 +0000</pubDate>
+            <sparkle:version>72</sparkle:version>
+            <sparkle:shortVersionString>1.1.7</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
@@ -14,16 +14,19 @@
 
 ### 修复
 
-- 修复公网 IP 在部分网络环境返回错误或不稳定：改为多源 fallback 链（3322.net / ipinfo.io / checkip.amazonaws.com / ifconfig.me / icanhazip / ipify），并新增 inet_pton 严格校验，避免 Cloudflare HTML 错误页被误识别为 IP
-- 修复电源模块功率流在 power 数据缺失时只显标题不出图，改为整体隐藏避免视觉断裂
+- 修复 M1/M2 机内 HDMI 口 DDC 亮度控制失效(MCDP29XX 芯片地址适配)
 
 ### 优化与体验
 
-- 网络进程排行从累计字节增量改为字节/秒速率，与 macOS 活动监视器等行业惯例一致
+- 新增 Gamma 软件调光降级层,DDC 不可用时仍可调节亮度
+
+### 代码质量
+
+- 退出/断开显示器时恢复 Gamma 表,避免残留压暗
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.6/HagimiMonitor-v1.1.6.zip" length="3730641" type="application/octet-stream" sparkle:edSignature="CKWcUWF49TuHwFhCGUUUdcwLqcHLKPln2FpAGvW3l2SIYylByZKfJWA44zUT19Olq/SAV0/FQbcP2s00hpWHDg=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.1.7/HagimiMonitor-v1.1.7.zip" length="3736093" type="application/octet-stream" sparkle:edSignature="UdV6N1HTWUib7Nh+IUE6uJZLF26vF30EHgbhAieAZkAPS+ZYhY/et/QLYcEkoUwyfJk3lEuCi9JtR2XpK7VyAQ=="/>
         </item>
     </channel>
 </rss>
