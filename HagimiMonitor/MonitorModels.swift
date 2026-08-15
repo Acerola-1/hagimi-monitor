@@ -489,7 +489,13 @@ final class MonitorStore: ObservableObject {
     /// 由 SwiftUI 侧在 `withAnimation` 展开/收起时调用,置位一次性动画标记。
     func beginExpansionAnimation() {
         pendingExpansionAnimation = true
+        // 同时记录动画截止时刻:窗口期内的采样结果推迟到动画结束后再刷 UI,
+        // 避免 1-3s 节奏的模块刷新恰好撞进 0.15s 展开动画、拖动整棵视图树重算造成掉帧。
+        expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
     }
+
+    /// 展开/收起动画的截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
+    private var expansionAnimationDeadline = Date.distantPast
 
     /// 由窗口层在处理内容尺寸变化时调用:返回并清除标记。true 表示本次变化源自用户
     /// toggle、应走补间;false 表示数据驱动的尺寸变化、应瞬时贴合。
@@ -839,20 +845,19 @@ final class MonitorStore: ObservableObject {
     private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
         switch result {
         case .success(let snapshot):
-            // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
-            // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
-            if allModules != snapshot.modules {
-                allModules = snapshot.modules
+            // 展开/收起动画窗口期内推迟应用:采样命中动画的 0.15s 窗口时,
+            // @Published 刷新会拖着面板视图树在动画帧间重算,造成肉眼可见的顿挫。
+            // 推迟到动画结束后再刷,主队列 FIFO 保证多次推迟的顺序不乱。
+            // (调试对照:HAGIMI_NODEFER_SAMPLING=1 时关闭推迟,用于帧探针 A/B 对比。)
+            let deferDisabled = ProcessInfo.processInfo.environment["HAGIMI_NODEFER_SAMPLING"] != nil
+            if !deferDisabled, Date() < expansionAnimationDeadline {
+                let delay = expansionAnimationDeadline.timeIntervalSinceNow
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.applySamplingSuccess(snapshot)
+                }
+            } else {
+                applySamplingSuccess(snapshot)
             }
-            // 注入风扇模块:仅在 fanAvailable 时插入,位置固定在 GPU 之后、内存之前。
-            // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
-            // 把它的输出合成成 MonitorModule.fan 填入 allModules。
-            applyFanModule()
-            let newVisibleModules = visibleModules(from: allModules)
-            if modules != newVisibleModules {
-                modules = newVisibleModules
-            }
-            updateMenuBarTargetComputeLoad()
 
         case .failure(let error):
             let message = "Sampling failed: \(error.description)"
@@ -867,6 +872,24 @@ final class MonitorStore: ObservableObject {
             pendingSampleKinds.removeAll()
             runSampling(kinds: kinds)
         }
+    }
+
+    /// 应用一次成功采样的结果到发布属性。
+    private func applySamplingSuccess(_ snapshot: SystemMonitorSnapshot) {
+        // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
+        // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
+        if allModules != snapshot.modules {
+            allModules = snapshot.modules
+        }
+        // 注入风扇模块:仅在 fanAvailable 时插入,位置固定在 GPU 之后、内存之前。
+        // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
+        // 把它的输出合成成 MonitorModule.fan 填入 allModules。
+        applyFanModule()
+        let newVisibleModules = visibleModules(from: allModules)
+        if modules != newVisibleModules {
+            modules = newVisibleModules
+        }
+        updateMenuBarTargetComputeLoad()
     }
 
 

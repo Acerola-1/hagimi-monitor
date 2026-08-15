@@ -177,8 +177,21 @@ struct MonitorPanelView: View {
             // 面板由隐藏→可见:菜单栏面板摧骰子决定是否客串;隐藏时清理。
             guard !showsQuickPanelControls else { return }
             if visible {
+                // header 时钟仅面板可见时推进:视图树常驻,隐藏期间每秒的 @State
+                // 更新只会白白重算整棵 body。
+                startTimeUpdateTask()
                 cameoModel.panelDidAppear()
+                // 调试自动测试:可见后 0.8s 自动全量展开(走真实 setExpansion 动画路径),
+                // 供 sizeDidChange 日志观察展开期间的尺寸上报行为。
+                if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                        guard store.isPanelVisible else { return }
+                        setExpansion { expandedKinds = Set(listKinds) }
+                    }
+                }
             } else {
+                timeUpdateTask?.cancel()
+                timeUpdateTask = nil
                 cameoModel.panelDidDisappear()
             }
         }
@@ -188,14 +201,15 @@ struct MonitorPanelView: View {
             applyDefaultExpansion()
         }
         .onAppear {
-            if !showsQuickPanelControls {
-                startTimeUpdateTask()
-            }
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             applyDefaultExpansion()
             // 上报当前需进程采样的集合(展开 ∪ 放大):面板重开时 @State 可能保留上次选项,
             // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
             reportActiveProcessKinds()
+            // 钉住面板不走 isPanelVisible 的可见性分支时(已可见),补启动时钟。
+            if store.isPanelVisible, !showsQuickPanelControls, timeUpdateTask == nil {
+                startTimeUpdateTask()
+            }
         }
         .onDisappear {
             timeUpdateTask?.cancel()
@@ -236,7 +250,9 @@ struct MonitorPanelView: View {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
-                    .compatiblePulseEffect()
+                    // 仅面板可见时脉冲:面板视图树常驻(NSPanel 不销毁),隐藏期间
+                    // 持续动画会白白驱动渲染。
+                    .compatiblePulseEffect(isActive: store.isPanelVisible)
 
                 Text(String(localized: "SYSTEM · LIVE"))
                     .monitorPanelLabelFont(tracking: 1.1)
@@ -501,6 +517,9 @@ struct MonitorPanelView: View {
         // 置位一次性动画标记:紧接着的首次内容尺寸上报会被窗口层消费、走补间;
         // 而展开后进程数据回来/定时刷新引起的尺寸变化不再置位,瞬时贴合,不与此次展开叠加。
         store.beginExpansionAnimation()
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            NSLog("[autotest] setExpansion click ts=%.3f", CACurrentMediaTime())
+        }
         withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
             mutate()
         }
