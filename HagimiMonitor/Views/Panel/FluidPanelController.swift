@@ -13,8 +13,8 @@ import SwiftUI
 /// 下沿,只向下增长。
 ///
 /// 动画分工(关键):内容尺寸由 SwiftUI 瞬时上报(不加 `withAnimation`),平滑
-/// 的高度补间完全交给窗口层的 `animate: true`。这正好避开上一轮「SwiftUI 几何
-/// 动画 + 窗口 resize 抢锚点」导致的顶部抖动。
+/// 的高度补间完全交给窗口层的 `animate: true`。若改用 SwiftUI 几何动画,会与
+/// 窗口 resize 抢锚点、导致顶部抖动。
 ///
 /// 动态图标:把 `MenuBarStatusLabel` 用 `ImageRenderer` 快照成 `NSImage` 赋给标准
 /// `NSStatusItem.button.image`(负载/采样变化时重刷)。走标准图路径而非子视图,是为了
@@ -170,9 +170,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        // contentView 用 popover 毛玻璃:提供圆角遮罩 + 通透底(对齐 FluidMenuBarExtra)。
-        // 这是恢复系统 popover 般外观的关键——实现者此前直接用透明 hosting 作 contentView,
-        // 丢了圆角与毛玻璃底,面板才变成方盒子。
+        // contentView 用 popover 毛玻璃:提供圆角遮罩 + 通透底(对齐 FluidMenuBarExtra),
+        // 是系统 popover 般外观的关键——直接以透明 hosting 作 contentView 会丢圆角与
+        // 毛玻璃底,面板退化成方盒子。
         let visualEffect = NSVisualEffectView()
         visualEffect.material = .popover
         visualEffect.blendingMode = .behindWindow
@@ -462,7 +462,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     ///
     /// 动画分工(关键):外层 `.background(GeometryReader)` 只在展开/收起时上报一次
     /// **终值**(不逐帧),故这里不能靠「逐帧 animate:false 贴合」补出平滑——那只会
-    /// 让窗口一步瞬跳到终点。改为:面板可见且高度变化显著(展开/收起)时,用与内容
+    /// 让窗口一步瞬跳到终点。面板可见且高度变化显著(展开/收起)时,用与内容
     /// (`MonitorPanelView.setExpansion` / `CollapsibleDetail`)完全一致的时长与 easeInOut
     /// 曲线做窗口补间;二者从同一时刻并行动画到同一终值,窗口高度(t)≈内容高度(t),
     /// 边框与内容一起伸缩、不裁剪不留空。指标微调(<阈值)仍瞬时贴合,不触发多余动画。
@@ -573,8 +573,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         // 环模式:MenuBarComputeRingIcon 已直接产出一张缓存好的 18×18 AppKit NSImage,
         // 无需再走 SwiftUI + ImageRenderer 二次光栅化。直接赋给 button.image,可绕开
-        // CoreSVG/ImageRenderer 那一整套快照中间对象(CGImage/NSCGImageSnapshotRep/SVGPath),
-        // 它们此前会随负载动画持续累积、常驻不释放,也是空闲 CPU 高的主因。
+        // CoreSVG/ImageRenderer 的快照中间对象(CGImage/NSCGImageSnapshotRep/SVGPath)——
+        // 它们会随负载动画持续累积、常驻不释放,推高空闲 CPU。
         // 该 NSImage 由绘制闭包惰性渲染,系统绘制时会按各屏 scale 原生重画,多屏依旧清晰;
         // 内部读 NSAppearance.currentDrawing() 判定墨色,与 button 外观同步。
         if store.settings.menuBarDisplayMode == .ring {

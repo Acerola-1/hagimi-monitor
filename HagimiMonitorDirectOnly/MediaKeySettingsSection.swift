@@ -38,7 +38,7 @@ struct MediaKeySettingsSection: View {
         // 的困惑;授权入口由下方常驻提示卡提供。
         .disabled(!permission.isTrusted)
 
-        // 提示卡改为未授权即常驻(不再依赖开关状态)——开关已灰掉,这里是唯一授权入口。
+        // 未授权时提示卡常驻——开关已灰掉,这是唯一授权入口。
         if !permission.isTrusted {
             permissionHint
         }

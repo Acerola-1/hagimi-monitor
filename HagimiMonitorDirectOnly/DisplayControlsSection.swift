@@ -161,10 +161,9 @@ struct DisplayControlsSection: View {
         }
     }
 
-    /// 统一用 `withAnimation` 做布局补间,窗口层(FluidPanelController)逐帧跟随。
-    /// 旧代码在 macOS 15 走「一次性到位」分支是为了规避 MenuBarExtra 逐帧 resize 抖动;
-    /// 现已改用自建 NSPanel,该分支过时且有害——瞬间 toggle 会与 chevron 旋转、内容
-    /// transition 的时间线打架,造成「收一半停顿再补完」的卡顿。两版本统一即可。
+    /// 布局补间统一走 `withAnimation`,窗口层(FluidPanelController)逐帧跟随。
+    /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
+    /// 时间线打架,造成「收一半停顿再补完」的卡顿。
     private func toggleExpansion() {
         // 与其他指标行一致:置位一次性标记,使窗口层对本次展开走补间(而非瞬跳),
         // 与下方 CollapsibleDetail 的高度补间并行同步。

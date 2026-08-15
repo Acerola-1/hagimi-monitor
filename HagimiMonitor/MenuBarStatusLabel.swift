@@ -204,9 +204,9 @@ struct MenuBarMetricLabel: View {
         return cache
     }()
 
-    /// 与显示字体同为 rounded 设计的测量字体。此前用默认 SF 测、SF Rounded 显:
-    /// rounded 的数字字形略宽,测量系统性偏小,定宽框在取整边界上放不下实际
-    /// 渲染结果,数值偶发被截断成「9…」(紧凑模式温度尤其明显)。
+    /// 与显示字体同为 rounded 设计的测量字体:rounded 的数字字形略宽,若用非 rounded
+    /// 字体测量会系统性偏小,定宽框在取整边界上放不下实际渲染结果,数值偶发被截断
+    /// 成「9…」(紧凑模式温度尤其明显)。
     private static func roundedMeasuringFont(size: CGFloat, weight: NSFont.Weight, monospacedDigit: Bool) -> NSFont {
         let base = monospacedDigit
             ? NSFont.monospacedDigitSystemFont(ofSize: size, weight: weight)

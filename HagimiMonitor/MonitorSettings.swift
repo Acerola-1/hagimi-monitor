@@ -124,7 +124,7 @@ final class MonitorSettings: ObservableObject {
 
         let menuBarDisplayModeRawValue = defaults.string(forKey: Keys.menuBarDisplayMode) ?? MenuBarDisplayMode.ring.rawValue
         menuBarDisplayMode = MenuBarDisplayMode(rawValue: menuBarDisplayModeRawValue) ?? .ring
-        // 旧版仅有「图标/文字」两态的前缀样式,键名沿用其历史存储值作为迁移兜底,避免升级后静默重置为默认值。
+        // 旧键仅存「图标/文字」两态前缀样式,其历史存储值作为迁移兜底,避免升级后静默重置为默认值。
         let legacyPrefixStyleRawValue = defaults.string(forKey: Keys.legacyMenuBarMetricPrefixStyle)
         let layoutStyleRawValue = defaults.string(forKey: Keys.menuBarMetricLayoutStyle) ?? legacyPrefixStyleRawValue ?? MenuBarMetricLayoutStyle.icon.rawValue
         menuBarMetricLayoutStyle = MenuBarMetricLayoutStyle(rawValue: layoutStyleRawValue) ?? .icon
@@ -308,8 +308,8 @@ final class MonitorSettings: ObservableObject {
     }
 
     private func migrateMetrics(_ ids: [String], for kind: MonitorKind) -> [String] {
-        // 旧版使用本地化名称作为 metric ID，新版使用英文 key。
-        // 映射需同时覆盖中文和英文旧 key，确保跨语言升级不丢失设置。
+        // 旧 metric ID 为本地化名称(现为英文 key),映射需同时覆盖中文和英文旧 key,
+        // 确保跨语言升级不丢失设置。
         let mapping: [String: String] = {
             switch kind {
             case .cpu:
@@ -648,7 +648,7 @@ private enum Keys {
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
     static let menuBarMetricKinds = "settings.menuBar.metricKinds"
     static let menuBarMetricLayoutStyle = "settings.menuBar.metricLayoutStyle"
-    /// 旧版键名,仅用于读取迁移,不再写入。
+    /// 遗留键名:仅用于读取迁移,不写入。
     static let legacyMenuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
     static let defaultExpandedKinds = "settings.panel.defaultExpandedKinds"
     static let cardStyleKinds = "settings.panel.cardStyleKinds"

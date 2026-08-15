@@ -215,7 +215,7 @@ final class BatterySampler: MonitorSampler {
     private func chargingPowerWatts(_ service: io_service_t, isCharging: Bool) -> Double? {
         // 优先用 PowerTelemetryData.BatteryPower（电池包级别，准确）。
         // 注意符号约定因机型/系统而异：实测本机充电时 BatteryPower 为正值
-        // （= SystemPowerIn − SystemLoad，流入电池的功率），旧代码只认 bp<0 会漏判。
+        // （= SystemPowerIn − SystemLoad，流入电池的功率），不能单凭符号判方向。
         // BatteryPower 的符号在不同硬件 / macOS 版本上并不一致，
         // 因此用 IOPS 的充电状态判断方向，只把绝对值当作充电功率。
         if let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?

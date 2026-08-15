@@ -3,11 +3,11 @@ import Foundation
 
 /// 进程图标降采样缓存。
 ///
-/// 背景:`NSWorkspace.shared.icon(forFile:)` 与 `NSRunningApplication.icon` 返回的
-/// App 图标通常带有 512/1024px 的大 representation。此前各 `enrich*` 只把 `icon.size`
-/// 设为 16×16(仅改逻辑尺寸,底层大位图 rep 不释放),再放进 `@Published` 数组供面板
-/// 渲染。面板展开时 4 个进程列表最多同时持有 20 张这类「大图底」的 NSImage;且每 5 秒
-/// 重新采样都会重建全新实例,旧图要等下一轮 SwiftUI diff 才释放,造成内存高水位与分配抖动。
+/// `NSWorkspace.shared.icon(forFile:)` 与 `NSRunningApplication.icon` 返回的 App 图标
+/// 通常带有 512/1024px 的大 representation:只缩小逻辑尺寸而不重绘,底层大位图仍随
+/// `NSImage` 常驻。面板展开时 4 个进程列表最多同时持有 20 张这类「大图底」图标,
+/// 且每 5 秒采样重建全新实例,旧图要等下一轮 SwiftUI diff 才释放,造成内存高水位
+/// 与分配抖动。
 ///
 /// 本缓存把源图一次性重绘为固定 16pt(@2x = 32px)的小位图,单张约 32×32×4 ≈ 4KB,
 /// 并按可执行文件路径缓存,命中后直接复用——既压掉常驻内存,也免去每 5 秒重复光栅化。
