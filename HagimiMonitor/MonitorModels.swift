@@ -187,6 +187,10 @@ struct MonitorMetric: Identifiable, Equatable {
     let name: String
     let value: String
     var numericValue: Double?
+    /// 值的单位后缀(如 "%"、"°C"、" W"):当 value 以它结尾时,明细网格把数值与
+    /// 单位拆开渲染(数值主角化、单位弱化)。value 本身保持完整字符串,
+    /// 复制/其他展示面语义不变;不设置时回退整串渲染。
+    var unit: String? = nil
 
     var id: String { name }
 }

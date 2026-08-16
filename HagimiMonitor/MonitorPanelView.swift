@@ -796,10 +796,14 @@ private struct MetricDetailGrid: View {
     /// true=行内展开紧凑样式(小字体 + 28pt 缩进对齐图标列);false=方卡放大样式(大字体、无缩进)。
     var isCompact: Bool = true
 
-    /// 需要占满整行的长值字段(IP、启动时间等):它们的 value 太长,
-    /// 塞进两列会撑破列宽或触发不可控换行,故显式整行、排到网格末尾。
+    /// 需要占满整行的字段:长值(IP、启动时间)塞两列会撑破列宽或不可控换行;
+    /// wifi-rssi 格结构性超宽(标签+信号条+数值+单位四件套,半格必溢出,
+    /// 实测压成省略号/缩到不可读);gateway-latency 是其语义配对,且网络块
+    /// 其余指标已全整行,一并转整行保持纵列节奏,不残留半格孤儿。
+    /// 命中项显式整行、排到网格末尾。
     private static let fullRowMetricIDs: Set<String> = [
-        "ipv4", "ipv6", "public-ip", "uptime", "adapter", "wifi-ssid"
+        "ipv4", "ipv6", "public-ip", "uptime", "adapter", "wifi-ssid",
+        "wifi-rssi", "gateway-latency"
     ]
 
     private var leadingInset: CGFloat { isCompact ? 28 : 0 }
@@ -882,12 +886,9 @@ private struct MetricDetailGrid: View {
 
             Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
-            Text(valueText)
-                .monitorPanelMonoFont(valueStyle, weight: .semibold)
-                .foregroundStyle(metricValueColor(metric))
-                .lineLimit(1)
-                .minimumScaleFactor(isCompact ? 1 : 0.6)
-                .layoutPriority(2)
+            // 数值主角、单位弱化:带 unit 标记的指标拆成两段渲染,
+            // 数字亮度提一档(valueText)、单位降到 caption 层级,指标多了不再糊成一片。
+            splitValue(metric, text: valueText)
                 .help(valueText)
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -895,6 +896,38 @@ private struct MetricDetailGrid: View {
                 }
         }
         .frame(maxWidth: .infinity, alignment: .leading))
+    }
+
+    /// 数值/单位两段组合:数字 mono semibold 主角化,单位 caption 弱化;
+    /// 无 unit 标记或后缀不匹配("--"、文本态、长值)时回退整串渲染。
+    /// 两段同 layoutPriority(2) 一起预留宽度,单位另加 fixedSize——
+    /// 若单位掉到默认优先级,窄格中会被挤成省略号(拆分前的单 Text 无此问题)。
+    private func splitValue(_ metric: MonitorMetric, text: String) -> some View {
+        let parts = splitValueUnit(text, unit: metric.unit)
+        return HStack(alignment: .firstTextBaseline, spacing: 2) {
+            Text(parts.number)
+                .monitorPanelMonoFont(valueStyle, weight: .semibold)
+                .foregroundStyle(metricValueColor(metric))
+                .lineLimit(1)
+                .minimumScaleFactor(isCompact ? 1 : 0.6)
+                .layoutPriority(2)
+            if let unit = parts.unit {
+                Text(unit)
+                    .monitorPanelCaptionFont(labelStyle)
+                    .foregroundStyle(theme.captionText)
+                    .lineLimit(1)
+                    .fixedSize()
+                    .layoutPriority(2)
+            }
+        }
+    }
+
+    /// 按采样侧标注的单位后缀拆分文案;不命中时返回整串。
+    private func splitValueUnit(_ text: String, unit: String?) -> (number: String, unit: String?) {
+        guard let unit, !unit.isEmpty, text.hasSuffix(unit), text.count > unit.count else {
+            return (text, nil)
+        }
+        return (String(text.dropLast(unit.count)), unit)
     }
 
     /// Wi-Fi 信号单元:升序四格信号条 + dBm 读数,等级由 RSSI 阈值换算。
@@ -910,10 +943,7 @@ private struct MetricDetailGrid: View {
 
             WifiSignalBars(level: Self.wifiSignalLevel(metric.numericValue))
 
-            Text(metric.value)
-                .monitorPanelMonoFont(valueStyle, weight: .semibold)
-                .foregroundStyle(theme.secondaryText)
-                .lineLimit(1)
+            splitValue(metric, text: metric.value)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -930,7 +960,8 @@ private struct MetricDetailGrid: View {
 
     /// 个别指标按语义着色:CPU 热压力四档与 SMART 同口径(正常→calm 绿,
     /// 轻微→warning,严重/临界→critical;serious 与 critical 共用红色,
-    /// 档位文本仍可区分),其余维持次要文本色。
+    /// 档位文本仍可区分);其余数值用 valueText 主角化,
+    /// 与 captionText 标签拉开亮度层级,指标多了不再糊成一片。
     private func metricValueColor(_ metric: MonitorMetric) -> Color {
         if kind == .cpu, metric.name == "thermal-pressure" {
             switch metric.numericValue ?? 0 {
@@ -948,7 +979,7 @@ private struct MetricDetailGrid: View {
                 ? theme.palette.severityTint(for: .critical)
                 : theme.palette.severityTint(for: .calm)
         }
-        return theme.secondaryText
+        return theme.valueText
     }
 }
 

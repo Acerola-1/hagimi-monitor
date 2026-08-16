@@ -37,8 +37,8 @@ final class NetworkSampler: MonitorSampler {
         // 接口名指标已删:行头 summary 展示的就是接口名,明细再列一遍是冗余。
         let wifi = wifiProbe.snapshot()
         let wifiMetrics = [
-            MonitorMetric(name: "wifi-rssi", value: wifi.rssi.map { "\($0) dBm" } ?? "--", numericValue: wifi.rssi.map(Double.init)),
-            MonitorMetric(name: "gateway-latency", value: wifi.gatewayLatencyMs.map { "\($0) ms" } ?? "--", numericValue: wifi.gatewayLatencyMs.map(Double.init)),
+            MonitorMetric(name: "wifi-rssi", value: wifi.rssi.map { "\($0) dBm" } ?? "--", numericValue: wifi.rssi.map(Double.init), unit: " dBm"),
+            MonitorMetric(name: "gateway-latency", value: wifi.gatewayLatencyMs.map { "\($0) ms" } ?? "--", numericValue: wifi.gatewayLatencyMs.map(Double.init), unit: " ms"),
             MonitorMetric(name: "wifi-ssid", value: wifi.ssid ?? "--")
         ]
 

@@ -74,21 +74,21 @@ final class BatterySampler: MonitorSampler {
             metrics: [
                 MonitorMetric(name: "type", value: "battery"),
                 MonitorMetric(name: "status", value: isCharging ? "charging" : (connected ? "ac-power" : "on-battery")),
-                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts),
-                MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--"),
-                MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower),
-                MonitorMetric(name: "health", value: stableHealth.map(percent) ?? "--", numericValue: stableHealth),
+                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
+                MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", unit: connected ? " W" : nil),
+                MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower, unit: " W"),
+                MonitorMetric(name: "health", value: stableHealth.map(percent) ?? "--", numericValue: stableHealth, unit: "%"),
                 MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--", numericValue: smart.cycleCount.map(Double.init)),
-                MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius),
+                MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius, unit: "°C"),
                 // 功率流数据链(不进指标网格,由展开区功率流图消费)
-                MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn),
-                MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow),
+                MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn, unit: " W"),
+                MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow, unit: " W"),
                 MonitorMetric(name: "time-remaining", value: timeRemaining.map { "\($0)" } ?? "--", numericValue: timeRemaining.map(Double.init)),
                 // 展开区明细网格新增项:转换损耗/充电限制/低电量模式。
                 // charge-limit 为尽力读取(IORegistry 无该键的机型显示"--");
                 // low-power-mode 存 on/off 原值,由视图层 localizedMetricValue 本地化。
-                MonitorMetric(name: "power-loss", value: wattString(powerLoss), numericValue: powerLoss),
-                MonitorMetric(name: "charge-limit", value: smart.chargeLimit.map { "\($0)%" } ?? "--", numericValue: smart.chargeLimit.map(Double.init)),
+                MonitorMetric(name: "power-loss", value: wattString(powerLoss), numericValue: powerLoss, unit: " W"),
+                MonitorMetric(name: "charge-limit", value: smart.chargeLimit.map { "\($0)%" } ?? "--", numericValue: smart.chargeLimit.map(Double.init), unit: "%"),
                 MonitorMetric(name: "low-power-mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "on" : "off")
             ],
             samples: seedSamples(percentage)
@@ -105,8 +105,8 @@ final class BatterySampler: MonitorSampler {
             metrics: [
                 MonitorMetric(name: "type", value: "ac-power"),
                 MonitorMetric(name: "status", value: "ac-power"),
-                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts),
-                MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts)
+                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
+                MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W")
             ],
             samples: seedSamples(100)
         )
