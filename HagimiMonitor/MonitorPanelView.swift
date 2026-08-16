@@ -831,19 +831,20 @@ private struct MetricDetailGrid: View {
         }
     }
 
-    // 固定两列 Grid:每列 label 左对齐、value 右对齐到列右边界,
-    // 短值因此落在两条稳定竖直轴上,眼睛可顺列下扫;长值统一在下方整行区。
+    // 逐格内衬网格(实验分支第四版,业界调研后定案):斑马带/发丝线都是
+    // 「行级」手段,项目少时失效且显乱。改为 iOS 健康类 App stat tile 的
+    // 「格级」方案——每个指标独立 trackFill 圆角内衬色块,边界属于格子自己,
+    // 不依赖行数;单元保持「标签左·数值右」,数值字重提到 bold 强化存在感。
     private var content: some View {
-        VStack(alignment: .leading, spacing: rowSpacing) {
-            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: rowSpacing) {
-                ForEach(Array(rowPairs.enumerated()), id: \.offset) { _, pair in
-                    GridRow {
-                        metricCell(pair.0)
-                        if let right = pair.1 {
-                            metricCell(right)
-                        } else {
-                            Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
-                        }
+        VStack(alignment: .leading, spacing: 8) {
+            if !shortMetrics.isEmpty {
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),
+                              GridItem(.flexible())],
+                    spacing: MetricGridMetrics.columnSpacing
+                ) {
+                    ForEach(shortMetrics) { metric in
+                        metricCell(metric)
                     }
                 }
             }
@@ -854,18 +855,14 @@ private struct MetricDetailGrid: View {
         }
     }
 
-    /// 奇数个时最后一项右槽为 nil。
-    private var rowPairs: [(MonitorMetric, MonitorMetric?)] {
-        let items = shortMetrics
-        var pairs: [(MonitorMetric, MonitorMetric?)] = []
-        var index = 0
-        while index < items.count {
-            let left = items[index]
-            let right = index + 1 < items.count ? items[index + 1] : nil
-            pairs.append((left, right))
-            index += 2
-        }
-        return pairs
+    /// 指标格内衬容器:trackFill 圆角色块包裹,格与格靠 8pt 间隙 + 各自
+    /// 色块边界分开;1~2 项的模块同样成立,不产生斑马/发丝线的行级副作用。
+    private func insetCell<Content: View>(_ content: Content) -> some View {
+        content
+            .padding(.vertical, 4)
+            .padding(.horizontal, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
     }
 
     private func metricCell(_ metric: MonitorMetric) -> some View {
@@ -874,31 +871,31 @@ private struct MetricDetailGrid: View {
 
         // Wi-Fi 信号用「信号格 + dBm」组合(冻结原型),非纯文本值。
         if kind == .network, metric.name == "wifi-rssi" {
-            return AnyView(wifiSignalCell(labelText: labelText, metric: metric))
+            return AnyView(insetCell(wifiSignalCell(labelText: labelText, metric: metric)))
         }
 
-        return AnyView(HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-            Text(labelText)
-                .monitorPanelCaptionFont(labelStyle)
-                .foregroundStyle(theme.captionText)
-                .lineLimit(1)
-                .layoutPriority(1)
+        return AnyView(insetCell(
+            HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
+                Text(labelText)
+                    .monitorPanelCaptionFont(labelStyle)
+                    .foregroundStyle(theme.captionText)
+                    .lineLimit(1)
+                    .layoutPriority(1)
 
-            Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+                Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
-            // 数值主角、单位弱化:带 unit 标记的指标拆成两段渲染,
-            // 数字亮度提一档(valueText)、单位降到 caption 层级,指标多了不再糊成一片。
-            splitValue(metric, text: valueText)
-                .help(valueText)
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    copyToPasteboard(metric.value)
-                }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading))
+                splitValue(metric, text: valueText)
+                    .help(valueText)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        copyToPasteboard(metric.value)
+                    }
+            }
+        ))
     }
 
-    /// 数值/单位两段组合:数字 mono semibold 主角化,单位 caption 弱化;
+    /// 数值/单位两段组合:数字 mono bold 主角化(逐格内衬版从 semibold 提到
+    /// bold,强化每个格子的视觉锤),单位 caption 弱化;
     /// 无 unit 标记或后缀不匹配("--"、文本态、长值)时回退整串渲染。
     /// 两段同 layoutPriority(2) 一起预留宽度,单位另加 fixedSize——
     /// 若单位掉到默认优先级,窄格中会被挤成省略号(拆分前的单 Text 无此问题)。
@@ -906,7 +903,7 @@ private struct MetricDetailGrid: View {
         let parts = splitValueUnit(text, unit: metric.unit)
         return HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text(parts.number)
-                .monitorPanelMonoFont(valueStyle, weight: .semibold)
+                .monitorPanelMonoFont(valueStyle, weight: .bold)
                 .foregroundStyle(metricValueColor(metric))
                 .lineLimit(1)
                 .minimumScaleFactor(isCompact ? 1 : 0.6)
@@ -945,7 +942,6 @@ private struct MetricDetailGrid: View {
 
             splitValue(metric, text: metric.value)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     /// RSSI → 信号格数:≥-55 满格,逐级递减,低于 -90 计 0 格。
