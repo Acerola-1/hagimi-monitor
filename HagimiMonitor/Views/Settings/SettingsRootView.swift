@@ -9,7 +9,7 @@ struct SettingsRootView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                SettingsSidebar(selection: $selection, settings: settings)
+                SettingsSidebar(selection: $selection, settings: settings, fanAvailable: store.fanAvailable)
                     .frame(width: 164)
                     .background(.bar, ignoresSafeAreaEdges: .top)
 
@@ -36,10 +36,12 @@ struct SettingsRootView: View {
             GeneralSettingsView(settings: settings, store: store)
         case .module(let kind):
             ModuleSettingsView(kind: kind, settings: settings)
-        #if DISPLAY_CONTROL
         case .displayModule:
+            #if DISPLAY_CONTROL
             DisplayModuleSettingsView(settings: settings)
-        #endif
+            #else
+            DisplayInfoSettingsView(settings: settings)
+            #endif
 
         case .about:
             AboutSettingsView()

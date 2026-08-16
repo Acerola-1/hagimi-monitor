@@ -54,10 +54,8 @@ struct GeneralSettingsView: View {
 
 /// 快速呼出快捷键录制器。
 ///
-/// 旧实现将一个不透明的占位层盖在库自带的原生 `NSSearchField` 上，
-/// 既与面板风格不一致，又依赖点击穿透，经常点不动。
-/// 现在改为完全自绘的按钮：点击由真正的 SwiftUI Button 驱动，
-/// 录制通过本地事件监听实现，库只负责存储与全局注册。
+/// 完全自绘的按钮:点击由真正的 SwiftUI Button 驱动,录制通过本地事件监听实现,
+/// 库只负责存储与全局注册。
 private struct QuickAccessShortcutRecorder: View {
     @StateObject private var model = QuickAccessShortcutModel()
 

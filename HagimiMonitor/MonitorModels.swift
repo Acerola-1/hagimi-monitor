@@ -49,17 +49,21 @@ enum MonitorSeverity {
 enum MonitorKind: String, CaseIterable, Identifiable {
     case cpu
     case gpu
+    /// 风扇:独立于 SystemMonitorSampler,数据由 FanSampler 注入,仅 fanAvailable 时存在。
+    /// 可见性与其余模块一致走用户开关;无风扇机型由设置侧栏按 fanAvailable 隐藏入口。
+    /// 声明顺序即设置侧栏顺序——放在 GPU 之后与面板侧 applyFanModule 的插入位
+    /// (GPU 之后、内存之前)对齐,两处顺序共用这一个来源,不再各排各的。
+    case fan
     case memory
     case storage
     case network
     case battery
-    /// 风扇:独立于 SystemMonitorSampler,数据由 FanSampler 注入,仅 fanAvailable 时存在。
-    case fan
 
     var id: String { rawValue }
 
-    /// 用户可见的模块。风扇模块按运行时 fanAvailable 单独门控,不在此暴露。
-    static let userVisibleCases: [MonitorKind] = allCases.filter { $0 != .fan }
+    /// 用户可开关的模块全集(含风扇)。无风扇机型由 SettingsSidebar 按
+    /// fanAvailable 过滤掉风扇入口,不出现无效开关。
+    static let userVisibleCases: [MonitorKind] = allCases
 
     var title: String {
         switch self {
@@ -109,6 +113,11 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "user", title: String(localized: "metric.cpu.user"), isDefault: true),
                 MetricSwitch(id: "idle", title: String(localized: "metric.cpu.idle"), isDefault: true),
                 MetricSwitch(id: "uptime", title: String(localized: "metric.cpu.uptime"), isDefault: true),
+                // 热压力(ProcessInfo.thermalState 四档)与 P/E 核分组占用:公开 API,
+                // 双渠道可用;值按 severity 着色(见 MetricDetailGrid)。
+                // P/E 合并为单一指标「P/E 核」,值为「82% / 35%」。
+                MetricSwitch(id: "thermal-pressure", title: String(localized: "metric.cpu.thermal-pressure"), isDefault: true),
+                MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),
             ]
             #if DISPLAY_CONTROL
             metrics.append(MetricSwitch(id: "temperature", title: String(localized: "metric.cpu.temperature"), isDefault: false))
@@ -127,25 +136,33 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "pressure", title: String(localized: "metric.memory.pressure"), isDefault: true),
                 MetricSwitch(id: "swap-used", title: String(localized: "metric.memory.swap-used"), isDefault: true),
                 MetricSwitch(id: "total", title: String(localized: "metric.memory.total"), isDefault: true),
+                MetricSwitch(id: "compressed", title: String(localized: "metric.memory.compressed"), isDefault: true),
             ]
         case .storage:
             return [
                 MetricSwitch(id: "used", title: String(localized: "metric.storage.used"), isDefault: true),
                 MetricSwitch(id: "free", title: String(localized: "metric.storage.free"), isDefault: true),
                 MetricSwitch(id: "total", title: String(localized: "metric.storage.total"), isDefault: true),
+                MetricSwitch(id: "smart", title: String(localized: "metric.storage.smart"), isDefault: true),
             ]
         case .network:
             return [
                 MetricSwitch(id: "ipv4", title: String(localized: "metric.network.ipv4"), isDefault: true),
                 MetricSwitch(id: "ipv6", title: String(localized: "metric.network.ipv6"), isDefault: true),
                 MetricSwitch(id: "public-ip", title: String(localized: "metric.network.public-ip"), isDefault: true),
+                MetricSwitch(id: "wifi-rssi", title: String(localized: "metric.network.wifi-rssi"), isDefault: true),
+                MetricSwitch(id: "gateway-latency", title: String(localized: "metric.network.gateway-latency"), isDefault: true),
+                MetricSwitch(id: "wifi-ssid", title: String(localized: "metric.network.wifi-ssid"), isDefault: true),
             ]
         case .battery:
             return [
-                // 充电功率已改为电源行常驻 CHG pill 展示,不再作为可开关的明细项。
+                // 充电功率在电源行以常驻 CHG pill 展示,不作为可开关的明细项。
+                // 充电限制/低电量模式不进明细网格:前者只保留在功率流电池条的
+                // 刻度线上,后者只保留行头图标着色(纯状态文本行信息量低)。
                 MetricSwitch(id: "health", title: String(localized: "metric.battery.health"), isDefault: true),
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
+                MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true),
             ]
         case .fan:
             // 风扇行无子指标开关,展开区直接显示所有风扇(由 FanList 渲染)。
@@ -170,6 +187,10 @@ struct MonitorMetric: Identifiable, Equatable {
     let name: String
     let value: String
     var numericValue: Double?
+    /// 值的单位后缀(如 "%"、"°C"、" W"):当 value 以它结尾时,明细网格把数值与
+    /// 单位拆开渲染(数值主角化、单位弱化)。value 本身保持完整字符串,
+    /// 复制/其他展示面语义不变;不设置时回退整串渲染。
+    var unit: String? = nil
 
     var id: String { name }
 }
@@ -261,6 +282,9 @@ struct MonitorModule: Identifiable, Equatable {
     var pressureValue: Double? = nil
     /// 压力百分比历史序列,与 samples 同法滚动积累,供压力模式下的迷你曲线使用。
     var pressureSamples: [Double] = []
+    /// 整机功率历史序列(W,与 samples 同法滚动积累),仅电源模块有值,
+    /// 供展开区功率流下方的 60s 功率 sparkline 使用。
+    var powerSamples: [Double] = []
     /// 多风扇读数(仅风扇模块有值)。面板展开区按此数组渲染所有风扇;
     /// 菜单栏只取 max(currentRPM)。独立于 metrics 字段,避免冲撞统一采样契约。
     var fans: [FanInfo]? = nil
@@ -489,7 +513,13 @@ final class MonitorStore: ObservableObject {
     /// 由 SwiftUI 侧在 `withAnimation` 展开/收起时调用,置位一次性动画标记。
     func beginExpansionAnimation() {
         pendingExpansionAnimation = true
+        // 同时记录动画截止时刻:窗口期内的采样结果推迟到动画结束后再刷 UI,
+        // 避免 1-3s 节奏的模块刷新恰好撞进 0.15s 展开动画、拖动整棵视图树重算造成掉帧。
+        expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
     }
+
+    /// 展开/收起动画的截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
+    private var expansionAnimationDeadline = Date.distantPast
 
     /// 由窗口层在处理内容尺寸变化时调用:返回并清除标记。true 表示本次变化源自用户
     /// toggle、应走补间;false 表示数据驱动的尺寸变化、应瞬时贴合。
@@ -839,20 +869,19 @@ final class MonitorStore: ObservableObject {
     private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
         switch result {
         case .success(let snapshot):
-            // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
-            // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
-            if allModules != snapshot.modules {
-                allModules = snapshot.modules
+            // 展开/收起动画窗口期内推迟应用:采样命中动画的 0.15s 窗口时,
+            // @Published 刷新会拖着面板视图树在动画帧间重算,造成肉眼可见的顿挫。
+            // 推迟到动画结束后再刷,主队列 FIFO 保证多次推迟的顺序不乱。
+            // (调试对照:HAGIMI_NODEFER_SAMPLING=1 时关闭推迟,用于帧探针 A/B 对比。)
+            let deferDisabled = ProcessInfo.processInfo.environment["HAGIMI_NODEFER_SAMPLING"] != nil
+            if !deferDisabled, Date() < expansionAnimationDeadline {
+                let delay = expansionAnimationDeadline.timeIntervalSinceNow
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+                    self?.applySamplingSuccess(snapshot)
+                }
+            } else {
+                applySamplingSuccess(snapshot)
             }
-            // 注入风扇模块:仅在 fanAvailable 时插入,位置固定在 GPU 之后、内存之前。
-            // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
-            // 把它的输出合成成 MonitorModule.fan 填入 allModules。
-            applyFanModule()
-            let newVisibleModules = visibleModules(from: allModules)
-            if modules != newVisibleModules {
-                modules = newVisibleModules
-            }
-            updateMenuBarTargetComputeLoad()
 
         case .failure(let error):
             let message = "Sampling failed: \(error.description)"
@@ -867,6 +896,24 @@ final class MonitorStore: ObservableObject {
             pendingSampleKinds.removeAll()
             runSampling(kinds: kinds)
         }
+    }
+
+    /// 应用一次成功采样的结果到发布属性。
+    private func applySamplingSuccess(_ snapshot: SystemMonitorSnapshot) {
+        // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
+        // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
+        if allModules != snapshot.modules {
+            allModules = snapshot.modules
+        }
+        // 注入风扇模块:仅在 fanAvailable 时插入,位置固定在 GPU 之后、内存之前。
+        // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
+        // 把它的输出合成成 MonitorModule.fan 填入 allModules。
+        applyFanModule()
+        let newVisibleModules = visibleModules(from: allModules)
+        if modules != newVisibleModules {
+            modules = newVisibleModules
+        }
+        updateMenuBarTargetComputeLoad()
     }
 
 
@@ -913,10 +960,9 @@ final class MonitorStore: ObservableObject {
     }
 
     private func visibleModules(from modules: [MonitorModule]) -> [MonitorModule] {
-        // .fan 不走 settings.visibleKinds 过滤:它不在 userVisibleCases 中(不由用户开关),
-        // 而是由 applyFanModule() 按 fanAvailable 自动门控——有风扇的机型自动显示,
-        // 无风扇的机型 applyFanModule 不插入,此处自然不会出现。
-        modules.filter { $0.kind == .fan || settings.isVisible($0.kind) }
+        // 风扇模块仅 fanAvailable 时被 applyFanModule 插入;插入后与其余模块
+        // 一致走 settings.visibleKinds 用户开关(设置页可隐藏风扇行)。
+        modules.filter { settings.isVisible($0.kind) }
     }
 }
 

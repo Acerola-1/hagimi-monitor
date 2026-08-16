@@ -124,7 +124,7 @@ final class MonitorSettings: ObservableObject {
 
         let menuBarDisplayModeRawValue = defaults.string(forKey: Keys.menuBarDisplayMode) ?? MenuBarDisplayMode.ring.rawValue
         menuBarDisplayMode = MenuBarDisplayMode(rawValue: menuBarDisplayModeRawValue) ?? .ring
-        // 旧版仅有「图标/文字」两态的前缀样式,键名沿用其历史存储值作为迁移兜底,避免升级后静默重置为默认值。
+        // 旧键仅存「图标/文字」两态前缀样式,其历史存储值作为迁移兜底,避免升级后静默重置为默认值。
         let legacyPrefixStyleRawValue = defaults.string(forKey: Keys.legacyMenuBarMetricPrefixStyle)
         let layoutStyleRawValue = defaults.string(forKey: Keys.menuBarMetricLayoutStyle) ?? legacyPrefixStyleRawValue ?? MenuBarMetricLayoutStyle.icon.rawValue
         menuBarMetricLayoutStyle = MenuBarMetricLayoutStyle(rawValue: layoutStyleRawValue) ?? .icon
@@ -133,7 +133,13 @@ final class MonitorSettings: ObservableObject {
         )
 
         showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
+        // 默认值分渠道:Direct 的控制区是 Beta 选择性能力,默认关;
+        // App Store 的信息行默认展示。两渠道 Bundle ID 不同,UserDefaults 独立。
+        #if DISPLAY_CONTROL
         displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? false
+        #else
+        displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? true
+        #endif
         displayControlsExpandedByDefault = defaults.object(forKey: Keys.displayControlsExpandedByDefault) as? Bool ?? false
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
@@ -157,7 +163,18 @@ final class MonitorSettings: ObservableObject {
         mediaKeyShowOSD = defaults.object(forKey: Keys.mediaKeyShowOSD) as? Bool ?? true
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
-            let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
+            var kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
+            // 一次性迁移:老用户的已存储列表是风扇可开关之前写入的,不含 fan;
+            // 不补会被当成「用户已隐藏」,升级后风扇行凭空消失。
+            // 补上后立即回写存储——迁移标记只挡一次,不回写的话下次启动
+            // 会按旧列表(无 fan)加载,风扇行再次消失。
+            if !defaults.bool(forKey: Keys.fanVisibilityMigrated) {
+                if !kinds.contains(.fan) {
+                    kinds.append(.fan)
+                    defaults.set(kinds.map(\.rawValue), forKey: Keys.visibleKinds)
+                }
+                defaults.set(true, forKey: Keys.fanVisibilityMigrated)
+            }
             visibleKinds = Set(kinds)
         } else {
             visibleKinds = Set(MonitorKind.userVisibleCases)
@@ -178,6 +195,22 @@ final class MonitorSettings: ObservableObject {
                 let migrated = migrateMetrics(stored, for: kind)
                 loadedMetrics[kind] = Set(migrated)
             }
+        }
+        // 一次性迁移:migrateMetrics 对存量只做交集,后来新增的默认开指标
+        // (热压力/P-E 核/压缩内存/SMART/Wi-Fi 系列等)不在旧存量里,升级后
+        // 会被当成「用户已关」。这里把各模块默认开的指标并回存量并立即回写;
+        // 之后用户的手动开关走正常读写,不再被本迁移覆盖。
+        if !defaults.bool(forKey: Keys.metricsDefaultOnMigrated) {
+            for kind in MonitorKind.allCases where loadedMetrics[kind] != nil {
+                var merged = loadedMetrics[kind] ?? []
+                let defaultsForKind = defaultMetricIds(for: kind)
+                merged.formUnion(defaultsForKind)
+                if merged != loadedMetrics[kind] {
+                    loadedMetrics[kind] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + kind.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.metricsDefaultOnMigrated)
         }
         enabledMetrics = loadedMetrics
 
@@ -308,8 +341,8 @@ final class MonitorSettings: ObservableObject {
     }
 
     private func migrateMetrics(_ ids: [String], for kind: MonitorKind) -> [String] {
-        // 旧版使用本地化名称作为 metric ID，新版使用英文 key。
-        // 映射需同时覆盖中文和英文旧 key，确保跨语言升级不丢失设置。
+        // 旧 metric ID 为本地化名称(现为英文 key),映射需同时覆盖中文和英文旧 key,
+        // 确保跨语言升级不丢失设置。
         let mapping: [String: String] = {
             switch kind {
             case .cpu:
@@ -648,7 +681,7 @@ private enum Keys {
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
     static let menuBarMetricKinds = "settings.menuBar.metricKinds"
     static let menuBarMetricLayoutStyle = "settings.menuBar.metricLayoutStyle"
-    /// 旧版键名,仅用于读取迁移,不再写入。
+    /// 遗留键名:仅用于读取迁移,不写入。
     static let legacyMenuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
     static let defaultExpandedKinds = "settings.panel.defaultExpandedKinds"
     static let cardStyleKinds = "settings.panel.cardStyleKinds"
@@ -672,6 +705,10 @@ private enum Keys {
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let visibleKinds = "settings.visibleKinds"
+    /// 一次性迁移标记:风扇模块从「硬件自动门控」升级为「用户可开关」时,
+    /// 给老用户的已存储可见列表补上 fan(否则会被当作「用户已隐藏」)。
+    static let fanVisibilityMigrated = "settings.fanVisibilityMigrated"
+    static let metricsDefaultOnMigrated = "settings.metricsDefaultOnMigrated"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"

@@ -14,6 +14,10 @@ struct DisplayControlsSection: View {
     @StateObject private var controller = DisplayControlController()
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
+    /// 显示器只读信息(分辨率/刷新率/HDR/位深)缓存。这些值运行期基本不变,
+    /// 只在显示器集合变化时重采;拖滑杆等高频 body 重算不再反复触发昂贵的
+    /// IORegistry 枚举与 DDC 分类探测。
+    @State private var displayInfoByID: [CGDirectDisplayID: DisplayInfo] = [:]
 
     // 与其他 metric 行统一曲线/时长(MonitorPanelView.setExpansion 与
     // FluidPanelController 的窗口补间用同一条),保证展开/折叠手感一致,
@@ -120,6 +124,14 @@ struct DisplayControlsSection: View {
                 isExpanded = newValue
             }
         }
+        .onChange(of: controller.displays.map(\.id)) { _, _ in
+            // 显示器集合变化(插拔/首次探测完成)才重采只读信息。轮询回读或拖滑杆
+            // 只改亮度值、id 集合不变,不会触发本重算。
+            displayInfoByID = Dictionary(
+                DisplayInfoSection.collectDisplays().map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
         .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
     }
 
@@ -151,6 +163,7 @@ struct DisplayControlsSection: View {
 
                     DisplayControlGroup(
                         display: display,
+                        displayInfo: displayInfoByID[display.id],
                         settings: settings,
                         controller: controller,
                         palette: palette,
@@ -161,10 +174,9 @@ struct DisplayControlsSection: View {
         }
     }
 
-    /// 统一用 `withAnimation` 做布局补间,窗口层(FluidPanelController)逐帧跟随。
-    /// 旧代码在 macOS 15 走「一次性到位」分支是为了规避 MenuBarExtra 逐帧 resize 抖动;
-    /// 现已改用自建 NSPanel,该分支过时且有害——瞬间 toggle 会与 chevron 旋转、内容
-    /// transition 的时间线打架,造成「收一半停顿再补完」的卡顿。两版本统一即可。
+    /// 布局补间统一走 `withAnimation`,窗口层(FluidPanelController)逐帧跟随。
+    /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
+    /// 时间线打架,造成「收一半停顿再补完」的卡顿。
     private func toggleExpansion() {
         // 与其他指标行一致:置位一次性标记,使窗口层对本次展开走补间(而非瞬跳),
         // 与下方 CollapsibleDetail 的高度补间并行同步。
@@ -192,6 +204,8 @@ struct DisplayControlsSection: View {
 
 private struct DisplayControlGroup: View {
     let display: ControlledDisplay
+    /// 该显示器的只读信息(分辨率/刷新率/HDR),并入控制区展示;采集失败为 nil 不占位。
+    let displayInfo: DisplayInfo?
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var controller: DisplayControlController
     let palette: MonitorPalette
@@ -228,6 +242,15 @@ private struct DisplayControlGroup: View {
                             Capsule()
                                 .fill(palette.displayBadgeFill)
                         }
+                }
+
+                // 信息行(B4 并入):分辨率 · 刷新率(· HDR 开启时 · 输出位深),紧贴名称下方。
+                if let info = displayInfo {
+                    Text("\(info.resolution) · \(info.refreshRate)\(info.hdrOn == true ? " · HDR" : "")\(info.colorDepth != "--" ? " · \(info.colorDepth)" : "")")
+                        .monitorPanelCaptionFont(.caption2)
+                        .foregroundStyle(palette.captionText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
                 }
 
                 VStack(spacing: 7) {

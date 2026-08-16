@@ -13,8 +13,8 @@ import SwiftUI
 /// 下沿,只向下增长。
 ///
 /// 动画分工(关键):内容尺寸由 SwiftUI 瞬时上报(不加 `withAnimation`),平滑
-/// 的高度补间完全交给窗口层的 `animate: true`。这正好避开上一轮「SwiftUI 几何
-/// 动画 + 窗口 resize 抢锚点」导致的顶部抖动。
+/// 的高度补间完全交给窗口层的 `animate: true`。若改用 SwiftUI 几何动画,会与
+/// 窗口 resize 抢锚点、导致顶部抖动。
 ///
 /// 动态图标:把 `MenuBarStatusLabel` 用 `ImageRenderer` 快照成 `NSImage` 赋给标准
 /// `NSStatusItem.button.image`(负载/采样变化时重刷)。走标准图路径而非子视图,是为了
@@ -32,6 +32,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
+
+    /// 调试自动测试:环境变量 `HAGIMI_PANEL_AUTOTEST="<间隔秒>:<次数>"`(如 "2:12")
+    /// 时,启动后每间隔秒自动 toggle 一次面板,共次数次,用于内存/动画回归实测。
+    /// 未设置时零开销。
+    private var autoTestTimer: Timer?
 
     /// 内容侧最近一次上报的自然尺寸(未经封顶)。showPanel 用它定位首帧:
     /// hosting 的 sizingOptions 为空,intrinsicContentSize 不可靠,
@@ -90,9 +95,49 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         configurePanel()
         configureStatusItem()
         installEventMonitors()
+        startAutoTestIfNeeded()
+    }
+
+    private func startAutoTestIfNeeded() {
+        guard let spec = ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] else { return }
+        let parts = spec.split(separator: ":")
+        guard parts.count == 2,
+              let interval = TimeInterval(parts[0]), interval > 0.5,
+              let count = Int(parts[1]), count > 0 else { return }
+        var remaining = count
+        autoTestTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
+            guard let self else { timer.invalidate(); return }
+            remaining -= 1
+            if remaining <= 0 { timer.invalidate() }
+            self.togglePanel()
+        }
+        startFrameProbe()
+    }
+
+    /// 调试帧探针:主线程上以 4ms 目标间隔持续打卡,记录实际间隔。
+    /// 展开动画(0.15s)期间若主线程被重绘/布局拖住,打卡间隔会显著拉大,
+    /// 用 `[autotest] slowframe gap=Xms` 输出超过半帧(>8.3ms)的间隔供离线统计。
+    private var frameProbeTimer: DispatchSourceTimer?
+
+    private func startFrameProbe() {
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now(), repeating: .milliseconds(4), leeway: .milliseconds(1))
+        var last = CACurrentMediaTime()
+        timer.setEventHandler {
+            let now = CACurrentMediaTime()
+            let gap = (now - last) * 1000
+            last = now
+            if gap > 8.3 {
+                NSLog("[autotest] slowframe gap=%.1fms ts=%.3f", gap, now)
+            }
+        }
+        timer.resume()
+        frameProbeTimer = timer
     }
 
     deinit {
+        autoTestTimer?.invalidate()
+        frameProbeTimer?.cancel()
         if let localEventMonitor {
             NSEvent.removeMonitor(localEventMonitor)
         }
@@ -125,9 +170,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        // contentView 用 popover 毛玻璃:提供圆角遮罩 + 通透底(对齐 FluidMenuBarExtra)。
-        // 这是恢复系统 popover 般外观的关键——实现者此前直接用透明 hosting 作 contentView,
-        // 丢了圆角与毛玻璃底,面板才变成方盒子。
+        // contentView 用 popover 毛玻璃:提供圆角遮罩 + 通透底(对齐 FluidMenuBarExtra),
+        // 是系统 popover 般外观的关键——直接以透明 hosting 作 contentView 会丢圆角与
+        // 毛玻璃底,面板退化成方盒子。
         let visualEffect = NSVisualEffectView()
         visualEffect.material = .popover
         visualEffect.blendingMode = .behindWindow
@@ -309,6 +354,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func showPanel() {
+        // 恢复隐藏期间卸下的 contentView(见 reclaimHiddenPanelResources)。
+        // 必须在布局/定位之前恢复,后续 layoutSubtreeIfNeeded 才能测到内容尺寸。
+        if let savedContentView, panel.contentView == nil {
+            panel.contentView = savedContentView
+            self.savedContentView = nil
+        }
         // 先同步高度上限(可能换了屏幕/Dock 变化),再让 SwiftUI 布局。
         updateContentHeightCap()
         // 先让 SwiftUI 布局出内容固有尺寸,再据此定位窗口,避免首帧尺寸跳变。
@@ -328,10 +379,20 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         store.panelDidAppear()
         statusItem.button?.highlight(true)
+        // 作废在途的淡出回调(快速点击时淡出尚未完成),避免它随后把面板藏掉。
+        dismissGeneration += 1
 
         // 通知系统在全屏模式下保持菜单栏可见。
         DistributedNotificationCenter.default().post(name: .beginMenuTracking, object: nil)
+        // 淡入呼出:与 dismissPanel 的淡出对称,避免面板硬切出现的生硬感。
+        // alpha 从 0 开始,先调零再上屏,避免闪现一帧全不透明。
+        panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
     }
 
     private func dismissPanel() {
@@ -339,18 +400,53 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
 
+        // 代际令牌:淡出期间(0.18s)若被重开(showPanel 递增令牌),
+        // 过期的 completionHandler 不再执行 orderOut/卸载,避免把刚呼出的面板藏掉。
+        dismissGeneration += 1
+        let generation = dismissGeneration
+
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            guard let self else { return }
+            guard let self, generation == self.dismissGeneration else { return }
             self.panel.orderOut(nil)
             self.panel.alphaValue = 1
             self.statusItem.button?.highlight(false)
             self.store.panelDidDisappear()
+            self.reclaimHiddenPanelResources()
         }
     }
+
+    /// dismissPanel 代际令牌,showPanel 时递增使在途淡出回调失效。
+    private var dismissGeneration = 0
+
+    /// 面板隐藏后回收窗口层常驻资源。
+    ///
+    /// 实测(footprint):面板展开过一次后,隐藏状态下窗口及视图/层树仍被
+    /// WindowServer/CA 持有大尺寸 backing store 与材质合成资源,计入本进程
+    /// footprint 的 graphics 类目且不主动释放——仅菜单栏常驻时多占 ~40-50MB,
+    /// 是后台内存高水位的主要来源。收缩 frame 不足以释放,必须把 contentView
+    /// (毛玻璃底 + SwiftUI hosting 层树)整体从窗口卸下,隐藏态 graphics 才能
+    /// 回落到 ~1MB。contentView 对象本身被暂存不销毁,SwiftUI 视图状态
+    /// (@State/展开态)全部保留;下次 showPanel 先装回再定位上屏,用户无感知。
+    private func reclaimHiddenPanelResources() {
+        guard savedContentView == nil, let contentView = panel.contentView else { return }
+        // 顺手把 frame 收到最小高度:下次装回前 showPanel 会重新定位,
+        // 避免隐藏窗口继续按大尺寸占用纹理。
+        if panel.frame.height > 2 {
+            panel.setFrame(
+                CGRect(x: panel.frame.origin.x, y: panel.frame.origin.y, width: panel.frame.width, height: 1),
+                display: false
+            )
+        }
+        savedContentView = contentView
+        panel.contentView = nil
+    }
+
+    /// 隐藏期间暂存的 contentView,showPanel 时装回。
+    private var savedContentView: NSView?
 
     // MARK: - Sizing / Positioning
 
@@ -366,11 +462,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     ///
     /// 动画分工(关键):外层 `.background(GeometryReader)` 只在展开/收起时上报一次
     /// **终值**(不逐帧),故这里不能靠「逐帧 animate:false 贴合」补出平滑——那只会
-    /// 让窗口一步瞬跳到终点。改为:面板可见且高度变化显著(展开/收起)时,用与内容
+    /// 让窗口一步瞬跳到终点。面板可见且高度变化显著(展开/收起)时,用与内容
     /// (`MonitorPanelView.setExpansion` / `CollapsibleDetail`)完全一致的时长与 easeInOut
     /// 曲线做窗口补间;二者从同一时刻并行动画到同一终值,窗口高度(t)≈内容高度(t),
     /// 边框与内容一起伸缩、不裁剪不留空。指标微调(<阈值)仍瞬时贴合,不触发多余动画。
     private func contentSizeDidChange(to size: CGSize) {
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            NSLog("[autotest] sizeDidChange h=%.1f visible=%d", size.height, panel.isVisible ? 1 : 0)
+        }
         lastReportedContentSize = size
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
@@ -380,6 +479,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             // 瞬时贴合,不与展开动画叠加二次动画。
             let userToggled = self.store.consumeExpansionAnimationFlag()
             let animate = self.panel.isVisible && delta > 8 && userToggled
+            if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+                NSLog("[autotest] tweenStart ts=%.3f animate=%d delta=%.1f", CACurrentMediaTime(), animate ? 1 : 0, delta)
+            }
             self.setPanelFrame(size: size, animate: animate)
         }
     }
@@ -471,8 +573,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         // 环模式:MenuBarComputeRingIcon 已直接产出一张缓存好的 18×18 AppKit NSImage,
         // 无需再走 SwiftUI + ImageRenderer 二次光栅化。直接赋给 button.image,可绕开
-        // CoreSVG/ImageRenderer 那一整套快照中间对象(CGImage/NSCGImageSnapshotRep/SVGPath),
-        // 它们此前会随负载动画持续累积、常驻不释放,也是空闲 CPU 高的主因。
+        // CoreSVG/ImageRenderer 的快照中间对象(CGImage/NSCGImageSnapshotRep/SVGPath)——
+        // 它们会随负载动画持续累积、常驻不释放,推高空闲 CPU。
         // 该 NSImage 由绘制闭包惰性渲染,系统绘制时会按各屏 scale 原生重画,多屏依旧清晰;
         // 内部读 NSAppearance.currentDrawing() 判定墨色,与 button 外观同步。
         if store.settings.menuBarDisplayMode == .ring {
@@ -559,6 +661,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.alphaValue = 1
         statusItem.button?.highlight(false)
         store.panelDidDisappear()
+        reclaimHiddenPanelResources()
     }
 
     // MARK: - NSWindowDelegate
