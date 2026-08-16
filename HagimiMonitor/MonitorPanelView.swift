@@ -113,7 +113,6 @@ struct MonitorPanelView: View {
                                         .frame(maxWidth: .infinity)
                                 }
                                 .compatibleButtonStyle()
-                                .buttonBorderShape(.capsule)
 
                                 Button {
                                     fluidOpenSettings()
@@ -122,7 +121,6 @@ struct MonitorPanelView: View {
                                         .frame(maxWidth: .infinity)
                                 }
                                 .compatibleButtonStyle()
-                                .buttonBorderShape(.capsule)
                             }
                             .font(.body.weight(.medium))
                             .foregroundStyle(theme.primaryText)
