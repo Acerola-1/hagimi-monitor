@@ -36,10 +36,12 @@ struct SettingsRootView: View {
             GeneralSettingsView(settings: settings, store: store)
         case .module(let kind):
             ModuleSettingsView(kind: kind, settings: settings)
-        #if DISPLAY_CONTROL
         case .displayModule:
+            #if DISPLAY_CONTROL
             DisplayModuleSettingsView(settings: settings)
-        #endif
+            #else
+            DisplayInfoSettingsView(settings: settings)
+            #endif
 
         case .about:
             AboutSettingsView()

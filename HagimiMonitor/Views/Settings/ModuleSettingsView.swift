@@ -347,4 +347,21 @@ struct DisplayModuleSettingsView: View {
         .animation(.default, value: settings.displayModuleVisible)
     }
 }
+#else
+/// 显示器信息行设置页(App Store 渠道):无控制能力,仅面板可见性开关。
+struct DisplayInfoSettingsView: View {
+    @ObservedObject var settings: MonitorSettings
+
+    var body: some View {
+        SettingsPage {
+            SettingsGroup {
+                SettingsRow(title: String(localized: "settings.show-in-panel")) {
+                    Toggle("", isOn: $settings.displayModuleVisible)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+            }
+        }
+    }
+}
 #endif

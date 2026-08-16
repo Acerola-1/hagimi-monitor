@@ -30,6 +30,9 @@ struct DisplayInfo: Identifiable, Equatable {
 /// 亮度/DDC 两项由 Direct 版通过 #if DISPLAY_CONTROL 钩子回填。
 struct DisplayInfoSection: View {
     let theme: MonitorPanelTheme
+    /// 展开/收起前的窗口层动画同步钩子(与其他模块行同一机制):
+    /// FluidPanelController 的窗口尺寸动画由此启动,与内容高度补间同速合拍。
+    var beginExpansionAnimation: () -> Void = {}
 
     @State private var isExpanded = false
     @State private var displays: [DisplayInfo] = []
@@ -41,7 +44,7 @@ struct DisplayInfoSection: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
-                Image(systemName: "display")
+                Image(systemName: "slider.horizontal.below.rectangle")
                     .font(.callout.weight(.semibold))
                     .symbolRenderingMode(.monochrome)
                     .foregroundStyle(displayTint)
@@ -67,12 +70,6 @@ struct DisplayInfoSection: View {
                     ForEach(displays) { display in
                         displaySection(display)
                     }
-
-                    Text(String(localized: "panel.displays.note"))
-                        .font(.system(size: 10))
-                        .foregroundStyle(theme.captionText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(.leading, 28)
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
@@ -84,7 +81,12 @@ struct DisplayInfoSection: View {
             if !isExpanded {
                 displays = Self.collectDisplays()
             }
-            isExpanded.toggle()
+            // 与其他模块行同款展开动画:窗口层与内容高度补间同时同速,
+            // 缺了这一步会表现为「内容突然出现/消失」。
+            beginExpansionAnimation()
+            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+                isExpanded.toggle()
+            }
         }
         .compatibleGlassEffect(tint: theme.palette.displayGlassTint, cornerRadius: MonitorConstants.rowCornerRadius)
         .onAppear {

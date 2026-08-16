@@ -133,7 +133,13 @@ final class MonitorSettings: ObservableObject {
         )
 
         showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
+        // 默认值分渠道:Direct 的控制区是 Beta 选择性能力,默认关;
+        // App Store 的信息行默认展示。两渠道 Bundle ID 不同,UserDefaults 独立。
+        #if DISPLAY_CONTROL
         displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? false
+        #else
+        displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? true
+        #endif
         displayControlsExpandedByDefault = defaults.object(forKey: Keys.displayControlsExpandedByDefault) as? Bool ?? false
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true

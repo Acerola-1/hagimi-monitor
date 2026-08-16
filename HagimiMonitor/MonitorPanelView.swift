@@ -90,8 +90,13 @@ struct MonitorPanelView: View {
                             // Direct 版信息并入 DisplayControlsSection 展开区,
                             // 避免出现两行「显示器」重复。
                             #if !DISPLAY_CONTROL
-                            DisplayInfoSection(theme: theme)
+                            if store.settings.displayModuleVisible {
+                                DisplayInfoSection(
+                                    theme: theme,
+                                    beginExpansionAnimation: { store.beginExpansionAnimation() }
+                                )
                                 .compatibleGlassEffectID("display-info", in: glassNamespace)
+                            }
                             #endif
 
                             #if DISPLAY_CONTROL
@@ -675,8 +680,7 @@ private struct MetricGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
             // 手势只挂行头(与 DisplayControlsSection 同款):macOS 上覆盖整个
-            // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击,
-            // 风扇控制的模式按钮曾因此全部点不动。
+            // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
             .onTapGesture {
                 // 单风扇时主行已展示 RPM,无展开内容,点击不切换展开状态。
@@ -797,9 +801,8 @@ private struct MetricDetailGrid: View {
     var isCompact: Bool = true
 
     /// 需要占满整行的字段:长值(IP、启动时间)塞两列会撑破列宽或不可控换行;
-    /// wifi-rssi 格结构性超宽(标签+信号条+数值+单位四件套,半格必溢出,
-    /// 实测压成省略号/缩到不可读);gateway-latency 是其语义配对,且网络块
-    /// 其余指标已全整行,一并转整行保持纵列节奏,不残留半格孤儿。
+    /// wifi-rssi 格结构性超宽(标签+信号条+数值+单位四件套,半格装不下);
+    /// gateway-latency 是其语义配对,一并整行保持网络块纵列节奏。
     /// 命中项显式整行、排到网格末尾。
     private static let fullRowMetricIDs: Set<String> = [
         "ipv4", "ipv6", "public-ip", "uptime", "adapter", "wifi-ssid",
@@ -831,17 +834,16 @@ private struct MetricDetailGrid: View {
         }
     }
 
-    // 逐格内衬网格(实验分支第四版,业界调研后定案):斑马带/发丝线都是
-    // 「行级」手段,项目少时失效且显乱。改为 iOS 健康类 App stat tile 的
-    // 「格级」方案——每个指标独立 trackFill 圆角内衬色块,边界属于格子自己,
-    // 不依赖行数;单元保持「标签左·数值右」,数值字重提到 bold 强化存在感。
+    // 逐格内衬网格(stat tile 形态):每个指标独立 trackFill 圆角内衬色块,
+    // 边界属于格子自己,不依赖行数;单元保持「标签左·数值右」,数值字重
+    // 提到 bold 强化存在感。
     private var content: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
             if !shortMetrics.isEmpty {
                 LazyVGrid(
                     columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),
                               GridItem(.flexible())],
-                    spacing: MetricGridMetrics.columnSpacing
+                    spacing: MetricGridMetrics.gridRowGap
                 ) {
                     ForEach(shortMetrics) { metric in
                         metricCell(metric)
@@ -894,11 +896,10 @@ private struct MetricDetailGrid: View {
         ))
     }
 
-    /// 数值/单位两段组合:数字 mono bold 主角化(逐格内衬版从 semibold 提到
-    /// bold,强化每个格子的视觉锤),单位 caption 弱化;
+    /// 数值/单位两段组合:数字 mono bold 主角化,单位 caption 弱化;
     /// 无 unit 标记或后缀不匹配("--"、文本态、长值)时回退整串渲染。
-    /// 两段同 layoutPriority(2) 一起预留宽度,单位另加 fixedSize——
-    /// 若单位掉到默认优先级,窄格中会被挤成省略号(拆分前的单 Text 无此问题)。
+    /// 两段同 layoutPriority(2) 一起预留宽度,单位另加 fixedSize:
+    /// 单位若掉到默认优先级,窄格中会被挤成省略号。
     private func splitValue(_ metric: MonitorMetric, text: String) -> some View {
         let parts = splitValueUnit(text, unit: metric.unit)
         return HStack(alignment: .firstTextBaseline, spacing: 2) {
@@ -1445,7 +1446,7 @@ private struct BatteryGlassRow: View, Equatable {
     private var detailMetrics: [MonitorMetric] {
         // 充电功率已上移到行首常驻 CHG pill,明细不再重复展示。
         // 充电限制只保留在功率流电池条的刻度线上,低电量模式只保留行头图标
-        // 着色与功率流配色(评审反馈:两行纯状态文本信息量低),明细收缩为四项。
+        // 着色与功率流配色,明细收缩为四项。
         let names = ["health", "cycle-count", "temperature", "power-loss"]
 
         let enabledNames = Set(details.map(\.name))
@@ -1810,7 +1811,7 @@ private struct PowerFlowDiagram: View {
 
     /// 图下说明行:只在需要警示的「适配器不足」场景出现;常规态(充电/直供/
     /// 电池供电/无电池)的瓦数、损耗、ETA 已分别在节点、明细网格与电池条内
-    /// 展示,不再重复拼长句(评审反馈:原文案信息冗余、不明所以)。
+    /// 展示,不再重复拼长句。
     private var flowNoteText: String? {
         guard connected, hasBattery, isInsufficient else { return nil }
         let magnitude = String(format: "%.1fW", batteryMagnitude)
@@ -1943,8 +1944,7 @@ private struct PowerFlowDiagram: View {
     // MARK: 配色
 
     /// 低电量模式:除行头图标外,功率流同步转琥珀——电池条填充/边框、充电
-    /// stub、sparkline 全部换警示色,系统限电状态在图内直接可读(评审反馈:
-    /// 只染行头图标、图内无任何变化,指示与主视觉脱节)。
+    /// stub、sparkline 全部换警示色,系统限电状态在图内直接可读。
     private var isLowPowerMode: Bool {
         hasBattery && rawValue("low-power-mode") == "on"
     }

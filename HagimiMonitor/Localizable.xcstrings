@@ -8514,28 +8514,6 @@
         }
       }
     },
-    "panel.displays.note": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Info display works on both builds; brightness/volume control remains Direct-only."
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "情報表示は両チャネル共通；明るさ／音量操作は Direct 版限定。"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "信息展示两渠道通用；亮度/音量控制仍为 Direct 独有。"
-          }
-        }
-      }
-    },
     "panel.displays.summary": {
       "localizations": {
         "en": {
