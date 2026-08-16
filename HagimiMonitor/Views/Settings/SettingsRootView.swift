@@ -9,7 +9,7 @@ struct SettingsRootView: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
-                SettingsSidebar(selection: $selection, settings: settings)
+                SettingsSidebar(selection: $selection, settings: settings, fanAvailable: store.fanAvailable)
                     .frame(width: 164)
                     .background(.bar, ignoresSafeAreaEdges: .top)
 

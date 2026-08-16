@@ -8,11 +8,15 @@ struct TopCPUProcess: Identifiable, Equatable {
     /// 进程 CPU 占用百分比。
     let cpuUsage: Double
     let icon: NSImage?
+    /// 是否正通过 Rosetta 转译运行(Intel 二进制)。macOS 28 起 Intel 应用将无法运行,
+    /// 面板 TOP 进程列表据此打角标并汇总提醒。
+    let translated: Bool
 
     var id: pid_t { pid }
 
     static func == (lhs: TopCPUProcess, rhs: TopCPUProcess) -> Bool {
         lhs.pid == rhs.pid && lhs.name == rhs.name && lhs.cpuUsage == rhs.cpuUsage
+            && lhs.translated == rhs.translated
     }
 }
 
@@ -128,6 +132,34 @@ func enrichCPU(_ rawProcesses: [RawCPUProcess]) -> [TopCPUProcess] {
 
         let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)
 
-        return TopCPUProcess(pid: raw.pid, name: name, cpuUsage: raw.cpuUsage, icon: icon)
+        return TopCPUProcess(
+            pid: raw.pid,
+            name: name,
+            cpuUsage: raw.cpuUsage,
+            icon: icon,
+            translated: isTranslatedProcess(raw.pid)
+        )
     }
+}
+
+/// 查询指定进程是否正通过 Rosetta 转译运行。
+/// 走官方推荐的 `sysctl.proc_translated`(传入 pid 作为输入参数),仅查询不干预,
+/// 沙盒下同样可用;失败/不支持一律视为非转译。
+func isTranslatedProcess(_ pid: pid_t) -> Bool {
+    #if arch(arm64)
+    var translated: Int32 = 0
+    var size = MemoryLayout<Int32>.size
+    var pidValue = pid
+    let result = sysctlbyname(
+        "sysctl.proc_translated",
+        &translated,
+        &size,
+        &pidValue,
+        MemoryLayout<pid_t>.size
+    )
+    return result == 0 && translated == 1
+    #else
+    _ = pid
+    return false
+    #endif
 }

@@ -17,7 +17,8 @@ struct ModuleSettingsView: View {
                 }
 
                 // 模块隐藏后「显示方式」无意义,随 moduleOptions 一起隐藏。
-                if settings.isVisible(kind) {
+                // 风扇不提供卡片样式:展开区(风扇列表+转速控制)依赖列表行形态。
+                if settings.isVisible(kind), kind != .fan {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.display-style")) {

@@ -19,6 +19,9 @@ final class NetworkSampler: MonitorSampler {
     private lazy var dynamicStore: SCDynamicStore? =
         SCDynamicStoreCreate(nil, "HagimiMonitor.NetworkSampler" as CFString, nil, nil)
 
+    // Wi-Fi 信号/网关延迟探针:内部带缓存,RSSI 10s、延迟 5s,不随每秒采样无脑触发。
+    private let wifiProbe = WiFiProbe()
+
     func sample(previous: MonitorModule?) -> MonitorModule {
         let now = Date()
         let bytes = networkBytes()
@@ -28,6 +31,16 @@ final class NetworkSampler: MonitorSampler {
         let publicIP = cachedPublicIP()
         let ipv4 = bytes.ipv4.first ?? "--"
         let ipv6 = bytes.ipv6.first ?? "--"
+
+        // Wi-Fi 信号/SSID/网关延迟(A6):探针失败时全部降级为"--"。
+        // 顺序对齐冻结原型网格配对:(信号, 延迟),SSID 长值整行展示。
+        // 接口名指标已删:行头 summary 展示的就是接口名,明细再列一遍是冗余。
+        let wifi = wifiProbe.snapshot()
+        let wifiMetrics = [
+            MonitorMetric(name: "wifi-rssi", value: wifi.rssi.map { "\($0) dBm" } ?? "--", numericValue: wifi.rssi.map(Double.init)),
+            MonitorMetric(name: "gateway-latency", value: wifi.gatewayLatencyMs.map { "\($0) ms" } ?? "--", numericValue: wifi.gatewayLatencyMs.map(Double.init)),
+            MonitorMetric(name: "wifi-ssid", value: wifi.ssid ?? "--")
+        ]
 
         guard let previousBytes else {
             return MonitorModule(
@@ -42,7 +55,7 @@ final class NetworkSampler: MonitorSampler {
                     MonitorMetric(name: "download", value: "--"),
                     MonitorMetric(name: "cumulativeBytesIn", value: "\(bytes.input)"),
                     MonitorMetric(name: "cumulativeBytesOut", value: "\(bytes.output)")
-                ],
+                ] + wifiMetrics,
                 samples: seedSamples(0)
             )
         }
@@ -68,7 +81,7 @@ final class NetworkSampler: MonitorSampler {
                 MonitorMetric(name: "download", value: bytesPerSecond(download), numericValue: download),
                 MonitorMetric(name: "cumulativeBytesIn", value: "\(bytes.input)"),
                 MonitorMetric(name: "cumulativeBytesOut", value: "\(bytes.output)")
-            ],
+            ] + wifiMetrics,
             samples: seedSamples(value)
         )
     }

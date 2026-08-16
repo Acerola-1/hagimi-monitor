@@ -8,6 +8,9 @@ final class StorageSampler: MonitorSampler {
 
     private var previousDiskIO: (bytesRead: Int64, bytesWritten: Int64, timestamp: Date)?
 
+    // S.M.A.R.T. 探针:内部 60s 缓存(system_profiler 拉起成本高,见探针说明)。
+    private let smartProbe = StorageSMARTProbe()
+
     func sample(previous: MonitorModule?) -> MonitorModule {
         do {
             let rootURL = URL(fileURLWithPath: "/")
@@ -31,6 +34,12 @@ final class StorageSampler: MonitorSampler {
                 MonitorMetric(name: "free", value: bytes(free), numericValue: free),
                 MonitorMetric(name: "total", value: bytes(total))
             ]
+
+            // S.M.A.R.T. 健康状态(A7):探针无法确定时不出指标,网格不占位。
+            // value 存状态 id(verified/failing),视图层本地化并按语义着色。
+            if let smart = smartProbe.status() {
+                metrics.append(MonitorMetric(name: "smart", value: smart, numericValue: smart == "verified" ? 1 : 0))
+            }
 
             if let ioStats = readDiskIOStats() {
                 metrics.append(MonitorMetric(name: "cumulativeBytesRead", value: "\(ioStats.bytesRead)"))

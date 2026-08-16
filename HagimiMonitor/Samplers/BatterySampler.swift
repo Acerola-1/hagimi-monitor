@@ -59,6 +59,14 @@ final class BatterySampler: MonitorSampler {
             return nil
         }()
 
+        // 转换损耗(W):适配器输入 − 系统负载 − |电池流向|。仅插电时可算
+        // (电池供电时输入侧不可测);遥测瞬时不同步可能出负值,钳至 0。
+        let powerLoss: Double? = {
+            guard connected, let powerIn, let systemPower else { return nil }
+            let flow = batteryFlow.map(abs) ?? 0
+            return max(0, powerIn - systemPower - flow)
+        }()
+
         return MonitorModule(
             kind: .battery,
             value: percentage,
@@ -66,7 +74,7 @@ final class BatterySampler: MonitorSampler {
             metrics: [
                 MonitorMetric(name: "type", value: "battery"),
                 MonitorMetric(name: "status", value: isCharging ? "charging" : (connected ? "ac-power" : "on-battery")),
-                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
+                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts),
                 MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--"),
                 MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower),
                 MonitorMetric(name: "health", value: stableHealth.map(percent) ?? "--", numericValue: stableHealth),
@@ -75,7 +83,13 @@ final class BatterySampler: MonitorSampler {
                 // 功率流数据链(不进指标网格,由展开区功率流图消费)
                 MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn),
                 MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow),
-                MonitorMetric(name: "time-remaining", value: timeRemaining.map { "\($0)" } ?? "--", numericValue: timeRemaining.map(Double.init))
+                MonitorMetric(name: "time-remaining", value: timeRemaining.map { "\($0)" } ?? "--", numericValue: timeRemaining.map(Double.init)),
+                // 展开区明细网格新增项:转换损耗/充电限制/低电量模式。
+                // charge-limit 为尽力读取(IORegistry 无该键的机型显示"--");
+                // low-power-mode 存 on/off 原值,由视图层 localizedMetricValue 本地化。
+                MonitorMetric(name: "power-loss", value: wattString(powerLoss), numericValue: powerLoss),
+                MonitorMetric(name: "charge-limit", value: smart.chargeLimit.map { "\($0)%" } ?? "--", numericValue: smart.chargeLimit.map(Double.init)),
+                MonitorMetric(name: "low-power-mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "on" : "off")
             ],
             samples: seedSamples(percentage)
         )
@@ -91,7 +105,7 @@ final class BatterySampler: MonitorSampler {
             metrics: [
                 MonitorMetric(name: "type", value: "ac-power"),
                 MonitorMetric(name: "status", value: "ac-power"),
-                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true)),
+                MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts),
                 MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts)
             ],
             samples: seedSamples(100)
@@ -171,6 +185,10 @@ final class BatterySampler: MonitorSampler {
         let telemetryChargingWatts = telemetryChargingWatts(service, isCharging: isCharging)
         let powerInWatts = powerInWatts(service)
         let batteryFlowWatts = batteryFlowWatts(service)
+        // 充电限制(%):macOS 系统设置的电池充电上限。尽力读取——键名/层级随系统
+        // 版本可能变化(27 起 BatteryData 布局已迁移过一次),lookup 已含子树合并兜底,
+        // 读不到时 UI 显示"--",不影响其余指标。
+        let chargeLimit = lookupInt("ChargeLimit")
         let temperature = lookupDouble("Temperature").map { $0 / 100 }
         let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
             min(100, max(0, maxCapacity / designCapacity * 100))
@@ -193,7 +211,8 @@ final class BatterySampler: MonitorSampler {
             temperatureCelsius: temperature,
             telemetryChargingWatts: telemetryChargingWatts,
             powerInWatts: powerInWatts,
-            batteryFlowWatts: batteryFlowWatts
+            batteryFlowWatts: batteryFlowWatts,
+            chargeLimit: chargeLimit
         )
     }
 
@@ -400,4 +419,5 @@ private struct SmartBatteryInfo {
     var telemetryChargingWatts: Double?
     var powerInWatts: Double?
     var batteryFlowWatts: Double?
+    var chargeLimit: Int?
 }

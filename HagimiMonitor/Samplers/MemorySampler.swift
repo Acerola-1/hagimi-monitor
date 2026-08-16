@@ -52,6 +52,9 @@ final class MemorySampler: MonitorSampler {
                 MonitorMetric(name: "pressure", value: pressure.title),
                 MonitorMetric(name: "swap-used", value: swapUsedText(swap), numericValue: swap?.used),
                 MonitorMetric(name: "total", value: memoryBytes(total)),
+                // 压缩内存(compressor_page_count):内存紧张时系统压缩页的占用,
+                // 与活动监视器「被压缩」同口径。
+                MonitorMetric(name: "compressed", value: memoryBytes(compressed), numericValue: compressed),
                 MonitorMetric(name: "pressure-level", value: pressure.title, numericValue: Double(pressure.level.rawValue)),
                 MonitorMetric(name: "swapins", value: String(swapins), numericValue: Double(swapins)),
                 MonitorMetric(name: "swapouts", value: String(swapouts), numericValue: Double(swapouts))

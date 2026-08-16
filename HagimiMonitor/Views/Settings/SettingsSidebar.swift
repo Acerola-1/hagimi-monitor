@@ -12,6 +12,8 @@ enum SettingsRoute: Hashable {
 struct SettingsSidebar: View {
     @Binding var selection: SettingsRoute
     @ObservedObject var settings: MonitorSettings
+    /// 无风扇机型(如 MacBook Air)不显示风扇模块入口,避免出现无效开关。
+    let fanAvailable: Bool
     #if DIRECT_DISTRIBUTION
     @ObservedObject private var updateService = UpdateService.shared
     #endif
@@ -24,7 +26,7 @@ struct SettingsSidebar: View {
             }
 
             Section {
-                ForEach(MonitorKind.userVisibleCases) { kind in
+                ForEach(MonitorKind.userVisibleCases.filter { $0 != .fan || fanAvailable }) { kind in
                     Label(kind.title, systemImage: kind.symbol)
                         .tag(SettingsRoute.module(kind))
                 }

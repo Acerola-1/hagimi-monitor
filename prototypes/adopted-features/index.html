@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 已采纳功能原型 v3（对齐真实面板 UI）</title>
+<style>
+  /* ====== 设计令牌：逐项取自 MonitorPalette (balanced · dark) 与 MonitorPanelView ======
+     primaryText white.96 / valueText .90 / secondaryText .82 / captionText .68 / trackFill .08
+     rowGlass #7A91B4@.12 / separator #7A91B4@.22 / 行圆角 14 / 明细缩进 28
+     tints: cpu D27A4A gpu 5D8CF0 mem 42A39A sto 9A865E net 43A6A0 bat 65AF52 fan 5BB0C2
+     severity: calm 2F9E64 warn B8872E crit D94848 */
+  :root {
+    --primary: rgba(255,255,255,0.96);
+    --value:   rgba(255,255,255,0.90);
+    --secondary: rgba(255,255,255,0.82);
+    --caption: rgba(255,255,255,0.68);
+    --track: rgba(255,255,255,0.08);
+    --glass: rgba(122,145,180,0.12);
+    --glass-hover: rgba(122,145,180,0.17);
+    --sep: rgba(122,145,180,0.22);
+    --tint-cpu:#D27A4A; --tint-gpu:#5D8CF0; --tint-mem:#42A39A; --tint-sto:#9A865E;
+    --tint-net:#43A6A0; --tint-bat:#65AF52; --tint-fan:#5BB0C2;
+    --calm:#2F9E64; --warn:#B8872E; --crit:#D94848;
+    --good:#7BC98F; --warn-txt:#E0B45E; --crit-txt:#F08A8A;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    min-height:100vh;
+    background:
+      radial-gradient(1100px 720px at 20% -10%, rgba(59,87,150,0.42) 0%, transparent 58%),
+      radial-gradient(1000px 700px at 90% 110%, rgba(92,56,124,0.36) 0%, transparent 56%),
+      #16181f;
+    display:flex; flex-direction:column; align-items:center; gap:14px;
+    padding:26px 16px 60px; -webkit-font-smoothing:antialiased; color:var(--primary);
+  }
+  .mono { font-family:"SF Mono",ui-monospace,Menlo,monospace; font-variant-numeric:tabular-nums; }
+  h1 { font-size:15px; font-weight:600; }
+  .subtitle { font-size:11px; color:var(--caption); max-width:364px; text-align:center; line-height:1.5; }
+
+  /* ====== 原型控制 ====== */
+  .proto { width:min(364px, 100vw - 32px); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+    border-radius:14px; padding:11px 13px; display:flex; flex-direction:column; gap:9px; }
+  .proto-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .proto-label { font-size:10px; color:var(--caption); width:58px; flex:none; }
+  .seg { display:flex; gap:4px; flex-wrap:wrap; }
+  .seg button { font-size:10.5px; padding:3px 8px; border-radius:7px; border:1px solid rgba(255,255,255,0.13);
+    background:transparent; color:var(--secondary); cursor:pointer; font-family:inherit; transition:all .15s; }
+  .seg button:hover { background:rgba(255,255,255,0.07); }
+  .seg button.active { background:rgba(255,255,255,0.16); color:var(--primary); border-color:rgba(255,255,255,0.30); }
+  .switch { margin-left:auto; display:inline-flex; align-items:center; gap:5px; font-size:10px;
+    color:var(--caption); cursor:pointer; user-select:none; }
+  .switch input { accent-color:#E8B84B; }
+
+  /* ====== 面板（FluidPanel 近似：宽度对齐真实面板 ideal 340、padding 10 对齐内容边距）====== */
+  .panel { width:min(364px, 100vw - 32px); background:rgba(12,14,20,0.55); border:1px solid rgba(255,255,255,0.09);
+    border-radius:22px; padding:10px; backdrop-filter:blur(30px);
+    box-shadow:0 24px 60px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
+    display:flex; flex-direction:column; gap:6px; }
+  .panel-header { display:flex; align-items:center; gap:6px; padding:1px 4px 2px; }
+  .live-dot { width:5px; height:5px; border-radius:50%; background:#E8A33D; box-shadow:0 0 7px rgba(232,163,61,0.8);
+    animation:pulse 2.4s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity:.4; } }
+  .panel-header .t { font-size:10.5px; letter-spacing:1.2px; color:var(--caption); font-weight:600; }
+  .panel-header .clock { margin-left:auto; font-size:11px; color:var(--caption); }
+
+  /* ====== 行（MetricGlassRow 复刻）======
+     行头拆成「左信息区 / 右控件区」两组：左侧 icon+标题+值(+状态芯片)，
+     右侧 sparkline/meter/pill+chevron 整组靠右。行宽不足时整组换行（flex-wrap 兜底），
+     避免真实原型里电源行 7 元素挤爆 296pt 行宽的问题。 */
+  .row { background:var(--glass); border-radius:14px; cursor:pointer; user-select:none;
+    transition:background .15s; }
+  .row:hover { background:var(--glass-hover); }
+  .row-head { display:flex; align-items:center; gap:5px; flex-wrap:wrap; padding:8px 10px; }
+  .rh-left { display:flex; align-items:center; gap:5px; flex:none; min-width:0; }
+  .rh-right { display:flex; align-items:center; gap:5px; margin-left:auto; flex:none; }
+  .row-head .icon { width:18px; flex:none; text-align:center; font-size:14px; font-weight:600; line-height:1; }
+  .row-head .label { font-size:12.5px; color:var(--primary); font-weight:500; white-space:nowrap; }
+  .row-head .value { font-size:12.5px; font-weight:600; color:var(--value); white-space:nowrap; }
+  .chev { display:inline-flex; align-items:center; width:8px; color:var(--caption);
+    transition:transform .2s; flex:none; }
+  .chev svg { display:block; }
+  .row.open .chev { transform:rotate(90deg); }
+  /* A3 状态芯片：四态四色，border 用同色系半透明增强玻璃上的边缘清晰度 */
+  .state-chip { flex:none; font-size:9.5px; font-weight:600; padding:2px 6px; border-radius:6px;
+    white-space:nowrap; border:1px solid transparent; }
+  /* PowerLabelPill 复刻：固定宽 74、右对齐、图标+mono 值 */
+  .ppill { width:74px; flex:none; display:flex; justify-content:flex-end; align-items:center; gap:4px;
+    font-size:12px; font-weight:500; color:var(--secondary); white-space:nowrap; }
+  .ppill .sym { font-size:9.5px; color:rgba(255,255,255,0.55); }
+  /* sparkline / ProgressMeter 复刻位 */
+  .spark-mini { width:56px; height:18px; flex:none; }
+  .meter { width:56px; height:3px; border-radius:2px; background:var(--track); flex:none; overflow:hidden; }
+  .meter > div { height:100%; border-radius:2px; }
+
+  /* ====== 展开区（CollapsibleDetail 复刻）
+     高度从 0 卷出：grid-template-rows 0fr→1fr + opacity，近似真实面板 0.15s 补间。 */
+  .detail { display:grid; grid-template-rows:minmax(0, 0fr); opacity:0;
+    transition:grid-template-rows .18s ease, opacity .15s ease; }
+  .detail-inner { overflow:hidden; min-height:0; padding:0 10px 9px; }
+  .row.open .detail { grid-template-rows:minmax(0, 1fr); opacity:1; }
+  .dsep { height:1px; background:var(--sep); margin-left:28px; margin-bottom:8px; }
+  /* MetricDetailGrid 复刻：两列 label 左 / value 右，缩进 28 */
+  .grid2 { margin-left:28px; display:grid; grid-template-columns:1fr 1fr; column-gap:16px; row-gap:7px; }
+  .gcell { display:flex; align-items:baseline; gap:6px; font-size:12px; min-width:0; }
+  .gcell .gl { color:var(--caption); white-space:nowrap; }
+  .gcell .gv { margin-left:auto; color:var(--secondary); font-weight:600; white-space:nowrap; }
+  .gcell.full { grid-column:1 / -1; }
+  .gv.good { color:var(--good); } .gv.warn { color:var(--warn-txt); } .gv.crit { color:var(--crit-txt); }
+
+  /* PowerSectionHeader 复刻：与明细网格同缩进 28，保证分区标题与下方内容左缘对齐 */
+  .sec-title { margin:10px 0 8px 28px; display:flex; align-items:center; gap:8px;
+    font-size:10px; color:var(--caption); letter-spacing:.8px; }
+  .sec-title::after { content:''; flex:1; height:1px; background:var(--sep); }
+
+  /* ====== 功率流（flex 流式布局 + DOM 实测连线，构造上不可能重叠）====== */
+  .flow { position:relative; margin-left:28px; }
+  .flow svg.edges { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .flow-top { position:relative; z-index:1; display:flex; justify-content:space-between; gap:36px; }
+  .fnode { width:104px; flex:none; text-align:center; background:var(--track); border-radius:9px;
+    padding:5px 4px; transition:opacity .3s; }
+  .fnode .fl { font-size:9.5px; color:var(--caption); letter-spacing:.2px; line-height:1.25; }
+  .fnode .fv { font-size:12.5px; font-weight:600; color:var(--value); margin-top:1px; line-height:1.25; }
+  .fnode .fv .u { font-size:9px; color:var(--caption); margin-left:1px; }
+  .fbar { height:2.5px; border-radius:2px; background:rgba(255,255,255,0.10); margin:3px 8px 1px; overflow:hidden; }
+  .fbar > div { height:100%; border-radius:2px; background:rgba(255,255,255,0.55); transition:width .5s,background .3s; }
+  .stub { height:16px; }
+  /* 全宽电池条：内容走 flex 流，左右永不相撞 */
+  .batbar { position:relative; z-index:1; height:38px; border-radius:10px; background:var(--track);
+    overflow:hidden; display:flex; align-items:center; padding:0 11px; gap:7px;
+    border:1px solid transparent; transition:border-color .3s; }
+  .batbar .fill { position:absolute; top:2px; bottom:2px; left:2px; border-radius:8px; z-index:0;
+    background:linear-gradient(90deg, rgba(101,175,82,0.60), rgba(101,175,82,0.28)); transition:width .7s; }
+  .batbar .tick { position:absolute; top:5px; bottom:5px; width:1.5px; background:rgba(255,255,255,0.60); z-index:1; }
+  .batbar .bb-left { position:relative; z-index:2; display:flex; align-items:baseline; gap:6px;
+    text-shadow:0 1px 3px rgba(0,0,0,0.5); white-space:nowrap; }
+  .batbar .pct { font-size:14px; font-weight:700; color:#fff; }
+  .batbar .st { font-size:10px; color:rgba(255,255,255,0.78); }
+  .batbar .bb-eta { position:relative; z-index:2; margin-left:auto; font-size:10px;
+    color:rgba(255,255,255,0.75); text-shadow:0 1px 3px rgba(0,0,0,0.5);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:56%; text-align:right; }
+  .flow-note { margin:7px 0 0; font-size:10px; color:var(--caption); line-height:1.5; }
+  .flow-note.crit { color:var(--crit-txt); }
+  /* 60s sparkline（SparklineChart 风格：纯线 + tint） */
+  .spark-wrap { margin:9px 0 0; display:flex; align-items:center; gap:8px; }
+  .spark-wrap svg { flex:1; height:24px; min-width:0; }
+  .spark-wrap .cap { font-size:9px; color:var(--caption); flex:none; text-align:right; line-height:1.5; }
+
+  /* ====== CPUProcessList 复刻（16px 图标位 + 名称 + 右对齐数值，缩进 28）
+     列表与上方明细网格之间补一条分隔线（源码 CPUProcessList 顶部 Rectangle）。 */
+  .procs { margin-left:28px; margin-top:9px; display:flex; flex-direction:column; gap:4.5px; }
+  .procs::before { content:''; height:1px; background:var(--sep); margin-bottom:7px; }
+  .proc { display:flex; align-items:center; gap:6px; font-size:12px; }
+  .proc .picon { width:16px; height:16px; flex:none; border-radius:4px; background:var(--track);
+    display:inline-flex; align-items:center; justify-content:center; font-size:8.5px; color:var(--caption); }
+  .proc .pname { color:var(--primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .proc .pv { margin-left:auto; flex:none; font-size:10px; color:var(--secondary); }
+  .badge-rosetta { flex:none; font-size:8px; font-weight:700; letter-spacing:.3px; color:var(--warn-txt);
+    background:rgba(184,135,46,0.15); border:1px solid rgba(184,135,46,0.45); border-radius:4px; padding:1px 4px; }
+  .rosetta-banner { margin:8px 0 0 28px; padding:7px 9px; border-radius:9px;
+    background:rgba(184,135,46,0.09); border:1px solid rgba(184,135,46,0.30);
+    font-size:10px; color:var(--warn-txt); line-height:1.55; cursor:default; }
+
+  /* ====== B2 风扇控制（展开区内，Direct）====== */
+  .fan-ctl { margin-left:28px; display:flex; flex-direction:column; gap:9px; cursor:default; }
+  .fan-mode { display:flex; gap:5px; }
+  .fan-mode button { flex:1; font-size:11px; padding:5px 0; border-radius:8px; cursor:pointer; font-family:inherit;
+    border:1px solid rgba(255,255,255,0.13); background:transparent; color:var(--secondary); transition:all .15s; }
+  .fan-mode button:hover { background:rgba(255,255,255,0.06); }
+  .fan-mode button.active { background:rgba(91,176,194,0.18); color:var(--primary); border-color:rgba(91,176,194,0.5); }
+  #fan-fixed, #fan-curve { display:flex; flex-direction:column; gap:6px; }
+  input[type=range] { width:100%; accent-color:var(--tint-fan); }
+  .direct-badge { font-size:8px; font-weight:700; letter-spacing:.5px; color:#9DB4E8;
+    background:rgba(93,140,240,0.12); border:1px solid rgba(93,140,240,0.40); border-radius:4px; padding:1px 5px; }
+  .wifi-bars { display:inline-flex; align-items:flex-end; gap:1.5px; height:11px; }
+  .wifi-bars i { width:3px; border-radius:1px; background:rgba(255,255,255,0.16); }
+  .wifi-bars i.on { background:var(--tint-net); }
+
+  /* ====== 底部按钮（活动监视器 / 设置）：胶囊形，对齐真实面板 buttonBorderShape(.capsule) */
+  .btnrow { display:flex; gap:8px; padding:2px 2px 0; }
+  .cap { flex:1; display:flex; align-items:center; justify-content:center; gap:6px;
+    background:var(--glass); border:1px solid rgba(255,255,255,0.06);
+    border-radius:999px; padding:6.5px 0; font-size:11.5px; color:var(--secondary);
+    transition:background .15s, border-color .15s; }
+  .cap:hover { background:var(--glass-hover); border-color:rgba(255,255,255,0.12); }
+
+  /* ====== 标注 ====== */
+  .mark { position:relative; }
+  .mk { display:none; position:absolute; top:-6px; left:-6px; z-index:7; width:15px; height:15px; border-radius:50%;
+    background:#E8B84B; color:#241a05; font-size:9.5px; font-weight:800; align-items:center; justify-content:center;
+    box-shadow:0 1px 5px rgba(0,0,0,0.55); }
+  .mk.static { position:static; margin-right:6px; }
+  body.show-mk .mk { display:flex; }
+  .legend { width:min(364px, 100vw - 32px); background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
+    border-radius:14px; padding:12px 14px; }
+  .legend h3 { font-size:12px; margin-bottom:8px; }
+  .legend .li { display:flex; gap:9px; font-size:11px; color:var(--secondary); line-height:1.6; padding:3.5px 0; }
+  .legend .li b { color:var(--primary); }
+  .legend .li .mk { display:flex; position:static; flex:none; margin-top:2px; }
+  .hidden { display:none !important; }
+</style>
+</head>
+<body>
+
+<h1>HagimiMonitor · 已采纳功能原型 v3</h1>
+<div class="subtitle">完全复刻真实面板 UI（行/明细网格/双 pill/缩进体系）· 点击任意行可展开收起 · 数据为演示模拟值</div>
+
+<!-- ============ 原型控制 ============ -->
+<div class="proto">
+  <div class="proto-row">
+    <span class="proto-label">电源场景</span>
+    <div class="seg" id="scenario-seg">
+      <button data-s="charging" class="active">充电中</button>
+      <button data-s="battery">电池供电</button>
+      <button data-s="ac">插电直供</button>
+      <button data-s="insufficient">适配器不足</button>
+      <button data-s="desktop">台式机·无电池</button>
+    </div>
+  </div>
+  <div class="proto-row">
+    <span class="proto-label">A1 热压力</span>
+    <div class="seg" id="thermal-seg">
+      <button data-t="0" class="active">正常</button>
+      <button data-t="1">轻微</button>
+      <button data-t="2">严重</button>
+      <button data-t="3">临界</button>
+    </div>
+    <label class="switch"><input type="checkbox" id="mk-toggle">显示标注</label>
+  </div>
+  <div class="proto-row">
+    <span class="proto-label">发行渠道</span>
+    <div class="seg" id="channel-seg">
+      <button data-c="direct" class="active">Direct 版</button>
+      <button data-c="appstore">App Store 版</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ 面板 ============ -->
+<div class="panel">
+  <div class="panel-header">
+    <span class="live-dot"></span><span class="t">SYSTEM · LIVE</span>
+    <span class="clock mono">12:07</span>
+  </div>
+
+  <!-- CPU 行（默认展开：A1 热压力 + A5 细分 + A2 Rosetta 进程） -->
+  <div class="row open" id="row-cpu">
+    <div class="row-head">
+      <div class="rh-left">
+        <span class="icon" style="color:var(--tint-cpu)">▤</span>
+        <span class="label">CPU:</span><span class="value mono">38%</span>
+      </div>
+      <div class="rh-right">
+        <svg class="spark-mini" viewBox="0 0 56 18" preserveAspectRatio="none">
+          <polyline points="0,14 6,12 12,13 18,8 24,10 30,5 36,9 42,4 48,7 56,6" fill="none" stroke="var(--tint-cpu)" stroke-width="1.5"/>
+        </svg>
+        <span class="chev"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M2.5 1.5 L6 6 L2.5 10.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="detail-inner">
+        <div class="dsep"></div>
+        <div class="grid2 mark">
+          <span class="mk">5</span>
+          <div class="gcell"><span class="gl">系统</span><span class="gv mono">10%</span></div>
+          <div class="gcell"><span class="gl">用户</span><span class="gv mono">28%</span></div>
+          <div class="gcell"><span class="gl">温度</span><span class="gv mono" id="cpu-temp">62°C</span></div>
+          <div class="gcell mark"><span class="gl">热压力</span><span class="gv mono" id="thermal-val">正常</span><span class="mk">4</span></div>
+          <div class="gcell"><span class="gl">性能核 ×4</span><span class="gv mono">64%</span></div>
+          <div class="gcell"><span class="gl">能效核 ×6</span><span class="gv mono">21%</span></div>
+          <div class="gcell full"><span class="gl">频率</span><span class="gv mono">P 3.6 GHz · E 2.4 GHz</span></div>
+        </div>
+        <div id="cpu-procs-wrap">
+          <div class="procs mark" id="proc-list"><span class="mk">6</span></div>
+          <div class="rosetta-banner">⚠ 2 个应用正通过 Rosetta 转译运行。macOS 28 起 Intel 应用将无法运行，建议寻找原生版本。</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 内存行（A5：压力等级上行头） -->
+  <div class="row" id="row-mem">
+    <div class="row-head">
+      <div class="rh-left">
+        <span class="icon" style="color:var(--tint-mem)">◫</span>
+        <span class="label">内存:</span><span class="value mono">61%</span>
+      </div>
+      <div class="rh-right">
+        <div class="meter"><div style="width:61%;background:var(--tint-mem)"></div></div>
+        <span class="chev"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M2.5 1.5 L6 6 L2.5 10.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="detail-inner">
+        <div class="dsep"></div>
+        <div class="grid2">
+          <div class="gcell"><span class="gl">已用</span><span class="gv mono">14.6 / 24 GB</span></div>
+          <div class="gcell"><span class="gl">内存压力</span><span class="gv mono good">正常</span></div>
+          <div class="gcell"><span class="gl">Swap</span><span class="gv mono">1.2 GB</span></div>
+          <div class="gcell"><span class="gl">压缩</span><span class="gv mono">812 MB</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 网络行（A6） -->
+  <div class="row" id="row-net">
+    <div class="row-head">
+      <div class="rh-left">
+        <span class="icon" style="color:var(--tint-net)">⇅</span>
+        <span class="label">网络:</span><span class="value mono">Wi-Fi</span>
+      </div>
+      <div class="rh-right">
+        <span class="ppill"><span class="sym">↑</span><span class="mono">1.1 MB/s</span></span>
+        <span class="ppill"><span class="sym">↓</span><span class="mono">8.2 MB/s</span></span>
+        <span class="chev"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M2.5 1.5 L6 6 L2.5 10.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="detail-inner">
+        <div class="dsep"></div>
+        <div class="grid2 mark">
+          <span class="mk">7</span>
+          <div class="gcell"><span class="gl">Wi-Fi 信号</span>
+            <span class="gv mono" style="display:inline-flex;align-items:center;gap:5px;">
+              <span class="wifi-bars"><i class="on" style="height:4px"></i><i class="on" style="height:6px"></i><i class="on" style="height:8px"></i><i style="height:11px"></i></span>-52 dBm</span></div>
+          <div class="gcell"><span class="gl">网关延迟</span><span class="gv mono good">3 ms</span></div>
+          <div class="gcell"><span class="gl">SSID</span><span class="gv mono">Home-5G</span></div>
+          <div class="gcell"><span class="gl">接口</span><span class="gv mono">en0 · 6E</span></div>
+          <div class="gcell full"><span class="gl">IPv4</span><span class="gv mono">192.168.31.24</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 存储行（A7） -->
+  <div class="row" id="row-sto">
+    <div class="row-head">
+      <div class="rh-left">
+        <span class="icon" style="color:var(--tint-sto)">◍</span>
+        <span class="label">存储:</span><span class="value mono">42%</span>
+      </div>
+      <div class="rh-right">
+        <div class="meter"><div style="width:42%;background:var(--tint-sto)"></div></div>
+        <span class="chev"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M2.5 1.5 L6 6 L2.5 10.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="detail-inner">
+        <div class="dsep"></div>
+        <div class="grid2 mark">
+          <span class="mk">8</span>
+          <div class="gcell"><span class="gl">已用</span><span class="gv mono">612 / 1 TB</span></div>
+          <div class="gcell"><span class="gl">SMART</span><span class="gv mono good">正常</span></div>
+          <div class="gcell"><span class="gl">写入寿命</span><span class="gv mono">18.4 TB</span></div>
+          <div class="gcell"><span class="gl">磁盘温度</span><span class="gv mono">38°C</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 电源行（默认展开：改造核心 · A3 状态 + 新功率流） -->
+  <div class="row open" id="row-bat">
+    <div class="row-head">
+      <div class="rh-left">
+        <span class="icon" id="bat-icon" style="color:var(--tint-bat)">🔋</span>
+        <span class="label">电源:</span><span class="value mono" id="bat-summary">82%</span>
+        <span class="state-chip" id="state-chip"></span>
+      </div>
+      <div class="rh-right">
+        <span class="ppill"><span class="sym">⚡︎</span><span class="mono" id="pill-chg">30.4W</span></span>
+        <span class="ppill"><span class="sym">◔</span><span class="mono" id="pill-pwr">24.6W</span></span>
+        <span class="chev"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M2.5 1.5 L6 6 L2.5 10.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="detail-inner">
+        <div class="dsep"></div>
+        <div class="grid2">
+          <div class="gcell"><span class="gl">健康度</span><span class="gv mono">92%</span></div>
+          <div class="gcell"><span class="gl">循环次数</span><span class="gv mono">118</span></div>
+          <div class="gcell"><span class="gl">温度</span><span class="gv mono" id="g-temp">31°C</span></div>
+          <div class="gcell"><span class="gl">转换损耗</span><span class="gv mono" id="g-loss">3.2 W</span></div>
+          <div class="gcell"><span class="gl">充电限制</span><span class="gv mono" id="g-limit">80%</span></div>
+          <div class="gcell"><span class="gl">低电量模式</span><span class="gv mono" id="g-lpm">关</span></div>
+        </div>
+        <div class="sec-title mark">功率流<span class="mk static">1</span></div>
+        <div class="flow" id="flow">
+          <svg class="edges" id="edges"></svg>
+          <div class="flow-top">
+            <div class="fnode" id="fn-adapter">
+              <div class="fl" id="fa-label">适配器·96W</div>
+              <div class="fv mono" id="fa-value">58.2<span class="u">W</span></div>
+              <div class="fbar"><div id="fa-bar" style="width:60%"></div></div>
+            </div>
+            <div class="fnode" id="fn-system">
+              <div class="fl">系统</div>
+              <div class="fv mono" id="fs-value">24.6<span class="u">W</span></div>
+            </div>
+          </div>
+          <div class="stub"></div>
+          <div class="batbar mark" id="batbar">
+            <span class="mk">2</span>
+            <div class="fill" id="bb-fill" style="width:81%"></div>
+            <div class="tick hidden" id="bb-tick" style="left:80%"></div>
+            <div class="bb-left mono"><span class="pct" id="bb-pct">82%</span><span class="st" id="bb-status">充电中</span></div>
+            <div class="bb-eta mono" id="bb-eta">约 52 分钟充满</div>
+          </div>
+          <div class="flow-note" id="flow-note"></div>
+          <div class="spark-wrap mark">
+            <span class="mk">9</span>
+            <svg id="sparkline" viewBox="0 0 220 24" preserveAspectRatio="none"></svg>
+            <div class="cap mono">60s 功率<br><span id="spark-avg">avg 23W</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 风扇行（B2：Direct 控制） -->
+  <div class="row" id="row-fan">
+    <div class="row-head">
+      <div class="rh-left">
+        <span class="icon" style="color:var(--tint-fan)">✳</span>
+        <span class="label">风扇:</span><span class="value mono">1842 RPM</span>
+        <span class="direct-badge hidden" id="fan-direct-badge">DIRECT</span>
+      </div>
+      <div class="rh-right">
+        <svg class="spark-mini" viewBox="0 0 56 18" preserveAspectRatio="none">
+          <polyline points="0,12 8,12 16,11 24,12 32,9 40,10 48,8 56,9" fill="none" stroke="var(--tint-fan)" stroke-width="1.5"/>
+        </svg>
+        <span class="chev"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M2.5 1.5 L6 6 L2.5 10.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="detail-inner">
+        <div class="dsep"></div>
+        <div class="fan-ctl" id="fan-ctl">
+          <div class="fan-mode" id="fan-mode">
+            <button data-m="auto" class="active">自动（系统托管）</button>
+            <button data-m="fixed">固定转速</button>
+            <button data-m="curve">温度曲线</button>
+          </div>
+          <div id="fan-fixed" class="hidden">
+            <input type="range" min="1200" max="5800" value="2200" id="fan-slider">
+            <div class="flow-note">手动固定 <span class="mono" id="fan-slider-val">2200 RPM</span> · 写 SMC，仅 Direct 版</div>
+          </div>
+          <div id="fan-curve" class="hidden">
+            <svg viewBox="0 0 250 64" style="width:100%;display:block;">
+              <polyline points="6,54 56,50 102,40 158,20 214,7 244,5" fill="none" stroke="var(--tint-fan)" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="102" cy="40" r="3.4" fill="#fff" stroke="var(--tint-fan)" stroke-width="2"/>
+              <circle cx="158" cy="20" r="3.4" fill="#fff" stroke="var(--tint-fan)" stroke-width="2"/>
+              <text x="6" y="62" font-size="8" fill="rgba(255,255,255,0.45)">40°C · 静音</text>
+              <text x="200" y="62" font-size="8" fill="rgba(255,255,255,0.45)">90°C · 全速</text>
+            </svg>
+            <div class="flow-note">温度 → 转速映射，锚点可拖（示意）</div>
+          </div>
+        </div>
+        <div class="flow-note hidden" id="fan-appstore-note">App Store 版仅转速读数；控制需写 SMC，只在 Direct 版提供。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 显示器行（B4：信息面板） -->
+  <div class="row" id="row-disp">
+    <div class="row-head">
+      <div class="rh-left">
+        <span class="icon" style="color:#4E7FD9">▭</span>
+        <span class="label">显示器:</span><span class="value mono">2 台 · 外接 1</span>
+      </div>
+      <div class="rh-right">
+        <span class="chev"><svg viewBox="0 0 8 12" width="8" height="12"><path d="M2.5 1.5 L6 6 L2.5 10.5" stroke="currentColor" stroke-width="1.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      </div>
+    </div>
+    <div class="detail">
+      <div class="detail-inner">
+        <div class="dsep"></div>
+        <div class="sec-title" style="margin-top:0;">内建 Liquid Retina XDR</div>
+        <div class="grid2" style="margin-bottom:9px;">
+          <div class="gcell"><span class="gl">分辨率</span><span class="gv mono">3024×1964</span></div>
+          <div class="gcell"><span class="gl">刷新率</span><span class="gv mono">120 Hz</span></div>
+          <div class="gcell"><span class="gl">HDR</span><span class="gv mono">关</span></div>
+          <div class="gcell"><span class="gl">亮度</span><span class="gv mono">68%</span></div>
+        </div>
+        <div class="sec-title" style="margin-top:0;">DELL U2723QE · TB4</div>
+        <div class="grid2 mark">
+          <span class="mk">10</span>
+          <div class="gcell"><span class="gl">分辨率</span><span class="gv mono">3840×2160</span></div>
+          <div class="gcell"><span class="gl">刷新率</span><span class="gv mono">60 Hz</span></div>
+          <div class="gcell"><span class="gl">DDC</span><span class="gv mono good">✓ 可用</span></div>
+          <div class="gcell"><span class="gl">HDR</span><span class="gv mono">—</span></div>
+        </div>
+        <div class="flow-note">信息展示两渠道通用；亮度/音量控制仍为 Direct 独有。</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部按钮 -->
+  <div class="btnrow">
+    <div class="cap">📈 活动监视器</div>
+    <div class="cap">⚙︎ 设置</div>
+  </div>
+</div>
+
+<!-- ============ 标注说明 ============ -->
+<div class="legend">
+  <h3>改动点（打开「显示标注」对照角标；本版全部复刻真实面板组件）</h3>
+  <div class="li"><span class="mk">1</span><span><b>功率流新基座</b>：沿用展开区「分区标题 + 图」结构。节点走 flex 布局、连线按 DOM 实测坐标绘制，构造上不可能重叠；导管粗细 ∝ 瓦数。</span></div>
+  <div class="li"><span class="mk">2</span><span><b>全宽电量条</b>：填充=电量；白色刻度=系统充电限制（官方 26.5+ 已有，只读）；左侧电量+状态、右侧 ETA 走 flex 两端对齐，永不撞字。</span></div>
+  <div class="li"><span class="mk">3</span><span><b>A3 电源状态</b>：行头新增状态芯片，四态四色——充电中/插电直供/电池供电/适配器不足，补上现状缺失的状态区分。</span></div>
+  <div class="li"><span class="mk">4</span><span><b>A1 热压力</b>：做成明细网格里的一格（ProcessInfo.thermalState 四档，severity 配色），与现有「温度」并列，完全融入现有 UI。</span></div>
+  <div class="li"><span class="mk">5</span><span><b>A5 CPU 细分</b>：性能核/能效核、P/E 频率进网格；内存行补压力等级与 Swap。</span></div>
+  <div class="li"><span class="mk">6</span><span><b>A2 Rosetta</b>：TOP 进程行加琥珀角标 + 汇总横幅（CPU 展开区，Direct 版进程采样）。</span></div>
+  <div class="li"><span class="mk">7</span><span><b>A6 Wi-Fi</b>：网络展开区加 RSSI 信号格/dBm/网关延迟。</span></div>
+  <div class="li"><span class="mk">8</span><span><b>A7 存储健康</b>：SMART 状态 + 写入寿命进存储展开区。</span></div>
+  <div class="li"><span class="mk">9</span><span><b>60s 功率 sparkline</b>：SparklineChart 同款纯线风格，补时间维度。</span></div>
+  <div class="li"><span class="mk">10</span><span><b>B2 风扇控制 / B4 显示器信息</b>：风扇展开区三模式（Direct，切渠道看降级）；显示器行复刻现有「N 台·外接 N」形态展开信息。</span></div>
+</div>
+
+<script>
+/* ====== 场景数据 ====== */
+const S = {
+  charging:     { level:82, state:'charging',   adapterIn:58.2, rated:96, system:24.6, batFlow:+30.4, loss:3.2, eta:'约 52 分钟充满', temp:'31°C', limit:80, icon:'⚡︎' },
+  battery:      { level:76, state:'on-battery', adapterIn:null, rated:null, system:18.4, batFlow:-18.7, loss:0.3, eta:'可用 6 小时 20 分', temp:'34°C', limit:80, icon:'🔋' },
+  ac:           { level:100, state:'ac-power',  adapterIn:22.8, rated:96, system:22.1, batFlow:0, loss:0.7, eta:'已充满 · 直供', temp:'29°C', limit:80, icon:'🔌' },
+  insufficient: { level:64, state:'insufficient', adapterIn:29.8, rated:30, system:41.5, batFlow:-12.4, loss:0.7, eta:'电池补电中', temp:'39°C', limit:100, icon:'⚠︎' },
+  desktop:      { level:null, state:'ac-power', adapterIn:88.4, rated:140, system:86.2, batFlow:null, loss:2.2, eta:'市电直供', temp:'—', limit:null, icon:'🔌' },
+};
+const STATE_META = {
+  charging:    { bg:'rgba(101,175,82,0.16)', fg:'#9ED48B', border:'rgba(101,175,82,0.45)', text:'充电中' },
+  'ac-power':  { bg:'rgba(255,255,255,0.09)', fg:'rgba(255,255,255,0.75)', border:'rgba(255,255,255,0.18)', text:'插电直供' },
+  'on-battery':{ bg:'rgba(184,135,46,0.18)', fg:'#E0B45E', border:'rgba(184,135,46,0.45)', text:'电池供电' },
+  insufficient:{ bg:'rgba(217,72,72,0.18)', fg:'#F08A8A', border:'rgba(217,72,72,0.45)', text:'适配器不足' },
+};
+let current = 'charging';
+const fmtW = v => v == null ? '—' : (Math.round(v*10)/10) + '<span class="u">W</span>';
+const $ = id => document.getElementById(id);
+
+function edge(from, to, w, opts={}) {
+  const width = w == null ? 1.2 : Math.min(6.5, 1.2 + Math.sqrt(w) * 0.62);
+  const color = opts.color || 'rgba(122,145,180,0.45)';
+  const dash = opts.dash ? 'stroke-dasharray="3 4"' : '';
+  return `<path d="M ${from[0]} ${from[1]} L ${to[0]} ${to[1]}" stroke="${color}" stroke-width="${width}" stroke-linecap="round" fill="none" ${dash}/>`;
+}
+
+/* 连线：节点先布局，再按 DOM 实测坐标画线 —— 永不重叠 */
+function drawEdges() {
+  const flow = $('flow'), svg = $('edges');
+  if (!flow.offsetWidth) return;
+  const fr = flow.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${fr.width} ${fr.height}`);
+  const rel = el => { const r = el.getBoundingClientRect();
+    return { cx:r.left-fr.left+r.width/2, cy:r.top-fr.top+r.height/2, l:r.left-fr.left, r:r.right-fr.left, t:r.top-fr.top }; };
+  const A = rel($('fn-adapter')), Sy = rel($('fn-system'));
+  const hasBat = !$('batbar').classList.contains('hidden');
+  const d = S[current];
+  const crit = d.state === 'insufficient';
+  let p = '';
+  if (hasBat) {
+    const jy = A.cy, jx = fr.width/2, barTop = rel($('batbar')).t;
+    p += edge([A.r, jy], [jx, jy], d.adapterIn, { color: d.adapterIn==null?'rgba(122,145,180,0.16)':'rgba(255,255,255,0.36)' });
+    p += edge([jx, jy], [Sy.l, jy], d.system, { color:'rgba(255,255,255,0.36)' });
+    if (d.batFlow > 0)      p += edge([jx, jy], [jx, barTop], d.batFlow, { color:'rgba(101,175,82,0.75)' });
+    else if (d.batFlow < 0) p += edge([jx, barTop], [jx, jy], -d.batFlow, { color: crit?'rgba(217,72,72,0.8)':'rgba(224,180,94,0.75)' });
+    else                    p += edge([jx, jy], [jx, barTop], null, { color:'rgba(122,145,180,0.16)', dash:true });
+    p += `<circle cx="${jx}" cy="${jy}" r="2.4" fill="rgba(255,255,255,0.5)"/>`;
+  } else {
+    p += edge([A.r, A.cy], [Sy.l, Sy.cy], d.system, { color:'rgba(255,255,255,0.36)' });
+  }
+  svg.innerHTML = p;
+}
+
+function render() {
+  const d = S[current];
+  const hasBattery = d.level != null;
+  const meta = STATE_META[d.state];
+
+  /* 行头 */
+  $('bat-summary').textContent = hasBattery ? d.level + '%' : '市电';
+  $('bat-icon').textContent = d.icon;
+  const chip = $('state-chip');
+  chip.style.background = meta.bg; chip.style.color = meta.fg; chip.style.borderColor = meta.border;
+  chip.classList.add('mark');
+  chip.innerHTML = meta.text + '<span class="mk" style="top:-8px;left:-8px;">3</span>';
+  $('pill-chg').textContent = d.batFlow > 0 ? d.batFlow.toFixed(1) + 'W' : '-';
+  $('pill-chg').parentElement.style.opacity = d.batFlow > 0 ? 1 : 0.5;
+  $('pill-pwr').textContent = d.system.toFixed(1) + 'W';
+
+  /* 明细网格 */
+  $('g-temp').textContent = d.temp;
+  $('g-loss').textContent = d.loss.toFixed(1) + ' W';
+  $('g-limit').textContent = d.limit == null ? '—' : d.limit + '%';
+  $('g-lpm').textContent = current === 'battery' ? '开' : '关';
+
+  /* 适配器节点 */
+  const adapter = $('fn-adapter');
+  if (d.adapterIn == null) {
+    adapter.style.opacity = 0.4;
+    $('fa-label').textContent = '适配器';
+    $('fa-value').innerHTML = '—';
+    $('fa-bar').style.width = '0%';
+  } else {
+    adapter.style.opacity = 1;
+    $('fa-label').textContent = d.rated ? `适配器·${d.rated}W` : '适配器';
+    $('fa-value').innerHTML = fmtW(d.adapterIn);
+    const load = d.rated ? d.adapterIn / d.rated : 0;
+    const bar = $('fa-bar');
+    bar.style.width = Math.min(100, load*100) + '%';
+    bar.style.background = load > 0.92 ? 'var(--crit)' : (load > 0.75 ? 'var(--warn)' : 'rgba(255,255,255,0.55)');
+  }
+  $('fs-value').innerHTML = fmtW(d.system);
+
+  /* 电池条 */
+  $('batbar').classList.toggle('hidden', !hasBattery);
+  document.querySelector('.stub').classList.toggle('hidden', !hasBattery);
+  if (hasBattery) {
+    $('bb-fill').style.width = `calc(${d.level}% - 4px)`;
+    $('bb-pct').textContent = d.level + '%';
+    $('bb-status').textContent = meta.text;
+    $('bb-eta').textContent = d.eta;
+    const tick = $('bb-tick');
+    const showTick = d.limit != null && d.limit < 100;
+    tick.classList.toggle('hidden', !showTick);
+    if (showTick) tick.style.left = d.limit + '%';
+    const bar = $('batbar');
+    bar.style.borderColor = d.state === 'charging' ? 'rgba(101,175,82,0.45)'
+      : d.state === 'insufficient' ? 'rgba(217,72,72,0.5)' : 'transparent';
+    bar.querySelector('.fill').style.background = d.state === 'insufficient'
+      ? 'linear-gradient(90deg, rgba(217,72,72,0.45), rgba(184,135,46,0.28))'
+      : 'linear-gradient(90deg, rgba(101,175,82,0.60), rgba(101,175,82,0.28))';
+  }
+
+  /* 说明 */
+  const note = $('flow-note');
+  const N = {
+    charging: `适配器输入 ${d.adapterIn}W · 系统 ${d.system}W · 充入电池 ${d.batFlow}W · 损耗 ${d.loss}W`,
+    battery: `电池输出 ${Math.abs(d.batFlow)}W · 系统 ${d.system}W · 损耗 ${d.loss}W`,
+    ac: `已充满：适配器 ${d.adapterIn}W 直供系统 ${d.system}W，电池静置 · 损耗 ${d.loss}W`,
+    insufficient: `⚠ 适配器 ${d.adapterIn}W 已达额定 ${d.rated}W 上限，电池放电 ${Math.abs(d.batFlow)}W 补差`,
+    desktop: `无电池机型：市电 ${d.adapterIn}W → 系统 ${d.system}W · 损耗 ${d.loss}W`,
+  };
+  note.textContent = N[current];
+  note.className = 'flow-note' + (current === 'insufficient' ? ' crit' : '');
+
+  renderSparkline(d.system);
+  requestAnimationFrame(drawEdges);
+}
+
+function renderSparkline(base) {
+  let v = base * (0.7 + Math.random()*0.3), pts = [];
+  for (let i = 0; i < 30; i++) { v = Math.max(2, v + (Math.random()-0.5) * base * 0.22); pts.push(v); }
+  pts.push(base);
+  const max = Math.max(...pts) * 1.15;
+  const path = pts.map((p,i) => `${(i/(pts.length-1)*220).toFixed(1)},${(23 - p/max*20).toFixed(1)}`).join(' ');
+  $('sparkline').innerHTML = `<polyline points="${path}" fill="none" stroke="var(--tint-bat)" stroke-width="1.5" opacity="0.85"/>`;
+  $('spark-avg').textContent = 'avg ' + (pts.reduce((a,b)=>a+b,0)/pts.length).toFixed(0) + 'W';
+}
+
+/* ====== CPU 进程列表（A2）====== */
+const PROCS = [
+  { name:'Xcode', cpu:32.4 },
+  { name:'Chrome Helper (Renderer)', cpu:18.2, rosetta:true },
+  { name:'WindowServer', cpu:9.6 },
+  { name:'Photoshop 2024 (Intel)', cpu:7.1, rosetta:true },
+  { name:'Spotlight', cpu:3.8 },
+];
+$('proc-list').insertAdjacentHTML('beforeend', PROCS.map(p => `
+  <div class="proc">
+    <span class="picon">${p.name[0]}</span>
+    <span class="pname">${p.name}</span>
+    ${p.rosetta ? '<span class="badge-rosetta">ROSETTA</span>' : ''}
+    <span class="pv mono">${p.cpu.toFixed(1)}%</span>
+  </div>`).join(''));
+
+/* ====== A1 热压力（severity 配色，融入明细网格）====== */
+const TH = [
+  { t:'正常', cls:'' }, { t:'轻微', cls:'warn' }, { t:'严重', cls:'crit' }, { t:'临界', cls:'crit' },
+];
+function renderThermal(i) {
+  const v = $('thermal-val');
+  v.textContent = TH[i].t;
+  v.className = 'gv mono ' + TH[i].cls;
+  $('cpu-temp').textContent = [62, 78, 93, 101][i] + '°C';
+}
+
+/* ====== 渠道切换 ====== */
+function renderChannel(c) {
+  const direct = c === 'direct';
+  $('fan-ctl').classList.toggle('hidden', !direct);
+  $('fan-appstore-note').classList.toggle('hidden', direct);
+  $('fan-direct-badge').classList.toggle('hidden', !direct);
+  $('cpu-procs-wrap').classList.toggle('hidden', !direct); /* 沙盒版无他进程采样 */
+}
+
+/* ====== 行点击展开（复刻 CollapsibleDetail）====== */
+document.querySelectorAll('.row').forEach(r => r.addEventListener('click', e => {
+  if (e.target.closest('.fan-ctl, input, .rosetta-banner')) return;
+  r.classList.toggle('open');
+  /* 展开动画 180ms 结束后按最终尺寸重绘功率流连线 */
+  if (r.id === 'row-bat') setTimeout(() => { render(); }, 220);
+}));
+
+/* ====== 风扇模式 ====== */
+document.querySelectorAll('#fan-mode button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('#fan-mode button').forEach(x => x.classList.remove('active'));
+  b.classList.add('active');
+  $('fan-fixed').classList.toggle('hidden', b.dataset.m !== 'fixed');
+  $('fan-curve').classList.toggle('hidden', b.dataset.m !== 'curve');
+}));
+$('fan-slider').addEventListener('input', e => { $('fan-slider-val').textContent = e.target.value + ' RPM'; });
+
+/* ====== 绑定 ====== */
+function bindSeg(id, cb) {
+  document.querySelectorAll(`#${id} button`).forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    document.querySelectorAll(`#${id} button`).forEach(x => x.classList.remove('active'));
+    b.classList.add('active'); cb(b);
+  }));
+}
+bindSeg('scenario-seg', b => { current = b.dataset.s; render(); });
+bindSeg('thermal-seg', b => renderThermal(+b.dataset.t));
+bindSeg('channel-seg', b => renderChannel(b.dataset.c));
+$('mk-toggle').addEventListener('change', e => document.body.classList.toggle('show-mk', e.target.checked));
+window.addEventListener('resize', drawEdges);
+
+render();
+renderThermal(0);
+renderChannel('direct');
+</script>
+</body>
+</html>

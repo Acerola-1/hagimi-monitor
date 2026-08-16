@@ -157,7 +157,18 @@ final class MonitorSettings: ObservableObject {
         mediaKeyShowOSD = defaults.object(forKey: Keys.mediaKeyShowOSD) as? Bool ?? true
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
-            let kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
+            var kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
+            // 一次性迁移:老用户的已存储列表是风扇可开关之前写入的,不含 fan;
+            // 不补会被当成「用户已隐藏」,升级后风扇行凭空消失。
+            // 补上后立即回写存储——迁移标记只挡一次,不回写的话下次启动
+            // 会按旧列表(无 fan)加载,风扇行再次消失。
+            if !defaults.bool(forKey: Keys.fanVisibilityMigrated) {
+                if !kinds.contains(.fan) {
+                    kinds.append(.fan)
+                    defaults.set(kinds.map(\.rawValue), forKey: Keys.visibleKinds)
+                }
+                defaults.set(true, forKey: Keys.fanVisibilityMigrated)
+            }
             visibleKinds = Set(kinds)
         } else {
             visibleKinds = Set(MonitorKind.userVisibleCases)
@@ -178,6 +189,22 @@ final class MonitorSettings: ObservableObject {
                 let migrated = migrateMetrics(stored, for: kind)
                 loadedMetrics[kind] = Set(migrated)
             }
+        }
+        // 一次性迁移:migrateMetrics 对存量只做交集,后来新增的默认开指标
+        // (热压力/P-E 核/压缩内存/SMART/Wi-Fi 系列等)不在旧存量里,升级后
+        // 会被当成「用户已关」。这里把各模块默认开的指标并回存量并立即回写;
+        // 之后用户的手动开关走正常读写,不再被本迁移覆盖。
+        if !defaults.bool(forKey: Keys.metricsDefaultOnMigrated) {
+            for kind in MonitorKind.allCases where loadedMetrics[kind] != nil {
+                var merged = loadedMetrics[kind] ?? []
+                let defaultsForKind = defaultMetricIds(for: kind)
+                merged.formUnion(defaultsForKind)
+                if merged != loadedMetrics[kind] {
+                    loadedMetrics[kind] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + kind.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.metricsDefaultOnMigrated)
         }
         enabledMetrics = loadedMetrics
 
@@ -672,6 +699,10 @@ private enum Keys {
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let visibleKinds = "settings.visibleKinds"
+    /// 一次性迁移标记:风扇模块从「硬件自动门控」升级为「用户可开关」时,
+    /// 给老用户的已存储可见列表补上 fan(否则会被当作「用户已隐藏」)。
+    static let fanVisibilityMigrated = "settings.fanVisibilityMigrated"
+    static let metricsDefaultOnMigrated = "settings.metricsDefaultOnMigrated"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"

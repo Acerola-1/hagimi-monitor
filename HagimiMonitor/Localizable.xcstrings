@@ -17,12 +17,6 @@
     "HagimiMonitor": {},
     "Issue": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Issue"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -34,11 +28,23 @@
             "state": "translated",
             "value": "Issue"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issue"
+          }
         }
       }
     },
     "Releases": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Releases"
+          }
+        },
         "ja": {
           "stringUnit": {
             "state": "translated",
@@ -50,17 +56,17 @@
             "state": "translated",
             "value": "发布版本"
           }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Releases"
-          }
         }
       }
     },
     "SYSTEM · LIVE": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SYSTEM · LIVE"
+          }
+        },
         "ja": {
           "stringUnit": {
             "state": "translated",
@@ -68,12 +74,6 @@
           }
         },
         "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "SYSTEM · LIVE"
-          }
-        },
-        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "SYSTEM · LIVE"
@@ -83,12 +83,6 @@
     },
     "X / Twitter": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "X / Twitter"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -96,6 +90,12 @@
           }
         },
         "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "X / Twitter"
+          }
+        },
+        "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "X / Twitter"
@@ -706,12 +706,6 @@
     },
     "about.xiaohongshu": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "小红书"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -722,6 +716,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "小紅書"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小红书"
           }
         }
       }
@@ -2768,16 +2768,16 @@
             "value": "Take over Brightness Keys (F1/F2)"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "接管亮度键（F1/F2）"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "明るさキーを割り当て（F1/F2）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接管亮度键（F1/F2）"
           }
         }
       }
@@ -2790,16 +2790,16 @@
             "value": "Open System Settings"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打开系统设置"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "システム設定を開く"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开系统设置"
           }
         }
       }
@@ -2812,16 +2812,16 @@
             "value": "Used only to intercept brightness/volume key events. Other keystrokes are not read."
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅用于拦截亮度/音量按键事件，不会读取键盘输入或其他按键。"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "明るさ/音量キーのイベントをインターセプトするためのみに使用します。キーボード入力やその他のキーは読み取りません。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅用于拦截亮度/音量按键事件，不会读取键盘输入或其他按键。"
           }
         }
       }
@@ -2834,16 +2834,16 @@
             "value": "Accessibility"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "辅助功能权限"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "アクセシビリティ権限"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辅助功能权限"
           }
         }
       }
@@ -2856,16 +2856,16 @@
             "value": "Refresh Permission"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新权限状态"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "権限状態を更新"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新权限状态"
           }
         }
       }
@@ -2878,16 +2878,16 @@
             "value": "Media Key Takeover"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "媒体键接管"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "メディアキー割り当て"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "媒体键接管"
           }
         }
       }
@@ -2900,16 +2900,16 @@
             "value": "Show Native OSD"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "显示原生 OSD 提示"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "ネイティブ OSD を表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示原生 OSD 提示"
           }
         }
       }
@@ -2923,16 +2923,16 @@
             "value": "Authorized"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已授权"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "許可済み"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已授权"
           }
         }
       }
@@ -2946,16 +2946,16 @@
             "value": "Not Authorized"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未授权"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "未許可"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未授权"
           }
         }
       }
@@ -2968,16 +2968,16 @@
             "value": "Take over Volume Keys (F10/F11/F12)"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "接管音量键（F10/F11/F12）"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "音量キーを割り当て（F10/F11/F12）"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接管音量键（F10/F11/F12）"
           }
         }
       }
@@ -3318,13 +3318,8 @@
       }
     },
     "menu-bar-metric-prefix.battery-level": {
+      "extractionState": "manual",
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电池"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -3336,18 +3331,18 @@
             "state": "translated",
             "value": "バッテリ"
           }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "menu-bar-metric-prefix.cpu-temperature": {
-      "localizations": {
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "温度"
+            "value": "电池"
           }
-        },
+        }
+      }
+    },
+    "menu-bar-metric-prefix.cpu-temperature": {
+      "extractionState": "manual",
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -3359,18 +3354,18 @@
             "state": "translated",
             "value": "温度"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温度"
+          }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "menu-bar-metric-prefix.cpu-usage": {
+      "extractionState": "manual",
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -3382,18 +3377,18 @@
             "state": "translated",
             "value": "CPU"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "menu-bar-metric-prefix.gpu-usage": {
+      "extractionState": "manual",
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -3405,18 +3400,18 @@
             "state": "translated",
             "value": "GPU"
           }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "menu-bar-metric-prefix.memory-usage": {
-      "localizations": {
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "内存"
+            "value": "GPU"
           }
-        },
+        }
+      }
+    },
+    "menu-bar-metric-prefix.memory-usage": {
+      "extractionState": "manual",
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -3428,18 +3423,18 @@
             "state": "translated",
             "value": "メモリ"
           }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "menu-bar-metric-prefix.storage-free": {
-      "localizations": {
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "可用"
+            "value": "内存"
           }
-        },
+        }
+      }
+    },
+    "menu-bar-metric-prefix.storage-free": {
+      "extractionState": "manual",
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -3451,18 +3446,18 @@
             "state": "translated",
             "value": "空き"
           }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "menu-bar-metric-prefix.system-power": {
-      "localizations": {
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "功耗"
+            "value": "可用"
           }
-        },
+        }
+      }
+    },
+    "menu-bar-metric-prefix.system-power": {
+      "extractionState": "manual",
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -3474,22 +3469,27 @@
             "state": "translated",
             "value": "消費電力"
           }
-        }
-      },
-      "extractionState": "manual"
-    },
-    "menu-bar-metric-prefix.fan-speed": {
-      "localizations": {
+        },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "风扇"
+            "value": "功耗"
           }
-        },
+        }
+      }
+    },
+    "menu-bar-metric-prefix.fan-speed": {
+      "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
             "value": "FAN"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风扇"
           }
         }
       }
@@ -4850,12 +4850,6 @@
     },
     "panel.pin": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "钉住面板"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -4866,6 +4860,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "パネルをピン留め"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钉住面板"
           }
         }
       }
@@ -5092,12 +5092,6 @@
     },
     "panel.unpin": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消钉住"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -5108,6 +5102,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ピン留めを解除"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消钉住"
           }
         }
       }
@@ -5779,13 +5779,8 @@
       }
     },
     "ring-source.cpu": {
+      "extractionState": "manual",
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -5797,18 +5792,18 @@
             "state": "translated",
             "value": "CPU"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "ring-source.gpu": {
+      "extractionState": "manual",
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -5820,9 +5815,14 @@
             "state": "translated",
             "value": "GPU"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "ring-source.memory": {
       "localizations": {
@@ -5847,13 +5847,8 @@
       }
     },
     "sampler.unavailable": {
+      "extractionState": "manual",
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "无法读取"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -5865,9 +5860,14 @@
             "state": "translated",
             "value": "読み取れません"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取"
+          }
         }
-      },
-      "extractionState": "manual"
+      }
     },
     "settings.appearance": {
       "localizations": {
@@ -6357,12 +6357,6 @@
     },
     "settings.quick-access": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "快速呼出"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -6374,17 +6368,17 @@
             "state": "translated",
             "value": "クイックアクセス"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速呼出"
+          }
         }
       }
     },
     "settings.quick-access.clear": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清除快捷键"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -6396,17 +6390,17 @@
             "state": "translated",
             "value": "ショートカットをクリア"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除快捷键"
+          }
         }
       }
     },
     "settings.quick-access.press-key": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按下按键"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -6418,17 +6412,17 @@
             "state": "translated",
             "value": "キーを押す"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下按键"
+          }
         }
       }
     },
     "settings.quick-access.record": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "点按录制"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -6440,17 +6434,17 @@
             "state": "translated",
             "value": "クリックして録音"
           }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点按录制"
+          }
         }
       }
     },
     "settings.quick-access.recording": {
       "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "按下快捷键…"
-          }
-        },
         "en": {
           "stringUnit": {
             "state": "translated",
@@ -6461,6 +6455,12 @@
           "stringUnit": {
             "state": "translated",
             "value": "ショートカットキーを押す…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按下快捷键…"
           }
         }
       }
@@ -6693,16 +6693,16 @@
             "value": "Beta"
           }
         },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beta"
-          }
-        },
         "ja": {
           "stringUnit": {
             "state": "translated",
             "value": "ベータ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Beta"
           }
         }
       }
@@ -7848,6 +7848,12 @@
     },
     "© 2026 Acerola": {
       "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "© 2026 Acerola"
+          }
+        },
         "ja": {
           "stringUnit": {
             "state": "translated",
@@ -7855,12 +7861,6 @@
           }
         },
         "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "© 2026 Acerola"
-          }
-        },
-        "en": {
           "stringUnit": {
             "state": "translated",
             "value": "© 2026 Acerola"
@@ -8156,6 +8156,668 @@
           "stringUnit": {
             "state": "translated",
             "value": "风扇转速已恢复正常。最大转速：%lld RPM"
+          }
+        }
+      }
+    },
+    "battery-state.insufficient": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adapter Insufficient"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "アダプター不足"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适配器不足"
+          }
+        }
+      }
+    },
+    "metric-value.off": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オフ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关"
+          }
+        }
+      }
+    },
+    "metric-value.on": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "オン"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开"
+          }
+        }
+      }
+    },
+    "metric.battery.power-loss": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Conversion Loss"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "変換損失"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转换损耗"
+          }
+        }
+      }
+    },
+    "metric.cpu.core-split": {
+      "comment": "CPU 明细网格单一指标;值为「82% / 35%」(P 在前 E 在后)。",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P/E Cores"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P/E コア"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P/E 核"
+          }
+        }
+      },
+      "title": []
+    },
+    "metric.cpu.thermal-pressure": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thermal Pressure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "熱圧力"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "热压力"
+          }
+        }
+      }
+    },
+    "metric.display.brightness": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brightness"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明るさ"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮度"
+          }
+        }
+      }
+    },
+    "metric.display.ddc-available": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ Available"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 利用可"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "✓ 可用"
+          }
+        }
+      }
+    },
+    "metric.display.refresh-rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh Rate"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "リフレッシュレート"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新率"
+          }
+        }
+      }
+    },
+    "metric.display.resolution": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resolution"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解像度"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分辨率"
+          }
+        }
+      }
+    },
+    "metric.memory.compressed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compressed"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "圧縮"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "压缩"
+          }
+        }
+      }
+    },
+    "metric.network.gateway-latency": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gateway Latency"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ゲートウェイ遅延"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网关延迟"
+          }
+        }
+      }
+    },
+    "metric.network.wifi-rssi": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi Signal"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi 信号"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi 信号"
+          }
+        }
+      }
+    },
+    "metric.network.wifi-ssid": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSID"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSID"
+          }
+        }
+      }
+    },
+    "metric.storage.smart": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康"
+          }
+        }
+      }
+    },
+    "panel.battery.low-power-on": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low Power Mode is on"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低電力モードがオンです"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "低电量模式已开启"
+          }
+        }
+      }
+    },
+    "panel.displays.note": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Info display works on both builds; brightness/volume control remains Direct-only."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "情報表示は両チャネル共通；明るさ／音量操作は Direct 版限定。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信息展示两渠道通用；亮度/音量控制仍为 Direct 独有。"
+          }
+        }
+      }
+    },
+    "panel.displays.summary": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld displays · %lld external"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 台 · 外部 %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 台 · 外接 %lld"
+          }
+        }
+      }
+    },
+    "panel.power-flow.direct-supply": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Direct Supply"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直接給電中"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直供中"
+          }
+        }
+      }
+    },
+    "panel.power-flow.note.insufficient": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠ Adapter under-powered · battery supplying %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠ アダプター電力不足 · バッテリーが %@ を補填"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "⚠ 适配器供电不足，电池放电 %@ 补差"
+          }
+        }
+      }
+    },
+    "panel.power-flow.sparkline-avg": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avg %@"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均 %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均 %@"
+          }
+        }
+      }
+    },
+    "panel.power-flow.sparkline-caption": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60s Power Draw"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60秒消費電力"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60s 功耗"
+          }
+        }
+      }
+    },
+    "panel.processes.rosetta-banner": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld app(s) running via Rosetta translation. Intel apps won't run on macOS 28 — consider native versions."
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rosetta 経由で実行中のアプリが %lld 個あります。macOS 28 では Intel アプリは実行できません。ネイティブ版への移行をお勧めします。"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个应用正通过 Rosetta 转译运行。macOS 28 起 Intel 应用将无法运行，建议寻找原生版本。"
+          }
+        }
+      }
+    },
+    "storage-smart.failing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failing"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "異常"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "异常"
+          }
+        }
+      }
+    },
+    "storage-smart.verified": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        }
+      }
+    },
+    "thermal-pressure.critical": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Critical"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "臨界"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "临界"
+          }
+        }
+      }
+    },
+    "thermal-pressure.fair": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fair"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "やや高い"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "轻微"
+          }
+        }
+      }
+    },
+    "thermal-pressure.normal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        }
+      }
+    },
+    "thermal-pressure.serious": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Serious"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深刻"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "严重"
+          }
+        }
+      }
+    },
+    "metric.display.color-depth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bit Depth"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ビット深度"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "位深"
           }
         }
       }
