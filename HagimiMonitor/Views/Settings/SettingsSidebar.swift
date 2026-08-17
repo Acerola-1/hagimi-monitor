@@ -25,9 +25,16 @@ struct SettingsSidebar: View {
             }
 
             Section {
+                // 蓝牙入口无条件显示:「无连接设备/蓝牙关闭」是瞬态,拿它门控
+                // 常驻设置项会让用户误以为功能消失(与风扇的硬件级门控不同)。
                 ForEach(MonitorKind.userVisibleCases.filter { $0 != .fan || fanAvailable }) { kind in
-                    Label(kind.title, systemImage: kind.symbol)
-                        .tag(SettingsRoute.module(kind))
+                    // 自绘图标(蓝牙符文)与 SF Symbols 共用同一 Label 形态。
+                    Label {
+                        Text(kind.title)
+                    } icon: {
+                        kind.symbolImage
+                    }
+                    .tag(SettingsRoute.module(kind))
                 }
 
                 HStack(spacing: 6) {

@@ -818,6 +818,28 @@
         }
       }
     },
+    "bluetooth.summary.count %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld devices"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld台のデバイス"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 台设备"
+          }
+        }
+      }
+    },
     "cat-cameo.thanks.body": {
       "localizations": {
         "en": {
@@ -2608,6 +2630,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "电源"
+          }
+        }
+      }
+    },
+    "kind.bluetooth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "蓝牙"
           }
         }
       }

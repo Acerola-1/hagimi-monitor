@@ -58,12 +58,21 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     case storage
     case network
     case battery
+    /// 蓝牙设备电量:独立于 SystemMonitorSampler,数据由 BluetoothBatterySampler 注入,
+    /// 仅蓝牙开启且有已连接设备时存在。声明在 battery 之后,面板中落在电源行与
+    /// 显示器区之间;可见性与其余模块一致走用户开关。
+    case bluetooth
 
     var id: String { rawValue }
 
     /// 用户可开关的模块全集(含风扇)。无风扇机型由 SettingsSidebar 按
     /// fanAvailable 过滤掉风扇入口,不出现无效开关。
     static let userVisibleCases: [MonitorKind] = allCases
+
+    /// SystemMonitorSampler 管线驱动的模块全集。风扇/蓝牙的输出是「设备列表」
+    /// 而非「单模块值」,由各自独立采样器产出、MonitorStore 合成注入,不进采样
+    /// 排期——排期会令无注册采样器的类目每秒空转报错。
+    static let samplerBackedCases: [MonitorKind] = [.cpu, .gpu, .memory, .storage, .network, .battery]
 
     var title: String {
         switch self {
@@ -81,6 +90,8 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             String(localized: "kind.battery")
         case .fan:
             String(localized: "kind.fan")
+        case .bluetooth:
+            String(localized: "kind.bluetooth")
         }
     }
 
@@ -100,7 +111,20 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             "powerplug"
         case .fan:
             "fan.fill"
+        case .bluetooth:
+            // SF Symbols 无蓝牙符号(Apple 因商标原因不提供),symbolImage 改用
+            // 自绘符文资产;symbol 保留耳机形仅作兜底。
+            "headphones"
         }
+    }
+
+    /// 面板/设置侧栏实际渲染的图标。蓝牙模块用自绘符文模板资产,
+    /// 其余模块用 SF Symbols。
+    var symbolImage: Image {
+        if self == .bluetooth {
+            return Image("BluetoothGlyph")
+        }
+        return Image(systemName: symbol)
     }
 
     var availableMetrics: [MetricSwitch] {
@@ -166,6 +190,9 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             ]
         case .fan:
             // 风扇行无子指标开关,展开区直接显示所有风扇(由 FanList 渲染)。
+            return []
+        case .bluetooth:
+            // 蓝牙行无子指标开关,展开区直接显示已连接设备列表(由 BluetoothDeviceList 渲染)。
             return []
         }
     }
@@ -285,6 +312,9 @@ struct MonitorModule: Identifiable, Equatable {
     /// 多风扇读数(仅风扇模块有值)。面板展开区按此数组渲染所有风扇;
     /// 菜单栏只取 max(currentRPM)。独立于 metrics 字段,避免冲撞统一采样契约。
     var fans: [FanInfo]? = nil
+    /// 已连接蓝牙设备(仅蓝牙模块有值)。面板展开区按此数组渲染设备电量列表;
+    /// 独立于 metrics 字段,避免冲撞统一采样契约。
+    var bluetoothDevices: [BluetoothDeviceInfo]? = nil
 
     var id: MonitorKind { kind }
 
@@ -306,6 +336,14 @@ struct MonitorModule: Identifiable, Equatable {
             return .calm
         case .fan:
             // 风扇无严重度概念(没有"过载"阈值);永远 calm,避免误报警。
+            return .calm
+        case .bluetooth:
+            // 取上报电量设备中的最低值着色(阈值复用电池口径);全部未上报
+            // 电量时 value=0 但无低电语义,判 calm 不误报。
+            let levels = (bluetoothDevices ?? []).compactMap(\.batteryLevel)
+            guard let lowest = levels.min() else { return .calm }
+            if Double(lowest) <= MonitorConstants.batteryCriticalThreshold { return .critical }
+            if Double(lowest) <= MonitorConstants.batteryWarningThreshold { return .warning }
             return .calm
         }
     }
@@ -383,6 +421,13 @@ final class MonitorStore: ObservableObject {
     /// 目标机型是否有风扇(由 FNum 启动时一次性检测决定)。
     /// UI 用此值决定:面板是否插入风扇行、设置选单是否显示风扇选项。
     var fanAvailable: Bool { fanSampler.available }
+    /// 蓝牙采样器(独立于 SystemMonitorSampler:数据源是 system_profiler 探针,
+    /// 输出是「设备列表」而非「单模块值」)。
+    private let bluetoothSampler = BluetoothBatterySampler()
+    /// 当前已连接蓝牙设备。由 bluetoothSampler.$devices Combine sink 同步更新。
+    @Published private(set) var bluetoothDevices: [BluetoothDeviceInfo] = []
+    /// 蓝牙控制器是否开启。由 bluetoothSampler.$controllerOn sink 同步更新。
+    @Published private(set) var bluetoothControllerOn = false
 
     init() {
         let settings = MonitorSettings()
@@ -390,8 +435,8 @@ final class MonitorStore: ObservableObject {
         self.settings = settings
         allModules = initialModules
         modules = initialModules.filter { settings.isVisible($0.kind) }
-        advance(kinds: MonitorKind.allCases)
-        refreshSchedule.markRefreshed(MonitorKind.allCases, at: Date())
+        advance(kinds: MonitorKind.samplerBackedCases)
+        refreshSchedule.markRefreshed(MonitorKind.samplerBackedCases, at: Date())
         settings.objectWillChange
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
@@ -466,6 +511,23 @@ final class MonitorStore: ObservableObject {
         // SMC 读取(FNum/F0Ac)极轻量(单次 IOConnectCall),2s 周期对功耗无感。
         fanSampler.start()
         FanAlertService.shared.attach(to: fanSampler)
+
+        // 蓝牙设备电量:探针 30s 轮询(高成本源缓存纪律),后台执行不占主线程。
+        bluetoothSampler.$devices
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] newDevices in
+                self?.bluetoothDevices = newDevices
+            }
+            .store(in: &cancellables)
+
+        bluetoothSampler.$controllerOn
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] isOn in
+                self?.bluetoothControllerOn = isOn
+            }
+            .store(in: &cancellables)
+
+        bluetoothSampler.start()
     }
 
     /// 面板出现时调用（菜单栏面板便捷封装）。
@@ -906,6 +968,8 @@ final class MonitorStore: ObservableObject {
         // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
         // 把它的输出合成成 MonitorModule.fan 填入 allModules。
         applyFanModule()
+        // 注入蓝牙模块:仅在蓝牙开启且有已连接设备时插入,位置固定在电池之后。
+        applyBluetoothModule()
         let newVisibleModules = visibleModules(from: allModules)
         if modules != newVisibleModules {
             modules = newVisibleModules
@@ -953,6 +1017,36 @@ final class MonitorStore: ObservableObject {
             allModules.insert(fanModule, at: min(insertIdx, allModules.endIndex))
         } else {
             allModules.append(fanModule)
+        }
+    }
+
+    /// 把 BluetoothBatterySampler 的输出合成成 .bluetooth MonitorModule,插入到
+    /// allModules 的电池之后(面板中落在电源行与显示器区之间):
+    /// - 蓝牙关闭:不插入模块,面板行消失
+    /// - 蓝牙开启即常驻(无连接设备时显示 0 台,与风扇「无硬件才隐藏」的
+    ///   门控不同:蓝牙开关是瞬态,隐藏会让用户误以为功能消失)
+    /// - summary = 设备数,value = 上报电量设备中的最低值(均未上报时为 0,
+    ///   severity 已对无电量情形判 calm 不误报)
+    private func applyBluetoothModule() {
+        allModules.removeAll { $0.kind == .bluetooth }
+        guard bluetoothControllerOn else { return }
+
+        let lowestLevel = bluetoothDevices.compactMap(\.batteryLevel).min()
+        let summary = String(localized: "bluetooth.summary.count \(bluetoothDevices.count)")
+
+        var bluetoothModule = MonitorModule(
+            kind: .bluetooth,
+            value: Double(lowestLevel ?? 0),
+            summary: summary,
+            metrics: [],
+            samples: []
+        )
+        bluetoothModule.bluetoothDevices = bluetoothDevices
+
+        if let batteryIdx = allModules.firstIndex(where: { $0.kind == .battery }) {
+            allModules.insert(bluetoothModule, at: batteryIdx + 1)
+        } else {
+            allModules.append(bluetoothModule)
         }
     }
 
@@ -1117,7 +1211,8 @@ final class MonitorRefreshSchedule {
     }
 
     func dueKinds(at date: Date) -> [MonitorKind] {
-        let dueKinds = MonitorKind.allCases.filter { kind in
+        // 只对采样管线类目排期:风扇/蓝牙由独立采样器驱动(见 samplerBackedCases)。
+        let dueKinds = MonitorKind.samplerBackedCases.filter { kind in
             let interval = intervals[kind] ?? tickInterval
             guard let lastRefreshDate = lastRefreshDates[kind] else {
                 return true

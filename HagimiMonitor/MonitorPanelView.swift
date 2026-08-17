@@ -448,6 +448,15 @@ struct MonitorPanelView: View {
                 toggleExpansion(for: module.kind)
             }
             .equatable()
+        case .bluetooth:
+            BluetoothGlassRow(
+                module: module,
+                theme: theme,
+                isExpanded: expandedKinds.contains(module.kind)
+            ) {
+                toggleExpansion(for: module.kind)
+            }
+            .equatable()
         }
     }
 
@@ -743,7 +752,7 @@ private struct MetricGlassRow: View, Equatable {
         case .storage:
             ProgressMeter(value: module.value, tint: tint, theme: theme)
                 .frame(width: 56, height: 3)
-        case .network, .battery:
+        case .network, .battery, .bluetooth:
             EmptyView()
         case .fan:
             // 风扇主行右侧:有 RPM 历史则画 sparkline,否则显示当前 max RPM 数字。
@@ -2190,6 +2199,13 @@ private struct MetricCardView: View, Equatable {
                 SparklineChart(samples: module.samples, tint: tint, minValue: fanMin, maxValue: fanMax)
                     .frame(height: 36)
             }
+        case .bluetooth:
+            // 蓝牙不提供卡片样式(设置侧已门控),此处仅为穷尽分支兜底:
+            // 渲染设备数与展开区同款设备列表。
+            VStack(alignment: .leading, spacing: 12) {
+                bigValue(module.summary)
+                BluetoothDeviceList(devices: module.bluetoothDevices ?? [], theme: theme)
+            }
         }
     }
 
@@ -2258,8 +2274,8 @@ private struct MetricCardView: View, Equatable {
                 ])
             }
             return (items, 2)
-        case .gpu, .battery, .fan:
-            // 风扇大卡片无 TOP 进程小节
+        case .gpu, .battery, .fan, .bluetooth:
+            // 风扇/蓝牙大卡片无 TOP 进程小节
             return nil
         }
         #endif
@@ -2991,6 +3007,163 @@ private struct FanList: View {
         switch status {
         case .fault, .warning: theme.palette.severityTint(for: status.severity)
         case .normal, .unknown: theme.valueText
+        }
+    }
+}
+
+/// 蓝牙设备电量行:行头显示设备数与最低电量,展开区逐设备列出电量。
+/// 与 BatteryGlassRow 同款结构:手势只挂行头,展开区不拦截。
+private struct BluetoothGlassRow: View, Equatable {
+    let module: MonitorModule
+    let theme: MonitorPanelTheme
+    var isExpanded = false
+    var toggleExpansion: (() -> Void)?
+
+    static func == (lhs: BluetoothGlassRow, rhs: BluetoothGlassRow) -> Bool {
+        lhs.module == rhs.module
+            && lhs.theme.palette.preference == rhs.theme.palette.preference
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.isExpanded == rhs.isExpanded
+    }
+
+    private var tint: Color {
+        theme.moduleTint(for: module.kind)
+    }
+
+    private var devices: [BluetoothDeviceInfo] {
+        module.bluetoothDevices ?? []
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                module.kind.symbolImage
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(tint)
+                    .frame(width: 14, height: 14)
+
+                Text("\(module.kind.title):")
+                    .monitorPanelMetricLabelFont()
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+
+                Text(module.summary)
+                    .monitorPanelMonoFont(weight: .semibold)
+                    .foregroundStyle(theme.valueText)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                // 行尾不放电量数值:多设备时「最低电量」归属不明,易误读;
+                // 与显示器模块同款展开箭头,设备明细全在展开区。
+                // 无设备时无内容可展开,箭头隐藏(显占位保持行高稳定)。
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(theme.captionText)
+                    .frame(width: 18, height: 18)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                    .animation(.easeInOut(duration: MonitorConstants.panelExpansionDuration), value: isExpanded)
+                    .opacity(devices.isEmpty ? 0 : 1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                // 无设备时展开区无内容,点击不切换状态。
+                guard !devices.isEmpty else { return }
+                toggleExpansion?()
+            }
+
+            CollapsibleDetail(isExpanded: isExpanded && !devices.isEmpty) {
+                BluetoothDeviceList(devices: devices, theme: theme)
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 9)
+            }
+        }
+        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
+    }
+}
+
+/// 蓝牙展开区设备列表:类型图标 + 名称 + 电量条 + 百分比。
+/// 未上报电量的设备(厂商私有协议,系统本身收不到)只显示「已连接」,不伪造读数。
+private struct BluetoothDeviceList: View {
+    let devices: [BluetoothDeviceInfo]
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .bluetooth))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(devices) { device in
+                    deviceRow(device)
+                }
+            }
+            .padding(.leading, 28)
+        }
+    }
+
+    @ViewBuilder
+    private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: device.type.symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(theme.secondaryText)
+                .frame(width: 14)
+
+            Text(device.name)
+                .monitorPanelMetricLabelFont()
+                .foregroundStyle(theme.primaryText)
+                .lineLimit(1)
+
+            Spacer(minLength: 8)
+
+            if let level = device.batteryLevel {
+                BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
+                    .frame(width: 44, height: 4)
+                Text("\(level)%")
+                    .monitorPanelMonoFont(.callout, weight: .semibold)
+                    .foregroundStyle(batteryColor(level))
+                    .lineLimit(1)
+                    .monospacedDigit()
+                    .frame(width: 38, alignment: .trailing)
+            }
+            // 无电量设备右侧留空:列表本身即「已连接」清单,重复标注无信息量
+            //(厂商私有协议设备系统读不到电量,不伪造读数)。
+        }
+    }
+
+    /// 电量条/读数颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
+    private func batteryColor(_ level: Int) -> Color {
+        if Double(level) <= MonitorConstants.batteryCriticalThreshold {
+            return theme.palette.severityTint(for: .critical)
+        }
+        if Double(level) <= MonitorConstants.batteryWarningThreshold {
+            return theme.palette.severityTint(for: .warning)
+        }
+        return theme.palette.severityTint(for: .calm)
+    }
+}
+
+/// 设备电量条:trackFill 底槽 + 按百分比填充,只用调色板令牌。
+private struct BluetoothBatteryBar: View {
+    let level: Int
+    let tint: Color
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(theme.palette.trackFill)
+                Capsule()
+                    .fill(tint)
+                    .frame(width: geometry.size.width * CGFloat(max(0, min(100, level))) / 100)
+            }
         }
     }
 }

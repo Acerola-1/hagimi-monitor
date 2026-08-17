@@ -175,6 +175,13 @@ final class MonitorSettings: ObservableObject {
                 }
                 defaults.set(true, forKey: Keys.fanVisibilityMigrated)
             }
+            if !defaults.bool(forKey: Keys.bluetoothVisibilityMigrated) {
+                if !kinds.contains(.bluetooth) {
+                    kinds.append(.bluetooth)
+                    defaults.set(kinds.map(\.rawValue), forKey: Keys.visibleKinds)
+                }
+                defaults.set(true, forKey: Keys.bluetoothVisibilityMigrated)
+            }
             visibleKinds = Set(kinds)
         } else {
             visibleKinds = Set(MonitorKind.userVisibleCases)
@@ -379,6 +386,9 @@ final class MonitorSettings: ObservableObject {
                 ]
             case .fan:
                 // 风扇行无子指标,展开区由 FanList 直接渲染;此处无需迁移映射。
+                return [:]
+            case .bluetooth:
+                // 蓝牙行无子指标,展开区由 BluetoothDeviceList 直接渲染;此处无需迁移映射。
                 return [:]
             }
         }()
@@ -708,6 +718,9 @@ private enum Keys {
     /// 一次性迁移标记:风扇模块从「硬件自动门控」升级为「用户可开关」时,
     /// 给老用户的已存储可见列表补上 fan(否则会被当作「用户已隐藏」)。
     static let fanVisibilityMigrated = "settings.fanVisibilityMigrated"
+    /// 一次性迁移标记:蓝牙模块新增时,给老用户的已存储可见列表补上 bluetooth,
+    /// 语义同 fanVisibilityMigrated。
+    static let bluetoothVisibilityMigrated = "settings.bluetoothVisibilityMigrated"
     static let metricsDefaultOnMigrated = "settings.metricsDefaultOnMigrated"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"

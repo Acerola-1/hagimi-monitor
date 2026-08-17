@@ -8,5 +8,7 @@
 	<string>fHL1MyFa8DDLwsRN84Nc2tTCsg/F0o/rVWZthczL+jA=</string>
 	<key>SUEnableInstallerLauncherService</key>
 	<true/>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>HagimiMonitor uses Bluetooth to read battery levels of connected accessories.</string>
 </dict>
 </plist>
