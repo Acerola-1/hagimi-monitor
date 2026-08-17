@@ -1626,15 +1626,8 @@ private struct PowerFlowDiagram: View {
             strokeSegment(&context, from: stubEnd, to: junction,
                           color: color, width: edgeWidth(batteryMagnitude))
         case .idle:
-            if isInsufficient {
-                // 插电但电池放电补差:stub 按放电方向着色,与状态芯片/说明行呼应。
-                strokeSegment(&context, from: stubEnd, to: junction,
-                              color: theme.palette.severityTint(for: .critical).opacity(0.8),
-                              width: edgeWidth(batteryMagnitude))
-            } else {
-                strokeSegment(&context, from: junction, to: stubEnd,
-                              color: faintEdge, width: 1.2, dashed: true)
-            }
+            strokeSegment(&context, from: junction, to: stubEnd,
+                          color: faintEdge, width: 1.2, dashed: true)
         }
 
         // 汇流点圆点。
@@ -1791,17 +1784,20 @@ private struct PowerFlowDiagram: View {
         switch status {
         case "charging": return localizedBatteryState("charging")
         case "on-battery": return localizedBatteryState("on-battery")
-        default:
+        case "maintain":
+            // 适配器不足是 maintain 的告警子态(输入顶到额定仍放电补差),优先展示。
             return isInsufficient
                 ? String(localized: "battery-state.insufficient")
-                : localizedBatteryState("ac-power")
+                : localizedBatteryState("maintain")
+        default:
+            return localizedBatteryState("ac-power")
         }
     }
 
     private var barEtaText: String? {
         if let eta = etaText { return eta }
-        // 插电且无 ETA(已充满/达充电限制):展示「直供」状态语,条内信息不断档。
-        if connected && !isCharging {
+        // 真直供且无 ETA(已充满/达充电限制):展示「直供」状态语,条内信息不断档。
+        if status == "ac-power" {
             return String(localized: "panel.power-flow.direct-supply")
         }
         return nil
@@ -1864,7 +1860,7 @@ private struct PowerFlowDiagram: View {
     }
 
     private var connected: Bool {
-        status == "charging" || status == "ac-power"
+        status == "charging" || status == "ac-power" || status == "maintain"
     }
 
     private var systemWatts: Double? {
@@ -1875,36 +1871,40 @@ private struct PowerFlowDiagram: View {
         numericValue("power-in")
     }
 
-    /// 电池流向方向。**只依据 IOPS 的充电/连接状态判定,不看 BatteryPower 符号**——
-    /// 后者符号在不同机型/系统上不一致(实测 macOS 27 放电时为负),会把放电误判成充电。
-    /// status 由 BatterySampler 依据 kIOPSIsChargingKey / kIOPSPowerSourceStateKey 产出,可靠。
+    /// 电池流向方向,只依据 IOPS 的充电/连接状态判定(status 由 BatterySampler
+    /// 依据 kIOPSIsChargingKey / kIOPSPowerSourceStateKey 产出):BatteryPower 的
+    /// 符号约定随机型/系统版本不同,不作为方向依据。
     private enum FlowDirection { case charging, discharging, idle }
 
     private var flowDirection: FlowDirection {
         switch status {
         case "charging": return .charging
-        case "on-battery": return .discharging
+        case "on-battery", "maintain": return .discharging
         default: return .idle // ac-power:插电且不充电(如满电)
         }
     }
 
     private var isCharging: Bool { flowDirection == .charging }
 
-    /// 适配器不足:插电却伴随电池放电补差(如小功率适配器带高负载)。
-    /// 与行头状态芯片同一判定口径。
+    /// 适配器不足:电池放电补差,且适配器输入已逼近额定瓦数(弱适配器带高负载)。
+    /// 充电上限维持等策略性放电同样伴随电池放电,但其输入接近零(系统主动
+    /// 断输入),与真正的适配器供电不足区分。
     private var isInsufficient: Bool {
-        connected && (numericValue("battery-flow") ?? 0) < -0.05
+        guard connected, (numericValue("battery-flow") ?? 0) < -0.05,
+              let powerIn = powerInWatts, let rated = numericValue("adapter"), rated > 0 else {
+            return false
+        }
+        return powerIn / rated > 0.85
     }
 
-    /// 电池流向功率幅度(恒非负)。放电时若遥测尚未刷新(拔电瞬间为 0),用系统负载兜底
-    /// ——脱离适配器后系统功耗必然全部由电池提供,不可能为 0。
-    /// idle 态仅在适配器不足(插电放电)时有流动。
+    /// 电池流向功率幅度(恒非负)。放电时若遥测尚未刷新(拔电瞬间为 0),用系统
+    /// 负载兜底——脱离适配器后系统功耗全部由电池提供。idle 态电池静止。
     private var batteryMagnitude: Double {
         let flow = abs(numericValue("battery-flow") ?? 0)
         switch flowDirection {
         case .discharging: return flow >= 0.05 ? flow : (systemWatts ?? 0)
         case .charging: return flow
-        case .idle: return isInsufficient ? flow : 0
+        case .idle: return 0
         }
     }
 

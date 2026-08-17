@@ -8182,6 +8182,28 @@
         }
       }
     },
+    "battery-state.maintain": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AC · Battery"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AC接続・バッテリー駆動"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插电 · 电池放电"
+          }
+        }
+      }
+    },
     "metric-value.off": {
       "localizations": {
         "en": {
