@@ -3,40 +3,22 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.2.0</title>
-            <pubDate>Sun, 16 Aug 2026 15:45:21 +0000</pubDate>
-            <sparkle:version>73</sparkle:version>
-            <sparkle:shortVersionString>1.2.0</sparkle:shortVersionString>
+            <title>1.2.1</title>
+            <pubDate>Mon, 17 Aug 2026 08:22:38 +0000</pubDate>
+            <sparkle:version>74</sparkle:version>
+            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-## App Store 版
-
-### 新功能
-
-- 新增热压力、P/E 核、压缩内存、SMART 硬盘健康、Wi-Fi 信号、显示器信息等监控模块，系统状态覆盖更全面
-- 电源功率流重新设计：充电、放电、直供状态与电池损耗一目了然
-
 ### 优化与体验
 
-- 明细网格全面改版：逐格内衬色块 + 数值加粗，关键数字一眼可读
-- Wi-Fi 信号强度与网关延迟改为整行显示，信息层级更清晰
-- 显示器信息默认展示，可在设置中自由开关
-- 面板展开收起动画期间刷新与资源回收优化，操作更流畅
-
-## GitHub 版
-
-包含 App Store 版全部更新，另针对无沙盒环境提供增强能力：
-
-### 优化与体验
-
-- 优化显示器模块能力，面板补充更多显示器信息（亮度、音量控制与信息展示一体）
+- 优化了电源模块的 UI 效果
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.2.0/HagimiMonitor-v1.2.0.zip" length="3786244" type="application/octet-stream" sparkle:edSignature="L6w/HMrfNxMnS7ajsPRDQa6fNKcAlFUu2Xq23EkRy8PznirgDkwO5bgRDPYWpn8ORSy1a2VMQQ//0lb2aTUBAw=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.2.1/HagimiMonitor-v1.2.1.zip" length="3792839" type="application/octet-stream" sparkle:edSignature="OCEYA2uXFMWweprZIF5P+lOeRr/rx/2ECCzhbIhfMWGZgFydsJd7uqXTBSzvXrPF003bYkNORVmaEk0RM+TVDg=="/>
         </item>
     </channel>
 </rss>
