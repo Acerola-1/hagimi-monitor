@@ -136,7 +136,7 @@ struct MonitorPalette {
         case .network:
             Color(hex: 0x43A6A0)
         case .battery:
-            Color(hex: 0x65AF52)
+            Color(hex: 0x55BC6F)
         case .fan:
             // 风扇色与系统色温呼应:蓝青系,弱化视觉权重,避免与 CPU/内存(暖色)抢眼。
             Color(hex: 0x5BB0C2)
@@ -156,7 +156,7 @@ struct MonitorPalette {
         case .network:
             Color(hex: 0x009D9A)
         case .battery:
-            Color(hex: 0x198038)
+            Color(hex: 0x2AB55E)
         case .fan:
             Color(hex: 0x6366F1)
         }

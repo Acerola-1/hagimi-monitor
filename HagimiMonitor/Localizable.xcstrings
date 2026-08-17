@@ -8182,6 +8182,28 @@
         }
       }
     },
+    "battery-state.maintain": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AC · Battery"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AC接続・バッテリー駆動"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插电 · 电池放电"
+          }
+        }
+      }
+    },
     "metric-value.off": {
       "localizations": {
         "en": {
@@ -8576,50 +8598,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "⚠ 适配器供电不足，电池放电 %@ 补差"
-          }
-        }
-      }
-    },
-    "panel.power-flow.sparkline-avg": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "avg %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均 %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均 %@"
-          }
-        }
-      }
-    },
-    "panel.power-flow.sparkline-caption": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "60s Power Draw"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "60秒消費電力"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "60s 功耗"
           }
         }
       }

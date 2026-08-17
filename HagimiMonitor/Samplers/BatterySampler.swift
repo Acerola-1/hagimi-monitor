@@ -10,6 +10,10 @@ final class BatterySampler: MonitorSampler {
     private var powerTelemetryService: io_service_t = IO_OBJECT_NULL
     private var didSearchPowerTelemetryService = false
 
+    // 充电上限兜底探针:IORegistry 无 ChargeLimit 键的系统版本(macOS 27 实测)
+    // 改读 pmset,结果缓存 60s。
+    private let chargeLimitProbe = ChargeLimitProbe()
+
     // 健康度平滑状态:健康度真实变化以天/周为尺度,充放电时的抖动纯属测量噪声。
     // 系统设置显示的是 powerd 低通滤波后的值,这里用 EMA + 整数迟滞复刻其稳定性。
     private var smoothedHealthRatio: Double?   // 平滑后的 maxCapacity/designCapacity
@@ -47,7 +51,35 @@ final class BatterySampler: MonitorSampler {
 
         // 功率流:适配器实际输入、电池流向(正=充电/负=放电)。
         let powerIn = connected ? smart.powerInWatts : nil
-        let batteryFlow = smart.batteryFlowWatts
+        // 电池流向的方向只由 IOPS 状态决定,幅度取 |BatteryPower|(该字段的符号
+        // 约定随机型/系统版本不同,本机实测充电为正值)。插电未充电时固件常停报
+        // 遥测(充电上限维持期 BatteryPower 恒 0),此时按功率守恒用
+        // 「系统负载 − 适配器输入」估算放电量。
+        let batteryFlow: Double? = {
+            if isCharging {
+                return smart.batteryMagnitudeWatts
+            }
+            if !connected {
+                if let magnitude = smart.batteryMagnitudeWatts {
+                    return -magnitude
+                }
+                return systemPower.map { -$0 }
+            }
+            if let magnitude = smart.batteryMagnitudeWatts {
+                return -magnitude
+            }
+            guard let powerIn, let systemPower, powerIn < systemPower - 1 else { return nil }
+            return -(systemPower - powerIn)
+        }()
+
+        let statusValue: String = if isCharging {
+            "charging"
+        } else if connected {
+            // maintain:插电未充电但电池实际在放电(如充电上限维持期),与真直供区分。
+            (batteryFlow ?? 0) < -0.05 ? "maintain" : "ac-power"
+        } else {
+            "on-battery"
+        }
         // 剩余时间(分钟):充电中取充满耗时,电池供电取可用时长;-1 表示系统仍在估算。
         let timeRemaining: Int? = {
             if isCharging {
@@ -59,12 +91,13 @@ final class BatterySampler: MonitorSampler {
             return nil
         }()
 
-        // 转换损耗(W):适配器输入 − 系统负载 − |电池流向|。仅插电时可算
-        // (电池供电时输入侧不可测);遥测瞬时不同步可能出负值,钳至 0。
+        // 转换损耗(W):适配器输入 − 系统负载 − |电池流向|。仅插电时可算;
+        // 差值为负说明遥测失衡(典型为电池正在补差),显示"--"。
         let powerLoss: Double? = {
             guard connected, let powerIn, let systemPower else { return nil }
             let flow = batteryFlow.map(abs) ?? 0
-            return max(0, powerIn - systemPower - flow)
+            let loss = powerIn - systemPower - flow
+            return loss >= 0 ? loss : nil
         }()
 
         return MonitorModule(
@@ -73,7 +106,7 @@ final class BatterySampler: MonitorSampler {
             summary: percent(percentage),
             metrics: [
                 MonitorMetric(name: "type", value: "battery"),
-                MonitorMetric(name: "status", value: isCharging ? "charging" : (connected ? "ac-power" : "on-battery")),
+                MonitorMetric(name: "status", value: statusValue),
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
                 MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", unit: connected ? " W" : nil),
                 MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower, unit: " W"),
@@ -184,11 +217,11 @@ final class BatterySampler: MonitorSampler {
         let chargingPowerWatts = chargingPowerWatts(service, isCharging: isCharging)
         let telemetryChargingWatts = telemetryChargingWatts(service, isCharging: isCharging)
         let powerInWatts = powerInWatts(service)
-        let batteryFlowWatts = batteryFlowWatts(service)
-        // 充电限制(%):macOS 系统设置的电池充电上限。尽力读取——键名/层级随系统
-        // 版本可能变化(27 起 BatteryData 布局已迁移过一次),lookup 已含子树合并兜底,
-        // 读不到时 UI 显示"--",不影响其余指标。
-        let chargeLimit = lookupInt("ChargeLimit")
+        let batteryMagnitudeWatts = batteryMagnitudeWatts(service)
+        // 充电限制(%):macOS 26.4+ 支持 80/85/90/95/100 五档自选,优化电池充电
+        // 也可能随时暂停充电。优先读 IORegistry 的 ChargeLimit 键;键缺失的
+        // 系统版本(macOS 27 实测)回退 pmset 探针。
+        let chargeLimit = lookupInt("ChargeLimit") ?? chargeLimitProbe.limit()
         let temperature = lookupDouble("Temperature").map { $0 / 100 }
         let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
             min(100, max(0, maxCapacity / designCapacity * 100))
@@ -211,7 +244,7 @@ final class BatterySampler: MonitorSampler {
             temperatureCelsius: temperature,
             telemetryChargingWatts: telemetryChargingWatts,
             powerInWatts: powerInWatts,
-            batteryFlowWatts: batteryFlowWatts,
+            batteryMagnitudeWatts: batteryMagnitudeWatts,
             chargeLimit: chargeLimit
         )
     }
@@ -279,15 +312,15 @@ final class BatterySampler: MonitorSampler {
         return powerIn / 1_000
     }
 
-    /// 电池流向功率(W,带符号):固件口径 BatteryPower 负值为充电,
-    /// 对外统一翻转为「正=充入电池,负=电池放电」,与功率流图的箭头方向一致。
-    private func batteryFlowWatts(_ service: io_service_t) -> Double? {
+    /// 电池流向功率幅度(W,恒非负):|PowerTelemetryData.BatteryPower|。
+    /// 方向由采样主流程依据 IOPS 状态赋予,这里只给大小。
+    private func batteryMagnitudeWatts(_ service: io_service_t) -> Double? {
         guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
               let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 else {
             return nil
         }
-        return -bp / 1_000
+        return abs(bp) / 1_000
     }
 
     private func powerTelemetryWatts() -> Double? {
@@ -418,6 +451,6 @@ private struct SmartBatteryInfo {
     var temperatureCelsius: Double?
     var telemetryChargingWatts: Double?
     var powerInWatts: Double?
-    var batteryFlowWatts: Double?
+    var batteryMagnitudeWatts: Double?
     var chargeLimit: Int?
 }

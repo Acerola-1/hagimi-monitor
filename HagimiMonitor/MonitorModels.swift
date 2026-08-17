@@ -282,9 +282,6 @@ struct MonitorModule: Identifiable, Equatable {
     var pressureValue: Double? = nil
     /// 压力百分比历史序列,与 samples 同法滚动积累,供压力模式下的迷你曲线使用。
     var pressureSamples: [Double] = []
-    /// 整机功率历史序列(W,与 samples 同法滚动积累),仅电源模块有值,
-    /// 供展开区功率流下方的 60s 功率 sparkline 使用。
-    var powerSamples: [Double] = []
     /// 多风扇读数(仅风扇模块有值)。面板展开区按此数组渲染所有风扇;
     /// 菜单栏只取 max(currentRPM)。独立于 metrics 字段,避免冲撞统一采样契约。
     var fans: [FanInfo]? = nil

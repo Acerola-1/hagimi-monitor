@@ -430,7 +430,8 @@ struct MonitorPanelView: View {
                 theme: theme,
                 details: enabledMetrics(for: module),
                 isExpanded: expandedKinds.contains(module.kind),
-                showPowerFlow: store.settings.batteryShowPowerFlow
+                showPowerFlow: store.settings.batteryShowPowerFlow,
+                panelVisible: store.isPanelVisible
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -1297,6 +1298,8 @@ private struct BatteryGlassRow: View, Equatable {
     var isExpanded = false
     /// 功率流图开关(Beta,settings.battery.showPowerFlow):关闭后展开区仅保留指标网格。
     var showPowerFlow = true
+    /// 面板可见性:与 isExpanded 一起门控功率流的流光动画。
+    var panelVisible = true
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
@@ -1306,6 +1309,7 @@ private struct BatteryGlassRow: View, Equatable {
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
             && lhs.showPowerFlow == rhs.showPowerFlow
+            && lhs.panelVisible == rhs.panelVisible
     }
 
     private var tint: Color {
@@ -1383,7 +1387,8 @@ private struct BatteryGlassRow: View, Equatable {
                         PowerFlowDiagram(
                             module: module,
                             theme: theme,
-                            tint: tint
+                            tint: tint,
+                            animate: isExpanded && showPowerFlow && panelVisible
                         )
                     }
                 }
@@ -1512,12 +1517,15 @@ private struct PowerSectionHeader: View {
 /// (填充=电量,刻度=充电限制),短 stub 垂直连到汇流点;导管粗细 ∝ 瓦数。
 /// 节点走正常流式布局,连线按容器几何计算绘制,构造上不会重叠。
 /// 数据全部来自 BatterySampler 的遥测指标(power-in / power / battery-flow / status),
-/// 沙盒版同样可用。纯静态绘制:无粒子动画、无 TimelineView,面板收起/隐藏时
-/// 不产生任何额外重绘开销。
+/// 沙盒版同样可用。活跃导管用彗星式能量光轨表达流向:灼亮头部 + 渐隐长尾 +
+/// 外发光三层叠加,速度/数量 ∝ 瓦数(仅展开且面板可见时挂载 TimelineView
+/// 30fps 驱动,收起/隐藏即回到纯静态绘制)。
 private struct PowerFlowDiagram: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let tint: Color
+    /// 流光动画门控:仅当行展开且面板可见时为 true。
+    let animate: Bool
 
     private static let nodeWidth: CGFloat = 104
     private static let nodeHeight: CGFloat = 46
@@ -1535,8 +1543,6 @@ private struct PowerFlowDiagram: View {
                         .foregroundStyle(isInsufficient ? theme.palette.severityTint(for: .critical) : theme.captionText)
                         .lineLimit(2)
                 }
-
-                powerSparkline
             }
             // 与明细网格同 28pt 缩进,分区标题与图内容左缘对齐。
             .padding(.leading, 28)
@@ -1547,8 +1553,17 @@ private struct PowerFlowDiagram: View {
 
     private var flowArea: some View {
         ZStack(alignment: .top) {
-            Canvas { context, size in
-                drawEdges(&context, size: size)
+            // 流光动画仅在门控通过时挂载 TimelineView;收起/隐藏后回到纯静态 Canvas。
+            if animate {
+                TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
+                    Canvas { context, size in
+                        drawEdges(&context, size: size, time: timeline.date.timeIntervalSinceReferenceDate)
+                    }
+                }
+            } else {
+                Canvas { context, size in
+                    drawEdges(&context, size: size, time: nil)
+                }
             }
 
             VStack(spacing: Self.stubHeight) {
@@ -1591,7 +1606,7 @@ private struct PowerFlowDiagram: View {
         context.stroke(line, with: .color(color), style: style)
     }
 
-    private func drawEdges(_ context: inout GraphicsContext, size: CGSize) {
+    private func drawEdges(_ context: inout GraphicsContext, size: CGSize, time: TimeInterval?) {
         let topY = Self.nodeHeight / 2
         let junction = CGPoint(x: size.width / 2, y: topY)
         let adapterRight = CGPoint(x: Self.nodeWidth, y: topY)
@@ -1601,6 +1616,9 @@ private struct PowerFlowDiagram: View {
         if !hasBattery {
             strokeSegment(&context, from: adapterRight, to: systemLeft,
                           color: neutralEdge, width: edgeWidth(systemWatts))
+            drawEnergyBeam(&context, from: adapterRight, to: systemLeft,
+                           watts: systemWatts, color: edgeShimmer, head: neutralBeamHead,
+                           width: edgeWidth(systemWatts), time: time)
             return
         }
 
@@ -1608,10 +1626,16 @@ private struct PowerFlowDiagram: View {
         strokeSegment(&context, from: adapterRight, to: junction,
                       color: connected ? neutralEdge : faintEdge,
                       width: edgeWidth(connected ? powerInWatts : nil))
+        drawEnergyBeam(&context, from: adapterRight, to: junction,
+                       watts: connected ? powerInWatts : nil, color: edgeShimmer, head: neutralBeamHead,
+                       width: edgeWidth(connected ? powerInWatts : nil), time: time)
 
         // S2 汇流点 → 系统:系统恒耗电,恒活跃。
         strokeSegment(&context, from: junction, to: systemLeft,
                       color: neutralEdge, width: edgeWidth(systemWatts))
+        drawEnergyBeam(&context, from: junction, to: systemLeft,
+                       watts: systemWatts, color: edgeShimmer, head: neutralBeamHead,
+                       width: edgeWidth(systemWatts), time: time)
 
         // S3 汇流点 ↕ 电池 stub:充电绿色、放电琥珀(适配器不足时转红)、无流动虚线轨道。
         let stubEnd = CGPoint(x: junction.x, y: Self.nodeHeight + Self.stubHeight)
@@ -1619,27 +1643,97 @@ private struct PowerFlowDiagram: View {
         case .charging:
             strokeSegment(&context, from: junction, to: stubEnd,
                           color: flowTint.opacity(0.75), width: edgeWidth(batteryMagnitude))
+            drawEnergyBeam(&context, from: junction, to: stubEnd,
+                           watts: batteryMagnitude, color: flowTint, head: .white,
+                           width: edgeWidth(batteryMagnitude), time: time)
         case .discharging:
             let color = isInsufficient
                 ? theme.palette.severityTint(for: .critical).opacity(0.8)
                 : theme.palette.severityTint(for: .warning).opacity(0.75)
             strokeSegment(&context, from: stubEnd, to: junction,
                           color: color, width: edgeWidth(batteryMagnitude))
+            // 放电路径按电池 → 汇流点方向声明,光轨行进方向即流向。
+            drawEnergyBeam(&context, from: stubEnd, to: junction,
+                           watts: batteryMagnitude, color: color, head: .white,
+                           width: edgeWidth(batteryMagnitude), time: time)
         case .idle:
-            if isInsufficient {
-                // 插电但电池放电补差:stub 按放电方向着色,与状态芯片/说明行呼应。
-                strokeSegment(&context, from: stubEnd, to: junction,
-                              color: theme.palette.severityTint(for: .critical).opacity(0.8),
-                              width: edgeWidth(batteryMagnitude))
-            } else {
-                strokeSegment(&context, from: junction, to: stubEnd,
-                              color: faintEdge, width: 1.2, dashed: true)
-            }
+            strokeSegment(&context, from: junction, to: stubEnd,
+                          color: faintEdge, width: 1.2, dashed: true)
         }
 
         // 汇流点圆点。
         let dot = Path(ellipseIn: CGRect(x: junction.x - 2.4, y: junction.y - 2.4, width: 4.8, height: 4.8))
         context.fill(dot, with: .color(neutralEdge))
+    }
+
+    /// 能量光轨(彗星):灼亮头部拖一条渐隐长尾沿导管行进——外发光(模糊宽描边)
+    /// + 亮芯(细渐变描边)+ 头部星点三层叠加,质感对齐 Web 能量可视化的光轨
+    /// 效果。速度/数量 ∝ 瓦数。time 为 nil(门控关闭)时不绘制。
+    private func drawEnergyBeam(
+        _ context: inout GraphicsContext,
+        from: CGPoint,
+        to: CGPoint,
+        watts: Double?,
+        color: Color,
+        head: Color,
+        width: CGFloat,
+        time: TimeInterval?
+    ) {
+        guard let time, let watts, watts >= 0.05 else { return }
+        let cycle = max(1.4, min(3.4, 4.2 / (1 + watts / 25)))
+        let beams = watts > 30 ? 2 : 1
+        let tail: CGFloat = 0.45
+        for k in 0..<beams {
+            let phase = CGFloat((time / cycle + Double(k) / Double(beams)).truncatingRemainder(dividingBy: 1))
+            let headPos = phase * (1 + tail * 2) - tail
+            let tailPos = headPos - tail
+            guard headPos > 0, tailPos < 1 else { continue }
+            var beam = Path()
+            beam.move(to: lerp(from, to, max(0, tailPos)))
+            beam.addLine(to: lerp(from, to, min(1, headPos)))
+            // 渐变端点取未裁剪的带头带尾,光轨形状在滑入滑出过程中保持稳定。
+            let g0 = lerp(from, to, tailPos)
+            let g1 = lerp(from, to, headPos)
+
+            // 外发光层:宽幅模糊低透明度,形成霓虹光晕。
+            context.drawLayer { layer in
+                layer.addFilter(.blur(radius: 2.4))
+                layer.stroke(
+                    beam,
+                    with: .linearGradient(
+                        Gradient(colors: [color.opacity(0), color.opacity(0.4), color.opacity(0.7)]),
+                        startPoint: g0,
+                        endPoint: g1
+                    ),
+                    style: StrokeStyle(lineWidth: width + 2.6, lineCap: .round)
+                )
+            }
+
+            // 亮芯层:更细更亮,向头部渐次逼近白热。
+            context.stroke(
+                beam,
+                with: .linearGradient(
+                    Gradient(colors: [color.opacity(0), color.opacity(0.55), head.opacity(0.95)]),
+                    startPoint: g0,
+                    endPoint: g1
+                ),
+                style: StrokeStyle(lineWidth: max(1.4, width * 0.6), lineCap: .round)
+            )
+
+            // 头部星点:行进前沿的一点亮斑。
+            if headPos <= 1 {
+                let hp = lerp(from, to, headPos)
+                let r = max(1.6, width * 0.42)
+                context.fill(
+                    Path(ellipseIn: CGRect(x: hp.x - r, y: hp.y - r, width: r * 2, height: r * 2)),
+                    with: .color(head.opacity(0.95))
+                )
+            }
+        }
+    }
+
+    private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
+        CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
     }
 
     // MARK: 节点
@@ -1724,8 +1818,8 @@ private struct PowerFlowDiagram: View {
                 if let limit = numericValue("charge-limit"), limit < 100 {
                     Rectangle()
                         .fill(isDark ? Color.white.opacity(0.6) : Color.black.opacity(0.35))
-                        .frame(width: 1.5, height: geo.size.height - 10)
-                        .offset(x: geo.size.width * CGFloat(limit) / 100 - 0.75, y: 5)
+                        .frame(width: 2, height: geo.size.height - 4)
+                        .offset(x: geo.size.width * CGFloat(limit) / 100 - 1, y: 2)
                 }
 
                 HStack(spacing: 6) {
@@ -1791,17 +1885,20 @@ private struct PowerFlowDiagram: View {
         switch status {
         case "charging": return localizedBatteryState("charging")
         case "on-battery": return localizedBatteryState("on-battery")
-        default:
+        case "maintain":
+            // 适配器不足是 maintain 的告警子态(输入顶到额定仍放电补差),优先展示。
             return isInsufficient
                 ? String(localized: "battery-state.insufficient")
-                : localizedBatteryState("ac-power")
+                : localizedBatteryState("maintain")
+        default:
+            return localizedBatteryState("ac-power")
         }
     }
 
     private var barEtaText: String? {
         if let eta = etaText { return eta }
-        // 插电且无 ETA(已充满/达充电限制):展示「直供」状态语,条内信息不断档。
-        if connected && !isCharging {
+        // 真直供且无 ETA(已充满/达充电限制):展示「直供」状态语,条内信息不断档。
+        if status == "ac-power" {
             return String(localized: "panel.power-flow.direct-supply")
         }
         return nil
@@ -1816,37 +1913,6 @@ private struct PowerFlowDiagram: View {
         guard connected, hasBattery, isInsufficient else { return nil }
         let magnitude = String(format: "%.1fW", batteryMagnitude)
         return String(format: String(localized: "panel.power-flow.note.insufficient"), magnitude)
-    }
-
-    /// 60s 整机功率 sparkline:复用 SparklineChart 纯线风格,补上时间维度,
-    /// 插拔与负载突变一眼可见。采样历史由 SystemMonitorSampler 滚动积累,
-    /// 首几帧无数据时不渲染,避免空轴框。
-    @ViewBuilder
-    private var powerSparkline: some View {
-        let samples = module.powerSamples
-        if samples.count > 1 {
-            HStack(spacing: 8) {
-                SparklineChart(
-                    samples: samples,
-                    tint: flowTint,
-                    minValue: 0,
-                    maxValue: max(10, (samples.max() ?? 0) * 1.2)
-                )
-                .frame(height: 24)
-
-                VStack(alignment: .trailing, spacing: 1) {
-                    Text(String(localized: "panel.power-flow.sparkline-caption"))
-                        .font(.system(size: 9))
-                        .foregroundStyle(theme.captionText)
-                    let avg = samples.reduce(0, +) / Double(samples.count)
-                    Text(String(format: String(localized: "panel.power-flow.sparkline-avg"),
-                                "\(Int(avg.rounded()))W"))
-                        .monitorPanelMonoFont(.caption2, weight: .medium)
-                        .foregroundStyle(theme.captionText)
-                }
-            }
-            .padding(.top, 2)
-        }
     }
 
     // MARK: 数据
@@ -1864,7 +1930,7 @@ private struct PowerFlowDiagram: View {
     }
 
     private var connected: Bool {
-        status == "charging" || status == "ac-power"
+        status == "charging" || status == "ac-power" || status == "maintain"
     }
 
     private var systemWatts: Double? {
@@ -1875,36 +1941,40 @@ private struct PowerFlowDiagram: View {
         numericValue("power-in")
     }
 
-    /// 电池流向方向。**只依据 IOPS 的充电/连接状态判定,不看 BatteryPower 符号**——
-    /// 后者符号在不同机型/系统上不一致(实测 macOS 27 放电时为负),会把放电误判成充电。
-    /// status 由 BatterySampler 依据 kIOPSIsChargingKey / kIOPSPowerSourceStateKey 产出,可靠。
+    /// 电池流向方向,只依据 IOPS 的充电/连接状态判定(status 由 BatterySampler
+    /// 依据 kIOPSIsChargingKey / kIOPSPowerSourceStateKey 产出):BatteryPower 的
+    /// 符号约定随机型/系统版本不同,不作为方向依据。
     private enum FlowDirection { case charging, discharging, idle }
 
     private var flowDirection: FlowDirection {
         switch status {
         case "charging": return .charging
-        case "on-battery": return .discharging
+        case "on-battery", "maintain": return .discharging
         default: return .idle // ac-power:插电且不充电(如满电)
         }
     }
 
     private var isCharging: Bool { flowDirection == .charging }
 
-    /// 适配器不足:插电却伴随电池放电补差(如小功率适配器带高负载)。
-    /// 与行头状态芯片同一判定口径。
+    /// 适配器不足:电池放电补差,且适配器输入已逼近额定瓦数(弱适配器带高负载)。
+    /// 充电上限维持等策略性放电同样伴随电池放电,但其输入接近零(系统主动
+    /// 断输入),与真正的适配器供电不足区分。
     private var isInsufficient: Bool {
-        connected && (numericValue("battery-flow") ?? 0) < -0.05
+        guard connected, (numericValue("battery-flow") ?? 0) < -0.05,
+              let powerIn = powerInWatts, let rated = numericValue("adapter"), rated > 0 else {
+            return false
+        }
+        return powerIn / rated > 0.85
     }
 
-    /// 电池流向功率幅度(恒非负)。放电时若遥测尚未刷新(拔电瞬间为 0),用系统负载兜底
-    /// ——脱离适配器后系统功耗必然全部由电池提供,不可能为 0。
-    /// idle 态仅在适配器不足(插电放电)时有流动。
+    /// 电池流向功率幅度(恒非负)。放电时若遥测尚未刷新(拔电瞬间为 0),用系统
+    /// 负载兜底——脱离适配器后系统功耗全部由电池提供。idle 态电池静止。
     private var batteryMagnitude: Double {
         let flow = abs(numericValue("battery-flow") ?? 0)
         switch flowDirection {
         case .discharging: return flow >= 0.05 ? flow : (systemWatts ?? 0)
         case .charging: return flow
-        case .idle: return isInsufficient ? flow : 0
+        case .idle: return 0
         }
     }
 
@@ -1957,6 +2027,17 @@ private struct PowerFlowDiagram: View {
 
     private var neutralEdge: Color {
         isDark ? Color.white.opacity(0.36) : Color.black.opacity(0.30)
+    }
+
+    /// 中性导管上的流动亮色:比导管底色亮一档,流动可辨但不张扬。
+    private var edgeShimmer: Color {
+        isDark ? Color.white.opacity(0.6) : Color.black.opacity(0.4)
+    }
+
+    /// 中性导管光轨头部:暗色底亮白、浅色底深色,与导管语言一致;
+    /// 语义导管(充电/放电)头部直接用白点,像火花。
+    private var neutralBeamHead: Color {
+        isDark ? .white : Color.black.opacity(0.6)
     }
 
     private var faintEdge: Color {
