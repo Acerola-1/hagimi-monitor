@@ -148,11 +148,12 @@ struct BluetoothMergeTests {
     }
 
     @Test func appstoreBuildReliesOnIOBluetoothAndBLE() {
-        // App Store 沙盒场景:profiler 为空,IOBluetooth 给清单与类型,
-        // BLE 快照经相似度配对注入电量并学习绑定。
+        // App Store 沙盒场景:profiler 为空,IOBluetooth 给清单、类型与
+        // 系统侧电量(AVRCP/HFP 上报,Redmi 这类无 GATT 设备的唯一电量来源),
+        // BLE 快照经相似度配对注入 GATT 精确电量并学习绑定。
         let io = [
-            Self.device("苏轼的鹅鸡", address: "0013d6b752af", type: .headphones),
-            Self.device("Redmi Buds 4", address: "7cc95e67e53f", type: .headset),
+            Self.device("苏轼的鹅鸡", address: "0013d6b752af", type: .headphones, battery: 100),
+            Self.device("Redmi Buds 4", address: "7cc95e67e53f", type: .headset, battery: 100),
         ]
         let result = BluetoothBatterySampler.merge(
             ioDevices: io,
@@ -168,7 +169,10 @@ struct BluetoothMergeTests {
         let xiaomi = result.devices.first { $0.address == "0013d6b752af" }
         #expect(xiaomi?.name == "苏轼的鹅鸡")
         #expect(xiaomi?.type == .headphones)
+        // GATT 精确值覆盖系统侧粗粒度读数。
         #expect(xiaomi?.batteryLevel == 90)
+        let redmi = result.devices.first { $0.address == "7cc95e67e53f" }
+        #expect(redmi?.batteryLevel == 100)
         #expect(result.devices.first { $0.name == "Rapoo BT Mouse" }?.batteryLevel == 50)
         #expect(result.learnedBindings["0013d6b752af"] == "00000000-0000-0000-0000-0000000000AA")
     }

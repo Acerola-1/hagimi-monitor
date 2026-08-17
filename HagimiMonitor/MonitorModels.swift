@@ -512,7 +512,8 @@ final class MonitorStore: ObservableObject {
         fanSampler.start()
         FanAlertService.shared.attach(to: fanSampler)
 
-        // 蓝牙设备电量:探针 30s 轮询(高成本源缓存纪律),后台执行不占主线程。
+        // 蓝牙设备电量:独立采样器(IOBluetooth 连断事件驱动 + profiler 10s 兜底
+        // 轮询,高成本源后台执行),结果经 Combine 回主线程。
         bluetoothSampler.$devices
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newDevices in
@@ -968,7 +969,7 @@ final class MonitorStore: ObservableObject {
         // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
         // 把它的输出合成成 MonitorModule.fan 填入 allModules。
         applyFanModule()
-        // 注入蓝牙模块:仅在蓝牙开启且有已连接设备时插入,位置固定在电池之后。
+        // 注入蓝牙模块:蓝牙开启即插入(常驻),位置固定在电池之后。
         applyBluetoothModule()
         let newVisibleModules = visibleModules(from: allModules)
         if modules != newVisibleModules {

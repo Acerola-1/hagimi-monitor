@@ -141,24 +141,34 @@ enum BluetoothBatteryParser {
 ///
 /// 三数据源合并(按归一化 MAC / 持久化绑定表关联同一台设备):
 /// 1. IOBluetooth(公开 framework,两渠道一致可用)——已配对已连接设备的
-///    MAC、系统名(设备端改名实时反映)、CoD 类型。BLE 鼠标等设备的
+///    MAC、系统名(设备端改名实时反映)、CoD 类型,以及系统侧电量
+///    (未公开 getter,AVRCP/HFP 上报;沙盒内可用)。BLE 鼠标等设备的
 ///    isConnected() 可能报 false,由其余数据源补齐;
 /// 2. `system_profiler SPBluetoothDataType -json`——设备电量
-///    (device_batteryLevel* 键,AVRCP 上报经系统暴露;控制中心读数同源)。
-///    沙盒内此通道拿不到蓝牙数据(实测 App Store 版返回空骨架),
-///    直连版为纯经典蓝牙设备电量的唯一来源;
+///    (device_batteryLevel* 键;控制中心读数同源)。
+///    沙盒内 bluetoothd 拒绝向沙盒客户端提供数据(实测返回空骨架),
+///    直连版与 IOBluetooth 读数互为冗余;
 /// 3. CoreBluetooth 直读 GATT 电池服务(BLEBatteryReader)——BLE 设备
 ///    实时电量与清单补充(2A19 Notify 推送)。
+///
+/// 电量优先级:GATT(设备自报精确值,实时推送)> 系统侧读数
+/// (IOBluetooth/profiler 同源,粗粒度分档)。
 ///
 /// 身份关联:数据源间无公开地址互换接口,用持久化绑定表(归一化 MAC ↔
 /// BLE identifier)关联。绑定在无歧义窗口(同名匹配/名称相似度唯一配对)
 /// 学习一次后永久生效,此后设备改名、多设备并存都能稳定合并。
 ///
 /// 成本与缓存:system_profiler 启动数百毫秒,绝不能随每秒采样拉起——
-/// 探针 10s 轮询,后台队列执行;IOBluetooth 查询微秒级,随探针周期同步;
+/// 探针 10s 轮询,后台队列执行;IOBluetooth 查询微秒级,主线程独立刷新;
 /// BLE 电量由常驻读取器订阅推送。结果经 @Published 回主线程。
-final class BluetoothBatterySampler {
-    /// 采样周期:与 BLE 读取器的发现周期对齐,设备连/断变化最多延迟一个周期。
+///
+/// 响应速度:10s 轮询只是兜底,连断变化由 IOBluetooth 通知事件驱动——
+/// 全局连接通知(per-class)+ 每设备断开通知(per-device,随清单动态注册),
+/// 0.5s 防抖合并后立即跑快速路径。新连接设备的 AVRCP/HFP 电量上报
+/// 滞后于链路建立,防抖窗口后再做渐进重试(2s/6s/15s/30s)。
+final class BluetoothBatterySampler: NSObject {
+    /// 兜底轮询周期:连断变化由 IOBluetooth 通知即时驱动,此周期仅覆盖
+    /// 通知遗漏场景(如设备休眠导致的静默链路变化)。
     private static let sampleInterval: TimeInterval = 10
     /// system_profiler 正常数百毫秒返回,个别蓝牙控制器无响应时可能挂起;
     /// 超过此时长终止进程并放弃本次结果,绝不让探针卡死后台队列。
@@ -181,13 +191,28 @@ final class BluetoothBatterySampler {
     private var cbControllerOn = false
     /// 已学身份绑定(归一化 MAC -> BLE UUID),跨启动持久。
     private var identityBindings: [String: String] = [:]
+    /// 全局连接通知持有体;unregister 后置 nil,避免重复注销。
+    private var connectObserver: IOBluetoothUserNotification?
+    /// 每台已连接设备的断开通知(归一化地址 -> 通知对象),随清单动态注册/注销。
+    private var disconnectObservers: [String: IOBluetoothUserNotification] = [:]
+    /// 连断事件防抖任务(合并连发链路事件为一次快速刷新)。
+    private var eventRefreshWork: DispatchWorkItem?
+    /// 防抖窗口内出现过连接事件(决定刷新后是否安排电量重试)。
+    private var pendingConnectEvent = false
+    /// 连接后电量渐进重试任务。
+    private var batteryRetryWorks: [DispatchWorkItem] = []
+    /// 电量粘性缓存(归一化地址 -> 最近读到的系统侧电量):
+    /// IOBluetooth 的 AVRCP 电量属性会间歇性回空,设备保持连接期间
+    /// 沿用最近读数保证显示连续;设备离场(清单消失)时清除,
+    /// 重连后重新学习,不会残留跨会话旧值。
+    private var lastKnownBattery: [String: Int] = [:]
 
     /// 已连接蓝牙设备(按「有电量优先、再按名称」排序)。
     @Published private(set) var devices: [BluetoothDeviceInfo] = []
     /// 蓝牙控制器是否开启;关闭时面板不渲染蓝牙行。
     @Published private(set) var controllerOn = false
 
-    init() {
+    override init() {
         // 迁移历史绑定键(原始 MAC 格式)为归一化格式。
         let stored = UserDefaults.standard
             .dictionary(forKey: Self.bindingsDefaultsKey) as? [String: String] ?? [:]
@@ -211,32 +236,109 @@ final class BluetoothBatterySampler {
         }
         // BLE 读取器常驻监视:电量经 2A19 Notify 实时推送,设备清单 10s 周期同步。
         bleReader.ensureWatching()
-        // 启动后立即探一次,避免面板首开时空白一个周期。
-        sample()
+        // 全局连接通知:任何设备链路建立即回调,事件驱动取代轮询等待。
+        connectObserver = IOBluetoothDevice.register(
+            forConnectNotifications: self, selector: #selector(ioDeviceDidConnect(_:device:))
+        )
+        // 快速路径先行(微秒级,面板首开即有清单),profiler 异步补充电量。
+        refreshIO()
+        probeProfiler()
         timer = Timer.publish(every: Self.sampleInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                self?.sample()
+                self?.refreshIO()
+                self?.probeProfiler()
             }
     }
 
     func stop() {
         timer?.cancel()
         timer = nil
+        connectObserver?.unregister()
+        connectObserver = nil
+        for observer in disconnectObservers.values {
+            observer.unregister()
+        }
+        disconnectObservers.removeAll()
+        eventRefreshWork?.cancel()
+        eventRefreshWork = nil
+        pendingConnectEvent = false
+        batteryRetryWorks.forEach { $0.cancel() }
+        batteryRetryWorks.removeAll()
+        lastKnownBattery.removeAll()
     }
 
-    private func sample() {
+    /// 快速路径:IOBluetooth 枚举(微秒级)主线程执行,连断状态即时发布,
+    /// 不等 system_profiler。同时维护每设备断开通知的注册表。
+    private func refreshIO() {
+        ioDevices = ioConnectedDevices()
+        publishMerged()
+    }
+
+    /// 慢速路径:system_profiler 探针(数百毫秒~8s)后台执行,结果回主线程
+    /// 补充合并。沙盒内返回空骨架,不影响快速路径。
+    private func probeProfiler() {
         queue.async { [weak self] in
             guard let self else { return }
             let snapshot = Self.probe()
             DispatchQueue.main.async {
                 self.profilerControllerOn = snapshot.controllerOn
                 self.profilerDevices = snapshot.devices
-                // IOBluetooth 查询快,随探针周期刷新(改名秒级到周期级反映)。
-                self.ioDevices = Self.ioConnectedDevices()
                 AppLogger.sampler.info("Bluetooth probe: profiler=\(snapshot.devices.count), io=\(self.ioDevices.count)")
                 self.publishMerged()
             }
+        }
+    }
+
+    // MARK: - 事件驱动(连断通知)
+
+    /// 设备连接通知回调(注册线程即主线程 runloop)。
+    @objc private func ioDeviceDidConnect(
+        _ notification: IOBluetoothUserNotification, device: IOBluetoothDevice
+    ) {
+        scheduleEventRefresh(retries: true)
+    }
+
+    /// 设备断开通知回调(随清单注册,断开的设备从下一轮清单消失)。
+    @objc private func ioDeviceDidDisconnect(
+        _ notification: IOBluetoothUserNotification, device: IOBluetoothDevice
+    ) {
+        scheduleEventRefresh(retries: false)
+    }
+
+    /// 连断事件防抖:一次连断常伴随多条链路事件(ACL/HFP/A2DP 分链路),
+    /// 0.5s 窗口合并为一次快速路径刷新 + BLE 侧即时召回。
+    /// 窗口内只要出现过连接事件,刷新后就安排电量重试——不被夹在
+    /// 中间的其他设备断开事件取消。
+    private func scheduleEventRefresh(retries: Bool) {
+        eventRefreshWork?.cancel()
+        pendingConnectEvent = pendingConnectEvent || retries
+        let shouldRetry = pendingConnectEvent
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingConnectEvent = false
+            self.refreshIO()
+            self.bleReader.refreshImmediately()
+            if shouldRetry {
+                self.scheduleBatteryRetries()
+            }
+        }
+        eventRefreshWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: work)
+    }
+
+    /// 新连接设备的 AVRCP/HFP 电量上报滞后于链路建立,且首报可能
+    /// 间歇性回空(属性随会话建立渐进填充):2s/6s/15s/30s 渐进重试,
+    /// 每轮都更新粘性缓存,读到即稳定显示。
+    private func scheduleBatteryRetries() {
+        batteryRetryWorks.forEach { $0.cancel() }
+        batteryRetryWorks.removeAll()
+        for delay in [TimeInterval(2), TimeInterval(6), TimeInterval(15), TimeInterval(30)] {
+            let work = DispatchWorkItem { [weak self] in
+                self?.refreshIO()
+            }
+            batteryRetryWorks.append(work)
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         }
     }
 
@@ -255,6 +357,10 @@ final class BluetoothBatterySampler {
             bleReader.updateKnownIdentifiers(boundIdentifiers())
         }
         devices = Self.displayOrder(result.devices)
+        let summary = devices
+            .map { "\($0.name)=\($0.batteryLevel.map { "\($0)%" } ?? "-")" }
+            .joined(separator: ", ")
+        AppLogger.sampler.info("Bluetooth merged: \(summary, privacy: .public)")
     }
 
     /// 绑定表当前已知的外设标识(identifier 兜底召回名单)。
@@ -269,18 +375,26 @@ final class BluetoothBatterySampler {
     }
 
     /// IOBluetooth 侧已连接设备快照:系统名(实时反映设备端改名)、
-    /// 归一化 MAC、CoD 类型。BLE 设备的 isConnected() 可能报 false,
+    /// 归一化 MAC、CoD 类型、经 AVRCP/HFP 上报给系统的电量。
+    /// BLE 设备的 isConnected() 可能报 false,
     /// 此类设备由 profiler/CoreBluetooth 路径补入清单。
-    private static func ioConnectedDevices() -> [BluetoothDeviceInfo] {
+    /// 枚举同时维护每设备断开通知注册表(断开通知是 per-device API)。
+    private func ioConnectedDevices() -> [BluetoothDeviceInfo] {
         guard let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else {
             return []
         }
         var byAddress: [String: BluetoothDeviceInfo] = [:]
         for device in paired where device.isConnected() {
             guard let raw = device.addressString else { continue }
-            let address = normalizeMAC(raw)
+            let address = Self.normalizeMAC(raw)
             guard !address.isEmpty, byAddress[address] == nil else { continue }
+            registerDisconnectObserver(for: device, address: address)
             let name = device.nameOrAddress ?? address
+            // 读到新值更新粘性缓存;回空时沿用缓存,电量显示不断流。
+            let fresh = Self.ioBatteryPercent(of: device)
+            if let fresh {
+                lastKnownBattery[address] = fresh
+            }
             byAddress[address] = BluetoothDeviceInfo(
                 address: address,
                 name: name,
@@ -288,18 +402,60 @@ final class BluetoothBatterySampler {
                     major: Int(device.deviceClassMajor),
                     minor: Int(device.deviceClassMinor)
                 ) ?? BluetoothDeviceType.inferred(fromName: name),
-                batteryLevel: nil
+                batteryLevel: fresh ?? lastKnownBattery[address]
             )
+        }
+        // 清单里消失的设备注销其断开通知并清电量缓存。
+        for (address, observer) in disconnectObservers where byAddress[address] == nil {
+            observer.unregister()
+            disconnectObservers.removeValue(forKey: address)
+            lastKnownBattery.removeValue(forKey: address)
         }
         return Array(byAddress.values)
     }
 
+    /// 为已连接设备补注册断开通知;已注册的跳过(幂等)。
+    private func registerDisconnectObserver(for device: IOBluetoothDevice, address: String) {
+        guard disconnectObservers[address] == nil else { return }
+        disconnectObservers[address] = device.register(
+            forDisconnectNotification: self, selector: #selector(ioDeviceDidDisconnect(_:device:))
+        )
+    }
+
+    /// 读取 IOBluetoothDevice 未公开的电池 getter(batteryPercentSingle 等)。
+    /// bluetoothd 随 AVRCP/HFP 会话填充——经典蓝牙耳机的电量走此通道,
+    /// 是沙盒内该类设备电量的唯一来源(实测 macOS 26)。
+    /// 属性会间歇性回空(AVRCP 会话重建/懒加载期间),由调用方的
+    /// 粘性缓存保证显示连续性。
+    /// 读取顺序:多单体(左/右/仓)取非零最小值,单体设备取 Single/Combined/裸键。
+    /// responds(to:) 先确认 getter 存在(系统 API 变更时安全降级为 nil),
+    /// valueForKey 装箱值统一按 NSNumber 提取,覆盖全部数值装箱类型。
+    private static func ioBatteryPercent(of device: IOBluetoothDevice) -> Int? {
+        func number(for key: String) -> Int? {
+            guard device.responds(to: Selector((key))),
+                  let boxed = device.value(forKey: key) as? NSNumber,
+                  (1...100).contains(boxed.intValue) else {
+                return nil
+            }
+            return boxed.intValue
+        }
+        let segmentKeys = ["batteryPercentLeft", "batteryPercentRight", "batteryPercentCase"]
+        let segments = segmentKeys.compactMap { number(for: $0) }
+        if !segments.isEmpty {
+            return segments.min()
+        }
+        return number(for: "batteryPercentSingle")
+            ?? number(for: "batteryPercentCombined")
+            ?? number(for: "headsetBattery")
+            ?? number(for: "batteryPercent")
+    }
+
     /// 三数据源合并(纯函数,可单测):
-    /// 1. IOBluetooth 条目为骨架(归一化 MAC + CoD 类型 + 系统名);
-    /// 2. profiler 条目按归一化 MAC 注入电量,骨架缺类型时补强;
+    /// 1. IOBluetooth 条目为骨架(归一化 MAC + CoD 类型 + 系统名 + 系统侧电量);
+    /// 2. profiler 条目按归一化 MAC 注入电量(骨架缺电量时),缺类型时补强;
     ///    profiler 独有条目(BLE 鼠标等 isConnected 报 false 的设备)追加;
     /// 3. BLE 快照按 已学绑定 → 同名 → 名称相似度唯一配对 关联,
-    ///    并在配对成功时学习绑定(此后改名免疫);
+    ///    GATT 精确电量覆盖系统侧读数,并在配对成功时学习绑定(此后改名免疫);
     /// 4. 未消化的 BLE 条目为 CB 独有设备,按 identifier 作稳定 id 补入。
     ///
     /// 名称显示与系统 UI 一致(IOBluetooth 系统名优先);纯 profiler 条目

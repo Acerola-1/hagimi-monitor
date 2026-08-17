@@ -3041,7 +3041,9 @@ private struct BluetoothGlassRow: View, Equatable {
                     .resizable()
                     .scaledToFit()
                     .foregroundStyle(tint)
-                    .frame(width: 14, height: 14)
+                    // 占位宽度与其余行头图标(SF Symbols .frame(width: 18))一致,
+                    // 保证各行标题文字起始列对齐;高度 14 匹配符文的窄高形态。
+                    .frame(width: 18, height: 14)
 
                 Text("\(module.kind.title):")
                     .monitorPanelMetricLabelFont()

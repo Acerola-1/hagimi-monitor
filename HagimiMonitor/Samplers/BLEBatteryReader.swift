@@ -37,8 +37,8 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         CBUUID(string: "180A"),
         CBUUID(string: "1812"),
     ]
-    /// 周期性 retrieve:发现新连接设备、清理消失设备。系统无公开连接通知,
-    /// 此周期是新设备出现的延迟上限。
+    /// 周期性 retrieve:发现新连接设备、清理消失设备。新设备出现由
+    /// sampler 的连断事件通知即时触发召回,此周期是事件遗漏时的兜底上限。
     private static let refreshInterval: TimeInterval = 10
     /// 单次连接安全网:超时未连上则放弃,等下个周期重挂。
     private static let connectTimeout: TimeInterval = 10
@@ -77,6 +77,14 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                 queue: self.queue,
                 options: [CBCentralManagerOptionShowPowerAlertKey: false]
             )
+        }
+    }
+
+    /// 外部事件(蓝牙连断通知)触发立即召回:新设备的出现延迟从
+    /// 一个刷新周期降到事件防抖窗口;central 未就绪时静默跳过。
+    func refreshImmediately() {
+        queue.async { [weak self] in
+            self?.refreshNow()
         }
     }
 
