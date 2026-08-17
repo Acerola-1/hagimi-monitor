@@ -41,11 +41,6 @@ final class SystemMonitorSampler {
                     if let pressureValue = module.pressureValue {
                         updated.pressureSamples = Array((previous.pressureSamples + [pressureValue]).suffix(MonitorConstants.sparklineMaxPoints))
                     }
-                    // 电源模块的整机功率历史:供展开区 60s 功率 sparkline 使用。
-                    if kind == .battery,
-                       let powerWatts = module.metrics.first(where: { $0.name == "power" })?.numericValue {
-                        updated.powerSamples = Array((previous.powerSamples + [powerWatts]).suffix(MonitorConstants.sparklineMaxPoints))
-                    }
                     modulesByKind[kind] = updated
                 } else {
                     modulesByKind[kind] = module

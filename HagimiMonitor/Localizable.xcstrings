@@ -8602,50 +8602,6 @@
         }
       }
     },
-    "panel.power-flow.sparkline-avg": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "avg %@"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均 %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "平均 %@"
-          }
-        }
-      }
-    },
-    "panel.power-flow.sparkline-caption": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "60s Power Draw"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "60秒消費電力"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "60s 功耗"
-          }
-        }
-      }
-    },
     "panel.processes.rosetta-banner": {
       "localizations": {
         "en": {
