@@ -16,7 +16,7 @@ final class SystemMonitorSampler {
     ]
 
     func sample(previousModules: [MonitorModule]) -> Result<SystemMonitorSnapshot, SamplingError> {
-        sample(kinds: MonitorKind.allCases, previousModules: previousModules)
+        sample(kinds: MonitorKind.samplerBackedCases, previousModules: previousModules)
     }
 
     func sample(kinds: some Sequence<MonitorKind>, previousModules: [MonitorModule]) -> Result<SystemMonitorSnapshot, SamplingError> {
@@ -90,6 +90,9 @@ final class SystemMonitorSampler {
         case .fan:
             // 风扇走独立 FanSampler 管线,不应进入 SystemMonitorSampler;
             // 兜底返回 batteryUnavailable(实际不会被触发)。
+            return .batteryUnavailable
+        case .bluetooth:
+            // 蓝牙走独立 BluetoothBatterySampler 管线,同 fan。
             return .batteryUnavailable
         }
     }

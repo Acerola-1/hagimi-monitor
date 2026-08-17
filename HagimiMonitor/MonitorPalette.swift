@@ -140,6 +140,9 @@ struct MonitorPalette {
         case .fan:
             // 风扇色与系统色温呼应:蓝青系,弱化视觉权重,避免与 CPU/内存(暖色)抢眼。
             Color(hex: 0x5BB0C2)
+        case .bluetooth:
+            // 蓝牙标志色:平衡主题降低饱和,与调色板其余模块的柔和度对齐。
+            Color(hex: 0x4A90D9)
         }
     }
 
@@ -159,6 +162,9 @@ struct MonitorPalette {
             Color(hex: 0x2AB55E)
         case .fan:
             Color(hex: 0x6366F1)
+        case .bluetooth:
+            // Bluetooth SIG 官方蓝。
+            Color(hex: 0x0082FC)
         }
     }
 }

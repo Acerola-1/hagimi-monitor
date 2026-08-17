@@ -17,8 +17,8 @@ struct ModuleSettingsView: View {
                 }
 
                 // 模块隐藏后「显示方式」无意义,随 moduleOptions 一起隐藏。
-                // 风扇不提供卡片样式:展开区(风扇列表+转速控制)依赖列表行形态。
-                if settings.isVisible(kind), kind != .fan {
+                // 风扇/蓝牙不提供卡片样式:展开区(设备列表)依赖列表行形态。
+                if settings.isVisible(kind), kind != .fan, kind != .bluetooth {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.display-style")) {
