@@ -3,22 +3,22 @@
     <channel>
         <title>HagimiMonitor</title>
         <item>
-            <title>1.2.1</title>
-            <pubDate>Mon, 17 Aug 2026 08:22:38 +0000</pubDate>
-            <sparkle:version>74</sparkle:version>
-            <sparkle:shortVersionString>1.2.1</sparkle:shortVersionString>
+            <title>1.3.0</title>
+            <pubDate>Mon, 17 Aug 2026 17:18:56 +0000</pubDate>
+            <sparkle:version>75</sparkle:version>
+            <sparkle:shortVersionString>1.3.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 优化与体验
+### 新功能
 
-- 优化了电源模块的 UI 效果
+- 增加蓝牙模块
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.2.1/HagimiMonitor-v1.2.1.zip" length="3792839" type="application/octet-stream" sparkle:edSignature="OCEYA2uXFMWweprZIF5P+lOeRr/rx/2ECCzhbIhfMWGZgFydsJd7uqXTBSzvXrPF003bYkNORVmaEk0RM+TVDg=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.3.0/HagimiMonitor-v1.3.0.zip" length="3860010" type="application/octet-stream" sparkle:edSignature="N52kWxekRlhr3CqNft3InxaFdx1if+7B1ObjIQiXHnhpOAcs9ts0m2JPTxrOSv6MErpkMcb9f40dV9QUySTOAQ=="/>
         </item>
     </channel>
 </rss>
