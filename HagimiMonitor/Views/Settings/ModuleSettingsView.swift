@@ -15,25 +15,6 @@ struct ModuleSettingsView: View {
                     .toggleStyle(.switch)
                     .labelsHidden()
                 }
-
-                // 模块隐藏后「显示方式」无意义,随 moduleOptions 一起隐藏。
-                // 风扇/蓝牙不提供卡片样式:展开区(设备列表)依赖列表行形态。
-                if settings.isVisible(kind), kind != .fan, kind != .bluetooth {
-                    SettingsDivider()
-
-                    SettingsRow(title: String(localized: "settings.display-style")) {
-                        Picker(String(localized: "settings.display-style"), selection: Binding(
-                            get: { settings.isCardStyle(kind) ? ModuleDisplayStyle.card : .list },
-                            set: { settings.setCardStyle($0 == .card, for: kind) }
-                        )) {
-                            Text(String(localized: "settings.display-style.list")).tag(ModuleDisplayStyle.list)
-                            Text(String(localized: "settings.display-style.card")).tag(ModuleDisplayStyle.card)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 190)
-                    }
-                }
             }
 
             // 模块关闭后，下方的指标 / 进程 / 重置等选项都失去意义，直接隐藏。
@@ -48,22 +29,20 @@ struct ModuleSettingsView: View {
     private var moduleOptions: some View {
             SettingsGroup(String(localized: "settings.metrics")) {
                 // 「默认展开」融入「监测项目」卡:开关决定是否自动摊开,网格决定摊开后显示哪些项,
-                // 一张卡承载「展开 →(下列)监测项目」的因果整体。仅列表行有意义,卡片常显明细故隐藏。
-                if !settings.isCardStyle(kind) {
-                    SettingsRow(
-                        title: String(localized: "settings.expand-by-default"),
-                        subtitle: String(localized: "settings.expand-by-default.subtitle")
-                    ) {
-                        Toggle("", isOn: Binding(
-                            get: { settings.isExpandedByDefault(kind) },
-                            set: { settings.setExpandedByDefault($0, for: kind) }
-                        ))
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                    }
-
-                    SettingsDivider()
+                // 一张卡承载「展开 →(下列)监测项目」的因果整体。
+                SettingsRow(
+                    title: String(localized: "settings.expand-by-default"),
+                    subtitle: String(localized: "settings.expand-by-default.subtitle")
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.isExpandedByDefault(kind) },
+                        set: { settings.setExpandedByDefault($0, for: kind) }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
                 }
+
+                SettingsDivider()
 
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 8),
@@ -97,8 +76,7 @@ struct ModuleSettingsView: View {
 
                     SettingsDivider()
 
-                    // App Store 沙盒版无法采样他进程,隐藏进程列表相关设置。
-                    #if DIRECT_DISTRIBUTION
+                    // 内存列表数据源(sysctl + proc_pidinfo)沙盒可用,双渠道均开放设置。
                     SettingsRow(title: String(localized: "settings.show-memory-processes")) {
                         Toggle("", isOn: $settings.showMemoryProcesses)
                             .toggleStyle(.switch)
@@ -112,12 +90,11 @@ struct ModuleSettingsView: View {
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
-                    #endif
                 }
             }
 
-            // App Store 沙盒版无法采样他进程,隐藏 CPU 进程列表设置。
-            #if DIRECT_DISTRIBUTION
+            // CPU 列表数据源沙盒可用(直连版走 ps,沙盒版走 TASKINFO 差分),
+            // 双渠道均开放设置。
             if kind == .cpu {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-cpu-processes")) {
@@ -135,9 +112,29 @@ struct ModuleSettingsView: View {
                     }
                 }
             }
-            #endif
 
-            // App Store 沙盒版无法采样他进程,隐藏存储进程列表设置。
+            // GPU 进程列表数据源为 IORegistry 只读属性(AGX user client 的
+            // AppUsage),沙盒允许,双渠道均可用,故不加 DIRECT_DISTRIBUTION 门控。
+            if kind == .gpu {
+                SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.show-gpu-processes")) {
+                        Toggle("", isOn: $settings.showGPUProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.gpu.show-system-processes")) {
+                        Toggle("", isOn: $settings.gpuShowSystemProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+            }
+
+            // 存储列表依赖 proc_pid_rusage,沙盒下跨进程调用被策略拒绝,
+            // App Store 版隐藏存储进程列表设置。
             #if DIRECT_DISTRIBUTION
             if kind == .storage {
                 SettingsGroup {
@@ -158,7 +155,7 @@ struct ModuleSettingsView: View {
             }
             #endif
 
-            // App Store 沙盒版无法采样网络他进程,隐藏网络进程列表设置。
+            // 网络列表依赖 nettop 私有通道,沙盒下不可用,App Store 版隐藏网络进程列表设置。
             #if DIRECT_DISTRIBUTION
             if kind == .network {
                 SettingsGroup {
@@ -237,12 +234,6 @@ private struct PowerFlowBetaBadge: View {
             .padding(.vertical, 1)
             .background(.secondary.opacity(0.15), in: Capsule())
     }
-}
-
-/// 设置页分段选择器的 UI 局部枚举:存储层仍是 cardStyleKinds 集合(见 MonitorSettings)。
-private enum ModuleDisplayStyle: Hashable {
-    case list
-    case card
 }
 
 private struct MetricSelectionRow: View {

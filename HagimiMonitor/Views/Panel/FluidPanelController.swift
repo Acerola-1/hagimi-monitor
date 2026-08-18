@@ -63,7 +63,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 面板圆角半径。由 window 层的 NSVisualEffectView / hosting layer 裁剪,
     /// 恢复系统 popover 般的圆角外观(自建 borderless 窗口默认是方角)。
-    private static let panelCornerRadius: CGFloat = 12
+    /// 与行卡片/底部按钮同为 rowCornerRadius,整个面板圆角弧度一致。
+    private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
 
     /// 面板底部距屏幕可视区下缘(Dock 上沿)的最小留白。
     private static let panelBottomMargin: CGFloat = 10
@@ -398,6 +399,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private func dismissPanel() {
         guard panel.isVisible else { return }
 
+        // 工具浮层是面板的子窗口,面板隐藏前先显式收起,避免残留。
+        QuickToolsStore.shared.popoverPresenter.dismiss()
+
         DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
 
         // 代际令牌:淡出期间(0.18s)若被重开(showPanel 递增令牌),
@@ -656,6 +660,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 不直接调用 openSettingsAction,因为关闭面板和打开设置需要由外部协调。
     func dismissPanelForSettings() {
         guard panel.isVisible else { return }
+        QuickToolsStore.shared.popoverPresenter.dismiss()
         DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
         panel.orderOut(nil)
         panel.alphaValue = 1

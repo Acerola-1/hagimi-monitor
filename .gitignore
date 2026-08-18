@@ -73,9 +73,11 @@ build/
 
 # AI IDE configs
 .claude/
+.trae/
 .codex/
 .opencode/
 .qoder/
+.zcode/
 AGENTS.md
 CLAUDE.md
 .codegraph/
@@ -85,3 +87,4 @@ promo-codes.html
 
 # 本地临时产物（构建缓存、探针二进制、截图）
 tmp/
+*.profraw

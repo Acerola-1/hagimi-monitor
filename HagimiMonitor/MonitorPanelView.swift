@@ -81,7 +81,7 @@ struct MonitorPanelView: View {
                     ScrollView(.vertical) {
                         VStack(spacing: 6) {
                             ForEach(store.modules) { module in
-                                row(for: module, theme: theme)
+                                compactRow(for: module, theme: theme)
                                     .id(module.kind)
                                     .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
                             }
@@ -110,26 +110,33 @@ struct MonitorPanelView: View {
                             }
                             #endif
 
-                            HStack(spacing: 8) {
+                            // 底部三按钮与行卡片同规格:同内边距/同字体/同间距,
+                            // 高度与行间留白都与模块行一致;文案用短形式避免折行。
+                            HStack(spacing: 6) {
                                 Button {
                                     openActivityMonitor()
                                 } label: {
-                                    Label(String(localized: "panel.activity-monitor"), systemImage: "waveform.path.ecg")
+                                    Label(String(localized: "panel.monitor"), systemImage: "waveform.path.ecg")
+                                        .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
                                 .compatibleButtonStyle()
+
+                                // 快捷功能入口:激活角标与浮层打开态高亮由子视图
+                                // 自行观察 store,开关变化不牵动整块面板重绘。
+                                QuickToolsEntryButton(theme: theme)
 
                                 Button {
                                     fluidOpenSettings()
                                 } label: {
                                     Label(String(localized: "panel.settings"), systemImage: "gearshape")
+                                        .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
                                 .compatibleButtonStyle()
                             }
-                            .font(.body.weight(.medium))
+                            .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
-                            .padding(.top, 2)
                         }
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -172,7 +179,10 @@ struct MonitorPanelView: View {
                     }
                 }
             }
-            .padding(10)
+            // 底边留白与面板内部行间节奏(6pt)对齐;顶/侧保持 10pt。
+            .padding(.top, 10)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
             .frame(
                 minWidth: MonitorConstants.panelMinWidth,
                 idealWidth: MonitorConstants.panelIdealWidth,
@@ -209,7 +219,7 @@ struct MonitorPanelView: View {
                 if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         guard store.isPanelVisible else { return }
-                        setExpansion { expandedKinds = Set(listKinds) }
+                        setExpansion { expandedKinds = Set(visibleKinds) }
                     }
                 }
             } else {
@@ -226,7 +236,7 @@ struct MonitorPanelView: View {
         .onAppear {
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             applyDefaultExpansion()
-            // 上报当前需进程采样的集合(展开 ∪ 放大):面板重开时 @State 可能保留上次选项,
+            // 上报当前需进程采样的集合(展开的行):面板重开时 @State 可能保留上次选项,
             // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
             reportActiveProcessKinds()
             // 钉住面板不走 isPanelVisible 的可见性分支时(已可见),补启动时钟。
@@ -240,17 +250,11 @@ struct MonitorPanelView: View {
         .onChange(of: expandedKinds) { _, _ in
             reportActiveProcessKinds()
         }
-        .onChange(of: store.settings.cardStyleKinds) { _, _ in
-            // 显示方式变更:卡片模块常显进程列表,需立即重报采样集合;
-            // 尺寸变化属配置驱动,不置位展开补间标记,窗口走瞬时贴合路径。
-            reportActiveProcessKinds()
-        }
     }
 
-    /// 需进程采样的类目集 = 行内展开的模块 ∪ 卡片模块(卡片常显进程列表,视同展开)。
+    /// 需进程采样的类目集 = 行内展开的模块。
     private func reportActiveProcessKinds() {
-        let cardKinds = store.settings.cardStyleKinds.intersection(visibleKinds)
-        store.updateExpandedKinds(expandedKinds.union(cardKinds), for: panelSource)
+        store.updateExpandedKinds(expandedKinds, for: panelSource)
     }
 
     /// 本面板对应的进程采样来源。带快捷面板控件的是钉住面板,否则是菜单栏面板。
@@ -327,34 +331,6 @@ struct MonitorPanelView: View {
     }
 
     @ViewBuilder
-    private func row(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
-        // 显示方式为「大卡片」的模块渲染常显卡片,无展开/收起交互;其余走紧凑行。
-        if store.settings.cardStyleKinds.contains(module.kind) {
-            card(for: module, theme: theme)
-        } else {
-            compactRow(for: module, theme: theme)
-        }
-    }
-
-    @ViewBuilder
-    private func card(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
-        MetricCardView(
-            module: module,
-            theme: theme,
-            details: enabledMetrics(for: module),
-            topMemoryProcesses: store.topMemoryProcesses,
-            showMemoryProcesses: store.settings.showMemoryProcesses,
-            topCPUProcesses: store.topCPUProcesses,
-            showCPUProcesses: store.settings.showCPUProcesses,
-            topDiskProcesses: store.topDiskProcesses,
-            showDiskProcesses: store.settings.showDiskProcesses,
-            topNetworkProcesses: store.topNetworkProcesses,
-            showNetworkProcesses: store.settings.showNetworkProcesses
-        )
-        .equatable()
-    }
-
-    @ViewBuilder
     private func compactRow(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
         switch module.kind {
         case .cpu:
@@ -378,7 +354,9 @@ struct MonitorPanelView: View {
                 detail: module.summary,
                 samples: module.samples,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: expandedKinds.contains(module.kind),
+                topGPUProcesses: store.topGPUProcesses,
+                showGPUProcesses: store.settings.showGPUProcesses
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -504,34 +482,29 @@ struct MonitorPanelView: View {
         store.modules.map(\.kind)
     }
     
-    /// 参与展开/收起机制的列表行 kind 集合 = 可见 − 卡片(卡片常显,不参与展开)。
-    private var listKinds: [MonitorKind] {
-        visibleKinds.filter { !store.settings.cardStyleKinds.contains($0) }
-    }
-    
     /// 当前是否所有列表行都处于展开状态。
     /// 空集时为 false——没有行可展开,双击不应被视为「已全开」。
     private var allVisibleRowsExpanded: Bool {
-        !listKinds.isEmpty
-        && listKinds.allSatisfy { expandedKinds.contains($0) }
+        !visibleKinds.isEmpty
+        && visibleKinds.allSatisfy { expandedKinds.contains($0) }
     }
     
-    /// 残留 expandedKinds 里的不可见/卡片 kind 不影响判定;全展开分支用列表行集合覆盖,顺便清掉残留。
+    /// 残留 expandedKinds 里的不可见 kind 不影响判定;全展开分支用可见行集合覆盖,顺便清掉残留。
     private func toggleAllExpansion() {
         setExpansion {
             if allVisibleRowsExpanded {
                 expandedKinds.removeAll()
             } else {
-                expandedKinds = Set(listKinds)
+                expandedKinds = Set(visibleKinds)
             }
         }
     }
     
-    /// 把展开状态重置为「各模块默认展开设置 ∩ 列表行」(卡片不参与,顺便清掉残留 kind)。
+    /// 把展开状态重置为「各模块默认展开设置 ∩ 可见行」(顺便清掉残留 kind)。
     /// 面板隐藏时直接赋值,不走 setExpansion——无需动画,也不置位窗口补间标记;
     /// 面板可见时(钉住面板开着改设置)走 setExpansion,与手动展开同一补间节奏。
     private func applyDefaultExpansion() {
-        let target = store.settings.defaultExpandedKinds.intersection(listKinds)
+        let target = store.settings.defaultExpandedKinds.intersection(visibleKinds)
         guard expandedKinds != target else { return }
         if store.isPanelVisible {
             setExpansion { expandedKinds = target }
@@ -546,6 +519,8 @@ struct MonitorPanelView: View {
     /// 边框与内容一起伸缩。故此处必须用 `MonitorConstants.panelExpansionDuration` + easeInOut,
     /// 与窗口侧 `NSAnimationContext` 严格一致。
     private func setExpansion(_ mutate: () -> Void) {
+        // 展开补间与浮层子窗口并存会引发布局抖动,展开前确保浮层已收起。
+        QuickToolsStore.shared.popoverPresenter.dismiss()
         // 置位一次性动画标记:紧接着的首次内容尺寸上报会被窗口层消费、走补间;
         // 而展开后进程数据回来/定时刷新引起的尺寸变化不再置位,瞬时贴合,不与此次展开叠加。
         store.beginExpansionAnimation()
@@ -624,6 +599,8 @@ private struct MetricGlassRow: View, Equatable {
     var fans: [FanInfo]? = nil
     var topCPUProcesses: [TopCPUProcess] = []
     var showCPUProcesses = true
+    var topGPUProcesses: [TopGPUProcess] = []
+    var showGPUProcesses = true
     var topDiskProcesses: [TopDiskProcess] = []
     var showDiskProcesses = true
     var toggleExpansion: (() -> Void)?
@@ -642,6 +619,8 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.showMemoryProcesses == rhs.showMemoryProcesses
             && lhs.topCPUProcesses == rhs.topCPUProcesses
             && lhs.showCPUProcesses == rhs.showCPUProcesses
+            && lhs.topGPUProcesses == rhs.topGPUProcesses
+            && lhs.showGPUProcesses == rhs.showGPUProcesses
             && lhs.topDiskProcesses == rhs.topDiskProcesses
             && lhs.showDiskProcesses == rhs.showDiskProcesses
             && lhs.fans == rhs.fans
@@ -706,18 +685,28 @@ private struct MetricGlassRow: View, Equatable {
                         StorageVolumeDetailList(volumes: storageVolumes, kind: module.kind, tint: tint, theme: theme)
                     } else {
                         VStack(spacing: 9) {
-                            MetricDetailGrid(metrics: details, kind: module.kind, theme: theme)
+                            MetricDetailGrid(
+                                metrics: details,
+                                kind: module.kind,
+                                theme: theme,
+                                cpuCoreDetail: showCPUCoresDetail ? module.cpuCoreDetail : nil
+                            )
                             // CPU / 内存采样恒返回 top 5,故展开时无条件挂载列表(数据未到
                             // 先用留白占位预留高度),使展开一次到位、数据到达后原位淡入,
                             // 不产生二次高度跳变。磁盘采样需采样间隔才有增量,可能为空,仍按需挂载。
-                            // App Store 沙盒版无法采样他进程,整体隐藏 TOP 进程列表。
-                            #if DIRECT_DISTRIBUTION
+                            // GPU 列表数据源为 IORegistry 只读属性,CPU/内存列表走
+                            // sysctl + proc_pidinfo,均被沙盒放行,双渠道渲染;
+                            // 存储列表依赖沙盒下被拒的 proc_pid_rusage,仅直连版渲染。
+                            if module.kind == .gpu, showGPUProcesses {
+                                GPUProcessList(processes: topGPUProcesses, theme: theme)
+                            }
                             if module.kind == .memory, showMemoryProcesses {
                                 MemoryProcessList(processes: topMemoryProcesses, theme: theme)
                             }
                             if module.kind == .cpu, showCPUProcesses {
                                 CPUProcessList(processes: topCPUProcesses, theme: theme)
                             }
+                            #if DIRECT_DISTRIBUTION
                             if module.kind == .storage, showDiskProcesses {
                                 InlineDiskProcessList(processes: topDiskProcesses, theme: theme)
                             }
@@ -729,7 +718,9 @@ private struct MetricGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+            theme.rowGlassFill(for: module.kind)
+        }
     }
 
     @ViewBuilder
@@ -799,41 +790,211 @@ private struct MetricGlassRow: View, Equatable {
     private func metricValue(_ name: String) -> String {
         details.first { $0.name == name }?.value ?? "--"
     }
+
+    /// CPU 的 P/E 两行展示生效条件:采样侧产出逐核数据且用户未关闭
+    /// core-split 指标开关(关闭时环形图与占用值一并隐藏)。
+    private var showCPUCoresDetail: Bool {
+        module.kind == .cpu
+            && module.cpuCoreDetail != nil
+            && details.contains { $0.name == "core-split" }
+    }
 }
 
 // MARK: - Detail Grid
+
+/// CPU 展开区 P/E 核两行展示:第一行逐核负载环形图(逐行铺满、多核
+/// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
+/// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
+/// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
+private struct CPUCoresDetail: View {
+    let detail: CPUCoreDetail
+    let theme: MonitorPanelTheme
+
+    /// E 核色:复用 severity calm 绿;P 核色:独立令牌(见 performanceCoreTint),
+    /// 与行 tint 保持对比,不引入调色板之外的颜色。
+    private var eTint: Color { theme.palette.severityTint(for: .calm) }
+    private var pTint: Color { theme.palette.performanceCoreTint }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            // 圆环逐行铺满:优先放满一行,放不下自动折行;每一行(含末行)
+            // 按自身环数把间隙撑满整行,不留右侧空档。
+            CoreRingFlowLayout() {
+                ForEach(detail.cores) { core in
+                    CoreLoadRing(
+                        usage: core.usage,
+                        tint: core.isPerformance ? pTint : eTint,
+                        // 底环比内衬底色深一档(trackFill 叠 trackFill 会糊),
+                        // 复用行分隔线令牌拉开层次。
+                        track: theme.rowSeparator(for: .cpu)
+                    )
+                }
+            }
+            // 内衬背景与指标格同款 trackFill 色块;环底用行分隔线令牌
+            // (深一档),避免与底色糊成一片。
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(theme.palette.trackFill)
+            )
+
+            HStack(spacing: MetricGridMetrics.columnSpacing) {
+                if let efficiency = detail.efficiencyUsage {
+                    usageTile(
+                        label: String(localized: "cpu.detail.e-cores"),
+                        tint: eTint,
+                        value: efficiency
+                    )
+                }
+                usageTile(
+                    label: String(localized: "cpu.detail.p-cores"),
+                    tint: pTint,
+                    value: detail.performanceUsage
+                )
+            }
+        }
+    }
+
+    /// 分组占用格:与指标网格同款 trackFill 内衬色块;左侧色点标示
+    /// 圆环颜色归属,右侧百分比 mono 加粗。
+    private func usageTile(label: String, tint: Color, value: Double) -> some View {
+        HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
+            Circle()
+                .fill(tint)
+                .frame(width: 5, height: 5)
+            Text(label)
+                .monitorPanelCaptionFont(.footnote)
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+                .layoutPriority(1)
+            Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+            Text("\(Int(value.rounded()))%")
+                .monitorPanelMonoFont(.footnote, weight: .bold)
+                .foregroundStyle(theme.valueText)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+    }
+}
+
+/// 逐核圆环流式布局:优先放满一行(按最小间隙算每行容量),放不下再折行;
+/// 每一行(含末行)都按自身环数把间隙撑满整行,单环行居中。
+private struct CoreRingFlowLayout: Layout {
+    var ringSize: CGFloat = 14
+    var minSpacing: CGFloat = 6
+    var rowGap: CGFloat = 6
+
+    /// 按可用宽度分行,并为每一行按自身环数计算铺满整行的间隙;
+    /// 单环行间隙无意义,由摆放阶段居中处理。
+    private func arrange(count: Int, width: CGFloat) -> (rows: [[Int]], spacings: [CGFloat]) {
+        guard count > 0, width > 0 else { return ([], []) }
+        let perRow = max(1, Int(floor((width + minSpacing) / (ringSize + minSpacing))))
+        var rows: [[Int]] = []
+        var index = 0
+        while index < count {
+            rows.append(Array(index..<min(index + perRow, count)))
+            index += perRow
+        }
+        let spacings = rows.map { indices -> CGFloat in
+            guard indices.count > 1 else { return 0 }
+            return (width - CGFloat(indices.count) * ringSize) / CGFloat(indices.count - 1)
+        }
+        return (rows, spacings)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.replacingUnspecifiedDimensions(by: CGSize(width: 240, height: ringSize)).width
+        let (rows, _) = arrange(count: subviews.count, width: width)
+        let height = CGFloat(rows.count) * ringSize + CGFloat(max(0, rows.count - 1)) * rowGap
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (rows, spacings) = arrange(count: subviews.count, width: bounds.width)
+        var y = bounds.minY
+        for (rowIndex, indices) in rows.enumerated() {
+            // 单环行居中;多环行从行首起按该行间隙铺满。
+            var x = indices.count > 1
+                ? bounds.minX
+                : bounds.minX + (bounds.width - ringSize) / 2
+            let spacing = spacings[rowIndex]
+            for (position, subviewIndex) in indices.enumerated() {
+                subviews[subviewIndex].place(
+                    at: CGPoint(x: x, y: y),
+                    proposal: ProposedViewSize(width: ringSize, height: ringSize)
+                )
+                if position < indices.count - 1 {
+                    x += ringSize + spacing
+                }
+            }
+            y += ringSize + rowGap
+        }
+    }
+}
+
+/// 单核负载环:trackFill 底环 + 占用弧。弧线随采样帧短促缓动过渡,
+/// 无持续动画。
+private struct CoreLoadRing: View {
+    let usage: Double
+    let tint: Color
+    let track: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(track, lineWidth: 2)
+            Circle()
+                .trim(from: 0, to: max(0.001, min(1, usage / 100)))
+                .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 14, height: 14)
+        .animation(.easeOut(duration: 0.3), value: usage)
+    }
+}
 
 private struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
     let kind: MonitorKind
     let theme: MonitorPanelTheme
-    /// true=行内展开紧凑样式(小字体 + 28pt 缩进对齐图标列);false=方卡放大样式(大字体、无缩进)。
-    var isCompact: Bool = true
+    /// CPU 逐核数据:非 nil 时在网格顶部渲染 P/E 两行展示,
+    /// 并剔除 core-split 格子(同源数值不重复展示)。
+    var cpuCoreDetail: CPUCoreDetail? = nil
 
     /// 需要占满整行的字段:长值(IP、启动时间)塞两列会撑破列宽或不可控换行;
     /// wifi-rssi 格结构性超宽(标签+信号条+数值+单位四件套,半格装不下);
-    /// gateway-latency 是其语义配对,一并整行保持网络块纵列节奏。
+    /// gateway-latency 是其语义配对,一并整行保持网络块纵列节奏;
+    /// capacity 为「剩余 / 满充 mAh」斜杠长值,半格装不下。
     /// 命中项显式整行、排到网格末尾。
     private static let fullRowMetricIDs: Set<String> = [
         "ipv4", "ipv6", "public-ip", "uptime", "adapter", "wifi-ssid",
-        "wifi-rssi", "gateway-latency"
+        "wifi-rssi", "gateway-latency", "capacity"
     ]
 
-    private var leadingInset: CGFloat { isCompact ? 28 : 0 }
-    private var rowSpacing: CGFloat { isCompact ? MetricGridMetrics.rowSpacing : 11 }
-    private var labelStyle: Font.TextStyle { isCompact ? .footnote : .subheadline }
-    private var valueStyle: Font.TextStyle { isCompact ? .footnote : .title3 }
+    private var leadingInset: CGFloat { 28 }
+    private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
+    private var labelStyle: Font.TextStyle { .footnote }
+    private var valueStyle: Font.TextStyle { .footnote }
 
     private var shortMetrics: [MonitorMetric] {
-        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) }
+        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) && !isReplacedByCoreDetail($0) }
     }
 
     private var fullRowMetrics: [MonitorMetric] {
-        metrics.filter { Self.fullRowMetricIDs.contains($0.name) }
+        metrics.filter { Self.fullRowMetricIDs.contains($0.name) && !isReplacedByCoreDetail($0) }
+    }
+
+    /// core-split 被 P/E 两行展示取代时从格子列表剔除。
+    private func isReplacedByCoreDetail(_ metric: MonitorMetric) -> Bool {
+        cpuCoreDetail != nil && metric.name == "core-split"
     }
 
     var body: some View {
-        VStack(spacing: isCompact ? 7 : 11) {
+        VStack(spacing: 7) {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
@@ -849,6 +1010,10 @@ private struct MetricDetailGrid: View {
     // 提到 bold 强化存在感。
     private var content: some View {
         VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
+            if let cpuCoreDetail {
+                CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
+            }
+
             if !shortMetrics.isEmpty {
                 LazyVGrid(
                     columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),
@@ -917,7 +1082,6 @@ private struct MetricDetailGrid: View {
                 .monitorPanelMonoFont(valueStyle, weight: .bold)
                 .foregroundStyle(metricValueColor(metric))
                 .lineLimit(1)
-                .minimumScaleFactor(isCompact ? 1 : 0.6)
                 .layoutPriority(2)
             if let unit = parts.unit {
                 Text(unit)
@@ -1011,7 +1175,7 @@ private struct WifiSignalBars: View {
 }
 
 /// 网络明细指标门控(与用户设置无关,纯当前网络条件):条件不符的指标不渲染,
-/// 避免面板挂 "--" 噪音行;条件恢复后自动出现。列表行与卡片模式共用同一套规则。
+/// 避免面板挂 "--" 噪音行;条件恢复后自动出现。
 /// - 主接口非 Wi-Fi(有线/USB 热点)时隐藏 Wi-Fi 信号/SSID——有线连接下
 ///   Wi-Fi 芯片仍可能关联着家中网络,该读数与当前连接无关;
 /// - 探针失败或无对应条件(值为 "--")时隐藏:未连 Wi-Fi → 信号/SSID;
@@ -1278,7 +1442,9 @@ private struct NetworkGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+            theme.rowGlassFill(for: module.kind)
+        }
     }
 
     private var detailMetrics: [MonitorMetric] {
@@ -1405,7 +1571,9 @@ private struct BatteryGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+            theme.rowGlassFill(for: module.kind)
+        }
     }
 
     private var hasBattery: Bool {
@@ -1459,9 +1627,10 @@ private struct BatteryGlassRow: View, Equatable {
 
     private var detailMetrics: [MonitorMetric] {
         // 充电功率已上移到行首常驻 CHG pill,明细不再重复展示。
-        // 充电限制只保留在功率流电池条的刻度线上,低电量模式只保留行头图标
-        // 着色与功率流配色,明细收缩为四项。
-        let names = ["health", "cycle-count", "temperature", "power-loss"]
+        // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
+        // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
+        // 斜杠长值,由 fullRowMetricIDs 自动整行排到末尾。
+        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "capacity"]
 
         let enabledNames = Set(details.map(\.name))
 
@@ -1523,12 +1692,13 @@ private struct PowerSectionHeader: View {
 }
 
 /// 功率流图(冻结原型重制):上排适配器/系统双节点流式排布,下方全宽电池条
-/// (填充=电量,刻度=充电限制),短 stub 垂直连到汇流点;导管粗细 ∝ 瓦数。
+/// (填充=电量,旗标=充电限制),短 stub 垂直连到汇流点;导管粗细 ∝ 瓦数。
 /// 节点走正常流式布局,连线按容器几何计算绘制,构造上不会重叠。
 /// 数据全部来自 BatterySampler 的遥测指标(power-in / power / battery-flow / status),
-/// 沙盒版同样可用。活跃导管用彗星式能量光轨表达流向:灼亮头部 + 渐隐长尾 +
-/// 外发光三层叠加,速度/数量 ∝ 瓦数(仅展开且面板可见时挂载 TimelineView
-/// 30fps 驱动,收起/隐藏即回到纯静态绘制)。
+/// 沙盒版同样可用。活跃导管走相位联动的能量脉冲:单一相位沿
+/// 适配器→汇流点→系统全路径行进,段内 easeInOutCubic 缓动,汇流点交接辉光;
+/// 细导管(<3pt)降级纯色脉冲不叠发光层;电池 stub 为呼吸脉动。
+/// 仅展开且面板可见时挂载 TimelineView 30fps 驱动,收起/隐藏即回到纯静态绘制。
 private struct PowerFlowDiagram: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
@@ -1592,10 +1762,31 @@ private struct PowerFlowDiagram: View {
 
     // MARK: 连线
 
-    /// 导管宽度 ∝ 瓦数(与原型一致:1.2 + √W × 0.62,封顶 6.5)。
+    /// 连线宽度 ∝ 瓦数(苹果风细线:1.8 + √W × 0.14,封顶 3.2;无值 1.8)。
     private func edgeWidth(_ watts: Double?) -> CGFloat {
-        guard let watts, watts >= 0.05 else { return 1.2 }
-        return min(6.5, 1.2 + sqrt(watts) * 0.62)
+        guard let watts, watts >= 0.05 else { return 1.8 }
+        return min(3.2, 1.8 + sqrt(watts) * 0.14)
+    }
+
+    /// 辉光细线:底层同色宽线过 blur 形成柔和光晕,顶层细实线定形。
+    private func glowSegment(
+        _ context: inout GraphicsContext,
+        from: CGPoint,
+        to: CGPoint,
+        color: Color,
+        width: CGFloat,
+        glowAlpha: Double = 0.35
+    ) {
+        var line = Path()
+        line.move(to: from)
+        line.addLine(to: to)
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: max(3, width * 2.6)))
+            layer.stroke(line, with: .color(color.opacity(glowAlpha)),
+                         style: StrokeStyle(lineWidth: width * 2.4, lineCap: .round))
+        }
+        context.stroke(line, with: .color(color.opacity(0.92)),
+                       style: StrokeStyle(lineWidth: width, lineCap: .round))
     }
 
     private func strokeSegment(
@@ -1621,30 +1812,32 @@ private struct PowerFlowDiagram: View {
         let adapterRight = CGPoint(x: Self.nodeWidth, y: topY)
         let systemLeft = CGPoint(x: size.width - Self.nodeWidth, y: topY)
 
-        // 无电池台式机:适配器 → 系统一条直通线,不渲染汇流点与 stub。
+        // 无电池台式机:适配器 → 系统一条直通细线辉光,不渲染汇流点与 stub。
         if !hasBattery {
-            strokeSegment(&context, from: adapterRight, to: systemLeft,
-                          color: neutralEdge, width: edgeWidth(systemWatts))
-            drawEnergyBeam(&context, from: adapterRight, to: systemLeft,
-                           watts: systemWatts, color: edgeShimmer, head: neutralBeamHead,
-                           width: edgeWidth(systemWatts), time: time)
+            glowSegment(&context, from: adapterRight, to: systemLeft,
+                        color: connected ? activeTint : neutralEdge, width: edgeWidth(systemWatts))
+            if let time {
+                let cycle = max(1.6, min(3.6, 5.2 / (1 + (systemWatts ?? 0) / 30)))
+                let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
+                drawPulse(&context, from: adapterRight, to: systemLeft,
+                          progress: easeInOutCubic(u), color: connected ? activeTint : edgeShimmer,
+                          head: neutralBeamHead,
+                          width: edgeWidth(systemWatts))
+            }
             return
         }
 
-        // S1 适配器 → 汇流点:未插电只留暗轨道。
-        strokeSegment(&context, from: adapterRight, to: junction,
-                      color: connected ? neutralEdge : faintEdge,
-                      width: edgeWidth(connected ? powerInWatts : nil))
-        drawEnergyBeam(&context, from: adapterRight, to: junction,
-                       watts: connected ? powerInWatts : nil, color: edgeShimmer, head: neutralBeamHead,
-                       width: edgeWidth(connected ? powerInWatts : nil), time: time)
+        // S1/S2 水平线静态本体:状态色辉光细线(左段插电才有,右段恒有)。
+        glowSegment(&context, from: adapterRight, to: junction,
+                    color: connected ? activeTint : neutralEdge, width: edgeWidth(powerInWatts),
+                    glowAlpha: connected ? 0.35 : 0.22)
+        glowSegment(&context, from: junction, to: systemLeft,
+                    color: activeTint, width: edgeWidth(systemWatts))
 
-        // S2 汇流点 → 系统:系统恒耗电,恒活跃。
-        strokeSegment(&context, from: junction, to: systemLeft,
-                      color: neutralEdge, width: edgeWidth(systemWatts))
-        drawEnergyBeam(&context, from: junction, to: systemLeft,
-                       watts: systemWatts, color: edgeShimmer, head: neutralBeamHead,
-                       width: edgeWidth(systemWatts), time: time)
+        // 相位联动光轨:单一相位沿 适配器→汇流点→系统 全路径行进,
+        // 段内缓动,汇流点交接辉光;未插电时左段自动停摆。右段系统恒耗电恒活跃。
+        drawLinkedBeams(&context, adapterRight: adapterRight, junction: junction,
+                        systemLeft: systemLeft, time: time)
 
         // S3 汇流点 ↕ 电池 stub:充电绿色、放电琥珀(适配器不足时转红)、无流动虚线轨道。
         let stubEnd = CGPoint(x: junction.x, y: Self.nodeHeight + Self.stubHeight)
@@ -1652,93 +1845,213 @@ private struct PowerFlowDiagram: View {
         case .charging:
             strokeSegment(&context, from: junction, to: stubEnd,
                           color: flowTint.opacity(0.75), width: edgeWidth(batteryMagnitude))
-            drawEnergyBeam(&context, from: junction, to: stubEnd,
-                           watts: batteryMagnitude, color: flowTint, head: .white,
-                           width: edgeWidth(batteryMagnitude), time: time)
+            if let time {
+                drawBreathingStub(&context, from: junction, to: stubEnd,
+                                  color: flowTint, width: edgeWidth(batteryMagnitude), time: time)
+            }
         case .discharging:
             let color = isInsufficient
                 ? theme.palette.severityTint(for: .critical).opacity(0.8)
                 : theme.palette.severityTint(for: .warning).opacity(0.75)
             strokeSegment(&context, from: stubEnd, to: junction,
                           color: color, width: edgeWidth(batteryMagnitude))
-            // 放电路径按电池 → 汇流点方向声明,光轨行进方向即流向。
-            drawEnergyBeam(&context, from: stubEnd, to: junction,
-                           watts: batteryMagnitude, color: color, head: .white,
-                           width: edgeWidth(batteryMagnitude), time: time)
+            if let time {
+                drawBreathingStub(&context, from: stubEnd, to: junction,
+                                  color: color, width: edgeWidth(batteryMagnitude), time: time)
+            }
         case .idle:
-            strokeSegment(&context, from: junction, to: stubEnd,
-                          color: faintEdge, width: 1.2, dashed: true)
+            glowSegment(&context, from: junction, to: stubEnd,
+                        color: neutralEdge, width: 1.8, glowAlpha: 0.22)
         }
 
-        // 汇流点圆点。
-        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.4, y: junction.y - 2.4, width: 4.8, height: 4.8))
-        context.fill(dot, with: .color(neutralEdge))
+        // 汇流点:白色小圆 + 状态色呼吸辉光。
+        drawJunctionDot(&context, at: junction, time: time)
     }
 
-    /// 能量光轨(彗星):灼亮头部拖一条渐隐长尾沿导管行进——外发光(模糊宽描边)
-    /// + 亮芯(细渐变描边)+ 头部星点三层叠加,质感对齐 Web 能量可视化的光轨
-    /// 效果。速度/数量 ∝ 瓦数。time 为 nil(门控关闭)时不绘制。
-    private func drawEnergyBeam(
+    /// 汇流点:底层状态色径向辉光(呼吸放大),顶层白色小圆 + 状态色光晕。
+    private func drawJunctionDot(
+        _ context: inout GraphicsContext,
+        at junction: CGPoint,
+        time: TimeInterval?
+    ) {
+        let breath = time.map { 0.5 + 0.5 * sin($0 * .pi / 1.4) } ?? 0.5
+        let color = connected ? activeTint : neutralEdge
+        let r = 5 * (1 + 0.25 * breath)
+        context.fill(
+            Path(ellipseIn: CGRect(x: junction.x - r * 3.2, y: junction.y - r * 3.2,
+                                   width: r * 6.4, height: r * 6.4)),
+            with: .radialGradient(
+                Gradient(colors: [color.opacity(0.4 * breath + 0.1), color.opacity(0)]),
+                center: junction,
+                startRadius: 0,
+                endRadius: r * 3.2
+            )
+        )
+        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.5, y: junction.y - 2.5, width: 5, height: 5))
+        context.fill(dot, with: .color(.white.opacity(0.9 + 0.1 * breath)))
+    }
+
+    // MARK: 能量光轨(相位联动脉冲)
+
+    /// 段内加减速缓动:彗星在汇流点前后“减速停靠→加速接棒”,形成交接脉动。
+    private func easeInOutCubic(_ t: CGFloat) -> CGFloat {
+        t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2
+    }
+
+    /// 相位联动光轨:单一相位沿 适配器→汇流点→系统 全路径行进,两段共享时钟,
+    /// 能量在汇流点连续交接不断裂;周期/数量 ∝ 总传输瓦数。time 为 nil
+    /// (门控关闭)时不绘制。
+    private func drawLinkedBeams(
+        _ context: inout GraphicsContext,
+        adapterRight: CGPoint,
+        junction: CGPoint,
+        systemLeft: CGPoint,
+        time: TimeInterval?
+    ) {
+        guard let time else { return }
+        let lenLeft = junction.x - adapterRight.x
+        let lenRight = systemLeft.x - junction.x
+        let lenTotal = lenLeft + lenRight
+        guard lenTotal > 0 else { return }
+        let fJ = lenLeft / lenTotal
+
+        let wattsLeft = connected ? powerInWatts : nil
+        let wattsRight = systemWatts ?? 0
+        let totalW = (wattsLeft ?? 0) + wattsRight
+        guard totalW >= 0.05 else { return }
+
+        let cycle = max(1.6, min(3.6, 5.2 / (1 + totalW / 30)))
+        let beams = totalW > 60 ? 2 : 1
+        // 脉冲走状态色:充电绿 / 放电黄 / 不足红;头部白点如火花。
+        let pulseColor = connected ? activeTint : edgeShimmer
+        for k in 0..<beams {
+            let u = CGFloat(((time / cycle) + Double(k) / Double(beams)).truncatingRemainder(dividingBy: 1))
+            drawJunctionGlow(&context, at: junction, u: u, fJ: fJ, color: pulseColor)
+            if u <= fJ {
+                guard let wattsLeft, wattsLeft >= 0.05 else { continue }
+                drawPulse(&context, from: adapterRight, to: junction,
+                          progress: easeInOutCubic(u / fJ),
+                          color: pulseColor, head: neutralBeamHead,
+                          width: edgeWidth(wattsLeft))
+            } else {
+                drawPulse(&context, from: junction, to: systemLeft,
+                          progress: easeInOutCubic((u - fJ) / (1 - fJ)),
+                          color: pulseColor, head: neutralBeamHead,
+                          width: edgeWidth(wattsRight))
+            }
+        }
+    }
+
+    /// 汇流点交接辉光:脉冲行经汇流点前后短暂点亮放大,强化能量在此交接分发。
+    private func drawJunctionGlow(
+        _ context: inout GraphicsContext,
+        at junction: CGPoint,
+        u: CGFloat,
+        fJ: CGFloat,
+        color: Color
+    ) {
+        let d = abs(u - fJ)
+        guard d < 0.10 else { return }
+        let a = 1 - d / 0.10
+        let r = (4.5 + 4 * a) * 2.4
+        context.fill(
+            Path(ellipseIn: CGRect(x: junction.x - r, y: junction.y - r, width: r * 2, height: r * 2)),
+            with: .radialGradient(
+                Gradient(colors: [color.opacity(0.9 * a), color.opacity(0)]),
+                center: junction,
+                startRadius: 0,
+                endRadius: r
+            )
+        )
+    }
+
+    /// 能量脉冲:拖短尾、辉光收敛、渐变陡峭,读感是离散的“能量脉冲包”而非
+    /// 连续流带。细导管(<3pt)降级纯色脉冲,不叠加发光层。
+    private func drawPulse(
         _ context: inout GraphicsContext,
         from: CGPoint,
         to: CGPoint,
-        watts: Double?,
+        progress: CGFloat,
         color: Color,
         head: Color,
         width: CGFloat,
-        time: TimeInterval?
+        tailFraction: CGFloat = 0.20
     ) {
-        guard let time, let watts, watts >= 0.05 else { return }
-        let cycle = max(1.4, min(3.4, 4.2 / (1 + watts / 25)))
-        let beams = watts > 30 ? 2 : 1
-        let tail: CGFloat = 0.45
-        for k in 0..<beams {
-            let phase = CGFloat((time / cycle + Double(k) / Double(beams)).truncatingRemainder(dividingBy: 1))
-            let headPos = phase * (1 + tail * 2) - tail
-            let tailPos = headPos - tail
-            guard headPos > 0, tailPos < 1 else { continue }
-            var beam = Path()
-            beam.move(to: lerp(from, to, max(0, tailPos)))
-            beam.addLine(to: lerp(from, to, min(1, headPos)))
-            // 渐变端点取未裁剪的带头带尾,光轨形状在滑入滑出过程中保持稳定。
-            let g0 = lerp(from, to, tailPos)
-            let g1 = lerp(from, to, headPos)
+        guard progress > 0.004 else { return }
+        let p0 = lerp(from, to, max(0, progress - tailFraction))
+        let p1 = lerp(from, to, progress)
+        var beam = Path()
+        beam.move(to: p0)
+        beam.addLine(to: p1)
 
-            // 外发光层:宽幅模糊低透明度,形成霓虹光晕。
-            context.drawLayer { layer in
-                layer.addFilter(.blur(radius: 2.4))
-                layer.stroke(
-                    beam,
-                    with: .linearGradient(
-                        Gradient(colors: [color.opacity(0), color.opacity(0.4), color.opacity(0.7)]),
-                        startPoint: g0,
-                        endPoint: g1
-                    ),
-                    style: StrokeStyle(lineWidth: width + 2.6, lineCap: .round)
-                )
-            }
+        if width < 3 {
+            context.stroke(beam, with: .color(color.opacity(0.85)),
+                           style: StrokeStyle(lineWidth: max(1.4, width), lineCap: .round))
+            let r = max(1.3, width * 0.5)
+            context.fill(
+                Path(ellipseIn: CGRect(x: p1.x - r, y: p1.y - r, width: r * 2, height: r * 2)),
+                with: .color(head.opacity(0.94))
+            )
+            return
+        }
 
-            // 亮芯层:更细更亮,向头部渐次逼近白热。
-            context.stroke(
+        context.drawLayer { layer in
+            layer.addFilter(.blur(radius: 1.2))
+            layer.stroke(
                 beam,
                 with: .linearGradient(
-                    Gradient(colors: [color.opacity(0), color.opacity(0.55), head.opacity(0.95)]),
-                    startPoint: g0,
-                    endPoint: g1
+                    Gradient(colors: [color.opacity(0), color.opacity(0.35), color.opacity(0.85)]),
+                    startPoint: p0,
+                    endPoint: p1
                 ),
-                style: StrokeStyle(lineWidth: max(1.4, width * 0.6), lineCap: .round)
+                style: StrokeStyle(lineWidth: width + 1.6, lineCap: .round)
             )
-
-            // 头部星点:行进前沿的一点亮斑。
-            if headPos <= 1 {
-                let hp = lerp(from, to, headPos)
-                let r = max(1.6, width * 0.42)
-                context.fill(
-                    Path(ellipseIn: CGRect(x: hp.x - r, y: hp.y - r, width: r * 2, height: r * 2)),
-                    with: .color(head.opacity(0.95))
-                )
-            }
         }
+        context.stroke(
+            beam,
+            with: .linearGradient(
+                Gradient(colors: [color.opacity(0), color.opacity(0.55), head.opacity(0.96)]),
+                startPoint: p0,
+                endPoint: p1
+            ),
+            style: StrokeStyle(lineWidth: max(1.4, width * 0.6), lineCap: .round)
+        )
+        let r = max(1.6, width * 0.5)
+        context.fill(
+            Path(ellipseIn: CGRect(x: p1.x - r, y: p1.y - r, width: r * 2, height: r * 2)),
+            with: .color(head.opacity(0.96))
+        )
+    }
+
+    /// 电池 stub 呼吸脉动:亮度与线宽正弦起伏、端点光点胀缩,替代移动彗星——
+    /// 16pt 短路径不承载移动光轨,呼吸表达能量注入/抽出的绵密感。
+    private func drawBreathingStub(
+        _ context: inout GraphicsContext,
+        from: CGPoint,
+        to: CGPoint,
+        color: Color,
+        width: CGFloat,
+        time: TimeInterval
+    ) {
+        let breath = 0.5 + 0.5 * sin(time * .pi / 1.4)
+        let a = 0.35 + 0.45 * breath
+        var stub = Path()
+        stub.move(to: from)
+        stub.addLine(to: to)
+        context.stroke(
+            stub,
+            with: .linearGradient(
+                Gradient(colors: [color.opacity(a * 0.31), color.opacity(a)]),
+                startPoint: from,
+                endPoint: to
+            ),
+            style: StrokeStyle(lineWidth: width * (0.85 + 0.4 * breath), lineCap: .round)
+        )
+        let r = 1.5 + 1.6 * breath
+        context.fill(
+            Path(ellipseIn: CGRect(x: to.x - r, y: to.y - r, width: r * 2, height: r * 2)),
+            with: .color(color.opacity(0.5 + 0.45 * breath))
+        )
     }
 
     private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
@@ -1812,9 +2125,10 @@ private struct PowerFlowDiagram: View {
 
     // MARK: 全宽电池条
 
-    /// 电池从「节点」升级为「全宽容器」:填充 = 电量百分比,白色刻度 = 系统充电限制;
-    /// 左侧电量+状态、右侧 ETA 走 flex 两端对齐,文字永不碰撞。任何电源状态
-    /// (含插电直供)都承载信息,不再出现「下半图空白」。
+    /// 电池从「节点」升级为「全宽容器」:填充 = 电量百分比,卡标 = 系统充电限制;
+    /// 左侧电量+状态、右侧 ETA 走 flex 两端对齐,文字永不碰撞。卡标从条外
+    /// 上缘插入、止于条体上半,既传达「上限卡在这里」又不碰中部文字。
+    /// 任何电源状态(含插电直供)都承载信息,不再出现「下半图空白」。
     private var batteryBar: some View {
         GeometryReader { geo in
             ZStack(alignment: .leading) {
@@ -1823,13 +2137,6 @@ private struct PowerFlowDiagram: View {
                     .frame(width: max(0, CGFloat(module.value) / 100 * geo.size.width - 4),
                            height: geo.size.height - 4)
                     .offset(x: 2, y: 2)
-
-                if let limit = numericValue("charge-limit"), limit < 100 {
-                    Rectangle()
-                        .fill(isDark ? Color.white.opacity(0.6) : Color.black.opacity(0.35))
-                        .frame(width: 2, height: geo.size.height - 4)
-                        .offset(x: geo.size.width * CGFloat(limit) / 100 - 1, y: 2)
-                }
 
                 HStack(spacing: 6) {
                     Text(percent(module.value))
@@ -1856,6 +2163,22 @@ private struct PowerFlowDiagram: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(theme.trackFill))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(barBorder, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        // 卡标挂在裁剪层之外,顶端探出条外的部分不被裁掉。
+        .overlay(limitTick)
+    }
+
+    /// 充电上限卡标(冻结原型「方案 B 旗标」):条外上缘倒三角旗头 + 细线下探
+    /// 进条体上半(止于中部文字带之上),视觉上像从外部插进电池标记上限位置;
+    /// 与电量填充同用百分比定位,随条宽自适应。旗头探出条外,故挂在裁剪层之外。
+    private var limitTick: some View {
+        GeometryReader { geo in
+            if let limit = numericValue("charge-limit"), limit < 100 {
+                LimitFlagShape()
+                    .fill(isDark ? Color.white.opacity(0.68) : Color.black.opacity(0.42))
+                    .frame(width: 8, height: 19)
+                    .offset(x: geo.size.width * CGFloat(limit) / 100 - 4, y: -6)
+            }
+        }
     }
 
     private var barFillGradient: LinearGradient {
@@ -2034,6 +2357,14 @@ private struct PowerFlowDiagram: View {
         isLowPowerMode ? theme.palette.severityTint(for: .warning) : tint
     }
 
+    /// 连线状态色:充电用主题绿;放电用警示黄,适配器不足优先转警示红。
+    /// 与原型「充电绿 / 放电黄 / 不足红」一致,整条水平线共享同一状态色。
+    private var activeTint: Color {
+        if isInsufficient { return theme.palette.severityTint(for: .critical) }
+        if flowDirection == .discharging { return theme.palette.severityTint(for: .warning) }
+        return flowTint
+    }
+
     private var neutralEdge: Color {
         isDark ? Color.white.opacity(0.36) : Color.black.opacity(0.30)
     }
@@ -2062,327 +2393,30 @@ private struct PowerFlowDiagram: View {
     }
 }
 
+/// 充电上限旗标形状:顶端倒三角旗头(底边在上、尖朝下) + 自旗头尖端下探的
+/// 细圆头竖线,单一填充色整形绘制。
+private struct LimitFlagShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let headHeight: CGFloat = 5
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY + headHeight))
+        path.closeSubpath()
+        let lineWidth: CGFloat = 1.5
+        path.addRoundedRect(
+            in: CGRect(x: rect.midX - lineWidth / 2, y: rect.minY + headHeight,
+                       width: lineWidth, height: rect.height - headHeight),
+            cornerSize: CGSize(width: lineWidth / 2, height: lineWidth / 2)
+        )
+        return path
+    }
+}
+
 private func localizedNetworkInterface(_ summary: String) -> String {
     let key = "network-interface.\(summary)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? summary : localized
-}
-
-// MARK: - Metric Card
-
-/// 大卡片:显示方式设为「大卡片」的模块的常显形态(hero 主值 + 指标网格 + TOP 进程)。
-/// 无任何手势/按钮——显示方式是静态配置,面板内交互仍只有列表行的点击展开一层。
-/// 源自已弃用的悬停放大方案(61febc61),剥离了浮标/还原按钮与 enlargedKinds 交互态。
-private struct MetricCardView: View, Equatable {
-    let module: MonitorModule
-    let theme: MonitorPanelTheme
-    var details: [MonitorMetric] = []
-    var topMemoryProcesses: [TopMemoryProcess] = []
-    var showMemoryProcesses = false
-    var topCPUProcesses: [TopCPUProcess] = []
-    var showCPUProcesses = false
-    var topDiskProcesses: [TopDiskProcess] = []
-    var showDiskProcesses = false
-    var topNetworkProcesses: [TopNetworkProcess] = []
-    var showNetworkProcesses = false
-
-    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段。
-    static func == (lhs: MetricCardView, rhs: MetricCardView) -> Bool {
-        lhs.module == rhs.module
-            && lhs.theme.palette.preference == rhs.theme.palette.preference
-            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.details == rhs.details
-            && lhs.topMemoryProcesses == rhs.topMemoryProcesses
-            && lhs.showMemoryProcesses == rhs.showMemoryProcesses
-            && lhs.topCPUProcesses == rhs.topCPUProcesses
-            && lhs.showCPUProcesses == rhs.showCPUProcesses
-            && lhs.topDiskProcesses == rhs.topDiskProcesses
-            && lhs.showDiskProcesses == rhs.showDiskProcesses
-            && lhs.topNetworkProcesses == rhs.topNetworkProcesses
-            && lhs.showNetworkProcesses == rhs.showNetworkProcesses
-    }
-
-    private var tint: Color {
-        theme.moduleTint(for: module.kind)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-            hero
-            if !details.isEmpty {
-                // 网络卡片明细走与列表行同一套门控(断网/有线/无 Wi-Fi 时
-                // 不渲染 "--" 行,见 filteredNetworkMetrics);其余模块原样展示。
-                if module.kind == .network {
-                    let visible = filteredNetworkMetrics(details, summary: module.summary)
-                    if !visible.isEmpty {
-                        MetricDetailGrid(metrics: visible, kind: module.kind, theme: theme, isCompact: false)
-                    }
-                } else {
-                    MetricDetailGrid(metrics: details, kind: module.kind, theme: theme, isCompact: false)
-                }
-            }
-            if let section = processSection {
-                CardProcessList(
-                    items: section.items,
-                    metricColumns: section.columns,
-                    separator: theme.rowSeparator(for: module.kind),
-                    theme: theme
-                )
-            }
-        }
-        .padding(16)
-        // 高度随内容自适应:内容多(CPU/内存带图表+进程)则高,内容少(电源/网络)则矮,
-        // 不强制方形以免底部大片留白;同时避免自测宽度回写高度与窗口跟随动画相互干扰。
-        .frame(maxWidth: .infinity, alignment: .topLeading)
-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
-    }
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            Image(systemName: module.kind.symbol)
-                .font(.title3.weight(.semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
-
-            Text(module.kind.title)
-                .font(.headline)
-                .foregroundStyle(theme.primaryText)
-                .lineLimit(1)
-
-            Spacer(minLength: 8)
-        }
-    }
-
-    @ViewBuilder
-    private var hero: some View {
-        switch module.kind {
-        case .cpu, .gpu:
-            HStack(alignment: .center, spacing: 12) {
-                bigValue(percentText)
-                SparklineChart(samples: module.samples, tint: tint)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 72)
-            }
-        case .memory, .storage:
-            VStack(alignment: .leading, spacing: 12) {
-                bigValue(percentText)
-                ProgressMeter(value: module.value, tint: tint, theme: theme)
-                    .frame(height: 10)
-            }
-        case .network:
-            VStack(alignment: .leading, spacing: 14) {
-                Text(localizedNetworkInterface(module.summary))
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
-                    .foregroundStyle(theme.valueText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-                HStack(spacing: 22) {
-                    cardRate(symbol: "arrow.down", value: metricValue("download"))
-                    cardRate(symbol: "arrow.up", value: metricValue("upload"))
-                }
-            }
-        case .battery:
-            VStack(alignment: .leading, spacing: 10) {
-                bigValue(hasBattery ? percentText : metricValue("power"))
-                if hasBattery {
-                    cardRate(symbol: "powermeter", value: metricValue("power"))
-                }
-            }
-        case .fan:
-            // 风扇大卡片:大数字 max RPM + sparkline
-            // Y 轴用风扇硬件 min~max 归一化,与列表行 sparkline 保持一致。
-            VStack(alignment: .leading, spacing: 12) {
-                bigValue(percentText)
-                let fanMin = Double(module.fans?.map(\.minRPM).min() ?? 0)
-                let fanMax = Double(module.fans?.map(\.maxRPM).max() ?? 100)
-                SparklineChart(samples: module.samples, tint: tint, minValue: fanMin, maxValue: fanMax)
-                    .frame(height: 36)
-            }
-        case .bluetooth:
-            // 蓝牙不提供卡片样式(设置侧已门控),此处仅为穷尽分支兜底:
-            // 渲染设备数与展开区同款设备列表。
-            VStack(alignment: .leading, spacing: 12) {
-                bigValue(module.summary)
-                BluetoothDeviceList(devices: module.bluetoothDevices ?? [], theme: theme)
-            }
-        }
-    }
-
-    private func bigValue(_ text: String) -> some View {
-        Text(text)
-            .font(.system(size: 46, weight: .semibold, design: .rounded))
-            .monospacedDigit()
-            .foregroundStyle(theme.valueText)
-            .lineLimit(1)
-            .minimumScaleFactor(0.5)
-            .fixedSize(horizontal: true, vertical: false)
-    }
-
-    private func cardRate(symbol: String, value: String) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: symbol)
-                .font(.callout.weight(.bold))
-                .foregroundStyle(tint)
-            Text(value)
-                .monitorPanelMonoFont(.title3, weight: .semibold)
-                .foregroundStyle(theme.valueText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.6)
-        }
-    }
-
-    /// 按当前模块类型返回已开启的 top 进程小节(items + 数值列数):未开启时返回 nil。
-    /// 四类列表统一固定 5 行位置:真实数据从上往下填,空位由 CardProcessList 统一补“—”占位。
-    private var processSection: (items: [CardProcessItem], columns: Int)? {
-        #if !DIRECT_DISTRIBUTION
-        // App Store 沙盒版无法采样他进程,大卡片不渲染 TOP 进程小节。
-        return nil
-        #else
-        switch module.kind {
-        case .cpu:
-            guard showCPUProcesses else { return nil }
-            let items = topCPUProcesses.enumerated().map { index, proc in
-                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
-                    CardProcessMetric(symbol: nil, text: String(format: "%.1f%%", proc.cpuUsage))
-                ])
-            }
-            return (items, 1)
-        case .memory:
-            guard showMemoryProcesses else { return nil }
-            let items = topMemoryProcesses.enumerated().map { index, proc in
-                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
-                    CardProcessMetric(symbol: nil, text: byteCountString(Int64(proc.memoryUsage), countStyle: .memory))
-                ])
-            }
-            return (items, 1)
-        case .storage:
-            guard showDiskProcesses else { return nil }
-            let items = topDiskProcesses.enumerated().map { index, proc in
-                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
-                    CardProcessMetric(symbol: "↑", text: byteCountString(Int64(proc.bytesWritten))),
-                    CardProcessMetric(symbol: "↓", text: byteCountString(Int64(proc.bytesRead)))
-                ])
-            }
-            return (items, 2)
-        case .network:
-            guard showNetworkProcesses else { return nil }
-            let items = topNetworkProcesses.enumerated().map { index, proc in
-                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
-                    CardProcessMetric(symbol: "↑", text: bytesPerSecond(Double(proc.upload))),
-                    CardProcessMetric(symbol: "↓", text: bytesPerSecond(Double(proc.download)))
-                ])
-            }
-            return (items, 2)
-        case .gpu, .battery, .fan, .bluetooth:
-            // 风扇/蓝牙大卡片无 TOP 进程小节
-            return nil
-        }
-        #endif
-    }
-
-    private var percentText: String {
-        "\(Int(module.value.rounded()))%"
-    }
-
-    /// 当前模块是否为真电池(非台式机外接电源):决定大卡英雄区显示电量百分比还是直接显功耗。
-    private var hasBattery: Bool {
-        module.metrics.first { $0.name == "type" }?.value == "battery"
-    }
-
-    private func metricValue(_ name: String) -> String {
-        module.metrics.first { $0.name == name }?.value ?? "--"
-    }
-}
-
-// MARK: - Card Process List
-
-private struct CardProcessMetric {
-    let symbol: String?
-    let text: String
-}
-
-private struct CardProcessItem: Identifiable {
-    let id: Int
-    let icon: NSImage?
-    let name: String
-    let metrics: [CardProcessMetric]
-    var isPlaceholder = false
-}
-
-/// 方卡专用的 top 进程列表:与行内版统一取自同一数据,但图标/字体更大、不再缩进 28pt,
-/// 与卡片内其他内容左对齐。单值(CPU/内存)只显一列,双值(磁盘/网络)显↑/↓两列。
-/// 固定 5 行:真实数据从上往下填,空位显“—”占位,高度永远不变、无加载跳变。
-private struct CardProcessList: View {
-    let items: [CardProcessItem]
-    var metricColumns: Int = 1
-    let separator: Color
-    let theme: MonitorPanelTheme
-
-    private static let rowCount = 5
-
-    private var placeholderItem: CardProcessItem {
-        CardProcessItem(
-            id: -1,
-            icon: nil,
-            name: "—",
-            metrics: Array(repeating: CardProcessMetric(symbol: nil, text: "—"), count: max(1, metricColumns)),
-            isPlaceholder: true
-        )
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            Rectangle()
-                .fill(separator)
-                .frame(height: 1)
-
-            VStack(spacing: 8) {
-                // 按下标固定 5 个槽位:每个槽位要么真实行、要么“—”占位,数据到达为同槽位内容替换,
-                // 高度恒定、不触发窗口二次动画。
-                ForEach(0 ..< Self.rowCount, id: \.self) { index in
-                    row(for: index < items.count ? items[index] : placeholderItem)
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: items.count)
-        }
-    }
-
-    private func row(for item: CardProcessItem) -> some View {
-        HStack(spacing: 9) {
-            if item.isPlaceholder {
-                Color.clear
-                    .frame(width: 20, height: 20)
-            } else {
-                ProcessIcon(icon: item.icon, theme: theme)
-                    .frame(width: 20, height: 20)
-            }
-
-            Text(item.name)
-                .monitorPanelCaptionFont(.subheadline)
-                .foregroundStyle(item.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.primaryText)
-                .lineLimit(1)
-                .truncationMode(.tail)
-
-            Spacer(minLength: 6)
-
-            HStack(spacing: 12) {
-                ForEach(Array(item.metrics.enumerated()), id: \.offset) { _, metric in
-                    HStack(spacing: 3) {
-                        if let symbol = metric.symbol {
-                            Text(symbol)
-                                .monitorPanelMonoFont(.footnote, weight: .medium)
-                        }
-                        Text(metric.text)
-                            .monitorPanelMonoFont(.footnote, weight: .semibold)
-                            .frame(minWidth: 56, alignment: .trailing)
-                    }
-                }
-            }
-            .foregroundStyle(item.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.secondaryText)
-            .layoutPriority(1)
-        }
-    }
 }
 
 // MARK: - Transparent Window Background
@@ -2647,8 +2681,9 @@ struct MonitorPanelTheme {
         palette.moduleTint(for: kind)
     }
 
-    func rowGlassTint(for kind: MonitorKind) -> Color {
-        palette.rowGlassTint(for: kind)
+    @ViewBuilder
+    func rowGlassFill(for kind: MonitorKind) -> some View {
+        palette.rowGlassFill(for: kind)
     }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
@@ -2801,6 +2836,66 @@ private struct CPUProcessList: View {
                 RosettaBanner(count: translatedCount, theme: theme)
                     .padding(.leading, 28)
             }
+        }
+    }
+}
+
+// MARK: - Top GPU Processes
+
+private struct GPUProcessList: View {
+    let processes: [TopGPUProcess]
+    let theme: MonitorPanelTheme
+
+    /// 固定展示 top 5 个位置:真实数据从上往下填,空位显“—”占位。
+    private static let rowCount = 5
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .gpu))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    if index < processes.count {
+                        let proc = processes[index]
+                        HStack(spacing: 6) {
+                            ProcessIcon(icon: proc.icon, theme: theme)
+                                .frame(width: 16, height: 16)
+
+                            Text(proc.name)
+                                .monitorPanelCaptionFont(.footnote)
+                                .foregroundStyle(theme.primaryText)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                            Spacer(minLength: 4)
+
+                            Text(String(format: "%.1f%%", proc.gpuUsage))
+                                .monitorPanelMonoFont(.caption2, weight: .medium)
+                                .foregroundStyle(theme.secondaryText)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
+
+                            // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
+                            // GPU 时间,空值(旧驱动/未上报)时不渲染。
+                            if !proc.api.isEmpty {
+                                Text(proc.api)
+                                    .monitorPanelCaptionFont(.caption2)
+                                    .foregroundStyle(theme.captionText)
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                        }
+                    } else {
+                        ProcessPlaceholderRow(theme: theme)
+                    }
+                }
+            }
+            .padding(.leading, 28)
+            .animation(.easeInOut(duration: 0.2), value: processes.count)
         }
     }
 }
@@ -3083,12 +3178,14 @@ private struct BluetoothGlassRow: View, Equatable {
                     .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+            theme.rowGlassFill(for: module.kind)
+        }
     }
 }
 
-/// 蓝牙展开区设备列表:类型图标 + 名称 + 电量条 + 百分比。
-/// 未上报电量的设备(厂商私有协议,系统本身收不到)只显示「已连接」,不伪造读数。
+/// 蓝牙展开区设备列表:图标底座 + 名称/类型双行文字 + 电量条 + 百分比。
+/// 未上报电量的设备(厂商私有协议,系统本身收不到)右侧以短横占位,不伪造读数。
 private struct BluetoothDeviceList: View {
     let devices: [BluetoothDeviceInfo]
     let theme: MonitorPanelTheme
@@ -3100,7 +3197,7 @@ private struct BluetoothDeviceList: View {
                 .frame(height: 1)
                 .padding(.leading, 28)
 
-            VStack(spacing: 4) {
+            VStack(spacing: 8) {
                 ForEach(devices) { device in
                     deviceRow(device)
                 }
@@ -3111,35 +3208,49 @@ private struct BluetoothDeviceList: View {
 
     @ViewBuilder
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            // 图标底座:模块色圆角方块承托形态符号,与系统设备卡片语言一致。
             Image(systemName: device.type.symbol)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.secondaryText)
-                .frame(width: 14)
+                .foregroundStyle(theme.moduleTint(for: .bluetooth))
+                .frame(width: 26, height: 26)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(theme.badgeFill(for: .bluetooth))
+                }
 
-            Text(device.name)
-                .monitorPanelMetricLabelFont()
-                .foregroundStyle(theme.primaryText)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(device.name)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+                Text(typeLabel(for: device.type))
+                    .monitorPanelCaptionFont()
+                    .foregroundStyle(theme.captionText)
+                    .lineLimit(1)
+            }
 
             Spacer(minLength: 8)
 
             if let level = device.batteryLevel {
                 BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
-                    .frame(width: 44, height: 4)
+                    .frame(width: 56, height: 6)
                 Text("\(level)%")
-                    .monitorPanelMonoFont(.callout, weight: .semibold)
-                    .foregroundStyle(batteryColor(level))
+                    .monitorPanelMonoFont(.footnote, weight: .semibold)
+                    .foregroundStyle(levelTextColor(level))
                     .lineLimit(1)
-                    .monospacedDigit()
+                    .frame(width: 38, alignment: .trailing)
+            } else {
+                // 无电量设备右侧占位与 TOP 进程空位行同规;列表本身即「已连接」清单。
+                Text("—")
+                    .monitorPanelCaptionFont(.footnote)
+                    .foregroundStyle(theme.captionText)
                     .frame(width: 38, alignment: .trailing)
             }
-            // 无电量设备右侧留空:列表本身即「已连接」清单,重复标注无信息量
-            //(厂商私有协议设备系统读不到电量,不伪造读数)。
         }
     }
 
-    /// 电量条/读数颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
+    /// 电量条颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
     private func batteryColor(_ level: Int) -> Color {
         if Double(level) <= MonitorConstants.batteryCriticalThreshold {
             return theme.palette.severityTint(for: .critical)
@@ -3148,6 +3259,32 @@ private struct BluetoothDeviceList: View {
             return theme.palette.severityTint(for: .warning)
         }
         return theme.palette.severityTint(for: .calm)
+    }
+
+    /// 电量数字颜色:常态用中性值色,只有低电区间才染 severity 色,
+    /// 避免饱和绿文字在玻璃底上抢眼。
+    private func levelTextColor(_ level: Int) -> Color {
+        if Double(level) <= MonitorConstants.batteryCriticalThreshold {
+            return theme.palette.severityTint(for: .critical)
+        }
+        if Double(level) <= MonitorConstants.batteryWarningThreshold {
+            return theme.palette.severityTint(for: .warning)
+        }
+        return theme.valueText
+    }
+
+    /// 设备类型副标题:三语文案见 Localizable 的 bluetooth.type.* 键。
+    private func typeLabel(for type: BluetoothDeviceType) -> String {
+        switch type {
+        case .mouse: String(localized: "bluetooth.type.mouse")
+        case .keyboard: String(localized: "bluetooth.type.keyboard")
+        case .headphones: String(localized: "bluetooth.type.headphones")
+        case .headset: String(localized: "bluetooth.type.headset")
+        case .gamepad: String(localized: "bluetooth.type.gamepad")
+        case .trackpad: String(localized: "bluetooth.type.trackpad")
+        case .speaker: String(localized: "bluetooth.type.speaker")
+        case .other: String(localized: "bluetooth.type.other")
+        }
     }
 }
 
@@ -3268,7 +3405,13 @@ struct CollapsibleDetail<Content: View>: View {
                     Color.clear
                         .onAppear { contentHeight = geometry.size.height }
                         .onChange(of: geometry.size.height) { _, newValue in
-                            contentHeight = newValue
+                            // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
+                            // onChange 回调无动画上下文,裸更新会让容器高度与下方
+                            // 内容的位移瞬跳;显式包同款补间事务,与展开/收起、
+                            // 窗口层的补间同时长同曲线,整链同步平滑。
+                            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+                                contentHeight = newValue
+                            }
                         }
                 }
             )
@@ -3276,10 +3419,6 @@ struct CollapsibleDetail<Content: View>: View {
             .frame(height: isExpanded ? contentHeight : 0, alignment: .top)
             .opacity(isExpanded ? 1 : 0)
             .clipped()
-            // 展开状态下内容自身高度变化(如风扇模式切换插入滑杆/曲线)平滑过渡,
-            // 而非无动画瞬跳;折叠态的高度变化不可见,不受影响。展开/收起仍由
-            // 调用方的 withAnimation(isExpanded)驱动,与本动画互不干扰。
-            .animation(.easeInOut(duration: 0.18), value: contentHeight)
             // 折叠状态(高度 0、不可见)不参与点击,避免拦截行的展开手势。
             .allowsHitTesting(isExpanded)
     }

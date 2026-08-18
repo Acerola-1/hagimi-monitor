@@ -42,16 +42,16 @@ struct CompatibleGlassContainer<Content: View>: View {
 /// 宿主窗口，每一帧都要重新向 WindowServer 请求背景合成，导致整个面板(含顶部
 /// SYSTEM·LIVE)闪烁、像被重新加载。`.withinWindow` 只混合窗口内内容，resize
 /// 不再触发桌面重采样，从根上消除闪烁。
-struct CompatibleGlassEffect: ViewModifier {
-    var tint: Color
+struct CompatibleGlassEffect<Fill: View>: ViewModifier {
     var cornerRadius: CGFloat
+    var fill: Fill
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
             .background {
-                shape
-                    .fill(tint)
+                fill
+                    .clipShape(shape)
                     .background {
                         VisualEffectView(material: .menu, blendingMode: .withinWindow)
                             .clipShape(shape)
@@ -85,7 +85,13 @@ extension View {
     ///   - tint: 玻璃效果着色
     ///   - cornerRadius: 圆角半径
     func compatibleGlassEffect(tint: Color = .clear, cornerRadius: CGFloat) -> some View {
-        modifier(CompatibleGlassEffect(tint: tint, cornerRadius: cornerRadius))
+        modifier(CompatibleGlassEffect(cornerRadius: cornerRadius, fill: tint))
+    }
+
+    /// 跨版本兼容的 `.glassEffect` 替代(自定义填充版):填充可以是渐变等任意视图,
+    /// 用于活力配色行 tint 的垂直衰减(见 `MonitorPalette.rowGlassFill`)。
+    func compatibleGlassEffect(cornerRadius: CGFloat, @ViewBuilder fill: () -> some View) -> some View {
+        modifier(CompatibleGlassEffect(cornerRadius: cornerRadius, fill: fill()))
     }
 
     /// 跨版本兼容的 `.glassEffectID` 替代。
@@ -94,10 +100,10 @@ extension View {
         modifier(CompatibleGlassEffectID(id: id, namespace: namespace))
     }
 
-    /// 面板底部按钮样式:统一用毛玻璃材质胶囊(`PanelMaterialButtonStyle`)。
+    /// 面板底部按钮样式:统一用毛玻璃材质圆角卡片(`PanelMaterialButtonStyle`)。
     /// 面板整体(含各行)已是 `.menu` 毛玻璃基调,底部按钮若用 26 原生
     /// `.buttonStyle(.glass)` 液态玻璃,深色模式下会偏亮偏透、与周围格格不入,
-    /// 故所有版本都统一为与行同款的毛玻璃胶囊。
+    /// 故所有版本都统一为与行同款的毛玻璃圆角卡片。
     func compatibleButtonStyle() -> some View {
         self.buttonStyle(PanelMaterialButtonStyle())
     }
@@ -105,13 +111,16 @@ extension View {
 
 // MARK: - macOS 15 毛玻璃按钮样式
 
-/// 面板底部按钮样式:毛玻璃材质胶囊,与面板各行同款的 `.menu` +
-/// `.withinWindow` 毛玻璃,融为一体、深浅模式下基调一致。
+/// 面板底部按钮样式:毛玻璃材质卡片,与面板各行同款的 `.menu` +
+/// `.withinWindow` 毛玻璃与 `rowCornerRadius` 圆角,融为一体、
+/// 深浅模式下基调一致。
 private struct PanelMaterialButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        let shape = Capsule()
+        let shape = RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
         return configuration.label
-            .padding(.vertical, 6)
+            // 内边距与行卡片严格一致(同为 vertical 8):按钮高度与行同高,
+            // rowCornerRadius 在矮按钮上会被夹到 height/2 退化成胶囊。
+            .padding(.vertical, 8)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
             .background {

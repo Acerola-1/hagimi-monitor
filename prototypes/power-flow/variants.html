@@ -1,0 +1,615 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 功率流 · T 形枢纽 v3</title>
+<style>
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-bat: #65AF52;
+    --sev-warn: #E0A63C;
+    --sev-crit: #E05C5C;
+    --row-radius: 14px;
+  }
+  body.light {
+    --panel-bg: rgba(255, 255, 255, 0.52);
+    --row-glass: rgba(122, 145, 180, 0.10);
+    --row-separator: rgba(30, 50, 80, 0.14);
+    --text-primary: rgba(10, 15, 25, 0.92);
+    --text-value: rgba(10, 15, 25, 0.85);
+    --text-secondary: rgba(10, 15, 25, 0.72);
+    --text-caption: rgba(10, 15, 25, 0.55);
+    --track-fill: rgba(10, 15, 25, 0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 18px; padding: 36px 16px 56px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+  body.light {
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #cfdcf5 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #ecd9ee 0%, transparent 55%),
+      #e8eaf0;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  h1 { font-size: 17px; font-weight: 700; letter-spacing: 0.3px; }
+  .subtitle { font-size: 12px; color: var(--text-caption); margin-top: -10px; }
+
+  /* ====== 控制台 ====== */
+  .controls {
+    width: 880px; max-width: 98vw;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 16px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    padding: 12px 16px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px;
+    font-size: 12px;
+  }
+  .ctl-group { display: flex; align-items: center; gap: 8px; }
+  .ctl-label { font-size: 10px; letter-spacing: 0.8px; color: var(--text-caption); font-weight: 600; }
+  .seg {
+    display: flex; border-radius: 8px; overflow: hidden;
+    border: 0.5px solid rgba(255,255,255,0.14); background: var(--track-fill);
+  }
+  .seg button {
+    appearance: none; border: none; background: transparent;
+    color: var(--text-caption); font-size: 11px; padding: 5px 11px;
+    cursor: pointer; font-family: inherit; white-space: nowrap;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .seg button + button { border-left: 0.5px solid rgba(255,255,255,0.10); }
+  .seg button.on { background: rgba(101, 175, 82, 0.28); color: var(--text-primary); font-weight: 600; }
+  .seg button:hover:not(.on) { background: rgba(255,255,255,0.06); }
+
+  /* ====== 单卡片 ====== */
+  .card {
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 18px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    padding: 14px 16px 16px;
+    display: flex; flex-direction: column; gap: 10px;
+    width: 880px; max-width: 98vw;
+  }
+  .card-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .card-head .tag {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    color: var(--tint-bat);
+  }
+  .card-head .title { font-size: 13px; font-weight: 600; }
+  .card-head .desc { font-size: 10.5px; color: var(--text-caption); }
+
+  .stage {
+    position: relative;
+    width: 100%; height: 380px;
+    background: rgba(255,255,255,0.02);
+    border-radius: 12px;
+    border: 0.5px solid rgba(255,255,255,0.05);
+    overflow: hidden;
+  }
+  body.light .stage { background: rgba(0,0,0,0.02); }
+  .stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .bbar {
+    position: absolute; left: 14px; right: 14px; bottom: 14px;
+    height: 36px;
+    border-radius: 9px;
+    background: var(--track-fill);
+    border: 1px solid transparent;
+    overflow: hidden;
+    transition: border-color 0.35s ease;
+  }
+  .bbar.charging { border-color: rgba(101, 175, 82, 0.45); }
+  .bbar.insufficient { border-color: rgba(224, 92, 92, 0.5); }
+  .bbar .fill {
+    position: absolute; top: 2px; left: 2px; bottom: 2px;
+    border-radius: 7px;
+    background: linear-gradient(90deg, rgba(101,175,82,0.60), rgba(101,175,82,0.28));
+  }
+  .bbar.insufficient .fill {
+    background: linear-gradient(90deg, rgba(224,92,92,0.45), rgba(224,166,60,0.28));
+  }
+  .bbar .texts {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 10px;
+  }
+  .bbar .pct { font-size: 13px; font-weight: 700; color: var(--text-primary); }
+  .bbar .state { font-size: 9.5px; color: var(--text-secondary); }
+
+  /* ====== 充电上限卡尺(卡在充电上限位置正上方,小尺寸) ====== */
+  .cap-ruler {
+    position: absolute; left: 14px; right: 14px;   /* 与 .bbar 对齐,80% 位置一致 */
+    bottom: 59px;                 /* stage 内:bbar 顶(50px)上方 9px,独立悬于条顶 */
+    height: 12px;
+    pointer-events: none;
+    z-index: 3;
+  }
+  /* 小卡尺块:宽 64px,居中于上限百分比位置 */
+  .cap-piece {
+    position: absolute; bottom: 0;
+    left: 80%;
+    transform: translateX(-50%);
+    width: 64px; height: 12px;
+  }
+  .cap-piece .cline {
+    position: absolute; bottom: 0; left: 0; right: 0; height: 1px;
+    background: linear-gradient(90deg, rgba(255,255,255,0.05), rgba(255,255,255,0.6) 50%, rgba(255,255,255,0.05));
+  }
+  body.light .cap-piece .cline {
+    background: linear-gradient(90deg, rgba(0,0,0,0.04), rgba(0,0,0,0.45) 50%, rgba(0,0,0,0.04));
+  }
+  .cap-piece .cmark {
+    position: absolute; bottom: 0; left: 50%;
+    width: 1px; height: 9px;
+    margin-left: -0.5px;
+    background: rgba(255,255,255,0.85);
+    border-radius: 1px;
+  }
+  body.light .cap-piece .cmark { background: rgba(0,0,0,0.55); }
+  .cap-piece .cdot {
+    position: absolute; bottom: 8px; left: 50%;
+    width: 3px; height: 3px; border-radius: 50%;
+    margin-left: -1.5px;
+    background: rgba(255,255,255,0.95);
+  }
+  body.light .cap-piece .cdot { background: rgba(0,0,0,0.65); }
+
+  /* ====== 节点 fnode 标签 ====== */
+  .fnode {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    min-width: 88px;
+    background: var(--track-fill);
+    border: 0.5px solid rgba(255,255,255,0.10);
+    border-radius: 9px;
+    padding: 6px 10px;
+    text-align: center;
+    font-size: 9.5px;
+    color: var(--text-value);
+    pointer-events: none;
+    backdrop-filter: blur(8px);
+    z-index: 3;
+  }
+  body.light .fnode { border: 0.5px solid rgba(0,0,0,0.08); }
+  .fnode .label { color: var(--text-caption); font-size: 8.5px; letter-spacing: 0.2px; }
+  .fnode .val   { font-size: 12.5px; font-weight: 650; margin-top: 1px; }
+
+  footer { font-size: 10.5px; color: var(--text-caption); text-align: center; line-height: 1.7; max-width: 880px; }
+
+  /* ====== 参考原型横条 ====== */
+  .reference-bar {
+    width: 880px; max-width: 98vw;
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(40px) saturate(1.2);
+    border-radius: 14px;
+    border: 0.5px solid rgba(255, 255, 255, 0.10);
+    border-style: dashed;
+    padding: 14px 18px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  }
+  body.light .reference-bar { background: rgba(0, 0, 0, 0.02); }
+  .ref-label {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+    color: var(--text-caption);
+    background: var(--track-fill);
+    border-radius: 6px;
+    padding: 4px 10px;
+  }
+  .ref-text { font-size: 11.5px; color: var(--text-secondary); }
+  .ref-link {
+    font-size: 12px; font-weight: 600;
+    color: var(--tint-bat);
+    text-decoration: none;
+    padding: 5px 12px;
+    border-radius: 6px;
+    border: 0.5px solid rgba(101, 175, 82, 0.4);
+    background: rgba(101, 175, 82, 0.12);
+    transition: background 0.2s ease;
+  }
+  .ref-link:hover { background: rgba(101, 175, 82, 0.25); }
+</style>
+</head>
+<body class="dark">
+
+<h1>功率流 · T 形枢纽 v3</h1>
+<div class="subtitle">经典 T 几何：细线 + 柔和辉光 + 呼吸圆点，汇流节奏沿用 v3</div>
+
+<!-- ====== 控制台 ====== -->
+<div class="controls">
+  <div class="ctl-group">
+    <span class="ctl-label">电源状态</span>
+    <div class="seg" id="seg-scenario">
+      <button data-v="charging" class="on">充电中</button>
+      <button data-v="discharging">放电中</button>
+      <button data-v="insufficient">适配器不足</button>
+      <button data-v="lowload">低负载·细导管</button>
+    </div>
+  </div>
+  <div class="ctl-group">
+    <span class="ctl-label">外观</span>
+    <div class="seg" id="seg-theme">
+      <button data-v="dark" class="on">深色</button>
+      <button data-v="light">浅色</button>
+    </div>
+  </div>
+  <div class="ctl-group">
+    <div class="seg" id="seg-pause">
+      <button data-v="run" class="on">▶ 动画</button>
+      <button data-v="pause">⏸ 暂停</button>
+    </div>
+  </div>
+  <div class="ctl-group">
+    <span class="ctl-label">速度</span>
+    <div class="seg" id="seg-speed">
+      <button data-v="1" class="on">1×</button>
+      <button data-v="0.4">0.4×</button>
+      <button data-v="0.15">慢放</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 单卡片 ====== -->
+<div class="card">
+  <div class="card-head">
+    <span class="tag">v3</span>
+    <span class="title">T 形枢纽</span>
+    <span class="desc">— 细线 + 辉光 + 汇流点呼吸，能量沿 T 形路径流动</span>
+  </div>
+  <div class="stage" id="stage-0"></div>
+</div>
+
+<!-- ====== 参考原型横条 ====== -->
+<div class="reference-bar">
+  <div class="ref-label">参考原型</div>
+  <div class="ref-text">早期 v3 斜线枢纽（细线 + 彗星 + 汇流辉光）保留在独立文件：</div>
+  <a class="ref-link" href="refine.html" target="_blank">→ refine.html（早期 v3）</a>
+  <div class="ref-text" style="margin-top: 4px;">它不是候选，仅作为"细线枢纽流派"参照对比。</div>
+</div>
+
+<footer>
+  T 形枢纽 v3 完整版：几何 = A 左 / J 中上 / B 右 / J 竖直连 bbar。<br>
+  细线 + 柔和辉光 + 呼吸圆点：充电绿 / 放电黄 / 不足红，彗星与汇流节奏沿用 v3。
+</footer>
+
+<script>
+'use strict';
+
+const S = { scenario: 'charging', paused: false, speed: 1 };
+
+function watts() {
+  switch (S.scenario) {
+    case 'charging':      return { powerIn: 58.9, system: 25.2, battery: 33.7 };
+    case 'discharging':   return { powerIn: null, system: 25.2, battery: 25.2 };
+    case 'insufficient':  return { powerIn: 28.5, system: 42.0, battery: 13.5 };
+    case 'lowload':       return { powerIn: 6.5, system: 5.2, battery: 1.3 };
+  }
+}
+const flowTint  = () => getComputedStyle(document.body).getPropertyValue('--tint-bat').trim() || '#65AF52';
+const warnTint  = () => '#E0A63C';
+const critTint  = () => '#E05C5C';
+const isDark    = () => document.body.classList.contains('dark');
+
+function edgeWidth(w) {
+  if (w == null || w < 0.05) return 1.2;
+  return Math.min(6.5, 1.2 + Math.sqrt(w) * 0.62);
+}
+const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+/* ====== 通用：给 stage 加电池条 + 充电上限卡尺 ====== */
+const CHARGE_LIMIT = 80;   // 充电上限(%)
+function attachBar(stageEl, pct = 83) {
+  const bar = document.createElement('div');
+  bar.className = 'bbar';
+  bar.innerHTML = `
+    <div class="fill" style="width: calc(${pct}% - 4px)"></div>
+    <div class="texts">
+      <span class="pct mono">${pct}%</span>
+      <span class="state">充电中</span>
+    </div>`;
+  stageEl.appendChild(bar);
+  const ruler = document.createElement('div');
+  ruler.className = 'cap-ruler';
+  ruler.innerHTML = `
+    <div class="cap-piece">
+      <div class="cline"></div>
+      <div class="cmark"></div>
+      <div class="cdot"></div>
+    </div>`;
+  stageEl.appendChild(ruler);
+  return bar;
+}
+const bar0 = attachBar(document.getElementById('stage-0'));
+
+function updateBars() {
+  const w = watts();
+  const charging = S.scenario === 'charging' || S.scenario === 'lowload';
+  bar0.classList.toggle('charging', charging);
+  bar0.classList.toggle('insufficient', S.scenario === 'insufficient');
+  bar0.querySelector('.state').textContent = (() => {
+    switch (S.scenario) {
+      case 'charging': return '充电中';
+      case 'discharging': return '放电中';
+      case 'insufficient': return '适配器不足';
+      case 'lowload': return '充电中';
+    }
+  })();
+}
+
+/* ====== 节点 fnode（DOM） ====== */
+function makeNode(stage, x, y, label, value) {
+  const n = document.createElement('div');
+  n.className = 'fnode';
+  n.style.left = x + 'px';
+  n.style.top  = y + 'px';
+  n.innerHTML = `<div class="label">${label}</div><div class="val mono">${value}</div>`;
+  stage.appendChild(n);
+  return n;
+}
+
+/* =========================================================
+   v3 共享动画核心
+   - drawPipe(seg): 由 stage 注入的"画管子皮肤"函数,
+     接受 { from, to, kind, width, liquidLevel, liquidColor }
+   - drawComet / junctionGlow / stubDrip: 沿用 v3 节奏
+   - toXY(u): 沿 A→J→B 直线段
+   ========================================================= */
+function makeV3Core(ctx, W, H, A, J, B, STUB_FROM, STUB_TO) {
+  const flowTint  = () => getComputedStyle(document.body).getPropertyValue('--tint-bat').trim() || '#65AF52';
+  const warnTint  = () => '#E0A63C';
+  const critTint  = () => '#E05C5C';
+
+  function toXY(u) {
+    if (u <= 0.5) {
+      const s = u / 0.5;
+      return { x: A.x + (J.x - A.x) * s, y: A.y + (J.y - A.y) * s };
+    }
+    const s = (u - 0.5) / 0.5;
+    return { x: J.x + (B.x - J.x) * s, y: J.y + (B.y - J.y) * s };
+  }
+  function stubXY(t) {
+    return { x: STUB_FROM.x + (STUB_TO.x - STUB_FROM.x) * t,
+             y: STUB_FROM.y + (STUB_TO.y - STUB_FROM.y) * t };
+  }
+
+  function drawComet(u0, u1, s, tailU, color, head, width) {
+    const headU = u0 + (u1 - u0) * ease(s);
+    if (headU <= u0 + 0.004) return;
+    const tailU0 = Math.max(u0, headU - tailU);
+    const p0 = toXY(tailU0), p1 = toXY(headU);
+    if (width < 3) {
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+      ctx.lineWidth = Math.max(1.4, width); ctx.lineCap = 'round';
+      ctx.strokeStyle = color + 'D9'; ctx.stroke();
+      ctx.beginPath(); ctx.arc(p1.x, p1.y, Math.max(1.3, width * 0.5), 0, Math.PI * 2);
+      ctx.fillStyle = head + 'F0'; ctx.fill();
+      return;
+    }
+    const grad = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+    grad.addColorStop(0, color + '00'); grad.addColorStop(0.4, color + '59'); grad.addColorStop(1, color + 'D9');
+    ctx.save(); ctx.filter = 'blur(1.2px)';
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+    ctx.lineWidth = width + 1.6; ctx.lineCap = 'round'; ctx.strokeStyle = grad; ctx.stroke();
+    ctx.restore();
+    const grad2 = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+    grad2.addColorStop(0, color + '00'); grad2.addColorStop(0.5, color + '8C'); grad2.addColorStop(1, head + 'F5');
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+    ctx.lineWidth = Math.max(1.4, width * 0.6); ctx.lineCap = 'round'; ctx.strokeStyle = grad2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(p1.x, p1.y, Math.max(1.6, width * 0.5), 0, Math.PI * 2);
+    ctx.fillStyle = head + 'F5'; ctx.fill();
+  }
+
+  function junctionGlow(u, color) {
+    const d = Math.abs(u - 0.5);
+    if (d > 0.12) return;
+    const a = 1 - d / 0.12;
+    const r = 5 + 4.5 * a;
+    const g = ctx.createRadialGradient(J.x, J.y, 0, J.x, J.y, r * 2.6);
+    g.addColorStop(0, color + Math.round(a * 235).toString(16).padStart(2, '0'));
+    g.addColorStop(1, color + '00');
+    ctx.beginPath(); ctx.arc(J.x, J.y, r * 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+  }
+
+  function stubDrip(t, color) {
+    const breath = 0.5 + 0.5 * Math.sin(performance.now() * 0.001 * Math.PI / 1.4);
+    const p = stubXY(t);
+    const r = 1.4 + 1.4 * breath;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 3);
+    g.addColorStop(0, color + 'F0');
+    g.addColorStop(0.5, color + Math.round((0.3 + 0.3 * breath) * 255).toString(16).padStart(2, '0'));
+    g.addColorStop(1, color + '00');
+    ctx.beginPath(); ctx.arc(p.x, p.y, r * 3, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = color + 'F5'; ctx.fill();
+  }
+
+  return {
+    toXY, stubXY, drawComet, junctionGlow, stubDrip,
+  };
+}
+
+/* =========================================================
+   #0 T 形枢纽 v3
+   ========================================================= */
+function stage0Init(stage) {
+  const cvs = document.createElement('canvas');
+  cvs.style.cssText = 'position:absolute; inset:0; width:100%; height:100%;';
+  stage.appendChild(cvs);
+  const ctx = cvs.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+
+  const W = stage.clientWidth, H = stage.clientHeight;
+  cvs.width = W * dpr; cvs.height = H * dpr;
+  ctx.scale(dpr, dpr);
+
+  // === 经典 T 几何 ===
+  const NODE_Y = 84;
+  const A = { x: 118, y: NODE_Y };
+  const J = { x: W / 2, y: NODE_Y };
+  const B = { x: W - 118, y: NODE_Y };
+  const STUB_FROM = { x: J.x, y: J.y + 16 };
+  const STUB_END_Y = H - 84;                  // 终止于卡尺上方,不被标尺穿过
+
+  makeNode(stage, A.x, A.y, '适配器', '58.9 W');
+  makeNode(stage, B.x, B.y, '系统负载', '25.2 W');
+
+  const core = makeV3Core(ctx, W, H, A, J, B, STUB_FROM, { x: J.x, y: STUB_END_Y });
+
+  // === 苹果风绘制:细线 + 柔和辉光 + 呼吸圆点 ===
+
+  // 细线(实线层 + 同色柔和辉光层)
+  function glowLine(from, to, color, width, glowAlpha) {
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.filter = 'blur(' + Math.max(3, width * 2.6) + 'px)';
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = glowAlpha == null ? 0.35 : glowAlpha;
+    ctx.lineWidth = width * 2.4;
+    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+    ctx.restore();
+    ctx.save();
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.92;
+    ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke();
+    ctx.restore();
+  }
+
+  // J 汇流点:白色小圆 + 状态色呼吸辉光
+  function drawJunction(time, color, active) {
+    const breath = 0.5 + 0.5 * Math.sin(time * Math.PI / 1.4);
+    const r = 5;
+    const g = ctx.createRadialGradient(J.x, J.y, 0, J.x, J.y, r * 3.2);
+    g.addColorStop(0, color + (active ? '66' : '2E'));
+    g.addColorStop(1, color + '00');
+    ctx.beginPath(); ctx.arc(J.x, J.y, r * 3.2, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.save();
+    ctx.globalAlpha = 0.9 + breath * 0.1;
+    ctx.beginPath(); ctx.arc(J.x, J.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // 竖线顶端小圆点(连接 J 与竖线)
+  function drawStubCap(color) {
+    ctx.save();
+    ctx.beginPath(); ctx.arc(J.x, STUB_FROM.y, 2.5, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.restore();
+  }
+
+  return function draw(time, w) {
+    ctx.clearRect(0, 0, W, H);
+    const connected = w.powerIn != null;
+    const charging = S.scenario === 'charging' || S.scenario === 'lowload';
+    const shimmer = isDark() ? '#CFE6FF' : '#5D8CF0';
+    const head = '#FFFFFF';
+    const green = flowTint();
+    const stubColor = S.scenario === 'insufficient' ? critTint() : warnTint();
+
+    const wIn  = connected ? w.powerIn : null;
+    const wSys = w.system;
+    const totalW = (wIn != null ? wIn : 0) + wSys;
+
+    // 状态主色:充电绿 / 放电黄 / 不足红
+    const active = charging ? green : stubColor;
+    // 输入段:有输入用主色,无输入用中性灰
+    const inColor  = connected ? active : (isDark() ? '#8A93A5' : '#9AA2B2');
+    const sysColor = active;
+
+    // 线宽随瓦数微变,保持"细线"
+    const inW  = 1.8 + Math.min(1.4, Math.sqrt(Math.max(0, wIn != null ? wIn : 0)) * 0.14);
+    const sysW = 1.8 + Math.min(1.4, Math.sqrt(wSys) * 0.14);
+
+    // 线从 fnode 边缘开始,不藏在标签下
+    const aX = A.x + 48, bX = B.x - 48;
+
+    // 1) 水平主线(A→J 输入, J→B 系统)
+    glowLine({ x: aX, y: A.y }, J, inColor, inW, connected ? 0.35 : 0.22);
+    glowLine(J, { x: bX, y: B.y }, sysColor, sysW, 0.35);
+
+    // 2) J→bbar 竖线(实线,取代旧虚线)
+    glowLine(STUB_FROM, { x: J.x, y: STUB_END_Y }, active, 1.8, 0.3);
+    drawStubCap(active);
+
+    // 3) J 汇流点(呼吸)
+    drawJunction(time, active, connected);
+
+    // 4) 双光束彗星(v3 节奏,纤细)
+    const cycle = Math.max(1.6, Math.min(3.6, 5.2 / (1 + totalW / 30)));
+    const beams = totalW > 60 ? 2 : 1;
+    for (let k = 0; k < beams; k++) {
+      const u = ((time / cycle) + k / beams) % 1;
+      core.junctionGlow(u, shimmer);
+      if (u <= 0.5 && connected && wIn != null) {
+        core.drawComet(0, 0.5, u / 0.5, 0.10, shimmer, head, edgeWidth(wIn) * 0.7);
+      } else if (u > 0.5) {
+        core.drawComet(0.5, 1, (u - 0.5) / 0.5, 0.10, shimmer, head, edgeWidth(wSys) * 0.7);
+      }
+    }
+
+    // 5) stub drip:小光点沿竖线滑动
+    if (charging) core.stubDrip((time / 1.6) % 1, green);
+    else          core.stubDrip(1 - (time / 1.6) % 1, stubColor);
+  };
+}
+
+/* ====== 初始化 ====== */
+const renderer = stage0Init(document.getElementById('stage-0'));
+
+function sync() { updateBars(); }
+
+function bindSeg(id, fn) {
+  const seg = document.getElementById(id);
+  seg.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+    fn(btn.dataset.v);
+  });
+}
+bindSeg('seg-scenario', v => { S.scenario = v; sync(); });
+bindSeg('seg-theme',    v => { document.body.className = v; sync(); });
+bindSeg('seg-pause',    v => { S.paused = v === 'pause'; });
+bindSeg('seg-speed',    v => { S.speed = parseFloat(v); });
+
+let last = performance.now(), vt = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (!S.paused) vt += dt * S.speed;
+  const w = watts();
+  renderer(vt, w);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

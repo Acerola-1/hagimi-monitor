@@ -14,8 +14,8 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
-    /// 面板圆角半径,与 FluidPanelController 一致。
-    private static let panelCornerRadius: CGFloat = 12
+    /// 面板圆角半径,与 FluidPanelController 一致(rowCornerRadius)。
+    private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
 
     init(store: MonitorStore, openSettings: @escaping () -> Void) {
         self.store = store

@@ -323,4 +323,4 @@ struct NetworkRow: View {
 - Apple Sample: *Adopting Liquid Glass*
 - 开源参考:[Stats](https://github.com/exelban/stats)、[MonitorControl](https://github.com/MonitorControl/MonitorControl)
 
-祝开发顺利 🚀
+祝开发顺利。

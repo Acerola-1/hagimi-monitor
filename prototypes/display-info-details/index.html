@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 显示器档案信息 原型</title>
+<style>
+  /* ====== 设计令牌:对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --track-fill-hover: rgba(255, 255, 255, 0.13);
+    --tint-display: #4E7FD9;
+    --calm: #2F9E64;
+    --row-radius: 14px;
+  }
+  body.light {
+    --panel-bg: rgba(255, 255, 255, 0.55);
+    --row-glass: rgba(122, 145, 180, 0.10);
+    --row-separator: rgba(30, 50, 80, 0.14);
+    --text-primary: rgba(10, 15, 25, 0.92);
+    --text-value: rgba(10, 15, 25, 0.85);
+    --text-secondary: rgba(10, 15, 25, 0.72);
+    --text-caption: rgba(10, 15, 25, 0.55);
+    --track-fill: rgba(10, 15, 25, 0.06);
+    --track-fill-hover: rgba(10, 15, 25, 0.10);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 900px at 85% 100%, #1d2c47 0%, transparent 60%),
+      #0d1420;
+    color: var(--text-primary);
+    padding: 34px 20px 60px;
+  }
+  body.light {
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #cfd9ec 0%, transparent 55%),
+      radial-gradient(1200px 900px at 85% 100%, #dde5f2 0%, transparent 60%),
+      #eef1f7;
+    color: var(--text-primary);
+  }
+  .stage { max-width: 1060px; margin: 0 auto; }
+  h1 { font-size: 19px; font-weight: 700; letter-spacing: .5px; }
+  .sub { color: var(--text-caption); font-size: 12.5px; margin-top: 6px; line-height: 1.7; }
+  .toolbar { display: flex; gap: 10px; margin: 16px 0 22px; }
+  .toolbar button {
+    font: 500 12px/1 inherit; color: var(--text-secondary);
+    background: var(--track-fill); border: 0; border-radius: 8px;
+    padding: 7px 12px; cursor: pointer;
+  }
+  .toolbar button:hover { background: var(--track-fill-hover); }
+
+  .panels { display: flex; gap: 26px; flex-wrap: wrap; align-items: flex-start; }
+  .panel { width: 500px; max-width: 100%; flex: 1 1 460px; }
+  .panel-label {
+    font-size: 12px; font-weight: 600; letter-spacing: 1px;
+    color: var(--text-caption); margin-bottom: 10px; text-transform: uppercase;
+  }
+  .panel-inner {
+    background: var(--panel-bg);
+    border-radius: 20px;
+    padding: 10px;
+    backdrop-filter: blur(30px);
+  }
+
+  /* ====== 模块行(显示器) ====== */
+  .row {
+    background: var(--row-glass);
+    border-radius: var(--row-radius);
+    overflow: hidden;
+  }
+  .row-head {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; cursor: default;
+  }
+  .row-head .icon { color: var(--tint-display); font-size: 14px; width: 18px; text-align: center; }
+  .row-head .label { font-size: 13px; font-weight: 600; color: var(--text-primary); }
+  .row-head .value {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 12.5px; font-weight: 600; color: var(--text-value);
+  }
+  .row-head .chev { margin-left: auto; color: var(--text-caption); }
+
+  .detail { padding: 2px 10px 10px; display: flex; flex-direction: column; gap: 12px; }
+
+  /* ====== 单台显示器分节 ====== */
+  .dsec-head { display: flex; align-items: center; gap: 8px; padding-left: 28px; }
+  .dname {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .8px;
+    color: var(--text-caption); white-space: nowrap;
+  }
+  .dsep { flex: 1; height: 1px; background: var(--row-separator); }
+
+  /* 分节标题行右侧:展开角标 */
+  .acts { display: flex; gap: 4px; }
+  .chev-btn .chev-mini { transition: transform .22s ease; }
+  .dsec.open .chev-mini { transform: rotate(90deg); }
+
+  /* 标题行展开角标:单一图标 */
+  .chev-btn {
+    background: transparent; border: 0; color: var(--text-caption);
+    padding: 3px 5px; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center;
+    transition: background .15s, color .15s;
+  }
+  .chev-btn:hover { background: var(--track-fill-hover); color: var(--text-secondary); }
+
+  /* 档案区底部复制胶囊 */
+  .copyrow { display: flex; justify-content: flex-end; margin-top: 2px; }
+  .copy-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--track-fill); border: 0; border-radius: 999px;
+    color: var(--text-caption); font: 500 10.5px/1 inherit;
+    padding: 5px 9px; cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .copy-pill:hover { background: var(--track-fill-hover); color: var(--text-secondary); }
+
+  /* ====== 默认四格(分辨率/刷新率/HDR/位深),stat tile 形态 ====== */
+  .grid2 {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 5px 8px; padding-left: 28px; margin-top: 7px;
+  }
+  .tile {
+    background: var(--track-fill); border-radius: 9px;
+    padding: 6px 9px;
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    min-width: 0;
+  }
+  .tile .k { font-size: 11.5px; color: var(--text-caption); white-space: nowrap; }
+  .tile .v {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 11.5px; font-weight: 600; color: var(--text-secondary);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .tile .v.dim { color: var(--text-caption); }
+  .tile .v.good { color: var(--calm); }
+
+  /* ====== 折叠档案区 ====== */
+  .more {
+    display: grid; grid-template-rows: 0fr;
+    transition: grid-template-rows .26s ease;
+    padding-left: 28px;
+  }
+  .dsec.open .more { grid-template-rows: 1fr; }
+  .more-inner { overflow: hidden; }
+  .more-body { padding-top: 7px; display: flex; flex-direction: column; gap: 5px; }
+  .group-label {
+    font-size: 10.5px; font-weight: 600; letter-spacing: 1px;
+    color: var(--text-caption); opacity: .85;
+    margin-top: 4px;
+  }
+  .full { grid-column: 1 / -1; }
+  .full .tile { width: 100%; }
+
+  /* ====== Direct 版控制区 ====== */
+  .ctrls { padding-left: 28px; margin-top: 8px; display: flex; flex-direction: column; gap: 7px; }
+  .ctrl {
+    background: var(--track-fill); border-radius: 9px;
+    padding: 7px 9px; display: flex; align-items: center; gap: 8px;
+  }
+  .ctrl .ck {
+    font-size: 11.5px; color: var(--text-caption); white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 5px; width: 52px;
+  }
+  .ctrl .track { flex: 1; height: 4px; border-radius: 2px; background: rgba(255,255,255,.14); position: relative; }
+  body.light .ctrl .track { background: rgba(10,15,25,.12); }
+  .ctrl .fillp { position: absolute; inset: 0 auto 0 0; border-radius: 2px; background: var(--tint-display); opacity: .8; }
+  .ctrl .knob {
+    position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%;
+    background: #fff; transform: translate(-50%, -50%);
+    box-shadow: 0 1px 3px rgba(0,0,0,.35);
+  }
+  body.light .ctrl .knob { background: #fff; }
+  .ctrl .cv {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 11px; font-weight: 600; color: var(--text-secondary); width: 34px; text-align: right;
+  }
+
+  /* ====== 提示 toast ====== */
+  #toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translateX(-50%) translateY(10px);
+    background: rgba(20, 28, 44, .92); color: rgba(255,255,255,.92);
+    font-size: 12.5px; padding: 9px 16px; border-radius: 10px;
+    opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+    backdrop-filter: blur(12px);
+  }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <h1>显示器档案信息 · 交互原型</h1>
+  <div class="sub">
+    默认只展示最直观的四项(分辨率 / 刷新率 / HDR 支持 / 位深);点分节标题行右侧角标展开完整档案
+    (尺寸 / PPI / 缩放 / 色域 / 自适应同步 / 身份档案),复制按钮在档案内底部,一键拷贝该显示器全部信息。<br>
+    左:App Store 版(纯信息)。右:Direct 版(信息同构,控制滑杆殿后)。
+  </div>
+  <div class="toolbar">
+    <button onclick="document.body.classList.toggle('light')">切换 深色 / 浅色</button>
+    <button onclick="toggleAll(true)">全部展开</button>
+    <button onclick="toggleAll(false)">全部收起</button>
+  </div>
+
+  <div class="panels">
+
+    <!-- ======================= App Store 版:纯信息 ======================= -->
+    <div class="panel">
+      <div class="panel-label">App Store 版 · 纯信息展示</div>
+      <div class="panel-inner">
+        <div class="row">
+          <div class="row-head">
+            <span class="icon">▭</span>
+            <span class="label">显示器:</span>
+            <span class="value">2 台</span>
+            <span class="chev">▾</span>
+          </div>
+          <div class="detail">
+
+            <!-- 内建屏 -->
+            <div class="dsec" data-name="内建 Liquid Retina XDR（内建）">
+              <div class="dsec-head">
+                <span class="dname">内建 Liquid Retina XDR</span>
+                <span class="dsep"></span>
+                <span class="acts">
+                  <button class="chev-btn more-btn" title="详情">
+                    <svg class="chev-mini" width="6" height="9" viewBox="0 0 6 9" fill="none">
+                      <path d="M1 1 L4.6 4.5 L1 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
+              </div>
+
+              <div class="grid2">
+                <div class="tile"><span class="k">分辨率</span><span class="v">3024×1964</span></div>
+                <div class="tile"><span class="k">刷新率</span><span class="v">120 Hz</span></div>
+                <div class="tile"><span class="k">HDR</span><span class="v">支持</span></div>
+                <div class="tile"><span class="k">位深</span><span class="v dim">--</span></div>
+              </div>
+
+              <div class="more"><div class="more-inner"><div class="more-body">
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">尺寸</span><span class="v">14 英寸</span></div>
+                  <div class="tile"><span class="k">像素密度</span><span class="v">226 PPI</span></div>
+                  <div class="tile"><span class="k">HiDPI 缩放</span><span class="v">2×</span></div>
+                  <div class="tile"><span class="k">色域</span><span class="v">P3 广色域</span></div>
+                  <div class="full"><div class="tile"><span class="k">自适应同步</span><span class="v">48–120 Hz</span></div></div>
+                </div>
+                <div class="group-label">身份档案</div>
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">厂商</span><span class="v">Apple</span></div>
+                  <div class="tile"><span class="k">型号</span><span class="v dim">--</span></div>
+                  <div class="full"><div class="tile"><span class="k">序列号</span><span class="v dim">--</span></div></div>
+                  <div class="full"><div class="tile"><span class="k">制造日期</span><span class="v dim">--</span></div></div>
+                </div>
+                <div class="copyrow"><button class="copy-pill copy-btn" title="复制该显示器完整信息"><svg width="11" height="12" viewBox="0 0 11 12" fill="none"><rect x="2.6" y="2.6" width="7" height="8.4" rx="1.4" stroke="currentColor" stroke-width="1.2"/><path d="M8.4 1.4 H2.8 A1.4 1.4 0 0 0 1.4 2.8 V9.4" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>复制</button></div>
+              </div></div></div>
+            </div>
+
+            <!-- 外接屏 -->
+            <div class="dsec" data-name="DELL S2725QC（外接）">
+              <div class="dsec-head">
+                <span class="dname">DELL S2725QC</span>
+                <span class="dsep"></span>
+                <span class="acts">
+                  <button class="chev-btn more-btn" title="详情">
+                    <svg class="chev-mini" width="6" height="9" viewBox="0 0 6 9" fill="none">
+                      <path d="M1 1 L4.6 4.5 L1 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
+              </div>
+
+              <div class="grid2">
+                <div class="tile"><span class="k">分辨率</span><span class="v">3840×2160</span></div>
+                <div class="tile"><span class="k">刷新率</span><span class="v">120 Hz</span></div>
+                <div class="tile"><span class="k">HDR</span><span class="v">不支持</span></div>
+                <div class="tile"><span class="k">位深</span><span class="v">10 bit</span></div>
+              </div>
+
+              <div class="more"><div class="more-inner"><div class="more-body">
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">尺寸</span><span class="v">27 英寸</span></div>
+                  <div class="tile"><span class="k">像素密度</span><span class="v">163 PPI</span></div>
+                  <div class="tile"><span class="k">HiDPI 缩放</span><span class="v">2×</span></div>
+                  <div class="tile"><span class="k">色域</span><span class="v">P3 广色域</span></div>
+                  <div class="full"><div class="tile"><span class="k">自适应同步</span><span class="v">48–120 Hz</span></div></div>
+                </div>
+                <div class="group-label">身份档案</div>
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">厂商</span><span class="v">Dell</span></div>
+                  <div class="tile"><span class="k">型号</span><span class="v">A272</span></div>
+                  <div class="full"><div class="tile"><span class="k">序列号</span><span class="v">B78J464</span></div></div>
+                  <div class="full"><div class="tile"><span class="k">制造日期</span><span class="v">2025 年第 20 周</span></div></div>
+                </div>
+                <div class="copyrow"><button class="copy-pill copy-btn" title="复制该显示器完整信息"><svg width="11" height="12" viewBox="0 0 11 12" fill="none"><rect x="2.6" y="2.6" width="7" height="8.4" rx="1.4" stroke="currentColor" stroke-width="1.2"/><path d="M8.4 1.4 H2.8 A1.4 1.4 0 0 0 1.4 2.8 V9.4" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>复制</button></div>
+              </div></div></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================= Direct 版:信息 + 控制 ======================= -->
+    <div class="panel">
+      <div class="panel-label">Direct 版 · 信息 + 控制</div>
+      <div class="panel-inner">
+        <div class="row">
+          <div class="row-head">
+            <span class="icon">▭</span>
+            <span class="label">显示器:</span>
+            <span class="value">2 台</span>
+            <span class="chev">▾</span>
+          </div>
+          <div class="detail">
+
+            <!-- 内建屏(原生亮度通道) -->
+            <div class="dsec" data-name="内建 Liquid Retina XDR（内建）">
+              <div class="dsec-head">
+                <span class="dname">内建 Liquid Retina XDR</span>
+                <span class="dsep"></span>
+                <span class="acts">
+                  <button class="chev-btn more-btn" title="详情">
+                    <svg class="chev-mini" width="6" height="9" viewBox="0 0 6 9" fill="none">
+                      <path d="M1 1 L4.6 4.5 L1 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
+              </div>
+
+              <div class="grid2">
+                <div class="tile"><span class="k">分辨率</span><span class="v">3024×1964</span></div>
+                <div class="tile"><span class="k">刷新率</span><span class="v">120 Hz</span></div>
+                <div class="tile"><span class="k">HDR</span><span class="v">支持</span></div>
+                <div class="tile"><span class="k">位深</span><span class="v dim">--</span></div>
+              </div>
+
+              <div class="more"><div class="more-inner"><div class="more-body">
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">尺寸</span><span class="v">14 英寸</span></div>
+                  <div class="tile"><span class="k">像素密度</span><span class="v">226 PPI</span></div>
+                  <div class="tile"><span class="k">HiDPI 缩放</span><span class="v">2×</span></div>
+                  <div class="tile"><span class="k">色域</span><span class="v">P3 广色域</span></div>
+                  <div class="full"><div class="tile"><span class="k">自适应同步</span><span class="v">48–120 Hz</span></div></div>
+                </div>
+                <div class="group-label">身份档案</div>
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">厂商</span><span class="v">Apple</span></div>
+                  <div class="tile"><span class="k">型号</span><span class="v dim">--</span></div>
+                  <div class="full"><div class="tile"><span class="k">序列号</span><span class="v dim">--</span></div></div>
+                  <div class="full"><div class="tile"><span class="k">制造日期</span><span class="v dim">--</span></div></div>
+                </div>
+                <div class="copyrow"><button class="copy-pill copy-btn" title="复制该显示器完整信息"><svg width="11" height="12" viewBox="0 0 11 12" fill="none"><rect x="2.6" y="2.6" width="7" height="8.4" rx="1.4" stroke="currentColor" stroke-width="1.2"/><path d="M8.4 1.4 H2.8 A1.4 1.4 0 0 0 1.4 2.8 V9.4" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>复制</button></div>
+              </div></div></div>
+
+              <!-- 控制区(Direct 独有,亮度走原生通道):信息聚拢在前,控制殿后 -->
+              <div class="ctrls">
+                <div class="ctrl">
+                  <span class="ck">☀ 亮度</span>
+                  <span class="track"><span class="fillp" style="width:68%"></span><span class="knob" style="left:68%"></span></span>
+                  <span class="cv">68%</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 外接屏(DDC 控制) -->
+            <div class="dsec" data-name="DELL S2725QC（外接）">
+              <div class="dsec-head">
+                <span class="dname">DELL S2725QC</span>
+                <span class="dsep"></span>
+                <span class="acts">
+                  <button class="chev-btn more-btn" title="详情">
+                    <svg class="chev-mini" width="6" height="9" viewBox="0 0 6 9" fill="none">
+                      <path d="M1 1 L4.6 4.5 L1 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                  </button>
+                </span>
+              </div>
+
+              <div class="grid2">
+                <div class="tile"><span class="k">分辨率</span><span class="v">3840×2160</span></div>
+                <div class="tile"><span class="k">刷新率</span><span class="v">120 Hz</span></div>
+                <div class="tile"><span class="k">HDR</span><span class="v">不支持</span></div>
+                <div class="tile"><span class="k">位深</span><span class="v">10 bit</span></div>
+              </div>
+
+              <div class="more"><div class="more-inner"><div class="more-body">
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">尺寸</span><span class="v">27 英寸</span></div>
+                  <div class="tile"><span class="k">像素密度</span><span class="v">163 PPI</span></div>
+                  <div class="tile"><span class="k">HiDPI 缩放</span><span class="v">2×</span></div>
+                  <div class="tile"><span class="k">色域</span><span class="v">P3 广色域</span></div>
+                  <div class="full"><div class="tile"><span class="k">自适应同步</span><span class="v">48–120 Hz</span></div></div>
+                </div>
+                <div class="group-label">身份档案</div>
+                <div class="grid2" style="margin-top:0;padding-left:0;">
+                  <div class="tile"><span class="k">厂商</span><span class="v">Dell</span></div>
+                  <div class="tile"><span class="k">型号</span><span class="v">A272</span></div>
+                  <div class="full"><div class="tile"><span class="k">序列号</span><span class="v">B78J464</span></div></div>
+                  <div class="full"><div class="tile"><span class="k">制造日期</span><span class="v">2025 年第 20 周</span></div></div>
+                </div>
+                <div class="copyrow"><button class="copy-pill copy-btn" title="复制该显示器完整信息"><svg width="11" height="12" viewBox="0 0 11 12" fill="none"><rect x="2.6" y="2.6" width="7" height="8.4" rx="1.4" stroke="currentColor" stroke-width="1.2"/><path d="M8.4 1.4 H2.8 A1.4 1.4 0 0 0 1.4 2.8 V9.4" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>复制</button></div>
+              </div></div></div>
+
+              <!-- 控制区(DDC):信息聚拢在前,控制殿后 -->
+              <div class="ctrls">
+                <div class="ctrl">
+                  <span class="ck">☀ 亮度</span>
+                  <span class="track"><span class="fillp" style="width:55%"></span><span class="knob" style="left:55%"></span></span>
+                  <span class="cv">55%</span>
+                </div>
+                <div class="ctrl">
+                  <span class="ck">◐ 对比</span>
+                  <span class="track"><span class="fillp" style="width:75%"></span><span class="knob" style="left:75%"></span></span>
+                  <span class="cv">75%</span>
+                </div>
+                <div class="ctrl">
+                  <span class="ck">🔊 音量</span>
+                  <span class="track"><span class="fillp" style="width:30%"></span><span class="knob" style="left:30%"></span></span>
+                  <span class="cv">30%</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div id="toast">已复制</div>
+
+<script>
+  // 展开/收起单台显示器的档案区(标题行只留角标,复制在档案内底部)
+  document.querySelectorAll('.more-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      btn.closest('.dsec').classList.toggle('open');
+    });
+  });
+
+  function toggleAll(open) {
+    document.querySelectorAll('.dsec').forEach(function (sec) {
+      sec.classList.toggle('open', open);
+    });
+  }
+
+  // 复制:从分节 DOM 读出全部信息(默认四项 + 档案区),格式化为文本
+  function sectionText(sec) {
+    var lines = [sec.dataset.name || sec.querySelector('.dname').textContent];
+    sec.querySelectorAll('.tile').forEach(function (tile) {
+      var k = tile.querySelector('.k').textContent;
+      var v = tile.querySelector('.v').textContent;
+      lines.push(k + ': ' + v);
+    });
+    return lines.join('\n');
+  }
+
+  var toastTimer = null;
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.remove('show'); }, 1600);
+  }
+
+  document.querySelectorAll('.copy-btn').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var text = sectionText(btn.closest('.dsec'));
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(
+          function () { showToast('已复制显示器信息'); },
+          function () { fallbackCopy(text); }
+        );
+      } else {
+        fallbackCopy(text);
+      }
+    });
+  });
+
+  function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+      document.execCommand('copy');
+      showToast('已复制显示器信息');
+    } catch (e) {
+      showToast('复制失败');
+    }
+    document.body.removeChild(ta);
+  }
+</script>
+</body>
+</html>

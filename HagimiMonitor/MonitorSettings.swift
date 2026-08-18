@@ -86,21 +86,23 @@ final class MonitorSettings: ObservableObject {
     @Published var mediaKeyVolumeEnabled: Bool = false
     @Published var mediaKeyShowOSD: Bool = true
     @Published var showMemoryProcesses: Bool = true
-    @Published var memoryShowSystemProcesses: Bool = false
+    /// 各类 TOP 列表默认包含系统进程:WindowServer 等系统进程常是占用大头,
+    /// 隐藏后列表常显得空。
+    @Published var memoryShowSystemProcesses: Bool = true
     @Published var memoryPrimaryMetric: MemoryPrimaryMetricPreference = .pressure
     @Published var showCPUProcesses: Bool = true
-    @Published var cpuShowSystemProcesses: Bool = false
+    @Published var cpuShowSystemProcesses: Bool = true
+    @Published var showGPUProcesses: Bool = true
+    @Published var gpuShowSystemProcesses: Bool = true
     @Published var showDiskProcesses: Bool = true
-    @Published var diskShowSystemProcesses: Bool = false
+    @Published var diskShowSystemProcesses: Bool = true
     @Published var showNetworkProcesses: Bool = true
-    @Published var networkShowSystemProcesses: Bool = false
+    @Published var networkShowSystemProcesses: Bool = true
     /// 功率流图开关(Beta):电源模块展开区的功率流可视化,默认开启,双渠道(含沙盒)均可用。
     @Published var batteryShowPowerFlow: Bool = true
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     /// 呼出面板时默认展开的模块集合(逐模块设置,非全局开关)。
     @Published private(set) var defaultExpandedKinds: Set<MonitorKind> = []
-    /// 在面板中以大卡片呈现的模块集合(逐模块设置;不在集合内 = 列表行)。
-    @Published private(set) var cardStyleKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
 
     /// 钉住面板窗口位置持久化。
@@ -145,15 +147,17 @@ final class MonitorSettings: ObservableObject {
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
         showMemoryProcesses = defaults.object(forKey: Keys.showMemoryProcesses) as? Bool ?? true
-        memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? false
+        memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? true
         let memoryPrimaryMetricRawValue = defaults.string(forKey: Keys.memoryPrimaryMetric) ?? MemoryPrimaryMetricPreference.pressure.rawValue
         memoryPrimaryMetric = MemoryPrimaryMetricPreference(rawValue: memoryPrimaryMetricRawValue) ?? .pressure
         showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? true
-        cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? false
+        cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? true
+        showGPUProcesses = defaults.object(forKey: Keys.showGPUProcesses) as? Bool ?? true
+        gpuShowSystemProcesses = defaults.object(forKey: Keys.gpuShowSystemProcesses) as? Bool ?? true
         showDiskProcesses = defaults.object(forKey: Keys.showDiskProcesses) as? Bool ?? true
-        diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? false
+        diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? true
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
-        networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? false
+        networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
         batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
 
         pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double
@@ -191,10 +195,6 @@ final class MonitorSettings: ObservableObject {
             defaultExpandedKinds = Set(storedExpanded.compactMap(MonitorKind.init(rawValue:)))
         }
 
-        if let storedCardKinds = defaults.array(forKey: Keys.cardStyleKinds) as? [String] {
-            cardStyleKinds = Set(storedCardKinds.compactMap(MonitorKind.init(rawValue:)))
-        }
-
         var loadedMetrics: [MonitorKind: Set<String>] = [:]
         for kind in MonitorKind.allCases {
             let key = Keys.enabledMetricsPrefix + kind.rawValue
@@ -218,6 +218,19 @@ final class MonitorSettings: ObservableObject {
                 }
             }
             defaults.set(true, forKey: Keys.metricsDefaultOnMigrated)
+        }
+        // 一次性迁移:电池模块新增的电压/电流/容量三项默认开指标不在存量
+        // 列表里,升级后会被当成「用户已关」。只把这三项并入电池存量并回写,
+        // 不重跑全量并回,避免复活用户手动关过的其他指标。
+        if !defaults.bool(forKey: Keys.batteryElectricalMetricsMigrated) {
+            if var merged = loadedMetrics[.battery] {
+                merged.formUnion(["voltage", "current", "capacity"])
+                if merged != loadedMetrics[.battery] {
+                    loadedMetrics[.battery] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.batteryElectricalMetricsMigrated)
         }
         enabledMetrics = loadedMetrics
 
@@ -247,18 +260,6 @@ final class MonitorSettings: ObservableObject {
             defaultExpandedKinds.insert(kind)
         } else {
             defaultExpandedKinds.remove(kind)
-        }
-    }
-
-    func isCardStyle(_ kind: MonitorKind) -> Bool {
-        cardStyleKinds.contains(kind)
-    }
-
-    func setCardStyle(_ isOn: Bool, for kind: MonitorKind) {
-        if isOn {
-            cardStyleKinds.insert(kind)
-        } else {
-            cardStyleKinds.remove(kind)
         }
     }
 
@@ -564,6 +565,20 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $showGPUProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showGPUProcesses)
+            }
+            .store(in: &cancellables)
+
+        $gpuShowSystemProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.gpuShowSystemProcesses)
+            }
+            .store(in: &cancellables)
+
         $showDiskProcesses
             .dropFirst()
             .sink { [weak self] newValue in
@@ -612,14 +627,6 @@ final class MonitorSettings: ObservableObject {
             .sink { [weak self] newValue in
                 let values = newValue.map(\.rawValue)
                 self?.persist(values, forKey: Keys.defaultExpandedKinds)
-            }
-            .store(in: &cancellables)
-
-        $cardStyleKinds
-            .dropFirst()
-            .sink { [weak self] newValue in
-                let values = newValue.map(\.rawValue)
-                self?.persist(values, forKey: Keys.cardStyleKinds)
             }
             .store(in: &cancellables)
 
@@ -694,7 +701,6 @@ private enum Keys {
     /// 遗留键名:仅用于读取迁移,不写入。
     static let legacyMenuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
     static let defaultExpandedKinds = "settings.panel.defaultExpandedKinds"
-    static let cardStyleKinds = "settings.panel.cardStyleKinds"
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let displayControlsExpandedByDefault = "settings.display.expandedByDefault"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
@@ -709,6 +715,8 @@ private enum Keys {
     static let memoryPrimaryMetric = "settings.memory.primaryMetric"
     static let showCPUProcesses = "settings.cpu.showProcesses"
     static let cpuShowSystemProcesses = "settings.cpu.showSystemProcesses"
+    static let showGPUProcesses = "settings.gpu.showProcesses"
+    static let gpuShowSystemProcesses = "settings.gpu.showSystemProcesses"
     static let showDiskProcesses = "settings.disk.showProcesses"
     static let diskShowSystemProcesses = "settings.disk.showSystemProcesses"
     static let showNetworkProcesses = "settings.network.showProcesses"
@@ -722,6 +730,9 @@ private enum Keys {
     /// 语义同 fanVisibilityMigrated。
     static let bluetoothVisibilityMigrated = "settings.bluetoothVisibilityMigrated"
     static let metricsDefaultOnMigrated = "settings.metricsDefaultOnMigrated"
+    /// 一次性迁移标记:电池模块新增电压/电流/容量默认开指标时,给存量用户
+    /// 的电池指标列表补上这三项(语义同 metricsDefaultOnMigrated,但只限电池三项)。
+    static let batteryElectricalMetricsMigrated = "settings.batteryElectricalMetricsMigrated"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"
