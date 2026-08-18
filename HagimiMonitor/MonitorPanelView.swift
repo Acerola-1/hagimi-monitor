@@ -110,26 +110,33 @@ struct MonitorPanelView: View {
                             }
                             #endif
 
-                            HStack(spacing: 8) {
+                            // 底部三按钮与行卡片同规格:同内边距/同字体/同间距,
+                            // 高度与行间留白都与模块行一致;文案用短形式避免折行。
+                            HStack(spacing: 6) {
                                 Button {
                                     openActivityMonitor()
                                 } label: {
-                                    Label(String(localized: "panel.activity-monitor"), systemImage: "waveform.path.ecg")
+                                    Label(String(localized: "panel.monitor"), systemImage: "waveform.path.ecg")
+                                        .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
                                 .compatibleButtonStyle()
+
+                                // 快捷功能入口:激活角标与浮层打开态高亮由子视图
+                                // 自行观察 store,开关变化不牵动整块面板重绘。
+                                QuickToolsEntryButton(theme: theme)
 
                                 Button {
                                     fluidOpenSettings()
                                 } label: {
                                     Label(String(localized: "panel.settings"), systemImage: "gearshape")
+                                        .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
                                 .compatibleButtonStyle()
                             }
-                            .font(.body.weight(.medium))
+                            .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
-                            .padding(.top, 2)
                         }
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -172,7 +179,10 @@ struct MonitorPanelView: View {
                     }
                 }
             }
-            .padding(10)
+            // 底边留白与面板内部行间节奏(6pt)对齐;顶/侧保持 10pt。
+            .padding(.top, 10)
+            .padding(.horizontal, 10)
+            .padding(.bottom, 6)
             .frame(
                 minWidth: MonitorConstants.panelMinWidth,
                 idealWidth: MonitorConstants.panelIdealWidth,
@@ -546,6 +556,8 @@ struct MonitorPanelView: View {
     /// 边框与内容一起伸缩。故此处必须用 `MonitorConstants.panelExpansionDuration` + easeInOut,
     /// 与窗口侧 `NSAnimationContext` 严格一致。
     private func setExpansion(_ mutate: () -> Void) {
+        // 展开补间与浮层子窗口并存会引发布局抖动,展开前确保浮层已收起。
+        QuickToolsStore.shared.popoverPresenter.dismiss()
         // 置位一次性动画标记:紧接着的首次内容尺寸上报会被窗口层消费、走补间;
         // 而展开后进程数据回来/定时刷新引起的尺寸变化不再置位,瞬时贴合,不与此次展开叠加。
         store.beginExpansionAnimation()

@@ -94,10 +94,10 @@ extension View {
         modifier(CompatibleGlassEffectID(id: id, namespace: namespace))
     }
 
-    /// 面板底部按钮样式:统一用毛玻璃材质胶囊(`PanelMaterialButtonStyle`)。
+    /// 面板底部按钮样式:统一用毛玻璃材质圆角卡片(`PanelMaterialButtonStyle`)。
     /// 面板整体(含各行)已是 `.menu` 毛玻璃基调,底部按钮若用 26 原生
     /// `.buttonStyle(.glass)` 液态玻璃,深色模式下会偏亮偏透、与周围格格不入,
-    /// 故所有版本都统一为与行同款的毛玻璃胶囊。
+    /// 故所有版本都统一为与行同款的毛玻璃圆角卡片。
     func compatibleButtonStyle() -> some View {
         self.buttonStyle(PanelMaterialButtonStyle())
     }
@@ -105,13 +105,16 @@ extension View {
 
 // MARK: - macOS 15 毛玻璃按钮样式
 
-/// 面板底部按钮样式:毛玻璃材质胶囊,与面板各行同款的 `.menu` +
-/// `.withinWindow` 毛玻璃,融为一体、深浅模式下基调一致。
+/// 面板底部按钮样式:毛玻璃材质卡片,与面板各行同款的 `.menu` +
+/// `.withinWindow` 毛玻璃与 `rowCornerRadius` 圆角,融为一体、
+/// 深浅模式下基调一致。
 private struct PanelMaterialButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
-        let shape = Capsule()
+        let shape = RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
         return configuration.label
-            .padding(.vertical, 6)
+            // 内边距与行卡片严格一致(同为 vertical 8):按钮高度与行同高,
+            // rowCornerRadius 在矮按钮上会被夹到 height/2 退化成胶囊。
+            .padding(.vertical, 8)
             .padding(.horizontal, 10)
             .frame(maxWidth: .infinity)
             .background {
