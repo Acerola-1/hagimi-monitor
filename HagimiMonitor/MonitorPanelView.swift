@@ -718,7 +718,12 @@ private struct MetricGlassRow: View, Equatable {
                         StorageVolumeDetailList(volumes: storageVolumes, kind: module.kind, tint: tint, theme: theme)
                     } else {
                         VStack(spacing: 9) {
-                            MetricDetailGrid(metrics: details, kind: module.kind, theme: theme)
+                            MetricDetailGrid(
+                                metrics: details,
+                                kind: module.kind,
+                                theme: theme,
+                                cpuCoreDetail: showCPUCoresDetail ? module.cpuCoreDetail : nil
+                            )
                             // CPU / 内存采样恒返回 top 5,故展开时无条件挂载列表(数据未到
                             // 先用留白占位预留高度),使展开一次到位、数据到达后原位淡入,
                             // 不产生二次高度跳变。磁盘采样需采样间隔才有增量,可能为空,仍按需挂载。
@@ -811,9 +816,172 @@ private struct MetricGlassRow: View, Equatable {
     private func metricValue(_ name: String) -> String {
         details.first { $0.name == name }?.value ?? "--"
     }
+
+    /// CPU 的 P/E 两行展示生效条件:采样侧产出逐核数据且用户未关闭
+    /// core-split 指标开关(关闭时环形图与占用值一并隐藏)。
+    private var showCPUCoresDetail: Bool {
+        module.kind == .cpu
+            && module.cpuCoreDetail != nil
+            && details.contains { $0.name == "core-split" }
+    }
 }
 
 // MARK: - Detail Grid
+
+/// CPU 展开区 P/E 核两行展示:第一行逐核负载环形图(逐行铺满、多核
+/// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
+/// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
+/// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
+private struct CPUCoresDetail: View {
+    let detail: CPUCoreDetail
+    let theme: MonitorPanelTheme
+
+    /// E 核色:复用 severity calm 绿;P 核色:复用 CPU 模块主色
+    /// (平衡主题暖橙/鲜艳主题粉红),不引入调色板之外的颜色。
+    private var eTint: Color { theme.palette.severityTint(for: .calm) }
+    private var pTint: Color { theme.palette.moduleTint(for: .cpu) }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            // 圆环逐行铺满:优先放满一行,放不下自动折行;每一行(含末行)
+            // 按自身环数把间隙撑满整行,不留右侧空档。
+            CoreRingFlowLayout() {
+                ForEach(detail.cores) { core in
+                    CoreLoadRing(
+                        usage: core.usage,
+                        tint: core.isPerformance ? pTint : eTint,
+                        // 底环比内衬底色深一档(trackFill 叠 trackFill 会糊),
+                        // 复用行分隔线令牌拉开层次。
+                        track: theme.rowSeparator(for: .cpu)
+                    )
+                }
+            }
+            // 内衬背景与指标格同款 trackFill 色块;环底用行分隔线令牌
+            // (深一档),避免与底色糊成一片。
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 7)
+                    .fill(theme.palette.trackFill)
+            )
+
+            HStack(spacing: MetricGridMetrics.columnSpacing) {
+                if let efficiency = detail.efficiencyUsage {
+                    usageTile(
+                        label: String(localized: "cpu.detail.e-cores"),
+                        tint: eTint,
+                        value: efficiency
+                    )
+                }
+                usageTile(
+                    label: String(localized: "cpu.detail.p-cores"),
+                    tint: pTint,
+                    value: detail.performanceUsage
+                )
+            }
+        }
+    }
+
+    /// 分组占用格:与指标网格同款 trackFill 内衬色块;左侧色点标示
+    /// 圆环颜色归属,右侧百分比 mono 加粗。
+    private func usageTile(label: String, tint: Color, value: Double) -> some View {
+        HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
+            Circle()
+                .fill(tint)
+                .frame(width: 5, height: 5)
+            Text(label)
+                .monitorPanelCaptionFont(.footnote)
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+                .layoutPriority(1)
+            Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+            Text("\(Int(value.rounded()))%")
+                .monitorPanelMonoFont(.footnote, weight: .bold)
+                .foregroundStyle(theme.valueText)
+                .lineLimit(1)
+        }
+        .padding(.vertical, 4)
+        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+    }
+}
+
+/// 逐核圆环流式布局:优先放满一行(按最小间隙算每行容量),放不下再折行;
+/// 每一行(含末行)都按自身环数把间隙撑满整行,单环行居中。
+private struct CoreRingFlowLayout: Layout {
+    var ringSize: CGFloat = 14
+    var minSpacing: CGFloat = 6
+    var rowGap: CGFloat = 6
+
+    /// 按可用宽度分行,并为每一行按自身环数计算铺满整行的间隙;
+    /// 单环行间隙无意义,由摆放阶段居中处理。
+    private func arrange(count: Int, width: CGFloat) -> (rows: [[Int]], spacings: [CGFloat]) {
+        guard count > 0, width > 0 else { return ([], []) }
+        let perRow = max(1, Int(floor((width + minSpacing) / (ringSize + minSpacing))))
+        var rows: [[Int]] = []
+        var index = 0
+        while index < count {
+            rows.append(Array(index..<min(index + perRow, count)))
+            index += perRow
+        }
+        let spacings = rows.map { indices -> CGFloat in
+            guard indices.count > 1 else { return 0 }
+            return (width - CGFloat(indices.count) * ringSize) / CGFloat(indices.count - 1)
+        }
+        return (rows, spacings)
+    }
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.replacingUnspecifiedDimensions(by: CGSize(width: 240, height: ringSize)).width
+        let (rows, _) = arrange(count: subviews.count, width: width)
+        let height = CGFloat(rows.count) * ringSize + CGFloat(max(0, rows.count - 1)) * rowGap
+        return CGSize(width: width, height: height)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let (rows, spacings) = arrange(count: subviews.count, width: bounds.width)
+        var y = bounds.minY
+        for (rowIndex, indices) in rows.enumerated() {
+            // 单环行居中;多环行从行首起按该行间隙铺满。
+            var x = indices.count > 1
+                ? bounds.minX
+                : bounds.minX + (bounds.width - ringSize) / 2
+            let spacing = spacings[rowIndex]
+            for (position, subviewIndex) in indices.enumerated() {
+                subviews[subviewIndex].place(
+                    at: CGPoint(x: x, y: y),
+                    proposal: ProposedViewSize(width: ringSize, height: ringSize)
+                )
+                if position < indices.count - 1 {
+                    x += ringSize + spacing
+                }
+            }
+            y += ringSize + rowGap
+        }
+    }
+}
+
+/// 单核负载环:trackFill 底环 + 占用弧。弧线随采样帧短促缓动过渡,
+/// 无持续动画。
+private struct CoreLoadRing: View {
+    let usage: Double
+    let tint: Color
+    let track: Color
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .stroke(track, lineWidth: 2)
+            Circle()
+                .trim(from: 0, to: max(0.001, min(1, usage / 100)))
+                .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+        }
+        .frame(width: 14, height: 14)
+        .animation(.easeOut(duration: 0.3), value: usage)
+    }
+}
 
 private struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
@@ -821,6 +989,9 @@ private struct MetricDetailGrid: View {
     let theme: MonitorPanelTheme
     /// true=行内展开紧凑样式(小字体 + 28pt 缩进对齐图标列);false=方卡放大样式(大字体、无缩进)。
     var isCompact: Bool = true
+    /// CPU 逐核数据:非 nil 时在网格顶部渲染 P/E 两行展示,
+    /// 并剔除 core-split 格子(同源数值不重复展示)。
+    var cpuCoreDetail: CPUCoreDetail? = nil
 
     /// 需要占满整行的字段:长值(IP、启动时间)塞两列会撑破列宽或不可控换行;
     /// wifi-rssi 格结构性超宽(标签+信号条+数值+单位四件套,半格装不下);
@@ -837,11 +1008,16 @@ private struct MetricDetailGrid: View {
     private var valueStyle: Font.TextStyle { isCompact ? .footnote : .title3 }
 
     private var shortMetrics: [MonitorMetric] {
-        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) }
+        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) && !isReplacedByCoreDetail($0) }
     }
 
     private var fullRowMetrics: [MonitorMetric] {
-        metrics.filter { Self.fullRowMetricIDs.contains($0.name) }
+        metrics.filter { Self.fullRowMetricIDs.contains($0.name) && !isReplacedByCoreDetail($0) }
+    }
+
+    /// core-split 被 P/E 两行展示取代时从格子列表剔除。
+    private func isReplacedByCoreDetail(_ metric: MonitorMetric) -> Bool {
+        cpuCoreDetail != nil && metric.name == "core-split"
     }
 
     var body: some View {
@@ -861,6 +1037,10 @@ private struct MetricDetailGrid: View {
     // 提到 bold 强化存在感。
     private var content: some View {
         VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
+            if let cpuCoreDetail {
+                CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
+            }
+
             if !shortMetrics.isEmpty {
                 LazyVGrid(
                     columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),

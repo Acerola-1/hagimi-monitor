@@ -297,6 +297,26 @@ struct FanInfo: Identifiable, Equatable {
     }
 }
 
+/// 单个逻辑 CPU 的瞬时负载,供展开区逐核环形图渲染。
+struct CPUCoreLoad: Identifiable, Equatable {
+    let index: Int
+    /// 0-100 占用百分比。
+    let usage: Double
+    /// true=性能核(P),false=能效核(E)。
+    let isPerformance: Bool
+
+    var id: Int { index }
+}
+
+/// CPU 逐核负载与 P/E 分组占用(仅 CPU 模块有值):逐核环形图 +
+/// 分组占用两行展示的数据源。分组占用与 core-split 指标同口径
+/// (tick 差值聚合),独立存放供展开区直接渲染。
+struct CPUCoreDetail: Equatable {
+    let cores: [CPUCoreLoad]
+    let performanceUsage: Double
+    let efficiencyUsage: Double?
+}
+
 struct MonitorModule: Identifiable, Equatable {
     let kind: MonitorKind
     var context: String? = nil
@@ -315,6 +335,9 @@ struct MonitorModule: Identifiable, Equatable {
     /// 已连接蓝牙设备(仅蓝牙模块有值)。面板展开区按此数组渲染设备电量列表;
     /// 独立于 metrics 字段,避免冲撞统一采样契约。
     var bluetoothDevices: [BluetoothDeviceInfo]? = nil
+    /// 逐核负载与 P/E 分组占用(仅 CPU 模块且拓扑可识别时有值)。
+    /// 面板展开区据此渲染逐核环形图,独立于 metrics 字段。
+    var cpuCoreDetail: CPUCoreDetail? = nil
 
     var id: MonitorKind { kind }
 

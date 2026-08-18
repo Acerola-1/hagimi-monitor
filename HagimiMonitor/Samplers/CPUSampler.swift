@@ -34,6 +34,7 @@ final class CPUSampler: MonitorSampler {
         let info = hostCPULoadInfo()
         let metrics: [MonitorMetric]
         let total: Double
+        var cpuCoreDetail: CPUCoreDetail?
 
         if let info, let previousCPUInfo {
             let userDiff = Double(info.cpu_ticks.0 &- previousCPUInfo.cpu_ticks.0)
@@ -96,6 +97,20 @@ final class CPUSampler: MonitorSampler {
                         : groupUsage(eIndices, current: perCore, previous: previous)
                     let value = eUsage.map { "\(percent(perfUsage)) / \(percent($0))" } ?? percent(perfUsage)
                     resultMetrics.append(MonitorMetric(name: "core-split", value: value, numericValue: perfUsage))
+                    // 逐核负载与分组占用同帧产出:环形图与分组数值同源,
+                    // 保证两行展示的口径一致。
+                    let cores = perCore.indices.map { index in
+                        CPUCoreLoad(
+                            index: index,
+                            usage: coreUsage(at: index, current: perCore, previous: previous),
+                            isPerformance: pIndices.contains(index)
+                        )
+                    }
+                    cpuCoreDetail = CPUCoreDetail(
+                        cores: cores,
+                        performanceUsage: perfUsage,
+                        efficiencyUsage: eUsage
+                    )
                 }
             }
             previousPerCoreTicks = perCore
@@ -112,7 +127,8 @@ final class CPUSampler: MonitorSampler {
             value: total,
             summary: percent(total),
             metrics: resultMetrics,
-            samples: seedSamples(total)
+            samples: seedSamples(total),
+            cpuCoreDetail: cpuCoreDetail
         )
     }
 
@@ -175,6 +191,21 @@ final class CPUSampler: MonitorSampler {
         }
         guard totalTicks > 0 else { return nil }
         return min(100, max(0, activeTicks / totalTicks * 100))
+    }
+
+    /// 指定单核的占用(%):tick 差值法,与整机占用同口径。
+    /// 无增量(如休眠刚醒)返 0,环形图表现为空环。
+    private func coreUsage(at index: Int, current: [host_cpu_load_info], previous: [host_cpu_load_info]) -> Double {
+        guard index < current.count, index < previous.count else { return 0 }
+        let currentTicks = current[index].cpu_ticks
+        let previousTicks = previous[index].cpu_ticks
+        let user = Double(currentTicks.0 &- previousTicks.0)
+        let system = Double(currentTicks.1 &- previousTicks.1)
+        let idle = Double(currentTicks.2 &- previousTicks.2)
+        let nice = Double(currentTicks.3 &- previousTicks.3)
+        let all = user + system + idle + nice
+        guard all > 0 else { return 0 }
+        return min(100, max(0, (user + system + nice) / all * 100))
     }
 
     private func systemUptime() -> String {

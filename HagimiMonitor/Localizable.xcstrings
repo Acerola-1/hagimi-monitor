@@ -8298,19 +8298,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "P/E Cores"
+            "value": "Core Details"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "P/E コア"
+            "value": "コア詳細"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "P/E 核"
+            "value": "核心详情"
           }
         }
       },
@@ -8972,6 +8972,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "解锁键盘"
+          }
+        }
+      }
+    },
+    "cpu.detail.p-cores": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P-Core"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pコア"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "性能核"
+          }
+        }
+      }
+    },
+    "cpu.detail.e-cores": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E-Core"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eコア"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能效核"
           }
         }
       }
