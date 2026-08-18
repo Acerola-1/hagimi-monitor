@@ -3405,7 +3405,13 @@ struct CollapsibleDetail<Content: View>: View {
                     Color.clear
                         .onAppear { contentHeight = geometry.size.height }
                         .onChange(of: geometry.size.height) { _, newValue in
-                            contentHeight = newValue
+                            // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
+                            // onChange 回调无动画上下文,裸更新会让容器高度与下方
+                            // 内容的位移瞬跳;显式包同款补间事务,与展开/收起、
+                            // 窗口层的补间同时长同曲线,整链同步平滑。
+                            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+                                contentHeight = newValue
+                            }
                         }
                 }
             )
@@ -3413,10 +3419,6 @@ struct CollapsibleDetail<Content: View>: View {
             .frame(height: isExpanded ? contentHeight : 0, alignment: .top)
             .opacity(isExpanded ? 1 : 0)
             .clipped()
-            // 展开状态下内容自身高度变化(如风扇模式切换插入滑杆/曲线)平滑过渡,
-            // 而非无动画瞬跳;折叠态的高度变化不可见,不受影响。展开/收起仍由
-            // 调用方的 withAnimation(isExpanded)驱动,与本动画互不干扰。
-            .animation(.easeInOut(duration: 0.18), value: contentHeight)
             // 折叠状态(高度 0、不可见)不参与点击,避免拦截行的展开手势。
             .allowsHitTesting(isExpanded)
     }

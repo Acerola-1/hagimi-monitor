@@ -169,7 +169,8 @@ struct DisplayControlsSection: View {
                         settings: settings,
                         controller: controller,
                         palette: palette,
-                        tint: tint
+                        tint: tint,
+                        beginExpansionAnimation: beginExpansionAnimation
                     )
                 }
             }
@@ -193,25 +194,24 @@ struct DisplayControlsSection: View {
             return String(localized: "display.controls-disabled")
         }
 
-        let externalCount = displays.filter { !$0.isBuiltIn }.count
         let unitCount = String(localized: "display.unit-count")
-        let countPart = unitCount.isEmpty ? "\(displays.count)" : "\(displays.count) \(unitCount)"
-        if externalCount > 0 {
-            let unitExternal = String(localized: "display.unit-external")
-            return "\(countPart) · \(unitExternal) \(externalCount)"
-        }
-        return countPart
+        return unitCount.isEmpty ? "\(displays.count)" : "\(displays.count) \(unitCount)"
     }
 }
 
 private struct DisplayControlGroup: View {
     let display: ControlledDisplay
-    /// 该显示器的只读信息(分辨率/刷新率/HDR),并入控制区展示;采集失败为 nil 不占位。
+    /// 该显示器的只读信息(分辨率/刷新率/HDR 与档案),并入控制区展示;采集失败为 nil 不占位。
     let displayInfo: DisplayInfo?
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var controller: DisplayControlController
     let palette: MonitorPalette
     let tint: Color
+
+    @State private var archiveExpanded = false
+    /// 档案开合同样改变面板总高,须置位窗口层一次性补间标记,
+    /// 使窗口高度与档案内容的补间并行同步(与模块行展开同一机制)。
+    var beginExpansionAnimation: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -244,15 +244,29 @@ private struct DisplayControlGroup: View {
                             Capsule()
                                 .fill(palette.displayBadgeFill)
                         }
+
+                    if let info = displayInfo {
+                        DisplayArchiveToggle(
+                            palette: palette,
+                            archiveExpanded: archiveExpanded,
+                            onToggle: toggleArchive
+                        )
+                    }
                 }
 
-                // 信息行(B4 并入):分辨率 · 刷新率(· HDR 开启时 · 输出位深),紧贴名称下方。
+                // 信息区:基础四项 + 可折叠档案,与 App Store 版同构;
+                // 同处 gridRowGap 间距容器,展开后格子间留白统一。
                 if let info = displayInfo {
-                    Text("\(info.resolution) · \(info.refreshRate)\(info.hdrOn == true ? " · HDR" : "")\(info.colorDepth != "--" ? " · \(info.colorDepth)" : "")")
-                        .monitorPanelCaptionFont(.caption2)
-                        .foregroundStyle(palette.captionText)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                    VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
+                        DisplayInfoBaseGrid(display: info, palette: palette)
+
+                        CollapsibleDetail(isExpanded: archiveExpanded) {
+                            VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+                                DisplayArchiveGrid(display: info, palette: palette)
+                                DisplayArchiveCopyButton(display: info, palette: palette)
+                            }
+                        }
+                    }
                 }
 
                 VStack(spacing: 7) {
@@ -306,6 +320,16 @@ private struct DisplayControlGroup: View {
             }
         }
         .padding(.leading, 28)
+    }
+
+    /// 档案开合与模块行展开同一套补间约定:先置位窗口层一次性标记,再用与
+    /// 窗口层同时长(panelExpansionDuration)同曲线的动画驱动内容高度,
+    /// 窗口边框与档案内容并行动画到同一终值,不裁剪不留空。
+    private func toggleArchive() {
+        beginExpansionAnimation()
+        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            archiveExpanded.toggle()
+        }
     }
 
     private func binding(for control: DisplayControlKind) -> Binding<Double> {
