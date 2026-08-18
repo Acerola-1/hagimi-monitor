@@ -3365,8 +3365,8 @@ private struct BluetoothGlassRow: View, Equatable {
     }
 }
 
-/// 蓝牙展开区设备列表:类型图标 + 名称 + 电量条 + 百分比。
-/// 未上报电量的设备(厂商私有协议,系统本身收不到)只显示「已连接」,不伪造读数。
+/// 蓝牙展开区设备列表:图标底座 + 名称/类型双行文字 + 电量条 + 百分比。
+/// 未上报电量的设备(厂商私有协议,系统本身收不到)右侧以短横占位,不伪造读数。
 private struct BluetoothDeviceList: View {
     let devices: [BluetoothDeviceInfo]
     let theme: MonitorPanelTheme
@@ -3378,7 +3378,7 @@ private struct BluetoothDeviceList: View {
                 .frame(height: 1)
                 .padding(.leading, 28)
 
-            VStack(spacing: 4) {
+            VStack(spacing: 8) {
                 ForEach(devices) { device in
                     deviceRow(device)
                 }
@@ -3389,35 +3389,49 @@ private struct BluetoothDeviceList: View {
 
     @ViewBuilder
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 8) {
+            // 图标底座:模块色圆角方块承托形态符号,与系统设备卡片语言一致。
             Image(systemName: device.type.symbol)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.secondaryText)
-                .frame(width: 14)
+                .foregroundStyle(theme.moduleTint(for: .bluetooth))
+                .frame(width: 26, height: 26)
+                .background {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous)
+                        .fill(theme.badgeFill(for: .bluetooth))
+                }
 
-            Text(device.name)
-                .monitorPanelMetricLabelFont()
-                .foregroundStyle(theme.primaryText)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(device.name)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+                Text(typeLabel(for: device.type))
+                    .monitorPanelCaptionFont()
+                    .foregroundStyle(theme.captionText)
+                    .lineLimit(1)
+            }
 
             Spacer(minLength: 8)
 
             if let level = device.batteryLevel {
                 BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
-                    .frame(width: 44, height: 4)
+                    .frame(width: 56, height: 6)
                 Text("\(level)%")
-                    .monitorPanelMonoFont(.callout, weight: .semibold)
-                    .foregroundStyle(batteryColor(level))
+                    .monitorPanelMonoFont(.footnote, weight: .semibold)
+                    .foregroundStyle(levelTextColor(level))
                     .lineLimit(1)
-                    .monospacedDigit()
+                    .frame(width: 38, alignment: .trailing)
+            } else {
+                // 无电量设备右侧占位与 TOP 进程空位行同规;列表本身即「已连接」清单。
+                Text("—")
+                    .monitorPanelCaptionFont(.footnote)
+                    .foregroundStyle(theme.captionText)
                     .frame(width: 38, alignment: .trailing)
             }
-            // 无电量设备右侧留空:列表本身即「已连接」清单,重复标注无信息量
-            //(厂商私有协议设备系统读不到电量,不伪造读数)。
         }
     }
 
-    /// 电量条/读数颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
+    /// 电量条颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
     private func batteryColor(_ level: Int) -> Color {
         if Double(level) <= MonitorConstants.batteryCriticalThreshold {
             return theme.palette.severityTint(for: .critical)
@@ -3426,6 +3440,32 @@ private struct BluetoothDeviceList: View {
             return theme.palette.severityTint(for: .warning)
         }
         return theme.palette.severityTint(for: .calm)
+    }
+
+    /// 电量数字颜色:常态用中性值色,只有低电区间才染 severity 色,
+    /// 避免饱和绿文字在玻璃底上抢眼。
+    private func levelTextColor(_ level: Int) -> Color {
+        if Double(level) <= MonitorConstants.batteryCriticalThreshold {
+            return theme.palette.severityTint(for: .critical)
+        }
+        if Double(level) <= MonitorConstants.batteryWarningThreshold {
+            return theme.palette.severityTint(for: .warning)
+        }
+        return theme.valueText
+    }
+
+    /// 设备类型副标题:三语文案见 Localizable 的 bluetooth.type.* 键。
+    private func typeLabel(for type: BluetoothDeviceType) -> String {
+        switch type {
+        case .mouse: String(localized: "bluetooth.type.mouse")
+        case .keyboard: String(localized: "bluetooth.type.keyboard")
+        case .headphones: String(localized: "bluetooth.type.headphones")
+        case .headset: String(localized: "bluetooth.type.headset")
+        case .gamepad: String(localized: "bluetooth.type.gamepad")
+        case .trackpad: String(localized: "bluetooth.type.trackpad")
+        case .speaker: String(localized: "bluetooth.type.speaker")
+        case .other: String(localized: "bluetooth.type.other")
+        }
     }
 }
 
