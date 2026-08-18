@@ -137,6 +137,26 @@ struct ModuleSettingsView: View {
             }
             #endif
 
+            // GPU 进程列表数据源为 IORegistry 只读属性(AGX user client 的
+            // AppUsage),沙盒允许,双渠道均可用,故不加 DIRECT_DISTRIBUTION 门控。
+            if kind == .gpu {
+                SettingsGroup {
+                    SettingsRow(title: String(localized: "settings.show-gpu-processes")) {
+                        Toggle("", isOn: $settings.showGPUProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+
+                    SettingsDivider()
+
+                    SettingsRow(title: String(localized: "settings.gpu.show-system-processes")) {
+                        Toggle("", isOn: $settings.gpuShowSystemProcesses)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
+            }
+
             // App Store 沙盒版无法采样他进程,隐藏存储进程列表设置。
             #if DIRECT_DISTRIBUTION
             if kind == .storage {

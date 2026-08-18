@@ -393,6 +393,7 @@ final class MonitorStore: ObservableObject {
     @Published private(set) var modules: [MonitorModule]
     @Published var topMemoryProcesses: [TopMemoryProcess] = []
     @Published var topCPUProcesses: [TopCPUProcess] = []
+    @Published var topGPUProcesses: [TopGPUProcess] = []
     @Published var topDiskProcesses: [TopDiskProcess] = []
     @Published var topNetworkProcesses: [TopNetworkProcess] = []
     var selectedKind: MonitorKind = .cpu
@@ -640,19 +641,19 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 当前设置里已开启进程列表的类目集合。
-    /// App Store 沙盒版无法采样他进程资源(proc_pid_rusage/nettop 均被沙盒拒绝),
-    /// 故仅直连版启用进程采样;沙盒版恒返回空集,彻底停止 TOP 进程采样。
+    /// GPU 列表的数据源是 IORegistry 只读属性(AGX user client 的 AppUsage),
+    /// 沙盒允许,双渠道均可采样;其余四类依赖 proc_pid_rusage/nettop 等他进程
+    /// 接口,沙盒下被拒,仅直连版启用。
     private func enabledProcessKinds() -> Set<MonitorKind> {
-        #if DIRECT_DISTRIBUTION
         var enabled = Set<MonitorKind>()
+        if settings.showGPUProcesses { enabled.insert(.gpu) }
+        #if DIRECT_DISTRIBUTION
         if settings.showMemoryProcesses { enabled.insert(.memory) }
         if settings.showCPUProcesses { enabled.insert(.cpu) }
         if settings.showDiskProcesses { enabled.insert(.storage) }
         if settings.showNetworkProcesses { enabled.insert(.network) }
-        return enabled
-        #else
-        return []
         #endif
+        return enabled
     }
 
     /// 计算实际需要采样的进程类目:展开集合与「设置里开启的进程列表」集合的交集。
@@ -682,26 +683,28 @@ final class MonitorStore: ObservableObject {
         refreshProcesses(for: expandedProcessKinds)
     }
 
-    /// 面板打开时为增量型 TOP 采样(网络/磁盘)预热基线快照。
-    /// 两者的基线是跨调用持久的全局快照:提前建好后,用户展开时首次采样即可
-    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s),磁盘从
-    /// 「0.6s 补采」变为展开即出数;基线窗口=打开面板以来的时长,速率也更准。
+    /// 面板打开时为增量型 TOP 采样(网络/磁盘/GPU)预热基线快照。
+    /// 三者的基线是跨调用持久的全局快照:提前建好后,用户展开时首次采样即可
+    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s),磁盘/GPU
+    /// 变为展开即出数;基线窗口=打开面板以来的时长,速率也更准。
     /// 这是对「按需采样」原则的有限放宽:仅面板可见时触发一次、只覆盖设置里
-    /// 开启了 TOP 列表的类目、丢弃返回值(不 enrich、不建图标),后台常驻仍零开销;
-    /// 沙盒版 enabledProcessKinds() 恒返回空集,天然不受影响。
+    /// 开启了 TOP 列表的类目、丢弃返回值(不 enrich、不建图标),后台常驻仍零开销。
     private func prewarmProcessBaselines() {
         let enabled = enabledProcessKinds()
         // 已展开的类目走 updateExpandedKinds 的正常采样链路(含链式/延时补采),无需预热。
         let expanded = expandedProcessKinds
-        let targets = Set([MonitorKind.network, .storage].filter {
+        let targets = Set([MonitorKind.network, .storage, .gpu].filter {
             enabled.contains($0) && !expanded.contains($0)
         })
         guard !targets.isEmpty else { return }
 
         procSampleQueue.async {
-            // 磁盘快照极快、先执行;nettop 耗时 1~2s,排在后面以免阻塞串行队列。
+            // 磁盘/GPU 快照极快、先执行;nettop 耗时 1~2s,排在后面以免阻塞串行队列。
             if targets.contains(.storage) {
                 _ = sampleTopDiskProcesses()
+            }
+            if targets.contains(.gpu) {
+                _ = sampleTopGPUProcesses()
             }
             if targets.contains(.network) {
                 _ = sampleTopNetworkProcesses()
@@ -724,12 +727,14 @@ final class MonitorStore: ObservableObject {
 
         let memoryIncludeSystem = settings.memoryShowSystemProcesses
         let cpuIncludeSystem = settings.cpuShowSystemProcesses
+        let gpuIncludeSystem = settings.gpuShowSystemProcesses
         let diskIncludeSystem = settings.diskShowSystemProcesses
         let networkIncludeSystem = settings.networkShowSystemProcesses
 
         let group = DispatchGroup()
         var memoryProcesses: [TopMemoryProcess]?
         var cpuProcesses: [TopCPUProcess]?
+        var gpuProcesses: [TopGPUProcess]?
         var diskProcesses: [TopDiskProcess]?
         var networkProcesses: [TopNetworkProcess]?
 
@@ -752,6 +757,15 @@ final class MonitorStore: ObservableObject {
             procSampleQueue.async {
                 let raw = sampleTopCPUProcesses(includeSystemProcesses: cpuIncludeSystem)
                 cpuProcesses = enrichCPU(raw)
+                group.leave()
+            }
+        }
+
+        if active.contains(.gpu) {
+            group.enter()
+            procSampleQueue.async {
+                let raw = sampleTopGPUProcesses(includeSystemProcesses: gpuIncludeSystem)
+                gpuProcesses = enrichGPU(raw)
                 group.leave()
             }
         }
@@ -779,6 +793,7 @@ final class MonitorStore: ObservableObject {
             guard let self else { return }
             if let m = memoryProcesses { self.topMemoryProcesses = m }
             if let c = cpuProcesses { self.topCPUProcesses = c }
+            if let g = gpuProcesses { self.topGPUProcesses = g }
             if let d = diskProcesses { self.topDiskProcesses = d }
             if let n = networkProcesses { self.topNetworkProcesses = n }
             completion?()

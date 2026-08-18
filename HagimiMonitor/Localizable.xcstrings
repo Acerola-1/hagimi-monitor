@@ -6199,6 +6199,28 @@
         }
       }
     },
+    "settings.gpu.show-system-processes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show System Processes"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "システムプロセスを表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示系统进程"
+          }
+        }
+      }
+    },
     "settings.halo-ring": {
       "extractionState": "stale",
       "localizations": {
@@ -6615,6 +6637,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示耗电排行"
+          }
+        }
+      }
+    },
+    "settings.show-gpu-processes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show Top Processes by GPU"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU使用量TOPを表示"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示 GPU 占用排行"
           }
         }
       }

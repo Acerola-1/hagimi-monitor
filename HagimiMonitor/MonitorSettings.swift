@@ -90,6 +90,9 @@ final class MonitorSettings: ObservableObject {
     @Published var memoryPrimaryMetric: MemoryPrimaryMetricPreference = .pressure
     @Published var showCPUProcesses: Bool = true
     @Published var cpuShowSystemProcesses: Bool = false
+    @Published var showGPUProcesses: Bool = true
+    /// GPU 列表默认含系统进程:数据源里 WindowServer 等常是占用大头,隐藏后列表常显得空。
+    @Published var gpuShowSystemProcesses: Bool = true
     @Published var showDiskProcesses: Bool = true
     @Published var diskShowSystemProcesses: Bool = false
     @Published var showNetworkProcesses: Bool = true
@@ -150,6 +153,8 @@ final class MonitorSettings: ObservableObject {
         memoryPrimaryMetric = MemoryPrimaryMetricPreference(rawValue: memoryPrimaryMetricRawValue) ?? .pressure
         showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? true
         cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? false
+        showGPUProcesses = defaults.object(forKey: Keys.showGPUProcesses) as? Bool ?? true
+        gpuShowSystemProcesses = defaults.object(forKey: Keys.gpuShowSystemProcesses) as? Bool ?? true
         showDiskProcesses = defaults.object(forKey: Keys.showDiskProcesses) as? Bool ?? true
         diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? false
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
@@ -564,6 +569,20 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $showGPUProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.showGPUProcesses)
+            }
+            .store(in: &cancellables)
+
+        $gpuShowSystemProcesses
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.gpuShowSystemProcesses)
+            }
+            .store(in: &cancellables)
+
         $showDiskProcesses
             .dropFirst()
             .sink { [weak self] newValue in
@@ -709,6 +728,8 @@ private enum Keys {
     static let memoryPrimaryMetric = "settings.memory.primaryMetric"
     static let showCPUProcesses = "settings.cpu.showProcesses"
     static let cpuShowSystemProcesses = "settings.cpu.showSystemProcesses"
+    static let showGPUProcesses = "settings.gpu.showProcesses"
+    static let gpuShowSystemProcesses = "settings.gpu.showSystemProcesses"
     static let showDiskProcesses = "settings.disk.showProcesses"
     static let diskShowSystemProcesses = "settings.disk.showSystemProcesses"
     static let showNetworkProcesses = "settings.network.showProcesses"

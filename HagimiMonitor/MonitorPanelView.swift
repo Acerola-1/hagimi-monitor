@@ -356,6 +356,8 @@ struct MonitorPanelView: View {
             showMemoryProcesses: store.settings.showMemoryProcesses,
             topCPUProcesses: store.topCPUProcesses,
             showCPUProcesses: store.settings.showCPUProcesses,
+            topGPUProcesses: store.topGPUProcesses,
+            showGPUProcesses: store.settings.showGPUProcesses,
             topDiskProcesses: store.topDiskProcesses,
             showDiskProcesses: store.settings.showDiskProcesses,
             topNetworkProcesses: store.topNetworkProcesses,
@@ -388,7 +390,9 @@ struct MonitorPanelView: View {
                 detail: module.summary,
                 samples: module.samples,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: expandedKinds.contains(module.kind),
+                topGPUProcesses: store.topGPUProcesses,
+                showGPUProcesses: store.settings.showGPUProcesses
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -636,6 +640,8 @@ private struct MetricGlassRow: View, Equatable {
     var fans: [FanInfo]? = nil
     var topCPUProcesses: [TopCPUProcess] = []
     var showCPUProcesses = true
+    var topGPUProcesses: [TopGPUProcess] = []
+    var showGPUProcesses = true
     var topDiskProcesses: [TopDiskProcess] = []
     var showDiskProcesses = true
     var toggleExpansion: (() -> Void)?
@@ -654,6 +660,8 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.showMemoryProcesses == rhs.showMemoryProcesses
             && lhs.topCPUProcesses == rhs.topCPUProcesses
             && lhs.showCPUProcesses == rhs.showCPUProcesses
+            && lhs.topGPUProcesses == rhs.topGPUProcesses
+            && lhs.showGPUProcesses == rhs.showGPUProcesses
             && lhs.topDiskProcesses == rhs.topDiskProcesses
             && lhs.showDiskProcesses == rhs.showDiskProcesses
             && lhs.fans == rhs.fans
@@ -727,7 +735,11 @@ private struct MetricGlassRow: View, Equatable {
                             // CPU / 内存采样恒返回 top 5,故展开时无条件挂载列表(数据未到
                             // 先用留白占位预留高度),使展开一次到位、数据到达后原位淡入,
                             // 不产生二次高度跳变。磁盘采样需采样间隔才有增量,可能为空,仍按需挂载。
-                            // App Store 沙盒版无法采样他进程,整体隐藏 TOP 进程列表。
+                            // GPU 列表数据源为 IORegistry 只读属性,沙盒可用,双渠道均渲染;
+                            // 其余列表依赖他进程接口,仅直连版可用。
+                            if module.kind == .gpu, showGPUProcesses {
+                                GPUProcessList(processes: topGPUProcesses, theme: theme)
+                            }
                             #if DIRECT_DISTRIBUTION
                             if module.kind == .memory, showMemoryProcesses {
                                 MemoryProcessList(processes: topMemoryProcesses, theme: theme)
@@ -2273,6 +2285,8 @@ private struct MetricCardView: View, Equatable {
     var showMemoryProcesses = false
     var topCPUProcesses: [TopCPUProcess] = []
     var showCPUProcesses = false
+    var topGPUProcesses: [TopGPUProcess] = []
+    var showGPUProcesses = false
     var topDiskProcesses: [TopDiskProcess] = []
     var showDiskProcesses = false
     var topNetworkProcesses: [TopNetworkProcess] = []
@@ -2288,6 +2302,8 @@ private struct MetricCardView: View, Equatable {
             && lhs.showMemoryProcesses == rhs.showMemoryProcesses
             && lhs.topCPUProcesses == rhs.topCPUProcesses
             && lhs.showCPUProcesses == rhs.showCPUProcesses
+            && lhs.topGPUProcesses == rhs.topGPUProcesses
+            && lhs.showGPUProcesses == rhs.showGPUProcesses
             && lhs.topDiskProcesses == rhs.topDiskProcesses
             && lhs.showDiskProcesses == rhs.showDiskProcesses
             && lhs.topNetworkProcesses == rhs.topNetworkProcesses
@@ -2427,8 +2443,18 @@ private struct MetricCardView: View, Equatable {
     /// 按当前模块类型返回已开启的 top 进程小节(items + 数值列数):未开启时返回 nil。
     /// 四类列表统一固定 5 行位置:真实数据从上往下填,空位由 CardProcessList 统一补“—”占位。
     private var processSection: (items: [CardProcessItem], columns: Int)? {
+        // GPU 列表数据源为 IORegistry 只读属性,沙盒可用,不受渠道门控。
+        if module.kind == .gpu {
+            guard showGPUProcesses else { return nil }
+            let items = topGPUProcesses.enumerated().map { index, proc in
+                CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
+                    CardProcessMetric(symbol: nil, text: String(format: "%.1f%%", proc.gpuUsage))
+                ])
+            }
+            return (items, 1)
+        }
         #if !DIRECT_DISTRIBUTION
-        // App Store 沙盒版无法采样他进程,大卡片不渲染 TOP 进程小节。
+        // App Store 沙盒版无法采样他进程,其余大卡片不渲染 TOP 进程小节。
         return nil
         #else
         switch module.kind {
@@ -2467,7 +2493,7 @@ private struct MetricCardView: View, Equatable {
             }
             return (items, 2)
         case .gpu, .battery, .fan, .bluetooth:
-            // 风扇/蓝牙大卡片无 TOP 进程小节
+            // GPU 已在上方渠道门控外处理;风扇/蓝牙大卡片无 TOP 进程小节
             return nil
         }
         #endif
@@ -2993,6 +3019,66 @@ private struct CPUProcessList: View {
                 RosettaBanner(count: translatedCount, theme: theme)
                     .padding(.leading, 28)
             }
+        }
+    }
+}
+
+// MARK: - Top GPU Processes
+
+private struct GPUProcessList: View {
+    let processes: [TopGPUProcess]
+    let theme: MonitorPanelTheme
+
+    /// 固定展示 top 5 个位置:真实数据从上往下填,空位显“—”占位。
+    private static let rowCount = 5
+
+    var body: some View {
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: .gpu))
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            VStack(spacing: 4) {
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    if index < processes.count {
+                        let proc = processes[index]
+                        HStack(spacing: 6) {
+                            ProcessIcon(icon: proc.icon, theme: theme)
+                                .frame(width: 16, height: 16)
+
+                            Text(proc.name)
+                                .monitorPanelCaptionFont(.footnote)
+                                .foregroundStyle(theme.primaryText)
+                                .lineLimit(1)
+                                .truncationMode(.tail)
+
+                            Spacer(minLength: 4)
+
+                            Text(String(format: "%.1f%%", proc.gpuUsage))
+                                .monitorPanelMonoFont(.caption2, weight: .medium)
+                                .foregroundStyle(theme.secondaryText)
+                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                                .layoutPriority(1)
+
+                            // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
+                            // GPU 时间,空值(旧驱动/未上报)时不渲染。
+                            if !proc.api.isEmpty {
+                                Text(proc.api)
+                                    .monitorPanelCaptionFont(.caption2)
+                                    .foregroundStyle(theme.captionText)
+                                    .lineLimit(1)
+                                    .fixedSize(horizontal: true, vertical: false)
+                            }
+                        }
+                    } else {
+                        ProcessPlaceholderRow(theme: theme)
+                    }
+                }
+            }
+            .padding(.leading, 28)
+            .animation(.easeInOut(duration: 0.2), value: processes.count)
         }
     }
 }
