@@ -431,6 +431,9 @@ final class MonitorStore: ObservableObject {
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
+    /// nettop 单次耗时 1~2s,单独一条串行队列,避免阻塞磁盘/GPU 等毫秒级快照的
+    /// 出数。无锁前提不变:每一类的全局快照仍只被固定的一条队列读写。
+    private let nettopQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.nettop-sample", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var isSampling = false
     private var pendingSampleKinds: Set<MonitorKind> = []
@@ -571,7 +574,9 @@ final class MonitorStore: ObservableObject {
         visiblePanelKinds.insert(kind)
         if wasEmpty {
             isPanelVisible = true
-            refreshAllProcesses()
+            // 打开面板的首刷不允许空结果清列表:增量型首采常返空,若覆盖会
+            // 把上次会话留下的列表闪成空白;旧数据由后续定时周期(完整窗口)替换。
+            refreshProcesses(for: expandedProcessKinds, allowClear: false)
             prewarmProcessBaselines()
             startProcSampleTimer()
             // FanSampler 已在 init 中常驻启动(支持后台告警),此处无需再 start。
@@ -619,23 +624,32 @@ final class MonitorStore: ObservableObject {
         expandedKindsBySource[source] = kinds
         let newlyExpanded = expandedProcessKinds.subtracting(previous)
         guard isPanelVisible, !newlyExpanded.isEmpty else { return }
-        refreshProcesses(for: newlyExpanded) { [weak self] in
+        // 展开触发的采样不允许用空结果清空列表(allowClear=false):增量型首采
+        // (网络建基线/磁盘窗口过短)常返空,若直接覆盖,用户会看到旧数据一闪
+        // 后被清成空白、再硬等补采。旧数据保留到真实新数据或定时周期替换。
+        refreshProcesses(for: newlyExpanded, allowClear: false) { [weak self] emptyKinds in
             guard let self else { return }
             // 网络:首采的 nettop 仅建立基线(因无前一快照,增量为空),完成后立即
             // 链式再采一次即可算出增量,避免干等下一个 5s 定时。不用固定延时是
             // 因为 nettop 单次耗时 1-2s 不确定,按完成回调链式接力最稳。
+            // 链式条件看「首采是否返空」而非已发布列表:列表里可能留着上次的旧数据。
             guard newlyExpanded.contains(.network),
+                  emptyKinds.contains(.network),
                   self.isPanelVisible,
-                  self.expandedProcessKinds.contains(.network),
-                  self.topNetworkProcesses.isEmpty else { return }
-            self.refreshProcesses(for: [.network])
+                  self.expandedProcessKinds.contains(.network) else { return }
+            self.refreshProcesses(for: [.network], allowClear: false)
         }
-        // 磁盘读写量是两次快照的增量:首采只建基线、常返空。磁盘采样本身极快,故用
-        // 0.6s 定时补采(需一个测量窗口),把磁盘 TOP 从「干等 5s 定时」缩短到 ~0.6s 出数。
-        if newlyExpanded.contains(.storage) {
+        // 磁盘/GPU 读写量是两次快照的增量:首采只建基线、窗口过短时返空。两者
+        // 采样本身极快,故用 0.6s 定时补采(凑出一个测量窗口),把 TOP 从「干等 5s
+        // 定时」缩短到 ~0.6s 出数。
+        if newlyExpanded.contains(.storage) || newlyExpanded.contains(.gpu) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self, self.isPanelVisible, self.expandedProcessKinds.contains(.storage) else { return }
-                self.refreshProcesses(for: [.storage])
+                guard let self, self.isPanelVisible else { return }
+                let followUp = Set([MonitorKind.storage, .gpu].filter {
+                    newlyExpanded.contains($0) && self.expandedProcessKinds.contains($0)
+                })
+                guard !followUp.isEmpty else { return }
+                self.refreshProcesses(for: followUp, allowClear: false)
             }
         }
     }
@@ -679,6 +693,8 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 刷新当前展开且开启的进程列表。由 5 秒定时器驱动;未展开任何模块时为空转。
+    /// 定时周期拥有完整测量窗口,结果权威,允许用空结果清列表(真实空闲时列表
+    /// 应诚实变空);展开/开面板触发的一次性采样则另行禁用清空(见调用处)。
     private func refreshAllProcesses() {
         refreshProcesses(for: expandedProcessKinds)
     }
@@ -699,29 +715,37 @@ final class MonitorStore: ObservableObject {
         guard !targets.isEmpty else { return }
 
         procSampleQueue.async {
-            // 磁盘/GPU 快照极快、先执行;nettop 耗时 1~2s,排在后面以免阻塞串行队列。
+            // 磁盘/GPU 快照极快,与 nettop 分在两条队列,互不阻塞。
             if targets.contains(.storage) {
                 _ = sampleTopDiskProcesses()
             }
             if targets.contains(.gpu) {
                 _ = sampleTopGPUProcesses()
             }
-            if targets.contains(.network) {
+        }
+        if targets.contains(.network) {
+            nettopQueue.async {
                 _ = sampleTopNetworkProcesses()
             }
         }
     }
 
-    /// 对指定类目采样(仅限其中设置已开启的列表)。各类采样在 procSampleQueue 上
-    /// 串行执行(串行是磁盘/网络全局快照无锁安全的前提),全部完成后回主线程
-    /// 更新 @Published 属性。只采「展开 ∩ 设置开启」的类目,避免为不可见的列表
-    /// spawn ps/nettop 子进程、构建图标。
-    private func refreshProcesses(for kinds: Set<MonitorKind>, completion: (() -> Void)? = nil) {
+    /// 对指定类目采样(仅限其中设置已开启的列表)。快速采样(磁盘/GPU/CPU/内存)
+    /// 在 procSampleQueue、nettop 在 nettopQueue 各自串行执行(串行是每类全局
+    /// 快照无锁安全的前提),全部完成后回主线程更新 @Published 属性。只采「展开
+    /// ∩ 设置开启」的类目,避免为不可见的列表 spawn ps/nettop 子进程、构建图标。
+    /// allowClear=false 时空结果不覆盖已有列表(见 updateExpandedKinds);
+    /// completion 回传本次采样返空的类目,供链式补采判断。
+    private func refreshProcesses(
+        for kinds: Set<MonitorKind>,
+        allowClear: Bool = true,
+        completion: ((_ emptyKinds: Set<MonitorKind>) -> Void)? = nil
+    ) {
         let enabled = enabledProcessKinds()
 
         let active = Self.activeProcessKinds(expanded: kinds, enabled: enabled)
         guard !active.isEmpty else {
-            completion?()
+            completion?([])
             return
         }
 
@@ -738,10 +762,11 @@ final class MonitorStore: ObservableObject {
         var diskProcesses: [TopDiskProcess]?
         var networkProcesses: [TopNetworkProcess]?
 
-        // 各类采样在 procSampleQueue(串行队列)上顺序执行;只采样当前可见(展开)且已开启的列表。
-        // 注意:磁盘/网络的 TOP 采样各自维护一份文件级全局快照(previousDiskSnapshot /
-        // previousNetworkSnapshot,无锁)以计算增量,其线程安全正是依赖本队列的串行性——
-        // 切勿把 procSampleQueue 改成并发队列,否则会引入难复现的数据竞争。
+        // 只采样当前可见(展开)且已开启的列表。注意:磁盘/网络/GPU 的 TOP 采样各自
+        // 维护一份文件级全局快照(previousDiskSnapshot / previousNetworkSnapshot /
+        // previousGPUSnapshot,无锁)以计算增量,其线程安全依赖「每类快照只被固定
+        // 一条串行队列读写」——磁盘/GPU 在 procSampleQueue、网络在 nettopQueue,
+        // 切勿把任一条改成并发队列,否则会引入难复现的数据竞争。
         if active.contains(.memory) {
             group.enter()
             procSampleQueue.async {
@@ -781,7 +806,7 @@ final class MonitorStore: ObservableObject {
 
         if active.contains(.network) {
             group.enter()
-            procSampleQueue.async {
+            nettopQueue.async {
                 let raw = sampleTopNetworkProcesses(includeSystemProcesses: networkIncludeSystem)
                 networkProcesses = enrichNetwork(raw)
                 group.leave()
@@ -791,12 +816,18 @@ final class MonitorStore: ObservableObject {
         // 全部采样完成后,在主线程更新 @Published 属性。
         group.notify(queue: .main) { [weak self] in
             guard let self else { return }
-            if let m = memoryProcesses { self.topMemoryProcesses = m }
-            if let c = cpuProcesses { self.topCPUProcesses = c }
-            if let g = gpuProcesses { self.topGPUProcesses = g }
-            if let d = diskProcesses { self.topDiskProcesses = d }
-            if let n = networkProcesses { self.topNetworkProcesses = n }
-            completion?()
+            var emptyKinds = Set<MonitorKind>()
+            func publish<T>(_ kind: MonitorKind, _ result: [T]?, assign: ([T]) -> Void) {
+                guard let result else { return }
+                if result.isEmpty { emptyKinds.insert(kind) }
+                if !result.isEmpty || allowClear { assign(result) }
+            }
+            publish(.memory, memoryProcesses) { self.topMemoryProcesses = $0 }
+            publish(.cpu, cpuProcesses) { self.topCPUProcesses = $0 }
+            publish(.gpu, gpuProcesses) { self.topGPUProcesses = $0 }
+            publish(.storage, diskProcesses) { self.topDiskProcesses = $0 }
+            publish(.network, networkProcesses) { self.topNetworkProcesses = $0 }
+            completion?(emptyKinds)
         }
     }
 
