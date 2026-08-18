@@ -113,6 +113,12 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "health", value: stableHealth.map(percent) ?? "--", numericValue: stableHealth, unit: "%"),
                 MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--", numericValue: smart.cycleCount.map(Double.init)),
                 MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius, unit: "°C"),
+                MonitorMetric(name: "voltage", value: voltageString(smart.voltageVolts), numericValue: smart.voltageVolts, unit: " V"),
+                MonitorMetric(name: "current", value: currentString(smart.amperageMilliamps), numericValue: smart.amperageMilliamps.map(abs), unit: " mA"),
+                // 剩余/满充容量合并为一格斜杠式展示;满充口径取电池芯片实测的
+                // FullChargeCapacity(与「健康度」用的 NominalChargeCapacity 分工不同,
+                // 后者负责相对设计容量的衰减叙事)。
+                MonitorMetric(name: "capacity", value: capacityString(smart.remainingCapacitymAh, full: smart.fullChargeCapacitymAh), numericValue: smart.remainingCapacitymAh.map(Double.init), unit: " mAh"),
                 // 功率流数据链(不进指标网格,由展开区功率流图消费)
                 MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn, unit: " W"),
                 MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow, unit: " W"),
@@ -223,6 +229,10 @@ final class BatterySampler: MonitorSampler {
         // 系统版本(macOS 27 实测)回退 pmset 探针。
         let chargeLimit = lookupInt("ChargeLimit") ?? chargeLimitProbe.limit()
         let temperature = lookupDouble("Temperature").map { $0 / 100 }
+        // 容量(mAh):RemainingCapacity 为当前剩余,FullChargeCapacity 为电池芯片
+        // 实测满充值,两者在 macOS 26/27 的 BatteryData 合并后均可读。
+        let remainingCapacity = lookupDouble("RemainingCapacity").map { Int($0) }
+        let fullChargeCapacity = lookupDouble("FullChargeCapacity").map { Int($0) }
         let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
             min(100, max(0, maxCapacity / designCapacity * 100))
         } else {
@@ -245,8 +255,30 @@ final class BatterySampler: MonitorSampler {
             telemetryChargingWatts: telemetryChargingWatts,
             powerInWatts: powerInWatts,
             batteryMagnitudeWatts: batteryMagnitudeWatts,
-            chargeLimit: chargeLimit
+            chargeLimit: chargeLimit,
+            voltageVolts: voltage.map { $0 / 1_000 },
+            amperageMilliamps: amperage,
+            remainingCapacitymAh: remainingCapacity,
+            fullChargeCapacitymAh: fullChargeCapacity
         )
+    }
+
+    /// 电池端电压(V):IORegistry Voltage 为 mV。
+    private func voltageString(_ volts: Double?) -> String {
+        volts.map { String(format: "%.2f V", $0) } ?? "--"
+    }
+
+    /// 电池电流(mA):Amperage 的符号约定随机型/系统版本不一致,
+    /// 展示一律取绝对值,方向信息由充电状态承担。
+    private func currentString(_ milliamps: Double?) -> String {
+        milliamps.map { "\(Int(abs($0).rounded())) mA" } ?? "--"
+    }
+
+    /// 剩余/满充容量合并展示:两者齐备时「剩余 / 满充 mAh」,
+    /// 满充缺失时只展剩余,全缺显示 "--"。
+    private func capacityString(_ remaining: Int?, full: Int?) -> String {
+        guard let remaining else { return "--" }
+        return full.map { "\(remaining) / \($0) mAh" } ?? "\(remaining) mAh"
     }
 
     private func adapterWatts(_ service: io_service_t) -> Double? {
@@ -453,4 +485,8 @@ private struct SmartBatteryInfo {
     var powerInWatts: Double?
     var batteryMagnitudeWatts: Double?
     var chargeLimit: Int?
+    var voltageVolts: Double?
+    var amperageMilliamps: Double?
+    var remainingCapacitymAh: Int?
+    var fullChargeCapacitymAh: Int?
 }

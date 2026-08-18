@@ -25,6 +25,14 @@ enum MonitorConstants {
     static let panelMaxWidth: Double = 460
     static let rowCornerRadius = 14.0
 
+    // MARK: - Row Glass Tint Fade
+    // 活力配色行 tint 的垂直衰减参数:行头 plateau 高度内保持满浓度承载模块辨识度,
+    // 其后线性衰减至 faint 不透明度,展开区小字落在近中性底上;收起的行高度小于
+    // plateau,整卡处于满浓度段,外观与均布 tint 无异。
+    static let rowTintPlateau = 46.0
+    static let rowTintFadeEnd = 128.0
+    static let rowTintFaintOpacity = 0.02
+
     // MARK: - Panel Expansion
     // 子栏目展开/收起动画时长。内容(SwiftUI `CollapsibleDetail` 的 frame 高度补间)
     // 与窗口层(`FluidPanelController` 的 setFrame 动画)必须用这一同一时长与

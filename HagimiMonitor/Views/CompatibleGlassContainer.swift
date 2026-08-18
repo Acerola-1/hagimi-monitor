@@ -42,16 +42,16 @@ struct CompatibleGlassContainer<Content: View>: View {
 /// 宿主窗口，每一帧都要重新向 WindowServer 请求背景合成，导致整个面板(含顶部
 /// SYSTEM·LIVE)闪烁、像被重新加载。`.withinWindow` 只混合窗口内内容，resize
 /// 不再触发桌面重采样，从根上消除闪烁。
-struct CompatibleGlassEffect: ViewModifier {
-    var tint: Color
+struct CompatibleGlassEffect<Fill: View>: ViewModifier {
     var cornerRadius: CGFloat
+    var fill: Fill
 
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
             .background {
-                shape
-                    .fill(tint)
+                fill
+                    .clipShape(shape)
                     .background {
                         VisualEffectView(material: .menu, blendingMode: .withinWindow)
                             .clipShape(shape)
@@ -85,7 +85,13 @@ extension View {
     ///   - tint: 玻璃效果着色
     ///   - cornerRadius: 圆角半径
     func compatibleGlassEffect(tint: Color = .clear, cornerRadius: CGFloat) -> some View {
-        modifier(CompatibleGlassEffect(tint: tint, cornerRadius: cornerRadius))
+        modifier(CompatibleGlassEffect(cornerRadius: cornerRadius, fill: tint))
+    }
+
+    /// 跨版本兼容的 `.glassEffect` 替代(自定义填充版):填充可以是渐变等任意视图,
+    /// 用于活力配色行 tint 的垂直衰减(见 `MonitorPalette.rowGlassFill`)。
+    func compatibleGlassEffect(cornerRadius: CGFloat, @ViewBuilder fill: () -> some View) -> some View {
+        modifier(CompatibleGlassEffect(cornerRadius: cornerRadius, fill: fill()))
     }
 
     /// 跨版本兼容的 `.glassEffectID` 替代。

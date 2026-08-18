@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 功率流 v3 重做</title>
+<style>
+  /* ====== 设计令牌：对齐 MonitorPalette (balanced · dark) ====== */
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-bat: #65AF52;
+    --sev-warn: #E0A63C;
+    --sev-crit: #E05C5C;
+    --row-radius: 14px;
+  }
+  body.light {
+    --panel-bg: rgba(255, 255, 255, 0.52);
+    --row-glass: rgba(122, 145, 180, 0.10);
+    --row-separator: rgba(30, 50, 80, 0.14);
+    --text-primary: rgba(10, 15, 25, 0.92);
+    --text-value: rgba(10, 15, 25, 0.85);
+    --text-secondary: rgba(10, 15, 25, 0.72);
+    --text-caption: rgba(10, 15, 25, 0.55);
+    --track-fill: rgba(10, 15, 25, 0.06);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh;
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    display: flex; flex-direction: column; align-items: center;
+    gap: 18px; padding: 36px 16px 56px;
+    -webkit-font-smoothing: antialiased;
+    color: var(--text-primary);
+  }
+  body.light {
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #cfdcf5 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #ecd9ee 0%, transparent 55%),
+      #e8eaf0;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  h1 { font-size: 17px; font-weight: 700; letter-spacing: 0.3px; }
+  .subtitle { font-size: 12px; color: var(--text-caption); margin-top: -10px; }
+
+  /* ====== 控制台 ====== */
+  .controls {
+    width: 1200px; max-width: 96vw;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 16px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    padding: 12px 16px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 14px 22px;
+    font-size: 12px;
+  }
+  .ctl-group { display: flex; align-items: center; gap: 8px; }
+  .ctl-label { font-size: 10px; letter-spacing: 0.8px; color: var(--text-caption); font-weight: 600; }
+  .seg {
+    display: flex; border-radius: 8px; overflow: hidden;
+    border: 0.5px solid rgba(255,255,255,0.14); background: var(--track-fill);
+  }
+  .seg button {
+    appearance: none; border: none; background: transparent;
+    color: var(--text-caption); font-size: 11px; padding: 5px 11px;
+    cursor: pointer; font-family: inherit; white-space: nowrap;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .seg button + button { border-left: 0.5px solid rgba(255,255,255,0.10); }
+  .seg button.on { background: rgba(101, 175, 82, 0.28); color: var(--text-primary); font-weight: 600; }
+  .seg button:hover:not(.on) { background: rgba(255,255,255,0.06); }
+  input[type="range"] {
+    -webkit-appearance: none; width: 130px; height: 3px; border-radius: 2px;
+    background: var(--track-fill); outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px; border-radius: 50%;
+    background: var(--tint-bat); border: 1.5px solid rgba(255,255,255,0.85);
+    cursor: pointer;
+  }
+  .ctl-val { font-size: 11px; color: var(--text-value); min-width: 62px; }
+
+  /* ====== 面板（单版） ====== */
+  .stage { display: flex; justify-content: center; }
+  .panel {
+    width: 612px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    padding: 12px;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .panel-tag {
+    display: flex; align-items: baseline; gap: 8px; padding: 0 4px;
+  }
+  .panel-tag .tag {
+    font-size: 11px; font-weight: 700; letter-spacing: 1px;
+    color: var(--tint-bat);
+  }
+  .panel-tag .desc { font-size: 10.5px; color: var(--text-caption); }
+
+  .row { background: var(--row-glass); border-radius: var(--row-radius); border: 0.5px solid rgba(255, 255, 255, 0.06); }
+  .row-head { display: flex; align-items: center; gap: 9px; padding: 9px 11px; }
+  .row-head .icon { color: var(--tint-bat); display: flex; }
+  .row-head .label { font-size: 12.5px; font-weight: 600; }
+  .row-head .value { font-size: 12.5px; font-weight: 600; color: var(--text-value); }
+  .row-head .spacer { flex: 1; }
+  .row-head .pill {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 11px; color: var(--text-secondary);
+  }
+  .row-head .pill .bolt { color: var(--tint-bat); font-size: 10px; }
+
+  .detail { padding: 0 11px 10px; }
+  .detail .sep { height: 1px; background: var(--row-separator); margin-left: 28px; margin-bottom: 8px; }
+  .grid {
+    margin-left: 28px; margin-bottom: 10px;
+    display: grid; grid-template-columns: 1fr 1fr; column-gap: 16px; row-gap: 6px;
+  }
+  .gcell { display: flex; align-items: baseline; font-size: 11px; }
+  .gcell .gl { color: var(--text-caption); }
+  .gcell .gv { margin-left: auto; color: var(--text-secondary); font-weight: 500; }
+
+  .sec-title {
+    margin-left: 28px;
+    display: flex; align-items: center; gap: 7px;
+    font-size: 10px; color: var(--text-caption);
+    letter-spacing: 0.3px; margin-bottom: 7px;
+  }
+  .sec-title::after { content: ''; flex: 1; height: 1px; background: linear-gradient(90deg, var(--row-separator), transparent); }
+
+  /* ====== 功率流舞台：v3 几何 =====
+     节点宽 104, A/B 节点在导轨下方(top:46), J 圆心在 (272, 15) 中上偏 8px,
+     16px 短虚线 J→bbar 顶, 电池条 y=62(导轨下方衔接) */
+  .flow { margin-left: 28px; }
+  .flow-rail { position: relative; width: 544px; height: 138px; }
+  .flow-rail canvas { position: absolute; top: 0; left: 0; width: 544px; height: 138px; overflow: visible; }
+
+  /* J 圆点：纯小圆点(8px), 在中部偏上 */
+  .junction-dot {
+    position: absolute; top: 11px; left: 268px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.55);
+    pointer-events: none;
+  }
+  body.light .junction-dot {
+    background: rgba(10, 15, 25, 0.75);
+    box-shadow: 0 0 6px rgba(10, 15, 25, 0.30);
+  }
+
+  /* 16px 短虚线：J→bbar 顶 */
+  .junction-stub {
+    position: absolute; top: 19px; left: 271px;
+    width: 0; height: 16px;
+    border-left: 2px dashed rgba(255, 255, 255, 0.5);
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  body.light .junction-stub { border-left-color: rgba(10, 15, 25, 0.35); }
+
+  .fnode {
+    position: absolute; top: 46px;
+    width: 104px; height: 46px;
+    border-radius: 9px;
+    background: var(--track-fill);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1px;
+    transition: opacity 0.3s ease;
+  }
+  .fnode .fl { font-size: 9px; color: var(--text-caption); letter-spacing: 0.2px; }
+  .fnode .fv { font-size: 14px; font-weight: 650; color: var(--text-value); letter-spacing: -0.2px; }
+  .fnode .fv .u { font-size: 9px; font-weight: 500; color: var(--text-caption); margin-left: 1px; }
+  .fnode .fbar {
+    width: 76px; height: 2.5px; border-radius: 2px;
+    background: rgba(255,255,255,0.10); overflow: hidden;
+    transition: opacity 0.3s ease;
+  }
+  body.light .fnode .fbar { background: rgba(0,0,0,0.08); }
+  .fnode .fbar > div { height: 100%; border-radius: 2px; background: rgba(255,255,255,0.55); }
+  body.light .fnode .fbar > div { background: rgba(0,0,0,0.45); }
+  .fnode.adapter { left: 0; }
+  .fnode.system { right: 0; }
+
+  /* ====== 电池条：节点下方 8px 间距，y=100..138 ====== */
+  .bbar {
+    position: absolute; top: 100px; left: 0;
+    width: 544px; height: 38px;
+    border-radius: 10px;
+    background: var(--track-fill);
+    border: 1px solid transparent;
+    overflow: hidden;
+    transition: border-color 0.35s ease;
+  }
+  .bbar.charging { border-color: rgba(101, 175, 82, 0.45); }
+  .bbar.insufficient { border-color: rgba(224, 92, 92, 0.5); }
+  .bbar .fill {
+    position: absolute; top: 2px; left: 2px; bottom: 2px;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(101,175,82,0.60), rgba(101,175,82,0.28));
+    transition: width 0.4s ease, background 0.35s ease;
+  }
+  .bbar.insufficient .fill {
+    background: linear-gradient(90deg, rgba(224,92,92,0.45), rgba(224,166,60,0.28));
+  }
+  .bbar .texts {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; gap: 6px;
+    padding: 0 11px;
+  }
+  body.dark .bbar .texts { text-shadow: 0 1px 2px rgba(0,0,0,0.45); }
+  .bbar .pct { font-size: 14px; font-weight: 700; color: var(--text-primary); }
+  .bbar .state { font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+  .bbar .eta { margin-left: auto; font-size: 10px; color: var(--text-secondary); white-space: nowrap; }
+  .bbar .divider { width: 1px; height: 11px; background: rgba(255,255,255,0.25); flex-shrink: 0; }
+  body.light .bbar .divider { background: rgba(0,0,0,0.18); }
+
+  /* 刻度线本体（避让/现状共用元素，几何由 JS 控制） */
+  .tick-line {
+    position: absolute; top: 2px; width: 2px; bottom: 2px;
+    background: rgba(255,255,255,0.6);
+    transition: left 0.3s ease, height 0.25s ease, top 0.25s ease, opacity 0.25s ease;
+  }
+  body.light .tick-line { background: rgba(0,0,0,0.35); }
+  .tick-line.notch { height: 9px; bottom: auto; }
+  /* 旗标：顶端小三角 + 细线只下到文字带上方 */
+  .tick-flag {
+    position: absolute; top: 0;
+    width: 0; height: 0;
+    border-left: 4px solid transparent; border-right: 4px solid transparent;
+    border-top: 5px solid rgba(255,255,255,0.78);
+    transform: translateX(-4px);
+    transition: left 0.3s ease;
+  }
+  body.light .tick-flag { border-top-color: rgba(0,0,0,0.5); }
+  .tick-flag-line {
+    position: absolute; top: 5px; width: 1.5px; height: 8px;
+    background: rgba(255,255,255,0.5);
+    transition: left 0.3s ease;
+  }
+  body.light .tick-flag-line { background: rgba(0,0,0,0.32); }
+
+  .note { margin-left: 28px; font-size: 10px; color: var(--text-caption); line-height: 1.5; }
+
+  /* ====== 刻度三态横排对比 ====== */
+  .ticks-wrap {
+    width: 1200px; max-width: 96vw;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid rgba(255, 255, 255, 0.12);
+    padding: 14px 16px 16px;
+  }
+  .ticks-title { font-size: 12px; font-weight: 700; margin-bottom: 10px; }
+  .ticks-title span { font-weight: 400; color: var(--text-caption); font-size: 10.5px; margin-left: 8px; }
+  .ticks-row { display: flex; gap: 16px; flex-wrap: wrap; }
+  .tick-card { flex: 1; min-width: 340px; display: flex; flex-direction: column; gap: 7px; }
+  .tick-card .ct { font-size: 10.5px; color: var(--text-caption); font-weight: 600; letter-spacing: 0.4px; }
+  .tick-card .ct em { font-style: normal; color: var(--tint-bat); }
+
+  footer { font-size: 10.5px; color: var(--text-caption); text-align: center; line-height: 1.7; max-width: 900px; }
+</style>
+</head>
+<body class="dark">
+
+<h1>功率流 v3 重做</h1>
+<div class="subtitle">斜线枢纽 · 16px 短虚线 · 汇流辉光 · 全局弧长相位 · easeInOutCubic 缓动</div>
+
+<!-- ====== 控制台 ====== -->
+<div class="controls">
+  <div class="ctl-group">
+    <span class="ctl-label">电源状态</span>
+    <div class="seg" id="seg-scenario">
+      <button data-v="charging" class="on">充电中</button>
+      <button data-v="discharging">放电中</button>
+      <button data-v="insufficient">适配器不足</button>
+      <button data-v="lowload">低负载·细导管</button>
+    </div>
+  </div>
+  <div class="ctl-group">
+    <span class="ctl-label">刻度方案</span>
+    <div class="seg" id="seg-scheme">
+      <button data-v="line">现状·全高线</button>
+      <button data-v="avoid">方案A·避让</button>
+      <button data-v="flag" class="on">方案B·旗标</button>
+    </div>
+  </div>
+  <div class="ctl-group">
+    <span class="ctl-label">电量</span>
+    <input type="range" id="r-pct" min="5" max="99" value="83">
+    <span class="ctl-val mono" id="v-pct">83% / 上限 80%</span>
+  </div>
+  <div class="ctl-group">
+    <span class="ctl-label">外观</span>
+    <div class="seg" id="seg-theme">
+      <button data-v="dark" class="on">深色</button>
+      <button data-v="light">浅色</button>
+    </div>
+  </div>
+  <div class="ctl-group">
+    <div class="seg" id="seg-pause">
+      <button data-v="run" class="on">▶ 动画</button>
+      <button data-v="pause">⏸ 暂停</button>
+    </div>
+  </div>
+  <div class="ctl-group">
+    <span class="ctl-label">速度</span>
+    <div class="seg" id="seg-speed">
+      <button data-v="1" class="on">1×</button>
+      <button data-v="0.4">0.4×</button>
+      <button data-v="0.15">慢放</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 功率流面板（单版） ====== -->
+<div class="stage">
+  <div class="panel" id="panel">
+    <div class="row">
+      <div class="row-head">
+        <span class="icon">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+            <rect x="1" y="4.5" width="12" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="1.2"/>
+            <rect x="13.8" y="6.5" width="1.6" height="3" rx="0.8"/>
+            <rect x="3" y="6.2" width="6.5" height="3.6" rx="1"/>
+          </svg>
+        </span>
+        <span class="label">电源</span>
+        <span class="value mono pct-head"></span>
+        <span class="spacer"></span>
+        <span class="pill"><span class="bolt">⚡︎</span><span class="pill-state"></span></span>
+      </div>
+      <div class="detail">
+        <div class="sep"></div>
+        <div class="grid mono">
+          <div class="gcell"><span class="gl">健康度</span><span class="gv">89.3%</span></div>
+          <div class="gcell"><span class="gl">温度</span><span class="gv">32.5°C</span></div>
+          <div class="gcell"><span class="gl">循环计数</span><span class="gv">398 次</span></div>
+          <div class="gcell"><span class="gl">转换损耗</span><span class="gv">1.5 W</span></div>
+        </div>
+        <div class="sec-title">功率流</div>
+        <div class="flow">
+          <div class="flow-rail">
+            <canvas></canvas>
+            <div class="junction-dot"></div>
+            <div class="junction-stub"></div>
+            <div class="fnode adapter">
+              <span class="fl">适配器 · 65 W</span>
+              <span class="fv mono"><span class="w-in">58.9</span><span class="u"> W</span></span>
+              <div class="fbar"><div class="load"></div></div>
+            </div>
+            <div class="fnode system">
+              <span class="fl">系统负载</span>
+              <span class="fv mono"><span class="w-sys">25.2</span><span class="u"> W</span></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ====== 刻度三态横排（验证标尺位置：贴在电池条上方，不卡中间） ====== -->
+<div class="ticks-wrap">
+  <div class="ticks-title">充电上限刻度：三态对比<span>固定场景 电量 78% · 上限 88%（验证：刻度贴在电池条上方，完全脱离文字带）</span></div>
+  <div class="ticks-row" id="ticks-row"></div>
+</div>
+
+<footer>
+  几何：节点 104×46 位于 y=46..92（导轨下方），J 圆心 (272, 15) 中上偏 8px，16px 短虚线 J→电池条顶 y=62，电池条 544×38，导轨宽 544。<br>
+  动画：A→J→B 单一相位沿弧长推进，段内 easeInOutCubic 缓动（汇流点前后减速停靠→加速接棒），汇流点呼吸辉光，导管宽 &lt; 3pt 降级为纯色脉冲（无发光层），stub 静态渐变呼吸。<br>
+  验收：切「慢放 0.15×」看汇流辉光的完整呼吸；切「低负载·细导管」看纯色脉冲 vs 发光糊点。
+</footer>
+
+<script>
+'use strict';
+
+/* ====== 全局状态 ====== */
+const S = {
+  scenario: 'charging',   // charging | discharging | insufficient | lowload
+  scheme: 'flag',         // line | avoid | flag（对比面板电池条用）
+  pct: 83,
+  limit: 80,
+  rated: 65,
+  paused: false,
+  speed: 1,
+};
+
+/* 场景数据：瓦数组合决定导管粗细与动画密度。
+   lowload 专为展示「细导管纯色脉冲」：三段瓦数均 <8.5W，导管宽 <3pt。 */
+function watts() {
+  switch (S.scenario) {
+    case 'charging':      return { powerIn: 58.9, system: 25.2, battery: 33.7 };
+    case 'discharging':   return { powerIn: null, system: 25.2, battery: 25.2 };
+    case 'insufficient':  return { powerIn: 28.5, system: 42.0, battery: 13.5 };
+    case 'lowload':       return { powerIn: 6.5, system: 5.2, battery: 1.3 };
+  }
+}
+const flowTint  = () => getComputedStyle(document.body).getPropertyValue('--tint-bat').trim() || '#65AF52';
+const warnTint  = () => '#E0A63C';
+const critTint  = () => '#E05C5C';
+const isDark    = () => document.body.classList.contains('dark');
+
+/* ====== v3 几何：J 中上偏 8px，A/B 节点在导轨下方 ====== */
+const NODE_W = 104, NODE_H = 46, RAIL_W = 544;
+const JX = RAIL_W / 2;            // 272
+const JY = 15;                    // 中上偏 8px
+const NODE_CENTER_Y = 46 + NODE_H / 2;  // 69
+const ADAPTER_R = NODE_W;         // 104（左节点右沿）
+const SYSTEM_L  = RAIL_W - NODE_W;// 440（右节点左沿）
+const BAR_TOP   = 100;            // 电池条顶 y（节点下方 8px 间距）
+const BAR_BOT   = BAR_TOP + 38;   // 138
+const STUB_END_Y = BAR_TOP;       // 短虚线底
+
+const A = { x: ADAPTER_R, y: NODE_CENTER_Y };
+const J = { x: JX,         y: JY };
+const B = { x: SYSTEM_L,   y: NODE_CENTER_Y };
+
+/* 画布总高：节点底 92 + 间距 8 + 电池条 38 = 138 */
+const CANVAS_H = 138;
+
+/* 导管宽度 ∝ 瓦数（与 Swift edgeWidth 一致） */
+function edgeWidth(w) {
+  if (w == null || w < 0.05) return 1.2;
+  return Math.min(6.5, 1.2 + Math.sqrt(w) * 0.62);
+}
+
+/* ====== Canvas 渲染器（v3：斜线枢纽 + 三段折线 + ease + 汇流辉光 + 细导管纯色脉冲 + stub 呼吸） ====== */
+function makeRenderer(canvas) {
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = RAIL_W * dpr;
+  canvas.height = CANVAS_H * dpr;
+  ctx.scale(dpr, dpr);
+
+  /* 段内直线插值：A→J 段 y 从 69 线性到 15；J→B 段 y 从 15 线性到 69。
+     沿弧长参数 u ∈ [0,1] 的空间坐标转换。 */
+  function toXY(u) {
+    if (u <= 0) return { x: A.x + (J.x - A.x) * 0, y: A.y };
+    if (u >= 1) return { x: J.x + (B.x - J.x) * 1, y: B.y };
+    const fJ = 0.5; // A→J 与 J→B 等长斜线
+    if (u <= fJ) {
+      const s = u / fJ;
+      return { x: A.x + (J.x - A.x) * s, y: A.y + (J.y - A.y) * s };
+    }
+    const s = (u - fJ) / (1 - fJ);
+    return { x: J.x + (B.x - J.x) * s, y: J.y + (B.y - J.y) * s };
+  }
+
+  /* easeInOutCubic：汇流点前后"减速停靠→加速接棒" */
+  const ease = t => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+  function seg(p, q, color, width, dashed) {
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(q.x, q.y);
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.setLineDash(dashed ? [3, 4] : []);
+    ctx.strokeStyle = color;
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  /* 新彗星：单段相位 s ∈ [0,1]，段内 ease；细导管走纯色脉冲（无发光层） */
+  function drawComet(u0, u1, s, tailU, color, head, width) {
+    const headU = u0 + (u1 - u0) * ease(s);
+    if (headU <= u0 + 0.004) return;
+    const tailU0 = Math.max(u0, headU - tailU);
+    const p0 = toXY(tailU0), p1 = toXY(headU);
+    if (width < 3) {
+      // 纯色脉冲：短实色段 + 头点，干净利落
+      ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+      ctx.lineWidth = Math.max(1.4, width); ctx.lineCap = 'round';
+      ctx.strokeStyle = color + 'D9'; ctx.stroke();
+      const r = Math.max(1.3, width * 0.5);
+      ctx.beginPath(); ctx.arc(p1.x, p1.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = head + 'F0'; ctx.fill();
+      return;
+    }
+    const grad = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+    // 尾短、梯度陡、辉光收敛：读感是离散的"能量脉冲包"而非连续流带
+    grad.addColorStop(0, color + '00'); grad.addColorStop(0.4, color + '59'); grad.addColorStop(1, color + 'D9');
+    ctx.save();
+    ctx.filter = 'blur(1.2px)';
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+    ctx.lineWidth = width + 1.6; ctx.lineCap = 'round'; ctx.strokeStyle = grad; ctx.stroke();
+    ctx.restore();
+    const grad2 = ctx.createLinearGradient(p0.x, p0.y, p1.x, p1.y);
+    grad2.addColorStop(0, color + '00'); grad2.addColorStop(0.5, color + '8C'); grad2.addColorStop(1, head + 'F5');
+    ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+    ctx.lineWidth = Math.max(1.4, width * 0.6); ctx.lineCap = 'round'; ctx.strokeStyle = grad2; ctx.stroke();
+    const r = Math.max(1.6, width * 0.5);
+    ctx.beginPath(); ctx.arc(p1.x, p1.y, r, 0, Math.PI * 2);
+    ctx.fillStyle = head + 'F5'; ctx.fill();
+  }
+
+  /* 汇流点交接辉光：彗星头部越过汇流点前后短暂点亮径向渐变 */
+  function junctionGlow(u, color) {
+    const d = Math.abs(u - 0.5);
+    if (d > 0.12) return;
+    const a = 1 - d / 0.12;
+    const r = 5 + 4.5 * a;
+    const g = ctx.createRadialGradient(J.x, J.y, 0, J.x, J.y, r * 2.6);
+    g.addColorStop(0, color + Math.round(a * 235).toString(16).padStart(2, '0'));
+    g.addColorStop(1, color + '00');
+    ctx.beginPath(); ctx.arc(J.x, J.y, r * 2.6, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+  }
+
+  /* stub 能量灌注：在 J→电池条 短虚线上有一个光点从 J 端向电池条端缓慢滑行，
+     1.6s 一个周期，到达后回弹；保持虚线本身可见，不被实色覆盖 */
+  function stubDrip(from, to, color, time) {
+    const phase = (time / 1.6) % 1;
+    const breath = 0.5 + 0.5 * Math.sin(time * Math.PI / 1.4);
+    const px = from.x + (to.x - from.x) * phase;
+    const py = from.y + (to.y - from.y) * phase;
+    const r = 1.4 + 1.4 * breath;
+    const g = ctx.createRadialGradient(px, py, 0, px, py, r * 3);
+    g.addColorStop(0, color + 'F0');
+    g.addColorStop(0.5, color + Math.round((0.3 + 0.3 * breath) * 255).toString(16).padStart(2, '0'));
+    g.addColorStop(1, color + '00');
+    ctx.beginPath(); ctx.arc(px, py, r * 3, 0, Math.PI * 2);
+    ctx.fillStyle = g; ctx.fill();
+    ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI * 2);
+    ctx.fillStyle = color + 'F5'; ctx.fill();
+  }
+
+  return function draw(time) {
+    ctx.clearRect(0, 0, RAIL_W, CANVAS_H);
+    const w = watts();
+    const connected = w.powerIn != null;
+    const charging = S.scenario === 'charging' || S.scenario === 'lowload';
+    const neutral = isDark() ? 'rgba(255,255,255,0.22)' : 'rgba(20,30,50,0.25)';
+    const faint   = isDark() ? 'rgba(255,255,255,0.10)' : 'rgba(20,30,50,0.12)';
+    const shimmer = isDark() ? '#CFE6FF' : '#5D8CF0';
+    const head    = '#FFFFFF';
+    const green = flowTint();
+    const stubColor = S.scenario === 'insufficient' ? critTint() : warnTint();
+
+    /* --- 斜线底轨：A→J→B --- */
+    seg(A, J, connected ? neutral : faint, edgeWidth(connected ? w.powerIn : null));
+    seg(J, B, neutral, edgeWidth(w.system));
+
+    /* --- J→bbar 短虚线底轨：仅 connected 时显示，与 DOM dashed 一致 --- */
+    if (connected) {
+      const stubSegFrom = { x: J.x, y: J.y };
+      const stubSegTo   = { x: J.x, y: STUB_END_Y };
+      ctx.save();
+      ctx.setLineDash([3, 4]);
+      ctx.beginPath();
+      ctx.moveTo(stubSegFrom.x, stubSegFrom.y);
+      ctx.lineTo(stubSegTo.x, stubSegTo.y);
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = isDark() ? 'rgba(255,255,255,0.5)' : 'rgba(20,30,50,0.35)';
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    /* --- 动画：单一相位沿 A→J→B 弧长连续行进 --- */
+    const totalW = (connected ? w.powerIn : 0) + w.system;
+    const cycle = Math.max(1.6, Math.min(3.6, 5.2 / (1 + totalW / 30)));
+    const beams = totalW > 60 ? 2 : 1;
+    const tailLen = 0.20;
+    for (let k = 0; k < beams; k++) {
+      const u = ((time / cycle) + k / beams) % 1;
+      junctionGlow(u, shimmer);
+      if (u <= 0.5 && connected) {
+        const s = u / 0.5;
+        drawComet(0, 0.5, s, tailLen * 0.5, shimmer, head, edgeWidth(w.powerIn));
+      } else if (u > 0.5) {
+        const s = (u - 0.5) / 0.5;
+        drawComet(0.5, 1, s, tailLen * 0.5, shimmer, head, edgeWidth(w.system));
+      }
+    }
+
+    /* --- stub 能量灌注光点（沿 J→电池条 短虚线滑行） --- */
+    if (charging) {
+      stubDrip(J, { x: J.x, y: STUB_END_Y }, green, time);
+    } else {
+      stubDrip({ x: J.x, y: STUB_END_Y }, J, stubColor, time);
+    }
+  };
+}
+
+/* ====== 电池条 DOM 构建与刻度定位 ====== */
+function buildBar(container) {
+  const bar = document.createElement('div');
+  bar.className = 'bbar';
+  bar.innerHTML = `
+    <div class="fill"></div>
+    <div class="texts">
+      <span class="pct mono"></span>
+      <span class="state"></span>
+      <span class="divider"></span>
+      <span class="eta mono"></span>
+    </div>
+    <div class="tick-line"></div>
+    <div class="tick-flag"></div>
+    <div class="tick-flag-line"></div>`;
+  container.appendChild(bar);
+  return bar;
+}
+
+function stateText() {
+  switch (S.scenario) {
+    case 'charging': return '充电中';
+    case 'discharging': return '放电中';
+    case 'insufficient': return '适配器不足';
+    case 'lowload': return '充电中';
+  }
+}
+function etaText() {
+  switch (S.scenario) {
+    case 'charging': return '约 1 小时充满';
+    case 'discharging': return '可用 3 小时 20 分';
+    case 'insufficient': return '电池补差 13.5 W';
+    case 'lowload': return '约 5 小时充满';
+  }
+}
+
+function renderBar(bar, opts = {}) {
+  const scheme = opts.scheme || S.scheme;
+  const pct = opts.pct != null ? opts.pct : S.pct;
+  const limit = opts.limit != null ? opts.limit : S.limit;
+  const showDivider = opts.divider === true;
+  bar.querySelector('.divider').style.display = showDivider ? '' : 'none';
+  bar.querySelector('.fill').style.width = `calc(${pct}% - 4px)`;
+  bar.querySelector('.pct').textContent = pct + '%';
+  bar.querySelector('.state').textContent = stateText();
+  bar.querySelector('.eta').textContent = etaText();
+  bar.classList.toggle('charging', S.scenario === 'charging' || S.scenario === 'lowload');
+  bar.classList.toggle('insufficient', S.scenario === 'insufficient');
+
+  const tick = bar.querySelector('.tick-line');
+  const flag = bar.querySelector('.tick-flag');
+  const flagLine = bar.querySelector('.tick-flag-line');
+  const x = RAIL_W * limit / 100;
+  const showLimit = limit < 100;
+
+  tick.style.display = flag.style.display = flagLine.style.display = 'none';
+  if (!showLimit) return;
+
+  if (scheme === 'flag') {
+    // 旗标：三角 + 短线下探 13px，只触及条顶，完全避开中部文字带
+    flag.style.display = flagLine.style.display = '';
+    flag.style.left = x + 'px';
+    flagLine.style.left = (x - 0.75) + 'px';
+    return;
+  }
+
+  tick.style.display = '';
+  tick.classList.remove('notch');
+  tick.style.left = (x - 1) + 'px';
+
+  if (scheme === 'line') { tick.style.top = '2px'; tick.style.height = ''; return; }
+
+  /* 避让：实测左右文字组的完整水平占位 */
+  const barRect = bar.getBoundingClientRect();
+  const stateRect = bar.querySelector('.state').getBoundingClientRect();
+  const pctRect = bar.querySelector('.pct').getBoundingClientRect();
+  const etaRect = bar.querySelector('.eta').getBoundingClientRect();
+  const PAD = 6;
+  const leftL = pctRect.left - barRect.left - PAD;
+  const leftR = stateRect.right - barRect.left + PAD;
+  const rightL = etaRect.left - barRect.left - PAD;
+  const rightR = etaRect.right - barRect.left + PAD;
+  const collide = (x >= leftL && x <= leftR) || (x >= rightL && x <= rightR);
+  if (collide) {
+    tick.classList.add('notch');
+    tick.style.top = '2px';
+    tick.style.height = '9px';
+  } else {
+    tick.style.top = '2px';
+    tick.style.height = '';
+  }
+}
+
+/* ====== 渲染器初始化 ====== */
+const rail = document.querySelector('.flow-rail');
+const bar = buildBar(rail);
+const renderer = makeRenderer(rail.querySelector('canvas'));
+
+/* ====== 刻度三态横排 ====== */
+const ticksRow = document.getElementById('ticks-row');
+const tickCards = [];
+[
+  { scheme: 'line',  title: '现状 · 全高刻度线', desc: '刻度线贯穿条体，与右侧 ETA「约 1 小时 充满」直接交叉' },
+  { scheme: 'avoid', title: '方案 A · 避让',     desc: '与文字带距离 < 阈值时降级为条顶短刻度' },
+  { scheme: 'flag',  title: '方案 B · 旗标',     desc: '顶端三角 + 短线下探，脱离文字带' },
+].forEach(cfg => {
+  const card = document.createElement('div');
+  card.className = 'tick-card';
+  card.innerHTML = `<div class="ct"><em>${cfg.title}</em>　${cfg.desc}</div>`;
+  const stage = document.createElement('div');
+  stage.style.cssText = 'position:relative;width:544px;height:38px;';
+  card.appendChild(stage);
+  ticksRow.appendChild(card);
+  const b = buildBar(stage);
+  b.style.position = 'absolute';
+  b.style.top = '0';
+  tickCards.push({ bar: b, scheme: cfg.scheme });
+});
+
+/* ====== 同步所有视图 ====== */
+function sync() {
+  const w = watts();
+  document.querySelectorAll('.pct-head').forEach(n => n.textContent = S.pct + '%');
+  document.querySelectorAll('.pill-state').forEach(n => n.textContent =
+    w.powerIn != null ? w.powerIn.toFixed(1) + ' W' : '电池供电');
+  document.querySelectorAll('.w-in').forEach(n => {
+    n.textContent = w.powerIn != null ? w.powerIn.toFixed(1) : '--';
+  });
+  document.querySelectorAll('.w-sys').forEach(n => n.textContent = w.system.toFixed(1));
+  document.querySelectorAll('.fnode.adapter').forEach(n => {
+    const on = w.powerIn != null;
+    n.style.opacity = on ? 1 : 0.4;
+    const load = n.querySelector('.load');
+    load.style.width = on ? Math.min(100, w.powerIn / S.rated * 100) + '%' : '0%';
+    load.style.background = on && w.powerIn / S.rated > 0.92 ? critTint()
+      : on && w.powerIn / S.rated > 0.75 ? warnTint() : '';
+  });
+  // 适配器断电时 J→bbar 短虚线淡出
+  const stubEl = document.querySelector('.junction-stub');
+  if (stubEl) stubEl.style.opacity = w.powerIn != null ? '1' : '0.35';
+  document.getElementById('v-pct').textContent = `${S.pct}% / 上限 ${S.limit}%`;
+
+  renderBar(bar);
+  tickCards.forEach(c => renderBar(c.bar, { scheme: c.scheme, pct: 78, limit: 88, divider: c.scheme === 'line' }));
+}
+
+/* ====== 动画主循环：虚拟时间 × 速度倍率，切速不跳帧 ====== */
+let last = performance.now(), vt = 0;
+function frame(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  if (!S.paused) vt += dt * S.speed;
+  renderer(vt);
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ====== 控件绑定 ====== */
+function bindSeg(id, fn) {
+  const seg = document.getElementById(id);
+  seg.addEventListener('click', e => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    seg.querySelectorAll('button').forEach(b => b.classList.toggle('on', b === btn));
+    fn(btn.dataset.v);
+  });
+}
+bindSeg('seg-scenario', v => { S.scenario = v; sync(); });
+bindSeg('seg-scheme', v => { S.scheme = v; sync(); });
+bindSeg('seg-theme', v => {
+  document.body.className = v;
+  sync();
+});
+bindSeg('seg-pause', v => { S.paused = v === 'pause'; });
+bindSeg('seg-speed', v => { S.speed = parseFloat(v); });
+document.getElementById('r-pct').addEventListener('input', e => {
+  S.pct = +e.target.value;
+  sync();
+});
+
+sync();
+</script>
+</body>
+</html>

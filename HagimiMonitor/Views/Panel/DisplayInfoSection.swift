@@ -88,7 +88,9 @@ struct DisplayInfoSection: View {
                 isExpanded.toggle()
             }
         }
-        .compatibleGlassEffect(tint: theme.palette.displayGlassTint, cornerRadius: MonitorConstants.rowCornerRadius)
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+            theme.palette.displayGlassFill
+        }
         .onAppear {
             displays = Self.collectDisplays()
         }

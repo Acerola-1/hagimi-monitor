@@ -15,25 +15,6 @@ struct ModuleSettingsView: View {
                     .toggleStyle(.switch)
                     .labelsHidden()
                 }
-
-                // 模块隐藏后「显示方式」无意义,随 moduleOptions 一起隐藏。
-                // 风扇/蓝牙不提供卡片样式:展开区(设备列表)依赖列表行形态。
-                if settings.isVisible(kind), kind != .fan, kind != .bluetooth {
-                    SettingsDivider()
-
-                    SettingsRow(title: String(localized: "settings.display-style")) {
-                        Picker(String(localized: "settings.display-style"), selection: Binding(
-                            get: { settings.isCardStyle(kind) ? ModuleDisplayStyle.card : .list },
-                            set: { settings.setCardStyle($0 == .card, for: kind) }
-                        )) {
-                            Text(String(localized: "settings.display-style.list")).tag(ModuleDisplayStyle.list)
-                            Text(String(localized: "settings.display-style.card")).tag(ModuleDisplayStyle.card)
-                        }
-                        .labelsHidden()
-                        .pickerStyle(.segmented)
-                        .frame(width: 190)
-                    }
-                }
             }
 
             // 模块关闭后，下方的指标 / 进程 / 重置等选项都失去意义，直接隐藏。
@@ -48,22 +29,20 @@ struct ModuleSettingsView: View {
     private var moduleOptions: some View {
             SettingsGroup(String(localized: "settings.metrics")) {
                 // 「默认展开」融入「监测项目」卡:开关决定是否自动摊开,网格决定摊开后显示哪些项,
-                // 一张卡承载「展开 →(下列)监测项目」的因果整体。仅列表行有意义,卡片常显明细故隐藏。
-                if !settings.isCardStyle(kind) {
-                    SettingsRow(
-                        title: String(localized: "settings.expand-by-default"),
-                        subtitle: String(localized: "settings.expand-by-default.subtitle")
-                    ) {
-                        Toggle("", isOn: Binding(
-                            get: { settings.isExpandedByDefault(kind) },
-                            set: { settings.setExpandedByDefault($0, for: kind) }
-                        ))
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                    }
-
-                    SettingsDivider()
+                // 一张卡承载「展开 →(下列)监测项目」的因果整体。
+                SettingsRow(
+                    title: String(localized: "settings.expand-by-default"),
+                    subtitle: String(localized: "settings.expand-by-default.subtitle")
+                ) {
+                    Toggle("", isOn: Binding(
+                        get: { settings.isExpandedByDefault(kind) },
+                        set: { settings.setExpandedByDefault($0, for: kind) }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
                 }
+
+                SettingsDivider()
 
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 8),
@@ -255,12 +234,6 @@ private struct PowerFlowBetaBadge: View {
             .padding(.vertical, 1)
             .background(.secondary.opacity(0.15), in: Capsule())
     }
-}
-
-/// 设置页分段选择器的 UI 局部枚举:存储层仍是 cardStyleKinds 集合(见 MonitorSettings)。
-private enum ModuleDisplayStyle: Hashable {
-    case list
-    case card
 }
 
 private struct MetricSelectionRow: View {

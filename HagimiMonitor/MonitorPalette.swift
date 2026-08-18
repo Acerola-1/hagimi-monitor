@@ -21,7 +21,7 @@ struct MonitorPalette {
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.68) : Color(hex: 0x5A6475)
+        isDark ? Color.white.opacity(0.78) : Color(hex: 0x4E5868)
     }
 
     var trackFill: Color {
@@ -61,13 +61,43 @@ struct MonitorPalette {
         }
     }
 
-    func rowGlassTint(for kind: MonitorKind) -> Color {
+    /// P 核主色:独立于 CPU 模块主色。活力模式下 CPU 为橙,性能核用高醒目
+    /// 绯红与行 tint 形成强对比,保证逐核圆环在彩色底上的辨识度;
+    /// 平衡模式下与 CPU 主色一致。
+    var performanceCoreTint: Color {
+        switch preference {
+        case .balanced:
+            moduleTint(for: .cpu)
+        case .vibrant:
+            Color(hex: 0xFA4D56)
+        }
+    }
+
+    /// 行玻璃填充:平衡为均布中性玻璃;活力为垂直衰减渐变——行头保持满浓度,
+    /// 向下衰减至近中性,展开区小字不受模块色相干扰(参数见 MonitorConstants)。
+    @ViewBuilder
+    func rowGlassFill(for kind: MonitorKind) -> some View {
         switch preference {
         case .balanced:
             neutralGlassTint
         case .vibrant:
-            moduleTint(for: kind).opacity(isDark ? 0.16 : 0.08)
+            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: vibrantGlassOpacity)
         }
+    }
+
+    @ViewBuilder
+    var displayGlassFill: some View {
+        switch preference {
+        case .balanced:
+            neutralGlassTint
+        case .vibrant:
+            RowGlassFadeFill(tint: displayTint, fullOpacity: vibrantGlassOpacity)
+        }
+    }
+
+    /// 活力行玻璃满浓度不透明度:暗底需要更高浓度才能显出模块色相。
+    private var vibrantGlassOpacity: Double {
+        isDark ? 0.16 : 0.08
     }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
@@ -76,15 +106,6 @@ struct MonitorPalette {
             neutralSeparator
         case .vibrant:
             moduleTint(for: kind).opacity(isDark ? 0.28 : 0.18)
-        }
-    }
-
-    var displayGlassTint: Color {
-        switch preference {
-        case .balanced:
-            neutralGlassTint
-        case .vibrant:
-            displayTint.opacity(isDark ? 0.16 : 0.08)
         }
     }
 
@@ -149,7 +170,7 @@ struct MonitorPalette {
     private func vibrantModuleTint(for kind: MonitorKind) -> Color {
         switch kind {
         case .cpu:
-            Color(hex: 0xFA4D56)
+            Color(hex: 0xF97316)
         case .gpu:
             Color(hex: 0xA855F7)
         case .memory:
@@ -177,5 +198,30 @@ extension Color {
             green: Double((hex >> 8) & 0xFF) / 255,
             blue: Double(hex & 0xFF) / 255
         )
+    }
+}
+
+/// 活力行玻璃的垂直衰减填充:停靠点按实际行高换算,收起的行整卡落在
+/// plateau 满浓度段;展开时底部衰减到近中性。GeometryReader 随行高补间
+/// 逐帧重算,展开动画期间渐变同步滑动,不产生跳变。
+private struct RowGlassFadeFill: View {
+    var tint: Color
+    var fullOpacity: Double
+
+    var body: some View {
+        GeometryReader { proxy in
+            let height = max(proxy.size.height, 1)
+            LinearGradient(
+                stops: [
+                    .init(color: tint.opacity(fullOpacity), location: 0),
+                    .init(color: tint.opacity(fullOpacity),
+                          location: min(MonitorConstants.rowTintPlateau / height, 1)),
+                    .init(color: tint.opacity(MonitorConstants.rowTintFaintOpacity),
+                          location: min(MonitorConstants.rowTintFadeEnd / height, 1))
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        }
     }
 }

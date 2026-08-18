@@ -132,7 +132,9 @@ struct DisplayControlsSection: View {
                 uniquingKeysWith: { first, _ in first }
             )
         }
-        .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
+        .compatibleGlassEffect(cornerRadius: 14) {
+            palette.displayGlassFill
+        }
     }
 
     @ViewBuilder

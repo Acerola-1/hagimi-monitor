@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 活力配色展开区可读性：九方案对比（高还原）</title>
+<style>
+  /* ====== 页面骨架 ====== */
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    background: #101218;
+    color: rgba(255, 255, 255, 0.92);
+    padding: 32px 24px 56px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  .page-title { font-size: 17px; font-weight: 700; margin-bottom: 6px; }
+  .page-sub { font-size: 12px; color: rgba(255, 255, 255, 0.55); line-height: 1.75; max-width: 1060px; margin-bottom: 24px; }
+  .page-sub b { color: rgba(255, 255, 255, 0.85); font-weight: 600; }
+
+  .mode-band { margin-bottom: 44px; }
+  .mode-band-title {
+    font-size: 13px; font-weight: 600; letter-spacing: 0.6px;
+    color: rgba(255, 255, 255, 0.78);
+    display: flex; align-items: center; gap: 10px; margin-bottom: 14px;
+  }
+  .mode-band-title::after { content: ''; flex: 1; height: 1px; background: rgba(255, 255, 255, 0.12); }
+
+  .stage {
+    border-radius: 24px;
+    padding: 26px 20px 30px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 24px 20px;
+    justify-content: center;
+  }
+  .stage.dark {
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+  }
+  .stage.light {
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #dbe6fb 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #f3dded 0%, transparent 55%),
+      #eef1f6;
+  }
+
+  .slot { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+  .slot-tag { font-size: 12px; font-weight: 600; }
+  .slot-note { font-size: 10.5px; line-height: 1.6; text-align: center; width: 340px; }
+  .stage.dark .slot-tag { color: rgba(255, 255, 255, 0.90); }
+  .stage.dark .slot-note { color: rgba(255, 255, 255, 0.50); }
+  .stage.light .slot-tag { color: #2A3242; }
+  .stage.light .slot-note { color: #7A8496; }
+
+  /* ====== 面板令牌 · 暗（MonitorPalette vibrant dark） ====== */
+  .mode-dark {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --panel-border: rgba(255, 255, 255, 0.12);
+    --row-border: rgba(255, 255, 255, 0.06);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-value: rgba(255, 255, 255, 0.90);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --neutral-glass: rgba(122, 145, 180, 0.12);
+    --neutral-sep: rgba(122, 145, 180, 0.22);
+    --cpu: #FA4D56;
+    --cpu-glass: rgba(250, 77, 86, 0.16);
+    --cpu-sep: rgba(250, 77, 86, 0.28);
+    --gpu: #A855F7;
+    --gpu-glass: rgba(168, 85, 247, 0.16);
+    --sev-calm: #2F9E64;
+    --tile-fill-deep: rgba(255, 255, 255, 0.13);
+    --scrim: rgba(0, 0, 0, 0.24);
+    /* 同色相文字（暗）：标签=红相浅化，数值=近白带红相 */
+    --hue-caption: rgba(255, 176, 181, 0.78);
+    --hue-value: rgba(255, 228, 230, 0.95);
+  }
+  /* ====== 面板令牌 · 亮（MonitorPalette vibrant light） ====== */
+  .mode-light {
+    --panel-bg: rgba(255, 255, 255, 0.62);
+    --panel-border: rgba(255, 255, 255, 0.75);
+    --row-border: rgba(255, 255, 255, 0.55);
+    --text-primary: #171D2A;
+    --text-value: #2F3747;
+    --text-secondary: #465164;
+    --text-caption: #5A6475;
+    --track-fill: rgba(60, 72, 90, 0.08);
+    --neutral-glass: rgba(122, 145, 180, 0.06);
+    --neutral-sep: rgba(122, 145, 180, 0.14);
+    --cpu: #FA4D56;
+    --cpu-glass: rgba(250, 77, 86, 0.08);
+    --cpu-sep: rgba(250, 77, 86, 0.18);
+    --gpu: #A855F7;
+    --gpu-glass: rgba(168, 85, 247, 0.08);
+    --sev-calm: #2F9E64;
+    --tile-fill-deep: rgba(60, 72, 90, 0.13);
+    --scrim: rgba(255, 255, 255, 0.45);
+    /* 同色相文字（亮）：标签=红相灰，数值=红相深墨 */
+    --hue-caption: #B4565E;
+    --hue-value: #8E2F38;
+  }
+
+  .panel {
+    width: 340px;
+    background: var(--panel-bg);
+    backdrop-filter: blur(40px) saturate(1.3);
+    border-radius: 20px;
+    border: 0.5px solid var(--panel-border);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    color: var(--text-primary);
+  }
+  .panel-header { display: flex; align-items: center; padding: 2px 2px 0; }
+  .live-dot { width: 5px; height: 5px; border-radius: 50%; background: #6BBF59; margin-right: 5px; }
+  .panel-header .sys { font-size: 9px; letter-spacing: 1.1px; color: var(--text-caption); font-weight: 500; }
+  .panel-header .time { margin-left: auto; font-size: 10px; color: var(--text-caption); }
+
+  .row { position: relative; border-radius: 14px; border: 0.5px solid var(--row-border); }
+  .row.gpu-row { background: var(--gpu-glass); }
+
+  /* ---- 表面策略 ---- */
+  .v-current, .v-tile, .v-scrim, .v-vibrancy, .v-hue { background: var(--cpu-glass); }
+  .v-fade, .v-both {
+    background: linear-gradient(to bottom,
+      var(--cpu-glass) 0px, var(--cpu-glass) 46px, rgba(250, 77, 86, 0.02) 128px);
+  }
+  .v-edge, .v-chip { background: var(--neutral-glass); }
+  .v-edge::before {
+    content: ''; position: absolute; left: 0; top: 9px; bottom: 9px;
+    width: 2.5px; border-radius: 2px; background: var(--cpu); opacity: 0.9;
+  }
+
+  .row-head { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+  .row-head .icon { width: 18px; display: flex; justify-content: center; flex-shrink: 0; color: var(--cpu); }
+  .row-head .icon svg { display: block; }
+  .row-head .label { font-size: 12px; font-weight: 600; white-space: nowrap; }
+  .row-head .value { font-size: 12px; font-weight: 600; color: var(--text-value); white-space: nowrap; }
+  .row-head .spacer { flex: 1; min-width: 8px; }
+  .spark { width: 56px; height: 18px; flex-shrink: 0; }
+
+  /* 图标徽章（方案⑨）：图标坐 tinted 圆角徽章，行面中性 */
+  .v-chip .row-head .icon {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: color-mix(in srgb, var(--cpu) 20%, transparent);
+  }
+
+  .detail { position: relative; padding: 0 10px 9px; }
+  .dt-content { position: relative; z-index: 1; }
+  /* 中性压色蒙版（方案⑤）：盖在 tint 上、内容下，压住色相不压结构 */
+  .v-scrim .detail::before {
+    content: ''; position: absolute; inset: 0 2px 2px;
+    background: var(--scrim); border-radius: 11px; z-index: 0;
+  }
+  .detail .sep { height: 1px; background: var(--cpu-sep); margin-left: 28px; }
+  .v-edge .detail .sep, .v-chip .detail .sep { background: var(--neutral-sep); }
+
+  /* 展开区主体：对齐 MetricDetailGrid（分隔线后 spacing 7，内容 28pt 缩进） */
+  .grid-wrap { margin-left: 28px; margin-top: 7px; display: flex; flex-direction: column; gap: 7px; }
+
+  /* 逐核圆环内衬块（CPUCoresDetail） */
+  .cores-inset {
+    background: var(--track-fill);
+    border-radius: 7px;
+    padding: 6px 8px;
+  }
+  .cores-row { display: flex; justify-content: space-between; }
+  .ring { flex-shrink: 0; }
+  .usage-tiles { display: flex; gap: 8px; margin-top: 5px; }
+  .utile {
+    flex: 1; display: flex; align-items: center; gap: 6px;
+    background: var(--track-fill);
+    border-radius: 7px; padding: 4px 8px; min-width: 0;
+  }
+  .utile .dot { width: 5px; height: 5px; border-radius: 50%; flex-shrink: 0; }
+  .utile .ul { font-size: 10px; color: var(--text-caption); white-space: nowrap; overflow: hidden; }
+  .utile .uv { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-value); }
+
+  /* 指标网格：两列，列距 8 / 行距 5（MetricGridMetrics） */
+  .metric-grid { display: grid; grid-template-columns: 1fr 1fr; column-gap: 8px; row-gap: 5px; }
+  .tile {
+    display: flex; align-items: baseline; gap: 6px;
+    background: var(--track-fill);
+    border-radius: 7px; padding: 4px 8px; min-width: 0;
+  }
+  .tile.full { grid-column: 1 / -1; }
+  .tile .tl { font-size: 10px; color: var(--text-caption); white-space: nowrap; }
+  .tile .tv { margin-left: auto; font-size: 10px; font-weight: 700; color: var(--text-value); white-space: nowrap; }
+  .tile .tu { font-size: 10px; color: var(--text-caption); }
+  .tile .tv.calm { color: var(--sev-calm); }
+
+  /* 方案③/④：展开区所有内衬色块加深 8%→13% */
+  .v-tile .tile, .v-tile .utile, .v-tile .cores-inset,
+  .v-both .tile, .v-both .utile, .v-both .cores-inset { background: var(--tile-fill-deep); }
+
+  /* 方案⑥ Vibrancy 文字补偿：展开区文字令牌升一档（.68→.82 / .90→.96） */
+  .mode-dark .v-vibrancy .detail { --text-caption: rgba(255,255,255,0.82); --text-value: rgba(255,255,255,0.96); }
+  .mode-light .v-vibrancy .detail { --text-caption: #465164; --text-value: #171D2A; }
+
+  /* 方案⑦ 同色相文字：展开区文字改模块色相变体，消除中性灰×彩底的色散感 */
+  .v-hue .detail { --text-caption: var(--hue-caption); --text-value: var(--hue-value); }
+  .v-hue .tile .tv.calm { color: var(--sev-calm); }
+
+  /* TOP 进程列表（CPUProcessList） */
+  .proc-list { display: flex; flex-direction: column; gap: 4px; }
+  .prow { display: flex; align-items: center; gap: 6px; }
+  .picon {
+    width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 9px; color: rgba(255, 255, 255, 0.9);
+  }
+  .mode-light .picon { color: #fff; }
+  .pname { font-size: 10px; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pval { margin-left: auto; font-size: 10px; font-weight: 500; color: var(--text-secondary); white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<div class="page-title">活力配色展开区可读性 · 九方案对比（高还原版）</div>
+<div class="page-sub">
+  用例：CPU（活力红 #FA4D56）展开态，行结构逐字节对齐真机——逐核圆环内衬块、P/E 占用格、
+  指标 stat tile 网格（列距 8/行距 5/footnote 10px）、TOP 5 进程列表。
+  方案分三族：<b>表面处理</b>（②渐变衰减 ⑤中性蒙版 ⑧边缘强调 ⑨图标徽章），
+  <b>内容表面</b>（③内衬加深 ④叠加），<b>文字处理</b>（⑥ Vibrancy 补偿——Apple 在 visionOS/iOS 毛玻璃上
+  提亮前景内容的思路 ⑦同色相文字——彩底上文字趋近背景色相而非中性灰）。
+  ①为现状对照；唯一变量是 tint/文字的应用方式。
+</div>
+
+<div class="mode-band">
+  <div class="mode-band-title">暗色模式</div>
+  <div class="stage dark">
+    <div class="slot"><div class="slot-tag">① 现状（对照）</div><div class="panel mode-dark v-panel" data-panel data-variant="current"></div><div class="slot-note">tint 16% 整卡均布；caption 小字直接坐染色底。</div></div>
+    <div class="slot"><div class="slot-tag">② Tint 渐变衰减</div><div class="panel mode-dark v-panel" data-panel data-variant="fade"></div><div class="slot-note">行头满浓度，46px 后衰减至近中性；身份留行头，可读性还内容。</div></div>
+    <div class="slot"><div class="slot-tag">③ Tile 内衬加深</div><div class="panel mode-dark v-panel" data-panel data-variant="tile"></div><div class="slot-note">行底不动，展开区内衬 8%→13%，小字坐更实的中性面。</div></div>
+    <div class="slot"><div class="slot-tag">④ ②+③ 叠加</div><div class="panel mode-dark v-panel" data-panel data-variant="both"></div><div class="slot-note">渐变衰减 + 内衬加深双保险。</div></div>
+    <div class="slot"><div class="slot-tag">⑤ 中性压色蒙版</div><div class="panel mode-dark v-panel" data-panel data-variant="scrim"></div><div class="slot-note">展开区叠 24% 黑蒙版压住红相；经典 scrim 手法（图片叠字同款）。</div></div>
+    <div class="slot"><div class="slot-tag">⑥ Vibrancy 文字补偿</div><div class="panel mode-dark v-panel" data-panel data-variant="vibrancy"></div><div class="slot-note">表面不动，展开区文字令牌升一档（.68→.82 / .90→.96），Apple 毛玻璃前景增亮思路。</div></div>
+    <div class="slot"><div class="slot-tag">⑦ 同色相文字</div><div class="panel mode-dark v-panel" data-panel data-variant="hue"></div><div class="slot-note">展开区文字改红相浅色变体，消除灰字×彩底的边缘色散。</div></div>
+    <div class="slot"><div class="slot-tag">⑧ 边缘强调（面退色）</div><div class="panel mode-dark v-panel" data-panel data-variant="edge"></div><div class="slot-note">行面退回中性玻璃，模块色收进图标/分隔线/sparkline + 左侧 2.5px 强调条。</div></div>
+    <div class="slot"><div class="slot-tag">⑨ 图标徽章（面退色）</div><div class="panel mode-dark v-panel" data-panel data-variant="chip"></div><div class="slot-note">行面中性，图标坐 20% tint 圆角徽章；辨识度浓缩到一个点。</div></div>
+  </div>
+</div>
+
+<div class="mode-band">
+  <div class="mode-band-title">亮色模式</div>
+  <div class="stage light">
+    <div class="slot"><div class="slot-tag">① 现状（对照）</div><div class="panel mode-light v-panel" data-panel data-variant="current"></div><div class="slot-note">亮模式 tint 8%，红色相仍让小字发灰。</div></div>
+    <div class="slot"><div class="slot-tag">② Tint 渐变衰减</div><div class="panel mode-light v-panel" data-panel data-variant="fade"></div><div class="slot-note">行头保持浓度，展开区衰减。</div></div>
+    <div class="slot"><div class="slot-tag">③ Tile 内衬加深</div><div class="panel mode-light v-panel" data-panel data-variant="tile"></div><div class="slot-note">内衬加深隔离底色相。</div></div>
+    <div class="slot"><div class="slot-tag">④ ②+③ 叠加</div><div class="panel mode-light v-panel" data-panel data-variant="both"></div><div class="slot-note">渐变衰减 + 内衬加深。</div></div>
+    <div class="slot"><div class="slot-tag">⑤ 中性压色蒙版</div><div class="panel mode-light v-panel" data-panel data-variant="scrim"></div><div class="slot-note">展开区叠 45% 白蒙版压色相。</div></div>
+    <div class="slot"><div class="slot-tag">⑥ Vibrancy 文字补偿</div><div class="panel mode-light v-panel" data-panel data-variant="vibrancy"></div><div class="slot-note">展开区文字令牌升一档（caption→secondary，value→primary）。</div></div>
+    <div class="slot"><div class="slot-tag">⑦ 同色相文字</div><div class="panel mode-light v-panel" data-panel data-variant="hue"></div><div class="slot-note">展开区文字改红相灰/红相深墨。</div></div>
+    <div class="slot"><div class="slot-tag">⑧ 边缘强调（面退色）</div><div class="panel mode-light v-panel" data-panel data-variant="edge"></div><div class="slot-note">中性面 + 左侧强调条。</div></div>
+    <div class="slot"><div class="slot-tag">⑨ 图标徽章（面退色）</div><div class="panel mode-light v-panel" data-panel data-variant="chip"></div><div class="slot-note">中性面 + tinted 图标徽章。</div></div>
+  </div>
+</div>
+
+<script>
+  /* 行内容统一模板注入：所有方案、模式的 DOM 逐字节一致，
+     差异全部由 variant class 驱动，排除内容噪声。 */
+
+  const cpuIcon = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+    <rect x="3" y="3" width="9" height="9" rx="1.6" stroke="currentColor" stroke-width="1.3"/>
+    <rect x="5.6" y="5.6" width="3.8" height="3.8" rx="0.8" fill="currentColor"/>
+    <path stroke="currentColor" stroke-width="1.1" stroke-linecap="round"
+      d="M5.2 1v1.4M7.5 1v1.4M9.8 1v1.4M5.2 12.6V14M7.5 12.6V14M9.8 12.6V14M1 5.2h1.4M1 7.5h1.4M1 9.8h1.4M12.6 5.2H14M12.6 7.5H14M12.6 9.8H14"/>
+  </svg>`;
+  const gpuIcon = `<svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+    <rect x="1.2" y="3" width="12.6" height="8" rx="1.4" stroke="currentColor" stroke-width="1.3"/>
+    <path stroke="currentColor" stroke-width="1.1" stroke-linecap="round" d="M5 13h5"/>
+  </svg>`;
+
+  const sparkline = color => `
+    <svg class="spark" viewBox="0 0 56 18" preserveAspectRatio="none">
+      <polyline points="0,13 7,11 14,12 21,8 28,9 35,5 42,7 49,4 56,6"
+        fill="none" stroke="${color}" stroke-width="1.5"
+        stroke-linejoin="round" stroke-linecap="round" opacity="0.9"/>
+    </svg>`;
+
+  /* 单核负载环：14px，track 用行分隔线令牌（真机同款），弧按占用 */
+  function ring(usage, tint, track) {
+    const C = 2 * Math.PI * 6;
+    const dash = Math.max(0.04, Math.min(1, usage / 100)) * C;
+    return `<svg class="ring" width="14" height="14" viewBox="0 0 14 14">
+      <circle cx="7" cy="7" r="6" fill="none" stroke="${track}" stroke-width="2"/>
+      <circle cx="7" cy="7" r="6" fill="none" stroke="${tint}" stroke-width="2"
+        stroke-linecap="round" stroke-dasharray="${dash.toFixed(2)} ${C.toFixed(2)}"
+        transform="rotate(-90 7 7)"/>
+    </svg>`;
+  }
+
+  const coreUsages = [82, 76, 88, 71, 64, 79, 58, 69, 41, 35, 28, 47]; // P×8 + E×4
+  const metrics = [
+    { label: '系统', value: '22', unit: '%' },
+    { label: '用户', value: '46', unit: '%' },
+    { label: '闲置', value: '32', unit: '%' },
+    { label: '热压力', value: '正常', cls: 'calm' },
+    { label: '温度', value: '71', unit: '°C' },
+  ];
+  const procs = [
+    { icon: '#5A6B8C', glyph: 'W', name: 'WindowServer', val: '18.4%' },
+    { icon: '#3B6BD6', glyph: 'X', name: 'Xcode', val: '12.7%' },
+    { icon: '#4C9FD8', glyph: 'S', name: 'Safari', val: '9.2%' },
+    { icon: '#3D3F45', glyph: 'T', name: 'Terminal', val: '4.8%' },
+    { icon: '#C268B8', glyph: 'H', name: 'HagimiMonitor', val: '2.1%' },
+  ];
+
+  function cpuRow(variant) {
+    const cls = {
+      current: 'v-current', fade: 'v-fade', tile: 'v-tile', both: 'v-both',
+      scrim: 'v-scrim', vibrancy: 'v-vibrancy', hue: 'v-hue',
+      edge: 'v-edge', chip: 'v-chip',
+    }[variant];
+    const rings = coreUsages.map((u, i) =>
+      ring(u, i < 8 ? 'var(--cpu)' : 'var(--sev-calm)', 'var(--cpu-sep)')).join('');
+    const tiles = metrics.map(m => `
+      <div class="tile">
+        <span class="tl">${m.label}</span>
+        <span class="tv mono ${m.cls || ''}">${m.value}</span>
+        ${m.unit ? `<span class="tu">${m.unit}</span>` : ''}
+      </div>`).join('');
+    const procRows = procs.map(p => `
+      <div class="prow">
+        <span class="picon" style="background:${p.icon}">${p.glyph}</span>
+        <span class="pname">${p.name}</span>
+        <span class="pval mono">${p.val}</span>
+      </div>`).join('');
+    return `
+    <div class="row ${cls}">
+      <div class="row-head">
+        <div class="icon">${cpuIcon}</div>
+        <span class="label">CPU:</span>
+        <span class="value mono">68%</span>
+        <div class="spacer"></div>
+        ${sparkline('var(--cpu)')}
+      </div>
+      <div class="detail"><div class="dt-content">
+        <div class="sep"></div>
+        <div class="grid-wrap">
+          <div>
+            <div class="cores-inset"><div class="cores-row">${rings}</div></div>
+            <div class="usage-tiles">
+              <div class="utile">
+                <span class="dot" style="background:var(--sev-calm)"></span>
+                <span class="ul">能效核</span><span class="uv mono">38%</span>
+              </div>
+              <div class="utile">
+                <span class="dot" style="background:var(--cpu)"></span>
+                <span class="ul">性能核</span><span class="uv mono">76%</span>
+              </div>
+            </div>
+          </div>
+          <div class="metric-grid">
+            ${tiles}
+            <div class="tile full"><span class="tl">运行时间</span><span class="tv mono">3 天 4 小时</span></div>
+          </div>
+          <div>
+            <div class="sep" style="margin-left:0"></div>
+            <div class="proc-list" style="margin-top:5px">${procRows}</div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <div class="row gpu-row">
+      <div class="row-head">
+        <div class="icon" style="color:var(--gpu)">${gpuIcon}</div>
+        <span class="label">GPU:</span>
+        <span class="value mono">31%</span>
+        <div class="spacer"></div>
+        ${sparkline('var(--gpu)')}
+      </div>
+    </div>`;
+  }
+
+  document.querySelectorAll('[data-panel]').forEach(panel => {
+    panel.innerHTML = `
+      <div class="panel-header">
+        <span class="live-dot"></span>
+        <span class="sys">SYSTEM · LIVE</span>
+        <span class="time mono">14:32 · 周二</span>
+      </div>
+      ${cpuRow(panel.dataset.variant)}`;
+  });
+</script>
+
+</body>
+</html>

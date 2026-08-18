@@ -187,6 +187,10 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
                 MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true),
+                MetricSwitch(id: "voltage", title: String(localized: "metric.battery.voltage"), isDefault: true),
+                MetricSwitch(id: "current", title: String(localized: "metric.battery.current"), isDefault: true),
+                // 剩余/满充容量合并为单一开关(展示为「剩余 / 满充 mAh」整行格)。
+                MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true),
             ]
         case .fan:
             // 风扇行无子指标开关,展开区直接显示所有风扇(由 FanList 渲染)。
