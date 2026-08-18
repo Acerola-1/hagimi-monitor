@@ -68,9 +68,13 @@ func executablePath(for pid: pid_t) -> String {
     return length > 0 ? String(cString: buffer) : ""
 }
 
-/// 读取进程 phys_footprint(真实物理内存占用,含压缩/置换),口径对齐活动监视器。
-/// 失败返回 nil。proc_taskinfo 没有该字段,需用 proc_pid_rusage。
-private func physFootprint(for pid: pid_t) -> UInt64? {
+/// 读取单个进程的内存占用。
+/// 直连版取 phys_footprint(含压缩/置换,与活动监视器口径一致);
+/// 沙盒版跨进程 proc_pid_rusage 被策略拒绝,退而取 TASKINFO 的驻留内存
+/// (resident size,不含压缩/置换)。两者均为物理内存占用口径,
+/// 仅压缩/置换的计入方式不同。失败返回 nil。
+private func processMemoryUsage(for pid: pid_t) -> UInt64? {
+    #if DIRECT_DISTRIBUTION
     var rusage = rusage_info_current()
     let result = withUnsafeMutablePointer(to: &rusage) { structPtr -> Int32 in
         structPtr.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) { rawPtr in
@@ -79,6 +83,38 @@ private func physFootprint(for pid: pid_t) -> UInt64? {
     }
     guard result == 0 else { return nil }
     return rusage.ri_phys_footprint
+    #else
+    var taskInfo = proc_taskinfo()
+    let result = proc_pidinfo(pid, PROC_PIDTASKINFO, 0, &taskInfo, Int32(MemoryLayout<proc_taskinfo>.size))
+    guard result > 0 else { return nil }
+    return taskInfo.pti_resident_size
+    #endif
+}
+
+/// 枚举全部进程 pid。
+/// sysctl(KERN_PROC_ALL) 双渠道均放行;沙盒下 proc_listallpids 依赖的
+/// process-info 操作被策略拒绝,故统一走 sysctl。传 nil 首查拿所需缓冲区大小,
+/// 两次调用间进程数可能波动,填入时以实际返回的 size 为准。
+private func allProcessIds() -> [pid_t] {
+    var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
+    var size = 0
+    guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return [] }
+
+    var buffer = [UInt8](repeating: 0, count: size)
+    guard sysctl(&mib, 4, &buffer, &size, nil, 0) == 0 else { return [] }
+
+    let count = size / MemoryLayout<kinfo_proc>.stride
+    var pids: [pid_t] = []
+    pids.reserveCapacity(count)
+
+    buffer.withUnsafeBytes { raw in
+        let procs = raw.bindMemory(to: kinfo_proc.self)
+        for i in 0..<count where procs[i].kp_proc.p_pid > 0 {
+            pids.append(procs[i].kp_proc.p_pid)
+        }
+    }
+
+    return pids
 }
 
 /// 一个归属分组的累加器:以负责进程(宿主 App)为单位汇总内存。
@@ -109,36 +145,19 @@ struct RawMemoryProcess {
 ///
 /// 合并逻辑:用 `responsibility_get_pid_responsible_for_pid` 把每个进程归到其宿主 App。
 /// Safari 的 WebContent、Chrome 的 Helper 等子进程的 ppid 是 launchd(1),无法靠父子链
-/// 归属,但 responsible pid 能正确指向宿主 App。各分组内 phys_footprint 求和,即该 App
+/// 归属,但 responsible pid 能正确指向宿主 App。各分组内内存求和,即该 App
 /// 的总内存占用,与活动监视器分组口径一致。
 func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawMemoryProcess] {
-    // 枚举全部 pid。proc_listallpids 的两个参数语义不对称,是历史踩坑点:
-    //   - 第二个参数 buffersize 要的是「字节数」,必须 = 个数 × sizeof(pid_t);
-    //   - 但返回值是「写入的 pid 个数」,不是字节数,不能再除以 sizeof(pid_t)。
-    // 早期版本把个数当字节数传给 buffersize,缓冲区只够装 1/4 进程,后面的 pid 被
-    // 静默截断——这正是大内存进程(如 IDEA)偶尔不显示的根因。
-    // 传 nil 返回当前进程数(瞬时值,会波动),两次调用间可能有新进程,故留一倍余量。
-    let estimatedCount = proc_listallpids(nil, 0)
-    guard estimatedCount > 0 else { return [] }
-
-    let capacity = Int(estimatedCount) * 2
-    var pids = [pid_t](repeating: 0, count: capacity)
-    let bufferSizeInBytes = Int32(capacity * MemoryLayout<pid_t>.size)
-    let pidCount = Int(proc_listallpids(&pids, bufferSizeInBytes))
-    guard pidCount > 0 else { return [] }
+    let pids = allProcessIds()
+    guard !pids.isEmpty else { return [] }
 
     // responsiblePid -> 累加分组
     var groups: [pid_t: ProcessGroup] = [:]
-    groups.reserveCapacity(pidCount)
+    groups.reserveCapacity(pids.count)
 
-    // pidCount 理论上不会超过 capacity,但 proc_listallpids 在极端竞态下可能返回偏大值,
-    // 取 min 防越界。
-    for i in 0..<min(pidCount, capacity) {
-        let pid = pids[i]
-        guard pid > 0 else { continue }
-
+    for pid in pids {
         // 该进程的内存。读不到(进程已退出/无权限)就跳过。
-        guard let memory = physFootprint(for: pid) else { continue }
+        guard let memory = processMemoryUsage(for: pid) else { continue }
 
         // 归属到宿主 App。responsible pid 即分组键。
         let responsiblePid = responsiblePidResolver(pid)

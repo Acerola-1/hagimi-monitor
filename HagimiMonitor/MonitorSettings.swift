@@ -86,17 +86,18 @@ final class MonitorSettings: ObservableObject {
     @Published var mediaKeyVolumeEnabled: Bool = false
     @Published var mediaKeyShowOSD: Bool = true
     @Published var showMemoryProcesses: Bool = true
-    @Published var memoryShowSystemProcesses: Bool = false
+    /// 各类 TOP 列表默认包含系统进程:WindowServer 等系统进程常是占用大头,
+    /// 隐藏后列表常显得空。
+    @Published var memoryShowSystemProcesses: Bool = true
     @Published var memoryPrimaryMetric: MemoryPrimaryMetricPreference = .pressure
     @Published var showCPUProcesses: Bool = true
-    @Published var cpuShowSystemProcesses: Bool = false
+    @Published var cpuShowSystemProcesses: Bool = true
     @Published var showGPUProcesses: Bool = true
-    /// GPU 列表默认含系统进程:数据源里 WindowServer 等常是占用大头,隐藏后列表常显得空。
     @Published var gpuShowSystemProcesses: Bool = true
     @Published var showDiskProcesses: Bool = true
-    @Published var diskShowSystemProcesses: Bool = false
+    @Published var diskShowSystemProcesses: Bool = true
     @Published var showNetworkProcesses: Bool = true
-    @Published var networkShowSystemProcesses: Bool = false
+    @Published var networkShowSystemProcesses: Bool = true
     /// 功率流图开关(Beta):电源模块展开区的功率流可视化,默认开启,双渠道(含沙盒)均可用。
     @Published var batteryShowPowerFlow: Bool = true
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
@@ -148,17 +149,17 @@ final class MonitorSettings: ObservableObject {
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
         displayContrastControlEnabled = defaults.object(forKey: Keys.displayContrastControlEnabled) as? Bool ?? false
         showMemoryProcesses = defaults.object(forKey: Keys.showMemoryProcesses) as? Bool ?? true
-        memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? false
+        memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? true
         let memoryPrimaryMetricRawValue = defaults.string(forKey: Keys.memoryPrimaryMetric) ?? MemoryPrimaryMetricPreference.pressure.rawValue
         memoryPrimaryMetric = MemoryPrimaryMetricPreference(rawValue: memoryPrimaryMetricRawValue) ?? .pressure
         showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? true
-        cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? false
+        cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? true
         showGPUProcesses = defaults.object(forKey: Keys.showGPUProcesses) as? Bool ?? true
         gpuShowSystemProcesses = defaults.object(forKey: Keys.gpuShowSystemProcesses) as? Bool ?? true
         showDiskProcesses = defaults.object(forKey: Keys.showDiskProcesses) as? Bool ?? true
-        diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? false
+        diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? true
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
-        networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? false
+        networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
         batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
 
         pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double

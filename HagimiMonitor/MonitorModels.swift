@@ -641,11 +641,15 @@ final class MonitorStore: ObservableObject {
         }
         // 磁盘/GPU 读写量是两次快照的增量:首采只建基线、窗口过短时返空。两者
         // 采样本身极快,故用 0.6s 定时补采(凑出一个测量窗口),把 TOP 从「干等 5s
-        // 定时」缩短到 ~0.6s 出数。
-        if newlyExpanded.contains(.storage) || newlyExpanded.contains(.gpu) {
+        // 定时」缩短到 ~0.6s 出数。沙盒版 CPU 列表同为差分型,一并补采。
+        var incrementalKinds: [MonitorKind] = [.storage, .gpu]
+        #if !DIRECT_DISTRIBUTION
+        incrementalKinds.append(.cpu)
+        #endif
+        if !Set(incrementalKinds).isDisjoint(with: newlyExpanded) {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
                 guard let self, self.isPanelVisible else { return }
-                let followUp = Set([MonitorKind.storage, .gpu].filter {
+                let followUp = Set(incrementalKinds.filter {
                     newlyExpanded.contains($0) && self.expandedProcessKinds.contains($0)
                 })
                 guard !followUp.isEmpty else { return }
@@ -655,15 +659,16 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 当前设置里已开启进程列表的类目集合。
-    /// GPU 列表的数据源是 IORegistry 只读属性(AGX user client 的 AppUsage),
-    /// 沙盒允许,双渠道均可采样;其余四类依赖 proc_pid_rusage/nettop 等他进程
+    /// GPU 列表的数据源是 IORegistry 只读属性(AGX user client 的 AppUsage);
+    /// CPU/内存列表走 sysctl + proc_pidinfo(TASKINFO),均被沙盒放行,
+    /// 这三类双渠道均可采样;存储/网络依赖 proc_pid_rusage/nettop 等他进程
     /// 接口,沙盒下被拒,仅直连版启用。
     private func enabledProcessKinds() -> Set<MonitorKind> {
         var enabled = Set<MonitorKind>()
         if settings.showGPUProcesses { enabled.insert(.gpu) }
-        #if DIRECT_DISTRIBUTION
         if settings.showMemoryProcesses { enabled.insert(.memory) }
         if settings.showCPUProcesses { enabled.insert(.cpu) }
+        #if DIRECT_DISTRIBUTION
         if settings.showDiskProcesses { enabled.insert(.storage) }
         if settings.showNetworkProcesses { enabled.insert(.network) }
         #endif
@@ -699,9 +704,10 @@ final class MonitorStore: ObservableObject {
         refreshProcesses(for: expandedProcessKinds)
     }
 
-    /// 面板打开时为增量型 TOP 采样(网络/磁盘/GPU)预热基线快照。
-    /// 三者的基线是跨调用持久的全局快照:提前建好后,用户展开时首次采样即可
-    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s),磁盘/GPU
+    /// 面板打开时为增量型 TOP 采样预热基线快照。直连版覆盖网络/磁盘/GPU;
+    /// 沙盒版 CPU 列表同为差分型(TASKINFO 累计值差分),一并预热。
+    /// 基线是跨调用持久的全局快照:提前建好后,用户展开时首次采样即可
+    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s),其余
     /// 变为展开即出数;基线窗口=打开面板以来的时长,速率也更准。
     /// 这是对「按需采样」原则的有限放宽:仅面板可见时触发一次、只覆盖设置里
     /// 开启了 TOP 列表的类目、丢弃返回值(不 enrich、不建图标),后台常驻仍零开销。
@@ -709,7 +715,11 @@ final class MonitorStore: ObservableObject {
         let enabled = enabledProcessKinds()
         // 已展开的类目走 updateExpandedKinds 的正常采样链路(含链式/延时补采),无需预热。
         let expanded = expandedProcessKinds
-        let targets = Set([MonitorKind.network, .storage, .gpu].filter {
+        var baselineKinds: [MonitorKind] = [.network, .storage, .gpu]
+        #if !DIRECT_DISTRIBUTION
+        baselineKinds.append(.cpu)
+        #endif
+        let targets = Set(baselineKinds.filter {
             enabled.contains($0) && !expanded.contains($0)
         })
         guard !targets.isEmpty else { return }
@@ -722,6 +732,11 @@ final class MonitorStore: ObservableObject {
             if targets.contains(.gpu) {
                 _ = sampleTopGPUProcesses()
             }
+            #if !DIRECT_DISTRIBUTION
+            if targets.contains(.cpu) {
+                _ = sampleTopCPUProcesses()
+            }
+            #endif
         }
         if targets.contains(.network) {
             nettopQueue.async {

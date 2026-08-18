@@ -97,8 +97,7 @@ struct ModuleSettingsView: View {
 
                     SettingsDivider()
 
-                    // App Store 沙盒版无法采样他进程,隐藏进程列表相关设置。
-                    #if DIRECT_DISTRIBUTION
+                    // 内存列表数据源(sysctl + proc_pidinfo)沙盒可用,双渠道均开放设置。
                     SettingsRow(title: String(localized: "settings.show-memory-processes")) {
                         Toggle("", isOn: $settings.showMemoryProcesses)
                             .toggleStyle(.switch)
@@ -112,12 +111,11 @@ struct ModuleSettingsView: View {
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
-                    #endif
                 }
             }
 
-            // App Store 沙盒版无法采样他进程,隐藏 CPU 进程列表设置。
-            #if DIRECT_DISTRIBUTION
+            // CPU 列表数据源沙盒可用(直连版走 ps,沙盒版走 TASKINFO 差分),
+            // 双渠道均开放设置。
             if kind == .cpu {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-cpu-processes")) {
@@ -135,7 +133,6 @@ struct ModuleSettingsView: View {
                     }
                 }
             }
-            #endif
 
             // GPU 进程列表数据源为 IORegistry 只读属性(AGX user client 的
             // AppUsage),沙盒允许,双渠道均可用,故不加 DIRECT_DISTRIBUTION 门控。
@@ -157,7 +154,8 @@ struct ModuleSettingsView: View {
                 }
             }
 
-            // App Store 沙盒版无法采样他进程,隐藏存储进程列表设置。
+            // 存储列表依赖 proc_pid_rusage,沙盒下跨进程调用被策略拒绝,
+            // App Store 版隐藏存储进程列表设置。
             #if DIRECT_DISTRIBUTION
             if kind == .storage {
                 SettingsGroup {
@@ -178,7 +176,7 @@ struct ModuleSettingsView: View {
             }
             #endif
 
-            // App Store 沙盒版无法采样网络他进程,隐藏网络进程列表设置。
+            // 网络列表依赖 nettop 私有通道,沙盒下不可用,App Store 版隐藏网络进程列表设置。
             #if DIRECT_DISTRIBUTION
             if kind == .network {
                 SettingsGroup {

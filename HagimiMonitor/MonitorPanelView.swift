@@ -735,18 +735,19 @@ private struct MetricGlassRow: View, Equatable {
                             // CPU / 内存采样恒返回 top 5,故展开时无条件挂载列表(数据未到
                             // 先用留白占位预留高度),使展开一次到位、数据到达后原位淡入,
                             // 不产生二次高度跳变。磁盘采样需采样间隔才有增量,可能为空,仍按需挂载。
-                            // GPU 列表数据源为 IORegistry 只读属性,沙盒可用,双渠道均渲染;
-                            // 其余列表依赖他进程接口,仅直连版可用。
+                            // GPU 列表数据源为 IORegistry 只读属性,CPU/内存列表走
+                            // sysctl + proc_pidinfo,均被沙盒放行,双渠道渲染;
+                            // 存储列表依赖沙盒下被拒的 proc_pid_rusage,仅直连版渲染。
                             if module.kind == .gpu, showGPUProcesses {
                                 GPUProcessList(processes: topGPUProcesses, theme: theme)
                             }
-                            #if DIRECT_DISTRIBUTION
                             if module.kind == .memory, showMemoryProcesses {
                                 MemoryProcessList(processes: topMemoryProcesses, theme: theme)
                             }
                             if module.kind == .cpu, showCPUProcesses {
                                 CPUProcessList(processes: topCPUProcesses, theme: theme)
                             }
+                            #if DIRECT_DISTRIBUTION
                             if module.kind == .storage, showDiskProcesses {
                                 InlineDiskProcessList(processes: topDiskProcesses, theme: theme)
                             }
@@ -2442,9 +2443,10 @@ private struct MetricCardView: View, Equatable {
 
     /// 按当前模块类型返回已开启的 top 进程小节(items + 数值列数):未开启时返回 nil。
     /// 四类列表统一固定 5 行位置:真实数据从上往下填,空位由 CardProcessList 统一补“—”占位。
+    /// GPU/CPU/内存列表数据源沙盒可用,双渠道渲染;存储/网络列表仅直连版渲染。
     private var processSection: (items: [CardProcessItem], columns: Int)? {
-        // GPU 列表数据源为 IORegistry 只读属性,沙盒可用,不受渠道门控。
-        if module.kind == .gpu {
+        switch module.kind {
+        case .gpu:
             guard showGPUProcesses else { return nil }
             let items = topGPUProcesses.enumerated().map { index, proc in
                 CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
@@ -2452,12 +2454,6 @@ private struct MetricCardView: View, Equatable {
                 ])
             }
             return (items, 1)
-        }
-        #if !DIRECT_DISTRIBUTION
-        // App Store 沙盒版无法采样他进程,其余大卡片不渲染 TOP 进程小节。
-        return nil
-        #else
-        switch module.kind {
         case .cpu:
             guard showCPUProcesses else { return nil }
             let items = topCPUProcesses.enumerated().map { index, proc in
@@ -2475,6 +2471,7 @@ private struct MetricCardView: View, Equatable {
             }
             return (items, 1)
         case .storage:
+            #if DIRECT_DISTRIBUTION
             guard showDiskProcesses else { return nil }
             let items = topDiskProcesses.enumerated().map { index, proc in
                 CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
@@ -2483,7 +2480,11 @@ private struct MetricCardView: View, Equatable {
                 ])
             }
             return (items, 2)
+            #else
+            return nil
+            #endif
         case .network:
+            #if DIRECT_DISTRIBUTION
             guard showNetworkProcesses else { return nil }
             let items = topNetworkProcesses.enumerated().map { index, proc in
                 CardProcessItem(id: index, icon: proc.icon, name: proc.name, metrics: [
@@ -2492,11 +2493,13 @@ private struct MetricCardView: View, Equatable {
                 ])
             }
             return (items, 2)
-        case .gpu, .battery, .fan, .bluetooth:
-            // GPU 已在上方渠道门控外处理;风扇/蓝牙大卡片无 TOP 进程小节
+            #else
+            return nil
+            #endif
+        case .battery, .fan, .bluetooth:
+            // 风扇/蓝牙大卡片无 TOP 进程小节
             return nil
         }
-        #endif
     }
 
     private var percentText: String {
