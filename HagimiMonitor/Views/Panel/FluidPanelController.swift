@@ -53,7 +53,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private struct MetricsRenderKey: Equatable {
         let items: [MenuBarMetricItem]
         let isDark: Bool
-        let layout: MenuBarMetricLayoutStyle
         let scale: CGFloat
     }
     private var lastMetricsRenderKey: MetricsRenderKey?
@@ -612,7 +611,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let renderKey = MetricsRenderKey(
             items: store.menuBarMetricItems,
             isDark: isDark,
-            layout: store.settings.menuBarMetricLayoutStyle,
             scale: scale
         )
         guard renderKey != lastMetricsRenderKey else { return }
