@@ -11,6 +11,8 @@ private let panelTimeFormatter: DateFormatter = {
 private struct BodyScrollEdges: Equatable {
     let top: Bool
     let bottom: Bool
+    /// 内容自然高度(不含视口),用于判定内容是否真实超高。
+    let contentHeight: CGFloat
 }
 
 struct MonitorPanelView: View {
@@ -147,11 +149,17 @@ struct MonitorPanelView: View {
                         BodyScrollEdges(
                             top: geometry.contentOffset.y > 1,
                             bottom: geometry.contentOffset.y + geometry.containerSize.height
-                                < geometry.contentSize.height - 1
+                                < geometry.contentSize.height - 1,
+                            contentHeight: geometry.contentSize.height
                         )
                     } action: { _, edges in
                         isBodyScrolled = edges.top
-                        bodyHasMoreBelow = edges.bottom
+                        // 底部渐隐只在内容真实超高时显示:展开动画期间内容高度补间
+                        // 领先视口补间约一帧,contentSize 会瞬时大于 containerSize,
+                        // 直接据此判断会在「未超高、无需滚动」时也闪现一次底部渐隐。
+                        // 用稳定的封顶高度(动画期间不变)作门控,未超高时恒不触发。
+                        let cappedHeight = scrollBodyMaxHeight ?? .infinity
+                        bodyHasMoreBelow = edges.contentHeight > cappedHeight && edges.bottom
                     }
                     // 上下渐隐遮罩:对应边缘外还有内容时,圆角卡片滑到边界不再被直线
                     // 硬切,而是在 12pt 内渐隐消失;贴边/未溢出时渐隐段高度为 0,
