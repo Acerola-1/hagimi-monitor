@@ -4909,28 +4909,6 @@
         }
       }
     },
-    "metric.cpu.temperature": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Temperature"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温度"
-          }
-        }
-      }
-    },
     "metric.cpu.thermal-pressure": {
       "localizations": {
         "en": {

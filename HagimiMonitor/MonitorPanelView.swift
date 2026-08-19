@@ -347,7 +347,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 detail: module.summary,
                 samples: module.samples,
-                details: enabledMetrics(for: module),
+                details: cpuDetails(for: module),
                 isExpanded: expandedKinds.contains(module.kind),
                 topCPUProcesses: store.topCPUProcesses,
                 showCPUProcesses: store.settings.showCPUProcesses
@@ -449,6 +449,17 @@ struct MonitorPanelView: View {
     private func enabledMetrics(for module: MonitorModule) -> [MonitorMetric] {
         let enabledIds = store.settings.enabledMetrics[module.kind] ?? defaultMetricIds(for: module.kind)
         return module.metrics.filter { enabledIds.contains($0.name) }
+    }
+
+    /// CPU 展开明细:热压力开关开启时把温度指标一并带给网格,供合并整行展示
+    /// (温度在面板不再单独开关;菜单栏温度选项独立读取温度指标,不受影响)。
+    private func cpuDetails(for module: MonitorModule) -> [MonitorMetric] {
+        let enabled = enabledMetrics(for: module)
+        guard enabled.contains(where: { $0.name == "thermal-pressure" }),
+              let temperature = module.metrics.first(where: { $0.name == "temperature" }) else {
+            return enabled
+        }
+        return enabled + [temperature]
     }
 
     /// 内存头部主值的压力等级文案(已本地化)。
@@ -989,16 +1000,21 @@ private struct MetricDetailGrid: View {
     private var valueStyle: Font.TextStyle { .footnote }
 
     private var shortMetrics: [MonitorMetric] {
-        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) && !isReplacedByCoreDetail($0) }
+        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) && !isMergedThermalRow($0) }
     }
 
     private var fullRowMetrics: [MonitorMetric] {
-        metrics.filter { Self.fullRowMetricIDs.contains($0.name) && !isReplacedByCoreDetail($0) }
+        metrics.filter { Self.fullRowMetricIDs.contains($0.name) && !isMergedThermalRow($0) }
     }
 
     /// core-split 被 P/E 两行展示取代时从格子列表剔除。
     private func isReplacedByCoreDetail(_ metric: MonitorMetric) -> Bool {
         cpuCoreDetail != nil && metric.name == "core-split"
+    }
+
+    /// 热压力与温度合并为整行渲染(温度并入热压力行;菜单栏温度选项独立)。
+    private func isMergedThermalRow(_ metric: MonitorMetric) -> Bool {
+        kind == .cpu && (metric.name == "thermal-pressure" || metric.name == "temperature")
     }
 
     var body: some View {
@@ -1034,6 +1050,11 @@ private struct MetricDetailGrid: View {
                 }
             }
 
+            if let thermal = metrics.first(where: { $0.name == "thermal-pressure" }) {
+                let temperature = metrics.first { $0.name == "temperature" }
+                thermalPressureCell(thermal: thermal, temperature: temperature)
+            }
+
             ForEach(fullRowMetrics) { metric in
                 metricCell(metric)
             }
@@ -1048,6 +1069,50 @@ private struct MetricDetailGrid: View {
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+    }
+
+    /// 热压力整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
+    /// 直连版温度可用时双值并排;沙盒版无温度只显示档位。档位按 severity 着色,
+    /// 温度保持 valueText 与其余数值同层级。
+    private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric?) -> some View {
+        insetCell(
+            HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
+                Text(localizedMetricName(kind: kind, id: thermal.name))
+                    .monitorPanelCaptionFont(labelStyle)
+                    .foregroundStyle(theme.captionText)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+
+                if let temperature {
+                    splitValue(temperature, text: localizedMetricValue(kind: kind, metric: temperature))
+                        .help(localizedMetricValue(kind: kind, metric: temperature))
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            copyToPasteboard(temperature.value)
+                        }
+                }
+                splitValue(thermal, text: localizedMetricValue(kind: kind, metric: thermal))
+                    .help(localizedMetricValue(kind: kind, metric: thermal))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        copyToPasteboard(thermal.value)
+                    }
+            }
+        )
+    }
+
+    /// 热压力四档 severity 着色:正常→calm 绿,轻微→warning,严重/临界→critical。
+    private func thermalPressureColor(_ metric: MonitorMetric) -> Color {
+        switch metric.numericValue ?? 0 {
+        case ..<1:
+            return theme.palette.severityTint(for: .calm)
+        case ..<2:
+            return theme.palette.severityTint(for: .warning)
+        default:
+            return theme.palette.severityTint(for: .critical)
+        }
     }
 
     private func metricCell(_ metric: MonitorMetric) -> some View {
@@ -1143,14 +1208,7 @@ private struct MetricDetailGrid: View {
     /// 与 captionText 标签拉开亮度层级,指标多了不再糊成一片。
     private func metricValueColor(_ metric: MonitorMetric) -> Color {
         if kind == .cpu, metric.name == "thermal-pressure" {
-            switch metric.numericValue ?? 0 {
-            case ..<1:
-                return theme.palette.severityTint(for: .calm)
-            case ..<2:
-                return theme.palette.severityTint(for: .warning)
-            default:
-                return theme.palette.severityTint(for: .critical)
-            }
+            return thermalPressureColor(metric)
         }
         // S.M.A.R.T.:verified 绿、failing 红,与原型 good/crit 色对齐。
         if kind == .storage, metric.name == "smart" {

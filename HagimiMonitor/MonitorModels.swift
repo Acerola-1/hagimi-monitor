@@ -131,22 +131,18 @@ enum MonitorKind: String, CaseIterable, Identifiable {
         switch self {
         case .cpu:
             // 温度读数来自 SMC(IOServiceOpen AppleSMC),App Store 沙盒版被拒,
-            // CPUSampler 也只在 DISPLAY_CONTROL 下产出该指标,选项列表同步门控。
-            var metrics = [
+            // CPUSampler 只在 DISPLAY_CONTROL 下产出该指标。面板中温度与热压力
+            // 合并为「热压力」整行(直连版展示「温度 / 热压力」);菜单栏温度选项
+            // 独立读取温度指标,不受面板合并影响。
+            // P/E 合并为单一指标「P/E 核」,值为「82% / 35%」。
+            return [
                 MetricSwitch(id: "system", title: String(localized: "metric.cpu.system"), isDefault: true),
                 MetricSwitch(id: "user", title: String(localized: "metric.cpu.user"), isDefault: true),
                 MetricSwitch(id: "idle", title: String(localized: "metric.cpu.idle"), isDefault: true),
                 MetricSwitch(id: "uptime", title: String(localized: "metric.cpu.uptime"), isDefault: true),
-                // 热压力(ProcessInfo.thermalState 四档)与 P/E 核分组占用:公开 API,
-                // 双渠道可用;值按 severity 着色(见 MetricDetailGrid)。
-                // P/E 合并为单一指标「P/E 核」,值为「82% / 35%」。
                 MetricSwitch(id: "thermal-pressure", title: String(localized: "metric.cpu.thermal-pressure"), isDefault: true),
                 MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),
             ]
-            #if DISPLAY_CONTROL
-            metrics.append(MetricSwitch(id: "temperature", title: String(localized: "metric.cpu.temperature"), isDefault: false))
-            #endif
-            return metrics
         case .gpu:
             return [
                 MetricSwitch(id: "gpu-memory", title: String(localized: "metric.gpu.gpu-memory"), isDefault: true),
