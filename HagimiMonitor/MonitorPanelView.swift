@@ -375,6 +375,9 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: pressureMode ? memoryPressureText(for: module) : module.summary,
+                // 压力模式下头部即压力等级文案,按等级着色(与热压力/SMART 同口径);
+                // 使用率模式保持常规数值色。
+                detailColor: pressureMode ? memoryPressureColor(level: pressureRawLevel(module), theme: theme) : nil,
                 // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
                 samples: pressureMode ? module.pressureSamples : [],
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
@@ -466,6 +469,11 @@ struct MonitorPanelView: View {
     private func memoryPressureText(for module: MonitorModule) -> String {
         let raw = module.metrics.first { $0.name == "pressure" }?.value ?? "--"
         return localizedMemoryPressure(raw)
+    }
+
+    /// 内存模块当前压力等级原始值;模块未携带压力时按未知处理。
+    private func pressureRawLevel(_ module: MonitorModule) -> Int {
+        module.pressure?.rawValue ?? MemoryPressureLevel.unknown.rawValue
     }
 
     /// 压力模式下头部已显示压力等级,展开列表里的「压力」行原位换成「使用率」行,
@@ -610,6 +618,8 @@ private struct MetricGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let detail: String
+    /// 明细文字自定义着色(如内存压力等级);nil 时用常规 valueText。
+    var detailColor: Color? = nil
     var samples: [Double] = []
     var details: [MonitorMetric] = []
     var isExpanded = false
@@ -631,6 +641,7 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.detail == rhs.detail
+            && lhs.detailColor == rhs.detailColor
             && lhs.samples == rhs.samples
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
@@ -678,7 +689,7 @@ private struct MetricGlassRow: View, Equatable {
 
                 Text(detail)
                     .monitorPanelMonoFont(weight: .semibold)
-                    .foregroundStyle(theme.valueText)
+                    .foregroundStyle(detailColor ?? theme.valueText)
                     .lineLimit(1)
 
                 Spacer(minLength: 8)
@@ -1216,6 +1227,12 @@ private struct MetricDetailGrid: View {
                 ? theme.palette.severityTint(for: .critical)
                 : theme.palette.severityTint(for: .calm)
         }
+        // 内存压力档位着色:取 pressure-level 指标原始值判级,与热压力/SMART 同口径。
+        if kind == .memory, metric.name == "pressure" {
+            let level = Int(metrics.first { $0.name == "pressure-level" }?.numericValue
+                ?? Double(MemoryPressureLevel.unknown.rawValue))
+            return memoryPressureColor(level: level, theme: theme)
+        }
         return theme.valueText
     }
 }
@@ -1288,6 +1305,22 @@ private func localizedMemoryPressure(_ id: String) -> String {
     let key = "memory-pressure.\(id)"
     let localized = String(localized: String.LocalizationValue(key))
     return localized == key ? id : localized
+}
+
+/// 内存压力档位着色:与热压力/SMART 同口径——正常→calm 绿、
+/// 警告→warning、严重→critical;未知态不强调,回退中性 valueText。
+/// level 用 MemoryPressureLevel.rawValue。
+private func memoryPressureColor(level: Int, theme: MonitorPanelTheme) -> Color {
+    switch level {
+    case MemoryPressureLevel.warning.rawValue:
+        return theme.palette.severityTint(for: .warning)
+    case MemoryPressureLevel.critical.rawValue:
+        return theme.palette.severityTint(for: .critical)
+    case MemoryPressureLevel.unknown.rawValue:
+        return theme.valueText
+    default:
+        return theme.palette.severityTint(for: .calm)
+    }
 }
 
 private struct StorageVolumeDetailList: View {
