@@ -572,6 +572,9 @@ final class MonitorStore: ObservableObject {
     func panelDidAppear(_ kind: PanelKind) {
         let wasEmpty = visiblePanelKinds.isEmpty
         visiblePanelKinds.insert(kind)
+        // 蓝牙数据只在面板可见时被消费(菜单栏指标不含蓝牙):CoreBluetooth
+        // 的系统授权弹窗推迟到此刻触发,不打断应用启动。
+        bluetoothSampler.activateBLE()
         if wasEmpty {
             isPanelVisible = true
             // 打开面板的首刷不允许空结果清列表:增量型首采常返空,若覆盖会
