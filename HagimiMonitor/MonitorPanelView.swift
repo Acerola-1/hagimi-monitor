@@ -2311,7 +2311,7 @@ private struct PowerFlowDiagram: View {
                     .fill(barFillGradient)
                     .frame(width: max(0, CGFloat(module.value) / 100 * geo.size.width - 4),
                            height: geo.size.height - 4)
-                    .offset(x: 2, y: 2)
+                    .offset(x: 2)
 
                 HStack(spacing: 6) {
                     Text(percent(module.value))
@@ -2329,7 +2329,7 @@ private struct PowerFlowDiagram: View {
                     }
                 }
                 .padding(.horizontal, 11)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // 深色模式填充上的白字需要轻投影保可读性;浅色模式用深字不投影。
                 .shadow(color: .black.opacity(isDark ? 0.45 : 0), radius: 2, x: 0, y: 1)
             }
