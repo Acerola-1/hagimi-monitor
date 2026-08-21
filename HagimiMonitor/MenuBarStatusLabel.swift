@@ -46,8 +46,9 @@ struct MenuBarMetricLabel: View {
     }
 
     /// 横排(icon/text):总宽由 `MenuBarMetricWidthEngine` 按各指标的最大预留一次性算死,
-    /// 与任何实时数值无关--左右边缘与邻居图标的距离恒定不动;前缀+数值按内容自适应,
-    /// 预留富余均摊为等宽的格间间距,位数变化只引起内部间距轻微呼吸。
+    /// 与任何实时数值无关--左右边缘与邻居图标的距离恒定不动;每格区域按「常用宽度」
+    /// 划定,常用范围内的位数变化被区域内空白吸收,位置纹丝不动,富余均摊为格间间距。
+    /// 字体与菜单栏观感同族(SF Rounded,引擎同源 NSFont 桥接),尾部单位小一号弱化。
     private var horizontalBody: some View {
         let layout = MenuBarMetricWidthEngine.horizontalLayout(for: items, layout: layoutStyle)
         return HStack(spacing: layout.gap) {
@@ -55,31 +56,49 @@ struct MenuBarMetricLabel: View {
                 horizontalCell(for: item)
             }
         }
-        .font(labelFont)
+        .font(Font(MenuBarMetricWidthEngine.horizontalValueFont))
         .lineLimit(1)
         .allowsTightening(false)
         .fixedSize()
         .frame(width: layout.totalWidth, alignment: .leading)
     }
 
-    /// 紧凑(compact):各指标双层列宽恒定,整体宽度天然稳定。
+    /// 紧凑(compact):各指标双层列宽恒定,整体宽度天然稳定,字体同为 rounded。
     private var compactBody: some View {
         HStack(spacing: interCellSpacing) {
             ForEach(items) { item in
                 compactCell(for: item)
             }
         }
-        .font(labelFont)
         .lineLimit(1)
         .allowsTightening(false)
         .fixedSize()
     }
 
-    /// 横排单格:前缀(SF 图标 / CPU / ↑↓ 等)+ 数值,内容自适应、不做定宽框。
+    /// 横排单格:按「常用宽度」划定最小区域,前缀(SF 图标 / CPU / ↑↓ 等)+ 数值紧贴成对。
+    /// 常用范围内的位数变化只伸缩区域内空白,不推动任何相邻内容;
+    /// 冲出常用宽度时该格临时变宽、轻微收缩格间距(引擎侧计算)。
     private func horizontalCell(for item: MenuBarMetricItem) -> some View {
         HStack(spacing: symbolSpacing) {
             leading(for: item.kind)
-            Text(numericValue(for: item))
+            valueText(for: item)
+        }
+        .frame(minWidth: MenuBarMetricWidthEngine.commonPairWidth(for: item.kind, layout: layoutStyle), alignment: .leading)
+    }
+
+    /// 数值:数字部分主字号,尾部单位字形小一号、基线对齐弱化(iStat 式层次)。
+    /// 拆分口径与引擎的 measuredValueWidth 一一对应,测量/渲染同源。
+    @ViewBuilder
+    private func valueText(for item: MenuBarMetricItem) -> some View {
+        let parts = MenuBarMetricWidthEngine.splitValueUnit(numericValue(for: item))
+        if parts.unit.isEmpty {
+            Text(parts.digits)
+        } else {
+            HStack(alignment: .firstTextBaseline, spacing: 0) {
+                Text(parts.digits)
+                Text(parts.unit)
+                    .font(Font(MenuBarMetricWidthEngine.unitFont))
+            }
         }
     }
 
@@ -148,10 +167,6 @@ struct MenuBarMetricLabel: View {
         Self.compactCellWidths[kind]!
     }
 
-    private var labelFont: Font {
-        .system(size: Self.fontSize, weight: .medium, design: .rounded).monospacedDigit()
-    }
-
     private var compactLabelFont: Font {
         .system(size: Self.compactLabelFontSize, weight: .semibold, design: .rounded)
     }
@@ -181,9 +196,6 @@ struct MenuBarMetricLabel: View {
         }
         return cache
     }()
-
-    /// 横排数值字号,同源在布局引擎(横排测量与渲染必须一致)。
-    private static var fontSize: CGFloat { MenuBarMetricWidthEngine.horizontalValueFontSize }
 
     /// icon 字号,同源在布局引擎(icon 测量与渲染必须一致)。
     private static var iconFontSize: CGFloat { MenuBarMetricWidthEngine.iconFontSize }

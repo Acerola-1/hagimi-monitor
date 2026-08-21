@@ -213,13 +213,12 @@ enum MenuBarMetricFormatter {
         return leftPad("\(Int(max(0, value).rounded()))", to: 3) + "W"
     }
 
-    /// 风扇转速(单位 RPM)。固定 4 字符右对齐数字,无单位(参考 Stats 菜单栏):
-    /// 9999 作 cap,极端值(Mac Pro 极限散热也很少破 8000 RPM)显示为 9999。
-    /// nil(无风扇 / 读取失败)走 leftPad(unavailable, to: 4) 占位,保持 4 字符宽度。
+    /// 风扇转速(单位 RPM,不渲染单位字母--前缀/图标已表明语义,rpm 三字母在小字号下
+    /// 仍偏宽)。9999 作 cap,极端值(Mac Pro 极限散热也很少破 8000 RPM)显示为 9999。
+    /// nil(无风扇 / 读取失败)走 unavailable 占位。
     static func fanRPM(_ rpm: Int?) -> String {
-        guard let rpm else { return leftPad(unavailable, to: 4) }
-        let capped = min(rpm, 9999)
-        return String(format: "%4d", capped)
+        guard let rpm else { return unavailable }
+        return "\(min(rpm, 9999))"
     }
 
     private static func compactCapacity(_ value: Double) -> String {
