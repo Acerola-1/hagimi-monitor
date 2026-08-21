@@ -46,6 +46,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 只会与 CA 动画
     /// 叠加冲突并把 CPU 打满。动画结束后由 contentSizeDidChange 做最终校准。
     private var isAnimatingExpansion = false
+    /// 展开/收起动画代号:每次 applyWindowHeight 递增,只有最新一次动画的复位
+    /// 回调生效。快速连续 toggle(如双击 header)时,早先动画的复位定时器不再
+    /// 提前清掉在途动画的标记(否则逐帧贴合突然放行,与 CA 冲突导致跳变)。
+    private var expansionAnimationToken = 0
 
     /// 向 SwiftUI 侧下发布局约束(内容高度上限)。面板主体据此自行封顶并在
     /// 内部 ScrollView 滚动,header 固定在外、不参与滚动。
@@ -71,6 +75,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 面板底部距屏幕可视区下缘(Dock 上沿)的最小留白。
     private static let panelBottomMargin: CGFloat = 10
+    /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
+    private static let minPanelHeight: CGFloat = 96
 
     /// 状态项内容左右留白,避免图标/文字贴住菜单栏边缘(系统 MenuBarExtra 自带此留白)。
     private static let statusItemHorizontalPadding: CGFloat = 2
@@ -120,7 +126,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 调试帧探针:主线程上以 4ms 目标间隔持续打卡,记录实际间隔。
     /// 展开动画(0.15s)期间若主线程被重绘/布局拖住,打卡间隔会显著拉大,
-    /// 用 `[autotest] slowframe gap=Xms` 输出超过半帧(>8.3ms)的间隔供离线统计。
+    /// 交给 `AutotestPerfMeter` 在度量窗口内累计为 slowframes 并逐帧打印。
     private var frameProbeTimer: DispatchSourceTimer?
 
     private func startFrameProbe() {
@@ -132,7 +138,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let gap = (now - last) * 1000
             last = now
             if gap > 8.3 {
-                NSLog("[autotest] slowframe gap=%.1fms ts=%.3f", gap, now)
+                // 动画窗口内的掉帧计入度量并逐帧打印;窗口外的间隔与本度量无关,忽略。
+                MainActor.assumeIsolated {
+                    AutotestPerfMeter.shared.noteSlowFrame(gap: gap)
+                }
             }
         }
         timer.resume()
@@ -475,7 +484,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         if let screen = buttonWindow.screen {
             let available = buttonFrame.minY - screen.visibleFrame.minY - Self.panelBottomMargin
             if available > 0 {
-                clamped.height = min(clamped.height, available)
+                // 高度下限兜底:预测链上游(driver 基线校准)异常时防止窗口
+                // 被带到 0/负高度(表现为「整页消失」),钳在至少能露出 header+首行。
+                clamped.height = min(max(clamped.height, Self.minPanelHeight), available)
             }
         }
         var origin = buttonFrame.origin
@@ -491,13 +502,23 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             }
         }
         if animated {
+            expansionAnimationToken += 1
+            let token = expansionAnimationToken
             isAnimatingExpansion = true
             let context = NSAnimationContext.current
             context.duration = MonitorConstants.panelExpansionDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().setFrame(newFrame, display: false)
             DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
-                self?.isAnimatingExpansion = false
+                guard let self, self.expansionAnimationToken == token else { return }
+                self.isAnimatingExpansion = false
+                // 对账:动画期间被丢弃的尺寸上报在此补贴合一次。不做这步,
+                // 若最终上报恰好落在动画窗口内被丢弃且无重试,窗口会永久卡在
+                // 错误高度(快速连续 toggle 时尤为可见)。
+                if self.lastReportedContentSize.height > 0,
+                   self.panel.frame.size != self.lastReportedContentSize {
+                    self.setPanelFrame(size: self.lastReportedContentSize)
+                }
             }
         } else {
             panel.setFrame(newFrame, display: true)

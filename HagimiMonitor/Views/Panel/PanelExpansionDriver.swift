@@ -28,6 +28,11 @@ final class PanelExpansionDriver: ObservableObject {
     private var lastMeasuredContentHeight: CGFloat = 0
     /// 收起态(全部展开区高度为 0)的内容总高度。非动画期间从实测值反推校准。
     private var collapsedBaseHeight: CGFloat = 0
+    /// 内容总高度上限(菜单栏面板 = 屏幕可用高度,由视图上报;钉住面板为无穷)。
+    /// 封顶期间 ScrollView 把实测高度钳在上限,「实测 = 基线 + Σ相位高度」的
+    /// 反推等式失真(会解出过小甚至为负的基线,再经 predicted 把窗口带到
+    /// 错误高度)——此时跳过校准、保留上次一致值,预测值同样钳在上限内。
+    private var contentHeightCap: CGFloat = .infinity
 
     /// 窗口贴合回调:(目标内容总高度, 是否动画)。
     /// animated=true 时由 CoreAnimation 补间窗口 frame;false 时同步贴合。
@@ -76,21 +81,30 @@ final class PanelExpansionDriver: ObservableObject {
         recalibrateBaseHeight()
     }
 
+    /// 视图上报内容总高度上限(菜单栏下沿到屏幕底部的可用空间)。
+    /// 上限变化(换屏/面板锚点移动)时随测高校报一起刷新即可。
+    func reportContentHeightCap(_ cap: CGFloat) {
+        contentHeightCap = cap
+    }
+
     /// 非动画期间从实测值反推收起态基线高度。
     private func recalibrateBaseHeight() {
         guard lastMeasuredContentHeight > 0 else { return }
+        // 封顶中:实测高度被钳在上限,反推不出基线(等式失真),保留上次校准值。
+        guard lastMeasuredContentHeight < contentHeightCap - 0.5 else { return }
         let totalExpanded = naturalHeights.reduce(into: 0.0) { acc, kv in
             acc += kv.value * (phase[kv.key] ?? 0)
         }
         collapsedBaseHeight = lastMeasuredContentHeight - totalExpanded
     }
 
-    /// 当前预测的内容总高度 = 收起基线 + 各展开区按相位占用的高度。
+    /// 当前预测的内容总高度 = 收起基线 + 各展开区按相位占用的高度,
+    /// 并钳制在内容上限内(封顶时内容实际高度不再随展开增长,窗口不应超出)。
     private var predictedContentHeight: CGFloat {
         let totalExpanded = naturalHeights.reduce(into: 0.0) { acc, kv in
             acc += kv.value * (phase[kv.key] ?? 0)
         }
-        return collapsedBaseHeight + totalExpanded
+        return min(max(collapsedBaseHeight + totalExpanded, 0), contentHeightCap)
     }
 }
 

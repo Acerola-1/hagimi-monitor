@@ -17,6 +17,12 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     /// 展开动画进行中标记:此期间 contentSizeDidChange 逐帧上报被忽略——
     /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 会与 CA 冲突。
     private var isAnimatingExpansion = false
+    /// 展开/收起动画代号:只有最新一次动画的复位回调生效(连续 toggle 防竞态)。
+    private var expansionAnimationToken = 0
+    /// 最近一次实测内容尺寸,动画结束对账用。
+    private var lastReportedContentSize: CGSize = .zero
+    /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
+    private static let minPanelHeight: CGFloat = 96
 
     /// 面板圆角半径,与 FluidPanelController 一致(rowCornerRadius)。
     private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
@@ -229,20 +235,33 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     /// 固定顶部,向下生长。
     private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
         guard panel.isVisible else { return }
-        let size = CGSize(width: panel.frame.width, height: contentHeight)
+        // 高度下限兜底:预测链异常时防止窗口被带到 0/负高度(表现为「整页消失」)。
+        let size = CGSize(width: panel.frame.width, height: max(contentHeight, Self.minPanelHeight))
         guard panel.frame.size != size else { return }
         var frame = panel.frame
         let top = frame.maxY
         frame.size = size
         frame.origin.y = top - size.height
         if animated {
+            expansionAnimationToken += 1
+            let token = expansionAnimationToken
             isAnimatingExpansion = true
             let context = NSAnimationContext.current
             context.duration = MonitorConstants.panelExpansionDuration
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().setFrame(frame, display: false)
             DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
-                self?.isAnimatingExpansion = false
+                guard let self, self.expansionAnimationToken == token else { return }
+                self.isAnimatingExpansion = false
+                // 对账:动画期间被丢弃的尺寸上报在此补贴合,窗口不会卡在错误高度。
+                if self.panel.frame.size != self.lastReportedContentSize,
+                   self.lastReportedContentSize.height > 0 {
+                    var frame = self.panel.frame
+                    let top = frame.maxY
+                    frame.size = self.lastReportedContentSize
+                    frame.origin.y = top - frame.height
+                    self.panel.setFrame(frame, display: true)
+                }
             }
         } else {
             panel.setFrame(frame, display: true)
@@ -250,6 +269,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     }
 
     private func contentSizeDidChange(to size: CGSize) {
+        lastReportedContentSize = size
         // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
         guard !isAnimatingExpansion else { return }
         guard panel.frame.size != size else { return }

@@ -61,6 +61,14 @@ struct MonitorPanelView: View {
         return max(120, maxContentHeight - headerHeight - 26)
     }
 
+    /// 主体封顶时内容总高度的实际钳制值(header + 内边距/间距 + 主体上限),
+    /// 与 body 的布局公式一致,上报驱动器用于识别「实测高度已封顶」。
+    /// 无上限(钉住面板等宿主)时为无穷。
+    private var effectiveContentHeightCap: CGFloat {
+        guard let scrollBodyMaxHeight else { return .infinity }
+        return scrollBodyMaxHeight + headerHeight + 26
+    }
+
     var body: some View {
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
         // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
@@ -284,15 +292,25 @@ struct MonitorPanelView: View {
         }
         // 实测内容总高度上报驱动器:非动画期间据此反推收起态基线高度,
         // 动画开始时由 targetContentHeight 叠加目标相位高度预测窗口目标尺寸。
+        // 同时上报总高度上限:主体 ScrollView 封顶时实测高度被钳在上限,
+        // 驱动器据此跳过基线校准(反推等式在封顶期失真,会解出错误基线)。
         .background(
             GeometryReader { geometry in
                 Color.clear
-                    .onAppear { panelExpansion.reportMeasuredContentHeight(geometry.size.height) }
+                    .onAppear {
+                        panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
+                        panelExpansion.reportMeasuredContentHeight(geometry.size.height)
+                    }
                     .onChange(of: geometry.size.height) { _, newValue in
+                        panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
                         panelExpansion.reportMeasuredContentHeight(newValue)
                     }
             }
         )
+        .onChange(of: maxContentHeight) { _, _ in
+            // 上限变化(换屏/Dock 变化)独立刷新,尺寸未必随之变化。
+            panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
+        }
         // 展开驱动器注入整棵面板子树:CollapsibleDetail 按各自 key 自读相位。
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
@@ -593,6 +611,8 @@ struct MonitorPanelView: View {
     private func setExpansion(_ mutate: () -> Void) {
         // 展开补间与浮层子窗口并存会引发布局抖动,展开前确保浮层已收起。
         QuickToolsStore.shared.popoverPresenter.dismiss()
+        // 调试度量(仅 HAGIMI_PANEL_AUTOTEST 生效):在最前打快照,包住整段动画窗口。
+        AutotestPerfMeter.shared.beginExpand()
         let previous = expandedKinds
         // 置位一次性动画截止标记:动画窗口内的采样结果推迟应用,避免 1-3s 节奏的
         // 模块刷新恰好撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
