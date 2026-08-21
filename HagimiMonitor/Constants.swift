@@ -34,10 +34,9 @@ enum MonitorConstants {
     static let rowTintFaintOpacity = 0.02
 
     // MARK: - Panel Expansion
-    // 子栏目展开/收起动画时长。内容(SwiftUI `CollapsibleDetail` 的 frame 高度补间)
-    // 与窗口层(`FluidPanelController` 的 setFrame 动画)必须用这一同一时长与
-    // easeInOut 曲线并行动画到同一终值——外层 GeometryReader 只上报一次终值、无法
-    // 逐帧跟随,只有两边同时同速才能边框与内容严丝合缝一起伸缩。
+    // 子栏目展开/收起动画时长。`PanelExpansionDriver` 的相位补间、chevron 旋转
+    // 等次级动效共用这一时长与 easeInOut 曲线,端点对齐;动画窗口内的采样
+    // 推迟(见 MonitorStore.beginExpansionAnimation)也以它为基准。
     static let panelExpansionDuration: TimeInterval = 0.15
 
     // MARK: - Animation Durations

@@ -7,10 +7,13 @@ import SwiftUI
 struct DisplayControlsSection: View {
     @ObservedObject var settings: MonitorSettings
     let isPanelVisible: Bool
-    /// 展开/收起前调用,置位窗口层的一次性动画标记,使窗口补间与本行内容
-    /// (CollapsibleDetail)并行同步。本行走独立的 @State 展开路径,不经 MonitorPanelView
-    /// 的 setExpansion,故需单独注入该回调;缺省空实现便于预览/独立使用。
-    var beginExpansionAnimation: () -> Void = {}
+    /// 发起某展开区的相位变化(0 或 1)并置位窗口层的采样推迟截止标记。
+    /// `animated` 为 false 时无补间直接同步(初始化/隐藏重置等同步语义场景)。
+    var animate: (String, Bool, Bool) -> Void
+
+    /// 本节展开区 key(与各控制组的档案 key 区分)。
+    private static let sectionKey = "display-controls"
+
     @StateObject private var controller = DisplayControlController()
     @Environment(\.colorScheme) private var colorScheme
     @State private var isExpanded = false
@@ -18,11 +21,6 @@ struct DisplayControlsSection: View {
     /// 只在显示器集合变化时重采;拖滑杆等高频 body 重算不再反复触发昂贵的
     /// IORegistry 枚举与 DDC 分类探测。
     @State private var displayInfoByID: [CGDirectDisplayID: DisplayInfo] = [:]
-
-    // 与其他 metric 行统一曲线/时长(MonitorPanelView.setExpansion 与
-    // FluidPanelController 的窗口补间用同一条),保证展开/折叠手感一致,
-    // 内容(CollapsibleDetail)与窗口边框并行动画到同一终值、严丝合缝。
-    private let expansionAnimation = Animation.easeInOut(duration: MonitorConstants.panelExpansionDuration)
 
     var body: some View {
         let palette = MonitorPalette(
@@ -62,7 +60,7 @@ struct DisplayControlsSection: View {
                     .foregroundStyle(palette.captionText)
                     .frame(width: 18, height: 18)
                     .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .animation(expansionAnimation, value: isExpanded)
+                    .animation(.easeInOut(duration: MonitorConstants.panelExpansionDuration), value: isExpanded)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -71,7 +69,7 @@ struct DisplayControlsSection: View {
                 toggleExpansion()
             }
 
-            CollapsibleDetail(isExpanded: isExpanded) {
+            CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded) {
                 detailContent(
                     visibleDisplays: visibleDisplays,
                     hasControls: hasControls,
@@ -86,7 +84,9 @@ struct DisplayControlsSection: View {
             controller.attach(settings: settings)
             controller.refreshAsync()
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
+            // 无补间直接同步驱动器相位,避免相位残留 0 导致内容高度为零。
             isExpanded = settings.displayControlsExpandedByDefault
+            animate(Self.sectionKey, isExpanded, false)
             controller.setPolling(active: isPanelVisible && isExpanded)
         }
         // MonitorPanelView 只创建一次、常驻在 NSPanel 里,显隐只是窗口级 order,
@@ -99,9 +99,10 @@ struct DisplayControlsSection: View {
             if newValue {
                 controller.refreshAsync()
             } else {
-                // 面板隐藏后重置为「默认展开」设置:不可见期间直接赋值(无动画),
+                // 面板隐藏后重置为「默认展开」设置:不可见期间无补间直接同步,
                 // 下次呼出即已是设定的初始状态,与 MonitorPanelView 的重置时机一致。
                 isExpanded = settings.displayControlsExpandedByDefault
+                animate(Self.sectionKey, isExpanded, false)
             }
             controller.setPolling(active: newValue && isExpanded)
         }
@@ -113,16 +114,10 @@ struct DisplayControlsSection: View {
         }
         .onChange(of: settings.displayControlsExpandedByDefault) { _, newValue in
             // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
-            // 钉住面板开着改设置时可见,走与手动展开同一补间节奏直接预览。
+            // 钉住面板开着改设置时可见,与手动展开同一驱动源直接预览。
             guard isExpanded != newValue else { return }
-            if isPanelVisible {
-                beginExpansionAnimation()
-                withAnimation(expansionAnimation) {
-                    isExpanded = newValue
-                }
-            } else {
-                isExpanded = newValue
-            }
+            isExpanded = newValue
+            animate(Self.sectionKey, newValue, true)
         }
         .onChange(of: controller.displays.map(\.id)) { _, _ in
             // 显示器集合变化(插拔/首次探测完成)才重采只读信息。轮询回读或拖滑杆
@@ -170,23 +165,20 @@ struct DisplayControlsSection: View {
                         controller: controller,
                         palette: palette,
                         tint: tint,
-                        beginExpansionAnimation: beginExpansionAnimation
+                        archiveKey: "display-controls-arc-\(display.id)",
+                        animate: animate
                     )
                 }
             }
         }
     }
 
-    /// 布局补间统一走 `withAnimation`,窗口层(FluidPanelController)逐帧跟随。
+    /// 布局补间统一由 `PanelExpansionDriver` 驱动,窗口层逐帧被动跟随。
     /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
     /// 时间线打架,造成「收一半停顿再补完」的卡顿。
     private func toggleExpansion() {
-        // 与其他指标行一致:置位一次性标记,使窗口层对本次展开走补间(而非瞬跳),
-        // 与下方 CollapsibleDetail 的高度补间并行同步。
-        beginExpansionAnimation()
-        withAnimation(expansionAnimation) {
-            isExpanded.toggle()
-        }
+        isExpanded.toggle()
+        animate(Self.sectionKey, isExpanded, true)
     }
 
     private func summary(for displays: [ControlledDisplay], hasControls: Bool) -> String {
@@ -208,10 +200,12 @@ private struct DisplayControlGroup: View {
     let palette: MonitorPalette
     let tint: Color
 
+    /// 本显示器档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
+    let archiveKey: String
+    /// 发起动画的闭包,与 DisplayControlsSection 同一驱动源。
+    var animate: (String, Bool, Bool) -> Void
+
     @State private var archiveExpanded = false
-    /// 档案开合同样改变面板总高,须置位窗口层一次性补间标记,
-    /// 使窗口高度与档案内容的补间并行同步(与模块行展开同一机制)。
-    var beginExpansionAnimation: () -> Void = {}
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -260,7 +254,7 @@ private struct DisplayControlGroup: View {
                     VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
                         DisplayInfoBaseGrid(display: info, palette: palette)
 
-                        CollapsibleDetail(isExpanded: archiveExpanded) {
+                        CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
                             VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
                                 DisplayArchiveGrid(display: info, palette: palette)
                                 DisplayArchiveCopyButton(display: info, palette: palette)
@@ -322,14 +316,11 @@ private struct DisplayControlGroup: View {
         .padding(.leading, 28)
     }
 
-    /// 档案开合与模块行展开同一套补间约定:先置位窗口层一次性标记,再用与
-    /// 窗口层同时长(panelExpansionDuration)同曲线的动画驱动内容高度,
-    /// 窗口边框与档案内容并行动画到同一终值,不裁剪不留空。
+    /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
+    /// 并把本档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        beginExpansionAnimation()
-        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
-            archiveExpanded.toggle()
-        }
+        archiveExpanded.toggle()
+        animate(archiveKey, archiveExpanded, true)
     }
 
     private func binding(for control: DisplayControlKind) -> Binding<Double> {

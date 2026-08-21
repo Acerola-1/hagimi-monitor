@@ -403,17 +403,19 @@ final class MonitorStore: ObservableObject {
     /// 却从不读取该值的视图,在负载爬升/回落期间被拖着以 30fps 重算整棵视图树。
     let loadAnimator = MenuBarLoadAnimator()
 
+    /// 展开动画的单一进度驱动器。独立 ObservableObject(与 loadAnimator 同思路):
+    /// 仅动画的 ~0.15s 内逐显示帧发布相位,平时不发布;相位由各 CollapsibleDetail
+    /// 按 key 自读,宿主行与面板其余部分不受逐帧重算拖累。每个面板实例持有各自的
+    /// 驱动器(菜单栏面板与钉住面板并存时展开态互不牵动)。
     /// 面板是否可见,用于按需启停进程采样。
     @Published private(set) var isPanelVisible = false
 
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
 
-    /// 一次性展开动画标记。用户展开/收起时置位,仅供窗口层
-    /// (FluidPanelController / PinnedPanelController)读取:用户 toggle 后的第一次尺寸上报
-    /// 消费该标记、走补间动画;其后由进程数据到达/定时刷新引起的尺寸变化不再置位,
-    /// 故瞬时贴合、不与展开动画叠加(避免二次高度跳变与掉帧)。非 @Published:仅内部协调。
-    private var pendingExpansionAnimation = false
+    /// 展开/收起动画截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
+    /// 由 `beginExpansionAnimation` 在每次展开/收起起点置位。
+    private var expansionAnimationDeadline = Date.distantPast
 
     /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
     /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就构建大量进程
@@ -602,22 +604,11 @@ final class MonitorStore: ObservableObject {
         expandedKindsBySource.values.reduce(into: Set<MonitorKind>()) { $0.formUnion($1) }
     }
 
-    /// 由 SwiftUI 侧在 `withAnimation` 展开/收起时调用,置位一次性动画标记。
+    /// 由 SwiftUI 侧在每次展开/收起起点调用:置位动画截止时刻。
+    /// 窗口期内的采样结果推迟到动画结束后再刷 UI,避免 1-3s 节奏的模块刷新恰好
+    /// 撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
     func beginExpansionAnimation() {
-        pendingExpansionAnimation = true
-        // 同时记录动画截止时刻:窗口期内的采样结果推迟到动画结束后再刷 UI,
-        // 避免 1-3s 节奏的模块刷新恰好撞进 0.15s 展开动画、拖动整棵视图树重算造成掉帧。
         expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
-    }
-
-    /// 展开/收起动画的截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
-    private var expansionAnimationDeadline = Date.distantPast
-
-    /// 由窗口层在处理内容尺寸变化时调用:返回并清除标记。true 表示本次变化源自用户
-    /// toggle、应走补间;false 表示数据驱动的尺寸变化、应瞬时贴合。
-    func consumeExpansionAnimationFlag() -> Bool {
-        defer { pendingExpansionAnimation = false }
-        return pendingExpansionAnimation
     }
 
     /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证

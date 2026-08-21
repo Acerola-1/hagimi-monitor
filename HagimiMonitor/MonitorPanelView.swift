@@ -38,6 +38,10 @@ struct MonitorPanelView: View {
     @State private var bodyHasMoreBelow = false
     /// header 小猫客串彩蛋（致敬 RunCat）。仅菜单栏下拉面板参与，钉住面板不触发。
     @StateObject private var cameoModel = HeaderCatCameoModel()
+    /// 本面板实例私有的展开动画驱动器:与各展开区的相位 key 一一对应,
+    /// 经 environmentObject 注入子树;每个面板(菜单栏/钉住)各自持有,
+    /// 展开动画互不牵动。
+    @StateObject private var panelExpansion = PanelExpansionDriver()
 
     init(store: MonitorStore, quickPanelPresentation: QuickPanelPresentation? = nil) {
         self.store = store
@@ -95,7 +99,14 @@ struct MonitorPanelView: View {
                             if store.settings.displayModuleVisible {
                                 DisplayInfoSection(
                                     theme: theme,
-                                    beginExpansionAnimation: { store.beginExpansionAnimation() }
+                                    animate: { key, toFull, animated in
+                                        store.beginExpansionAnimation()
+                                        if animated {
+                                            panelExpansion.animate(key, toFull ? 1 : 0)
+                                        } else {
+                                            panelExpansion.setInstantly(key, toFull ? 1 : 0)
+                                        }
+                                    }
                                 )
                                 .compatibleGlassEffectID("display-info", in: glassNamespace)
                             }
@@ -106,7 +117,14 @@ struct MonitorPanelView: View {
                                 DisplayControlsSection(
                                     settings: store.settings,
                                     isPanelVisible: store.isPanelVisible,
-                                    beginExpansionAnimation: { store.beginExpansionAnimation() }
+                                    animate: { key, toFull, animated in
+                                        store.beginExpansionAnimation()
+                                        if animated {
+                                            panelExpansion.animate(key, toFull ? 1 : 0)
+                                        } else {
+                                            panelExpansion.setInstantly(key, toFull ? 1 : 0)
+                                        }
+                                    }
                                 )
                                 .compatibleGlassEffectID("display-controls", in: glassNamespace)
                             }
@@ -258,6 +276,10 @@ struct MonitorPanelView: View {
         .onChange(of: expandedKinds) { _, _ in
             reportActiveProcessKinds()
         }
+        // 展开驱动器注入整棵面板子树:CollapsibleDetail 按各自 key 自读相位。
+        // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
+        // 展开动画互不牵动。
+        .environmentObject(panelExpansion)
     }
 
     /// 需进程采样的类目集 = 行内展开的模块。
@@ -340,6 +362,7 @@ struct MonitorPanelView: View {
 
     @ViewBuilder
     private func compactRow(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
+        let isExpanded = expandedKinds.contains(module.kind)
         switch module.kind {
         case .cpu:
             MetricGlassRow(
@@ -348,7 +371,7 @@ struct MonitorPanelView: View {
                 detail: module.summary,
                 samples: module.samples,
                 details: cpuDetails(for: module),
-                isExpanded: expandedKinds.contains(module.kind),
+                isExpanded: isExpanded,
                 topCPUProcesses: store.topCPUProcesses,
                 showCPUProcesses: store.settings.showCPUProcesses
             ) {
@@ -362,7 +385,7 @@ struct MonitorPanelView: View {
                 detail: module.summary,
                 samples: module.samples,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind),
+                isExpanded: isExpanded,
                 topGPUProcesses: store.topGPUProcesses,
                 showGPUProcesses: store.settings.showGPUProcesses
             ) {
@@ -381,7 +404,7 @@ struct MonitorPanelView: View {
                 // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
                 samples: pressureMode ? module.pressureSamples : [],
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
-                isExpanded: expandedKinds.contains(module.kind),
+                isExpanded: isExpanded,
                 topMemoryProcesses: store.topMemoryProcesses,
                 showMemoryProcesses: store.settings.showMemoryProcesses
             ) {
@@ -394,7 +417,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 detail: module.summary,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind),
+                isExpanded: isExpanded,
                 topDiskProcesses: store.topDiskProcesses,
                 showDiskProcesses: store.settings.showDiskProcesses
             ) {
@@ -406,7 +429,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind),
+                isExpanded: isExpanded,
                 topNetworkProcesses: store.topNetworkProcesses,
                 showNetworkProcesses: store.settings.showNetworkProcesses
             ) {
@@ -418,7 +441,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
-                isExpanded: expandedKinds.contains(module.kind),
+                isExpanded: isExpanded,
                 showPowerFlow: store.settings.batteryShowPowerFlow,
                 panelVisible: store.isPanelVisible
             ) {
@@ -431,7 +454,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 detail: module.summary,
                 samples: module.samples,
-                isExpanded: expandedKinds.contains(module.kind),
+                isExpanded: isExpanded,
                 fans: module.fans
             ) {
                 toggleExpansion(for: module.kind)
@@ -441,7 +464,7 @@ struct MonitorPanelView: View {
             BluetoothGlassRow(
                 module: module,
                 theme: theme,
-                isExpanded: expandedKinds.contains(module.kind)
+                isExpanded: isExpanded
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -528,8 +551,9 @@ struct MonitorPanelView: View {
     }
     
     /// 把展开状态重置为「各模块默认展开设置 ∩ 可见行」(顺便清掉残留 kind)。
-    /// 面板隐藏时直接赋值,不走 setExpansion——无需动画,也不置位窗口补间标记;
-    /// 面板可见时(钉住面板开着改设置)走 setExpansion,与手动展开同一补间节奏。
+    /// 面板隐藏时直接赋值,不走 setExpansion——无需动画,但要把驱动器相位瞬间
+    /// 同步到目标(0/1),否则收起的行会残留旧相位、呼出时高度不对;面板可见时
+    /// (钉住面板开着改设置)走 setExpansion,与手动展开同一节奏。
     private func applyDefaultExpansion() {
         let target = store.settings.defaultExpandedKinds.intersection(visibleKinds)
         guard expandedKinds != target else { return }
@@ -537,26 +561,33 @@ struct MonitorPanelView: View {
             setExpansion { expandedKinds = target }
         } else {
             expandedKinds = target
+            // 相位同步覆盖全部模块 kind(而非仅当前可见行):展开中的模块若在隐藏前
+            // 因开关/设备断开离开面板,其残留相位也一并归零,重新可见时不带出旧展开高度。
+            var sync: [String: CGFloat] = [:]
+            for kind in MonitorKind.allCases { sync[kind.id] = target.contains(kind) ? 1 : 0 }
+            panelExpansion.setInstantly(targets: sync)
         }
     }
 
-    /// 展开区的「布局高度」由 `CollapsibleDetail` 从 0 补间到自然高度(见其说明),
-    /// 窗口层(`FluidPanelController`)用**完全相同**的时长与 easeInOut 曲线并行动画到同一
-    /// 终值。外层 GeometryReader 只上报一次终值、无法逐帧跟随,只有两边同时同速才能
-    /// 边框与内容一起伸缩。故此处必须用 `MonitorConstants.panelExpansionDuration` + easeInOut,
-    /// 与窗口侧 `NSAnimationContext` 严格一致。
+    /// 展开区的「布局高度」由 `CollapsibleDetail` 按 `PanelExpansionDriver` 每显示帧
+    /// 发布的相位缩放(全面板唯一的高度动画源)。窗口层因内容尺寸逐帧变化而被动跟随,
+    /// 无需自带补间。故此处只记录前后展开集合并驱动补间;
+    /// 内容高度变化由驱动器逐帧下发,不经 `withAnimation`。
     private func setExpansion(_ mutate: () -> Void) {
         // 展开补间与浮层子窗口并存会引发布局抖动,展开前确保浮层已收起。
         QuickToolsStore.shared.popoverPresenter.dismiss()
-        // 置位一次性动画标记:紧接着的首次内容尺寸上报会被窗口层消费、走补间;
-        // 而展开后进程数据回来/定时刷新引起的尺寸变化不再置位,瞬时贴合,不与此次展开叠加。
+        let previous = expandedKinds
+        // 置位一次性动画截止标记:动画窗口内的采样结果推迟应用,避免 1-3s 节奏的
+        // 模块刷新恰好撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
         store.beginExpansionAnimation()
-        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
-            NSLog("[autotest] setExpansion click ts=%.3f", CACurrentMediaTime())
-        }
-        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
-            mutate()
-        }
+        mutate()
+        let current = expandedKinds
+        guard current != previous else { return }
+        // 变化区推出/收起各自以同一起点、同曲线同步推进(整体展开/收起一致)。
+        var targets: [String: CGFloat] = [:]
+        for removed in previous.subtracting(current) { targets[removed.id] = 0 }
+        for added in current.subtracting(previous) { targets[added.id] = 1 }
+        panelExpansion.animate(targets: targets)
     }
 
     private func startTimeUpdateTask() {
@@ -707,7 +738,7 @@ private struct MetricGlassRow: View, Equatable {
                 toggleExpansion?()
             }
 
-            CollapsibleDetail(isExpanded: isExpanded && detailAvailable) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: detailAvailable) {
                 Group {
                     if module.kind == .fan, let fans, !fans.isEmpty {
                         FanList(fans: fans, theme: theme)
@@ -1519,7 +1550,7 @@ private struct NetworkGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            CollapsibleDetail(isExpanded: isExpanded && hasExpandableContent) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: hasExpandableContent) {
                 VStack(spacing: 9) {
                     if !detailMetrics.isEmpty {
                         MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
@@ -1643,7 +1674,7 @@ private struct BatteryGlassRow: View, Equatable {
                 }
             }
 
-            CollapsibleDetail(isExpanded: canExpand && isExpanded) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand) {
                 VStack(spacing: 9) {
                     MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     // 指标网格(健康度/温度/循环/损耗)与功率流图之间用带标题的分区分隔线
@@ -1939,14 +1970,18 @@ private struct PowerFlowDiagram: View {
                         systemLeft: systemLeft, time: time)
 
         // S3 汇流点 ↕ 电池 stub:充电绿色、放电琥珀(适配器不足时转红)、无流动虚线轨道。
+        // stub 与水平线保持同一光轨语言:行进脉冲而非呼吸,短路径用更短尾避免溢出。
         let stubEnd = CGPoint(x: junction.x, y: Self.nodeHeight + Self.stubHeight)
         switch flowDirection {
         case .charging:
             strokeSegment(&context, from: junction, to: stubEnd,
                           color: flowTint.opacity(0.75), width: edgeWidth(batteryMagnitude))
             if let time {
-                drawBreathingStub(&context, from: junction, to: stubEnd,
-                                  color: flowTint, width: edgeWidth(batteryMagnitude), time: time)
+                let cycle = max(1.2, min(2.4, 4.0 / (1 + (batteryMagnitude ?? 0) / 15)))
+                let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
+                drawPulse(&context, from: junction, to: stubEnd,
+                          progress: easeInOutCubic(u), color: flowTint, head: .white.opacity(0.96),
+                          width: edgeWidth(batteryMagnitude), tailFraction: 0.005)
             }
         case .discharging:
             let color = isInsufficient
@@ -1955,8 +1990,11 @@ private struct PowerFlowDiagram: View {
             strokeSegment(&context, from: stubEnd, to: junction,
                           color: color, width: edgeWidth(batteryMagnitude))
             if let time {
-                drawBreathingStub(&context, from: stubEnd, to: junction,
-                                  color: color, width: edgeWidth(batteryMagnitude), time: time)
+                let cycle = max(1.2, min(2.4, 4.0 / (1 + (batteryMagnitude ?? 0) / 15)))
+                let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
+                drawPulse(&context, from: stubEnd, to: junction,
+                          progress: easeInOutCubic(u), color: color, head: .white.opacity(0.96),
+                          width: edgeWidth(batteryMagnitude), tailFraction: 0.005)
             }
         case .idle:
             glowSegment(&context, from: junction, to: stubEnd,
@@ -3271,7 +3309,7 @@ private struct BluetoothGlassRow: View, Equatable {
                 toggleExpansion?()
             }
 
-            CollapsibleDetail(isExpanded: isExpanded && !devices.isEmpty) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty) {
                 BluetoothDeviceList(devices: devices, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
@@ -3475,29 +3513,56 @@ private struct ProcessIcon: View {
 
 /// 高度揭示式展开容器。
 ///
-/// 不能用 scale / opacity 这类「渲染层变换」做展开:它们不改变布局占位——展开区一插入就
+/// 不能用 scale / opacity 这类「渲染层变换」做展开:它们不改变布局占位--展开区一插入就
 /// 按完整高度占位,容器(进而窗口)高度会「瞬间」跳到终点,随后内容才在已定型的空间里
 /// 淡入/缩放,肉眼看到「边框先到位、内容再补上」的错位闪烁;收起时镜像反过来。
 ///
-/// 实现:内容常驻(以测出自然高度),再把「布局高度」本身从 0 补间到自然高度并裁剪。
-/// 这样容器高度随动画逐帧真实增长,`FluidPanelSizeReader` 的 GeometryReader 得以逐帧
-/// 上报中间高度,`FluidPanelController` 的窗口层随之逐帧跟随——内外一起展开/收起。
+/// 实现:内容常驻(以测出自然高度),再把「布局高度」本身按相位(0..1)设为
+/// `自然高度 × 相位`,并裁剪。高度**不由本视图自己补间**,而是由 `PanelExpansionDriver`
+/// 逐显示帧发布相位、本视图按 key 自行读取,宿主行与面板其余部分不被拖着重算。
+/// 相位增长时容器高度逐帧真实增长、顶部对齐、内容自上而下「卷出」;窗口层因内容
+/// 尺寸逐帧变化,由 `FluidPanelSizeReader` 逐帧上报、被动跟随--内容与边框从同一相位
+/// 推导,不分层。
+///
+/// `isExpanded` 是展开态(决定补间目标与稳态回退),`contentAvailable` 是内容门控:
+/// 内容可用性消失(如蓝牙设备全部断开)时高度直接钳 0,瞬时归零、不参与补间--
+/// 数据驱动的收起没有用户手势,不需要过渡动画。
 ///
 /// 供各 metric 行与 `DisplayControlsSection`(Direct 目标)共用,故非 private。
 struct CollapsibleDetail<Content: View>: View {
+    /// 面板根注入的展开驱动器:按 key 自读相位,把逐帧失效范围收在本视图内。
+    @EnvironmentObject private var expansion: PanelExpansionDriver
+    /// 驱动器内对应的展开区 key。
+    private let expansionKey: String
+    /// 是否处于展开态(决定可点击性与占位语义)。布局高度由相位决定。
     private let isExpanded: Bool
+    /// 是否有可展开的内容。false 时无论展开态与相位如何,高度恒为 0。
+    private let contentAvailable: Bool
     private let content: Content
 
     /// 内容的自然高度。内容始终挂载并被 GeometryReader 测量,故在首次展开前就已就绪,
-    /// 保证 `withAnimation` 能从 0 补间到该高度,而不是等测量回填后「跳」到终点。
+    /// 保证展开时高度从 0×相位 平滑增长,而不是等测量回填后「跳」到终点。
     @State private var contentHeight: CGFloat = 0
 
-    init(isExpanded: Bool, @ViewBuilder content: () -> Content) {
+    init(
+        expansionKey: String,
+        isExpanded: Bool,
+        contentAvailable: Bool = true,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.expansionKey = expansionKey
         self.isExpanded = isExpanded
+        self.contentAvailable = contentAvailable
         self.content = content()
     }
 
+    /// 当前相位 0..1:读驱动器;尚无动画下发过的 key 按展开态回退 0/1 稳态。
+    private var phase: CGFloat {
+        expansion.phase[expansionKey] ?? (isExpanded ? 1 : 0)
+    }
+
     var body: some View {
+        let progress = contentAvailable ? min(max(phase, 0), 1) : 0
         content
             .background(
                 GeometryReader { geometry in
@@ -3505,20 +3570,21 @@ struct CollapsibleDetail<Content: View>: View {
                         .onAppear { contentHeight = geometry.size.height }
                         .onChange(of: geometry.size.height) { _, newValue in
                             // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
-                            // onChange 回调无动画上下文,裸更新会让容器高度与下方
-                            // 内容的位移瞬跳;显式包同款补间事务,与展开/收起、
-                            // 窗口层的补间同时长同曲线,整链同步平滑。
+                            // onChange 回调无动画上下文,裸更新会让容器高度与下方内容
+                            // 的位移瞬跳;显式包一次补间,让它平滑并入既有展开节奏。
                             withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
                                 contentHeight = newValue
                             }
                         }
                 }
             )
-            // 折叠时钳到 0 高度;顶部对齐 + 裁剪,使内容随高度增长自上而下「卷出」。
-            .frame(height: isExpanded ? contentHeight : 0, alignment: .top)
-            .opacity(isExpanded ? 1 : 0)
+            // 收起时相位为 0 → 高度钳到 0;顶部对齐 + 裁剪,使内容随相位增长自上而下「卷出」。
+            .frame(height: contentHeight * progress, alignment: .top)
+            // 透明度在相位前 30% 内完成渐变:避免硬浮现/硬消失,同时中后段
+            // 不再因透明度逐帧变化拖着内容重绘。
+            .opacity(min(1, Double(progress) / 0.3))
             .clipped()
-            // 折叠状态(高度 0、不可见)不参与点击,避免拦截行的展开手势。
+            // 收起(高度 0、不可见)不参与点击,避免拦截行的展开手势。
             .allowsHitTesting(isExpanded)
     }
 }
