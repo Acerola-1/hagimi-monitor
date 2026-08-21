@@ -17,6 +17,28 @@ enum MenuBarDisplayMode: String, CaseIterable, Identifiable {
     }
 }
 
+/// 菜单栏指标的显示布局:图标+数字、文字+数字(均为单行横排,总宽由
+/// `MenuBarMetricWidthEngine` 按指标集合静态算死、内部间距自动铺开),
+/// 或文字在上、数值在下的紧凑双层排布。
+enum MenuBarMetricLayoutStyle: String, CaseIterable, Identifiable {
+    case icon
+    case text
+    case compact
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .icon:
+            String(localized: "menu-bar-metric-layout.icon")
+        case .text:
+            String(localized: "menu-bar-metric-layout.text")
+        case .compact:
+            String(localized: "menu-bar-metric-layout.compact")
+        }
+    }
+}
+
 enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     // CPU 组
     case cpuUsage

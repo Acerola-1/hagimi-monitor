@@ -61,6 +61,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private struct MetricsRenderKey: Equatable {
         let items: [MenuBarMetricItem]
         let isDark: Bool
+        let layout: MenuBarMetricLayoutStyle
         let scale: CGFloat
     }
     private var lastMetricsRenderKey: MetricsRenderKey?
@@ -659,9 +660,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let scale = NSScreen.screens.map(\.backingScaleFactor).max()
             ?? statusItem.button?.window?.backingScaleFactor
             ?? NSScreen.main?.backingScaleFactor ?? 2
+        // 横排总宽由布局引擎按指标集合静态算死,与实时数值无关:
+        // 无论数值怎么变,快照宽度恒定、statusItem.length 不动、不推挤邻居图标。
         let renderKey = MetricsRenderKey(
             items: store.menuBarMetricItems,
             isDark: isDark,
+            layout: store.settings.menuBarMetricLayoutStyle,
             scale: scale
         )
         guard renderKey != lastMetricsRenderKey else { return }
