@@ -42,6 +42,9 @@ struct MonitorPanelView: View {
     /// 经 environmentObject 注入子树;每个面板(菜单栏/钉住)各自持有,
     /// 展开动画互不牵动。
     @StateObject private var panelExpansion = PanelExpansionDriver()
+    /// 窗口层注入的贴合回调:driver 在 toggle 时把目标高度与是否动画下发给窗口层。
+    /// 预览/无窗口宿主为 nil。
+    @Environment(\.panelWindowResizeHandler) private var windowResizeHandler
 
     init(store: MonitorStore, quickPanelPresentation: QuickPanelPresentation? = nil) {
         self.store = store
@@ -260,6 +263,9 @@ struct MonitorPanelView: View {
             applyDefaultExpansion()
         }
         .onAppear {
+            // 桥接窗口层注入的贴合回调:driver toggle 时把目标高度与是否动画
+            // 下发给窗口层,animated 时由 CoreAnimation 补间窗口 frame。
+            panelExpansion.onWindowResize = windowResizeHandler
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             applyDefaultExpansion()
             // 上报当前需进程采样的集合(展开的行):面板重开时 @State 可能保留上次选项,
@@ -276,6 +282,17 @@ struct MonitorPanelView: View {
         .onChange(of: expandedKinds) { _, _ in
             reportActiveProcessKinds()
         }
+        // 实测内容总高度上报驱动器:非动画期间据此反推收起态基线高度,
+        // 动画开始时由 targetContentHeight 叠加目标相位高度预测窗口目标尺寸。
+        .background(
+            GeometryReader { geometry in
+                Color.clear
+                    .onAppear { panelExpansion.reportMeasuredContentHeight(geometry.size.height) }
+                    .onChange(of: geometry.size.height) { _, newValue in
+                        panelExpansion.reportMeasuredContentHeight(newValue)
+                    }
+            }
+        )
         // 展开驱动器注入整棵面板子树:CollapsibleDetail 按各自 key 自读相位。
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
@@ -569,10 +586,10 @@ struct MonitorPanelView: View {
         }
     }
 
-    /// 展开区的「布局高度」由 `CollapsibleDetail` 按 `PanelExpansionDriver` 每显示帧
-    /// 发布的相位缩放(全面板唯一的高度动画源)。窗口层因内容尺寸逐帧变化而被动跟随,
-    /// 无需自带补间。故此处只记录前后展开集合并驱动补间;
-    /// 内容高度变化由驱动器逐帧下发,不经 `withAnimation`。
+    /// toggle 时 `expandedKinds` 变化驱动 `CollapsibleDetail` 的 `.frame(height:)`
+    /// 与 `.opacity` 动画——由 `withAnimation` 包裹状态变更,SwiftUI 动画系统在
+    /// CoreAnimation 层插值,不在主线程逐帧重算。窗口目标高度由 driver 一次性
+    /// 下发给窗口层做 CA 补间。
     private func setExpansion(_ mutate: () -> Void) {
         // 展开补间与浮层子窗口并存会引发布局抖动,展开前确保浮层已收起。
         QuickToolsStore.shared.popoverPresenter.dismiss()
@@ -580,10 +597,11 @@ struct MonitorPanelView: View {
         // 置位一次性动画截止标记:动画窗口内的采样结果推迟应用,避免 1-3s 节奏的
         // 模块刷新恰好撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
         store.beginExpansionAnimation()
-        mutate()
+        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            mutate()
+        }
         let current = expandedKinds
         guard current != previous else { return }
-        // 变化区推出/收起各自以同一起点、同曲线同步推进(整体展开/收起一致)。
         var targets: [String: CGFloat] = [:]
         for removed in previous.subtracting(current) { targets[removed.id] = 0 }
         for added in current.subtracting(previous) { targets[added.id] = 1 }
@@ -3517,31 +3535,29 @@ private struct ProcessIcon: View {
 /// 按完整高度占位,容器(进而窗口)高度会「瞬间」跳到终点,随后内容才在已定型的空间里
 /// 淡入/缩放,肉眼看到「边框先到位、内容再补上」的错位闪烁;收起时镜像反过来。
 ///
-/// 实现:内容常驻(以测出自然高度),再把「布局高度」本身按相位(0..1)设为
-/// `自然高度 × 相位`,并裁剪。高度**不由本视图自己补间**,而是由 `PanelExpansionDriver`
-/// 逐显示帧发布相位、本视图按 key 自行读取,宿主行与面板其余部分不被拖着重算。
-/// 相位增长时容器高度逐帧真实增长、顶部对齐、内容自上而下「卷出」;窗口层因内容
-/// 尺寸逐帧变化,由 `FluidPanelSizeReader` 逐帧上报、被动跟随--内容与边框从同一相位
-/// 推导,不分层。
+/// 实现:内容常驻(以测出自然高度),布局高度在展开/收起两态间切换(0 或自然高度),
+/// 由 SwiftUI 动画系统(`.animation(value: isExpanded)`)在 CoreAnimation 层插值--
+/// body 只在 toggle 时求值一次,帧间高度插值由 CA 在合成器侧完成,不在主线程逐帧
+/// 重算。顶部对齐 + 裁剪,内容随高度增长自上而下「卷出」。
 ///
-/// `isExpanded` 是展开态(决定补间目标与稳态回退),`contentAvailable` 是内容门控:
-/// 内容可用性消失(如蓝牙设备全部断开)时高度直接钳 0,瞬时归零、不参与补间--
+/// `isExpanded` 是展开态(toggle 时触发高度动画),`contentAvailable` 是内容门控:
+/// 内容可用性消失(如蓝牙设备全部断开)时高度直接钳 0,瞬时归零、不参与动画--
 /// 数据驱动的收起没有用户手势,不需要过渡动画。
 ///
 /// 供各 metric 行与 `DisplayControlsSection`(Direct 目标)共用,故非 private。
 struct CollapsibleDetail<Content: View>: View {
-    /// 面板根注入的展开驱动器:按 key 自读相位,把逐帧失效范围收在本视图内。
+    /// 面板根注入的展开驱动器:仅用于上报自然高度供窗口高度预测。
     @EnvironmentObject private var expansion: PanelExpansionDriver
     /// 驱动器内对应的展开区 key。
     private let expansionKey: String
-    /// 是否处于展开态(决定可点击性与占位语义)。布局高度由相位决定。
+    /// 是否处于展开态。toggle 时由 SwiftUI 动画系统补间布局高度。
     private let isExpanded: Bool
-    /// 是否有可展开的内容。false 时无论展开态与相位如何,高度恒为 0。
+    /// 是否有可展开的内容。false 时无论展开态如何,高度恒为 0。
     private let contentAvailable: Bool
     private let content: Content
 
     /// 内容的自然高度。内容始终挂载并被 GeometryReader 测量,故在首次展开前就已就绪,
-    /// 保证展开时高度从 0×相位 平滑增长,而不是等测量回填后「跳」到终点。
+    /// 保证展开时高度从 0 平滑增长,而不是等测量回填后「跳」到终点。
     @State private var contentHeight: CGFloat = 0
 
     init(
@@ -3556,18 +3572,17 @@ struct CollapsibleDetail<Content: View>: View {
         self.content = content()
     }
 
-    /// 当前相位 0..1:读驱动器;尚无动画下发过的 key 按展开态回退 0/1 稳态。
-    private var phase: CGFloat {
-        expansion.phase[expansionKey] ?? (isExpanded ? 1 : 0)
-    }
-
     var body: some View {
-        let progress = contentAvailable ? min(max(phase, 0), 1) : 0
+        let expanded = contentAvailable && isExpanded
         content
+            .opacity(expanded ? 1 : 0)
             .background(
                 GeometryReader { geometry in
                     Color.clear
-                        .onAppear { contentHeight = geometry.size.height }
+                        .onAppear {
+                            contentHeight = geometry.size.height
+                            expansion.reportNaturalHeight(expansionKey, geometry.size.height)
+                        }
                         .onChange(of: geometry.size.height) { _, newValue in
                             // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
                             // onChange 回调无动画上下文,裸更新会让容器高度与下方内容
@@ -3575,16 +3590,19 @@ struct CollapsibleDetail<Content: View>: View {
                             withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
                                 contentHeight = newValue
                             }
+                            expansion.reportNaturalHeight(expansionKey, newValue)
                         }
                 }
             )
-            // 收起时相位为 0 → 高度钳到 0;顶部对齐 + 裁剪,使内容随相位增长自上而下「卷出」。
-            .frame(height: contentHeight * progress, alignment: .top)
-            // 透明度在相位前 30% 内完成渐变:避免硬浮现/硬消失,同时中后段
-            // 不再因透明度逐帧变化拖着内容重绘。
-            .opacity(min(1, Double(progress) / 0.3))
+            // 展开时高度 = 自然高度,收起时 = 0;由 .animation(value: isExpanded)
+            // 在 CoreAnimation 层插值,不在主线程逐帧重算。顶部对齐 + 裁剪,
+            // 使内容随高度增长自上而下「卷出」。
+            .frame(height: expanded ? contentHeight : 0, alignment: .top)
             .clipped()
             // 收起(高度 0、不可见)不参与点击,避免拦截行的展开手势。
             .allowsHitTesting(isExpanded)
+            // toggle 时 SwiftUI 动画系统补间高度与透明度;contentAvailable 变化
+            // (数据驱动)不触发此动画,瞬时切换。
+            .animation(.easeInOut(duration: MonitorConstants.panelExpansionDuration), value: isExpanded)
     }
 }

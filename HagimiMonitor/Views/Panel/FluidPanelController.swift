@@ -42,6 +42,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 而 size reader 的首次上报在 init 布局阶段就已发生。
     private var lastReportedContentSize: CGSize = .zero
 
+    /// 展开动画进行中标记:此期间 contentSizeDidChange 的逐帧上报被忽略——
+    /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 只会与 CA 动画
+    /// 叠加冲突并把 CPU 打满。动画结束后由 contentSizeDidChange 做最终校准。
+    private var isAnimatingExpansion = false
+
     /// 向 SwiftUI 侧下发布局约束(内容高度上限)。面板主体据此自行封顶并在
     /// 内部 ScrollView 滚动,header 固定在外、不参与滚动。
     private let layoutMetrics = FluidPanelLayoutMetrics()
@@ -184,6 +189,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
         let root = FluidPanelRootView(store: store, metrics: layoutMetrics)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
+            .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
+                self?.applyWindowHeight(height, animated: animated)
+            }
             .modifier(FluidPanelSizeReader { [weak self] size in
                 self?.contentSizeDidChange(to: size)
             })
@@ -452,6 +460,50 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Sizing / Positioning
 
+    /// driver 在 toggle 时一次性调用:把目标内容高度下发给窗口层。
+    /// animated=true 时由 CoreAnimation(`animator().setFrame`)补间窗口 frame,
+    /// 整个动画期间窗口 resize 只发生一次;`isAnimatingExpansion` 抑制期间的
+    /// contentSizeDidChange 逐帧贴合。animated=false 时同步贴合(初始化/隐藏重置)。
+    private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
+        guard panel.isVisible, let buttonWindow = statusItem.button?.window else { return }
+        let size = CGSize(width: panel.frame.width, height: contentHeight)
+        guard panel.frame.size != size else { return }
+
+        updateContentHeightCap()
+        let buttonFrame = buttonWindow.frame
+        var clamped = size
+        if let screen = buttonWindow.screen {
+            let available = buttonFrame.minY - screen.visibleFrame.minY - Self.panelBottomMargin
+            if available > 0 {
+                clamped.height = min(clamped.height, available)
+            }
+        }
+        var origin = buttonFrame.origin
+        origin.y -= clamped.height
+        origin.x -= Self.windowBorderSize
+        var newFrame = CGRect(origin: origin, size: clamped)
+        if let screen = buttonWindow.screen {
+            if newFrame.maxX > screen.visibleFrame.maxX {
+                newFrame.origin.x = screen.visibleFrame.maxX - clamped.width - Self.windowBorderSize
+            }
+            if newFrame.minX < screen.visibleFrame.minX {
+                newFrame.origin.x = screen.visibleFrame.minX + Self.windowBorderSize
+            }
+        }
+        if animated {
+            isAnimatingExpansion = true
+            let context = NSAnimationContext.current
+            context.duration = MonitorConstants.panelExpansionDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(newFrame, display: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
+                self?.isAnimatingExpansion = false
+            }
+        } else {
+            panel.setFrame(newFrame, display: true)
+        }
+    }
+
     /// SwiftUI 内容尺寸变化时:窗口顶边锚定、高度贴合内容当前尺寸。
     ///
     /// 必须 `DispatchQueue.main.async`(对齐 FluidMenuBarExtra):该回调发生在 SwiftUI
@@ -471,9 +523,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             NSLog("[autotest] sizeDidChange h=%.1f visible=%d", size.height, panel.isVisible ? 1 : 0)
         }
         lastReportedContentSize = size
+        // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
+        guard !isAnimatingExpansion else { return }
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.panel.frame.size != size else { return }
+            guard let self, !self.isAnimatingExpansion, self.panel.frame.size != size else { return }
             self.setPanelFrame(size: size)
         }
     }

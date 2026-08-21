@@ -14,6 +14,10 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
+    /// 展开动画进行中标记:此期间 contentSizeDidChange 逐帧上报被忽略——
+    /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 会与 CA 冲突。
+    private var isAnimatingExpansion = false
+
     /// 面板圆角半径,与 FluidPanelController 一致(rowCornerRadius)。
     private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
 
@@ -86,6 +90,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
                 self?.hide(resetPin: true)
                 self?.openSettingsAction()
             })
+            .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
+                self?.applyWindowHeight(height, animated: animated)
+            }
             .modifier(PinnedPanelSizeReader { [weak self] size in
                 self?.contentSizeDidChange(to: size)
             })
@@ -217,19 +224,42 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Sizing / Positioning
 
+    /// driver 在 toggle 时一次性调用:把目标内容高度下发给窗口层。
+    /// animated=true 时由 CoreAnimation 补间窗口 frame;false 时同步贴合。
+    /// 固定顶部,向下生长。
+    private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
+        guard panel.isVisible else { return }
+        let size = CGSize(width: panel.frame.width, height: contentHeight)
+        guard panel.frame.size != size else { return }
+        var frame = panel.frame
+        let top = frame.maxY
+        frame.size = size
+        frame.origin.y = top - size.height
+        if animated {
+            isAnimatingExpansion = true
+            let context = NSAnimationContext.current
+            context.duration = MonitorConstants.panelExpansionDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(frame, display: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
+                self?.isAnimatingExpansion = false
+            }
+        } else {
+            panel.setFrame(frame, display: true)
+        }
+    }
+
     private func contentSizeDidChange(to size: CGSize) {
+        // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
+        guard !isAnimatingExpansion else { return }
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.panel.frame.size != size else { return }
+            guard let self, !self.isAnimatingExpansion, self.panel.frame.size != size else { return }
             // 固定顶部，内容展开时只向下生长。
             var frame = self.panel.frame
             let top = frame.maxY
             frame.size = size
             frame.origin.y = top - size.height
-            // 纯被动跟随：内容每显示帧上报新高度，这里直接同步贴合。窗口不自带补间——
-            // 动画整体由内容侧的 PanelExpansionDriver 单一驱动，边框与内容同源同相。
-            // 不包动画组提交：展开动画期间本回调逐帧触发，0 时长 CAAnimation 的
-            // 创建/提交每帧都是纯开销；窗口 frame 无在途 CA 补间。
             self.panel.setFrame(frame, display: true)
         }
     }

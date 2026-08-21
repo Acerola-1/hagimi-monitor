@@ -116,7 +116,9 @@ struct DisplayControlsSection: View {
             // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
             // 钉住面板开着改设置时可见,与手动展开同一驱动源直接预览。
             guard isExpanded != newValue else { return }
-            isExpanded = newValue
+            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+                isExpanded = newValue
+            }
             animate(Self.sectionKey, newValue, true)
         }
         .onChange(of: controller.displays.map(\.id)) { _, _ in
@@ -177,7 +179,9 @@ struct DisplayControlsSection: View {
     /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
     /// 时间线打架,造成「收一半停顿再补完」的卡顿。
     private func toggleExpansion() {
-        isExpanded.toggle()
+        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            isExpanded.toggle()
+        }
         animate(Self.sectionKey, isExpanded, true)
     }
 
@@ -319,7 +323,9 @@ private struct DisplayControlGroup: View {
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
     /// 并把本档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        archiveExpanded.toggle()
+        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            archiveExpanded.toggle()
+        }
         animate(archiveKey, archiveExpanded, true)
     }
 

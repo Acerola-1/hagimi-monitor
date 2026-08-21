@@ -101,7 +101,9 @@ struct DisplayInfoSection: View {
             if !isExpanded {
                 displays = Self.collectDisplays()
             }
-            isExpanded.toggle()
+            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+                isExpanded.toggle()
+            }
             animate(Self.sectionKey, isExpanded, true)
         }
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
@@ -360,7 +362,9 @@ private struct DisplayInfoCard: View {
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
     /// 并把本卡档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        archiveExpanded.toggle()
+        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            archiveExpanded.toggle()
+        }
         animate(archiveKey, archiveExpanded, true)
     }
 }
