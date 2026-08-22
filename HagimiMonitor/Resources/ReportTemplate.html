@@ -1,0 +1,2497 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HagimiMonitor</title>
+<style>
+  :root {
+    --bg: #0a0e16;
+    --bg-grad-1: rgba(122, 162, 247, 0.10);
+    --bg-grad-2: rgba(168, 85, 247, 0.07);
+    --card: rgba(255, 255, 255, 0.045);
+    --card-border: rgba(255, 255, 255, 0.085);
+    --card-hover: rgba(255, 255, 255, 0.06);
+    --inset: rgba(255, 255, 255, 0.07);
+    --text: rgba(255, 255, 255, 0.96);
+    --text-2: rgba(255, 255, 255, 0.72);
+    --text-3: rgba(255, 255, 255, 0.52);
+    --tooltip-bg: rgba(18, 24, 38, 0.94);
+    --tooltip-border: rgba(255, 255, 255, 0.12);
+    --accent: #7aa2f7;
+    --radius: 16px;
+    --nav-bg: rgba(10, 14, 22, 0.72);
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.26);
+    --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.18);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
+            "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    color-scheme: dark;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #f2f4f8;
+      --bg-grad-1: rgba(122, 162, 247, 0.14);
+      --bg-grad-2: rgba(168, 85, 247, 0.06);
+      --card: rgba(255, 255, 255, 0.72);
+      --card-border: rgba(23, 34, 58, 0.10);
+      --card-hover: rgba(255, 255, 255, 0.92);
+      --inset: rgba(23, 34, 58, 0.07);
+      --text: #1b2433;
+      --text-2: #46536b;
+      --text-3: #71809a;
+      --tooltip-bg: rgba(255, 255, 255, 0.96);
+      --tooltip-border: rgba(23, 34, 58, 0.12);
+      --accent: #2563eb;
+      --nav-bg: rgba(242, 244, 248, 0.78);
+      --shadow: 0 12px 32px rgba(23, 34, 58, 0.10);
+      --shadow-sm: 0 4px 14px rgba(23, 34, 58, 0.07);
+      color-scheme: light;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    color: var(--text);
+    background:
+      radial-gradient(1200px 500px at 15% -10%, var(--bg-grad-1), transparent 60%),
+      radial-gradient(1000px 600px at 90% 0%, var(--bg-grad-2), transparent 55%),
+      var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 36px 28px 60px; }
+
+  /* ── 报告头 ─────────────────────────────── */
+  .hero { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between; }
+  .brand { display: flex; align-items: center; gap: 14px; }
+  .brand-mark {
+    width: 46px; height: 46px; border-radius: 13px; flex: none;
+    display: grid; place-items: center;
+    background: linear-gradient(140deg, var(--bg-grad-1), var(--bg-grad-2));
+    border: 1px solid var(--card-border);
+  }
+  .brand-mark .icon { width: 24px; height: 24px; color: var(--accent); }
+  .brand h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: 0.2px; }
+  .brand .sub { margin-top: 3px; font-size: 12.5px; color: var(--text-3); }
+  .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-2);
+    padding: 5px 11px; border-radius: 999px;
+    background: var(--card); border: 1px solid var(--card-border);
+  }
+  .chip .icon { width: 13px; height: 13px; color: var(--text-3); }
+
+  /* ── 范围工具条 ─────────────────────────── */
+  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 26px 0 30px; }
+  .ranges { display: inline-flex; padding: 4px; gap: 2px; border-radius: 12px; background: var(--card); border: 1px solid var(--card-border); }
+  .ranges button {
+    appearance: none; border: 0; background: transparent; color: var(--text-2);
+    font: 600 12.5px/1 var(--font); padding: 7px 13px; border-radius: 9px; cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .ranges button:hover { color: var(--text); }
+  .ranges button.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
+  .custom-range { display: inline-flex; align-items: center; gap: 8px; }
+  .custom-range input[type="date"] {
+    appearance: none; font: 500 12.5px/1 var(--font);
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: 9px; padding: 7px 10px; outline: none;
+    color: var(--text-2); color-scheme: inherit;
+  }
+  .custom-range input[type="date"]:focus { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .custom-range button {
+    appearance: none; font: 600 12.5px/1 var(--font); cursor: pointer;
+    color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
+    padding: 8px 14px; border-radius: 9px;
+  }
+
+  /* ── 卡片通用 ──────────────────────────── */
+  .card {
+    background: var(--card); border: 1px solid var(--card-border);
+    border-radius: var(--radius); padding: 18px 20px 14px;
+  }
+  section { margin-bottom: 18px; }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .sec-head .icon { width: 17px; height: 17px; color: var(--text-3); flex: none; }
+  .sec-head h2 { margin: 0; font-size: 14.5px; font-weight: 650; letter-spacing: 0.2px; }
+  .sec-head .hint { margin-left: auto; font-size: 11.5px; color: var(--text-3); }
+  .chart { width: 100%; height: 300px; }
+  .chart.tall { height: 340px; }
+  .chart.short { height: 260px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  section.inner-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 900px) {
+    .grid2, section.inner-grid { grid-template-columns: 1fr; }
+  }
+  .empty {
+    display: none; padding: 34px 20px; text-align: center;
+    color: var(--text-3); font-size: 13px;
+  }
+  .empty .icon { width: 22px; height: 22px; margin-bottom: 8px; opacity: 0.7; }
+
+  /* ── 健康评分 ──────────────────────────── */
+  .health-grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; }
+  @media (max-width: 900px) { .health-grid { grid-template-columns: 1fr; } }
+  .health-main { display: flex; align-items: center; gap: 18px; padding: 8px 2px 4px; flex-wrap: wrap; }
+  .score-ring-wrap { position: relative; width: 104px; height: 104px; flex: none; }
+  .score-ring-text {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
+  }
+  .score-num { font-size: 30px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1; }
+  .score-level { font-size: 11px; font-weight: 650; margin-top: 4px; }
+  .score-dims { display: flex; flex-wrap: wrap; gap: 6px; max-width: 380px; }
+  .score-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    font-size: 11px; font-weight: 550; color: var(--text-2);
+    border: 1px solid var(--card-border); background: var(--inset);
+    padding: 3.5px 9px; border-radius: 999px;
+  }
+  .score-badge .dot { width: 5.5px; height: 5.5px; border-radius: 50%; }
+  .score-badge .raw { color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .score-capped {
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 9px;
+    font-size: 11.5px; font-weight: 550; color: #e08e45;
+  }
+  .score-capped .icon { width: 13px; height: 13px; }
+
+  /* ── KPI ───────────────────────────────── */
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 14px; }
+  .kpi {
+    background: var(--card); border: 1px solid var(--card-border); border-radius: 14px;
+    padding: 14px 16px 12px; display: flex; gap: 12px; align-items: flex-start;
+    transition: background 0.15s ease;
+  }
+  .kpi:hover { background: var(--card-hover); }
+  .kpi .icon { width: 18px; height: 18px; margin-top: 2px; flex: none; }
+  .kpi .label { font-size: 11.5px; color: var(--text-3); font-weight: 600; letter-spacing: 0.3px; }
+  .kpi .value { font-size: 21px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; letter-spacing: 0.2px; }
+  .kpi .sub { font-size: 11.5px; color: var(--text-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .c-cpu { color: #f97316; } .c-gpu { color: #a855f7; } .c-mem { color: #38bdf8; }
+  .c-net { color: #14b8a6; } .c-disk { color: #d9a94a; } .c-batt { color: #10b981; }
+  .c-thermal { color: #ef4444; } .c-muted { color: var(--text-3); } .c-accent { color: var(--accent); }
+  @media (prefers-color-scheme: light) {
+    .c-cpu { color: #ea580c; } .c-gpu { color: #9333ea; } .c-mem { color: #0284c7; }
+    .c-net { color: #0d9488; } .c-disk { color: #b45309; } .c-batt { color: #059669; }
+    .c-thermal { color: #dc2626; }
+  }
+
+  /* ── 热力图 ────────────────────────────── */
+  .heat-legend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-3); }
+  .heat-scale { width: 110px; height: 8px; border-radius: 4px; border: 1px solid var(--card-border); }
+  .heat-scale.theme-dark { background: linear-gradient(90deg, #1c2534, #274068, #4c7fd0, #f0a34c, #f4643c); }
+  .heat-scale.theme-light { background: linear-gradient(90deg, #e8edf4, #c3d4ee, #7fa8e0, #f0a34c, #e2543c); }
+
+  /* ── 应用排行 ──────────────────────────── */
+  .apps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  section.apps-section { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  @media (max-width: 900px) { .apps-grid, section.apps-section { grid-template-columns: 1fr; } }
+  .app-list { display: flex; flex-direction: column; }
+  .app-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--card-border); }
+  .app-row:last-child { border-bottom: none; }
+  .app-row img { width: 24px; height: 24px; border-radius: 6px; flex: none; }
+  .app-row .app-icon-fallback { width: 24px; height: 24px; border-radius: 6px; flex: none;
+    display: grid; place-items: center; background: var(--inset); color: var(--text-3); }
+  .app-row .app-icon-fallback .icon { width: 12px; height: 12px; }
+  .app-row .app-name { width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-2); }
+  .app-row .app-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--inset); overflow: hidden; }
+  .app-row .app-bar-fill { height: 100%; border-radius: 3px; }
+  .app-row .app-value { flex: none; min-width: 74px; text-align: right; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+  .app-none { grid-column: 1 / -1; padding: 20px 0 14px; text-align: center; color: var(--text-3); font-size: 12.5px; }
+
+  /* ── 使用打卡 ──────────────────────────── */
+  .checkin { display: flex; flex-direction: column; gap: 10px; padding: 10px 4px 2px; }
+  .checkin-legend { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--text-3); }
+  .checkin-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+  .checkin-cell { width: 11px; height: 11px; border-radius: 2.5px; background: var(--inset); }
+  .checkin-cell.on { background: var(--accent); }
+  .checkin-cell.today { outline: 1.5px solid var(--accent); outline-offset: 1px; }
+  .checkin-stats { display: flex; gap: 18px; }
+  .checkin-stat .n { font-size: 20px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--accent); }
+  .checkin-stat .l { font-size: 11px; color: var(--text-3); margin-top: 1px; }
+
+  /* ── 事件时间线 ─────────────────────────── */
+  .events { display: flex; flex-direction: column; }
+  .event {
+    display: flex; align-items: baseline; gap: 12px;
+    padding: 8px 2px; border-bottom: 1px solid var(--card-border);
+    font-size: 12.5px;
+  }
+  .event:last-child { border-bottom: none; }
+  .event .sev { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
+  .event .time { color: var(--text-3); font-variant-numeric: tabular-nums; flex: none; width: 128px; font-size: 11.5px; }
+  .event .what { color: var(--text); font-weight: 550; }
+  .event .detail { color: var(--text-3); margin-left: auto; font-variant-numeric: tabular-nums; text-align: right; }
+  .event-none { padding: 26px 0; text-align: center; color: var(--text-3); font-size: 13px; }
+
+  /* ── 表格 ──────────────────────────────── */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+  th, td { text-align: right; padding: 8px 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th { color: var(--text-3); font-weight: 600; font-size: 11.5px; letter-spacing: 0.3px;
+    border-bottom: 1px solid var(--card-border); }
+  tbody tr { border-bottom: 1px solid var(--card-border); }
+  tbody tr:hover { background: var(--inset); }
+  td { color: var(--text-2); }
+  td.day { color: var(--text); font-weight: 600; }
+
+  /* ── 洞察 ─────────────────────────────── */
+  .insights { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+  .insight {
+    display: flex; flex-direction: column; gap: 9px;
+    background:
+      linear-gradient(150deg, color-mix(in srgb, currentColor 9%, transparent), transparent 62%),
+      var(--card);
+    border: 1px solid color-mix(in srgb, currentColor 16%, var(--card-border));
+    border-radius: 14px; padding: 14px 16px;
+  }
+  .insight-head { display: flex; align-items: center; gap: 7px; }
+  .insight-head .icon { width: 14px; height: 14px; flex: none; }
+  .insight .t { font-size: 11.5px; color: var(--text-3); font-weight: 600; letter-spacing: 0.3px; }
+  .insight .v { font-size: 13.5px; color: var(--text); line-height: 1.5; font-weight: 550; }
+
+  /* ── 空态 / 页脚 ───────────────────────── */
+  .blank-hero { text-align: center; padding: 90px 20px; color: var(--text-2); }
+  .blank-hero .icon { width: 42px; height: 42px; color: var(--accent); opacity: 0.9; }
+  .blank-hero h2 { font-size: 18px; margin: 16px 0 6px; color: var(--text); }
+  .blank-hero p { font-size: 13px; color: var(--text-3); line-height: 1.7; max-width: 420px; margin: 0 auto; }
+  footer { margin-top: 34px; text-align: center; font-size: 11.5px; color: var(--text-3); line-height: 1.8; }
+  .icon { display: inline-block; vertical-align: middle; }
+  [hidden] { display: none !important; }
+
+  /* ── 标题渐变 ─────────────────────────── */
+  .brand h1 {
+    background: linear-gradient(120deg, var(--text) 30%, var(--accent) 100%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent; color: transparent;
+  }
+
+  /* ── 固定分区导航:不随页面滚动,随时可切换 ── */
+  .sec-nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 40;
+    display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
+    /* 与 .wrap(1180 居中 + 28 内衬)左缘对齐 */
+    padding: 9px calc(max((100vw - 1180px) / 2, 0px) + 28px);
+    background: var(--nav-bg);
+    backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    border-bottom: 1px solid var(--card-border);
+  }
+  body.has-sec-nav { padding-top: 44px; }
+  .sec-nav::-webkit-scrollbar { display: none; }
+  .sec-nav a {
+    flex: none; text-decoration: none; color: var(--text-3);
+    font-size: 12px; font-weight: 600; letter-spacing: 0.2px;
+    padding: 6px 12px; border-radius: 9px; white-space: nowrap;
+    transition: color 0.15s ease, background 0.15s ease;
+  }
+  .sec-nav a:hover { color: var(--text); background: var(--card); }
+  .sec-nav a.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+
+  /* ── 卡片进场动效(滚动触发) ───────────── */
+  section, .kpi, .insight { transition: opacity 0.5s ease, transform 0.5s ease; }
+  .reveal { opacity: 0; transform: translateY(14px); }
+  .reveal.shown { opacity: 1; transform: none; }
+  @media (prefers-reduced-motion: reduce) {
+    section, .kpi, .insight { transition: none; }
+    .reveal { opacity: 1; transform: none; }
+    html { scroll-behavior: auto; }
+  }
+
+  /* ── KPI 图标芯片:外层 span 承载底色,svg 只画图形 ── */
+  .kpi-chip {
+    width: 34px; height: 34px; border-radius: 10px; flex: none;
+    display: grid; place-items: center;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    transition: transform 0.2s ease;
+  }
+  .kpi-chip .icon { width: 17px; height: 17px; margin: 0; }
+  .kpi:hover .kpi-chip { transform: scale(1.08); }
+  .kpi .value { font-size: 22px; }
+
+  /* ── 分区标题图标芯片化 ────────────────── */
+  .sec-head .icon-chip {
+    display: grid; place-items: center; width: 27px; height: 27px;
+    border-radius: 8.5px; flex: none;
+    background: color-mix(in srgb, currentColor 13%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+  }
+  .sec-head .icon-chip .icon { width: 14px; height: 14px; margin: 0; }
+
+  /* 粘性导航下的锚点滚动留白 */
+  #content > section { scroll-margin-top: 62px; }
+
+  /* ── 卡片悬浮微交互 ───────────────────── */
+  .card { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+  .card:hover { border-color: color-mix(in srgb, var(--accent) 22%, var(--card-border)); box-shadow: var(--shadow-sm); }
+
+  /* ── 回到顶部 ─────────────────────────── */
+  .to-top {
+    position: fixed; right: 26px; bottom: 26px; z-index: 50;
+    width: 42px; height: 42px; border-radius: 13px; border: 1px solid var(--card-border);
+    display: grid; place-items: center; cursor: pointer;
+    background: var(--nav-bg); color: var(--text-2);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: var(--shadow); opacity: 0; transform: translateY(10px); pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease, color 0.15s ease;
+  }
+  .to-top.show { opacity: 1; transform: none; pointer-events: auto; }
+  .to-top:hover { color: var(--accent); }
+  .to-top .icon { width: 18px; height: 18px; }
+</style>
+</head>
+<body>
+<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
+<symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></symbol>
+<symbol id="i-arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14" />
+  <path d="m19 12-7 7-7-7" /></symbol>
+<symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7" />
+  <path d="M12 19V5" /></symbol>
+<symbol id="i-battery-charging" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 7-3 5h4l-3 5" />
+  <path d="M14.856 6H16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.935" />
+  <path d="M22 14v-4" />
+  <path d="M5.14 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.936" /></symbol>
+<symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
+  <path d="M16 2v4" />
+  <rect width="18" height="18" x="3" y="4" rx="2" />
+  <path d="M3 10h18" /></symbol>
+<symbol id="i-chart-column" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16" />
+  <path d="M18 17V9" />
+  <path d="M13 17V5" />
+  <path d="M8 17v-3" /></symbol>
+<symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2" />
+  <circle cx="12" cy="12" r="10" /></symbol>
+<symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v2" />
+  <path d="M12 2v2" />
+  <path d="M17 20v2" />
+  <path d="M17 2v2" />
+  <path d="M2 12h2" />
+  <path d="M2 17h2" />
+  <path d="M2 7h2" />
+  <path d="M20 12h2" />
+  <path d="M20 17h2" />
+  <path d="M20 7h2" />
+  <path d="M7 20v2" />
+  <path d="M7 2v2" />
+  <rect x="4" y="4" width="16" height="16" rx="2" />
+  <rect x="8" y="8" width="8" height="8" rx="1" /></symbol>
+<symbol id="i-fan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412Z" />
+  <path d="M12 12v.01" /></symbol>
+<symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></symbol>
+<symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4" />
+  <path d="M3.34 19a10 10 0 1 1 17.32 0" /></symbol>
+<symbol id="i-hard-drive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12" />
+  <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
+  <line x1="6" x2="6.01" y1="16" y2="16" />
+  <line x1="10" x2="10.01" y1="16" y2="16" /></symbol>
+<symbol id="i-memory-stick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3" />
+  <path d="M10 19v-3" />
+  <path d="M14 19v-3" />
+  <path d="M18 19v-3" />
+  <path d="M8 11V9" />
+  <path d="M16 11V9" />
+  <path d="M12 11V9" />
+  <path d="M2 15h20" />
+  <path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z" /></symbol>
+<symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2" />
+  <line x1="8" x2="16" y1="21" y2="21" />
+  <line x1="12" x2="12" y1="17" y2="21" /></symbol>
+<symbol id="i-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1" />
+  <rect x="2" y="16" width="6" height="6" rx="1" />
+  <rect x="9" y="2" width="6" height="6" rx="1" />
+  <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
+  <path d="M12 12V8" /></symbol>
+<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+  <path d="M20 3v4" />
+  <path d="M22 5h-4" />
+  <path d="M4 17v2" />
+  <path d="M5 18H3" /></symbol>
+<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" />
+  <rect width="18" height="18" x="3" y="3" rx="2" />
+  <path d="M3 9h18" />
+  <path d="M3 15h18" /></symbol>
+<symbol id="i-thermometer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" /></symbol>
+<symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
+</svg>
+
+<div class="wrap" id="app">
+  <header class="hero">
+    <div class="brand">
+      <div class="brand-mark"><svg class="icon"><use href="#i-gauge"/></svg></div>
+      <div>
+        <h1 id="report-title"></h1>
+        <div class="sub" id="report-sub"></div>
+      </div>
+    </div>
+    <div class="meta-chips" id="meta-chips"></div>
+  </header>
+
+  <div class="toolbar" id="toolbar">
+    <div class="ranges" id="ranges"></div>
+    <div class="custom-range" id="custom-range">
+      <svg class="icon c-muted" style="width:15px;height:15px"><use href="#i-calendar"/></svg>
+      <input type="date" id="date-from">
+      <span style="color:var(--text-3)">–</span>
+      <input type="date" id="date-to">
+      <button id="apply-custom"></button>
+    </div>
+  </div>
+
+  <nav class="sec-nav" id="sec-nav" hidden></nav>
+
+  <div id="blank" class="blank-hero" hidden>
+    <svg class="icon"><use href="#i-chart-column"/></svg>
+    <h2 id="blank-title"></h2>
+    <p id="blank-body"></p>
+  </div>
+
+  <div id="content">
+    <section>
+      <div class="health-grid">
+        <div class="card">
+          <div class="sec-head">
+            <svg class="icon c-accent"><use href="#i-gauge"/></svg><h2 id="t-health"></h2>
+          </div>
+          <div class="health-main" id="health-main"></div>
+        </div>
+        <div class="card">
+          <div class="sec-head">
+            <svg class="icon c-accent"><use href="#i-chart-column"/></svg><h2 id="t-health-trend" style="font-size:13.5px"></h2>
+          </div>
+          <div class="chart short" id="ch-health-trend"></div>
+          <div class="empty" id="e-health-trend"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="kpi-grid" id="kpi"></div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon"><use href="#i-activity"/></svg><h2 id="t-overview"></h2>
+          <span class="hint" id="h-overview"></span>
+        </div>
+        <div class="chart" id="ch-overview"></div>
+        <div class="empty" id="e-overview"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon"><use href="#i-flame"/></svg><h2 id="t-heatmap"></h2>
+          <span class="hint" style="display:flex;align-items:center;gap:14px">
+            <span id="h-heatmap"></span>
+            <span class="heat-legend"><span id="lbl-low"></span><span class="heat-scale" id="heat-scale"></span><span id="lbl-high"></span></span>
+          </span>
+        </div>
+        <div class="chart tall" id="ch-heatmap"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-cpu"></h2>
+          <span class="hint" id="h-cpu"></span>
+        </div>
+        <div class="chart" id="ch-cpu"></div>
+        <div class="empty" id="e-cpu"></div>
+      </div>
+    </section>
+
+    <section class="inner-grid">
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-cpu-pe" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-cpu-pe"></div>
+        <div class="empty" id="e-cpu-pe"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-cpu-dist" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-cpu-dist"></div>
+        <div class="empty" id="e-cpu-dist"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-gpu"></h2>
+          <span class="hint" id="h-gpu"></span>
+        </div>
+        <div class="chart" id="ch-gpu"></div>
+        <div class="empty" id="e-gpu"></div>
+      </div>
+    </section>
+
+    <section class="inner-grid">
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-gpu-dist" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-gpu-dist"></div>
+        <div class="empty" id="e-gpu-dist"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-gpu-mem" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-gpu-mem"></div>
+        <div class="empty" id="e-gpu-mem"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-mem"><use href="#i-memory-stick"/></svg><h2 id="t-mem"></h2>
+          <span class="hint" id="h-mem"></span>
+        </div>
+        <div class="chart" id="ch-mem"></div>
+        <div class="empty" id="e-mem"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-net"><use href="#i-network"/></svg><h2 id="t-net"></h2>
+          <span class="hint" id="h-net"></span>
+        </div>
+        <div class="chart" id="ch-net"></div>
+        <div class="empty" id="e-net"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-net"><use href="#i-chart-column"/></svg><h2 id="t-net-daily" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-net-daily"></div>
+        <div class="empty" id="e-net-daily"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-disk"><use href="#i-hard-drive"/></svg><h2 id="t-disk"></h2>
+          <span class="hint" id="h-disk"></span>
+        </div>
+        <div class="chart" id="ch-disk"></div>
+        <div class="empty" id="e-disk"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-disk"><use href="#i-chart-column"/></svg><h2 id="t-disk-daily" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-disk-daily"></div>
+        <div class="empty" id="e-disk-daily"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-batt"><use href="#i-battery-charging"/></svg><h2 id="t-power"></h2>
+          <span class="hint" id="h-power"></span>
+        </div>
+        <div class="chart" id="ch-power"></div>
+        <div class="empty" id="e-power"></div>
+      </div>
+    </section>
+
+    <section class="inner-grid" id="sec-batt">
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-batt"><use href="#i-battery-charging"/></svg><h2 id="t-batt" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-batt"></div>
+        <div class="empty" id="e-batt"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-batt"><use href="#i-zap"/></svg><h2 id="t-power-dist" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-power-dist"></div>
+        <div class="empty" id="e-power-dist"></div>
+      </div>
+    </section>
+
+    <section class="inner-grid" id="sec-battery-health">
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-batt"><use href="#i-battery-charging"/></svg><h2 id="t-battery-health" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-battery-health"></div>
+        <div class="empty" id="e-battery-health"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-batt"><use href="#i-zap"/></svg><h2 id="t-power-daily" style="font-size:13.5px"></h2>
+        </div>
+        <div class="chart short" id="ch-power-daily"></div>
+        <div class="empty" id="e-power-daily"></div>
+      </div>
+    </section>
+
+    <section class="apps-section" id="sec-apps">
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-apps-cpu" style="font-size:13.5px"></h2>
+        </div>
+        <div class="app-list" id="app-list-cpu"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-mem"><use href="#i-memory-stick"/></svg><h2 id="t-apps-mem" style="font-size:13.5px"></h2>
+        </div>
+        <div class="app-list" id="app-list-mem"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-apps-gpu" style="font-size:13.5px"></h2>
+        </div>
+        <div class="app-list" id="app-list-gpu"></div>
+      </div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-net"><use href="#i-network"/></svg><h2 id="t-apps-net" style="font-size:13.5px"></h2>
+        </div>
+        <div class="app-list" id="app-list-net"></div>
+      </div>
+      <div class="app-none" id="apps-none" hidden></div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-muted"><use href="#i-calendar"/></svg><h2 id="t-activity"></h2>
+          <span class="hint" id="h-activity"></span>
+        </div>
+        <div class="grid2">
+          <div>
+            <div class="chart short" id="ch-activity" style="height:190px"></div>
+            <div class="empty" id="e-activity"></div>
+          </div>
+          <div class="checkin" id="checkin"></div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-thermal"><use href="#i-thermometer"/></svg><h2 id="t-thermal"></h2>
+          <span class="hint" id="h-thermal"></span>
+        </div>
+        <div class="chart" id="ch-thermal"></div>
+        <div class="empty" id="e-thermal"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-thermal"><use href="#i-activity"/></svg><h2 id="t-events"></h2>
+          <span class="hint" id="h-events"></span>
+        </div>
+        <div class="events" id="events"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-muted"><use href="#i-table"/></svg><h2 id="t-table"></h2>
+        </div>
+        <div class="tbl-wrap" id="tbl"></div>
+        <div class="empty" id="e-table"></div>
+      </div>
+    </section>
+
+    <section>
+      <div class="sec-head" style="margin:0 0 14px">
+        <svg class="icon" style="color:var(--accent)"><use href="#i-sparkles"/></svg><h2 id="t-insights"></h2>
+      </div>
+      <div class="insights" id="insights"></div>
+    </section>
+
+    <footer id="footer"></footer>
+  </div>
+
+  <button class="to-top" id="to-top" aria-label="back to top">
+    <svg class="icon"><use href="#i-arrow-up"/></svg>
+  </button>
+</div>
+
+<script>/*__ECHARTS__*/</script>
+<script>window.__DATA__ = /*__DATA__*/null;</script>
+<script>
+"use strict";
+(function () {
+  const DATA = window.__DATA__;
+  const I = DATA.i18n;
+  const COLS = DATA.cols;
+  const IDX = {};
+  COLS.forEach((c, i) => { IDX[c] = i + 1; });
+  const NIX = COLS.length + 1;
+
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
+  // 调用点两种约定并存(带/不带 i- 前缀),统一容错,避免空引用画出空图标
+  const icon = (name, cls) => `<svg class="icon ${cls || ""}"><use href="#${name.startsWith("i-") ? name : "i-" + name}"/></svg>`;
+
+  // ── 主题调色板(跟随系统明暗,变更时全量重绘) ───────────────────
+  const themeQuery = matchMedia("(prefers-color-scheme: light)");
+  let C = null;
+  function makePalette(isLight) {
+    if (isLight) {
+      return {
+        cpu: "#ea580c", gpu: "#9333ea", mem: "#0284c7", net: "#0d9488",
+        netUp: "#6366f1", disk: "#b45309", diskW: "#c2410c", batt: "#059669",
+        thermal: "#dc2626", battTemp: "#b45309", fan: "#64748b", accent: "#2563eb",
+        good: "#2f9e64", scoreGood: "#3bafda", fair: "#d4a843", poor: "#e08e45", critical: "#d94848",
+        grid: "rgba(20,32,58,0.07)", axis: "rgba(20,32,58,0.20)",
+        label: "rgba(27,36,51,0.55)", ring: "rgba(20,32,58,0.10)",
+        tooltipBg: "rgba(255,255,255,0.96)", tooltipBorder: "rgba(23,34,58,0.12)", tooltipText: "#1b2433",
+        heat: ["#e8edf4", "#c3d4ee", "#7fa8e0", "#f0a34c", "#e2543c"],
+        heatBorder: "rgba(242,244,248,0.9)", pieBorder: "rgba(242,244,248,0.95)",
+      };
+    }
+    return {
+      cpu: "#f97316", gpu: "#a855f7", mem: "#38bdf8", net: "#2dd4bf",
+      netUp: "#818cf8", disk: "#d9a94a", diskW: "#e07a5f", batt: "#34d399",
+      thermal: "#f87171", battTemp: "#fbbe2e", fan: "#94a3b8", accent: "#7aa2f7",
+      good: "#34c759", scoreGood: "#64d2ff", fair: "#ffd60a", poor: "#ff9f0a", critical: "#ff6961",
+      grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.14)",
+      label: "rgba(255,255,255,0.55)", ring: "rgba(255,255,255,0.09)",
+      tooltipBg: "rgba(18,24,38,0.94)", tooltipBorder: "rgba(255,255,255,0.12)", tooltipText: "#e8ecf4",
+      heat: ["#1c2534", "#274068", "#4c7fd0", "#f0a34c", "#f4643c"],
+      heatBorder: "rgba(10,14,22,0.85)", pieBorder: "rgba(10,14,22,0.9)",
+    };
+  }
+  function applyTheme() {
+    C = makePalette(themeQuery.matches);
+    $("heat-scale").className = "heat-scale " + (themeQuery.matches ? "theme-light" : "theme-dark");
+  }
+  applyTheme();
+  if (themeQuery.addEventListener) {
+    themeQuery.addEventListener("change", () => {
+      applyTheme();
+      renderHeatmap();
+      applyRange();
+    });
+  }
+
+  const FONT = getComputedStyle(document.documentElement).getPropertyValue("--font");
+
+  function fmtBytes(b) {
+    if (b == null || isNaN(b)) return "—";
+    const u = ["B", "KB", "MB", "GB", "TB", "PB"];
+    let i = 0;
+    while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
+    return (i === 0 ? b.toFixed(0) : b.toFixed(1)) + " " + u[i];
+  }
+  function fmtRate(bps) { return bps == null ? "—" : fmtBytes(bps) + "/s"; }
+  function fmtPct(v, d) { return v == null ? "—" : v.toFixed(d == null ? 1 : d) + "%"; }
+  function fmtW(w) { return w == null ? "—" : w.toFixed(1) + " W"; }
+  function fmtRPM(v) { return v == null ? "—" : Math.round(v).toLocaleString() + " RPM"; }
+  function fmtClock(ms) {
+    const d = new Date(ms);
+    const two = (n) => String(n).padStart(2, "0");
+    return two(d.getHours()) + ":" + two(d.getMinutes());
+  }
+  function fmtDate(ms) {
+    const d = new Date(ms);
+    return d.getFullYear() + "/" + String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
+  }
+  function fmtDateShort(ms) {
+    const d = new Date(ms);
+    return String(d.getMonth() + 1).padStart(2, "0") + "/" + String(d.getDate()).padStart(2, "0");
+  }
+  function fmtHours(seconds) {
+    if (seconds == null) return "—";
+    return (seconds / 3600).toFixed(1) + " h";
+  }
+  function fmtSpan(seconds) {
+    if (seconds == null) return "—";
+    if (seconds < 90) return Math.round(seconds) + " min";
+    if (seconds < 48 * 3600) return (seconds / 3600).toFixed(1) + " h";
+    return (seconds / 86400).toFixed(1) + " d";
+  }
+  // 数值滚动:解析前导数字 + 保留后缀与精度,~650ms 缓动到位;非数值原样展示
+  const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  function countUp(node, text) {
+    const m = /^(-?[\d.]+)(.*)$/.exec(text);
+    const target = m ? parseFloat(m[1]) : NaN;
+    if (!m || isNaN(target)) { node.textContent = text; return; }
+    if (reduceMotion) { node.textContent = text; return; }
+    const suffix = m[2];
+    const decimals = (m[1].split(".")[1] || "").length;
+    const dur = 650;
+    const start = performance.now();
+    function frame(nowTs) {
+      const p = Math.min(1, (nowTs - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      node.textContent = (target * eased).toFixed(decimals) + suffix;
+      if (p < 1) requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  }
+  function t(key, kv) {
+    let s = I[key] || key;
+    if (kv) for (const k in kv) s = s.replace("{" + k + "}", kv[k]);
+    return s;
+  }
+
+  const DAY = 86400 * 1000;
+  // 生成时间为秒或毫秒自适应(历史产物两口径都有)
+  const generatedMs = DATA.generatedAt < 1e12 ? DATA.generatedAt * 1000 : DATA.generatedAt;
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
+
+  // ── 文案与静态骨架 ────────────────────────────────────────────
+  document.title = I.reportTitle;
+  $("report-title").textContent = I.reportTitle;
+  $("report-sub").textContent = I.reportSub;
+  const chips = [
+    ["i-monitor", DATA.meta.device],
+    ["i-cpu", DATA.meta.model],
+    ["i-hard-drive", DATA.meta.os],
+    ["i-clock", t("metaDays", { v: DATA.meta.days })],
+    ["i-calendar", t("metaGenerated", { v: fmtDate(generatedMs) + " " + fmtClock(generatedMs) })],
+  ];
+  chips.forEach(([ic, text]) => {
+    const c = el("span", "chip");
+    c.innerHTML = icon(ic) + "<span></span>";
+    c.lastChild.textContent = text;
+    $("meta-chips").appendChild(c);
+  });
+
+  $("t-health").textContent = I.healthTitle;
+  $("t-health-trend").textContent = I.healthTrend;
+  $("t-overview").textContent = I.secOverview;
+  $("t-heatmap").textContent = I.secHeatmap;
+  $("t-cpu").textContent = I.secCpu;
+  $("t-cpu-pe").textContent = I.secCpuPE;
+  $("t-cpu-dist").textContent = I.secCpuDist;
+  $("t-gpu").textContent = I.secGpu;
+  $("t-gpu-dist").textContent = I.secGpuDist;
+  $("t-gpu-mem").textContent = I.secGpuMem;
+  $("t-mem").textContent = I.secMem;
+  $("t-net").textContent = I.secNet;
+  $("t-net-daily").textContent = I.secNetDaily;
+  $("t-disk").textContent = I.secDisk;
+  $("t-disk-daily").textContent = I.secDiskDaily;
+  $("t-power").textContent = I.secPower;
+  $("t-batt").textContent = I.secBatt;
+  $("t-power-dist").textContent = I.secPowerDist;
+  $("t-thermal").textContent = I.secThermal;
+  $("t-battery-health").textContent = I.secBatteryHealth;
+  $("t-power-daily").textContent = I.secPowerDaily;
+  $("t-apps-cpu").textContent = I.appsCpu;
+  $("t-apps-mem").textContent = I.appsMem;
+  $("t-apps-gpu").textContent = I.appsGpu;
+  $("t-apps-net").textContent = I.appsNet;
+  $("t-activity").textContent = I.secActivity;
+  const eBatteryHealth = $("e-battery-health");
+  if (eBatteryHealth) eBatteryHealth.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
+  const ePowerDaily = $("e-power-daily");
+  if (ePowerDaily) ePowerDaily.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
+  const eActivity = $("e-activity");
+  if (eActivity) eActivity.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
+  $("apps-none").textContent = I.appsNone;
+  $("t-events").textContent = I.secEvents;
+  $("t-table").textContent = I.secTable;
+  $("t-insights").textContent = I.secInsights;
+  $("lbl-low").textContent = I.heatLow;
+  $("lbl-high").textContent = I.heatHigh;
+  $("apply-custom").textContent = I.applyCustom;
+  $("footer").innerHTML = I.footer + "<br>" + I.footerLocal;
+  ["overview", "cpu", "cpu-pe", "cpu-dist", "gpu", "gpu-dist", "gpu-mem", "mem",
+   "net", "net-daily", "disk", "disk-daily", "power", "batt", "power-dist",
+   "thermal", "table", "health-trend"].forEach((k) => {
+    const e = $("e-" + k);
+    if (e) e.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
+  });
+
+  // ── 数据访问 ──────────────────────────────────────────────────
+  const v = (row, col) => row[IDX[col]];
+  const frames = (row) => row[NIX];
+  // 采样覆盖秒数(真实墙钟口径);迁移前的旧行无此列,回退帧数近似
+  const coverSeconds = (row) => v(row, "cover_s") ?? frames(row);
+  const timeOf = (row) => row[0] * 1000;
+
+  function rowsBetween(rows, from, to) {
+    return rows.filter((r) => r[0] * 1000 >= from && r[0] * 1000 < to);
+  }
+  function hasAny(rows, col) {
+    return rows.some((r) => v(r, col) != null);
+  }
+  function avgOf(rows, col) {
+    let sum = 0, n = 0;
+    rows.forEach((r) => {
+      const x = v(r, col);
+      if (x != null) { sum += x * frames(r); n += frames(r); }
+    });
+    return n > 0 ? sum / n : null;
+  }
+  function maxOf(rows, col) {
+    let m = null;
+    rows.forEach((r) => {
+      const x = v(r, col);
+      if (x != null && (m == null || x > m)) m = x;
+    });
+    return m;
+  }
+  function sumOf(rows, col) {
+    let sum = 0, seen = false;
+    rows.forEach((r) => {
+      const x = v(r, col);
+      if (x != null) { sum += x; seen = true; }
+    });
+    return seen ? sum : null;
+  }
+  const bucketSeconds = { minutes: 60, hours: 3600, days: 86400 };
+
+  // ── 健康评分 V2(与 App 端 StatisticsHealthScore 同口径) ────────
+  // 「健康时间占比」语义:高负载不扣分,只罚不健康状态。非线性应力曲线在
+  // 落库时按帧作用(存 stress_*_avg 列),这里只做线性重组;旧行无应力列时
+  // 按桶均值回退同套曲线(近似)。
+  const THERMAL_SOFT_CAP = 0.01;
+  function stressCPU(u) { return u <= 85 ? 0 : Math.min(1, (u - 85) / 15); }
+  function stressGPU(u) { return u <= 90 ? 0 : Math.min(1, (u - 90) / 10); }
+  function stressMem(percent, level) {
+    let s = level === 2 ? 1.0 : level === 1 ? 0.6 : 0;
+    if (percent != null && percent > 60) s = Math.max(s, Math.min(0.55, (percent - 60) / 40 * 0.55));
+    return s;
+  }
+  function stressThermal(state, temp) {
+    if (state != null) {
+      if (state < 0.5) return 0;
+      if (state < 1.5) return 0.2;
+      if (state < 2.5) return 0.6;
+      return 1.0;
+    }
+    if (temp == null) return 0;
+    return temp <= 85 ? 0 : Math.min(1, (temp - 85) / 15);
+  }
+  function rowStress(r) {
+    return {
+      mem: v(r, "stress_mem_avg") != null ? v(r, "stress_mem_avg")
+        : (v(r, "mem_pressure_avg") != null ? stressMem(v(r, "mem_pressure_avg"), null) : null),
+      thermal: v(r, "stress_thermal_avg") != null ? v(r, "stress_thermal_avg")
+        : ((v(r, "cpu_thermal_avg") != null || v(r, "cpu_temp_avg") != null)
+          ? stressThermal(v(r, "cpu_thermal_avg"), v(r, "cpu_temp_avg")) : null),
+      cpu: v(r, "stress_cpu_avg") != null ? v(r, "stress_cpu_avg")
+        : (v(r, "cpu_avg") != null ? stressCPU(v(r, "cpu_avg")) : null),
+      gpu: v(r, "stress_gpu_avg") != null ? v(r, "stress_gpu_avg")
+        : (v(r, "gpu_avg") != null ? stressGPU(v(r, "gpu_avg")) : null),
+    };
+  }
+  function healthOf(rows) {
+    const sums = { mem: 0, thermal: 0, cpu: 0, gpu: 0 };
+    const ws = { mem: 0, thermal: 0, cpu: 0, gpu: 0 };
+    rows.forEach((r) => {
+      const n = frames(r);
+      if (n <= 0) return;
+      const s = rowStress(r);
+      for (const k in sums) if (s[k] != null) { sums[k] += s[k] * n; ws[k] += n; }
+    });
+    const avg = (k) => (ws[k] > 0 ? sums[k] / ws[k] : null);
+    const m = avg("mem"), t = avg("thermal"), c = avg("cpu"), g = avg("gpu");
+    if (m == null && t == null && c == null && g == null) return null;
+    // 缺维度不扣分也不归一:没观测到不健康信号即不罚。
+    const stress = (m || 0) * 0.45 + (t || 0) * 0.30 + (c || 0) * 0.15 + (g || 0) * 0.10;
+    const score = Math.max(0, Math.min(100, 100 * (1 - stress)));
+    const capped = (t || 0) >= THERMAL_SOFT_CAP;
+    let level = levelOf(score);
+    if (capped && level === "excellent") level = "good";
+    return { score, level, capped, m, t, c, g };
+  }
+  function levelOf(score) {
+    if (score >= 95) return "excellent";
+    if (score >= 85) return "good";
+    if (score >= 70) return "fair";
+    if (score >= 50) return "poor";
+    return "critical";
+  }
+  function levelForShare(share) {
+    const p = share * 100;
+    if (p < 1) return "excellent";
+    if (p < 5) return "good";
+    if (p < 15) return "fair";
+    if (p < 30) return "poor";
+    return "critical";
+  }
+  function shareText(s) {
+    const p = s * 100;
+    return p < 0.05 ? "0%" : p.toFixed(1) + "%";
+  }
+  const LEVEL_META = {
+    excellent: { color: () => C.good, label: () => I.levelExcellent },
+    good: { color: () => C.scoreGood, label: () => I.levelGood },
+    fair: { color: () => C.fair, label: () => I.levelFair },
+    poor: { color: () => C.poor, label: () => I.levelPoor },
+    critical: { color: () => C.critical, label: () => I.levelCritical },
+  };
+
+  function renderHealth(rows) {
+    const host = $("health-main");
+    const h = healthOf(rows);
+    if (!h) {
+      host.innerHTML = '<div class="event-none">' + I.healthNoData + "</div>";
+      setChart("ch-health-trend", {}, rows, "cpu_avg");
+      return;
+    }
+    const color = LEVEL_META[h.level].color();
+
+    const dims = [
+      h.c != null && { name: I.dimCpu, raw: shareText(h.c), share: h.c },
+      h.g != null && { name: I.dimGpu, raw: shareText(h.g), share: h.g },
+      h.m != null && { name: I.dimPressure, raw: shareText(h.m), share: h.m },
+      h.t != null && { name: I.dimThermal, raw: shareText(h.t), share: h.t },
+    ].filter(Boolean);
+
+    const circ = 2 * Math.PI * 44;
+    const offset = circ * (1 - Math.min(h.score, 100) / 100);
+    let badges = "";
+    dims.forEach((d) => {
+      const dc = LEVEL_META[levelForShare(d.share)].color();
+      badges += '<span class="score-badge"><span class="dot" style="background:' + dc + '"></span>'
+        + d.name + '<span class="raw">' + d.raw + "</span></span>";
+    });
+    const cappedBadge = h.capped
+      ? '<div class="score-capped">' + icon("i-flame") + I.healthCapped + "</div>"
+      : "";
+    host.innerHTML =
+      '<div class="score-ring-wrap">' +
+        '<svg viewBox="0 0 104 104">' +
+          '<circle cx="52" cy="52" r="44" fill="none" stroke="' + C.ring + '" stroke-width="8"/>' +
+          '<circle cx="52" cy="52" r="44" fill="none" stroke="' + color + '" stroke-width="8" stroke-linecap="round" ' +
+            'stroke-dasharray="' + circ.toFixed(1) + '" stroke-dashoffset="' + offset.toFixed(1) + '" ' +
+            'style="transform:rotate(-90deg);transform-origin:center"/>' +
+        "</svg>" +
+        '<div class="score-ring-text"><span class="score-num" style="color:' + color + '">' + Math.round(h.score) + '</span>' +
+        '<span class="score-level" style="color:' + color + '">' + LEVEL_META[h.level].label() + "</span></div>" +
+      "</div>" +
+      '<div><div class="score-dims">' + badges + "</div>" + cappedBadge + "</div>";
+
+    // 评分走势:按当前粒度逐桶复算
+    const trend = [];
+    rows.forEach((r) => {
+      const rh = healthOf([r]);
+      if (rh) trend.push([timeOf(r), Math.min(rh.score, 100)]);
+    });
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.accent],
+      tooltip: Object.assign({}, liveTooltip(), {
+        valueFormatter: (val) => val == null ? "—" : val.toFixed(0),
+      }),
+      legend: { show: false },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", min: 0, max: 100,
+        axisLabel: { formatter: "{value}", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [Object.assign(lineSeries(I.healthTitle, trend, C.accent),
+        { smooth: 0.35, areaStyle: { color: areaGrad(C.accent, 0.22) } })],
+    };
+    setChart("ch-health-trend", option, rows, "cpu_avg");
+  }
+
+  // ── 应用排行 / 电池健康 / 每日电源构成 / 活跃与打卡 ──────────
+  function dayKeyOf(ms) {
+    const d = new Date(ms);
+    return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+  }
+
+  function renderApps(from, to) {
+    const apps = DATA.apps;
+    const section = $("sec-apps");
+    if (!apps || !apps.rows || !apps.rows.length) { section.hidden = true; return; }
+    section.hidden = false;
+    const fromKey = dayKeyOf(from), toKey = dayKeyOf(to);
+    const agg = {};
+    apps.rows.forEach((r) => {
+      const day = r[0], idx = r[1];
+      if (day < fromKey || day > toKey) return;
+      const a = agg[idx] || (agg[idx] = { cpu: 0, cn: 0, gpu: 0, gn: 0, mem: 0, mn: 0, net: 0 });
+      a.cpu += r[2] * r[3]; a.cn += r[3];
+      a.gpu += r[4] * r[5]; a.gn += r[5];
+      a.mem += r[6] * r[7]; a.mn += r[7];
+      a.net += r[8] + r[9];
+    });
+    function entries(field, countField, total) {
+      return Object.keys(agg)
+        .map((idx) => ({ idx: Number(idx), v: countField ? agg[idx][field] / (agg[idx][countField] || 1) : agg[idx][field] }))
+        .filter((e) => e.v > 0.05)
+        .sort((a, b) => b.v - a.v)
+        .slice(0, 8);
+    }
+    const lists = [
+      ["app-list-cpu", entries("cpu", "cn"), C.cpu, (x) => x.toFixed(1) + "%"],
+      ["app-list-mem", entries("mem", "mn"), C.mem, (x) => fmtBytes(x * 1_048_576)],
+      ["app-list-gpu", entries("gpu", "gn"), C.gpu, (x) => x.toFixed(1) + "%"],
+      ["app-list-net", entries("net", null), C.net, (x) => fmtBytes(x * 1_048_576)],
+    ];
+    let any = false;
+    lists.forEach(([listId, list, color, format]) => {
+      const host = $(listId);
+      host.innerHTML = "";
+      if (!list.length) {
+        host.innerHTML = '<div class="event-none" style="padding:18px 0">' + I.appsNone + "</div>";
+        return;
+      }
+      any = true;
+      const max = list[0].v || 1;
+      list.forEach((entry) => {
+        const row = el("div", "app-row");
+        const iconData = apps.icons[entry.idx];
+        const iconHTML = iconData
+          ? '<img src="data:image/png;base64,' + iconData + '" alt="">'
+          : '<span class="app-icon-fallback">' + icon("i-monitor") + "</span>";
+        row.innerHTML = iconHTML +
+          '<span class="app-name"></span>' +
+          '<span class="app-bar"><span class="app-bar-fill" style="width:' +
+          Math.max(3, entry.v / max * 100).toFixed(1) + "%;background:linear-gradient(90deg," +
+          color + "," + rgba(color, 0.45) + ')"></span></span>' +
+          '<span class="app-value"></span>';
+        row.querySelector(".app-name").textContent = apps.names[entry.idx] || "?";
+        row.querySelector(".app-value").textContent = format(entry.v);
+        host.appendChild(row);
+      });
+    });
+    $("apps-none").hidden = any;
+  }
+
+  function renderBatteryHealth(from, to) {
+    const section = $("sec-battery-health");
+    const battery = DATA.batteryDaily || [];
+    if (!battery.length || !DATA.hasBattery) { section.hidden = true; return; }
+    const fromKey = dayKeyOf(from), toKey = dayKeyOf(to);
+    const cycles = [], health = [];
+    battery.forEach((row) => {
+      if (row[0] < fromKey || row[0] > toKey) return;
+      const ms = dayKeyToMs(row[0]);
+      cycles.push([ms, row[1]]);
+      health.push([ms, row[2]]);
+    });
+    if (!cycles.length) {
+      section.hidden = false;
+      $("ch-battery-health").hidden = true;
+      $("e-battery-health").style.display = "block";
+    } else {
+      $("ch-battery-health").hidden = false;
+      $("e-battery-health").style.display = "none";
+      const option = {
+        backgroundColor: "transparent",
+        textStyle: { fontFamily: FONT },
+        color: [C.batt, C.accent],
+        tooltip: Object.assign({}, liveTooltip(), { trigger: "axis" }),
+        legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+          textStyle: { color: C.label, fontSize: 11.5 } },
+        grid: timeGrid(),
+        xAxis: baseAxis({ type: "time" }),
+        yAxis: [
+          baseAxis({ type: "value", scale: true, min: v => Math.floor(v.min / 20) * 20,
+            axisLabel: { color: C.label, fontSize: 11 } }),
+          baseAxis({ type: "value", scale: true, splitLine: { show: false },
+            axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
+        ],
+        series: [
+          lineSeries(I.sCycles, cycles, C.batt, { step: "end" }),
+          lineSeries(I.sHealth, health, C.accent, { yAxisIndex: 1, step: "end" }),
+        ],
+      };
+      chart("ch-battery-health").setOption(option, { notMerge: true });
+    }
+
+    // 每日电源构成:直供/充电/电池 小时(从当前粒度行推导)
+    const perDay = new Map();
+    rowsCurrent.forEach((r) => {
+      const ac = v(r, "ac_frac");
+      if (ac == null) return;
+      const key = dayKeyOf(timeOf(r));
+      const hours = bucketSeconds[currentSource] / 3600;
+      const e = perDay.get(key) || { d: 0, c: 0, b: 0 };
+      const charging = v(r, "charging_frac") || 0;
+      e.d += Math.max(0, ac - charging) * hours;
+      e.c += charging * hours;
+      e.b += Math.max(0, 1 - ac) * hours;
+      perDay.set(key, e);
+    });
+    const days = [...perDay.keys()].sort((a, b) => a - b);
+    if (!days.length || !DATA.hasBattery) {
+      $("ch-power-daily").hidden = true;
+      $("e-power-daily").style.display = "block";
+      return;
+    }
+    $("ch-power-daily").hidden = false;
+    $("e-power-daily").style.display = "none";
+    const option2 = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.accent, C.batt, C.fair],
+      tooltip: Object.assign({}, liveTooltip(), { trigger: "axis",
+        valueFormatter: (val) => val.toFixed(1) + " h" }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: { left: 10, right: 14, top: 36, bottom: 6, containLabel: true },
+      xAxis: baseAxis({ type: "category", data: days.map(fmtDayKeyShort),
+        axisLabel: { color: C.label, fontSize: 10.5, rotate: days.length > 16 ? 40 : 0 } }),
+      yAxis: baseAxis({ type: "value",
+        axisLabel: { formatter: (val) => val + " h", color: C.label, fontSize: 11 } }),
+      series: [
+        { name: I.sPowerDirect, type: "bar", stack: "p", barMaxWidth: 26, color: C.accent,
+          itemStyle: { borderRadius: [3, 3, 0, 0] }, data: days.map((k) => +perDay.get(k).d.toFixed(2)) },
+        { name: I.sPowerCharging, type: "bar", stack: "p", barMaxWidth: 26, color: C.batt,
+          data: days.map((k) => +perDay.get(k).c.toFixed(2)) },
+        { name: I.sPowerBattery, type: "bar", stack: "p", barMaxWidth: 26, color: C.fair,
+          data: days.map((k) => +perDay.get(k).b.toFixed(2)) },
+      ],
+    };
+    chart("ch-power-daily").setOption(option2, { notMerge: true });
+  }
+
+  function dayKeyToMs(key) {
+    return new Date(Math.floor(key / 10000), Math.floor(key % 10000 / 100) - 1, key % 100).getTime();
+  }
+  function fmtDayKeyShort(key) {
+    return String(Math.floor(key % 10000 / 100)).padStart(2, "0") + "/" + String(key % 100).padStart(2, "0");
+  }
+
+  function renderActivity(from, to) {
+    // 每日活跃时长(采样覆盖小时)
+    const perDay = new Map();
+    rowsCurrent.forEach((r) => {
+      const key = dayKeyOf(timeOf(r));
+      perDay.set(key, (perDay.get(key) || 0) + coverSeconds(r) / 3600);
+    });
+    const days = [...perDay.keys()].sort((a, b) => a - b);
+    if (days.length) {
+      $("ch-activity").hidden = false;
+      $("e-activity").style.display = "none";
+      const avg = days.reduce((a, k) => a + perDay.get(k), 0) / days.length;
+      $("h-activity").textContent = t("avgDaily", { v: avg.toFixed(1) });
+      const option = {
+        backgroundColor: "transparent",
+        textStyle: { fontFamily: FONT },
+        color: [C.accent],
+        tooltip: Object.assign({}, liveTooltip(), { trigger: "axis",
+          valueFormatter: (val) => val.toFixed(1) + " h" }),
+        grid: { left: 10, right: 14, top: 24, bottom: 6, containLabel: true },
+        xAxis: baseAxis({ type: "category", data: days.map(fmtDayKeyShort),
+          axisLabel: { color: C.label, fontSize: 10.5, rotate: days.length > 16 ? 40 : 0 } }),
+        yAxis: baseAxis({ type: "value",
+          axisLabel: { formatter: (val) => val + " h", color: C.label, fontSize: 11 } }),
+        series: [{ type: "bar", barMaxWidth: 22, color: C.accent,
+          itemStyle: { borderRadius: [3, 3, 0, 0] },
+          data: days.map((k) => +perDay.get(k).toFixed(2)) }],
+      };
+      chart("ch-activity").setOption(option, { notMerge: true });
+    } else {
+      $("ch-activity").hidden = true;
+      $("e-activity").style.display = "block";
+      $("h-activity").textContent = "";
+    }
+
+    // 使用打卡:近 26 周网格(周列 × 7 行,周一起)
+    const host = $("checkin");
+    const usage = DATA.usage;
+    if (!usage || !usage.days || !usage.days.length) {
+      host.innerHTML = '<div class="event-none" style="padding:24px 0">' + I.emptySection + "</div>";
+      return;
+    }
+    const onDays = new Set(usage.days);
+    const todayKey = dayKeyOf(Date.now());
+    const grid = el("div", "checkin-grid");
+    // 连续天数:优先服务端,缺失时由日列表回推
+    if (!usage.streak && usage.days) {
+      // 日历日回退(不能减 86400000ms:夏令时切换日会落到错误时刻、跳过一天)
+      const prevDay = (key) => {
+        const d = new Date(Math.floor(key / 10000), Math.floor(key % 10000 / 100) - 1, key % 100 - 1);
+        return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
+      };
+      let cursor = onDays.has(todayKey) ? todayKey : prevDay(todayKey);
+      let streak = 0;
+      while (onDays.has(cursor)) { streak += 1; cursor = prevDay(cursor); }
+      usage.streak = streak;
+    }
+    // 从本周周一(或 26 周前的周一)铺到本周
+    const today = new Date();
+    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
+    const start = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 25 * 7);
+    for (let week = 0; week < 26; week++) {
+      for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
+        const cellDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + week * 7 + dayOfWeek);
+        const key = dayKeyOf(cellDate.getTime());
+        const cell = el("span", "checkin-cell");
+        if (onDays.has(key)) cell.classList.add("on");
+        if (key === todayKey) cell.classList.add("today");
+        grid.appendChild(cell);
+      }
+    }
+    const stats = el("div", "checkin-stats");
+    stats.innerHTML =
+      '<div class="checkin-stat"><div class="n"></div><div class="l"></div></div>' +
+      '<div class="checkin-stat"><div class="n"></div><div class="l"></div></div>';
+    const blocks = stats.querySelectorAll(".checkin-stat");
+    blocks[0].querySelector(".n").textContent = usage.total || 0;
+    blocks[0].querySelector(".l").textContent = t("usageTotalLabel", {});
+    blocks[1].querySelector(".n").textContent = usage.streak || 0;
+    blocks[1].querySelector(".l").textContent = t("usageStreakLabel", {});
+    host.innerHTML = "";
+    const title = el("div", "");
+    title.style.cssText = "font-size:12px;color:var(--text-2);font-weight:600";
+    title.textContent = I.sCheckin;
+    const legend = el("div", "checkin-legend");
+    legend.textContent = I.checkinHint;
+    host.appendChild(title);
+    host.appendChild(grid);
+    host.appendChild(stats);
+    host.appendChild(legend);
+  }
+
+  // ── 事件时间线(从统计数据即时推导,可回溯任意范围) ─────────────
+  function deriveEvents(rows, source) {
+    if (!rows.length) return [];
+    const span = bucketSeconds[source];
+    const events = [];
+
+    // 连续桶区间扫描:条件满足的桶连成一段事件
+    function scanRuns(col, threshold, minBuckets, build) {
+      let run = null;
+      rows.forEach((r) => {
+        const x = v(r, col);
+        if (x != null && x >= threshold) {
+          if (!run) run = { start: r, count: 0, sum: 0 };
+          run.count += 1;
+          run.sum += x;
+        } else if (run) {
+          if (run.count >= minBuckets) events.push(build(run));
+          run = null;
+        }
+      });
+      if (run && run.count >= minBuckets) events.push(build(run));
+    }
+
+    scanRuns("cpu_avg", 90, 3, (run) => ({
+      ts: timeOf(run.start),
+      sev: run.sum / run.count >= 95 ? 2 : 1,
+      title: I.evCpuHigh,
+      detail: t("evCpuHighDetail", { v: (run.sum / run.count).toFixed(0), dur: fmtSpan(run.count * span) }),
+    }));
+    scanRuns("mem_pressure_avg", 60, 3, (run) => ({
+      ts: timeOf(run.start),
+      sev: run.sum / run.count >= 85 ? 2 : 1,
+      title: I.evPressureHigh,
+      detail: t("evPressureDetail", { v: (run.sum / run.count).toFixed(0), dur: fmtSpan(run.count * span) }),
+    }));
+    scanRuns("cpu_thermal_avg", 2.0, 2, (run) => ({
+      ts: timeOf(run.start),
+      sev: run.sum / run.count >= 2.5 ? 2 : 1,
+      title: I.evThermal,
+      detail: t("evThermalDetail", { dur: fmtSpan(run.count * span) }),
+    }));
+
+    // 尖峰:显著高于范围内中位数且绝对量足够大
+    function median(arr) {
+      if (!arr.length) return 0;
+      const s = arr.slice().sort((a, b) => a - b);
+      return s[Math.floor(s.length / 2)];
+    }
+    const netTotals = rows.map((r) => (v(r, "net_down") || 0) + (v(r, "net_up") || 0));
+    const netMedian = median(netTotals);
+    rows.forEach((r, i) => {
+      const total = netTotals[i];
+      if (total > 100 * 1024 * 1024 && total > netMedian * 8) {
+        events.push({ ts: timeOf(r), sev: 0, title: I.evNetSpike, detail: t("evNetDetail", { v: fmtBytes(total) }) });
+      }
+    });
+    const diskTotals = rows.map((r) => (v(r, "disk_read") || 0) + (v(r, "disk_write") || 0));
+    const diskMedian = median(diskTotals);
+    rows.forEach((r, i) => {
+      const total = diskTotals[i];
+      if (total > 100 * 1024 * 1024 && total > diskMedian * 8) {
+        events.push({ ts: timeOf(r), sev: 0, title: I.evDiskSpike, detail: t("evDiskDetail", { v: fmtBytes(total) }) });
+      }
+    });
+
+    // 系统重启:开机时长回落(时钟重置为更小值)
+    for (let i = 1; i < rows.length; i++) {
+      const a = v(rows[i - 1], "uptime_avg"), b = v(rows[i], "uptime_avg");
+      if (a == null || b == null) continue;
+      if (b < a - 120) {
+        events.push({ ts: timeOf(rows[i]), sev: 0, title: I.evReboot, detail: "" });
+      }
+    }
+
+    // 电源切换:相邻桶 ac_frac 跨 0.5
+    for (let i = 1; i < rows.length; i++) {
+      const a = v(rows[i - 1], "ac_frac"), b = v(rows[i], "ac_frac");
+      if (a == null || b == null) continue;
+      if ((a >= 0.5) !== (b >= 0.5)) {
+        events.push({
+          ts: timeOf(rows[i]),
+          sev: 0,
+          title: b >= 0.5 ? I.evPowerOnAC : I.evPowerOnBattery,
+          detail: "",
+        });
+      }
+    }
+
+    // 严重度优先,同级按时间倒序:避免大量 info 级电源切换淹没真实告警
+    return events.sort((a, b) => (b.sev - a.sev) || (b.ts - a.ts));
+  }
+
+  function renderEvents(rows, source) {
+    const host = $("events");
+    host.innerHTML = "";
+    const events = deriveEvents(rows, source);
+    $("h-events").textContent = events.length
+      ? t("evHint", { n: events.length > 30 ? "30+" : String(events.length) })
+      : "";
+    if (!events.length) {
+      host.innerHTML = '<div class="event-none">' + I.evNone + "</div>";
+      return;
+    }
+    const sevColor = [C.scoreGood, C.fair, C.critical];
+    events.slice(0, 30).forEach((ev) => {
+      const d = el("div", "event");
+      d.innerHTML =
+        '<span class="sev" style="background:' + sevColor[ev.sev] + '"></span>' +
+        '<span class="time"></span><span class="what"></span><span class="detail"></span>';
+      d.querySelector(".time").textContent = fmtDate(ev.ts) + " " + fmtClock(ev.ts);
+      d.querySelector(".what").textContent = ev.title;
+      d.querySelector(".detail").textContent = ev.detail;
+      host.appendChild(d);
+    });
+    if (events.length > 30) {
+      const more = el("div", "event-none");
+      more.textContent = t("evMore", { n: events.length - 30 });
+      host.appendChild(more);
+    }
+  }
+
+  // ── 范围与粒度 ────────────────────────────────────────────────
+  const RANGES = [
+    ["today", I.rToday, () => [startOfToday, Date.now()]],
+    ["week", I.rWeek, () => [Date.now() - 7 * DAY, Date.now()]],
+    ["month", I.rMonth, () => [Date.now() - 30 * DAY, Date.now()]],
+    ["year", I.rYear, () => [startOfYear, Date.now()]],
+    ["all", I.rAll, () => {
+      let min = Infinity;
+      ["minutes", "hours", "days"].forEach((k) => {
+        if (DATA[k].length) min = Math.min(min, timeOf(DATA[k][0]));
+      });
+      return [min === Infinity ? Date.now() : min, Date.now()];
+    }],
+  ];
+  let currentRange = "week";
+  let custom = null;
+
+  RANGES.forEach(([key, label]) => {
+    const b = el("button");
+    b.textContent = label;
+    b.dataset.key = key;
+    b.onclick = () => { custom = null; currentRange = key; applyRange(); };
+    $("ranges").appendChild(b);
+  });
+
+  $("apply-custom").onclick = () => {
+    const f = $("date-from").value, to = $("date-to").value;
+    if (!f || !to) return;
+    const from = new Date(f + "T00:00:00").getTime();
+    let end = new Date(to + "T00:00:00").getTime() + DAY;
+    if (end <= from) end = from + DAY;
+    custom = [from, Math.min(end, Date.now() + DAY)];
+    currentRange = null;
+    applyRange();
+  };
+
+  function pickSource(from, to) {
+    const span = to - from;
+    if (span <= 2 * DAY && DATA.minutes.length && from >= timeOf(DATA.minutes[0]) - DAY) return "minutes";
+    if (span <= 60 * DAY && DATA.hours.length && from >= timeOf(DATA.hours[0]) - DAY) return "hours";
+    if (span <= 60 * DAY) return DATA.hours.length ? "hours" : "days";
+    return "days";
+  }
+
+  // ── ECharts 公共样式 ─────────────────────────────────────────
+  function liveTooltip() {
+    // 颜色随主题变化,每次构造 option 时取实时值
+    return {
+      trigger: "axis",
+      backgroundColor: C.tooltipBg,
+      borderColor: C.tooltipBorder,
+      borderWidth: 1,
+      padding: [8, 12],
+      textStyle: { color: C.tooltipText, fontSize: 12, fontFamily: FONT },
+      axisPointer: { lineStyle: { color: "rgba(128,140,170,0.4)" } },
+    };
+  }
+  function baseAxis(extra) {
+    return Object.assign({
+      axisLine: { lineStyle: { color: C.axis } },
+      axisLabel: { color: C.label, fontSize: 11, hideOverlap: true },
+      splitLine: { lineStyle: { color: C.grid } },
+      axisTick: { show: false },
+    }, extra || {});
+  }
+  function timeGrid() {
+    return { left: 10, right: 18, top: 38, bottom: 6, containLabel: true };
+  }
+  const charts = {};
+  function chart(id) {
+    if (!charts[id]) charts[id] = echarts.init($(id), null, { renderer: "canvas" });
+    return charts[id];
+  }
+  function setChart(id, option, rows, col) {
+    const empty = $(id.replace("ch-", "e-"));
+    const hasData = !col || hasAny(rows, col);
+    if (!hasData) {
+      chart(id).clear();
+      $(id).hidden = true;
+      if (empty) empty.style.display = "block";
+      return;
+    }
+    $(id).hidden = false;
+    if (empty) empty.style.display = "none";
+    chart(id).setOption(option, { notMerge: true });
+  }
+  window.addEventListener("resize", () => {
+    Object.values(charts).forEach((c) => c.resize());
+  });
+
+  function lineSeries(name, data, color, opts) {
+    return Object.assign({
+      name, type: "line", smooth: 0.25, symbol: "none",
+      data, lineStyle: { width: 2, color },
+      itemStyle: { color },
+    }, opts || {});
+  }
+  function seriesData(rows, col, transform) {
+    const out = [];
+    rows.forEach((r) => {
+      let x = v(r, col);
+      if (x == null) { out.push([timeOf(r), null]); return; }
+      if (transform) x = transform(x, r);
+      out.push([timeOf(r), x]);
+    });
+    return out;
+  }
+
+  // 面积图垂直渐变:顶部近色、底部消隐,比平涂透明度更现代
+  function rgba(hex, a) {
+    const n = parseInt(hex.slice(1), 16);
+    return "rgba(" + ((n >> 16) & 255) + "," + ((n >> 8) & 255) + "," + (n & 255) + "," + a + ")";
+  }
+  function areaGrad(color, topAlpha) {
+    return new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+      { offset: 0, color: rgba(color, topAlpha == null ? 0.34 : topAlpha) },
+      { offset: 1, color: rgba(color, 0.02) },
+    ]);
+  }
+
+  // ── 各区块渲染 ───────────────────────────────────────────────
+  function renderKPI(rows) {
+    const grid = $("kpi");
+    grid.innerHTML = "";
+    const defs = [
+      ["cpu", "i-cpu", "c-cpu", I.kCpu, fmtPct(avgOf(rows, "cpu_avg")),
+        t("kPeak", { v: fmtPct(maxOf(rows, "cpu_max")) })],
+      ["gpu", "i-monitor", "c-gpu", I.kGpu, fmtPct(avgOf(rows, "gpu_avg")),
+        t("kPeak", { v: fmtPct(maxOf(rows, "gpu_max")) })],
+      ["mem", "i-memory-stick", "c-mem", I.kMem, fmtPct(avgOf(rows, "mem_pct_avg")),
+        t("kPeak", { v: fmtPct(maxOf(rows, "mem_pct_max")) })],
+      ["net-down", "i-arrow-down", "c-net", I.kNetDown, fmtBytes(sumOf(rows, "net_down")),
+        t("kPeakRate", { v: fmtRate(maxOf(rows, "net_down_peak")) })],
+      ["net-up", "i-arrow-up", "c-net", I.kNetUp, fmtBytes(sumOf(rows, "net_up")),
+        t("kPeakRate", { v: fmtRate(maxOf(rows, "net_up_peak")) })],
+      ["disk", "i-hard-drive", "c-disk", I.kDisk, fmtBytes(sumOf(rows, "disk_read")),
+        t("kDiskW", { v: fmtBytes(sumOf(rows, "disk_write")) })],
+      ["power", "i-battery-charging", "c-batt", I.kPower, fmtW(avgOf(rows, "power_avg")),
+        t("kPeak", { v: fmtW(maxOf(rows, "power_max")) })],
+      ["ac", "i-zap", "c-accent", I.kAC, fmtPct((avgOf(rows, "ac_frac") || 0) * 100, 0),
+        DATA.hasBattery ? t("kCharging", { v: fmtPct((avgOf(rows, "charging_frac") || 0) * 100, 0) }) : I.kDirectSupply],
+    ];
+    defs.forEach(([key, ic, cls, label, value, sub]) => {
+      const k = el("div", "kpi");
+      k.innerHTML = '<span class="kpi-chip ' + cls + '">' + icon(ic) + '</span>' +
+        '<div><div class="label"></div><div class="value"></div><div class="sub"></div></div>';
+      k.querySelector(".label").textContent = label;
+      countUp(k.querySelector(".value"), value);
+      k.querySelector(".sub").textContent = sub;
+      grid.appendChild(k);
+    });
+  }
+
+  function renderOverview(rows) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.cpu, C.gpu, C.mem],
+      tooltip: Object.assign({}, liveTooltip(), {
+        valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
+      }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", max: 100, axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [
+        Object.assign(lineSeries(I.sCpu, seriesData(rows, "cpu_avg"), C.cpu),
+          { areaStyle: { color: areaGrad(C.cpu, 0.26) } }),
+        lineSeries(I.sGpu, seriesData(rows, "gpu_avg"), C.gpu),
+        lineSeries(I.sMemPressure, seriesData(rows, "mem_pressure_avg"), C.mem),
+      ],
+    };
+    setChart("ch-overview", option, rows, "cpu_avg");
+  }
+
+  function renderHeatmap() {
+    // 固定用内嵌的小时数据(近 60 天):活动节律需要小时级分辨率
+    const rows = DATA.hours;
+    const cell = {};
+    let maxCell = 0;
+    rows.forEach((r) => {
+      const cpu = v(r, "cpu_avg"), gpu = v(r, "gpu_avg"), mem = v(r, "mem_pressure_avg");
+      if (cpu == null && gpu == null && mem == null) return;
+      const busy = Math.max(cpu || 0, gpu || 0, mem || 0);
+      const d = new Date(timeOf(r));
+      const key = d.getDay() + "-" + d.getHours();
+      if (!cell[key]) cell[key] = { sum: 0, n: 0 };
+      cell[key].sum += busy * frames(r);
+      cell[key].n += frames(r);
+    });
+    const data = [];
+    const order = [1, 2, 3, 4, 5, 6, 0]; // 周一→周日
+    order.forEach((weekday, yi) => {
+      for (let h = 0; h < 24; h++) {
+        const c = cell[weekday + "-" + h];
+        if (!c || c.n === 0) return;
+        const val = c.sum / c.n;
+        maxCell = Math.max(maxCell, val);
+        data.push([h, yi, val]);
+      }
+    });
+    const weekdays = [I.wd1, I.wd2, I.wd3, I.wd4, I.wd5, I.wd6, I.wd0];
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      tooltip: Object.assign({}, liveTooltip(), {
+        trigger: "item",
+        formatter: (p) => weekdays[p.value[1]] + " " + p.value[0] + ":00 – " + p.value[2].toFixed(1) + "%",
+      }),
+      grid: { left: 8, right: 14, top: 10, bottom: 26, containLabel: true },
+      xAxis: baseAxis({
+        type: "category",
+        data: Array.from({ length: 24 }, (_, h) => h),
+        splitLine: { show: false },
+        axisLabel: { formatter: (h) => (h % 3 === 0 ? h : ""), color: C.label, fontSize: 11 },
+        name: I.hourOfDay, nameLocation: "end", nameTextStyle: { color: C.label, fontSize: 10.5 },
+      }),
+      yAxis: baseAxis({ type: "category", data: weekdays, splitLine: { show: false } }),
+      visualMap: {
+        show: false, min: 0, max: Math.max(20, maxCell),
+        inRange: { color: C.heat },
+      },
+      series: [{
+        type: "heatmap",
+        data,
+        progressive: 0,
+        itemStyle: { borderColor: C.heatBorder, borderWidth: 2, borderRadius: 3 },
+        emphasis: { itemStyle: { shadowBlur: 6, shadowColor: "rgba(128,140,170,0.35)" } },
+      }],
+    };
+    $("ch-heatmap").hidden = false;
+    chart("ch-heatmap").setOption(option, { notMerge: true });
+  }
+
+  function distribution(rows, col) {
+    const buckets = [0, 0, 0, 0, 0];
+    rows.forEach((r) => {
+      const x = v(r, col);
+      if (x == null) return;
+      const b = x < 10 ? 0 : x < 30 ? 1 : x < 60 ? 2 : x < 90 ? 3 : 4;
+      buckets[b] += frames(r);
+    });
+    const total = buckets.reduce((a, b) => a + b, 0);
+    return total > 0 ? buckets : null;
+  }
+  function distOption(buckets, colors) {
+    const total = buckets.reduce((a, b) => a + b, 0);
+    return {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: colors,
+      tooltip: Object.assign({}, liveTooltip(), {
+        trigger: "item",
+        valueFormatter: (val) => val.toFixed(1) + "% (" + fmtHours(total * val / 100) + ")",
+      }),
+      legend: { bottom: 0, left: "center", icon: "circle", itemWidth: 8, itemHeight: 8,
+        textStyle: { color: C.label, fontSize: 11 } },
+      series: [{
+        type: "pie", radius: ["52%", "74%"], center: ["50%", "44%"],
+        avoidLabelOverlap: true,
+        itemStyle: { borderColor: C.pieBorder, borderWidth: 2, borderRadius: 5 },
+        label: { show: false },
+        emphasis: { scaleSize: 4 },
+        data: buckets.map((n, i) => ({ name: I["dist" + i], value: n })),
+      }],
+    };
+  }
+
+  function renderCpu(rows) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.cpu, C.disk],
+      tooltip: Object.assign({}, liveTooltip(), {
+        valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
+      }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", max: 100, axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [
+        Object.assign(lineSeries(I.sAvg, seriesData(rows, "cpu_avg"), C.cpu),
+          { areaStyle: { color: areaGrad(C.cpu, 0.30) } }),
+        lineSeries(I.sPeak, seriesData(rows, "cpu_max"), C.disk,
+          { lineStyle: { width: 1.4, type: [4, 4] } }),
+      ],
+    };
+    setChart("ch-cpu", option, rows, "cpu_avg");
+  }
+
+  function renderCpuPE(rows) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: ["#fb7185", "#60a5fa"],
+      tooltip: Object.assign({}, liveTooltip(), {
+        valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
+      }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", max: 100, axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [
+        Object.assign(lineSeries(I.sPerfCore, seriesData(rows, "cpu_p_avg"), "#fb7185"),
+          { stack: "pe", areaStyle: { color: areaGrad("#fb7185", 0.30) } }),
+        Object.assign(lineSeries(I.sEffCore, seriesData(rows, "cpu_e_avg"), "#60a5fa"),
+          { stack: "pe", areaStyle: { color: areaGrad("#60a5fa", 0.30) } }),
+      ],
+    };
+    setChart("ch-cpu-pe", option, rows, "cpu_p_avg");
+  }
+
+  function renderCpuDist(rows) {
+    const buckets = distribution(rows, "cpu_avg");
+    setChart("ch-cpu-dist", buckets ? distOption(buckets,
+      [C.ring, "#4c7fd0", C.mem, C.fair, C.critical]) : {}, rows, "cpu_avg");
+  }
+
+  function renderGpu(rows) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.gpu],
+      tooltip: Object.assign({}, liveTooltip(), {
+        valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
+      }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", max: 100, axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [
+        Object.assign(lineSeries(I.sAvg, seriesData(rows, "gpu_avg"), C.gpu),
+          { areaStyle: { color: areaGrad(C.gpu, 0.30) } }),
+        lineSeries(I.sPeak, seriesData(rows, "gpu_max"), C.gpu,
+          { lineStyle: { width: 1.4, opacity: 0.45, type: [4, 4] } }),
+      ],
+    };
+    setChart("ch-gpu", option, rows, "gpu_avg");
+  }
+
+  function renderGpuDist(rows) {
+    const buckets = distribution(rows, "gpu_avg");
+    setChart("ch-gpu-dist", buckets ? distOption(buckets,
+      [C.ring, "#7c6bd6", C.gpu, "#c084fc", C.critical]) : {}, rows, "gpu_avg");
+  }
+
+  function renderGpuMem(rows) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.gpu],
+      tooltip: Object.assign({}, liveTooltip(), { valueFormatter: fmtBytes }),
+      legend: { show: false },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", scale: true,
+        axisLabel: { formatter: (val) => fmtBytes(val), color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [Object.assign(lineSeries(I.sGpuMem, seriesData(rows, "gpu_mem_avg"), C.gpu),
+        { areaStyle: { color: areaGrad(C.gpu, 0.30) } })],
+    };
+    setChart("ch-gpu-mem", option, rows, "gpu_mem_avg");
+  }
+
+  function renderMem(rows) {
+    const other = [];
+    const compressed = [];
+    const pressure = [];
+    const swap = [];
+    rows.forEach((r) => {
+      const used = v(r, "mem_used_avg");
+      const comp = v(r, "mem_comp_avg") || 0;
+      compressed.push([timeOf(r), used == null ? null : comp]);
+      other.push([timeOf(r), used == null ? null : Math.max(0, used - comp)]);
+      pressure.push([timeOf(r), v(r, "mem_pressure_avg")]);
+      swap.push([timeOf(r), v(r, "mem_swap_avg")]);
+    });
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: ["#0ea5e9", C.mem, C.fan, "#f472b6"],
+      tooltip: Object.assign({}, liveTooltip(), {
+        formatter: (params) => {
+          let html = '<div style="opacity:.6;font-size:11px;margin-bottom:4px">'
+            + fmtDate(params[0].value[0]) + " " + fmtClock(params[0].value[0]) + "</div>";
+          params.forEach((p) => {
+            const text = p.seriesName === I.sMemPressure
+              ? (p.value[1] == null ? "—" : p.value[1].toFixed(1) + "%")
+              : fmtBytes(p.value[1]);
+            html += "<div>" + p.marker + " " + p.seriesName + ": " + text + "</div>";
+          });
+          return html;
+        },
+      }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: [
+        baseAxis({ type: "value", scale: true,
+          axisLabel: { formatter: (val) => fmtBytes(val), color: C.label, fontSize: 11 } }),
+        baseAxis({ type: "value", max: 100, splitLine: { show: false },
+          axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
+      ],
+      dataZoom: [{ type: "inside" }],
+      series: [
+        { name: I.sMemUsed, type: "line", stack: "mem", smooth: 0.25, symbol: "none",
+          data: other, lineStyle: { width: 0 }, areaStyle: { color: areaGrad("#0ea5e9", 0.42) },
+          emphasis: { focus: "series" } },
+        { name: I.sMemCompressed, type: "line", stack: "mem", smooth: 0.25, symbol: "none",
+          data: compressed, lineStyle: { width: 0 }, areaStyle: { color: areaGrad(C.mem, 0.72) },
+          emphasis: { focus: "series" } },
+        lineSeries(I.sMemPressure, pressure, "#f472b6", { yAxisIndex: 1 }),
+        lineSeries(I.sMemSwap, swap, C.fan, { lineStyle: { width: 1.5 } }),
+      ],
+    };
+    setChart("ch-mem", option, rows, "mem_used_avg");
+  }
+
+  function rateFromTotal(rows, col, source) {
+    const seconds = bucketSeconds[source];
+    return seriesData(rows, col, (x) => x / seconds);
+  }
+
+  function renderNet(rows, source) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.net, C.netUp],
+      tooltip: Object.assign({}, liveTooltip(), { valueFormatter: fmtRate }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", scale: true,
+        axisLabel: { formatter: (val) => fmtBytes(val) + "/s", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [
+        Object.assign(lineSeries(I.sDown, rateFromTotal(rows, "net_down", source), C.net),
+          { areaStyle: { color: areaGrad(C.net, 0.30) } }),
+        lineSeries(I.sUp, rateFromTotal(rows, "net_up", source), C.netUp),
+      ],
+    };
+    setChart("ch-net", option, rows, "net_down");
+  }
+
+  function dailyTotals(rows, col) {
+    const map = new Map();
+    rows.forEach((r) => {
+      const x = v(r, col);
+      if (x == null) return;
+      const d = new Date(timeOf(r));
+      const key = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+      map.set(key, (map.get(key) || 0) + x);
+    });
+    return [...map.entries()].sort((a, b) => a[0] - b[0]);
+  }
+
+  function dailyBarsOption(entries, seriesDefs) {
+    return {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: seriesDefs.map((s) => s.color),
+      tooltip: Object.assign({}, liveTooltip(), { trigger: "axis" }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: { left: 10, right: 14, top: 36, bottom: 6, containLabel: true },
+      xAxis: baseAxis({ type: "category",
+        data: entries.map((e) => fmtDateShort(e[0])),
+        axisLabel: { color: C.label, fontSize: 10.5, rotate: entries.length > 16 ? 40 : 0 } }),
+      yAxis: baseAxis({ type: "value",
+        axisLabel: { formatter: (val) => fmtBytes(val), color: C.label, fontSize: 11 } }),
+      series: seriesDefs.map((s) => ({
+        name: s.name, type: "bar", stack: s.stack, barMaxWidth: 26,
+        itemStyle: { color: s.color, borderRadius: s.radius ? [3, 3, 0, 0] : 0 },
+        data: entries.map((e) => e[1][s.key] || 0),
+      })),
+    };
+  }
+
+  function renderNetDaily(rows) {
+    const down = dailyTotals(rows, "net_down");
+    const up = dailyTotals(rows, "net_up");
+    const map = new Map();
+    down.forEach(([k, val]) => map.set(k, { down: val }));
+    up.forEach(([k, val]) => { const e = map.get(k) || {}; e.up = val; map.set(k, e); });
+    const entries = [...map.entries()].sort((a, b) => a[0] - b[0]);
+    setChart("ch-net-daily", dailyBarsOption(entries, [
+      { key: "down", name: I.sDown, color: C.net, stack: "net", radius: true },
+      { key: "up", name: I.sUp, color: C.netUp, stack: "net" },
+    ]), rows, "net_down");
+  }
+
+  function renderDisk(rows, source) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.disk, C.diskW],
+      tooltip: Object.assign({}, liveTooltip(), { valueFormatter: fmtRate }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", scale: true,
+        axisLabel: { formatter: (val) => fmtBytes(val) + "/s", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [
+        Object.assign(lineSeries(I.sDiskRead, rateFromTotal(rows, "disk_read", source), C.disk),
+          { areaStyle: { color: areaGrad(C.disk, 0.30) } }),
+        lineSeries(I.sDiskWrite, rateFromTotal(rows, "disk_write", source), C.diskW),
+      ],
+    };
+    setChart("ch-disk", option, rows, "disk_read");
+  }
+
+  function renderDiskDaily(rows) {
+    const read = dailyTotals(rows, "disk_read");
+    const write = dailyTotals(rows, "disk_write");
+    const map = new Map();
+    read.forEach(([k, val]) => map.set(k, { read: val }));
+    write.forEach(([k, val]) => { const e = map.get(k) || {}; e.write = val; map.set(k, e); });
+    const entries = [...map.entries()].sort((a, b) => a[0] - b[0]);
+    setChart("ch-disk-daily", dailyBarsOption(entries, [
+      { key: "read", name: I.sDiskRead, color: C.disk, stack: "disk", radius: true },
+      { key: "write", name: I.sDiskWrite, color: C.diskW, stack: "disk" },
+    ]), rows, "disk_read");
+  }
+
+  function renderPower(rows) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.batt],
+      tooltip: Object.assign({}, liveTooltip(), { valueFormatter: fmtW }),
+      legend: { show: false },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", scale: true,
+        axisLabel: { formatter: (val) => val + " W", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [Object.assign(lineSeries(I.sPower, seriesData(rows, "power_avg"), C.batt),
+        { areaStyle: { color: areaGrad(C.batt, 0.30) } })],
+    };
+    setChart("ch-power", option, rows, "power_avg");
+  }
+
+  function renderBattery(rows) {
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: [C.batt],
+      tooltip: Object.assign({}, liveTooltip(), {
+        valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
+      }),
+      legend: { show: false },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: baseAxis({ type: "value", min: 0, max: 100,
+        axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
+      dataZoom: [{ type: "inside" }],
+      series: [Object.assign(lineSeries(I.sBattLevel, seriesData(rows, "batt_level_avg"), C.batt),
+        { areaStyle: { color: areaGrad(C.batt, 0.30) } })],
+    };
+    setChart("ch-batt", option, rows, "batt_level_avg");
+  }
+
+  function renderPowerDist(rows) {
+    const ac = avgOf(rows, "ac_frac");
+    const charging = avgOf(rows, "charging_frac") || 0;
+    if (ac == null) { setChart("ch-power-dist", {}, rows, "ac_frac"); return; }
+    const direct = Math.max(0, ac - charging);
+    const battery = Math.max(0, 1 - ac);
+    const data = [
+      { name: I.sPowerDirect, value: direct, itemStyle: { color: C.accent } },
+      { name: I.sPowerCharging, value: charging, itemStyle: { color: C.batt } },
+      { name: I.sPowerBattery, value: battery, itemStyle: { color: C.fair } },
+    ].filter((d) => d.value > 0.0005);
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      tooltip: Object.assign({}, liveTooltip(), { trigger: "item",
+        valueFormatter: (val) => val.toFixed(1) + "%" }),
+      legend: { bottom: 0, left: "center", icon: "circle", itemWidth: 8, itemHeight: 8,
+        textStyle: { color: C.label, fontSize: 11 } },
+      series: [{
+        type: "pie", radius: ["52%", "74%"], center: ["50%", "44%"],
+        itemStyle: { borderColor: C.pieBorder, borderWidth: 2, borderRadius: 5 },
+        label: { show: false },
+        data,
+      }],
+    };
+    $("ch-power-dist").hidden = false;
+    $("e-power-dist").style.display = "none";
+    chart("ch-power-dist").setOption(option, { notMerge: true });
+  }
+
+  function renderThermal(rows) {
+    const series = [];
+    const colors = [];
+    const hasCpuTemp = hasAny(rows, "cpu_temp_avg");
+    const hasBattTemp = hasAny(rows, "batt_temp_avg");
+    const hasFan = hasAny(rows, "fan_avg");
+    if (hasCpuTemp) {
+      series.push(Object.assign(lineSeries(I.sCpuTemp, seriesData(rows, "cpu_temp_avg"), C.thermal),
+        { yAxisIndex: 0 }));
+      colors.push(C.thermal);
+    }
+    if (hasBattTemp) {
+      series.push(lineSeries(I.sBattTemp, seriesData(rows, "batt_temp_avg"), C.fair, { yAxisIndex: 0 }));
+      colors.push(C.fair);
+    }
+    if (hasFan) {
+      series.push(lineSeries(I.sFanRPM, seriesData(rows, "fan_avg"), C.fan, { yAxisIndex: 1 }));
+      colors.push(C.fan);
+    }
+    const option = {
+      backgroundColor: "transparent",
+      textStyle: { fontFamily: FONT },
+      color: colors,
+      tooltip: Object.assign({}, liveTooltip(), {
+        formatter: (params) => {
+          let html = '<div style="opacity:.6;font-size:11px;margin-bottom:4px">'
+            + fmtDate(params[0].value[0]) + " " + fmtClock(params[0].value[0]) + "</div>";
+          params.forEach((p) => {
+            const text = p.seriesName === I.sFanRPM
+              ? fmtRPM(p.value[1])
+              : p.value[1] == null ? "—" : p.value[1].toFixed(1) + "°C";
+            html += "<div>" + p.marker + " " + p.seriesName + ": " + text + "</div>";
+          });
+          return html;
+        },
+      }),
+      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
+        textStyle: { color: C.label, fontSize: 11.5 } },
+      grid: timeGrid(),
+      xAxis: baseAxis({ type: "time" }),
+      yAxis: [
+        baseAxis({ type: "value", scale: true,
+          axisLabel: { formatter: (val) => val + "°C", color: C.label, fontSize: 11 } }),
+        baseAxis({ type: "value", scale: true, splitLine: { show: false },
+          axisLabel: { formatter: (val) => (val / 1000) + "k", color: C.label, fontSize: 11 } }),
+      ],
+      dataZoom: [{ type: "inside" }],
+      series,
+    };
+    const probe = hasCpuTemp ? "cpu_temp_avg" : hasBattTemp ? "batt_temp_avg" : "fan_avg";
+    setChart("ch-thermal", option, rows, probe);
+  }
+
+  function renderTable(rows, source) {
+    // 日行优先;今日用分钟行现算,近 60 天内的小时数据兜底
+    const dayMap = new Map();
+    DATA.days.forEach((r) => {
+      const d = new Date(timeOf(r));
+      dayMap.set(new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime(), r);
+    });
+    const list = [];
+    const from = currentFrom, to = currentTo;
+    for (let ts = startOfLocalDay(from); ts < to; ts += DAY) {
+      let row = dayMap.get(ts);
+      if (!row && ts === startOfToday) {
+        const minutes = rowsBetween(DATA.minutes, ts, Date.now());
+        if (minutes.length) row = minutes.reduce(aggregateReduce, blankRow(ts));
+      }
+      if (!row && source !== "days") {
+        const hours = rowsBetween(DATA.hours, ts, ts + DAY);
+        if (hours.length) row = hours.reduce(aggregateReduce, blankRow(ts));
+      }
+      if (row) list.push(row);
+    }
+    const head = [
+      I.colDay, I.colCpuAvg, I.colCpuPeak, I.colMemAvg, I.colMemPressure,
+      I.colNetDown, I.colNetUp, I.colDiskRead, I.colDiskWrite,
+      I.colAC, I.colPowerAvg, I.colCoverage,
+    ];
+    const table = el("table");
+    const thead = el("thead");
+    const trh = el("tr");
+    head.forEach((h) => { const th = el("th"); th.textContent = h; trh.appendChild(th); });
+    thead.appendChild(trh);
+    table.appendChild(thead);
+    const tbody = el("tbody");
+    [...list].reverse().forEach((r) => {
+      const tr = el("tr");
+      const ac = v(r, "ac_frac");
+      const cells = [
+        [fmtDate(timeOf(r)), "day"],
+        [fmtPct(v(r, "cpu_avg")), ""],
+        [fmtPct(v(r, "cpu_max")), ""],
+        [fmtPct(v(r, "mem_pct_avg")), ""],
+        [fmtPct(v(r, "mem_pressure_avg")), ""],
+        [fmtBytes(v(r, "net_down")), ""],
+        [fmtBytes(v(r, "net_up")), ""],
+        [fmtBytes(v(r, "disk_read")), ""],
+        [fmtBytes(v(r, "disk_write")), ""],
+        [ac == null ? "—" : fmtPct(ac * 100, 0), ""],
+        [fmtW(v(r, "power_avg")), ""],
+        [fmtHours(frames(r)), ""],
+      ];
+      cells.forEach(([text, cls]) => {
+        const td = el("td");
+        if (cls) td.className = cls;
+        td.textContent = text;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    table.appendChild(tbody);
+    $("tbl").innerHTML = "";
+    if (!list.length) {
+      $("e-table").style.display = "block";
+      return;
+    }
+    $("e-table").style.display = "none";
+    $("tbl").appendChild(table);
+  }
+
+  function blankRow(ts) {
+    const r = [Math.floor(ts / 1000)];
+    for (let i = 0; i < COLS.length; i++) r.push(null);
+    r.push(0);
+    return r;
+  }
+  function aggregateReduce(acc, r) {
+    const weightA = frames(acc), weightB = frames(r);
+    COLS.forEach((c, i) => {
+      const a = acc[i + 1], b = r[i + 1];
+      if (b == null) return;
+      const kind = AGG[c];
+      if (kind === "sum") {
+        acc[i + 1] = (a || 0) + b;
+      } else if (kind === "max") {
+        acc[i + 1] = a == null ? b : Math.max(a, b);
+      } else {
+        // 均值/占比按帧数加权合并
+        if (a == null) acc[i + 1] = b;
+        else if (weightA + weightB === 0) acc[i + 1] = (a + b) / 2;
+        else acc[i + 1] = (a * weightA + b * weightB) / (weightA + weightB);
+      }
+    });
+    acc[NIX] = weightA + weightB;
+    return acc;
+  }
+  const AGG = {};
+  COLS.forEach((c) => {
+    AGG[c] = /(_avg|_frac)$/.test(c) ? "avg" : /(_max|_peak)$/.test(c) ? "max" : "sum";
+  });
+
+  function renderInsights(rows, source) {
+    const box = $("insights");
+    box.innerHTML = "";
+    const items = [];
+    const cpuAvg = avgOf(rows, "cpu_avg");
+    if (cpuAvg != null) {
+      const level = cpuAvg < 20 ? I.insLoadLow : cpuAvg < 50 ? I.insLoadMid : I.insLoadHigh;
+      items.push(["i-gauge", "c-accent", I.insLoadTitle,
+        t("insLoad", { v: cpuAvg.toFixed(1) }) + " — " + level]);
+    }
+    let peak = null;
+    rows.forEach((r) => {
+      const x = v(r, "cpu_max");
+      if (x != null && (!peak || x > peak[1])) peak = [timeOf(r), x];
+    });
+    if (peak) {
+      items.push(["i-cpu", "c-cpu", I.insPeakTitle,
+        t("insPeak", { v: peak[1].toFixed(1), time: fmtDate(peak[0]) + " " + fmtClock(peak[0]) })]);
+    }
+    // 最忙时段:小时内数据(所选范围 ≤60 天时);分钟粒度范围也要把小时层裁到同一窗口
+    if (source !== "days") {
+      const hourRows = source === "minutes" ? rowsBetween(DATA.hours, currentFrom, currentTo) : rows;
+      const slot = {};
+      hourRows.forEach((r) => {
+        const x = v(r, "cpu_avg");
+        if (x == null) return;
+        const h = new Date(timeOf(r)).getHours();
+        if (!slot[h]) slot[h] = { sum: 0, n: 0 };
+        slot[h].sum += x * frames(r);
+        slot[h].n += frames(r);
+      });
+      let busiest = null;
+      for (const h in slot) {
+        const avg = slot[h].sum / slot[h].n;
+        if (!busiest || avg > busiest[1]) busiest = [Number(h), avg];
+      }
+      if (busiest) {
+        items.push(["i-flame", "c-thermal", I.insBusyTitle,
+          t("insBusy", { v: String(busiest[0]).padStart(2, "0") + ":00–" + String((busiest[0] + 1) % 24).padStart(2, "0") + ":00", p: busiest[1].toFixed(1) })]);
+      }
+    }
+    const netDown = sumOf(rows, "net_down");
+    if (netDown != null) {
+      items.push(["i-arrow-down", "c-net", I.insNetTitle, t("insNet", { v: fmtBytes(netDown) })]);
+    }
+    const covered = rows.reduce((a, r) => a + coverSeconds(r), 0);
+    const spanSeconds = (currentTo - currentFrom) / 1000;
+    if (spanSeconds > 0) {
+      items.push(["i-clock", "c-muted", I.insCoverageTitle,
+        t("insCoverage", { v: Math.min(100, covered / spanSeconds * 100).toFixed(1), h: fmtHours(covered) })]);
+    }
+    items.forEach(([ic, cls, title, text]) => {
+      const d = el("div", "insight " + cls);
+      d.innerHTML = '<div class="insight-head">' + icon(ic) + '<div class="t"></div></div><div class="v"></div>';
+      d.querySelector(".t").textContent = title;
+      d.querySelector(".v").textContent = text;
+      box.appendChild(d);
+    });
+  }
+
+  function startOfLocalDay(ts) {
+    const d = new Date(ts);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  }
+
+  // ── 主流程 ───────────────────────────────────────────────────
+  let currentFrom = 0, currentTo = 0;
+  let rowsCurrent = [];
+  let currentSource = "hours";
+
+  function applyRange() {
+    document.querySelectorAll("#ranges button").forEach((b) => {
+      b.classList.toggle("active", b.dataset.key === currentRange);
+    });
+    let from, to;
+    if (custom) {
+      [from, to] = custom;
+    } else {
+      [from, to] = RANGES.find(([k]) => k === currentRange)[2]();
+    }
+    currentFrom = from;
+    currentTo = to;
+    const source = pickSource(from, to);
+    const rows = rowsBetween(DATA[source], from, to);
+    rowsCurrent = rows;
+    currentSource = source;
+
+    renderHealth(rows);
+    // 新增分区各自隔离:单区异常不拖垮整页
+    [renderApps, renderBatteryHealth, renderActivity].forEach((fn) => {
+      try { fn(from, to); } catch (err) {
+        console.error("render section failed:", err);
+        const note = $("apps-none");
+        if (note) { note.hidden = false; note.textContent = String(err && err.message || err); }
+      }
+    });
+    renderKPI(rows);
+    renderOverview(rows);
+    renderCpu(rows);
+    renderCpuPE(rows);
+    renderCpuDist(rows);
+    renderGpu(rows);
+    renderGpuDist(rows);
+    renderGpuMem(rows);
+    renderMem(rows);
+    renderNet(rows, source);
+    renderNetDaily(rows);
+    renderDisk(rows, source);
+    renderDiskDaily(rows);
+    renderPower(rows);
+    renderBattery(rows);
+    renderPowerDist(rows);
+    renderThermal(rows);
+    renderEvents(rows, source);
+    renderTable(rows, source);
+    renderInsights(rows, source);
+
+    const granLabel = source === "minutes" ? I.granMinute : source === "hours" ? I.granHour : I.granDay;
+    $("h-overview").textContent = granLabel;
+    $("h-cpu").textContent = granLabel;
+    $("h-gpu").textContent = granLabel;
+    $("h-mem").textContent = granLabel;
+    $("h-net").textContent = granLabel;
+    $("h-disk").textContent = granLabel;
+    $("h-power").textContent = granLabel;
+    $("h-thermal").textContent = granLabel;
+    $("h-heatmap").textContent = t("heatHint", { d: 60 });
+  }
+
+  // 整库无数据 → 空态页
+  if (!DATA.minutes.length && !DATA.hours.length && !DATA.days.length) {
+    $("content").hidden = true;
+    $("toolbar").hidden = true;
+    $("blank").hidden = false;
+    $("blank-title").textContent = I.blankTitle;
+    $("blank-body").textContent = I.blankBody;
+    return;
+  }
+
+  // 电池是否存在决定电池专属区块
+  DATA.hasBattery = ["minutes", "hours", "days"].some((k) => hasAny(DATA[k], "batt_level_avg"));
+  if (!DATA.hasBattery) {
+    $("sec-batt").hidden = true;
+  }
+
+  const maxT = Math.max(
+    DATA.minutes.length ? timeOf(DATA.minutes[DATA.minutes.length - 1]) : 0,
+    DATA.hours.length ? timeOf(DATA.hours[DATA.hours.length - 1]) : 0,
+    DATA.days.length ? timeOf(DATA.days[DATA.days.length - 1]) : 0,
+  );
+  const iso = (ts) => new Date(ts - new Date(ts).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  $("date-from").value = iso(maxT - 6 * DAY);
+  $("date-to").value = iso(maxT);
+
+  renderHeatmap();
+  applyRange();
+
+  // ── 视觉增强:分区标题图标芯片 / 粘性导航 / 滚动进场 / 回到顶部 ──
+  // 独立隔离:任何一步失败不影响已渲染的数据区。
+  try {
+    // 分区标题图标包进同色芯片,层次更现代
+    document.querySelectorAll(".sec-head").forEach((head) => {
+      if (head.querySelector(".icon-chip")) return;
+      const svg = head.querySelector(":scope > svg.icon");
+      if (!svg) return;
+      const chip = el("span", "icon-chip");
+      const colorClass = Array.from(svg.classList).find((c) => c.startsWith("c-"));
+      if (colorClass) {
+        chip.classList.add(colorClass);
+        svg.classList.remove(colorClass);
+      } else if (svg.style.color) {
+        chip.style.color = svg.style.color;
+        svg.style.color = "";
+      }
+      head.insertBefore(chip, svg);
+      chip.appendChild(svg);
+    });
+
+    // 粘性分区导航:从实际渲染出的分区收集锚点(隐藏分区不入导航)
+    const nav = $("sec-nav");
+    const navItems = [];
+    document.querySelectorAll("#content > section").forEach((sec, i) => {
+      if (sec.hidden || sec.classList.contains("inner-grid")) return;
+      const heading = sec.querySelector("h2");
+      if (!heading || !heading.textContent) return;
+      if (!sec.id) sec.id = "sec-auto-" + i;
+      const link = el("a");
+      link.href = "#" + sec.id;
+      link.textContent = sec.id === "sec-apps" && I.secAppsTitle ? I.secAppsTitle : heading.textContent;
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        sec.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+      });
+      nav.appendChild(link);
+      navItems.push([link, sec]);
+    });
+    if (navItems.length) {
+      nav.hidden = false;
+      document.body.classList.add("has-sec-nav");
+      let ticking = false;
+      const spy = () => {
+        ticking = false;
+        const offset = nav.offsetHeight + 30;
+        let current = navItems[0];
+        navItems.forEach((item) => {
+          if (!item[1].hidden && item[1].getBoundingClientRect().top <= offset) current = item;
+        });
+        navItems.forEach((item) => item[0].classList.toggle("active", item === current));
+        const active = nav.querySelector("a.active");
+        if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
+      };
+      window.addEventListener("scroll", () => {
+        if (!ticking) { ticking = true; requestAnimationFrame(spy); }
+      }, { passive: true });
+      spy();
+    }
+
+    // 分区滚动进场
+    if ("IntersectionObserver" in window && !reduceMotion) {
+      const io = new IntersectionObserver((entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("shown");
+            io.unobserve(entry.target);
+          }
+        });
+      }, { threshold: 0.05 });
+      document.querySelectorAll("#content > section").forEach((sec) => {
+        sec.classList.add("reveal");
+        io.observe(sec);
+      });
+    }
+
+    // 回到顶部
+    const toTop = $("to-top");
+    window.addEventListener("scroll", () => {
+      toTop.classList.toggle("show", window.scrollY > 700);
+    }, { passive: true });
+    toTop.addEventListener("click", () => {
+      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+    });
+  } catch (err) {
+    console.error("visual enhancements failed:", err);
+  }
+})();
+</script>
+</body>
+</html>

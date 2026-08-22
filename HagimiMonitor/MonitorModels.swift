@@ -410,6 +410,10 @@ final class MonitorStore: ObservableObject {
     /// 面板是否可见,用于按需启停进程采样。
     @Published private(set) var isPanelVisible = false
 
+    /// 历史统计记录器:把每秒采样帧聚合成分钟行落库(见 StatisticsRecorder)。
+    /// 设置页「数据统计」与网页报表共用其数据。
+    let statisticsRecorder = StatisticsRecorder()
+
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
 
@@ -558,6 +562,52 @@ final class MonitorStore: ObservableObject {
             .store(in: &cancellables)
 
         bluetoothSampler.start()
+
+        startStatisticsProcessSampling()
+    }
+
+    // MARK: - 统计进程采样
+
+    /// 统计专用 TOP 应用采样定时器(面板无关常驻):60s 一次、始终包含系统进程,
+    /// 结果交 StatisticsRecorder 聚合落 SwiftData。与面板进程采样共用同一条
+    /// 串行队列与全局差分快照——串行互斥保证安全,采样窗口交错不影响百分比口径。
+    private var statsProcTimer: AnyCancellable?
+
+    private func startStatisticsProcessSampling() {
+        guard statisticsRecorder.processStore != nil else { return }
+        statsProcTimer = Timer.publish(every: 60, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.sampleProcessesForStatistics()
+            }
+    }
+
+    private func sampleProcessesForStatistics() {
+        let recorder = statisticsRecorder
+        let sampleFast: () -> Void = {
+            let cpu = enrichCPU(sampleTopCPUProcesses(limit: 12, includeSystemProcesses: true))
+            let memory = enrich(sampleTopMemoryProcesses(includeSystemProcesses: true))
+            let gpu = enrichGPU(sampleTopGPUProcesses(limit: 12, includeSystemProcesses: true))
+            #if DIRECT_DISTRIBUTION
+            let disk = enrichDisk(sampleTopDiskProcesses(includeSystemProcesses: true))
+            #else
+            let disk: [TopDiskProcess] = []
+            #endif
+            DispatchQueue.main.async {
+                recorder.recordProcesses(cpu: cpu, memory: memory, gpu: gpu, network: [], disk: disk, at: Date())
+            }
+        }
+        procSampleQueue.async(execute: sampleFast)
+        #if DIRECT_DISTRIBUTION
+        // nettop 单次 1-2s,独占 nettopQueue;速率为窗口均值,×60s 近似为分钟字节量
+        let sampleNetwork: () -> Void = {
+            let network = enrichNetwork(sampleTopNetworkProcesses(includeSystemProcesses: true))
+            DispatchQueue.main.async {
+                recorder.recordProcesses(cpu: [], memory: [], gpu: [], network: network, disk: [], at: Date())
+            }
+        }
+        nettopQueue.async(execute: sampleNetwork)
+        #endif
     }
 
     /// 面板出现时调用（菜单栏面板便捷封装）。
@@ -849,6 +899,7 @@ final class MonitorStore: ObservableObject {
     deinit {
         timerCancellable?.cancel()
         procSampleTimer?.cancel()
+        statsProcTimer?.cancel()
         if let powerSourceRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSourceRunLoopSource, .defaultMode)
         }
@@ -1054,6 +1105,7 @@ final class MonitorStore: ObservableObject {
             modules = newVisibleModules
         }
         updateMenuBarTargetComputeLoad()
+        statisticsRecorder.record(modules: allModules, fans: fans, at: Date())
     }
 
 

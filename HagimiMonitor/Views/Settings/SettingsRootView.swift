@@ -43,6 +43,16 @@ struct SettingsRootView: View {
             DisplayInfoSettingsView(settings: settings)
             #endif
 
+        case .statistics:
+            StatisticsSettingsView(recorder: store.statisticsRecorder) {
+                selection = .storage
+            }
+
+        case .storage:
+            StorageSettingsView(recorder: store.statisticsRecorder) {
+                selection = .statistics
+            }
+
         case .about:
             AboutSettingsView()
         }
@@ -145,6 +155,10 @@ extension SettingsTab {
             return .general
         case .modules:
             return nil
+        case .statistics:
+            return .statistics
+        case .storage:
+            return .storage
         case .about:
             return .about
         }

@@ -5,6 +5,10 @@ enum SettingsRoute: Hashable {
     case module(MonitorKind)
     /// 显示器模块:Direct 为控制+信息,App Store 为纯信息展示(两渠道都有入口)。
     case displayModule
+    /// 数据统计:今日概览与网页报表入口。
+    case statistics
+    /// 存储管理:本地数据占用可视化与选择性清理。
+    case storage
     case about
 }
 
@@ -53,6 +57,11 @@ struct SettingsSidebar: View {
                     #endif
                 }
                 .tag(SettingsRoute.displayModule)
+            }
+
+            Section {
+                Label(String(localized: "settings.sidebar.statistics"), systemImage: "chart.bar.doc.horizontal")
+                    .tag(SettingsRoute.statistics)
             }
 
             Section {

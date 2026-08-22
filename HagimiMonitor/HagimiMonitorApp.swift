@@ -68,6 +68,14 @@ struct AppMenuCommands: Commands {
                 SettingsWindowPresenter.open(openSettings)
             }
             .keyboardShortcut(",", modifiers: .command)
+
+            Divider()
+
+            Button(String(localized: "menu.open-report")) {
+                if let delegate = NSApp.delegate as? AppDelegate {
+                    StatisticsReportFlow.open(recorder: delegate.store.statisticsRecorder)
+                }
+            }
         }
     }
 }

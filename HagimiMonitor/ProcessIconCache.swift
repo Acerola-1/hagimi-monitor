@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import ImageIO
 
 /// 进程图标降采样缓存。
 ///
@@ -93,5 +94,44 @@ enum ProcessIconCache {
         }
 
         return NSImage(cgImage: scaled, size: NSSize(width: side, height: side))
+    }
+
+    /// 取进程的全分辨率 bundle 图标,重绘为 sidePixels 见方并编码为 PNG。
+    /// 一次性调用、不缓存:供统计存储等需要持久化高清位图的消费方使用--
+    /// `icon(forPID:path:)` 返回的是 32px 降采样产物,放大到 128px 会永久糊化。
+    /// 走 CoreGraphics + ImageIO,可在后台线程安全调用;进程已退出等取不到
+    /// 源图时返回 nil,调用方下轮采样再试。
+    static func fullSizePNG(forPID pid: pid_t, sidePixels: Int) -> Data? {
+        guard let source = NSRunningApplication(processIdentifier: pid)?.icon else { return nil }
+        var proposedRect = NSRect(x: 0, y: 0, width: source.size.width, height: source.size.height)
+
+        guard let cgSource = source.cgImage(
+            forProposedRect: &proposedRect,
+            context: nil,
+            hints: [.interpolation: NSImageInterpolation.high.rawValue]
+        ), let colorSpace = CGColorSpace(name: CGColorSpace.sRGB),
+              let context = CGContext(
+                  data: nil,
+                  width: sidePixels,
+                  height: sidePixels,
+                  bitsPerComponent: 8,
+                  bytesPerRow: 0,
+                  space: colorSpace,
+                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+              ) else {
+            return nil
+        }
+
+        context.interpolationQuality = .high
+        context.draw(cgSource, in: CGRect(x: 0, y: 0, width: sidePixels, height: sidePixels))
+        guard let scaled = context.makeImage() else { return nil }
+
+        let out = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(out, "public.png" as CFString, 1, nil) else {
+            return nil
+        }
+        CGImageDestinationAddImage(destination, scaled, nil)
+        guard CGImageDestinationFinalize(destination) else { return nil }
+        return out as Data
     }
 }
