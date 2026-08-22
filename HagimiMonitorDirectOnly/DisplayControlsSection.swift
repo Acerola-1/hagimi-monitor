@@ -413,6 +413,7 @@ final class DisplayControlController: ObservableObject {
     private let audioOutputObserver = AudioOutputChangeObserver()
     private lazy var mediaKeyController = MediaKeyController()
     private var settingsObservation: AnyCancellable?
+    private var keyboardLockObservation: AnyCancellable?
     private var fallbackValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
     /// 抓握保护:记录用户最近一次设定的值与时刻。保护窗口内 `value(for:)` 优先返回
@@ -448,6 +449,16 @@ final class DisplayControlController: ObservableObject {
         .merge(with: mediaKeyController.permission.$isTrusted.map { _ in () })
 
         settingsObservation = merged
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.mediaKeyController.refresh()
+            }
+
+        // 锁定状态变化时重评估媒体键接管:锁定期间停用媒体键 tap(避免
+        // 重建插队绕过键盘锁),解锁后恢复。dropFirst:订阅时的初始值已由
+        // 上方 attach 的 refresh 覆盖。
+        keyboardLockObservation = QuickToolsStore.shared.$keyboardLocked
+            .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
                 self?.mediaKeyController.refresh()

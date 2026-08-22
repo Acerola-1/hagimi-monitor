@@ -1,7 +1,8 @@
 import Foundation
 
 /// 键盘锁定引擎:会话级 CGEventTap 吞掉全部键盘事件(keyDown/keyUp/
-/// flagsChanged),鼠标事件不经过本 tap,点击解锁等鼠标交互不受影响。
+/// flagsChanged/systemDefined),鼠标事件不经过本 tap,点击解锁等鼠标
+/// 交互不受影响。
 ///
 /// 仅 Direct 渠道编译:主动式(拦截)事件 tap 属辅助功能权限体系,
 /// 与 App Store 沙盒不兼容。
@@ -24,9 +25,13 @@ final class KeyboardLockController {
     /// - Returns: 是否成功(未授权时 tapCreate 失败返回 false)。
     func start() -> Bool {
         guard eventTap == nil else { return true }
+        // systemDefined:功能键(F4 Launchpad/亮度/音量等)在默认功能键模式
+        // 下走此通道而非 keyDown;SDK 未向 Swift 公开该 case,
+        // 取值见 SystemDefinedEventType(与 MediaKeyTapBridge 共用)。
         let mask: CGEventMask = (1 << CGEventType.keyDown.rawValue)
             | (1 << CGEventType.keyUp.rawValue)
             | (1 << CGEventType.flagsChanged.rawValue)
+            | SystemDefinedEventType.maskBit
         // passUnretained:生命周期由 owner 管理,stop() 同步移除 runLoopSource,
         // 移除完成后 in-flight 回调已退出(同 MediaKeyTapBridge 约定)。
         guard let tap = CGEvent.tapCreate(
@@ -79,7 +84,7 @@ final class KeyboardLockController {
 
     // MARK: - Tap 回调
 
-    /// 回调对三类键盘事件恒返回 nil 吞掉事件;tap 被系统因超时/用户输入
+    /// 回调对拦截到的所有键盘事件恒返回 nil 吞掉;tap 被系统因超时/用户输入
     /// 禁用时在回调内自恢复,保证锁定不因偶发禁用而静默失效。
     private static let tapCallback: CGEventTapCallBack = { _, type, event, refcon in
         guard let refcon else { return Unmanaged.passUnretained(event) }
