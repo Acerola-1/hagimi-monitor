@@ -19,7 +19,8 @@ struct StatisticsSettingsView: View {
             header
 
             if hasAnyData {
-                SettingsGroup(String(localized: "stats.settings.overview")) {
+                SettingsGroup(String(localized: "stats.settings.overview"),
+                              titleAccessory: { reportEntryButton }) {
                     rangePicker
                     healthCard
                     overviewGrid
@@ -39,13 +40,16 @@ struct StatisticsSettingsView: View {
                 }
             }
 
-            SettingsGroup {
-                entryRow(
-                    icon: "safari",
-                    title: String(localized: "stats.settings.report-title"),
-                    subtitle: nil,
-                    action: { StatisticsReportFlow.open(recorder: recorder) }
-                )
+            // 无数据时总览组不显示,报表入口退回独立行兜底;有数据时入口已收进总览标题行。
+            if !hasAnyData {
+                SettingsGroup {
+                    entryRow(
+                        icon: "safari",
+                        title: String(localized: "stats.settings.report-title"),
+                        subtitle: nil,
+                        action: { StatisticsReportFlow.open(recorder: recorder) }
+                    )
+                }
             }
 
             SettingsGroup {
@@ -219,6 +223,18 @@ struct StatisticsSettingsView: View {
         StatisticsOverviewRange.allCases.contains { range in
             (recorder.rangeRows[range] ?? nil) != nil
         }
+    }
+
+    /// 总览标题行右侧的报表快捷入口:与总览内容同属一屏,不必滚动到底部找入口。
+    private var reportEntryButton: some View {
+        Button {
+            StatisticsReportFlow.open(recorder: recorder)
+        } label: {
+            Label(String(localized: "stats.settings.report-details"), systemImage: "safari")
+                .font(.caption.weight(.medium))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
     }
 
     /// 报表与存储管理入口共用的导航行:图标+标题(+可选副标题)+右箭头,视觉统一。

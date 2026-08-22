@@ -166,7 +166,8 @@ func placeholderModule(_ kind: MonitorKind, summary: String) -> MonitorModule {
             MonitorMetric(name: "data", value: "--"),
             MonitorMetric(name: "update", value: "--")
         ],
-        samples: seedSamples(0)
+        samples: seedSamples(0),
+        isPlaceholder: true
     )
 }
 

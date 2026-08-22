@@ -23,21 +23,32 @@ struct SettingsPage<Content: View>: View {
     }
 }
 
-struct SettingsGroup<Content: View>: View {
+struct SettingsGroup<Content: View, TitleAccessory: View>: View {
     var title: String?
+    /// 标题行右侧挂件(如快捷操作按钮);无标题时不展示。
+    var titleAccessory: TitleAccessory?
     let content: Content
 
-    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String? = nil,
+         @ViewBuilder titleAccessory: () -> TitleAccessory,
+         @ViewBuilder content: () -> Content) {
         self.title = title
+        self.titleAccessory = titleAccessory()
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             if let title {
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                    .padding(.horizontal, 2)
+                HStack(alignment: .center) {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .padding(.horizontal, 2)
+                    Spacer(minLength: 0)
+                    if let titleAccessory {
+                        titleAccessory
+                    }
+                }
             }
 
             if #available(macOS 26, *) {
@@ -54,6 +65,13 @@ struct SettingsGroup<Content: View>: View {
                 .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
         }
+    }
+}
+
+extension SettingsGroup where TitleAccessory == EmptyView {
+    /// 无标题挂件的便捷入口,保持旧调用写法不变。
+    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title, titleAccessory: { EmptyView() }, content: content)
     }
 }
 

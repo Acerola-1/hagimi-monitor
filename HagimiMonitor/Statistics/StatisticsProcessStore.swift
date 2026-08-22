@@ -113,6 +113,8 @@ final class StatisticsProcessStore {
     private var accumulators: [String: AppAccumulator] = [:]
     /// 名称 → 图标 PNG 内存缓存,避免重复转码。
     private var iconCache: [String: Data] = [:]
+    /// 确认无图标的进程名集合,避免对守护进程反复查询。
+    private var iconSkipSet: Set<String> = []
 
     init(directory: URL) {
         queue.sync {
@@ -281,13 +283,20 @@ final class StatisticsProcessStore {
     /// 不触碰 NSGraphicsContext.current,后台队列安全。
     /// 落库不单独 save:由 flushLocked/分钟封口的统一 save 收口。
     private func captureIcon(_ name: String, pid: pid_t) {
-        guard iconCache[name] == nil else { return }
+        guard iconCache[name] == nil, !iconSkipSet.contains(name) else { return }
         guard let context else { return }
         let key = name
         let predicate = #Predicate<StatsAppIdentity> { $0.appKey == key }
         let existing = (try? context.fetch(FetchDescriptor(predicate: predicate)).first) ?? nil
         if let stored = existing?.iconPNG, Self.iconPixels(stored) >= Int(Self.iconSize) {
             iconCache[name] = stored
+            return
+        }
+        // 守护进程(.prohibited 或无 Launch Services 注册)使用通用系统图标,
+        // 不落库——数十个守护进程共用同一张图标,冗余存储可达数 MB。
+        guard let app = NSRunningApplication(processIdentifier: pid),
+              app.activationPolicy != .prohibited else {
+            iconSkipSet.insert(name)
             return
         }
         guard let png = ProcessIconCache.fullSizePNG(forPID: pid, sidePixels: Int(Self.iconSize)) else { return }
@@ -527,6 +536,7 @@ final class StatisticsProcessStore {
             deleteAllLocked(StatsUsageMeta.self)
             accumulators.removeAll()
             iconCache.removeAll()
+            iconSkipSet.removeAll()
             try? context.save()
         }
     }

@@ -174,7 +174,7 @@ final class StatisticsRecorder: ObservableObject {
 
         // 采样覆盖秒数:与速率积分同款分段累计(间隔越界视为睡眠/中断不计)。
         // 「活跃时长」以真实墙钟为口径,不依赖「1 帧 ≈ 1 秒」的采样节奏假设--
-        // 采样失败、动画推迟、未来节奏调整都不会再让它失真。
+        // 采样失败、动画推迟、未来节奏调整都不会让它失真。
         if let previous = lastFrameAt {
             let elapsed = date.timeIntervalSince(previous)
             if elapsed > 0, elapsed <= Self.rateIntegrationCap {
@@ -187,7 +187,7 @@ final class StatisticsRecorder: ObservableObject {
         var frameCPU: Double?, frameGPU: Double?, frameThermal: Double?, frameTemp: Double?
         var framePressurePct: Double?, framePressureLevel: Double?
 
-        for module in modules {
+        for module in modules where !module.isPlaceholder {
             switch module.kind {
             case .cpu:
                 accumulateCPU(module)
@@ -301,7 +301,9 @@ final class StatisticsRecorder: ObservableObject {
     }
 
     private func accumulateBattery(_ module: MonitorModule) {
-        let status = text("status", in: module)
+        // 无 status 的模块电源状态不可信(占位模块已在入口过滤,此处为防御):
+        // 不计入电源构成,避免把 nil 误判成交流供电。
+        guard let status = text("status", in: module) else { return }
         // 电源构成只认 IOPS 状态:非 "on-battery" 即在交流侧(直供/维持/充电)。
         let onAC = status != "on-battery"
         accumulator.add(Self.index("ac_frac"), onAC ? 1 : 0)

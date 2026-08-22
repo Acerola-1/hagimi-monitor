@@ -149,8 +149,33 @@ struct StatisticsRow: Equatable {
         self.coverS = v[39]
     }
 
+    /// stress 列缺值时,用该行已有的指标列走 fallback 重算近似应力。
+    /// 无 stress 值的历史行离散档位不可得,只能用连续值近似。
+    func stressFallback(index: Int) -> Double? {
+        switch index {
+        case Self.index("stress_mem_avg"):
+            return memPressureAvg.map { StatisticsHealthScore.stressMem(percent: $0, level: nil) }
+        case Self.index("stress_thermal_avg"):
+            guard cpuThermalAvg != nil || cpuTempAvg != nil else { return nil }
+            return StatisticsHealthScore.stressThermal(state: cpuThermalAvg, temp: cpuTempAvg)
+        case Self.index("stress_cpu_avg"):
+            return cpuAvg.map { StatisticsHealthScore.stressCPU($0) }
+        case Self.index("stress_gpu_avg"):
+            return gpuAvg.map { StatisticsHealthScore.stressGPU($0) }
+        default:
+            return nil
+        }
+    }
+
+    /// 列名 → 列序号,列不存在时返回 -1。
+    private static func index(_ name: String) -> Int {
+        columns.firstIndex { $0.name == name } ?? -1
+    }
+
     /// 把多行聚合成一个上层桶。均值按 n 加权,峰值取最大,总量求和;
     /// 参与聚合的子桶缺少某列时该列按「有值的子桶」聚合。
+    /// stress 列缺值时不能跳过(会让分母缩小、偏差放大),逐行走 fallback
+    /// 用已有的指标列重算后再参与加权平均。
     static func aggregate(_ rows: [StatisticsRow], t: Int64) -> StatisticsRow? {
         guard !rows.isEmpty else { return nil }
         var out = StatisticsRow(t: t, n: rows.reduce(0) { $0 + $1.n })
@@ -163,7 +188,12 @@ struct StatisticsRow: Equatable {
                 var weightedSum = 0.0
                 var weightSum = 0
                 for row in rows {
-                    guard let value = row.values[index], row.n > 0 else { continue }
+                    var value = row.values[index]
+                    // stress 列 null 时按该行已有指标列走 fallback,避免分母缩小
+                    if value == nil, let fallback = row.stressFallback(index: index) {
+                        value = fallback
+                    }
+                    guard let value, row.n > 0 else { continue }
                     weightedSum += value * Double(row.n)
                     weightSum += row.n
                 }
@@ -226,6 +256,8 @@ final class StatisticsDatabase {
 
     deinit {
         if let handle {
+            // 关库前把 WAL 合并进主库文件,避免残留 -wal/-shm 旁文件。
+            sqlite3_exec(handle, "PRAGMA wal_checkpoint(TRUNCATE)", nil, nil, nil)
             sqlite3_close_v2(handle)
         }
     }
@@ -251,21 +283,23 @@ final class StatisticsDatabase {
         }
     }
 
-    /// source → target 的增量汇总:从「目标表最大 t 的前一个桶」重扫到 boundary
-    /// (重扫最后一桶使部分写入的桶被完整重算),按本地时区切桶,空桶跳过。
-    /// 重扫起点同时不超过源表最早行:时钟回拨等造成的迟到旧行也要被汇总到。
+    /// source → target 的增量汇总:从「源表最早行」重扫到 boundary。
+    /// 全量重扫(而非仅最近一桶)确保缺列的目标行被完整重算补齐(stress 列);
+    /// 源表有保留窗口(分钟 45d/小时 400d),数据量可控。
+    /// 按本地时区切桶,空桶跳过。
     private func rollUp(source: String, target: String, boundary: TimeInterval, bucketUnit: Calendar.Component) {
-        let fallback: TimeInterval = bucketUnit == .hour ? 3600 : 86400
+        let bucketSeconds: TimeInterval = bucketUnit == .hour ? 3600 : 86400
         let maxTarget = scalarQuery("SELECT MAX(t) FROM stats_\(target)")
         let minSource = scalarQuery("SELECT MIN(t) FROM stats_\(source)")
         let resumeFrom: TimeInterval
         switch (maxTarget, minSource) {
         case (let target?, let source?):
-            resumeFrom = min(target - fallback, source)
+            // 从源表最早行重扫,确保已有目标行被重算(stress 列回填)。
+            resumeFrom = source
         case (nil, let source?):
             resumeFrom = source
         case (let target?, nil):
-            resumeFrom = target - fallback
+            resumeFrom = target - bucketSeconds
         default:
             return
         }
@@ -429,7 +463,7 @@ final class StatisticsDatabase {
     private func fetchRows(from table: String, from: TimeInterval, to: TimeInterval) -> [StatisticsRow] {
         guard let handle else { return [] }
         // 显式列名取数,不依赖物理列序:ALTER 迁移把新列追加在 n 之后,
-        // SELECT * 的位置假设会把 n 读错(应力列上线时曾因此读出 n=0)。
+        // SELECT * 的位置假设会把 n 读错。
         let sql = "SELECT t, " + StatisticsRow.columns.map(\.name).joined(separator: ", ")
             + ", n FROM stats_\(table) WHERE t >= ? AND t < ? ORDER BY t"
         var statement: OpaquePointer?

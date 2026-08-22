@@ -26,12 +26,23 @@ final class BatterySampler: MonitorSampler {
     }
 
     func sample(previous: MonitorModule?) -> MonitorModule {
+        // IOPS 接口本身失败(info/列表读不出):电源状态不可信,兜底模块标记为占位,
+        // 统计不得把它按「交流供电」计入,否则电池供电会被误记成 AC。
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef],
-              let source = sources.first,
-              let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
+              let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else {
             AppLogger.sampler.error("BatterySampler failed to read power source info")
-            return externalPowerModule()
+            return externalPowerModule(isPlaceholder: true)
+        }
+        // 空列表 = 无电池电源(桌面机型):AC 直供是真实稳态而非失败兜底。
+        if sources.isEmpty {
+            return externalPowerModule(isPlaceholder: false)
+        }
+        // 有电源硬件但描述读不出:与 info/列表失败同属接口不可信,标记占位,
+        // 避免这几帧被统计按「交流供电」计入。
+        guard let source = sources.first,
+              let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
+            AppLogger.sampler.error("BatterySampler failed to read power source description")
+            return externalPowerModule(isPlaceholder: true)
         }
 
         let current = doubleValue(description[kIOPSCurrentCapacityKey]) ?? 0
@@ -134,7 +145,10 @@ final class BatterySampler: MonitorSampler {
         )
     }
 
-    private func externalPowerModule() -> MonitorModule {
+    /// 无电池机型的 AC 直供展示模块(桌面机型稳态与 IOPS 失败兜底共用)。
+    /// `isPlaceholder` 区分两种语义:桌面稳态是真实读数(统计计入电源构成),
+    /// IOPS 失败时电源状态不可信(统计过滤,避免电池供电被误记成 AC)。
+    private func externalPowerModule(isPlaceholder: Bool) -> MonitorModule {
         let adapterWatts = externalAdapterWatts()
         let powerWatts = powerTelemetryWatts()
         return MonitorModule(
@@ -147,7 +161,8 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
                 MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W")
             ],
-            samples: seedSamples(100)
+            samples: seedSamples(100),
+            isPlaceholder: isPlaceholder
         )
     }
 

@@ -29,7 +29,7 @@ struct RawGPUProcess {
 }
 
 /// 每进程累计 GPU 时间(纳秒)快照,用于计算窗口增量。
-/// 与 previousDiskSnapshot 同为文件级全局,线程安全依赖 procSampleQueue 的串行性。
+/// 文件级全局快照,线程安全依赖 procSampleQueue 的串行性。
 private var previousGPUSnapshot: (perPid: [pid_t: UInt64], timestamp: TimeInterval)?
 
 /// AGX 驱动的每进程累计 GPU 时间:IOAccelerator 服务的 user client 子节点

@@ -6,43 +6,50 @@
 <title>HagimiMonitor</title>
 <style>
   :root {
-    --bg: #0a0e16;
-    --bg-grad-1: rgba(122, 162, 247, 0.10);
-    --bg-grad-2: rgba(168, 85, 247, 0.07);
+    --bg: #080b12;
+    --bg-grad-1: rgba(122, 162, 247, 0.12);
+    --bg-grad-2: rgba(168, 85, 247, 0.08);
+    --bg-grad-3: rgba(52, 199, 89, 0.04);
     --card: rgba(255, 255, 255, 0.045);
-    --card-border: rgba(255, 255, 255, 0.085);
-    --card-hover: rgba(255, 255, 255, 0.06);
+    --card-border: rgba(255, 255, 255, 0.09);
+    --card-hover: rgba(255, 255, 255, 0.065);
+    --card-glow: rgba(255, 255, 255, 0.025);
     --inset: rgba(255, 255, 255, 0.07);
     --text: rgba(255, 255, 255, 0.96);
     --text-2: rgba(255, 255, 255, 0.72);
-    --text-3: rgba(255, 255, 255, 0.52);
-    --tooltip-bg: rgba(18, 24, 38, 0.94);
+    --text-3: rgba(255, 255, 255, 0.50);
+    --tooltip-bg: rgba(14, 19, 30, 0.95);
     --tooltip-border: rgba(255, 255, 255, 0.12);
     --accent: #7aa2f7;
     --radius: 16px;
-    --nav-bg: rgba(10, 14, 22, 0.72);
-    --shadow: 0 12px 32px rgba(0, 0, 0, 0.26);
-    --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.18);
+    --nav-bg: rgba(8, 11, 18, 0.75);
+    --shadow: 0 12px 32px rgba(0, 0, 0, 0.30);
+    --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.20);
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
             "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    --font-mono: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", monospace;
+    /* 应用图标扁平渲染:报告为单文件产物,图标以 data URI 随模板内嵌 */
+    --app-icon: url("data:image/png;base64,__APP_ICON_B64__");
     color-scheme: dark;
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #f2f4f8;
-      --bg-grad-1: rgba(122, 162, 247, 0.14);
-      --bg-grad-2: rgba(168, 85, 247, 0.06);
-      --card: rgba(255, 255, 255, 0.72);
-      --card-border: rgba(23, 34, 58, 0.10);
+      --bg: #eef0f6;
+      --bg-grad-1: rgba(122, 162, 247, 0.15);
+      --bg-grad-2: rgba(168, 85, 247, 0.07);
+      --bg-grad-3: rgba(52, 199, 89, 0.05);
+      --card: rgba(255, 255, 255, 0.75);
+      --card-border: rgba(23, 34, 58, 0.09);
       --card-hover: rgba(255, 255, 255, 0.92);
-      --inset: rgba(23, 34, 58, 0.07);
+      --card-glow: rgba(255, 255, 255, 0.5);
+      --inset: rgba(23, 34, 58, 0.06);
       --text: #1b2433;
       --text-2: #46536b;
       --text-3: #71809a;
-      --tooltip-bg: rgba(255, 255, 255, 0.96);
+      --tooltip-bg: rgba(255, 255, 255, 0.97);
       --tooltip-border: rgba(23, 34, 58, 0.12);
       --accent: #2563eb;
-      --nav-bg: rgba(242, 244, 248, 0.78);
+      --nav-bg: rgba(238, 240, 246, 0.80);
       --shadow: 0 12px 32px rgba(23, 34, 58, 0.10);
       --shadow-sm: 0 4px 14px rgba(23, 34, 58, 0.07);
       color-scheme: light;
@@ -57,67 +64,115 @@
     background:
       radial-gradient(1200px 500px at 15% -10%, var(--bg-grad-1), transparent 60%),
       radial-gradient(1000px 600px at 90% 0%, var(--bg-grad-2), transparent 55%),
+      radial-gradient(800px 400px at 50% 100%, var(--bg-grad-3), transparent 70%),
       var(--bg);
+    background-attachment: fixed;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 36px 28px 60px; }
-
-  /* ── 报告头 ─────────────────────────────── */
-  .hero { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; justify-content: space-between; }
-  .brand { display: flex; align-items: center; gap: 14px; }
-  .brand-mark {
-    width: 46px; height: 46px; border-radius: 13px; flex: none;
-    display: grid; place-items: center;
-    background: linear-gradient(140deg, var(--bg-grad-1), var(--bg-grad-2));
-    border: 1px solid var(--card-border);
+  /* 氛围光斑:两枚低透明度光晕缓慢漂移,为深浅色主题提供空间层次 */
+  body::before, body::after {
+    content: ""; position: fixed; z-index: -1; border-radius: 50%;
+    filter: blur(90px); pointer-events: none;
   }
-  .brand-mark .icon { width: 24px; height: 24px; color: var(--accent); }
-  .brand h1 { margin: 0; font-size: 21px; font-weight: 700; letter-spacing: 0.2px; }
-  .brand .sub { margin-top: 3px; font-size: 12.5px; color: var(--text-3); }
+  body::before {
+    width: 560px; height: 560px; left: -160px; top: -180px;
+    background: radial-gradient(circle, rgba(122, 162, 247, 0.16), transparent 65%);
+    animation: aurora-a 26s ease-in-out infinite alternate;
+  }
+  body::after {
+    width: 640px; height: 640px; right: -220px; top: 260px;
+    background: radial-gradient(circle, rgba(168, 85, 247, 0.12), transparent 65%);
+    animation: aurora-b 34s ease-in-out infinite alternate;
+  }
+  @keyframes aurora-a { to { transform: translate(130px, 90px) scale(1.18); } }
+  @keyframes aurora-b { to { transform: translate(-150px, -70px) scale(0.88); } }
+  @media (prefers-reduced-motion: reduce) {
+    body::before, body::after { animation: none; }
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 28px 60px; }
+
+  /* ── 报告 masthead:品牌位唯一归属顶栏,此处只承载报表标题与设备元信息 ── */
+  .hero {
+    display: flex; flex-wrap: wrap; gap: 12px 24px;
+    align-items: flex-end; justify-content: space-between;
+    padding: 2px 0 18px; margin-bottom: 18px;
+    border-bottom: 1px solid transparent;
+    border-image: linear-gradient(90deg, var(--card-border), transparent 85%) 1;
+  }
+  .brand h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  .brand .sub { margin-top: 6px; font-size: 12.5px; color: var(--text-3); letter-spacing: 0.1px; }
   .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
   .chip {
     display: inline-flex; align-items: center; gap: 6px;
     font-size: 12px; color: var(--text-2);
-    padding: 5px 11px; border-radius: 999px;
+    padding: 6px 12px; border-radius: 999px;
     background: var(--card); border: 1px solid var(--card-border);
+    box-shadow: 0 1px 0 var(--card-glow) inset;
   }
   .chip .icon { width: 13px; height: 13px; color: var(--text-3); }
 
-  /* ── 范围工具条 ─────────────────────────── */
-  .toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 26px 0 30px; }
-  .ranges { display: inline-flex; padding: 4px; gap: 2px; border-radius: 12px; background: var(--card); border: 1px solid var(--card-border); }
+  /* ── 范围控件(位于固定导航内) ────────────── */
+  .toolbar { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; margin: 0; }
+  .ranges { display: inline-flex; padding: 3px; gap: 2px; border-radius: 11px;
+    background: linear-gradient(180deg, var(--card-glow), transparent), var(--card);
+    border: 1px solid var(--card-border); box-shadow: 0 1px 0 var(--card-glow) inset; }
   .ranges button {
     appearance: none; border: 0; background: transparent; color: var(--text-2);
-    font: 600 12.5px/1 var(--font); padding: 7px 13px; border-radius: 9px; cursor: pointer;
+    font: 600 12px/1 var(--font); padding: 7px 12px; border-radius: 8px; cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
   }
-  .ranges button:hover { color: var(--text); }
-  .ranges button.active { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent); }
-  .custom-range { display: inline-flex; align-items: center; gap: 8px; }
-  .custom-range input[type="date"] {
-    appearance: none; font: 500 12.5px/1 var(--font);
+  .ranges button:hover { color: var(--text); background: var(--inset); }
+  .ranges button.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .custom-range { position: relative; flex: none; }
+  .cal-btn {
+    appearance: none; cursor: pointer; width: 33px; height: 33px; border-radius: 9px;
+    display: grid; place-items: center;
+    background: var(--card); border: 1px solid var(--card-border); color: var(--text-2);
+    box-shadow: 0 1px 0 var(--card-glow) inset;
+    transition: color 0.15s ease, border-color 0.15s ease;
+  }
+  .cal-btn:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent); }
+  .cal-btn.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .cal-btn .icon { width: 15px; height: 15px; }
+  .cal-pop {
+    position: absolute; top: calc(100% + 12px); right: 0; z-index: 60;
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 14px; border-radius: 14px;
+    background: var(--tooltip-bg); border: 1px solid var(--tooltip-border);
+    backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
+    box-shadow: var(--shadow);
+  }
+  .cal-sep { color: var(--text-3); font-size: 12px; }
+  .cal-pop input[type="date"] {
+    appearance: none; font: 500 12px/1 var(--font);
     background: var(--card); border: 1px solid var(--card-border);
-    border-radius: 9px; padding: 7px 10px; outline: none;
+    border-radius: 9px; padding: 7px 9px; outline: none;
     color: var(--text-2); color-scheme: inherit;
   }
-  .custom-range input[type="date"]:focus { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
-  .custom-range button {
-    appearance: none; font: 600 12.5px/1 var(--font); cursor: pointer;
+  .cal-pop input[type="date"]:focus { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .cal-pop button {
+    appearance: none; font: 600 12px/1 var(--font); cursor: pointer;
     color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
     border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
-    padding: 8px 14px; border-radius: 9px;
+    padding: 8px 13px; border-radius: 9px;
   }
 
   /* ── 卡片通用 ──────────────────────────── */
   .card {
-    background: var(--card); border: 1px solid var(--card-border);
+    background:
+      linear-gradient(180deg, var(--card-glow), transparent 50%),
+      var(--card);
+    border: 1px solid var(--card-border);
     border-radius: var(--radius); padding: 18px 20px 14px;
+    box-shadow: 0 1px 0 var(--card-glow) inset;
   }
   section { margin-bottom: 18px; }
-  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; padding-bottom: 11px; border-bottom: 1px solid var(--card-border); }
   .sec-head .icon { width: 17px; height: 17px; color: var(--text-3); flex: none; }
-  .sec-head h2 { margin: 0; font-size: 14.5px; font-weight: 650; letter-spacing: 0.2px; }
-  .sec-head .hint { margin-left: auto; font-size: 11.5px; color: var(--text-3); }
+  .sec-head h2 { margin: 0; font-size: 14.5px; font-weight: 700; letter-spacing: -0.1px; }
+  .sec-head .hint { margin-left: auto; font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
   .chart { width: 100%; height: 300px; }
   .chart.tall { height: 340px; }
   .chart.short { height: 260px; }
@@ -132,43 +187,62 @@
   }
   .empty .icon { width: 22px; height: 22px; margin-bottom: 8px; opacity: 0.7; }
 
-  /* ── 健康评分 ──────────────────────────── */
-  .health-grid { display: grid; grid-template-columns: 320px 1fr; gap: 18px; }
-  @media (max-width: 900px) { .health-grid { grid-template-columns: 1fr; } }
-  .health-main { display: flex; align-items: center; gap: 18px; padding: 8px 2px 4px; flex-wrap: wrap; }
-  .score-ring-wrap { position: relative; width: 104px; height: 104px; flex: none; }
+  /* ── 首屏总览带:健康评分卡 + KPI 网格同行,核心摘要一屏读完 ── */
+  .summary { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 1020px) { .summary { grid-template-columns: 1fr; } }
+  .summary-kpis {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+    gap: 10px; align-content: start;
+  }
+  .summary-kpis .kpi { padding: 11px 13px 9px; border-radius: 13px; }
+  .summary-kpis .kpi-chip { width: 27px; height: 27px; border-radius: 8px; }
+  .summary-kpis .kpi-chip .icon { width: 14px; height: 14px; }
+  .summary-kpis .kpi .value { font-size: 19px; margin-top: 7px; }
+  .summary-kpis .kpi .sub { margin-top: 2px; }
+  .summary-kpis .spark { height: 22px; }
+  .summary-kpis .spark-wrap { padding-top: 7px; }
+  .health-main { display: flex; align-items: center; gap: 20px; padding: 10px 2px 4px; flex-wrap: wrap; }
+  .score-ring-wrap { position: relative; width: 108px; height: 108px; flex: none; }
   .score-ring-text {
     position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
   }
-  .score-num { font-size: 30px; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1; }
-  .score-level { font-size: 11px; font-weight: 650; margin-top: 4px; }
+  .score-ring-wrap svg circle { transform: rotate(-90deg); transform-origin: center; }
+  .score-ring-wrap svg circle.arc { transition: stroke-dashoffset 0.9s cubic-bezier(0.25, 0.9, 0.35, 1); }
+  .score-num { font-size: 32px; font-weight: 800; font-family: var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.5px; }
+  .score-level { font-size: 11px; font-weight: 600; margin-top: 5px; letter-spacing: 0.3px; }
   .score-dims { display: flex; flex-wrap: wrap; gap: 6px; max-width: 380px; }
   .score-badge {
     display: inline-flex; align-items: center; gap: 5px;
     font-size: 11px; font-weight: 550; color: var(--text-2);
-    border: 1px solid var(--card-border); background: var(--inset);
-    padding: 3.5px 9px; border-radius: 999px;
+    border: 1px solid var(--card-border);
+    background: linear-gradient(180deg, var(--card-glow), transparent), var(--inset);
+    padding: 4px 10px; border-radius: 999px;
   }
-  .score-badge .dot { width: 5.5px; height: 5.5px; border-radius: 50%; }
-  .score-badge .raw { color: var(--text-3); font-variant-numeric: tabular-nums; }
+  .score-badge .dot { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
+  .score-badge .raw { color: var(--text-3); font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
   .score-capped {
-    display: inline-flex; align-items: center; gap: 6px; margin-top: 9px;
+    display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
     font-size: 11.5px; font-weight: 550; color: #e08e45;
   }
   .score-capped .icon { width: 13px; height: 13px; }
 
-  /* ── KPI ───────────────────────────────── */
-  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(212px, 1fr)); gap: 14px; }
+  /* ── KPI(直接填充 .summary-kpis 栅格) ─── */
   .kpi {
-    background: var(--card); border: 1px solid var(--card-border); border-radius: 14px;
-    padding: 14px 16px 12px; display: flex; gap: 12px; align-items: flex-start;
-    transition: background 0.15s ease;
+    background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card);
+    border: 1px solid var(--card-border); border-radius: 15px;
+    padding: 15px 16px 12px; display: flex; flex-direction: column;
+    box-shadow: 0 1px 0 var(--card-glow) inset;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   }
-  .kpi:hover { background: var(--card-hover); }
-  .kpi .icon { width: 18px; height: 18px; margin-top: 2px; flex: none; }
-  .kpi .label { font-size: 11.5px; color: var(--text-3); font-weight: 600; letter-spacing: 0.3px; }
-  .kpi .value { font-size: 21px; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; letter-spacing: 0.2px; }
-  .kpi .sub { font-size: 11.5px; color: var(--text-3); margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .kpi:hover { background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card-hover); transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 20%, var(--card-border)); }
+  .kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .kpi .label { font-size: 11px; color: var(--text-3); font-weight: 650; letter-spacing: 0.4px; }
+  .kpi .value { font-size: 23px; font-weight: 700; margin-top: 9px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+  .kpi .sub { font-size: 11px; color: var(--text-3); margin-top: 3px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+  .spark-wrap { margin-top: auto; padding-top: 10px; display: block; }
+  .spark { width: 100%; height: 30px; display: block; overflow: visible; }
+  .spark polyline { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .spark .spark-area { fill: currentColor; opacity: 0.13; }
   .c-cpu { color: #f97316; } .c-gpu { color: #a855f7; } .c-mem { color: #38bdf8; }
   .c-net { color: #14b8a6; } .c-disk { color: #d9a94a; } .c-batt { color: #10b981; }
   .c-thermal { color: #ef4444; } .c-muted { color: var(--text-3); } .c-accent { color: var(--accent); }
@@ -189,65 +263,59 @@
   section.apps-section { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
   @media (max-width: 900px) { .apps-grid, section.apps-section { grid-template-columns: 1fr; } }
   .app-list { display: flex; flex-direction: column; }
-  .app-row { display: flex; align-items: center; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--card-border); }
+  .app-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--card-border); transition: background 0.12s ease; }
   .app-row:last-child { border-bottom: none; }
+  .app-row:hover { background: var(--inset); border-radius: 6px; }
   .app-row img { width: 24px; height: 24px; border-radius: 6px; flex: none; }
   .app-row .app-icon-fallback { width: 24px; height: 24px; border-radius: 6px; flex: none;
     display: grid; place-items: center; background: var(--inset); color: var(--text-3); }
   .app-row .app-icon-fallback .icon { width: 12px; height: 12px; }
   .app-row .app-name { width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-2); }
   .app-row .app-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--inset); overflow: hidden; }
-  .app-row .app-bar-fill { height: 100%; border-radius: 3px; }
-  .app-row .app-value { flex: none; min-width: 74px; text-align: right; font-size: 11.5px; font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
+  .app-row .app-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
+  .app-row .app-value { flex: none; min-width: 74px; text-align: right; font-size: 11.5px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
   .app-none { grid-column: 1 / -1; padding: 20px 0 14px; text-align: center; color: var(--text-3); font-size: 12.5px; }
-
-  /* ── 使用打卡 ──────────────────────────── */
-  .checkin { display: flex; flex-direction: column; gap: 10px; padding: 10px 4px 2px; }
-  .checkin-legend { display: flex; align-items: center; gap: 12px; font-size: 11px; color: var(--text-3); }
-  .checkin-grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); gap: 3px; overflow-x: auto; padding-bottom: 4px; }
-  .checkin-cell { width: 11px; height: 11px; border-radius: 2.5px; background: var(--inset); }
-  .checkin-cell.on { background: var(--accent); }
-  .checkin-cell.today { outline: 1.5px solid var(--accent); outline-offset: 1px; }
-  .checkin-stats { display: flex; gap: 18px; }
-  .checkin-stat .n { font-size: 20px; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--accent); }
-  .checkin-stat .l { font-size: 11px; color: var(--text-3); margin-top: 1px; }
 
   /* ── 事件时间线 ─────────────────────────── */
   .events { display: flex; flex-direction: column; }
   .event {
     display: flex; align-items: baseline; gap: 12px;
-    padding: 8px 2px; border-bottom: 1px solid var(--card-border);
+    padding: 9px 2px; border-bottom: 1px solid var(--card-border);
     font-size: 12.5px;
   }
   .event:last-child { border-bottom: none; }
-  .event .sev { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
-  .event .time { color: var(--text-3); font-variant-numeric: tabular-nums; flex: none; width: 128px; font-size: 11.5px; }
+  .event .sev { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; box-shadow: 0 0 6px currentColor; }
+  .event .time { color: var(--text-3); font-family: var(--font-mono); font-variant-numeric: tabular-nums; flex: none; width: 128px; font-size: 11.5px; }
   .event .what { color: var(--text); font-weight: 550; }
-  .event .detail { color: var(--text-3); margin-left: auto; font-variant-numeric: tabular-nums; text-align: right; }
+  .event .detail { color: var(--text-3); margin-left: auto; font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; font-weight: 500; }
   .event-none { padding: 26px 0; text-align: center; color: var(--text-3); font-size: 13px; }
 
   /* ── 表格 ──────────────────────────────── */
   .tbl-wrap { overflow-x: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-  th, td { text-align: right; padding: 8px 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: 9px 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   th:first-child, td:first-child { text-align: left; }
   thead th { color: var(--text-3); font-weight: 600; font-size: 11.5px; letter-spacing: 0.3px;
     border-bottom: 1px solid var(--card-border); }
-  tbody tr { border-bottom: 1px solid var(--card-border); }
+  tbody tr { border-bottom: 1px solid var(--card-border); transition: background 0.12s ease; }
   tbody tr:hover { background: var(--inset); }
-  td { color: var(--text-2); }
-  td.day { color: var(--text); font-weight: 600; }
+  td { color: var(--text-2); font-family: var(--font-mono); font-weight: 500; }
+  td.day { color: var(--text); font-weight: 600; font-family: var(--font); }
 
   /* ── 洞察 ─────────────────────────────── */
   .insights { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
   .insight {
     display: flex; flex-direction: column; gap: 9px;
     background:
-      linear-gradient(150deg, color-mix(in srgb, currentColor 9%, transparent), transparent 62%),
+      linear-gradient(150deg, color-mix(in srgb, currentColor 10%, transparent), transparent 62%),
+      linear-gradient(180deg, var(--card-glow), transparent 50%),
       var(--card);
     border: 1px solid color-mix(in srgb, currentColor 16%, var(--card-border));
     border-radius: 14px; padding: 14px 16px;
+    box-shadow: 0 1px 0 var(--card-glow) inset;
+    transition: border-color 0.2s ease;
   }
+  .insight:hover { border-color: color-mix(in srgb, currentColor 28%, var(--card-border)); }
   .insight-head { display: flex; align-items: center; gap: 7px; }
   .insight-head .icon { width: 14px; height: 14px; flex: none; }
   .insight .t { font-size: 11.5px; color: var(--text-3); font-weight: 600; letter-spacing: 0.3px; }
@@ -264,31 +332,64 @@
 
   /* ── 标题渐变 ─────────────────────────── */
   .brand h1 {
-    background: linear-gradient(120deg, var(--text) 30%, var(--accent) 100%);
+    background: linear-gradient(120deg, var(--text) 40%, var(--accent) 95%);
     -webkit-background-clip: text; background-clip: text;
     -webkit-text-fill-color: transparent; color: transparent;
   }
 
-  /* ── 固定分区导航:不随页面滚动,随时可切换 ── */
+  /* ── 固定顶栏:品牌 + 分区锚点 + 时间范围,不随页面滚动 ── */
   .sec-nav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 40;
-    display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none;
-    /* 与 .wrap(1180 居中 + 28 内衬)左缘对齐 */
-    padding: 9px calc(max((100vw - 1180px) / 2, 0px) + 28px);
     background: var(--nav-bg);
-    backdrop-filter: blur(16px) saturate(1.4); -webkit-backdrop-filter: blur(16px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
     border-bottom: 1px solid var(--card-border);
   }
-  body.has-sec-nav { padding-top: 44px; }
-  .sec-nav::-webkit-scrollbar { display: none; }
-  .sec-nav a {
-    flex: none; text-decoration: none; color: var(--text-3);
-    font-size: 12px; font-weight: 600; letter-spacing: 0.2px;
-    padding: 6px 12px; border-radius: 9px; white-space: nowrap;
-    transition: color 0.15s ease, background 0.15s ease;
+  .nav-inner {
+    max-width: 1180px; margin: 0 auto; padding: 8px 28px 6px;
+    display: flex; align-items: center; justify-content: space-between; gap: 14px;
   }
-  .sec-nav a:hover { color: var(--text); background: var(--card); }
-  .sec-nav a.active { color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent); }
+  .nav-brand { display: flex; align-items: center; gap: 9px; flex: none; }
+  .nav-brand .mark {
+    width: 26px; height: 26px; border-radius: 7px; flex: none;
+    background-image: var(--app-icon); background-size: 100% 100%;
+    box-shadow: 0 0 0 1px var(--card-border), 0 3px 10px rgba(0, 0, 0, 0.25);
+  }
+  .nav-brand .name { font-size: 13px; font-weight: 700; letter-spacing: -0.1px; }
+  .nav-links {
+    position: relative; display: flex; gap: 2px; flex: 1;
+    min-width: 0; overflow-x: auto; scrollbar-width: none;
+  }
+  .nav-links::-webkit-scrollbar { display: none; }
+  /* 滑动指示器:由 JS 依激活项定位,提供连续的切换动势 */
+  .nav-pill {
+    position: absolute; top: 0; left: 0; height: 27px; width: 0;
+    border-radius: 8px; opacity: 0;
+    background: color-mix(in srgb, var(--accent) 15%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 12%, transparent);
+    transition: transform 0.28s cubic-bezier(0.3, 0.9, 0.3, 1),
+      width 0.28s cubic-bezier(0.3, 0.9, 0.3, 1), opacity 0.2s ease;
+  }
+  .nav-links a {
+    position: relative; z-index: 1; flex: none; text-decoration: none; color: var(--text-3);
+    font-size: 12px; font-weight: 600; letter-spacing: 0.2px;
+    padding: 6px 12px; border-radius: 8px; white-space: nowrap;
+    transition: color 0.15s ease;
+  }
+  .nav-links a:hover { color: var(--text); }
+  .nav-links a.active { color: var(--accent); }
+  /* 底部滚动进度:渐变细线随阅读进度增长 */
+  .nav-progress {
+    height: 2px; margin-top: 4px; border-radius: 0 2px 2px 0;
+    background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #a855f7));
+    width: 0; transition: width 0.1s linear;
+  }
+  body.has-sec-nav { padding-top: 56px; }
+  @media (max-width: 880px) {
+    .nav-inner { padding: 8px 16px 6px; }
+    .nav-brand .name { display: none; }
+    .wrap { padding: 20px 16px 48px; }
+  }
+  @media (max-width: 720px) { .nav-brand { display: none; } }
 
   /* ── 卡片进场动效(滚动触发) ───────────── */
   section, .kpi, .insight { transition: opacity 0.5s ease, transform 0.5s ease; }
@@ -304,11 +405,13 @@
   .kpi-chip {
     width: 34px; height: 34px; border-radius: 10px; flex: none;
     display: grid; place-items: center;
-    background: color-mix(in srgb, currentColor 12%, transparent);
-    transition: transform 0.2s ease;
+    background: color-mix(in srgb, currentColor 14%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    box-shadow: 0 0 12px color-mix(in srgb, currentColor 12%, transparent);
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
   .kpi-chip .icon { width: 17px; height: 17px; margin: 0; }
-  .kpi:hover .kpi-chip { transform: scale(1.08); }
+  .kpi:hover .kpi-chip { transform: scale(1.08); box-shadow: 0 0 18px color-mix(in srgb, currentColor 20%, transparent); }
   .kpi .value { font-size: 22px; }
 
   /* ── 分区标题图标芯片化 ────────────────── */
@@ -321,11 +424,11 @@
   .sec-head .icon-chip .icon { width: 14px; height: 14px; margin: 0; }
 
   /* 粘性导航下的锚点滚动留白 */
-  #content > section { scroll-margin-top: 62px; }
+  #content > section { scroll-margin-top: 68px; }
 
   /* ── 卡片悬浮微交互 ───────────────────── */
   .card { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-  .card:hover { border-color: color-mix(in srgb, var(--accent) 22%, var(--card-border)); box-shadow: var(--shadow-sm); }
+  .card:hover { border-color: color-mix(in srgb, var(--accent) 18%, var(--card-border)); }
 
   /* ── 回到顶部 ─────────────────────────── */
   .to-top {
@@ -413,61 +516,67 @@
   <path d="M3 9h18" />
   <path d="M3 15h18" /></symbol>
 <symbol id="i-thermometer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" /></symbol>
-<symbol id="i-zap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" /></symbol>
 </svg>
 
 <div class="wrap" id="app">
   <header class="hero">
     <div class="brand">
-      <div class="brand-mark"><svg class="icon"><use href="#i-gauge"/></svg></div>
-      <div>
-        <h1 id="report-title"></h1>
-        <div class="sub" id="report-sub"></div>
-      </div>
+      <h1 id="report-title"></h1>
+      <div class="sub" id="report-sub"></div>
     </div>
     <div class="meta-chips" id="meta-chips"></div>
   </header>
 
-  <div class="toolbar" id="toolbar">
-    <div class="ranges" id="ranges"></div>
-    <div class="custom-range" id="custom-range">
-      <svg class="icon c-muted" style="width:15px;height:15px"><use href="#i-calendar"/></svg>
-      <input type="date" id="date-from">
-      <span style="color:var(--text-3)">–</span>
-      <input type="date" id="date-to">
-      <button id="apply-custom"></button>
+  <nav class="sec-nav" id="sec-nav" hidden>
+    <div class="nav-inner">
+      <div class="nav-brand">
+        <span class="mark" aria-hidden="true"></span>
+        <span class="name">HagimiMonitor</span>
+      </div>
+      <div class="toolbar" id="toolbar">
+        <div class="nav-links" id="nav-links"><span class="nav-pill" id="nav-pill"></span></div>
+        <div class="ranges" id="ranges"></div>
+        <div class="custom-range" id="custom-range">
+          <button class="cal-btn" id="cal-btn" type="button" aria-label="date range">
+            <svg class="icon"><use href="#i-calendar"/></svg>
+          </button>
+          <div class="cal-pop" id="cal-pop" hidden>
+            <input type="date" id="date-from">
+            <span class="cal-sep" aria-hidden="true">–</span>
+            <input type="date" id="date-to">
+            <button id="apply-custom" type="button"></button>
+          </div>
+        </div>
+      </div>
     </div>
-  </div>
-
-  <nav class="sec-nav" id="sec-nav" hidden></nav>
+    <div class="nav-progress" id="nav-progress"></div>
+  </nav>
 
   <div id="blank" class="blank-hero" hidden>
-    <svg class="icon"><use href="#i-chart-column"/></svg>
+    <div><svg class="icon"><use href="#i-chart-column"/></svg></div>
     <h2 id="blank-title"></h2>
     <p id="blank-body"></p>
   </div>
 
   <div id="content">
-    <section>
-      <div class="health-grid">
-        <div class="card">
-          <div class="sec-head">
-            <svg class="icon c-accent"><use href="#i-gauge"/></svg><h2 id="t-health"></h2>
-          </div>
-          <div class="health-main" id="health-main"></div>
+    <section class="summary">
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-accent"><use href="#i-gauge"/></svg><h2 id="t-health"></h2>
         </div>
-        <div class="card">
-          <div class="sec-head">
-            <svg class="icon c-accent"><use href="#i-chart-column"/></svg><h2 id="t-health-trend" style="font-size:13.5px"></h2>
-          </div>
-          <div class="chart short" id="ch-health-trend"></div>
-          <div class="empty" id="e-health-trend"></div>
-        </div>
+        <div class="health-main" id="health-main"></div>
       </div>
+      <div class="summary-kpis" id="kpi"></div>
     </section>
 
     <section>
-      <div class="kpi-grid" id="kpi"></div>
+      <div class="card">
+        <div class="sec-head">
+          <svg class="icon c-accent"><use href="#i-chart-column"/></svg><h2 id="t-health-trend"></h2>
+        </div>
+        <div class="chart short" id="ch-health-trend"></div>
+        <div class="empty" id="e-health-trend"></div>
+      </div>
     </section>
 
     <section>
@@ -622,29 +731,12 @@
         <div class="chart short" id="ch-batt"></div>
         <div class="empty" id="e-batt"></div>
       </div>
-      <div class="card">
-        <div class="sec-head">
-          <svg class="icon c-batt"><use href="#i-zap"/></svg><h2 id="t-power-dist" style="font-size:13.5px"></h2>
-        </div>
-        <div class="chart short" id="ch-power-dist"></div>
-        <div class="empty" id="e-power-dist"></div>
-      </div>
-    </section>
-
-    <section class="inner-grid" id="sec-battery-health">
-      <div class="card">
+      <div class="card" id="sec-battery-health">
         <div class="sec-head">
           <svg class="icon c-batt"><use href="#i-battery-charging"/></svg><h2 id="t-battery-health" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-battery-health"></div>
         <div class="empty" id="e-battery-health"></div>
-      </div>
-      <div class="card">
-        <div class="sec-head">
-          <svg class="icon c-batt"><use href="#i-zap"/></svg><h2 id="t-power-daily" style="font-size:13.5px"></h2>
-        </div>
-        <div class="chart short" id="ch-power-daily"></div>
-        <div class="empty" id="e-power-daily"></div>
       </div>
     </section>
 
@@ -674,22 +766,6 @@
         <div class="app-list" id="app-list-net"></div>
       </div>
       <div class="app-none" id="apps-none" hidden></div>
-    </section>
-
-    <section>
-      <div class="card">
-        <div class="sec-head">
-          <svg class="icon c-muted"><use href="#i-calendar"/></svg><h2 id="t-activity"></h2>
-          <span class="hint" id="h-activity"></span>
-        </div>
-        <div class="grid2">
-          <div>
-            <div class="chart short" id="ch-activity" style="height:190px"></div>
-            <div class="empty" id="e-activity"></div>
-          </div>
-          <div class="checkin" id="checkin"></div>
-        </div>
-      </div>
     </section>
 
     <section>
@@ -749,6 +825,8 @@
   const IDX = {};
   COLS.forEach((c, i) => { IDX[c] = i + 1; });
   const NIX = COLS.length + 1;
+  // 渠道标识:Direct 版可采集 CPU 温度/风扇 RPM 等 SMC 数据,沙盒版不可。
+  const IS_DIRECT = !!DATA.meta.direct;
 
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
@@ -792,7 +870,7 @@
   if (themeQuery.addEventListener) {
     themeQuery.addEventListener("change", () => {
       applyTheme();
-      renderHeatmap();
+      if (currentFrom && currentTo) renderHeatmap(currentFrom, currentTo);
       applyRange();
     });
   }
@@ -900,22 +978,12 @@
   $("t-disk-daily").textContent = I.secDiskDaily;
   $("t-power").textContent = I.secPower;
   $("t-batt").textContent = I.secBatt;
-  $("t-power-dist").textContent = I.secPowerDist;
   $("t-thermal").textContent = I.secThermal;
   $("t-battery-health").textContent = I.secBatteryHealth;
-  $("t-power-daily").textContent = I.secPowerDaily;
   $("t-apps-cpu").textContent = I.appsCpu;
   $("t-apps-mem").textContent = I.appsMem;
   $("t-apps-gpu").textContent = I.appsGpu;
   $("t-apps-net").textContent = I.appsNet;
-  $("t-activity").textContent = I.secActivity;
-  const eBatteryHealth = $("e-battery-health");
-  if (eBatteryHealth) eBatteryHealth.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
-  const ePowerDaily = $("e-power-daily");
-  if (ePowerDaily) ePowerDaily.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
-  const eActivity = $("e-activity");
-  if (eActivity) eActivity.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
-  $("apps-none").textContent = I.appsNone;
   $("t-events").textContent = I.secEvents;
   $("t-table").textContent = I.secTable;
   $("t-insights").textContent = I.secInsights;
@@ -924,11 +992,13 @@
   $("apply-custom").textContent = I.applyCustom;
   $("footer").innerHTML = I.footer + "<br>" + I.footerLocal;
   ["overview", "cpu", "cpu-pe", "cpu-dist", "gpu", "gpu-dist", "gpu-mem", "mem",
-   "net", "net-daily", "disk", "disk-daily", "power", "batt", "power-dist",
+   "net", "net-daily", "disk", "disk-daily", "power", "batt",
    "thermal", "table", "health-trend"].forEach((k) => {
     const e = $("e-" + k);
     if (e) e.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
   });
+  const eBatteryHealth = $("e-battery-health");
+  if (eBatteryHealth) eBatteryHealth.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
 
   // ── 数据访问 ──────────────────────────────────────────────────
   const v = (row, col) => row[IDX[col]];
@@ -1150,8 +1220,14 @@
       ["app-list-cpu", entries("cpu", "cn"), C.cpu, (x) => x.toFixed(1) + "%"],
       ["app-list-mem", entries("mem", "mn"), C.mem, (x) => fmtBytes(x * 1_048_576)],
       ["app-list-gpu", entries("gpu", "gn"), C.gpu, (x) => x.toFixed(1) + "%"],
-      ["app-list-net", entries("net", null), C.net, (x) => fmtBytes(x * 1_048_576)],
-    ];
+      // 网络/磁盘进程排行仅在 Direct 版采集(沙盒无 nettop/磁盘 IO 权限)
+      IS_DIRECT ? ["app-list-net", entries("net", null), C.net, (x) => fmtBytes(x * 1_048_576)] : null,
+    ].filter(Boolean);
+    // 沙盒版隐藏网络排行的卡片容器
+    if (!IS_DIRECT) {
+      const netCard = $("app-list-net");
+      if (netCard) netCard.parentElement.style.display = "none";
+    }
     let any = false;
     lists.forEach(([listId, list, color, format]) => {
       const host = $(listId);
@@ -1223,52 +1299,6 @@
       };
       chart("ch-battery-health").setOption(option, { notMerge: true });
     }
-
-    // 每日电源构成:直供/充电/电池 小时(从当前粒度行推导)
-    const perDay = new Map();
-    rowsCurrent.forEach((r) => {
-      const ac = v(r, "ac_frac");
-      if (ac == null) return;
-      const key = dayKeyOf(timeOf(r));
-      const hours = bucketSeconds[currentSource] / 3600;
-      const e = perDay.get(key) || { d: 0, c: 0, b: 0 };
-      const charging = v(r, "charging_frac") || 0;
-      e.d += Math.max(0, ac - charging) * hours;
-      e.c += charging * hours;
-      e.b += Math.max(0, 1 - ac) * hours;
-      perDay.set(key, e);
-    });
-    const days = [...perDay.keys()].sort((a, b) => a - b);
-    if (!days.length || !DATA.hasBattery) {
-      $("ch-power-daily").hidden = true;
-      $("e-power-daily").style.display = "block";
-      return;
-    }
-    $("ch-power-daily").hidden = false;
-    $("e-power-daily").style.display = "none";
-    const option2 = {
-      backgroundColor: "transparent",
-      textStyle: { fontFamily: FONT },
-      color: [C.accent, C.batt, C.fair],
-      tooltip: Object.assign({}, liveTooltip(), { trigger: "axis",
-        valueFormatter: (val) => val.toFixed(1) + " h" }),
-      legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
-        textStyle: { color: C.label, fontSize: 11.5 } },
-      grid: { left: 10, right: 14, top: 36, bottom: 6, containLabel: true },
-      xAxis: baseAxis({ type: "category", data: days.map(fmtDayKeyShort),
-        axisLabel: { color: C.label, fontSize: 10.5, rotate: days.length > 16 ? 40 : 0 } }),
-      yAxis: baseAxis({ type: "value",
-        axisLabel: { formatter: (val) => val + " h", color: C.label, fontSize: 11 } }),
-      series: [
-        { name: I.sPowerDirect, type: "bar", stack: "p", barMaxWidth: 26, color: C.accent,
-          itemStyle: { borderRadius: [3, 3, 0, 0] }, data: days.map((k) => +perDay.get(k).d.toFixed(2)) },
-        { name: I.sPowerCharging, type: "bar", stack: "p", barMaxWidth: 26, color: C.batt,
-          data: days.map((k) => +perDay.get(k).c.toFixed(2)) },
-        { name: I.sPowerBattery, type: "bar", stack: "p", barMaxWidth: 26, color: C.fair,
-          data: days.map((k) => +perDay.get(k).b.toFixed(2)) },
-      ],
-    };
-    chart("ch-power-daily").setOption(option2, { notMerge: true });
   }
 
   function dayKeyToMs(key) {
@@ -1276,98 +1306,6 @@
   }
   function fmtDayKeyShort(key) {
     return String(Math.floor(key % 10000 / 100)).padStart(2, "0") + "/" + String(key % 100).padStart(2, "0");
-  }
-
-  function renderActivity(from, to) {
-    // 每日活跃时长(采样覆盖小时)
-    const perDay = new Map();
-    rowsCurrent.forEach((r) => {
-      const key = dayKeyOf(timeOf(r));
-      perDay.set(key, (perDay.get(key) || 0) + coverSeconds(r) / 3600);
-    });
-    const days = [...perDay.keys()].sort((a, b) => a - b);
-    if (days.length) {
-      $("ch-activity").hidden = false;
-      $("e-activity").style.display = "none";
-      const avg = days.reduce((a, k) => a + perDay.get(k), 0) / days.length;
-      $("h-activity").textContent = t("avgDaily", { v: avg.toFixed(1) });
-      const option = {
-        backgroundColor: "transparent",
-        textStyle: { fontFamily: FONT },
-        color: [C.accent],
-        tooltip: Object.assign({}, liveTooltip(), { trigger: "axis",
-          valueFormatter: (val) => val.toFixed(1) + " h" }),
-        grid: { left: 10, right: 14, top: 24, bottom: 6, containLabel: true },
-        xAxis: baseAxis({ type: "category", data: days.map(fmtDayKeyShort),
-          axisLabel: { color: C.label, fontSize: 10.5, rotate: days.length > 16 ? 40 : 0 } }),
-        yAxis: baseAxis({ type: "value",
-          axisLabel: { formatter: (val) => val + " h", color: C.label, fontSize: 11 } }),
-        series: [{ type: "bar", barMaxWidth: 22, color: C.accent,
-          itemStyle: { borderRadius: [3, 3, 0, 0] },
-          data: days.map((k) => +perDay.get(k).toFixed(2)) }],
-      };
-      chart("ch-activity").setOption(option, { notMerge: true });
-    } else {
-      $("ch-activity").hidden = true;
-      $("e-activity").style.display = "block";
-      $("h-activity").textContent = "";
-    }
-
-    // 使用打卡:近 26 周网格(周列 × 7 行,周一起)
-    const host = $("checkin");
-    const usage = DATA.usage;
-    if (!usage || !usage.days || !usage.days.length) {
-      host.innerHTML = '<div class="event-none" style="padding:24px 0">' + I.emptySection + "</div>";
-      return;
-    }
-    const onDays = new Set(usage.days);
-    const todayKey = dayKeyOf(Date.now());
-    const grid = el("div", "checkin-grid");
-    // 连续天数:优先服务端,缺失时由日列表回推
-    if (!usage.streak && usage.days) {
-      // 日历日回退(不能减 86400000ms:夏令时切换日会落到错误时刻、跳过一天)
-      const prevDay = (key) => {
-        const d = new Date(Math.floor(key / 10000), Math.floor(key % 10000 / 100) - 1, key % 100 - 1);
-        return d.getFullYear() * 10000 + (d.getMonth() + 1) * 100 + d.getDate();
-      };
-      let cursor = onDays.has(todayKey) ? todayKey : prevDay(todayKey);
-      let streak = 0;
-      while (onDays.has(cursor)) { streak += 1; cursor = prevDay(cursor); }
-      usage.streak = streak;
-    }
-    // 从本周周一(或 26 周前的周一)铺到本周
-    const today = new Date();
-    const monday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - ((today.getDay() + 6) % 7));
-    const start = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - 25 * 7);
-    for (let week = 0; week < 26; week++) {
-      for (let dayOfWeek = 0; dayOfWeek < 7; dayOfWeek++) {
-        const cellDate = new Date(start.getFullYear(), start.getMonth(), start.getDate() + week * 7 + dayOfWeek);
-        const key = dayKeyOf(cellDate.getTime());
-        const cell = el("span", "checkin-cell");
-        if (onDays.has(key)) cell.classList.add("on");
-        if (key === todayKey) cell.classList.add("today");
-        grid.appendChild(cell);
-      }
-    }
-    const stats = el("div", "checkin-stats");
-    stats.innerHTML =
-      '<div class="checkin-stat"><div class="n"></div><div class="l"></div></div>' +
-      '<div class="checkin-stat"><div class="n"></div><div class="l"></div></div>';
-    const blocks = stats.querySelectorAll(".checkin-stat");
-    blocks[0].querySelector(".n").textContent = usage.total || 0;
-    blocks[0].querySelector(".l").textContent = t("usageTotalLabel", {});
-    blocks[1].querySelector(".n").textContent = usage.streak || 0;
-    blocks[1].querySelector(".l").textContent = t("usageStreakLabel", {});
-    host.innerHTML = "";
-    const title = el("div", "");
-    title.style.cssText = "font-size:12px;color:var(--text-2);font-weight:600";
-    title.textContent = I.sCheckin;
-    const legend = el("div", "checkin-legend");
-    legend.textContent = I.checkinHint;
-    host.appendChild(title);
-    host.appendChild(grid);
-    host.appendChild(stats);
-    host.appendChild(legend);
   }
 
   // ── 事件时间线(从统计数据即时推导,可回溯任意范围) ─────────────
@@ -1525,7 +1463,20 @@
     custom = [from, Math.min(end, Date.now() + DAY)];
     currentRange = null;
     applyRange();
+    $("cal-pop").hidden = true;
   };
+
+  // 日历弹窗:按钮开关,点外部/Escape 关闭
+  $("cal-btn").onclick = (e) => {
+    e.stopPropagation();
+    $("cal-pop").hidden = !$("cal-pop").hidden;
+  };
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".custom-range")) $("cal-pop").hidden = true;
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") $("cal-pop").hidden = true;
+  });
 
   function pickSource(from, to) {
     const span = to - from;
@@ -1612,31 +1563,59 @@
   }
 
   // ── 各区块渲染 ───────────────────────────────────────────────
+  // KPI 迷你趋势图:降采样至 24 点,归一化画进 100×30 视口;样本不足两点时返回空串
+  function sparkSVG(values) {
+    const pts = values.filter((x) => x != null && isFinite(x));
+    if (pts.length < 2) return "";
+    const n = Math.min(pts.length, 24);
+    const step = (pts.length - 1) / (n - 1);
+    const sampled = [];
+    for (let i = 0; i < n; i++) sampled.push(pts[Math.round(i * step)]);
+    const min = Math.min.apply(null, sampled);
+    const max = Math.max.apply(null, sampled);
+    const span = max - min || 1;
+    const H = 30;
+    const xy = sampled.map((val, i) => {
+      const x = (i / (n - 1)) * 100;
+      const y = H - 3 - ((val - min) / span) * (H - 6);
+      return x.toFixed(1) + "," + y.toFixed(1);
+    });
+    const line = xy.join(" ");
+    return '<svg class="spark" viewBox="0 0 100 ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+      '<polygon class="spark-area" points="0,' + H + " " + line + " 100," + H + '"></polygon>' +
+      '<polyline points="' + line + '"></polyline></svg>';
+  }
+
   function renderKPI(rows) {
     const grid = $("kpi");
     grid.innerHTML = "";
     const defs = [
       ["cpu", "i-cpu", "c-cpu", I.kCpu, fmtPct(avgOf(rows, "cpu_avg")),
-        t("kPeak", { v: fmtPct(maxOf(rows, "cpu_max")) })],
+        t("kPeak", { v: fmtPct(maxOf(rows, "cpu_max")) }), "cpu_avg"],
       ["gpu", "i-monitor", "c-gpu", I.kGpu, fmtPct(avgOf(rows, "gpu_avg")),
-        t("kPeak", { v: fmtPct(maxOf(rows, "gpu_max")) })],
+        t("kPeak", { v: fmtPct(maxOf(rows, "gpu_max")) }), "gpu_avg"],
       ["mem", "i-memory-stick", "c-mem", I.kMem, fmtPct(avgOf(rows, "mem_pct_avg")),
-        t("kPeak", { v: fmtPct(maxOf(rows, "mem_pct_max")) })],
+        t("kPeak", { v: fmtPct(maxOf(rows, "mem_pct_max")) }), "mem_pct_avg"],
+      ["mem-pressure", "i-gauge", "c-mem", I.kMemPressure,
+        fmtPct(avgOf(rows, "mem_pressure_avg")),
+        t("kPeak", { v: fmtPct(maxOf(rows, "mem_pressure_avg")) }), "mem_pressure_avg"],
       ["net-down", "i-arrow-down", "c-net", I.kNetDown, fmtBytes(sumOf(rows, "net_down")),
-        t("kPeakRate", { v: fmtRate(maxOf(rows, "net_down_peak")) })],
+        t("kPeakRate", { v: fmtRate(maxOf(rows, "net_down_peak")) }), "net_down"],
       ["net-up", "i-arrow-up", "c-net", I.kNetUp, fmtBytes(sumOf(rows, "net_up")),
-        t("kPeakRate", { v: fmtRate(maxOf(rows, "net_up_peak")) })],
+        t("kPeakRate", { v: fmtRate(maxOf(rows, "net_up_peak")) }), "net_up"],
       ["disk", "i-hard-drive", "c-disk", I.kDisk, fmtBytes(sumOf(rows, "disk_read")),
-        t("kDiskW", { v: fmtBytes(sumOf(rows, "disk_write")) })],
+        t("kDiskW", { v: fmtBytes(sumOf(rows, "disk_write")) }), "disk_read"],
       ["power", "i-battery-charging", "c-batt", I.kPower, fmtW(avgOf(rows, "power_avg")),
-        t("kPeak", { v: fmtW(maxOf(rows, "power_max")) })],
-      ["ac", "i-zap", "c-accent", I.kAC, fmtPct((avgOf(rows, "ac_frac") || 0) * 100, 0),
-        DATA.hasBattery ? t("kCharging", { v: fmtPct((avgOf(rows, "charging_frac") || 0) * 100, 0) }) : I.kDirectSupply],
+        t("kPeak", { v: fmtW(maxOf(rows, "power_max")) }), "power_avg"],
     ];
-    defs.forEach(([key, ic, cls, label, value, sub]) => {
+    defs.forEach(([key, ic, cls, label, value, sub, sparkCol]) => {
       const k = el("div", "kpi");
-      k.innerHTML = '<span class="kpi-chip ' + cls + '">' + icon(ic) + '</span>' +
-        '<div><div class="label"></div><div class="value"></div><div class="sub"></div></div>';
+      const spark = sparkSVG(rows.map((r) => v(r, sparkCol)));
+      k.innerHTML = '<div class="kpi-top">' +
+        '<span class="kpi-chip ' + cls + '">' + icon(ic) + '</span>' +
+        '<span class="label"></span></div>' +
+        '<div class="value"></div><div class="sub"></div>' +
+        (spark ? '<span class="spark-wrap ' + cls + '">' + spark + "</span>" : "");
       k.querySelector(".label").textContent = label;
       countUp(k.querySelector(".value"), value);
       k.querySelector(".sub").textContent = sub;
@@ -1648,7 +1627,7 @@
     const option = {
       backgroundColor: "transparent",
       textStyle: { fontFamily: FONT },
-      color: [C.cpu, C.gpu, C.mem],
+      color: [C.cpu, C.gpu, C.mem, "#0ea5e9"],
       tooltip: Object.assign({}, liveTooltip(), {
         valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
       }),
@@ -1663,14 +1642,16 @@
           { areaStyle: { color: areaGrad(C.cpu, 0.26) } }),
         lineSeries(I.sGpu, seriesData(rows, "gpu_avg"), C.gpu),
         lineSeries(I.sMemPressure, seriesData(rows, "mem_pressure_avg"), C.mem),
+        lineSeries(I.sMemUsage, seriesData(rows, "mem_pct_avg"), "#0ea5e9",
+          { lineStyle: { width: 1.4, type: [4, 4] } }),
       ],
     };
     setChart("ch-overview", option, rows, "cpu_avg");
   }
 
-  function renderHeatmap() {
-    // 固定用内嵌的小时数据(近 60 天):活动节律需要小时级分辨率
-    const rows = DATA.hours;
+  function renderHeatmap(from, to) {
+    // 活动节律热力图:用小时层数据,按星期×时段聚合平均忙碌度。
+    const rows = rowsBetween(DATA.hours, from, to);
     const cell = {};
     let maxCell = 0;
     rows.forEach((r) => {
@@ -1746,7 +1727,9 @@
       color: colors,
       tooltip: Object.assign({}, liveTooltip(), {
         trigger: "item",
-        valueFormatter: (val) => val.toFixed(1) + "% (" + fmtHours(total * val / 100) + ")",
+        // ECharts 饼图 trigger:item: p.value 是原始帧数, p.percent 是百分比。
+        // 小时数 = 帧数 / 3600(帧即采样秒,一分钟 60 帧)。
+        formatter: (p) => p.name + ": " + p.percent.toFixed(1) + "% (" + fmtHours(p.value / 3600) + ")",
       }),
       legend: { bottom: 0, left: "center", icon: "circle", itemWidth: 8, itemHeight: 8,
         textStyle: { color: C.label, fontSize: 11 } },
@@ -2065,54 +2048,41 @@
     setChart("ch-batt", option, rows, "batt_level_avg");
   }
 
-  function renderPowerDist(rows) {
-    const ac = avgOf(rows, "ac_frac");
-    const charging = avgOf(rows, "charging_frac") || 0;
-    if (ac == null) { setChart("ch-power-dist", {}, rows, "ac_frac"); return; }
-    const direct = Math.max(0, ac - charging);
-    const battery = Math.max(0, 1 - ac);
-    const data = [
-      { name: I.sPowerDirect, value: direct, itemStyle: { color: C.accent } },
-      { name: I.sPowerCharging, value: charging, itemStyle: { color: C.batt } },
-      { name: I.sPowerBattery, value: battery, itemStyle: { color: C.fair } },
-    ].filter((d) => d.value > 0.0005);
-    const option = {
-      backgroundColor: "transparent",
-      textStyle: { fontFamily: FONT },
-      tooltip: Object.assign({}, liveTooltip(), { trigger: "item",
-        valueFormatter: (val) => val.toFixed(1) + "%" }),
-      legend: { bottom: 0, left: "center", icon: "circle", itemWidth: 8, itemHeight: 8,
-        textStyle: { color: C.label, fontSize: 11 } },
-      series: [{
-        type: "pie", radius: ["52%", "74%"], center: ["50%", "44%"],
-        itemStyle: { borderColor: C.pieBorder, borderWidth: 2, borderRadius: 5 },
-        label: { show: false },
-        data,
-      }],
-    };
-    $("ch-power-dist").hidden = false;
-    $("e-power-dist").style.display = "none";
-    chart("ch-power-dist").setOption(option, { notMerge: true });
-  }
-
   function renderThermal(rows) {
     const series = [];
     const colors = [];
-    const hasCpuTemp = hasAny(rows, "cpu_temp_avg");
-    const hasBattTemp = hasAny(rows, "batt_temp_avg");
-    const hasFan = hasAny(rows, "fan_avg");
-    if (hasCpuTemp) {
-      series.push(Object.assign(lineSeries(I.sCpuTemp, seriesData(rows, "cpu_temp_avg"), C.thermal),
-        { yAxisIndex: 0 }));
+    // 热压力(ProcessInfo.thermalState 0~3)是双渠道公共主线,始终优先。
+    const hasThermal = hasAny(rows, "cpu_thermal_avg");
+    if (hasThermal) {
+      series.push(Object.assign(lineSeries(I.sThermalPressure, seriesData(rows, "cpu_thermal_avg"), C.thermal),
+        { yAxisIndex: 0, step: "end" }));
       colors.push(C.thermal);
     }
-    if (hasBattTemp) {
-      series.push(lineSeries(I.sBattTemp, seriesData(rows, "batt_temp_avg"), C.fair, { yAxisIndex: 0 }));
-      colors.push(C.fair);
+    // CPU 温度:仅 Direct 版采集(SMC/IORegistry),沙盒被拦截。
+    if (IS_DIRECT) {
+      const hasCpuTemp = hasAny(rows, "cpu_temp_avg");
+      if (hasCpuTemp) {
+        series.push(lineSeries(I.sCpuTemp, seriesData(rows, "cpu_temp_avg"), C.fair, { yAxisIndex: 1 }));
+        colors.push(C.fair);
+      }
     }
-    if (hasFan) {
-      series.push(lineSeries(I.sFanRPM, seriesData(rows, "fan_avg"), C.fan, { yAxisIndex: 1 }));
-      colors.push(C.fan);
+    // 电池温度:有电池时双渠道均可读取。
+    const hasBattTemp = hasAny(rows, "batt_temp_avg");
+    if (hasBattTemp) {
+      series.push(lineSeries(I.sBattTemp, seriesData(rows, "batt_temp_avg"), C.battTemp, { yAxisIndex: 1 }));
+      colors.push(C.battTemp);
+    }
+    // 风扇 RPM:仅 Direct 版(SMC 只读)。
+    if (IS_DIRECT) {
+      const hasFan = hasAny(rows, "fan_avg");
+      if (hasFan) {
+        series.push(lineSeries(I.sFanRPM, seriesData(rows, "fan_avg"), C.fan, { yAxisIndex: 2 }));
+        colors.push(C.fan);
+      }
+    }
+    if (!series.length) {
+      setChart("ch-thermal", {}, rows, "cpu_thermal_avg");
+      return;
     }
     const option = {
       backgroundColor: "transparent",
@@ -2123,9 +2093,10 @@
           let html = '<div style="opacity:.6;font-size:11px;margin-bottom:4px">'
             + fmtDate(params[0].value[0]) + " " + fmtClock(params[0].value[0]) + "</div>";
           params.forEach((p) => {
-            const text = p.seriesName === I.sFanRPM
-              ? fmtRPM(p.value[1])
-              : p.value[1] == null ? "—" : p.value[1].toFixed(1) + "°C";
+            let text;
+            if (p.seriesName === I.sFanRPM) text = fmtRPM(p.value[1]);
+            else if (p.seriesName === I.sThermalPressure) text = thermalStateText(p.value[1]);
+            else text = p.value[1] == null ? "—" : p.value[1].toFixed(1) + "°C";
             html += "<div>" + p.marker + " " + p.seriesName + ": " + text + "</div>";
           });
           return html;
@@ -2136,6 +2107,12 @@
       grid: timeGrid(),
       xAxis: baseAxis({ type: "time" }),
       yAxis: [
+        baseAxis({ type: "value", min: 0, max: 3,
+          axisLabel: {
+            formatter: (val) => thermalStateText(val),
+            color: C.label, fontSize: 10.5,
+          },
+          splitLine: { show: false } }),
         baseAxis({ type: "value", scale: true,
           axisLabel: { formatter: (val) => val + "°C", color: C.label, fontSize: 11 } }),
         baseAxis({ type: "value", scale: true, splitLine: { show: false },
@@ -2144,8 +2121,16 @@
       dataZoom: [{ type: "inside" }],
       series,
     };
-    const probe = hasCpuTemp ? "cpu_temp_avg" : hasBattTemp ? "batt_temp_avg" : "fan_avg";
+    const probe = hasThermal ? "cpu_thermal_avg" : IS_DIRECT && hasAny(rows, "cpu_temp_avg") ? "cpu_temp_avg" : "batt_temp_avg";
     setChart("ch-thermal", option, rows, probe);
+  }
+
+  function thermalStateText(state) {
+    if (state == null) return "—";
+    if (state < 0.5) return I.thermalNominal;
+    if (state < 1.5) return I.thermalFair;
+    if (state < 2.5) return I.thermalSerious;
+    return I.thermalCritical;
   }
 
   function renderTable(rows, source) {
@@ -2321,6 +2306,7 @@
     document.querySelectorAll("#ranges button").forEach((b) => {
       b.classList.toggle("active", b.dataset.key === currentRange);
     });
+    $("cal-btn").classList.toggle("active", !!custom);
     let from, to;
     if (custom) {
       [from, to] = custom;
@@ -2335,8 +2321,8 @@
     currentSource = source;
 
     renderHealth(rows);
-    // 新增分区各自隔离:单区异常不拖垮整页
-    [renderApps, renderBatteryHealth, renderActivity].forEach((fn) => {
+    // 各分区隔离:单区异常不拖垮整页
+    [renderApps, renderBatteryHealth].forEach((fn) => {
       try { fn(from, to); } catch (err) {
         console.error("render section failed:", err);
         const note = $("apps-none");
@@ -2358,7 +2344,6 @@
     renderDiskDaily(rows);
     renderPower(rows);
     renderBattery(rows);
-    renderPowerDist(rows);
     renderThermal(rows);
     renderEvents(rows, source);
     renderTable(rows, source);
@@ -2373,7 +2358,9 @@
     $("h-disk").textContent = granLabel;
     $("h-power").textContent = granLabel;
     $("h-thermal").textContent = granLabel;
-    $("h-heatmap").textContent = t("heatHint", { d: 60 });
+    const heatDays = Math.round((to - from) / DAY);
+    $("h-heatmap").textContent = t("heatHint", { d: heatDays });
+    renderHeatmap(from, to);
   }
 
   // 整库无数据 → 空态页
@@ -2401,7 +2388,7 @@
   $("date-from").value = iso(maxT - 6 * DAY);
   $("date-to").value = iso(maxT);
 
-  renderHeatmap();
+  renderHeatmap(startOfToday - 59 * DAY, startOfToday + DAY);
   applyRange();
 
   // ── 视觉增强:分区标题图标芯片 / 粘性导航 / 滚动进场 / 回到顶部 ──
@@ -2427,6 +2414,9 @@
 
     // 粘性分区导航:从实际渲染出的分区收集锚点(隐藏分区不入导航)
     const nav = $("sec-nav");
+    const navLinks = $("nav-links");
+    const navPill = $("nav-pill");
+    const navProgress = $("nav-progress");
     const navItems = [];
     document.querySelectorAll("#content > section").forEach((sec, i) => {
       if (sec.hidden || sec.classList.contains("inner-grid")) return;
@@ -2440,12 +2430,20 @@
         e.preventDefault();
         sec.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
       });
-      nav.appendChild(link);
+      navLinks.appendChild(link);
       navItems.push([link, sec]);
     });
     if (navItems.length) {
       nav.hidden = false;
       document.body.classList.add("has-sec-nav");
+      // 滑动指示器:贴合激活项的位置与宽度
+      const movePill = () => {
+        const active = navLinks.querySelector("a.active");
+        if (!active) { navPill.style.opacity = "0"; return; }
+        navPill.style.opacity = "1";
+        navPill.style.width = active.offsetWidth + "px";
+        navPill.style.transform = "translateX(" + active.offsetLeft + "px)";
+      };
       let ticking = false;
       const spy = () => {
         ticking = false;
@@ -2455,12 +2453,18 @@
           if (!item[1].hidden && item[1].getBoundingClientRect().top <= offset) current = item;
         });
         navItems.forEach((item) => item[0].classList.toggle("active", item === current));
-        const active = nav.querySelector("a.active");
+        movePill();
+        const active = navLinks.querySelector("a.active");
         if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
       };
       window.addEventListener("scroll", () => {
+        // 滚动进度:顶栏底部细线随阅读位置增长
+        const root = document.documentElement;
+        const max = root.scrollHeight - root.clientHeight;
+        navProgress.style.width = (max > 0 ? (root.scrollTop / max) * 100 : 0) + "%";
         if (!ticking) { ticking = true; requestAnimationFrame(spy); }
       }, { passive: true });
+      window.addEventListener("resize", movePill);
       spy();
     }
 

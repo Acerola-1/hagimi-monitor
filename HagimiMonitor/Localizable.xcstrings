@@ -8860,28 +8860,6 @@
         }
       }
     },
-    "stats.r.avgDaily": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{v} h daily avg"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日平均 {v} 時間"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日均 {v} h"
-          }
-        }
-      }
-    },
     "stats.r.blankBody": {
       "localizations": {
         "en": {
@@ -8922,28 +8900,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "报表已就绪，数据积累中"
-          }
-        }
-      }
-    },
-    "stats.r.checkinHint": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Lit when the app ran that day · last 26 weeks"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "起動した日が点灯・直近26週"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当日运行过即点亮一格 · 近 26 周"
           }
         }
       }
@@ -10356,50 +10312,6 @@
         }
       }
     },
-    "stats.r.kAC": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Power Source"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "電源構成"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电源构成"
-          }
-        }
-      }
-    },
-    "stats.r.kCharging": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Charging {v}"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充電 {v}"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充电 {v}"
-          }
-        }
-      }
-    },
     "stats.r.kCpu": {
       "localizations": {
         "en": {
@@ -10418,28 +10330,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "CPU"
-          }
-        }
-      }
-    },
-    "stats.r.kDirectSupply": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Always on power adapter"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "常時電源接続"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "始终由适配器直供"
           }
         }
       }
@@ -10528,6 +10418,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "内存"
+          }
+        }
+      }
+    },
+    "stats.r.kMemPressure": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory Pressure"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリプレッシャー"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存压力"
           }
         }
       }
@@ -10625,19 +10537,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "System Power"
+            "value": "System Power Draw"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "消費電力"
+            "value": "システム消費電力"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统功率"
+            "value": "系统功耗"
           }
         }
       }
@@ -11016,28 +10928,6 @@
         }
       }
     },
-    "stats.r.sCheckin": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HagimiMonitor Check-in"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HagimiMonitorチェックイン"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "HagimiMonitor 使用打卡"
-          }
-        }
-      }
-    },
     "stats.r.sCpu": {
       "localizations": {
         "en": {
@@ -11346,6 +11236,28 @@
         }
       }
     },
+    "stats.r.sMemUsage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory Usage"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "メモリ使用率"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存使用率"
+          }
+        }
+      }
+    },
     "stats.r.sMemUsed": {
       "localizations": {
         "en": {
@@ -11434,68 +11346,24 @@
         }
       }
     },
-    "stats.r.sPowerBattery": {
+    "stats.r.sThermalPressure": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "On Battery"
+            "value": "Thermal Pressure"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "バッテリー駆動"
+            "value": "熱圧力"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "电池"
-          }
-        }
-      }
-    },
-    "stats.r.sPowerCharging": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Charging"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充電"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充电"
-          }
-        }
-      }
-    },
-    "stats.r.sPowerDirect": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On Adapter"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "電源直結"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "直供"
+            "value": "热压力"
           }
         }
       }
@@ -11518,28 +11386,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "上行"
-          }
-        }
-      }
-    },
-    "stats.r.secActivity": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Active Hours & Check-in"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "稼働時間とチェックイン"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "活跃时长与使用打卡"
           }
         }
       }
@@ -11945,63 +11791,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "System Power"
+            "value": "System Power Draw"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "消費電力"
+            "value": "システム消費電力"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统功率"
-          }
-        }
-      }
-    },
-    "stats.r.secPowerDaily": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Daily Power Mix (hours)"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日別電源構成（時間）"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "每日电源构成（小时）"
-          }
-        }
-      }
-    },
-    "stats.r.secPowerDist": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Power Source Mix"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "電源構成"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电源构成"
+            "value": "系统功耗"
           }
         }
       }
@@ -12033,19 +11835,19 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Temperatures & Fan"
+            "value": "Thermal & Temperature"
           }
         },
         "ja": {
           "stringUnit": {
             "state": "translated",
-            "value": "温度とファン"
+            "value": "熱圧力と温度"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "温度与风扇"
+            "value": "热压力与温度"
           }
         }
       }
@@ -12134,50 +11936,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "严重"
-          }
-        }
-      }
-    },
-    "stats.r.usageStreakLabel": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Day streak"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "連続利用日数"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "连续使用天数"
-          }
-        }
-      }
-    },
-    "stats.r.usageTotalLabel": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Days total"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "累計利用日数"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "累计使用天数"
           }
         }
       }
@@ -14668,6 +14426,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "© 2026 Acerola"
+          }
+        }
+      }
+    },
+    "stats.settings.report-details": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详情"
           }
         }
       }

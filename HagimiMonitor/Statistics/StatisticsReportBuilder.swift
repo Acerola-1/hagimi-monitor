@@ -3,7 +3,7 @@ import Darwin
 import Foundation
 import OSLog
 
-/// 进程/电池/打卡维度的报表数据(来自 SwiftData 进程存储)。
+/// 进程/电池维度的报表数据(来自 SwiftData 进程存储)。
 struct StatisticsProcessSnapshot {
     /// 行:[日键, 名称下标, cpu%, cpu样本, gpu%, gpu样本, 内存MB, 内存样本, 网络MB, 磁盘MB]
     let appRows: [[Any]]
@@ -12,8 +12,6 @@ struct StatisticsProcessSnapshot {
     let appIcons: [String]
     /// [日键, 循环次数, 健康度%]
     let batteryDaily: [[Any]]
-    /// first/total/streak/days(活跃日键数组)
-    let usage: [String: Any]
 }
 
 /// 网页报表生成器:从统计库拉取分钟/小时/日三层行,连同元信息与当前语言文案
@@ -49,8 +47,31 @@ enum StatisticsReportBuilder {
         let html = template
             .replacingOccurrences(of: "/*__ECHARTS__*/", with: echarts)
             .replacingOccurrences(of: "window.__DATA__ = /*__DATA__*/null;", with: "window.__DATA__ = \(escapedJSON);")
+            .replacingOccurrences(of: "__APP_ICON_B64__", with: appIconBase64())
         try html.write(to: outputURL, atomically: true, encoding: .utf8)
         return outputURL
+    }
+
+    /// 应用图标渲染为 128px PNG 的 base64,注入模板品牌位。
+    /// 报表是单文件产物,图标需随文件内嵌;128px 覆盖页内最大 58px 展示位的 2x 屏。
+    /// 位图绘制为纯数据操作,后台线程安全;失败返回空串,品牌位退化为纯文字。
+    private static func appIconBase64() -> String {
+        guard let icon = NSImage(named: "AppIcon") else { return "" }
+        let size = NSSize(width: 128, height: 128)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 128, pixelsHigh: 128,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return "" }
+        rep.size = size
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        icon.draw(in: NSRect(origin: .zero, size: size))
+        NSGraphicsContext.current = nil
+        NSGraphicsContext.restoreGraphicsState()
+        guard let png = rep.representation(using: .png, properties: [:]) else { return "" }
+        return png.base64EncodedString()
     }
 
     /// 报表产物路径:应用支持目录下固定文件名,重复打开即覆盖刷新。
@@ -85,7 +106,6 @@ enum StatisticsReportBuilder {
         if let process {
             payload["apps"] = ["rows": process.appRows, "names": process.appNames, "icons": process.appIcons]
             payload["batteryDaily"] = process.batteryDaily
-            payload["usage"] = process.usage
         }
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.withoutEscapingSlashes])
         return String(data: data, encoding: .utf8) ?? "{}"
@@ -124,11 +144,11 @@ enum StatisticsReportBuilder {
     private static let stringKeys = [
         "reportTitle", "reportSub", "metaDays", "metaGenerated",
         "rToday", "rWeek", "rMonth", "rYear", "rAll", "applyCustom",
-        "kCpu", "kGpu", "kMem", "kNetDown", "kNetUp", "kDisk", "kPower", "kAC",
-        "kDirectSupply", "kCharging", "kPeak", "kPeakRate", "kDiskW",
+        "kCpu", "kGpu", "kMem", "kMemPressure", "kNetDown", "kNetUp", "kDisk", "kPower",
+        "kPeak", "kPeakRate", "kDiskW",
         "secOverview", "secHeatmap", "secCpu", "secCpuPE", "secCpuDist", "secGpu",
         "secGpuDist", "secGpuMem", "secMem", "secNet", "secNetDaily", "secDisk",
-        "secDiskDaily", "secPower", "secBatt", "secPowerDist", "secThermal",
+        "secDiskDaily", "secPower", "secBatt", "secThermal",
         "secTable", "secInsights",
         "healthTitle", "healthTrend", "healthNoData", "healthCapped",
         "levelExcellent", "levelGood", "levelFair", "levelPoor", "levelCritical",
@@ -138,15 +158,14 @@ enum StatisticsReportBuilder {
         "evCpuHigh", "evCpuHighDetail", "evPressureHigh", "evPressureDetail",
         "evThermal", "evThermalDetail", "evNetSpike", "evNetDetail",
         "evDiskSpike", "evDiskDetail", "evPowerOnAC", "evPowerOnBattery", "evReboot",
-        "secBatteryHealth", "sCycles", "sHealth", "secPowerDaily",
-        "secActivity", "avgDaily", "sCheckin", "usageTotalLabel", "usageStreakLabel", "checkinHint",
+        "secBatteryHealth", "sCycles", "sHealth",
         "secAppsTitle", "appsCpu", "appsMem", "appsGpu", "appsNet", "appsNone",
         "heatLow", "heatHigh", "heatHint", "hourOfDay",
         "granMinute", "granHour", "granDay",
-        "sCpu", "sGpu", "sMemPressure", "sAvg", "sPeak", "sPerfCore", "sEffCore",
+        "sCpu", "sGpu", "sMemPressure", "sMemUsage", "sAvg", "sPeak", "sPerfCore", "sEffCore",
         "sDown", "sUp", "sDiskRead", "sDiskWrite", "sMemUsed", "sMemCompressed",
         "sMemSwap", "sPower", "sBattLevel", "sCpuTemp", "sBattTemp", "sFanRPM",
-        "sGpuMem", "sPowerDirect", "sPowerCharging", "sPowerBattery",
+        "sThermalPressure", "sGpuMem",
         "dist0", "dist1", "dist2", "dist3", "dist4",
         "wd0", "wd1", "wd2", "wd3", "wd4", "wd5", "wd6",
         "colDay", "colCpuAvg", "colCpuPeak", "colMemAvg", "colMemPressure",
@@ -170,7 +189,7 @@ enum StatisticsReportBuilder {
         return strings
     }
 
-    /// 从进程存储拉取报表所需的进程/电池/打卡数据。
+    /// 从进程存储拉取报表所需的进程/电池数据。
     /// 应用行取近 60 天(与报表小时层窗口一致),日级粒度供网页端按范围聚合。
     static func processSnapshot(from store: StatisticsProcessStore, calendar: Calendar = .current) -> StatisticsProcessSnapshot? {
         let now = Date()
@@ -203,14 +222,8 @@ enum StatisticsReportBuilder {
         }
 
         let battery = store.batteryHistory().map { [$0.day, $0.cycleCount, $0.healthPercent] as [Any] }
-        var usage: [String: Any] = [:]
-        if let summary = store.usageSummary() {
-            usage["first"] = summary.firstUseDay
-            usage["total"] = summary.totalActiveDays
-            usage["days"] = store.activeDays()
-        }
         guard !names.isEmpty || !battery.isEmpty else { return nil }
-        return StatisticsProcessSnapshot(appRows: rows, appNames: names, appIcons: icons, batteryDaily: battery, usage: usage)
+        return StatisticsProcessSnapshot(appRows: rows, appNames: names, appIcons: icons, batteryDaily: battery)
     }
 
     // MARK: - 元信息
@@ -224,7 +237,17 @@ enum StatisticsReportBuilder {
             "os": "macOS \(version.majorVersion).\(version.minorVersion)",
             "days": days,
             "appVersion": Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "",
+            "direct": isDirect,
         ]
+    }
+
+    /// 是否为直连版(Direct):沙盒版拿不到的数据源在此门控。
+    private static var isDirect: Bool {
+        #if DIRECT_DISTRIBUTION
+        return true
+        #else
+        return false
+        #endif
     }
 
     private static func deviceName() -> String {

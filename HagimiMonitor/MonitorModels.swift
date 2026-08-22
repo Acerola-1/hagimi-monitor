@@ -338,6 +338,9 @@ struct MonitorModule: Identifiable, Equatable {
     /// 逐核负载与 P/E 分组占用(仅 CPU 模块且拓扑可识别时有值)。
     /// 面板展开区据此渲染逐核环形图,独立于 metrics 字段。
     var cpuCoreDetail: CPUCoreDetail? = nil
+    /// 采样失败/未产出时的占位模块标记:数值无真实数据源,
+    /// 统计入库据此过滤,避免把兜底值当作真实读数写入历史。
+    var isPlaceholder: Bool = false
 
     var id: MonitorKind { kind }
 
@@ -382,7 +385,8 @@ struct MonitorModule: Identifiable, Equatable {
                 MonitorMetric(name: "average", value: "--"),
                 MonitorMetric(name: "peak", value: "--")
             ],
-            samples: Array(repeating: 0, count: 28)
+            samples: Array(repeating: 0, count: 28),
+            isPlaceholder: true
         )
     }
 }
@@ -569,9 +573,10 @@ final class MonitorStore: ObservableObject {
     // MARK: - 统计进程采样
 
     /// 统计专用 TOP 应用采样定时器(面板无关常驻):60s 一次、始终包含系统进程,
-    /// 结果交 StatisticsRecorder 聚合落 SwiftData。与面板进程采样共用同一条
-    /// 串行队列与全局差分快照——串行互斥保证安全,采样窗口交错不影响百分比口径。
+    /// 结果交 StatisticsRecorder 聚合落 SwiftData。与面板进程采样共用同一条串行队列;
+    /// 磁盘增量走独立游标,保证 60s 统计窗口不被面板 5s 采样截断。
     private var statsProcTimer: AnyCancellable?
+    private let statsDiskCursor = DiskSnapshotCursor()
 
     private func startStatisticsProcessSampling() {
         guard statisticsRecorder.processStore != nil else { return }
@@ -584,12 +589,15 @@ final class MonitorStore: ObservableObject {
 
     private func sampleProcessesForStatistics() {
         let recorder = statisticsRecorder
+        #if DIRECT_DISTRIBUTION
+        let diskCursor = statsDiskCursor
+        #endif
         let sampleFast: () -> Void = {
             let cpu = enrichCPU(sampleTopCPUProcesses(limit: 12, includeSystemProcesses: true))
             let memory = enrich(sampleTopMemoryProcesses(includeSystemProcesses: true))
             let gpu = enrichGPU(sampleTopGPUProcesses(limit: 12, includeSystemProcesses: true))
             #if DIRECT_DISTRIBUTION
-            let disk = enrichDisk(sampleTopDiskProcesses(includeSystemProcesses: true))
+            let disk = enrichDisk(diskCursor.sampleTopDiskProcesses(includeSystemProcesses: true))
             #else
             let disk: [TopDiskProcess] = []
             #endif
@@ -822,10 +830,11 @@ final class MonitorStore: ObservableObject {
         var networkProcesses: [TopNetworkProcess]?
 
         // 只采样当前可见(展开)且已开启的列表。注意:磁盘/网络/GPU 的 TOP 采样各自
-        // 维护一份文件级全局快照(previousDiskSnapshot / previousNetworkSnapshot /
-        // previousGPUSnapshot,无锁)以计算增量,其线程安全依赖「每类快照只被固定
-        // 一条串行队列读写」——磁盘/GPU 在 procSampleQueue、网络在 nettopQueue,
-        // 切勿把任一条改成并发队列,否则会引入难复现的数据竞争。
+        // 维护一份差分快照以计算增量(磁盘按消费方各持一个 DiskSnapshotCursor:
+        // 面板 panelDiskCursor / 统计 statsDiskCursor;网络/GPU 为文件级全局快照
+        // previousNetworkSnapshot / previousGPUSnapshot,无锁),其线程安全依赖
+        // 「每份快照只被固定一条串行队列读写」——磁盘/GPU 在 procSampleQueue、
+        // 网络在 nettopQueue,并发化任一条会引入难复现的数据竞争。
         if active.contains(.memory) {
             group.enter()
             procSampleQueue.async {
