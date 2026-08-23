@@ -7,24 +7,28 @@ struct SettingsRootView: View {
     @State private var selection: SettingsRoute = .general
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                SettingsSidebar(selection: $selection, settings: settings, fanAvailable: store.fanAvailable)
-                    .frame(width: 164)
-                    .background(.bar, ignoresSafeAreaEdges: .top)
+        HStack(spacing: 0) {
+            SettingsSidebar(selection: $selection, settings: settings, fanAvailable: store.fanAvailable)
+                .frame(width: 164)
+                .background {
+                    // 26 上 `.sidebar` 列表样式自带系统液态玻璃侧栏,
+                    // 手铺 `.bar` 会把它压成平面材质,仅在 15 上补铺。
+                    if #unavailable(macOS 26) {
+                        Rectangle()
+                            .fill(.bar)
+                            .ignoresSafeArea(edges: .top)
+                    }
+                }
 
-                SettingsColumnDivider()
+            SettingsColumnDivider()
 
-                detailView
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(Color(nsColor: .windowBackgroundColor))
-            }
-            .frame(
-                minWidth: 560,
-                idealWidth: 600,
-                minHeight: 384,
-                idealHeight: 406
-            )
+            // 内容区忽略顶部安全区直达窗口顶边:标题栏由空 unified 工具栏 +
+            // 透明标题栏抹平,右栏背景与窗口背景同为 windowBackgroundColor,
+            // 顶部不再出现从红绿灯延伸过来的横条。页面自身的顶边距提供呼吸空间。
+            detailView
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(nsColor: .windowBackgroundColor))
+                .ignoresSafeArea(edges: .top)
         }
         .background(SettingsWindowTracker(selection: $selection))
     }
@@ -43,6 +47,16 @@ struct SettingsRootView: View {
             DisplayInfoSettingsView(settings: settings)
             #endif
 
+        case .statistics:
+            StatisticsSettingsView(recorder: store.statisticsRecorder) {
+                selection = .storage
+            }
+
+        case .storage:
+            StorageSettingsView(recorder: store.statisticsRecorder) {
+                selection = .statistics
+            }
+
         case .about:
             AboutSettingsView()
         }
@@ -59,6 +73,7 @@ private struct SettingsColumnDivider: View {
             endPoint: .bottom
         )
         .frame(width: 1)
+        .ignoresSafeArea(edges: .top)
     }
 }
 
@@ -76,9 +91,9 @@ struct SettingsWindowTracker: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        guard let window = nsView.window else { return }
+        guard nsView.window != nil else { return }
         Task { @MainActor in
-            SettingsWindowPresenter.register(window)
+            SettingsWindowPresenter.settingsViewDidAppear()
         }
 
         if let view = nsView as? SettingsWindowTrackingView {
@@ -126,14 +141,14 @@ private final class SettingsWindowTrackingView: NSView {
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
 
-        guard let window else {
+        guard window != nil else {
             return
         }
 
-        // 同步注册(不经 Task 延迟):此回调在窗口真正显示之前触发,
-        // 让标题栏样式与居中在窗口可见前完成,消除首次打开时的闪烁与位置跳变。
+        // 同步回调(不经 Task 延迟):此时路由观察者已随跟踪视图创建完毕,
+        // 补发窗口打开时指定但尚未消费的目标页。
         MainActor.assumeIsolated {
-            SettingsWindowPresenter.register(window)
+            SettingsWindowPresenter.settingsViewDidAppear()
         }
     }
 }
@@ -145,6 +160,10 @@ extension SettingsTab {
             return .general
         case .modules:
             return nil
+        case .statistics:
+            return .statistics
+        case .storage:
+            return .storage
         case .about:
             return .about
         }

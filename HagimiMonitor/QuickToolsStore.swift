@@ -7,15 +7,23 @@ import SwiftUI
 /// 与只读监控数据严格分离:状态由本 store 独立发布,浮层独立于面板
 /// 每秒刷新,不引入面板重绘开销。
 ///
-/// 键盘锁定双渠道实现:Direct 为辅助功能权限下的事件 tap 拦截,
-/// App Store 为全屏遮罩(见 KeyboardLockShield),状态语义一致。
+/// 键盘锁定双渠道同构:均由 KeyboardLockController 的事件 tap 拦截,
+/// 差异仅在授权通道——Direct 为辅助功能(该权限同时服务媒体键接管),
+/// App Store 为输入监控(沙盒内可用)。
 @MainActor
 final class QuickToolsStore: ObservableObject {
     static let shared = QuickToolsStore()
 
-    /// 键盘锁定激活中(Direct:键盘事件被拦截,鼠标不受影响;
-    /// App Store:全屏遮罩接管键盘与点击)。
+    /// 键盘锁定激活中:键盘事件被 tap 拦截,鼠标不受影响;解锁入口
+    /// 为本功能开关(快捷键会被 tap 一并吞掉)。
     @Published private(set) var keyboardLocked = false
+    /// 本轮锁定的自动解锁截止时刻,未锁定为 nil。header 倒计时徽章
+    /// 据此逐秒刷新,与 KeyboardLockController 的兜底计时器同源。
+    @Published private(set) var keyboardLockAutoUnlockDate: Date?
+    /// 键盘锁定权限未授予时的提示文案(当前渠道对应权限名的本地化),
+    /// 已授权为 nil。浮层磁贴据此显示"需要什么授权"的小字;授权即隐、
+    /// 撤销复现,与键盘锁定联动同拍发布。
+    @Published private(set) var keyboardLockPermissionHint: String?
     /// 系统防休眠激活中:阻止空闲引发的系统休眠(屏幕可正常熄灭;
     /// 合盖是否休眠由硬件/外接条件决定,断言不参与)。
     @Published private(set) var systemSleepPrevented = false
@@ -38,76 +46,136 @@ final class QuickToolsStore: ObservableObject {
     private var displayAssertionID: IOPMAssertionID?
     private var systemAssertionID: IOPMAssertionID?
     #if DIRECT_DISTRIBUTION
+    private typealias KeyboardLockPermission = AccessibilityPermissionService
+    #else
+    private typealias KeyboardLockPermission = InputMonitoringPermissionService
+    #endif
     private let keyboardLock = KeyboardLockController()
-    /// 已发起授权、等待授权通过后自动上锁的挂起标记。
+    private let keyboardLockPermission = KeyboardLockPermission.shared
+    /// 挂起标记:已表达上锁意图、等待授权通过或 tap 可建立;
+    /// 挂起期间再次点击开关视为撤销意图。
     private var pendingKeyboardLock = false
     private var permissionCancellable: AnyCancellable?
-    #else
-    private let keyboardShield = KeyboardLockShieldController()
+    #if !DIRECT_DISTRIBUTION
+    /// 授权通过后事件 tap 侧信任缓存存在传播延迟(实测约 40 秒),
+    /// 期间 tapCreate 失败,挂起态按固定间隔重试直到成功。
+    private var tapRetryTimer: DispatchSourceTimer?
+    private static let tapRetryInterval: TimeInterval = 5
     #endif
 
     private init() {
-        #if DIRECT_DISTRIBUTION
-        configureKeyboardLock()
-        #else
-        keyboardShield.onAutoUnlock = { [weak self] in
-            self?.keyboardLocked = false
+        keyboardLock.onAutoUnlock = { [weak self] in
+            // controller 到点已自行 stop,此处只同步发布态(倒计时随之清空)。
+            self?.setKeyboardLocked(false)
         }
-        keyboardShield.onUnlock = { [weak self] in
-            self?.toggleKeyboardLock()
-        }
-        #endif
+        observeKeyboardLockPermission()
     }
 
-    #if DIRECT_DISTRIBUTION
-    /// 键盘锁定的权限联动:授权通过后若处于挂起态则自动上锁;
-    /// 权限被撤销时 tap 已失效,同步回未锁定。
-    private func configureKeyboardLock() {
-        keyboardLock.onAutoUnlock = { [weak self] in
-            self?.keyboardLocked = false
-        }
-        permissionCancellable = AccessibilityPermissionService.shared.$isTrusted
+    /// 键盘锁定的权限联动:授权通过且处于挂起态时自动上锁;
+    /// 权限被撤销时 tap 已失效,同步回未锁定。权限状态变化时同步
+    /// 刷新磁贴下面的提示文案。
+    private func observeKeyboardLockPermission() {
+        permissionCancellable = keyboardLockPermission.$isTrusted
             .receive(on: RunLoop.main)
             .sink { [weak self] trusted in
                 guard let self else { return }
+                self.refreshPermissionHint()
                 if trusted {
-                    if self.pendingKeyboardLock && !self.keyboardLocked {
-                        self.pendingKeyboardLock = false
-                        self.keyboardLocked = self.keyboardLock.start()
-                    }
+                    self.attemptPendingLock()
                 } else if self.keyboardLocked {
                     self.keyboardLock.stop()
-                    self.keyboardLocked = false
+                    self.setKeyboardLocked(false)
                 }
             }
     }
-    #endif
 
-    /// 切换键盘锁定。Direct 渠道未授权时触发系统授权引导(打开系统
-    /// 设置 + 轮询),授权通过后自动上锁;App Store 渠道直接铺遮罩。
+    /// 以授权状态刷新提示文案:未授权给出来源渠道的权限名文案,已授权置 nil。
+    private func refreshPermissionHint() {
+        keyboardLockPermissionHint = keyboardLockPermission.isTrusted
+            ? nil
+            : String(localized: keyboardLockPermission.permissionHintKey)
+    }
+
+    /// 浮层可见期间定期校准授权状态(App Store 渠道撤销无事件通知,只能轮询)。
+    /// 内部走各渠道对应权限服务的 refresh,isTrusted 变化经
+    /// observeKeyboardLockPermission 的 sink 联动落锁/解锁与提示行。
+    func refreshKeyboardLockPermission() {
+        keyboardLockPermission.refresh()
+    }
+
+    /// 落锁/解锁后同步锁定态与倒计时截止时刻:两个 @Published 同拍
+    /// 发布,header 徽章不会出现「已解锁还挂着倒计时」的中间帧。
+    private func setKeyboardLocked(_ locked: Bool) {
+        keyboardLocked = locked
+        keyboardLockAutoUnlockDate = keyboardLock.autoUnlockDeadline
+    }
+
+    /// 切换键盘锁定。未授权时触发系统授权引导,授权通过后自动上锁;
+    /// 挂起中的再次点击撤销上锁意图。
     func toggleKeyboardLock() {
         if keyboardLocked {
-            #if DIRECT_DISTRIBUTION
             keyboardLock.stop()
-            #else
-            keyboardShield.dismiss()
+            setKeyboardLocked(false)
+            return
+        }
+        if pendingKeyboardLock {
+            cancelPendingLock()
+            return
+        }
+        pendingKeyboardLock = true
+        guard keyboardLockPermission.isTrusted else {
+            keyboardLockPermission.request()
+            return
+        }
+        attemptPendingLock()
+    }
+
+    /// 尝试落锁:tap 建立成功则点亮锁定态;失败时 App Store 渠道
+    /// 多处于授权后的信任缓存传播窗口,进入定时重试,Direct 渠道
+    /// 授权即生效,失败直接放弃本次意图。
+    private func attemptPendingLock() {
+        guard pendingKeyboardLock, !keyboardLocked else { return }
+        if keyboardLock.start() {
+            pendingKeyboardLock = false
+            setKeyboardLocked(true)
+            #if !DIRECT_DISTRIBUTION
+            stopTapRetry()
             #endif
-            keyboardLocked = false
-            return
+        } else {
+            #if !DIRECT_DISTRIBUTION
+            startTapRetry()
+            #else
+            pendingKeyboardLock = false
+            #endif
         }
-        #if DIRECT_DISTRIBUTION
-        guard AccessibilityPermissionService.shared.isTrusted else {
-            pendingKeyboardLock = true
-            AccessibilityPermissionService.shared.request()
-            return
-        }
-        keyboardLocked = keyboardLock.start()
-        #else
-        // 遮罩会盖过菜单栏,浮层失去入口,先收起避免残留。
-        popoverPresenter.dismiss()
-        keyboardLocked = keyboardShield.present()
+    }
+
+    /// 撤销挂起的上锁意图。
+    private func cancelPendingLock() {
+        pendingKeyboardLock = false
+        #if !DIRECT_DISTRIBUTION
+        stopTapRetry()
         #endif
     }
+
+    #if !DIRECT_DISTRIBUTION
+    /// 传播窗口内按固定间隔重试建 tap,直到成功或意图被撤销。
+    private func startTapRetry() {
+        guard tapRetryTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + Self.tapRetryInterval, repeating: Self.tapRetryInterval)
+        timer.setEventHandler { [weak self] in
+            self?.attemptPendingLock()
+        }
+        tapRetryTimer = timer
+        timer.resume()
+    }
+
+    private func stopTapRetry() {
+        tapRetryTimer?.cancel()
+        tapRetryTimer = nil
+    }
+    #endif
 
     // MARK: - 系统防休眠
 
@@ -145,13 +213,10 @@ final class QuickToolsStore: ObservableObject {
     /// 此处保证 stop 语义完整(如测试或热重启场景)。
     func stop() {
         if keyboardLocked {
-            #if DIRECT_DISTRIBUTION
             keyboardLock.stop()
-            #else
-            keyboardShield.dismiss()
-            #endif
-            keyboardLocked = false
+            setKeyboardLocked(false)
         }
+        cancelPendingLock()
         releaseAssertion(&displayAssertionID)
         releaseAssertion(&systemAssertionID)
         displayAwake = false

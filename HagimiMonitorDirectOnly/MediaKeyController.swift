@@ -30,6 +30,13 @@ final class MediaKeyController {
 
     func refresh() {
         guard let settings else { return }
+        // 键盘锁定期间功能键由锁定 tap 统一吞掉,媒体键 tap 必须停用:
+        // 两者同为 headInsert 且掩码在 systemDefined 上重叠,锁定期内重建会插到锁 tap 之前,
+        // 让功能键绕过键盘锁;解锁后由锁定状态订阅触发的 refresh 恢复。
+        guard !QuickToolsStore.shared.keyboardLocked else {
+            tap.stop()
+            return
+        }
         let wantBrightness = settings.mediaKeyBrightnessEnabled
         let wantVolume = settings.mediaKeyVolumeEnabled
 

@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+/// 设置页统一滚动容器:内容不足一屏时撑满可视区(配合页内 `Spacer`
+/// 实现"关于"页底部署名沉底),超过一屏时正常滚动,任意窗口高度下不裁切内容。
 struct SettingsPage<Content: View>: View {
     let content: Content
 
@@ -9,35 +11,48 @@ struct SettingsPage<Content: View>: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 24) {
-                content
+        GeometryReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 24) {
+                    content
+                }
+                .controlSize(.small)
+                .padding(.top, 22)
+                .padding(.horizontal, 36)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
-            .controlSize(.small)
-            .padding(.top, 22)
-            .padding(.horizontal, 36)
-            .padding(.bottom, 28)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
-struct SettingsGroup<Content: View>: View {
+struct SettingsGroup<Content: View, TitleAccessory: View>: View {
     var title: String?
+    /// 标题行右侧挂件(如快捷操作按钮);无标题时不展示。
+    var titleAccessory: TitleAccessory?
     let content: Content
 
-    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+    init(_ title: String? = nil,
+         @ViewBuilder titleAccessory: () -> TitleAccessory,
+         @ViewBuilder content: () -> Content) {
         self.title = title
+        self.titleAccessory = titleAccessory()
         self.content = content()
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             if let title {
-                Text(title)
-                    .font(.headline.weight(.semibold))
-                    .padding(.horizontal, 2)
+                HStack(alignment: .center) {
+                    Text(title)
+                        .font(.headline.weight(.semibold))
+                        .padding(.horizontal, 2)
+                    Spacer(minLength: 0)
+                    if let titleAccessory {
+                        titleAccessory
+                    }
+                }
             }
 
             if #available(macOS 26, *) {
@@ -54,6 +69,13 @@ struct SettingsGroup<Content: View>: View {
                 .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
         }
+    }
+}
+
+extension SettingsGroup where TitleAccessory == EmptyView {
+    /// 无标题挂件的便捷入口,保持旧调用写法不变。
+    init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
+        self.init(title, titleAccessory: { EmptyView() }, content: content)
     }
 }
 

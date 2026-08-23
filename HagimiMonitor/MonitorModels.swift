@@ -131,22 +131,18 @@ enum MonitorKind: String, CaseIterable, Identifiable {
         switch self {
         case .cpu:
             // 温度读数来自 SMC(IOServiceOpen AppleSMC),App Store 沙盒版被拒,
-            // CPUSampler 也只在 DISPLAY_CONTROL 下产出该指标,选项列表同步门控。
-            var metrics = [
+            // CPUSampler 只在 DISPLAY_CONTROL 下产出该指标。面板中温度与热压力
+            // 合并为「热压力」整行(直连版展示「温度 / 热压力」);菜单栏温度选项
+            // 独立读取温度指标,不受面板合并影响。
+            // P/E 合并为单一指标「P/E 核」,值为「82% / 35%」。
+            return [
                 MetricSwitch(id: "system", title: String(localized: "metric.cpu.system"), isDefault: true),
                 MetricSwitch(id: "user", title: String(localized: "metric.cpu.user"), isDefault: true),
                 MetricSwitch(id: "idle", title: String(localized: "metric.cpu.idle"), isDefault: true),
                 MetricSwitch(id: "uptime", title: String(localized: "metric.cpu.uptime"), isDefault: true),
-                // 热压力(ProcessInfo.thermalState 四档)与 P/E 核分组占用:公开 API,
-                // 双渠道可用;值按 severity 着色(见 MetricDetailGrid)。
-                // P/E 合并为单一指标「P/E 核」,值为「82% / 35%」。
                 MetricSwitch(id: "thermal-pressure", title: String(localized: "metric.cpu.thermal-pressure"), isDefault: true),
                 MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),
             ]
-            #if DISPLAY_CONTROL
-            metrics.append(MetricSwitch(id: "temperature", title: String(localized: "metric.cpu.temperature"), isDefault: false))
-            #endif
-            return metrics
         case .gpu:
             return [
                 MetricSwitch(id: "gpu-memory", title: String(localized: "metric.gpu.gpu-memory"), isDefault: true),
@@ -342,6 +338,9 @@ struct MonitorModule: Identifiable, Equatable {
     /// 逐核负载与 P/E 分组占用(仅 CPU 模块且拓扑可识别时有值)。
     /// 面板展开区据此渲染逐核环形图,独立于 metrics 字段。
     var cpuCoreDetail: CPUCoreDetail? = nil
+    /// 采样失败/未产出时的占位模块标记:数值无真实数据源,
+    /// 统计入库据此过滤,避免把兜底值当作真实读数写入历史。
+    var isPlaceholder: Bool = false
 
     var id: MonitorKind { kind }
 
@@ -386,7 +385,8 @@ struct MonitorModule: Identifiable, Equatable {
                 MonitorMetric(name: "average", value: "--"),
                 MonitorMetric(name: "peak", value: "--")
             ],
-            samples: Array(repeating: 0, count: 28)
+            samples: Array(repeating: 0, count: 28),
+            isPlaceholder: true
         )
     }
 }
@@ -407,17 +407,23 @@ final class MonitorStore: ObservableObject {
     /// 却从不读取该值的视图,在负载爬升/回落期间被拖着以 30fps 重算整棵视图树。
     let loadAnimator = MenuBarLoadAnimator()
 
+    /// 展开动画的单一进度驱动器。独立 ObservableObject(与 loadAnimator 同思路):
+    /// 仅动画的 ~0.15s 内逐显示帧发布相位,平时不发布;相位由各 CollapsibleDetail
+    /// 按 key 自读,宿主行与面板其余部分不受逐帧重算拖累。每个面板实例持有各自的
+    /// 驱动器(菜单栏面板与钉住面板并存时展开态互不牵动)。
     /// 面板是否可见,用于按需启停进程采样。
     @Published private(set) var isPanelVisible = false
+
+    /// 历史统计记录器:把每秒采样帧聚合成分钟行落库(见 StatisticsRecorder)。
+    /// 设置页「数据统计」与网页报表共用其数据。
+    let statisticsRecorder = StatisticsRecorder()
 
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
 
-    /// 一次性展开动画标记。用户展开/收起时置位,仅供窗口层
-    /// (FluidPanelController / PinnedPanelController)读取:用户 toggle 后的第一次尺寸上报
-    /// 消费该标记、走补间动画;其后由进程数据到达/定时刷新引起的尺寸变化不再置位,
-    /// 故瞬时贴合、不与展开动画叠加(避免二次高度跳变与掉帧)。非 @Published:仅内部协调。
-    private var pendingExpansionAnimation = false
+    /// 展开/收起动画截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
+    /// 由 `beginExpansionAnimation` 在每次展开/收起起点置位。
+    private var expansionAnimationDeadline = Date.distantPast
 
     /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
     /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就构建大量进程
@@ -560,6 +566,56 @@ final class MonitorStore: ObservableObject {
             .store(in: &cancellables)
 
         bluetoothSampler.start()
+
+        startStatisticsProcessSampling()
+    }
+
+    // MARK: - 统计进程采样
+
+    /// 统计专用 TOP 应用采样定时器(面板无关常驻):60s 一次、始终包含系统进程,
+    /// 结果交 StatisticsRecorder 聚合落 SwiftData。与面板进程采样共用同一条串行队列;
+    /// 磁盘增量走独立游标,保证 60s 统计窗口不被面板 5s 采样截断。
+    private var statsProcTimer: AnyCancellable?
+    private let statsDiskCursor = DiskSnapshotCursor()
+
+    private func startStatisticsProcessSampling() {
+        guard statisticsRecorder.processStore != nil else { return }
+        statsProcTimer = Timer.publish(every: 60, on: .main, in: .common)
+            .autoconnect()
+            .sink { [weak self] _ in
+                self?.sampleProcessesForStatistics()
+            }
+    }
+
+    private func sampleProcessesForStatistics() {
+        let recorder = statisticsRecorder
+        #if DIRECT_DISTRIBUTION
+        let diskCursor = statsDiskCursor
+        #endif
+        let sampleFast: () -> Void = {
+            let cpu = enrichCPU(sampleTopCPUProcesses(limit: 12, includeSystemProcesses: true))
+            let memory = enrich(sampleTopMemoryProcesses(includeSystemProcesses: true))
+            let gpu = enrichGPU(sampleTopGPUProcesses(limit: 12, includeSystemProcesses: true))
+            #if DIRECT_DISTRIBUTION
+            let disk = enrichDisk(diskCursor.sampleTopDiskProcesses(includeSystemProcesses: true))
+            #else
+            let disk: [TopDiskProcess] = []
+            #endif
+            DispatchQueue.main.async {
+                recorder.recordProcesses(cpu: cpu, memory: memory, gpu: gpu, network: [], disk: disk, at: Date())
+            }
+        }
+        procSampleQueue.async(execute: sampleFast)
+        #if DIRECT_DISTRIBUTION
+        // nettop 单次 1-2s,独占 nettopQueue;速率为窗口均值,×60s 近似为分钟字节量
+        let sampleNetwork: () -> Void = {
+            let network = enrichNetwork(sampleTopNetworkProcesses(includeSystemProcesses: true))
+            DispatchQueue.main.async {
+                recorder.recordProcesses(cpu: [], memory: [], gpu: [], network: network, disk: [], at: Date())
+            }
+        }
+        nettopQueue.async(execute: sampleNetwork)
+        #endif
     }
 
     /// 面板出现时调用（菜单栏面板便捷封装）。
@@ -576,6 +632,9 @@ final class MonitorStore: ObservableObject {
     func panelDidAppear(_ kind: PanelKind) {
         let wasEmpty = visiblePanelKinds.isEmpty
         visiblePanelKinds.insert(kind)
+        // 蓝牙数据只在面板可见时被消费(菜单栏指标不含蓝牙):CoreBluetooth
+        // 的系统授权弹窗推迟到此刻触发,不打断应用启动。
+        bluetoothSampler.activateBLE()
         if wasEmpty {
             isPanelVisible = true
             // 打开面板的首刷不允许空结果清列表:增量型首采常返空,若覆盖会
@@ -603,22 +662,11 @@ final class MonitorStore: ObservableObject {
         expandedKindsBySource.values.reduce(into: Set<MonitorKind>()) { $0.formUnion($1) }
     }
 
-    /// 由 SwiftUI 侧在 `withAnimation` 展开/收起时调用,置位一次性动画标记。
+    /// 由 SwiftUI 侧在每次展开/收起起点调用:置位动画截止时刻。
+    /// 窗口期内的采样结果推迟到动画结束后再刷 UI,避免 1-3s 节奏的模块刷新恰好
+    /// 撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
     func beginExpansionAnimation() {
-        pendingExpansionAnimation = true
-        // 同时记录动画截止时刻:窗口期内的采样结果推迟到动画结束后再刷 UI,
-        // 避免 1-3s 节奏的模块刷新恰好撞进 0.15s 展开动画、拖动整棵视图树重算造成掉帧。
         expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
-    }
-
-    /// 展开/收起动画的截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
-    private var expansionAnimationDeadline = Date.distantPast
-
-    /// 由窗口层在处理内容尺寸变化时调用:返回并清除标记。true 表示本次变化源自用户
-    /// toggle、应走补间;false 表示数据驱动的尺寸变化、应瞬时贴合。
-    func consumeExpansionAnimationFlag() -> Bool {
-        defer { pendingExpansionAnimation = false }
-        return pendingExpansionAnimation
     }
 
     /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证
@@ -782,10 +830,11 @@ final class MonitorStore: ObservableObject {
         var networkProcesses: [TopNetworkProcess]?
 
         // 只采样当前可见(展开)且已开启的列表。注意:磁盘/网络/GPU 的 TOP 采样各自
-        // 维护一份文件级全局快照(previousDiskSnapshot / previousNetworkSnapshot /
-        // previousGPUSnapshot,无锁)以计算增量,其线程安全依赖「每类快照只被固定
-        // 一条串行队列读写」——磁盘/GPU 在 procSampleQueue、网络在 nettopQueue,
-        // 切勿把任一条改成并发队列,否则会引入难复现的数据竞争。
+        // 维护一份差分快照以计算增量(磁盘按消费方各持一个 DiskSnapshotCursor:
+        // 面板 panelDiskCursor / 统计 statsDiskCursor;网络/GPU 为文件级全局快照
+        // previousNetworkSnapshot / previousGPUSnapshot,无锁),其线程安全依赖
+        // 「每份快照只被固定一条串行队列读写」——磁盘/GPU 在 procSampleQueue、
+        // 网络在 nettopQueue,并发化任一条会引入难复现的数据竞争。
         if active.contains(.memory) {
             group.enter()
             procSampleQueue.async {
@@ -859,6 +908,7 @@ final class MonitorStore: ObservableObject {
     deinit {
         timerCancellable?.cancel()
         procSampleTimer?.cancel()
+        statsProcTimer?.cancel()
         if let powerSourceRunLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSourceRunLoopSource, .defaultMode)
         }
@@ -1064,6 +1114,7 @@ final class MonitorStore: ObservableObject {
             modules = newVisibleModules
         }
         updateMenuBarTargetComputeLoad()
+        statisticsRecorder.record(modules: allModules, fans: fans, at: Date())
     }
 
 

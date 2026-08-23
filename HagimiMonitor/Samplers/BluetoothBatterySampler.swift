@@ -1,5 +1,6 @@
 import Foundation
 import IOBluetooth
+import CoreBluetooth
 import Combine
 import OSLog
 
@@ -234,8 +235,12 @@ final class BluetoothBatterySampler: NSObject {
             self.cbControllerOn = isOn
             self.publishMerged()
         }
-        // BLE 读取器常驻监视:电量经 2A19 Notify 实时推送,设备清单 10s 周期同步。
-        bleReader.ensureWatching()
+        // 已授权用户启动即常驻监视(BLE 电量经 2A19 Notify 实时推送,
+        // 设备清单 10s 周期同步);授权未决则推迟到面板首次可见
+        // (activateBLE),避免启动瞬间被系统授权弹窗打断。
+        if CBManager.authorization == .allowedAlways {
+            bleReader.ensureWatching()
+        }
         // 全局连接通知:任何设备链路建立即回调,事件驱动取代轮询等待。
         connectObserver = IOBluetoothDevice.register(
             forConnectNotifications: self, selector: #selector(ioDeviceDidConnect(_:device:))
@@ -249,6 +254,20 @@ final class BluetoothBatterySampler: NSObject {
                 self?.refreshIO()
                 self?.probeProfiler()
             }
+    }
+
+    /// 面板可见时激活 CoreBluetooth:授权未决时创建 central 即触发系统
+    /// 授权弹窗(此刻用户正打开面板,请求时机自然);已授权则幂等补挂
+    /// (覆盖运行期授权状态变化)。被拒后系统不再弹窗,静默跳过;用户在
+    /// 系统设置改为允许后,下次面板可见即恢复,无需重启应用。
+    func activateBLE() {
+        guard timer != nil else { return }
+        switch CBManager.authorization {
+        case .notDetermined, .allowedAlways:
+            bleReader.ensureWatching()
+        default:
+            break
+        }
     }
 
     func stop() {

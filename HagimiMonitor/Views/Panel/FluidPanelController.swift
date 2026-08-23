@@ -8,13 +8,12 @@ import SwiftUI
 /// resize 实现很差——内容高度变化时系统会整窗重绘,导致展开子项时面板连同顶部
 /// SYSTEM·LIVE 一起闪烁、像被重新加载;Apple 直到 macOS 26 才改进。为在 15 上
 /// 同时拿到「不闪」和「平滑展开动画」,这里借鉴 FluidMenuBarExtra 的思路,自建
-/// `NSPanel` 承载面板内容,由 AppKit 的 `setFrame(display:animate:)` 驱动高度动画:
-/// 窗口原生动画 resize 不会 rebuild SwiftUI 视图树,因此不闪;顶边锚定在菜单栏
-/// 下沿,只向下增长。
+/// `NSPanel` 承载面板内容;顶边锚定在菜单栏下沿,只向下增长。
 ///
-/// 动画分工(关键):内容尺寸由 SwiftUI 瞬时上报(不加 `withAnimation`),平滑
-/// 的高度补间完全交给窗口层的 `animate: true`。若改用 SwiftUI 几何动画,会与
-/// 窗口 resize 抢锚点、导致顶部抖动。
+/// 动画分工(关键):展开/收起的内容高度由 `PanelExpansionDriver` 逐显示帧发布
+/// 相位驱动,内容尺寸逐帧变化、逐帧上报;窗口层纯被动贴合(直接 `setFrame`,
+/// 不自带补间),边框与内容从同一相位推导、天然同相;数据驱动的尺寸变化
+/// 同样瞬时贴合。
 ///
 /// 动态图标:把 `MenuBarStatusLabel` 用 `ImageRenderer` 快照成 `NSImage` 赋给标准
 /// `NSStatusItem.button.image`(负载/采样变化时重刷)。走标准图路径而非子视图,是为了
@@ -43,6 +42,15 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 而 size reader 的首次上报在 init 布局阶段就已发生。
     private var lastReportedContentSize: CGSize = .zero
 
+    /// 展开动画进行中标记:此期间 contentSizeDidChange 的逐帧上报被忽略——
+    /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 只会与 CA 动画
+    /// 叠加冲突并把 CPU 打满。动画结束后由 contentSizeDidChange 做最终校准。
+    private var isAnimatingExpansion = false
+    /// 展开/收起动画代号:每次 applyWindowHeight 递增,只有最新一次动画的复位
+    /// 回调生效。快速连续 toggle(如双击 header)时,早先动画的复位定时器不再
+    /// 提前清掉在途动画的标记(否则逐帧贴合突然放行,与 CA 冲突导致跳变)。
+    private var expansionAnimationToken = 0
+
     /// 向 SwiftUI 侧下发布局约束(内容高度上限)。面板主体据此自行封顶并在
     /// 内部 ScrollView 滚动,header 固定在外、不参与滚动。
     private let layoutMetrics = FluidPanelLayoutMetrics()
@@ -68,6 +76,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 面板底部距屏幕可视区下缘(Dock 上沿)的最小留白。
     private static let panelBottomMargin: CGFloat = 10
+    /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
+    private static let minPanelHeight: CGFloat = 96
 
     /// 状态项内容左右留白,避免图标/文字贴住菜单栏边缘(系统 MenuBarExtra 自带此留白)。
     private static let statusItemHorizontalPadding: CGFloat = 2
@@ -83,9 +93,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         panel = NSPanel(
             contentRect: CGRect(x: 0, y: 0, width: MonitorConstants.panelIdealWidth, height: 200),
-            // 对齐 FluidMenuBarExtra:保留 `.titled` 让 `setFrame(display:animate:)` 的
-            // 高度动画可靠生效(borderless 窗口上 animate 常被忽略),再用
-            // `.fullSizeContentView` + 隐藏标题栏做出无边框外观。
+            // 对齐 FluidMenuBarExtra:保留 `.titled` 使窗口行为与系统面板一致
+            // (边框尺寸/圆角裁剪),再用 `.fullSizeContentView` + 隐藏标题栏
+            // 做出无边框外观。
             styleMask: [.titled, .nonactivatingPanel, .utilityWindow, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -117,7 +127,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 调试帧探针:主线程上以 4ms 目标间隔持续打卡,记录实际间隔。
     /// 展开动画(0.15s)期间若主线程被重绘/布局拖住,打卡间隔会显著拉大,
-    /// 用 `[autotest] slowframe gap=Xms` 输出超过半帧(>8.3ms)的间隔供离线统计。
+    /// 交给 `AutotestPerfMeter` 在度量窗口内累计为 slowframes 并逐帧打印。
     private var frameProbeTimer: DispatchSourceTimer?
 
     private func startFrameProbe() {
@@ -129,7 +139,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let gap = (now - last) * 1000
             last = now
             if gap > 8.3 {
-                NSLog("[autotest] slowframe gap=%.1fms ts=%.3f", gap, now)
+                // 动画窗口内的掉帧计入度量并逐帧打印;窗口外的间隔与本度量无关,忽略。
+                MainActor.assumeIsolated {
+                    AutotestPerfMeter.shared.noteSlowFrame(gap: gap)
+                }
             }
         }
         timer.resume()
@@ -186,6 +199,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
         let root = FluidPanelRootView(store: store, metrics: layoutMetrics)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
+            .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
+                self?.applyWindowHeight(height, animated: animated)
+            }
             .modifier(FluidPanelSizeReader { [weak self] size in
                 self?.contentSizeDidChange(to: size)
             })
@@ -376,7 +392,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         } else {
             size = panel.frame.size
         }
-        setPanelFrame(size: size, animate: false)
+        setPanelFrame(size: size)
 
         store.panelDidAppear()
         statusItem.button?.highlight(true)
@@ -454,6 +470,62 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Sizing / Positioning
 
+    /// driver 在 toggle 时一次性调用:把目标内容高度下发给窗口层。
+    /// animated=true 时由 CoreAnimation(`animator().setFrame`)补间窗口 frame,
+    /// 整个动画期间窗口 resize 只发生一次;`isAnimatingExpansion` 抑制期间的
+    /// contentSizeDidChange 逐帧贴合。animated=false 时同步贴合(初始化/隐藏重置)。
+    private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
+        guard panel.isVisible, let buttonWindow = statusItem.button?.window else { return }
+        let size = CGSize(width: panel.frame.width, height: contentHeight)
+        guard panel.frame.size != size else { return }
+
+        updateContentHeightCap()
+        let buttonFrame = buttonWindow.frame
+        var clamped = size
+        if let screen = buttonWindow.screen {
+            let available = buttonFrame.minY - screen.visibleFrame.minY - Self.panelBottomMargin
+            if available > 0 {
+                // 高度下限兜底:预测链上游(driver 基线校准)异常时防止窗口
+                // 被带到 0/负高度(表现为「整页消失」),钳在至少能露出 header+首行。
+                clamped.height = min(max(clamped.height, Self.minPanelHeight), available)
+            }
+        }
+        var origin = buttonFrame.origin
+        origin.y -= clamped.height
+        origin.x -= Self.windowBorderSize
+        var newFrame = CGRect(origin: origin, size: clamped)
+        if let screen = buttonWindow.screen {
+            if newFrame.maxX > screen.visibleFrame.maxX {
+                newFrame.origin.x = screen.visibleFrame.maxX - clamped.width - Self.windowBorderSize
+            }
+            if newFrame.minX < screen.visibleFrame.minX {
+                newFrame.origin.x = screen.visibleFrame.minX + Self.windowBorderSize
+            }
+        }
+        if animated {
+            expansionAnimationToken += 1
+            let token = expansionAnimationToken
+            isAnimatingExpansion = true
+            let context = NSAnimationContext.current
+            context.duration = MonitorConstants.panelExpansionDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(newFrame, display: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
+                guard let self, self.expansionAnimationToken == token else { return }
+                self.isAnimatingExpansion = false
+                // 对账:动画期间被丢弃的尺寸上报在此补贴合一次。不做这步,
+                // 若最终上报恰好落在动画窗口内被丢弃且无重试,窗口会永久卡在
+                // 错误高度(快速连续 toggle 时尤为可见)。
+                if self.lastReportedContentSize.height > 0,
+                   self.panel.frame.size != self.lastReportedContentSize {
+                    self.setPanelFrame(size: self.lastReportedContentSize)
+                }
+            }
+        } else {
+            panel.setFrame(newFrame, display: true)
+        }
+    }
+
     /// SwiftUI 内容尺寸变化时:窗口顶边锚定、高度贴合内容当前尺寸。
     ///
     /// 必须 `DispatchQueue.main.async`(对齐 FluidMenuBarExtra):该回调发生在 SwiftUI
@@ -464,29 +536,21 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 不能 guard panel.isVisible:size reader 的首次 onAppear 常在面板可见之前(init
     /// 布局阶段)触发,若丢弃则窗口尺寸永远停在默认值、之后 onChange 不再触发。
     ///
-    /// 动画分工(关键):外层 `.background(GeometryReader)` 只在展开/收起时上报一次
-    /// **终值**(不逐帧),故这里不能靠「逐帧 animate:false 贴合」补出平滑——那只会
-    /// 让窗口一步瞬跳到终点。面板可见且高度变化显著(展开/收起)时,用与内容
-    /// (`MonitorPanelView.setExpansion` / `CollapsibleDetail`)完全一致的时长与 easeInOut
-    /// 曲线做窗口补间;二者从同一时刻并行动画到同一终值,窗口高度(t)≈内容高度(t),
-    /// 边框与内容一起伸缩、不裁剪不留空。指标微调(<阈值)仍瞬时贴合,不触发多余动画。
+    /// 动画分工(关键):展开/收起的内容高度由 `PanelExpansionDriver`(全面板唯一
+    /// 动画源)逐显示帧发布相位驱动,因此这里的内容尺寸以每显示帧变化、逐帧上报,
+    /// 窗口逐帧直接贴合即可——窗口是纯被动跟随,不自带补间,边框与内容从同一相位
+    /// 推导、天然同相;数据驱动的尺寸变化同样瞬时贴合。
     private func contentSizeDidChange(to size: CGSize) {
         if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
             NSLog("[autotest] sizeDidChange h=%.1f visible=%d", size.height, panel.isVisible ? 1 : 0)
         }
         lastReportedContentSize = size
+        // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
+        guard !isAnimatingExpansion else { return }
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.panel.frame.size != size else { return }
-            let delta = abs(self.panel.frame.height - size.height)
-            // 仅用户 toggle 后的首次尺寸上报走补间;数据到达/定时刷新引起的变化
-            // 瞬时贴合,不与展开动画叠加二次动画。
-            let userToggled = self.store.consumeExpansionAnimationFlag()
-            let animate = self.panel.isVisible && delta > 8 && userToggled
-            if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
-                NSLog("[autotest] tweenStart ts=%.3f animate=%d delta=%.1f", CACurrentMediaTime(), animate ? 1 : 0, delta)
-            }
-            self.setPanelFrame(size: size, animate: animate)
+            guard let self, !self.isAnimatingExpansion, self.panel.frame.size != size else { return }
+            self.setPanelFrame(size: size)
         }
     }
 
@@ -501,7 +565,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         layoutMetrics.maxContentHeight = available
     }
 
-    private func setPanelFrame(size: CGSize, animate: Bool) {
+    private func setPanelFrame(size: CGSize) {
         guard let buttonWindow = statusItem.button?.window else {
             panel.setContentSize(size)
             panel.center()
@@ -541,25 +605,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         guard newFrame != panel.frame else { return }
-        if animate {
-            // 与内容侧 `withAnimation(.easeInOut(panelExpansionDuration))` 完全同时长同曲线,
-            // 使窗口高度补间与 CollapsibleDetail 的高度补间并行、逐帧对齐。
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = MonitorConstants.panelExpansionDuration
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                panel.animator().setFrame(newFrame, display: true)
-            }
-        } else {
-            // 数据驱动的即时贴合:用 0 时长动画组提交(而非 setFrame(animate:false))。
-            // 关键:进程列表(尤其磁盘/网络,行数随采样在 0→2→5 间变动)展开后异步到达的
-            // 高度变化,若此时展开补间仍在进行,`setFrame(animate:false)` 会被仍在逐帧推进的
-            // 补间「覆盖」回旧终值(表现为容器过高留白或过矮把底部按钮裁掉,直到下个采样周期才纠正)。
-            // 0 时长动画组会抢占并取消在途补间,令最新内容高度立即生效。
-            NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0
-                panel.animator().setFrame(newFrame, display: true)
-            }
-        }
+        // 纯被动跟随:内容每显示帧上报新高度,这里直接同步贴合。窗口不自带补间——
+        // 动画整体由内容侧的 PanelExpansionDriver 单一驱动,边框与内容同源同相。
+        // 不包动画组提交:展开动画期间本函数逐帧调用,0 时长 CAAnimation 的
+        // 创建/提交每帧都是纯开销;窗口 frame 无在途 CA 补间,
+        // 唯一的 animator() 动画是显隐 alpha 渐变,不碰 frame。
+        panel.setFrame(newFrame, display: true)
     }
 
     /// 构造状态项 label 视图:内嵌尺寸读取器,内容宽度变化时更新 `statusItem.length`,
@@ -609,6 +660,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let scale = NSScreen.screens.map(\.backingScaleFactor).max()
             ?? statusItem.button?.window?.backingScaleFactor
             ?? NSScreen.main?.backingScaleFactor ?? 2
+        // 横排总宽由布局引擎按指标集合静态算死,与实时数值无关:
+        // 无论数值怎么变,快照宽度恒定、statusItem.length 不动、不推挤邻居图标。
         let renderKey = MetricsRenderKey(
             items: store.menuBarMetricItems,
             isDark: isDark,
@@ -680,7 +733,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
 // MARK: - Size Reader
 
-/// 读取 SwiftUI 内容固有尺寸并回调。内容瞬时上报尺寸,高度动画交给窗口层。
+/// 读取 SwiftUI 内容固有尺寸并回调。内容尺寸逐帧变化(高度由展开相位驱动),
+/// 每次变化即时上报,窗口层被动贴合。
 ///
 /// 滚动已下移到 MonitorPanelView 内部(header 固定、仅主体滚动,据
 /// `\.panelMaxContentHeight` 自行封顶),故此处测到的自然尺寸已含封顶效果。
@@ -690,7 +744,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 ///    布局尺寸,不受后面 `.frame(maxHeight:.infinity)` 拉伸影响;
 /// 2. `.fixedSize()` 固定内容为固有尺寸;
 /// 3. `.frame(maxWidth/Height:.infinity, alignment: .top)` 让内容在被窗口拉伸的
-///    hosting 里顶部对齐——窗口高度动画时内容从顶部展开,而非居中跳变。
+///    hosting 里顶部对齐--窗口高度变化时内容从顶部展开,而非居中跳变。
 private struct FluidPanelSizeReader: ViewModifier {
     let onChange: (CGSize) -> Void
 

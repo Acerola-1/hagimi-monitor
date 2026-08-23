@@ -35,12 +35,11 @@ final class MediaKeyTapBridge {
 
         // passUnretained:bridge 的生命周期由外部 owner(MediaKeyController)管理;
         // deinit 调用 stop() 同步移除 runLoopSource,移除完成后 in-flight 回调已退出。
-        let mask = (1 << 14)
         guard let tap = CGEvent.tapCreate(
             tap: .cgSessionEventTap,
             place: .headInsertEventTap,
             options: .defaultTap,
-            eventsOfInterest: CGEventMask(mask),
+            eventsOfInterest: SystemDefinedEventType.maskBit,
             callback: Self.tapCallback,
             userInfo: Unmanaged.passUnretained(self).toOpaque()
         ) else {
@@ -85,12 +84,12 @@ final class MediaKeyTapBridge {
         }
 
         // NX_SYSDEFINED 系统事件的解析。常量来源:
-        //   - CGEventType.systemDefined rawValue == 14(kCGSystemDefined,
-        //     该 case 在当前 SDK 对 Swift 不公开,故用裸数字)。
+        //   - CGEventType.systemDefined 即 kCGEventSystemDefined,SDK 未向
+        //     Swift 公开该 case,取值见 SystemDefinedEventType。
         //   - NSEvent.subtype == 8 即 NX_SUBTYPE_AUX_CONTROL_BUTTONS,
         //     覆盖亮度/音量/静音/Eject 等辅助控制键。
         // 解析格式参考 the0neyouseek/MediaKeyTap 与 MonitorControl 的实现。
-        guard type == CGEventType(rawValue: 14),
+        guard type == CGEventType(rawValue: SystemDefinedEventType.rawValue),
               let nsEvent = NSEvent(cgEvent: cgEvent),
               nsEvent.subtype.rawValue == 8
         else {

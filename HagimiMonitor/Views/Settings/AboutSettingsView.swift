@@ -30,7 +30,7 @@ struct AboutSettingsView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
+        SettingsPage {
             SettingsGroup {
                 aboutHeader
             }
@@ -93,11 +93,6 @@ struct AboutSettingsView: View {
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
         }
-        .controlSize(.small)
-        .padding(.top, 22)
-        .padding(.horizontal, 36)
-        .padding(.bottom, 28)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .sheet(isPresented: $isShowingLicenses) {
             OpenSourceLicensesView(onClose: { isShowingLicenses = false })
         }

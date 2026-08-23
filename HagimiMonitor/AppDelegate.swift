@@ -9,14 +9,23 @@ import SwiftUI
 /// HagimiMonitorApp 通过 appDelegate.store 引用它。
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    /// @NSApplicationDelegateAdaptor 下 `NSApp.delegate` 是 SwiftUI 的转发壳
+    /// (SwiftUI.AppDelegate),外部代码取真实实例需走这里。
+    static private(set) weak var shared: AppDelegate?
+
     private(set) lazy var store: MonitorStore = MonitorStore()
+
+    override init() {
+        super.init()
+        Self.shared = self
+    }
 
     private(set) lazy var fluidPanelController: FluidPanelController = {
         FluidPanelController(
             store: store,
             openSettings: { [weak self] in
                 self?.fluidPanelController.dismissPanelForSettings()
-                SettingsWindowPresenter.openFromOutsideSwiftUI()
+                SettingsWindowPresenter.open()
             }
         )
     }()
@@ -24,9 +33,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var pinnedPanelController: PinnedPanelController = {
         PinnedPanelController(store: store, openSettings: { [weak self] in
             self?.fluidPanelController.dismissPanelForSettings()
-            SettingsWindowPresenter.openFromOutsideSwiftUI()
+            SettingsWindowPresenter.open()
         })
     }()
+
+    /// 用户经 Finder/Spotlight 重新打开已运行的应用时(rapp 事件)的落脚点:
+    /// 纯菜单栏应用无 Dock 图标、无主窗口可恢复,默认行为下重新打开毫无可见
+    /// 反馈,这里优先呈现设置窗口。返回 false:reopen 意图已由设置窗口承接,
+    /// 无需系统再走"恢复隐藏窗口"的默认路径。
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        SettingsWindowPresenter.open()
+        return false
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // 触发 lazy 初始化。菜单栏面板需在启动即常驻(承载状态项图标);

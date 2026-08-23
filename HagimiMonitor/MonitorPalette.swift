@@ -61,6 +61,18 @@ struct MonitorPalette {
         }
     }
 
+    /// 快捷功能统一强调色:全部工具共用一紫,激活状态一眼可辨,
+    /// 不随主题切换漂移。
+    var quickToolTint: Color {
+        Color(hex: 0xA855F7)
+    }
+
+    /// 快捷功能磁贴点亮态底色:强调色低透明铺底,深色模式下稍亮
+    /// 以维持可辨识度。
+    var quickToolActiveFill: Color {
+        quickToolTint.opacity(isDark ? 0.16 : 0.10)
+    }
+
     /// P 核主色:独立于 CPU 模块主色。活力模式下 CPU 为橙,性能核用高醒目
     /// 绯红与行 tint 形成强对比,保证逐核圆环在彩色底上的辨识度;
     /// 平衡模式下与 CPU 主色一致。

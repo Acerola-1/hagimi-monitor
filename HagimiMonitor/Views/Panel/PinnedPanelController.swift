@@ -14,6 +14,16 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
+    /// 展开动画进行中标记:此期间 contentSizeDidChange 逐帧上报被忽略——
+    /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 会与 CA 冲突。
+    private var isAnimatingExpansion = false
+    /// 展开/收起动画代号:只有最新一次动画的复位回调生效(连续 toggle 防竞态)。
+    private var expansionAnimationToken = 0
+    /// 最近一次实测内容尺寸,动画结束对账用。
+    private var lastReportedContentSize: CGSize = .zero
+    /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
+    private static let minPanelHeight: CGFloat = 96
+
     /// 面板圆角半径,与 FluidPanelController 一致(rowCornerRadius)。
     private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
 
@@ -86,6 +96,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
                 self?.hide(resetPin: true)
                 self?.openSettingsAction()
             })
+            .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
+                self?.applyWindowHeight(height, animated: animated)
+            }
             .modifier(PinnedPanelSizeReader { [weak self] size in
                 self?.contentSizeDidChange(to: size)
             })
@@ -217,33 +230,57 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Sizing / Positioning
 
+    /// driver 在 toggle 时一次性调用:把目标内容高度下发给窗口层。
+    /// animated=true 时由 CoreAnimation 补间窗口 frame;false 时同步贴合。
+    /// 固定顶部,向下生长。
+    private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
+        guard panel.isVisible else { return }
+        // 高度下限兜底:预测链异常时防止窗口被带到 0/负高度(表现为「整页消失」)。
+        let size = CGSize(width: panel.frame.width, height: max(contentHeight, Self.minPanelHeight))
+        guard panel.frame.size != size else { return }
+        var frame = panel.frame
+        let top = frame.maxY
+        frame.size = size
+        frame.origin.y = top - size.height
+        if animated {
+            expansionAnimationToken += 1
+            let token = expansionAnimationToken
+            isAnimatingExpansion = true
+            let context = NSAnimationContext.current
+            context.duration = MonitorConstants.panelExpansionDuration
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            panel.animator().setFrame(frame, display: false)
+            DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
+                guard let self, self.expansionAnimationToken == token else { return }
+                self.isAnimatingExpansion = false
+                // 对账:动画期间被丢弃的尺寸上报在此补贴合,窗口不会卡在错误高度。
+                if self.panel.frame.size != self.lastReportedContentSize,
+                   self.lastReportedContentSize.height > 0 {
+                    var frame = self.panel.frame
+                    let top = frame.maxY
+                    frame.size = self.lastReportedContentSize
+                    frame.origin.y = top - frame.height
+                    self.panel.setFrame(frame, display: true)
+                }
+            }
+        } else {
+            panel.setFrame(frame, display: true)
+        }
+    }
+
     private func contentSizeDidChange(to size: CGSize) {
+        lastReportedContentSize = size
+        // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
+        guard !isAnimatingExpansion else { return }
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.panel.frame.size != size else { return }
+            guard let self, !self.isAnimatingExpansion, self.panel.frame.size != size else { return }
             // 固定顶部，内容展开时只向下生长。
             var frame = self.panel.frame
             let top = frame.maxY
             frame.size = size
             frame.origin.y = top - size.height
-            // 展开/收起（高度变化显著）且源自用户 toggle 时，用与内容 `CollapsibleDetail`
-            // 完全一致的时长/easeInOut 曲线并行补间；数据到达/定时刷新引起的变化瞬时贴合。
-            let userToggled = self.store.consumeExpansionAnimationFlag()
-            if self.panel.isVisible, abs(self.panel.frame.height - size.height) > 8, userToggled {
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = MonitorConstants.panelExpansionDuration
-                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-                    self.panel.animator().setFrame(frame, display: true)
-                }
-            } else {
-                // 数据驱动的即时贴合:用 0 时长动画组抢占并取消可能仍在进行的展开补间,
-                // 否则进程列表(磁盘/网络行数随采样变动)展开后异步到达的高度变化会被在途补间
-                // 覆盖回旧终值(表现为容器过高留白或过矮裁掉底部按钮),直到下个采样周期才纠正。
-                NSAnimationContext.runAnimationGroup { context in
-                    context.duration = 0
-                    self.panel.animator().setFrame(frame, display: true)
-                }
-            }
+            self.panel.setFrame(frame, display: true)
         }
     }
 

@@ -9,13 +9,6 @@ extension NSAppearance {
 @main
 struct HagimiMonitorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @Environment(\.colorScheme) private var colorScheme
-
-    /// MonitorStore 由 AppDelegate 创建并持有。
-    /// App 通过 appDelegate 引用访问。
-    private var monitorStore: MonitorStore {
-        appDelegate.store
-    }
 
     init() {
         CrashHandler.install()
@@ -30,29 +23,21 @@ struct HagimiMonitorApp: App {
     }
 
     var body: some Scene {
-        Settings {
-            SettingsRootView(settings: monitorStore.settings, store: monitorStore)
-        }
-        .windowResizability(.contentSize)
-        .commands { AppMenuCommands() }
-    }
-
-    private var effectiveColorScheme: ColorScheme? {
-        monitorStore.settings.themePreference.colorScheme
+        // 场景占位:设置窗口由 SettingsWindowPresenter 自建 NSWindow 承载
+        // (SwiftUI 的 Settings 场景会重置窗口约束,无法钉死宽度只放开高度)。
+        // 菜单命令已被替换为直连 presenter,此场景不会被打开。
+        Settings { EmptyView() }
+            .commands { AppMenuCommands() }
     }
 }
 
 // MARK: - Menu Commands
 
 struct AppMenuCommands: Commands {
-    @Environment(\.openSettings) private var openSettings
-
     var body: some Commands {
-        let _ = SettingsWindowPresenter.cache(openSettings)
-
         CommandGroup(replacing: .appInfo) {
             Button(String(localized: "menu.about")) {
-                SettingsWindowPresenter.open(openSettings, tab: .about)
+                SettingsWindowPresenter.open(tab: .about)
             }
 
             Divider()
@@ -65,9 +50,17 @@ struct AppMenuCommands: Commands {
 
         CommandGroup(replacing: .appSettings) {
             Button(String(localized: "menu.settings")) {
-                SettingsWindowPresenter.open(openSettings)
+                SettingsWindowPresenter.open()
             }
             .keyboardShortcut(",", modifiers: .command)
+
+            Divider()
+
+            Button(String(localized: "menu.open-report")) {
+                if let delegate = AppDelegate.shared {
+                    StatisticsReportFlow.open(recorder: delegate.store.statisticsRecorder)
+                }
+            }
         }
     }
 }

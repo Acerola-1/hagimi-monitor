@@ -47,9 +47,12 @@ struct DisplayInfo: Identifiable, Equatable {
 /// 数据全部来自公开 API + IORegistry 只读属性,沙盒安全。
 struct DisplayInfoSection: View {
     let theme: MonitorPanelTheme
-    /// 展开/收起前的窗口层动画同步钩子(与其他模块行同一机制):
-    /// FluidPanelController 的窗口尺寸动画由此启动,与内容高度补间同速合拍。
-    var beginExpansionAnimation: () -> Void = {}
+    /// 发起某展开区的相位变化(0 或 1)并置位窗口层的采样推迟截止标记。
+    /// `animated` 为 false 时无补间直接同步(初始化/隐藏重置等同步语义场景)。
+    var animate: (String, Bool, Bool) -> Void
+
+    /// 本节展开区 key(与显示器档案卡的 key 区分)。
+    private static let sectionKey = "display-info"
 
     @State private var isExpanded = false
     @State private var displays: [DisplayInfo] = []
@@ -82,7 +85,7 @@ struct DisplayInfoSection: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            CollapsibleDetail(isExpanded: isExpanded && !displays.isEmpty) {
+            CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded, contentAvailable: !displays.isEmpty) {
                 VStack(spacing: 9) {
                     ForEach(displays) { display in
                         displaySection(display)
@@ -98,12 +101,10 @@ struct DisplayInfoSection: View {
             if !isExpanded {
                 displays = Self.collectDisplays()
             }
-            // 与其他模块行同款展开动画:窗口层与内容高度补间同时同速,
-            // 缺了这一步会表现为「内容突然出现/消失」。
-            beginExpansionAnimation()
             withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
                 isExpanded.toggle()
             }
+            animate(Self.sectionKey, isExpanded, true)
         }
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.palette.displayGlassFill
@@ -129,7 +130,8 @@ struct DisplayInfoSection: View {
         DisplayInfoCard(
             display: display,
             palette: theme.palette,
-            beginExpansionAnimation: beginExpansionAnimation
+            archiveKey: "display-info-arc-\(display.id)",
+            animate: animate
         )
     }
 
@@ -313,9 +315,10 @@ struct DisplayInfoSection: View {
 private struct DisplayInfoCard: View {
     let display: DisplayInfo
     let palette: MonitorPalette
-    /// 档案开合同样改变面板总高,须置位窗口层一次性补间标记,
-    /// 使窗口高度与档案内容的补间并行同步(与模块行展开同一机制)。
-    var beginExpansionAnimation: () -> Void = {}
+    /// 本卡档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
+    let archiveKey: String
+    /// 发起动画的闭包,与 DisplayInfoSection 同一驱动源。
+    var animate: (String, Bool, Bool) -> Void
 
     @State private var archiveExpanded = false
 
@@ -340,7 +343,7 @@ private struct DisplayInfoCard: View {
             VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
                 DisplayInfoBaseGrid(display: display, palette: palette)
 
-                CollapsibleDetail(isExpanded: archiveExpanded) {
+                CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
                     archiveContent
                 }
             }
@@ -356,14 +359,13 @@ private struct DisplayInfoCard: View {
         }
     }
 
-    /// 档案开合与模块行展开同一套补间约定:先置位窗口层一次性标记,再用与
-    /// 窗口层同时长(panelExpansionDuration)同曲线的动画驱动内容高度,
-    /// 窗口边框与档案内容并行动画到同一终值,不裁剪不留空。
+    /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
+    /// 并把本卡档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        beginExpansionAnimation()
         withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
             archiveExpanded.toggle()
         }
+        animate(archiveKey, archiveExpanded, true)
     }
 }
 

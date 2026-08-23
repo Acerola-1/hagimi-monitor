@@ -5,6 +5,10 @@ enum SettingsRoute: Hashable {
     case module(MonitorKind)
     /// 显示器模块:Direct 为控制+信息,App Store 为纯信息展示(两渠道都有入口)。
     case displayModule
+    /// 数据统计:今日概览与网页报表入口。
+    case statistics
+    /// 存储管理:本地数据占用可视化与选择性清理。
+    case storage
     case about
 }
 
@@ -22,9 +26,7 @@ struct SettingsSidebar: View {
             Section {
                 Label(String(localized: "settings.sidebar.general"), systemImage: "gearshape")
                     .tag(SettingsRoute.general)
-            }
 
-            Section {
                 // 蓝牙入口无条件显示:「无连接设备/蓝牙关闭」是瞬态,拿它门控
                 // 常驻设置项会让用户误以为功能消失(与风扇的硬件级门控不同)。
                 ForEach(MonitorKind.userVisibleCases.filter { $0 != .fan || fanAvailable }) { kind in
@@ -53,9 +55,10 @@ struct SettingsSidebar: View {
                     #endif
                 }
                 .tag(SettingsRoute.displayModule)
-            }
 
-            Section {
+                Label(String(localized: "settings.sidebar.statistics"), systemImage: "chart.bar.doc.horizontal")
+                    .tag(SettingsRoute.statistics)
+
                 #if DIRECT_DISTRIBUTION
                 HStack(spacing: 6) {
                     Label(String(localized: "settings.sidebar.about"), systemImage: "info.circle")
