@@ -26,6 +26,10 @@ final class KeyboardLockController {
     /// 自动解锁触发(主线程回调),owner 负责同步 UI 状态。
     var onAutoUnlock: (() -> Void)?
 
+    /// 当前这轮锁定的自动解锁截止时刻,未锁定为 nil。供 owner 转发
+    /// 给 UI 做逐秒倒计时;与 autoUnlockTimer 同源,读值即真相。
+    private(set) var autoUnlockDeadline: Date?
+
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var autoUnlockTimer: DispatchSourceTimer?
@@ -55,6 +59,7 @@ final class KeyboardLockController {
         CGEvent.tapEnable(tap: tap, enable: true)
         eventTap = tap
         runLoopSource = source
+        autoUnlockDeadline = Date().addingTimeInterval(Self.autoUnlockInterval)
         startAutoUnlockTimer()
         return true
     }
@@ -69,6 +74,7 @@ final class KeyboardLockController {
         }
         eventTap = nil
         runLoopSource = nil
+        autoUnlockDeadline = nil
         autoUnlockTimer?.cancel()
         autoUnlockTimer = nil
     }

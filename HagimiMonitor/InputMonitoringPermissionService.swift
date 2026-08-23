@@ -24,8 +24,15 @@ final class InputMonitoringPermissionService: ObservableObject {
     }
 
     func refresh() {
-        isTrusted = CGPreflightListenEventAccess()
+        let trusted = CGPreflightListenEventAccess()
+        // 等值守卫:浮层 2s 轮询期间同值不触发 objectWillChange,避免
+        // 无意义的发布循环。
+        if trusted != isTrusted { isTrusted = trusted }
     }
+
+    /// 键盘锁定未授权时磁贴下方的提示文案 key:值即系统「隐私与安全性」
+    /// 中用户需打开的授权项名称,与 request() 引导的入口一致。
+    var permissionHintKey: String.LocalizationValue { "quicktools.permission.input-monitoring" }
 
     /// 请求授权:触发系统授权弹窗并轮询直到通过。
     /// 弹窗自带「打开系统设置」入口,不重复主动拉起设置页。

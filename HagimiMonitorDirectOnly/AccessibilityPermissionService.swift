@@ -26,8 +26,15 @@ final class AccessibilityPermissionService: ObservableObject {
     }
 
     func refresh() {
-        isTrusted = AXIsProcessTrusted()
+        let trusted = AXIsProcessTrusted()
+        // 等值守卫:浮层轮询期间同值不触发 objectWillChange,避免无意义的
+        // 发布循环(本服务的撤销已有系统广播回调,流入的 refresh 多为同值)。
+        if trusted != isTrusted { isTrusted = trusted }
     }
+
+    /// 键盘锁定未授权时磁贴下方的提示文案 key:值即系统「隐私与安全性」
+    /// 中用户需打开的授权项名称。
+    var permissionHintKey: String.LocalizationValue { "quicktools.permission.accessibility" }
 
     func request() {
         let options: NSDictionary = [

@@ -1,12 +1,6 @@
 import AppKit
 import SwiftUI
 
-private let panelTimeFormatter: DateFormatter = {
-    let formatter = DateFormatter()
-    formatter.dateFormat = "HH:mm"
-    return formatter
-}()
-
 /// 主体 ScrollView 两端是否还有被裁内容,驱动上下渐隐遮罩。
 private struct BodyScrollEdges: Equatable {
     let top: Bool
@@ -26,8 +20,6 @@ struct MonitorPanelView: View {
     @Environment(\.panelMaxContentHeight) private var maxContentHeight
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
-    @State private var timeString: String = ""
-    @State private var timeUpdateTask: Task<Void, Never>?
     /// header 实测高度,用于从内容总高上限换算主体 ScrollView 的 maxHeight。
     @State private var headerHeight: CGFloat = 0
     /// 主体是否已向上滚动:控制顶部渐隐遮罩。仅滚动后启用,避免未滚动时
@@ -247,9 +239,6 @@ struct MonitorPanelView: View {
             // 面板由隐藏→可见:菜单栏面板摧骰子决定是否客串;隐藏时清理。
             guard !showsQuickPanelControls else { return }
             if visible {
-                // header 时钟仅面板可见时推进:视图树常驻,隐藏期间每秒的 @State
-                // 更新只会白白重算整棵 body。
-                startTimeUpdateTask()
                 cameoModel.panelDidAppear()
                 // 调试自动测试:可见后 0.8s 自动全量展开(走真实 setExpansion 动画路径),
                 // 供 sizeDidChange 日志观察展开期间的尺寸上报行为。
@@ -260,8 +249,6 @@ struct MonitorPanelView: View {
                     }
                 }
             } else {
-                timeUpdateTask?.cancel()
-                timeUpdateTask = nil
                 cameoModel.panelDidDisappear()
             }
         }
@@ -279,13 +266,6 @@ struct MonitorPanelView: View {
             // 上报当前需进程采样的集合(展开的行):面板重开时 @State 可能保留上次选项,
             // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
             reportActiveProcessKinds()
-            // 钉住面板不走 isPanelVisible 的可见性分支时(已可见),补启动时钟。
-            if store.isPanelVisible, !showsQuickPanelControls, timeUpdateTask == nil {
-                startTimeUpdateTask()
-            }
-        }
-        .onDisappear {
-            timeUpdateTask?.cancel()
         }
         .onChange(of: expandedKinds) { _, _ in
             reportActiveProcessKinds()
@@ -358,41 +338,79 @@ struct MonitorPanelView: View {
             }
 
             if showsQuickPanelControls {
-                HStack(spacing: 1) {
-                    QuickPanelControlButton(
-                        imageName: quickPanelPresentation.isPinned ? "pin.fill" : "pin",
-                        help: String(localized: quickPanelPresentation.isPinned ? "panel.unpin" : "panel.pin"),
-                        tint: theme.secondaryText
-                    ) {
-                        quickPanelPresentation.togglePin()
+                // 钉住面板:钉住/关闭是面板本体操作不可让位,空间不足时
+                // 先舍弃统计入口。
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        PanelHeaderToolBadges(theme: theme)
+                        statsEntryButton(theme: theme)
+                        pinnedControls(theme: theme)
                     }
 
-                    QuickPanelControlButton(
-                        imageName: "xmark",
-                        help: String(localized: "panel.close"),
-                        tint: .red
-                    ) {
-                        quickPanelPresentation.close()
+                    HStack(spacing: 6) {
+                        PanelHeaderToolBadges(theme: theme)
+                        pinnedControls(theme: theme)
                     }
                 }
             } else {
-                // 小猫客串紧贴在时间左侧。只在可见时才占位，隐藏时不留空隙、时间正常靠右。
-                // 该分支是标题子 HStack 的兄弟节点，不受「双击展开」手势影响。
-                HStack(spacing: 6) {
-                    if cameoModel.isVisible {
-                        HeaderCatCameo(
-                            model: cameoModel,
-                            tint: theme.captionText
-                        )
+                // 菜单栏面板:右上角随行簇,让位顺序小猫 → 统计入口,
+                // 激活工具的运行提示永不退场。该簇是标题子 HStack 的兄弟
+                // 节点,不受「双击展开」手势影响(与旧时钟同位)。
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 6) {
+                        if cameoModel.isVisible {
+                            HeaderCatCameo(
+                                model: cameoModel,
+                                tint: theme.captionText
+                            )
+                        }
+                        PanelHeaderToolBadges(theme: theme)
+                        statsEntryButton(theme: theme)
                     }
 
-                    Text(timeString)
-                        .monitorPanelMonoFont(.caption2, weight: .medium)
-                        .foregroundStyle(theme.captionText)
+                    HStack(spacing: 6) {
+                        PanelHeaderToolBadges(theme: theme)
+                        statsEntryButton(theme: theme)
+                    }
+
+                    PanelHeaderToolBadges(theme: theme)
                 }
             }
         }
         .padding(.horizontal, 2)
+    }
+
+    /// 钉住面板的钉住/关闭按钮组。
+    private func pinnedControls(theme: MonitorPanelTheme) -> some View {
+        HStack(spacing: 1) {
+            QuickPanelControlButton(
+                imageName: quickPanelPresentation.isPinned ? "pin.fill" : "pin",
+                help: String(localized: quickPanelPresentation.isPinned ? "panel.unpin" : "panel.pin"),
+                tint: theme.secondaryText
+            ) {
+                quickPanelPresentation.togglePin()
+            }
+
+            QuickPanelControlButton(
+                imageName: "xmark",
+                help: String(localized: "panel.close"),
+                tint: .red
+            ) {
+                quickPanelPresentation.close()
+            }
+        }
+    }
+
+    /// header 常驻的数据统计入口:打开设置页「数据统计」页签(与 App 菜单
+    /// 「打开数据报表…」分工——此处为速览,完整 HTML 报表另有专属入口)。
+    private func statsEntryButton(theme: MonitorPanelTheme) -> some View {
+        QuickPanelControlButton(
+            imageName: "chart.bar.doc.horizontal",
+            help: String(localized: "panel.statistics"),
+            tint: theme.secondaryText
+        ) {
+            SettingsWindowPresenter.open(tab: .statistics)
+        }
     }
 
     @ViewBuilder
@@ -628,16 +646,6 @@ struct MonitorPanelView: View {
         panelExpansion.animate(targets: targets)
     }
 
-    private func startTimeUpdateTask() {
-        timeUpdateTask?.cancel()
-        timeUpdateTask = Task {
-            while !Task.isCancelled {
-                timeString = panelTimeFormatter.string(from: Date())
-                try? await Task.sleep(for: .seconds(1))
-            }
-        }
-    }
-
     private func openActivityMonitor() {
         let url = URL(fileURLWithPath: "/System/Applications/Utilities/Activity Monitor.app")
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
@@ -678,6 +686,77 @@ private struct QuickPanelControlButtonStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.9 : 1)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
             .animation(.easeOut(duration: 0.12), value: isHovering)
+    }
+}
+
+// MARK: - Header 工具徽章
+
+/// header 右上角的激活工具提示:点亮中的快捷工具逐个亮出小图标,
+/// 点击整簇唤起工具浮层(与底部入口同一锚点机制),解锁等操作在浮层完成。
+/// 独立子视图观察 QuickToolsStore:开关变化只重绘本簇,不牵动整块面板。
+private struct PanelHeaderToolBadges: View {
+    @ObservedObject private var store = QuickToolsStore.shared
+    let theme: MonitorPanelTheme
+    @State private var anchor = QuickToolsAnchorBox()
+
+    private var tint: Color {
+        theme.palette.quickToolTint
+    }
+
+    var body: some View {
+        HStack(spacing: 5) {
+            if store.keyboardLocked {
+                HStack(spacing: 3) {
+                    Image(systemName: "keyboard")
+                        .font(.system(size: 11, weight: .semibold))
+                    if let deadline = store.keyboardLockAutoUnlockDate {
+                        autoUnlockCountdown(deadline: deadline)
+                    }
+                }
+                .help(String(localized: "quicktools.keyboard-lock"))
+            }
+            if store.systemSleepPrevented {
+                Image(systemName: "laptopcomputer")
+                    .font(.system(size: 11, weight: .semibold))
+                    .help(String(localized: "quicktools.system-awake"))
+            }
+            if store.displayAwake {
+                Image(systemName: "sun.max")
+                    .font(.system(size: 11, weight: .semibold))
+                    .help(String(localized: "quicktools.display-awake"))
+            }
+        }
+        .foregroundStyle(tint)
+        .frame(minHeight: 18)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            store.popoverPresenter.toggle(theme: theme, anchor: anchor)
+        }
+        .background(QuickToolsAnchorView(box: anchor))
+        // 菜单栏上已无任何激活工具时,收起本簇锚定的浮层,避免它随塌缩的
+        // 徽章簇漂移到统计入口下方(脱离触发来源变得突兀)。仅作用于 header
+        // 徽章打开的浮层;底部「工具」入口锚点稳定,不受此约束。
+        .onChange(of: store.anyActive) { _, active in
+            if !active, store.popoverPresenter.isShown(from: anchor) {
+                store.popoverPresenter.dismiss()
+            }
+        }
+    }
+
+    /// 自动解锁倒计时:TimelineView 每秒只重算这一个 Text,不牵动面板
+    /// 逐秒刷新(时钟移除后面板 body 已无每秒驱动源)。未锁定时本视图
+    /// 整体不在树中,无空转计时。
+    private func autoUnlockCountdown(deadline: Date) -> some View {
+        TimelineView(.periodic(from: .now, by: 1)) { context in
+            Text(Self.remainingText(from: deadline, now: context.date))
+                .monitorPanelMonoFont(.caption2, weight: .medium)
+        }
+    }
+
+    /// mm:ss,锁定上限 20 分钟,两位分钟足够。
+    private static func remainingText(from deadline: Date, now: Date) -> String {
+        let seconds = max(0, Int(deadline.timeIntervalSince(now).rounded()))
+        return String(format: "%d:%02d", seconds / 60, seconds % 60)
     }
 }
 

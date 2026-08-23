@@ -6176,6 +6176,28 @@
         }
       }
     },
+    "panel.statistics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data Statistics"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データ統計"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据统计"
+          }
+        }
+      }
+    },
     "panel.pin": {
       "localizations": {
         "en": {
@@ -6568,6 +6590,50 @@
           "stringUnit": {
             "state": "translated",
             "value": "键盘锁定"
+          }
+        }
+      }
+    },
+    "quicktools.permission.accessibility": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requires Accessibility permission"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「Accessibility」许可が必要です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要“辅助功能”授权"
+          }
+        }
+      }
+    },
+    "quicktools.permission.input-monitoring": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requires Input Monitoring permission"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "「入力監視」許可が必要です"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要“输入监控”授权"
           }
         }
       }

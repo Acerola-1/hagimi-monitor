@@ -17,6 +17,13 @@ final class QuickToolsStore: ObservableObject {
     /// 键盘锁定激活中:键盘事件被 tap 拦截,鼠标不受影响;解锁入口
     /// 为本功能开关(快捷键会被 tap 一并吞掉)。
     @Published private(set) var keyboardLocked = false
+    /// 本轮锁定的自动解锁截止时刻,未锁定为 nil。header 倒计时徽章
+    /// 据此逐秒刷新,与 KeyboardLockController 的兜底计时器同源。
+    @Published private(set) var keyboardLockAutoUnlockDate: Date?
+    /// 键盘锁定权限未授予时的提示文案(当前渠道对应权限名的本地化),
+    /// 已授权为 nil。浮层磁贴据此显示"需要什么授权"的小字;授权即隐、
+    /// 撤销复现,与键盘锁定联动同拍发布。
+    @Published private(set) var keyboardLockPermissionHint: String?
     /// 系统防休眠激活中:阻止空闲引发的系统休眠(屏幕可正常熄灭;
     /// 合盖是否休眠由硬件/外接条件决定,断言不参与)。
     @Published private(set) var systemSleepPrevented = false
@@ -58,25 +65,49 @@ final class QuickToolsStore: ObservableObject {
 
     private init() {
         keyboardLock.onAutoUnlock = { [weak self] in
-            self?.keyboardLocked = false
+            // controller 到点已自行 stop,此处只同步发布态(倒计时随之清空)。
+            self?.setKeyboardLocked(false)
         }
         observeKeyboardLockPermission()
     }
 
     /// 键盘锁定的权限联动:授权通过且处于挂起态时自动上锁;
-    /// 权限被撤销时 tap 已失效,同步回未锁定。
+    /// 权限被撤销时 tap 已失效,同步回未锁定。权限状态变化时同步
+    /// 刷新磁贴下面的提示文案。
     private func observeKeyboardLockPermission() {
         permissionCancellable = keyboardLockPermission.$isTrusted
             .receive(on: RunLoop.main)
             .sink { [weak self] trusted in
                 guard let self else { return }
+                self.refreshPermissionHint()
                 if trusted {
                     self.attemptPendingLock()
                 } else if self.keyboardLocked {
                     self.keyboardLock.stop()
-                    self.keyboardLocked = false
+                    self.setKeyboardLocked(false)
                 }
             }
+    }
+
+    /// 以授权状态刷新提示文案:未授权给出来源渠道的权限名文案,已授权置 nil。
+    private func refreshPermissionHint() {
+        keyboardLockPermissionHint = keyboardLockPermission.isTrusted
+            ? nil
+            : String(localized: keyboardLockPermission.permissionHintKey)
+    }
+
+    /// 浮层可见期间定期校准授权状态(App Store 渠道撤销无事件通知,只能轮询)。
+    /// 内部走各渠道对应权限服务的 refresh,isTrusted 变化经
+    /// observeKeyboardLockPermission 的 sink 联动落锁/解锁与提示行。
+    func refreshKeyboardLockPermission() {
+        keyboardLockPermission.refresh()
+    }
+
+    /// 落锁/解锁后同步锁定态与倒计时截止时刻:两个 @Published 同拍
+    /// 发布,header 徽章不会出现「已解锁还挂着倒计时」的中间帧。
+    private func setKeyboardLocked(_ locked: Bool) {
+        keyboardLocked = locked
+        keyboardLockAutoUnlockDate = keyboardLock.autoUnlockDeadline
     }
 
     /// 切换键盘锁定。未授权时触发系统授权引导,授权通过后自动上锁;
@@ -84,7 +115,7 @@ final class QuickToolsStore: ObservableObject {
     func toggleKeyboardLock() {
         if keyboardLocked {
             keyboardLock.stop()
-            keyboardLocked = false
+            setKeyboardLocked(false)
             return
         }
         if pendingKeyboardLock {
@@ -106,7 +137,7 @@ final class QuickToolsStore: ObservableObject {
         guard pendingKeyboardLock, !keyboardLocked else { return }
         if keyboardLock.start() {
             pendingKeyboardLock = false
-            keyboardLocked = true
+            setKeyboardLocked(true)
             #if !DIRECT_DISTRIBUTION
             stopTapRetry()
             #endif
@@ -183,7 +214,7 @@ final class QuickToolsStore: ObservableObject {
     func stop() {
         if keyboardLocked {
             keyboardLock.stop()
-            keyboardLocked = false
+            setKeyboardLocked(false)
         }
         cancelPendingLock()
         releaseAssertion(&displayAssertionID)

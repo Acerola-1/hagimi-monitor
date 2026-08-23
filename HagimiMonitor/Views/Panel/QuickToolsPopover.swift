@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreGraphics
 import SwiftUI
 
@@ -64,6 +65,10 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
     /// mouseDown 关浮层、mouseUp 到达入口按钮,需识别为「关闭」而非
     /// 重新弹出。窗口期低于人手两次独立点击的最小间隔,快速连点不被吞。
     private var lastCloseMediaTime: CFTimeInterval = 0
+    /// 当前浮层锚定的入口盒(弱引用避免与 store/视图形成强环)。header
+    /// 徽章与底部工具按钮各持不同盒,据此区分来源,实现「全部工具关闭
+    /// 时仅收起 header 锚定的浮层」。
+    private weak var activeAnchor: QuickToolsAnchorBox?
 
     init(onClosed: @escaping @MainActor () -> Void) {
         self.onClosed = onClosed
@@ -87,6 +92,7 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
         guard let anchorView = anchor.view, anchorView.window != nil else { return }
         let controller = prepareHostingController(theme: theme)
         popover.contentViewController = controller
+        activeAnchor = anchor
         QuickToolsStore.shared.isPopoverPresented = true
         popover.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .minY)
     }
@@ -96,10 +102,25 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
         popover.performClose(nil)
     }
 
+    /// 浮层当前是否锚定在指定盒上(区分 header 徽章与底部工具入口)。
+    func isShown(from box: QuickToolsAnchorBox) -> Bool {
+        popover.isShown && activeAnchor === box
+    }
+
+    /// 内容布局高度变化(权限提示行出现/消失)时同步浮层尺寸。NSPopover
+    /// 不会自动跟随内容生长,不重算会在提示行出现时裁切、消失时留白。
+    func refreshContentSize() {
+        guard popover.isShown, let controller = hostingController else { return }
+        controller.view.layoutSubtreeIfNeeded()
+        let fitting = controller.view.fittingSize
+        if fitting.width > 1, fitting.height > 1 { popover.contentSize = fitting }
+    }
+
     nonisolated func popoverDidClose(_ notification: Notification) {
         MainActor.assumeIsolated {
             lastCloseMediaTime = CACurrentMediaTime()
             hostingController = nil
+            activeAnchor = nil
             onClosed()
         }
     }
@@ -137,6 +158,19 @@ struct QuickToolsPopoverView: View {
         }
         .padding(12)
         .frame(width: 250)
+        .onAppear { store.refreshKeyboardLockPermission() }
+        // 浮层开着期间每 2s 校准一次键盘锁定授权状态(App Store 渠道撤销
+        // 无事件通知,只能轮询);浮层关闭时 hostingController 释放,本视图
+        // 随之下树,计时器随之停止,无空转。
+        .onReceive(
+            Timer.publish(every: 2, on: .main, in: .common).autoconnect()
+        ) { _ in
+            store.refreshKeyboardLockPermission()
+        }
+        // 提示行出现/消失改变磁贴高度,同步浮层尺寸避免裁切或留白。
+        .onChange(of: store.keyboardLockPermissionHint) { _, _ in
+            store.popoverPresenter.refreshContentSize()
+        }
     }
 }
 
@@ -158,37 +192,56 @@ private struct QuickToolTile: View {
         }
     }
 
+    /// 键盘锁定且权限未授予:磁贴标题下方追加提示行,告知用户需到系统
+    /// 设置授予对应授权;授权通过/被撤销时随 isTrusted 发布变化。
+    private var permissionHint: String? {
+        kind == .keyboardLock ? store.keyboardLockPermissionHint : nil
+    }
+
     private var accent: Color {
         theme.palette.quickToolTint
     }
 
     var body: some View {
         Button(action: toggle) {
-            HStack(spacing: 10) {
-                ZStack {
-                    Circle()
-                        .fill(isOn ? accent : theme.palette.trackFill)
-                    Image(systemName: kind.symbol)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(isOn ? Color.white : theme.secondaryText)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 10) {
+                    ZStack {
+                        Circle()
+                            .fill(isOn ? accent : theme.palette.trackFill)
+                        Image(systemName: kind.symbol)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(isOn ? Color.white : theme.secondaryText)
+                    }
+                    .frame(width: 32, height: 32)
+
+                    Text(String(localized: kind.titleKey))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 6)
+
+                    // 系统标准开关:macOS 26+ 自动液态玻璃,tint 染强调色保留
+                    // 点亮质感。关闭命中,点击统一由整块磁贴承接,避免磁贴按钮
+                    // 与开关各触发一次造成双重切换。
+                    Toggle(String(localized: kind.titleKey), isOn: .constant(isOn))
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                        .tint(accent)
+                        .allowsHitTesting(false)
                 }
-                .frame(width: 32, height: 32)
 
-                Text(String(localized: kind.titleKey))
-                    .font(.system(size: 12.5, weight: .semibold))
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-
-                Spacer(minLength: 6)
-
-                // 系统标准开关:macOS 26+ 自动液态玻璃,tint 染强调色保留
-                // 点亮质感。关闭命中,点击统一由整块磁贴承接,避免磁贴按钮
-                // 与开关各触发一次造成双重切换。
-                Toggle(String(localized: kind.titleKey), isOn: .constant(isOn))
-                    .labelsHidden()
-                    .toggleStyle(.switch)
-                    .tint(accent)
-                    .allowsHitTesting(false)
+                if let hint = permissionHint {
+                    Text(hint)
+                        .font(.system(size: 10.5))
+                        // 与标题同色而非强调色:小字承载体量与标题一致,深色模式下
+                        // 橙色低对比难读;灰色白承袭 primaryText,两行一体。
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(2)
+                        // 与标题文字左对齐:磁贴水平 padding 10 + 徽章 32 + 间距 10。
+                        .padding(.leading, 42)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -205,6 +258,7 @@ private struct QuickToolTile: View {
         // 磁贴按压反馈完全交给点亮态过渡,不用 .plain 默认的按压变暗。
         .buttonStyle(QuickToolTileButtonStyle())
         .animation(Self.toggleSpring, value: isOn)
+        .animation(Self.toggleSpring, value: permissionHint)
     }
 
     /// 状态切换统一包在同一条弹簧动画里:store 的 @Published 变化经
