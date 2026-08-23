@@ -26,9 +26,7 @@ struct SettingsSidebar: View {
             Section {
                 Label(String(localized: "settings.sidebar.general"), systemImage: "gearshape")
                     .tag(SettingsRoute.general)
-            }
 
-            Section {
                 // 蓝牙入口无条件显示:「无连接设备/蓝牙关闭」是瞬态,拿它门控
                 // 常驻设置项会让用户误以为功能消失(与风扇的硬件级门控不同)。
                 ForEach(MonitorKind.userVisibleCases.filter { $0 != .fan || fanAvailable }) { kind in
@@ -57,14 +55,10 @@ struct SettingsSidebar: View {
                     #endif
                 }
                 .tag(SettingsRoute.displayModule)
-            }
 
-            Section {
                 Label(String(localized: "settings.sidebar.statistics"), systemImage: "chart.bar.doc.horizontal")
                     .tag(SettingsRoute.statistics)
-            }
 
-            Section {
                 #if DIRECT_DISTRIBUTION
                 HStack(spacing: 6) {
                     Label(String(localized: "settings.sidebar.about"), systemImage: "info.circle")

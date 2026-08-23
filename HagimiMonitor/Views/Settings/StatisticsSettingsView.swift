@@ -104,7 +104,7 @@ struct StatisticsSettingsView: View {
                 .padding(.horizontal, 14)
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(StaticPressButtonStyle())
 
             if showCheckin {
                 checkinPanel
@@ -141,7 +141,9 @@ struct StatisticsSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             ScrollViewReader { proxy in
                 ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(alignment: .top, spacing: 3) {
+                    // 懒加载周列:26 周 × 7 格一次性建齐会让展开/收起瞬间的视图
+                    // 重建与头部同帧竞争,只建可见列,切换更顺滑。
+                    LazyHStack(alignment: .top, spacing: 3) {
                         ForEach(0..<26, id: \.self) { weekIndex in
                             let weekStart = calendar.date(byAdding: .weekOfYear, value: weekIndex - 25, to: monday)!
                             VStack(spacing: 3) {
@@ -164,7 +166,8 @@ struct StatisticsSettingsView: View {
                 }
                 .onAppear {
                     // 展开时滚到最后一列(今天所在周),不让用户从 26 周前开始翻。
-                    withAnimation(.easeOut(duration: 0.15)) {
+                    // 延后到主线程帧末无动画定位:立即动画滚动会与展开切换竞争,产生跳动。
+                    DispatchQueue.main.async {
                         proxy.scrollTo(25, anchor: .trailing)
                     }
                 }
@@ -545,5 +548,14 @@ struct StatisticsSettingsView: View {
     private func watts(_ value: Double?) -> String {
         guard let value else { return "—" }
         return String(format: "%.1f W", value)
+    }
+}
+
+/// 打卡卡展开按钮的专属样式:按下时标签外观完全静止。
+/// 按钮标签内含高饱和渐变图标,系统按压反馈施加在其上会被放大成一次可见
+/// 闪烁;展开/收起反馈由 chevron 旋转与高度动画承担,按钮本身不做视觉变化。
+private struct StaticPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }

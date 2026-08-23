@@ -1,6 +1,8 @@
 import AppKit
 import SwiftUI
 
+/// 设置页统一滚动容器:内容不足一屏时撑满可视区(配合页内 `Spacer`
+/// 实现"关于"页底部署名沉底),超过一屏时正常滚动,任意窗口高度下不裁切内容。
 struct SettingsPage<Content: View>: View {
     let content: Content
 
@@ -9,17 +11,19 @@ struct SettingsPage<Content: View>: View {
     }
 
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(alignment: .leading, spacing: 24) {
-                content
+        GeometryReader { proxy in
+            ScrollView(.vertical, showsIndicators: true) {
+                VStack(alignment: .leading, spacing: 24) {
+                    content
+                }
+                .controlSize(.small)
+                .padding(.top, 22)
+                .padding(.horizontal, 36)
+                .padding(.bottom, 28)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                .frame(minHeight: proxy.size.height, alignment: .topLeading)
             }
-            .controlSize(.small)
-            .padding(.top, 22)
-            .padding(.horizontal, 36)
-            .padding(.bottom, 28)
-            .frame(maxWidth: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
