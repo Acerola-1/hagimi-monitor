@@ -4,14 +4,6 @@ import OSLog
 
 private let mediaKeyLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "MediaKey")
 
-/// CGEventType.systemDefined 的共享常量。kCGEventSystemDefined ==
-/// NX_SYSDEFINED == 14,该 case 在当前 SDK 对 Swift 不公开;
-/// 媒体键与键盘锁两个事件 tap 都拦截此通道,统一定义避免裸值漂移。
-enum SystemDefinedEventType {
-    static let rawValue: UInt32 = 14
-    static let maskBit: CGEventMask = 1 << rawValue
-}
-
 enum MediaKey {
     case brightnessUp, brightnessDown
     case volumeUp, volumeDown, mute

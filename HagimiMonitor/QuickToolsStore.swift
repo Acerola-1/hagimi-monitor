@@ -7,14 +7,15 @@ import SwiftUI
 /// 与只读监控数据严格分离:状态由本 store 独立发布,浮层独立于面板
 /// 每秒刷新,不引入面板重绘开销。
 ///
-/// 键盘锁定双渠道实现:Direct 为辅助功能权限下的事件 tap 拦截,
-/// App Store 为全屏遮罩(见 KeyboardLockShield),状态语义一致。
+/// 键盘锁定双渠道同构:均由 KeyboardLockController 的事件 tap 拦截,
+/// 差异仅在授权通道——Direct 为辅助功能(该权限同时服务媒体键接管),
+/// App Store 为输入监控(沙盒内可用)。
 @MainActor
 final class QuickToolsStore: ObservableObject {
     static let shared = QuickToolsStore()
 
-    /// 键盘锁定激活中(Direct:键盘事件被拦截,鼠标不受影响;
-    /// App Store:全屏遮罩接管键盘与点击)。
+    /// 键盘锁定激活中:键盘事件被 tap 拦截,鼠标不受影响;解锁入口
+    /// 为本功能开关(快捷键会被 tap 一并吞掉)。
     @Published private(set) var keyboardLocked = false
     /// 系统防休眠激活中:阻止空闲引发的系统休眠(屏幕可正常熄灭;
     /// 合盖是否休眠由硬件/外接条件决定,断言不参与)。
@@ -38,76 +39,112 @@ final class QuickToolsStore: ObservableObject {
     private var displayAssertionID: IOPMAssertionID?
     private var systemAssertionID: IOPMAssertionID?
     #if DIRECT_DISTRIBUTION
+    private typealias KeyboardLockPermission = AccessibilityPermissionService
+    #else
+    private typealias KeyboardLockPermission = InputMonitoringPermissionService
+    #endif
     private let keyboardLock = KeyboardLockController()
-    /// 已发起授权、等待授权通过后自动上锁的挂起标记。
+    private let keyboardLockPermission = KeyboardLockPermission.shared
+    /// 挂起标记:已表达上锁意图、等待授权通过或 tap 可建立;
+    /// 挂起期间再次点击开关视为撤销意图。
     private var pendingKeyboardLock = false
     private var permissionCancellable: AnyCancellable?
-    #else
-    private let keyboardShield = KeyboardLockShieldController()
+    #if !DIRECT_DISTRIBUTION
+    /// 授权通过后事件 tap 侧信任缓存存在传播延迟(实测约 40 秒),
+    /// 期间 tapCreate 失败,挂起态按固定间隔重试直到成功。
+    private var tapRetryTimer: DispatchSourceTimer?
+    private static let tapRetryInterval: TimeInterval = 5
     #endif
 
     private init() {
-        #if DIRECT_DISTRIBUTION
-        configureKeyboardLock()
-        #else
-        keyboardShield.onAutoUnlock = { [weak self] in
-            self?.keyboardLocked = false
-        }
-        keyboardShield.onUnlock = { [weak self] in
-            self?.toggleKeyboardLock()
-        }
-        #endif
-    }
-
-    #if DIRECT_DISTRIBUTION
-    /// 键盘锁定的权限联动:授权通过后若处于挂起态则自动上锁;
-    /// 权限被撤销时 tap 已失效,同步回未锁定。
-    private func configureKeyboardLock() {
         keyboardLock.onAutoUnlock = { [weak self] in
             self?.keyboardLocked = false
         }
-        permissionCancellable = AccessibilityPermissionService.shared.$isTrusted
+        observeKeyboardLockPermission()
+    }
+
+    /// 键盘锁定的权限联动:授权通过且处于挂起态时自动上锁;
+    /// 权限被撤销时 tap 已失效,同步回未锁定。
+    private func observeKeyboardLockPermission() {
+        permissionCancellable = keyboardLockPermission.$isTrusted
             .receive(on: RunLoop.main)
             .sink { [weak self] trusted in
                 guard let self else { return }
                 if trusted {
-                    if self.pendingKeyboardLock && !self.keyboardLocked {
-                        self.pendingKeyboardLock = false
-                        self.keyboardLocked = self.keyboardLock.start()
-                    }
+                    self.attemptPendingLock()
                 } else if self.keyboardLocked {
                     self.keyboardLock.stop()
                     self.keyboardLocked = false
                 }
             }
     }
-    #endif
 
-    /// 切换键盘锁定。Direct 渠道未授权时触发系统授权引导(打开系统
-    /// 设置 + 轮询),授权通过后自动上锁;App Store 渠道直接铺遮罩。
+    /// 切换键盘锁定。未授权时触发系统授权引导,授权通过后自动上锁;
+    /// 挂起中的再次点击撤销上锁意图。
     func toggleKeyboardLock() {
         if keyboardLocked {
-            #if DIRECT_DISTRIBUTION
             keyboardLock.stop()
-            #else
-            keyboardShield.dismiss()
-            #endif
             keyboardLocked = false
             return
         }
-        #if DIRECT_DISTRIBUTION
-        guard AccessibilityPermissionService.shared.isTrusted else {
-            pendingKeyboardLock = true
-            AccessibilityPermissionService.shared.request()
+        if pendingKeyboardLock {
+            cancelPendingLock()
             return
         }
-        keyboardLocked = keyboardLock.start()
-        #else
-        // 遮罩会盖过菜单栏,浮层失去入口,先收起避免残留。
-        popoverPresenter.dismiss()
-        keyboardLocked = keyboardShield.present()
+        pendingKeyboardLock = true
+        guard keyboardLockPermission.isTrusted else {
+            keyboardLockPermission.request()
+            return
+        }
+        attemptPendingLock()
+    }
+
+    /// 尝试落锁:tap 建立成功则点亮锁定态;失败时 App Store 渠道
+    /// 多处于授权后的信任缓存传播窗口,进入定时重试,Direct 渠道
+    /// 授权即生效,失败直接放弃本次意图。
+    private func attemptPendingLock() {
+        guard pendingKeyboardLock, !keyboardLocked else { return }
+        if keyboardLock.start() {
+            pendingKeyboardLock = false
+            keyboardLocked = true
+            #if !DIRECT_DISTRIBUTION
+            stopTapRetry()
+            #endif
+        } else {
+            #if !DIRECT_DISTRIBUTION
+            startTapRetry()
+            #else
+            pendingKeyboardLock = false
+            #endif
+        }
+    }
+
+    /// 撤销挂起的上锁意图。
+    private func cancelPendingLock() {
+        pendingKeyboardLock = false
+        #if !DIRECT_DISTRIBUTION
+        stopTapRetry()
         #endif
     }
+
+    #if !DIRECT_DISTRIBUTION
+    /// 传播窗口内按固定间隔重试建 tap,直到成功或意图被撤销。
+    private func startTapRetry() {
+        guard tapRetryTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: .main)
+        timer.schedule(deadline: .now() + Self.tapRetryInterval, repeating: Self.tapRetryInterval)
+        timer.setEventHandler { [weak self] in
+            self?.attemptPendingLock()
+        }
+        tapRetryTimer = timer
+        timer.resume()
+    }
+
+    private func stopTapRetry() {
+        tapRetryTimer?.cancel()
+        tapRetryTimer = nil
+    }
+    #endif
 
     // MARK: - 系统防休眠
 
@@ -145,13 +182,10 @@ final class QuickToolsStore: ObservableObject {
     /// 此处保证 stop 语义完整(如测试或热重启场景)。
     func stop() {
         if keyboardLocked {
-            #if DIRECT_DISTRIBUTION
             keyboardLock.stop()
-            #else
-            keyboardShield.dismiss()
-            #endif
             keyboardLocked = false
         }
+        cancelPendingLock()
         releaseAssertion(&displayAssertionID)
         releaseAssertion(&systemAssertionID)
         displayAwake = false

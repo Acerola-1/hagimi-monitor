@@ -2,42 +2,12 @@ import AppKit
 import CoreGraphics
 import SwiftUI
 
-/// 快捷功能的强调色分组:键盘锁定走暖橙(与 CPU 同调,提示"介入态"),
-/// 电源类功能(系统防休眠/不息屏)共用冷蓝(与 GPU 同调,提示"持续运行")。
-enum QuickToolAccentKind {
-    case keyboardLock
-    case power
-}
-
-extension MonitorPalette {
-    func quickToolAccent(_ kind: QuickToolAccentKind) -> Color {
-        switch kind {
-        case .keyboardLock:
-            moduleTint(for: .cpu)
-        case .power:
-            moduleTint(for: .gpu)
-        }
-    }
-
-    /// 磁贴点亮态底色:强调色低透明铺底,深色模式下稍亮以维持可辨识度。
-    func quickToolActiveFill(_ kind: QuickToolAccentKind) -> Color {
-        quickToolAccent(kind).opacity(colorScheme == .dark ? 0.16 : 0.10)
-    }
-}
-
-/// 快捷功能条目。键盘锁定在 Direct 渠道为事件 tap 拦截、App Store
-/// 渠道为全屏遮罩(见 KeyboardLockShield),双渠道均有此磁贴。
+/// 快捷功能条目。键盘锁定双渠道均为事件 tap 拦截
+/// (见 KeyboardLockController),解锁入口即本磁贴开关。
 enum QuickToolKind: CaseIterable {
     case keyboardLock
     case systemAwake
     case displayAwake
-
-    var accent: QuickToolAccentKind {
-        switch self {
-        case .keyboardLock: .keyboardLock
-        case .systemAwake, .displayAwake: .power
-        }
-    }
 
     var titleKey: String.LocalizationValue {
         switch self {
@@ -189,7 +159,7 @@ private struct QuickToolTile: View {
     }
 
     private var accent: Color {
-        theme.palette.quickToolAccent(kind.accent)
+        theme.palette.quickToolTint
     }
 
     var body: some View {
@@ -224,7 +194,7 @@ private struct QuickToolTile: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
-                    .fill(isOn ? theme.palette.quickToolActiveFill(kind.accent) : theme.palette.trackFill)
+                    .fill(isOn ? theme.palette.quickToolActiveFill : theme.palette.trackFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
@@ -265,12 +235,6 @@ struct QuickToolsEntryButton: View {
     let theme: MonitorPanelTheme
     @State private var anchor = QuickToolsAnchorBox()
 
-    /// 角标色随激活工具的分组走:键盘锁定点亮时暖橙,电源类冷蓝。
-    private var badgeKind: QuickToolAccentKind {
-        if store.keyboardLocked { return .keyboardLock }
-        return .power
-    }
-
     var body: some View {
         Button {
             store.popoverPresenter.toggle(theme: theme, anchor: anchor)
@@ -290,7 +254,7 @@ struct QuickToolsEntryButton: View {
         )
         .overlay(alignment: .topTrailing) {
             Circle()
-                .fill(theme.palette.quickToolAccent(badgeKind))
+                .fill(theme.palette.quickToolTint)
                 .frame(width: 5, height: 5)
                 .padding(.trailing, 12)
                 .opacity(store.anyActive ? 1 : 0)
