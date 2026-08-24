@@ -241,6 +241,9 @@ final class StatisticsDatabase {
             sqlite3_busy_timeout(handle, 5_000)
             execute("PRAGMA journal_mode=WAL")
             execute("PRAGMA synchronous=NORMAL")
+            // 增量汇总水位表:记录每个 source→target 上次汇总的 boundary,使 maintain
+            // 只重算新封口的桶,而非从源表最早行全量重扫。
+            execute("CREATE TABLE IF NOT EXISTS stats_meta (key TEXT PRIMARY KEY, value REAL)")
             for table in ["minute", "hour", "day"] {
                 let columnSQL = StatisticsRow.columns.map { "\($0.name) REAL" }.joined(separator: ", ")
                 execute("CREATE TABLE IF NOT EXISTS stats_\(table) (t INTEGER PRIMARY KEY, \(columnSQL), n INTEGER NOT NULL DEFAULT 0)")
@@ -270,37 +273,35 @@ final class StatisticsDatabase {
     }
 
     /// 增量汇总:把已完成的小时从分钟行汇总、已完成的日从小时行汇总,
-    /// 并按保留窗口清理旧行。每次分钟落库后调用,常态下无待汇总桶、近乎零开销。
+    /// 并按保留窗口清理旧行。每次分钟落库后调用,通过水位只重算新封口的桶,
+    /// 单次开销与数据总量无关(见 `rollUp` 的 watermarkKey 参数)。
     func maintain(now: Date) {
         queue.sync {
             let nowInterval = now.timeIntervalSince1970
             let currentHour = calendar.dateInterval(of: .hour, for: now)?.start.timeIntervalSince1970 ?? nowInterval
             let currentDay = calendar.startOfDay(for: now).timeIntervalSince1970
-            rollUp(source: "minute", target: "hour", boundary: currentHour, bucketUnit: .hour)
-            rollUp(source: "hour", target: "day", boundary: currentDay, bucketUnit: .day)
+            rollUp(source: "minute", target: "hour", boundary: currentHour, bucketUnit: .hour, watermarkKey: Self.watermarkMinuteHour)
+            rollUp(source: "hour", target: "day", boundary: currentDay, bucketUnit: .day, watermarkKey: Self.watermarkHourDay)
             execute("DELETE FROM stats_minute WHERE t < \(Int64(nowInterval - Self.minuteRetention))")
             execute("DELETE FROM stats_hour WHERE t < \(Int64(nowInterval - Self.hourRetention))")
         }
     }
 
-    /// source → target 的增量汇总:从「源表最早行」重扫到 boundary。
-    /// 全量重扫(而非仅最近一桶)确保缺列的目标行被完整重算补齐(stress 列);
-    /// 源表有保留窗口(分钟 45d/小时 400d),数据量可控。
-    /// 按本地时区切桶,空桶跳过。
-    private func rollUp(source: String, target: String, boundary: TimeInterval, bucketUnit: Calendar.Component) {
+    /// source → target 的增量汇总:从上次汇总水位重扫到 boundary。
+    /// 水位语义 = 上次调用的 boundary(整点/整日),因此下次只处理新封口的一个桶;
+    /// 首次(无水位)从源表最早行全量重扫一次,补齐历史缺列(stress 列回填)。
+    /// 按本地时区切桶,空桶跳过。汇总完成后把水位推进到本次 boundary。
+    private func rollUp(source: String, target: String, boundary: TimeInterval, bucketUnit: Calendar.Component, watermarkKey: String) {
         let bucketSeconds: TimeInterval = bucketUnit == .hour ? 3600 : 86400
-        let maxTarget = scalarQuery("SELECT MAX(t) FROM stats_\(target)")
-        let minSource = scalarQuery("SELECT MIN(t) FROM stats_\(source)")
         let resumeFrom: TimeInterval
-        switch (maxTarget, minSource) {
-        case (let target?, let source?):
-            // 从源表最早行重扫,确保已有目标行被重算(stress 列回填)。
-            resumeFrom = source
-        case (nil, let source?):
-            resumeFrom = source
-        case (let target?, nil):
-            resumeFrom = target - bucketSeconds
-        default:
+        if let watermark = metaValue(for: watermarkKey) {
+            resumeFrom = watermark
+        } else if let minSource = scalarQuery("SELECT MIN(t) FROM stats_\(source)") {
+            // 首次(或水位被删除):从源表最早行全量重扫,确保老目标行被重算。
+            resumeFrom = minSource
+        } else if let maxTarget = scalarQuery("SELECT MAX(t) FROM stats_\(target)") {
+            resumeFrom = maxTarget - bucketSeconds
+        } else {
             return
         }
 
@@ -308,7 +309,7 @@ final class StatisticsDatabase {
         let boundaryDate = Date(timeIntervalSince1970: boundary)
         while cursor < boundaryDate {
             guard let bucketStart = calendar.dateInterval(of: bucketUnit, for: cursor)?.start else { break }
-            let bucketEnd = calendar.date(byAdding: bucketUnit, value: 1, to: bucketStart) ?? bucketStart.addingTimeInterval(bucketUnit == .hour ? 3600 : 86400)
+            let bucketEnd = calendar.date(byAdding: bucketUnit, value: 1, to: bucketStart) ?? bucketStart.addingTimeInterval(bucketSeconds)
             if bucketEnd > boundaryDate { break }
             let rows = fetchRows(from: source, from: bucketStart.timeIntervalSince1970, to: bucketEnd.timeIntervalSince1970)
             if let aggregated = StatisticsRow.aggregate(rows, t: Int64(bucketStart.timeIntervalSince1970)) {
@@ -316,6 +317,42 @@ final class StatisticsDatabase {
             }
             cursor = bucketEnd
         }
+        setMeta(boundary, for: watermarkKey)
+    }
+
+    // MARK: - 汇总水位
+
+    private static let watermarkMinuteHour = "rollup.minute_hour.watermark"
+    private static let watermarkHourDay = "rollup.hour_day.watermark"
+
+    /// SQLITE_TRANSIENT 的 Swift 等价:告诉 SQLite 在语句执行完成前复制绑定的字符串。
+    private static let sqliteTransient = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
+
+    private func metaValue(for key: String) -> TimeInterval? {
+        guard let handle else { return nil }
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, "SELECT value FROM stats_meta WHERE key = ?", -1, &statement, nil) == SQLITE_OK,
+              let statement else { return nil }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, key, -1, Self.sqliteTransient)
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return sqlite3_column_double(statement, 0)
+    }
+
+    private func setMeta(_ value: TimeInterval, for key: String) {
+        guard let handle else { return }
+        var statement: OpaquePointer?
+        let sql = "INSERT INTO stats_meta(key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return }
+        defer { sqlite3_finalize(statement) }
+        sqlite3_bind_text(statement, 1, key, -1, Self.sqliteTransient)
+        sqlite3_bind_double(statement, 2, value)
+        sqlite3_step(statement)
+    }
+
+    /// 删除水位,使下一次 `maintain` 从源表最早行全量重扫(用于清空/范围删除后)。
+    private func resetWatermarks() {
+        execute("DELETE FROM stats_meta")
     }
 
     // MARK: - 查询
@@ -380,6 +417,7 @@ final class StatisticsDatabase {
             execute("DELETE FROM stats_minute")
             execute("DELETE FROM stats_hour")
             execute("DELETE FROM stats_day")
+            resetWatermarks()
             execute("VACUUM")
         }
     }
@@ -392,6 +430,8 @@ final class StatisticsDatabase {
             for table in ["minute", "hour", "day"] {
                 execute("DELETE FROM stats_\(table) WHERE t >= \(lo) AND t < \(hi)")
             }
+            // 范围删除可能落在水位之后(会影响后续汇总),重置水位触发一次全量重算。
+            resetWatermarks()
             execute("VACUUM")
         }
     }

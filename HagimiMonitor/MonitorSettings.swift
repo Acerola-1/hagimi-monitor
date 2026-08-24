@@ -209,6 +209,10 @@ final class MonitorSettings: ObservableObject {
         // 之后用户的手动开关走正常读写,不再被本迁移覆盖。
         if !defaults.bool(forKey: Keys.metricsDefaultOnMigrated) {
             for kind in MonitorKind.allCases where loadedMetrics[kind] != nil {
+                // 用户明确关闭全部指标(存储为空数组)的模块是合法全关状态,
+                // 不被默认补齐迁移复活。
+                let stored = defaults.array(forKey: Keys.enabledMetricsPrefix + kind.rawValue) as? [String] ?? []
+                guard !stored.isEmpty else { continue }
                 var merged = loadedMetrics[kind] ?? []
                 let defaultsForKind = defaultMetricIds(for: kind)
                 merged.formUnion(defaultsForKind)
@@ -223,7 +227,7 @@ final class MonitorSettings: ObservableObject {
         // 列表里,升级后会被当成「用户已关」。只把这三项并入电池存量并回写,
         // 不重跑全量并回,避免复活用户手动关过的其他指标。
         if !defaults.bool(forKey: Keys.batteryElectricalMetricsMigrated) {
-            if var merged = loadedMetrics[.battery] {
+            if var merged = loadedMetrics[.battery], !merged.isEmpty {
                 merged.formUnion(["voltage", "current", "capacity"])
                 if merged != loadedMetrics[.battery] {
                     loadedMetrics[.battery] = merged
@@ -407,6 +411,9 @@ final class MonitorSettings: ObservableObject {
         let filtered = result.intersection(availableIds)
 
         if filtered.isEmpty {
+            // 用户主动关闭全部指标(存储为空数组)是合法持久态,不得回退默认。
+            // 仅当存储非空但过滤后为空(历史失效指标)时才回退,避免复活用户已关闭的指标。
+            guard !ids.isEmpty else { return [] }
             return Array(defaultMetricIds(for: kind))
         }
 

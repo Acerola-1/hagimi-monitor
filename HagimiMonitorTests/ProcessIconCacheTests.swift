@@ -1,6 +1,6 @@
 import Testing
 import AppKit
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 
 @Suite("ProcessIconCache downscaling & caching")
 struct ProcessIconCacheTests {

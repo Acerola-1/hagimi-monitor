@@ -212,7 +212,10 @@ final class MediaKeyController {
         if current > 0 {
             next = 0
         } else {
-            next = lastNonZeroVolume[displayID] ?? unmuteFallback
+            // 恢复优先级:进程内最近非零音量 → 持久化音量(DDC 写入成功时保存,跨会话)→ 兜底。
+            next = lastNonZeroVolume[displayID]
+                ?? persistedNonZeroVolume(for: displayID)
+                ?? unmuteFallback
         }
         controller.setValueAsync(next, for: .volume, displayID: displayID)
         rememberVolume(next, for: displayID)
@@ -225,6 +228,20 @@ final class MediaKeyController {
     private func rememberVolume(_ value: Double, for displayID: CGDirectDisplayID) {
         guard value > 0 else { return }
         lastNonZeroVolume[displayID] = value
+    }
+
+    /// 从 UserDefaults 读取持久化音量(DDC 写入成功时由 DisplayControlsSection 保存)。
+    /// 与 DisplayControlsSection.storedValueKey 的 key 格式保持一致。
+    private func persistedNonZeroVolume(for displayID: CGDirectDisplayID) -> Double? {
+        guard let controller,
+              let display = controller.displays.first(where: { $0.id == displayID }) else {
+            return nil
+        }
+        let key = "displayControl.value.\(display.storageID).\(DisplayControlKind.volume.storageKey)"
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: key) != nil else { return nil }
+        let value = defaults.double(forKey: key)
+        return value > 0 ? min(100, max(0, value)) : nil
     }
 
     private func hasExternalDDCDisplay() -> Bool {

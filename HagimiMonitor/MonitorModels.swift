@@ -354,7 +354,7 @@ struct MonitorModule: Identifiable, Equatable {
             if value >= MonitorConstants.networkWarningThreshold { return .warning }
             return .calm
         case .battery:
-            if metrics.first(where: { $0.name == "type" })?.value == "ac-power" {
+            if metrics.first(where: { $0.name == MonitorMetricKey.type })?.value == MonitorMetricKey.acPower {
                 return .calm
             }
             if value <= MonitorConstants.batteryCriticalThreshold { return .critical }
@@ -389,6 +389,13 @@ struct MonitorModule: Identifiable, Equatable {
             isPlaceholder: true
         )
     }
+}
+
+/// 采样指标 name 的跨文件契约键。采样器产出与消费方(severity 判定等)共享,
+/// 任一端改名编译器即报错,避免裸字符串断约后的静默降级(如电池交流供电判成 critical)。
+enum MonitorMetricKey {
+    static let type = "type"
+    static let acPower = "ac-power"
 }
 
 final class MonitorStore: ObservableObject {

@@ -39,14 +39,7 @@ enum MonitorConstants {
     // 推迟(见 MonitorStore.beginExpansionAnimation)也以它为基准。
     static let panelExpansionDuration: TimeInterval = 0.15
 
-    // MARK: - Animation Durations
-    static let cpuAnimationDuration = 0.30
-    static let batteryAnimationDuration = 2.20
-    static let gpuAnimationDuration = 0.85
-    static let defaultAnimationDuration = 1.65
-
     // MARK: - Sampling
-    static let maxSamples = 28
     static let sparklineMaxPoints = 24
 
     // MARK: - Compute Load Aggregation

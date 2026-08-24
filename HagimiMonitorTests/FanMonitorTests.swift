@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 
 // MARK: - Mock SMC Reader
 
@@ -261,10 +261,9 @@ struct FanRPMFormatterTests {
         #expect(result == "1200")
     }
 
-    @Test func smallValuePaddedToFourChars() {
+    @Test func smallValueNotPadded() {
         let result = MenuBarMetricFormatter.fanRPM(800)
-        #expect(result == " 800")
-        #expect(result.count == 4)
+        #expect(result == "800")
     }
 
     @Test func maxValueNotCapped() {
@@ -277,15 +276,14 @@ struct FanRPMFormatterTests {
         #expect(result == "9999")
     }
 
-    @Test func zeroValuePadded() {
+    @Test func zeroValueNotPadded() {
         let result = MenuBarMetricFormatter.fanRPM(0)
-        #expect(result == "   0")
-        #expect(result.count == 4)
+        #expect(result == "0")
     }
 
     @Test func nilReturnsUnavailablePlaceholder() {
         let result = MenuBarMetricFormatter.fanRPM(nil)
-        #expect(result.count == 4)
+        #expect(result == "--")
     }
 }
 

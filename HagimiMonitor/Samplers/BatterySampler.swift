@@ -116,7 +116,7 @@ final class BatterySampler: MonitorSampler {
             value: percentage,
             summary: percent(percentage),
             metrics: [
-                MonitorMetric(name: "type", value: "battery"),
+                MonitorMetric(name: MonitorMetricKey.type, value: "battery"),
                 MonitorMetric(name: "status", value: statusValue),
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
                 MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", unit: connected ? " W" : nil),
@@ -156,7 +156,7 @@ final class BatterySampler: MonitorSampler {
             value: 100,
             summary: "ac-power",
             metrics: [
-                MonitorMetric(name: "type", value: "ac-power"),
+                MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.acPower),
                 MonitorMetric(name: "status", value: "ac-power"),
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
                 MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W")

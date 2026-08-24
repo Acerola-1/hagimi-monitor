@@ -50,6 +50,14 @@ enum SettingsWindowPresenter {
         broadcastPendingTab()
     }
 
+    /// 路由观察者消费完标签页后调用,清除待处理值。
+    /// `pendingTab` 由观察者消费后清除而非广播时清除——首次打开窗口时广播早于
+    /// 观察者挂载(通知会丢失),若广播即清空,`settingsViewDidAppear` 的补发将无从谈起。
+    @MainActor
+    static func consumePendingTab() {
+        pendingTab = nil
+    }
+
     @MainActor
     private static func ensureWindow() -> NSWindow? {
         if let settingsWindow {
@@ -196,7 +204,8 @@ enum SettingsWindowPresenter {
     @MainActor
     private static func broadcastPendingTab() {
         guard let tab = pendingTab else { return }
-        pendingTab = nil
+        // 不清空 pendingTab:由观察者消费后调用 consumePendingTab 清除。
+        // 首次打开时观察者可能尚未挂载,本次广播可能无人接收,保留待消费值供补发。
         NotificationCenter.default.post(
             name: routeChangeNotification,
             object: nil,

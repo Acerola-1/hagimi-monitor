@@ -91,6 +91,11 @@ private struct QuickAccessShortcutRecorder: View {
         }
         .animation(.easeInOut(duration: 0.15), value: model.isRecording)
         .animation(.easeInOut(duration: 0.15), value: model.shortcut)
+        // 设置窗口关闭只 orderOut 不销毁视图树,onDisappear 不触发;录制中的本地
+        // 按键监视器会一直吞掉全 app 按键、全局快捷键保持禁用。监听窗口关闭兜底拆除。
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in
+            model.stopRecording()
+        }
         .onDisappear { model.stopRecording() }
     }
 

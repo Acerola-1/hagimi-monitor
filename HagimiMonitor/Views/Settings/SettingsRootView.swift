@@ -124,6 +124,10 @@ private final class SettingsWindowTrackingView: NSView {
             guard let tabValue = note.userInfo?[SettingsWindowPresenter.tabUserInfoKey] as? String,
                   let tab = SettingsTab(rawValue: tabValue) else { return }
             self?.onTabChanged?(tab)
+            // 消费即清除:防止 settingsViewDidAppear 的补发广播重复路由同一标签页。
+            MainActor.assumeIsolated {
+                SettingsWindowPresenter.consumePendingTab()
+            }
         }
     }
 
@@ -158,8 +162,6 @@ extension SettingsTab {
         switch self {
         case .general:
             return .general
-        case .modules:
-            return nil
         case .statistics:
             return .statistics
         case .storage:

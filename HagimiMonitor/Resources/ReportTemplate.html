@@ -1503,7 +1503,11 @@
       }
       const from = new Date(calPicker.selectedDates[0]).setHours(0, 0, 0, 0);
       const end = new Date(calPicker.selectedDates[1]).setHours(0, 0, 0, 0);
-      custom = [from, end + DAY];
+      // 结束边界取结束日当天最后一刻(end + DAY - 1ms),而非次日 0 点:
+      // 报表的日键过滤(day > toKey 排除 to 之后)依赖 to 的日键 = 结束日。
+      // 若用 end + DAY(次日 0 点),toKey = 次日,应用排行/电池健康会把结束日之后
+      // 一天也纳入统计。预设范围 to = Date.now()(日键 = 今天,包含今天)不受影响。
+      custom = [from, end + DAY - 1];
       currentRange = null;
       applyRange();
     },
@@ -1745,7 +1749,8 @@
       const x = v(r, col);
       if (x == null) return;
       const b = x < 10 ? 0 : x < 30 ? 1 : x < 60 ? 2 : x < 90 ? 3 : 4;
-      buckets[b] += frames(r);
+      // 用真实墙钟覆盖秒(cover_s)而非采样帧数:采样推迟/失败时帧数偏离真实时间。
+      buckets[b] += coverSeconds(r);
     });
     const total = buckets.reduce((a, b) => a + b, 0);
     return total > 0 ? buckets : null;
@@ -1758,9 +1763,9 @@
       color: colors,
       tooltip: Object.assign({}, liveTooltip(), {
         trigger: "item",
-        // ECharts 饼图 trigger:item: p.value 是原始帧数, p.percent 是百分比。
-        // 小时数 = 帧数 / 3600(帧即采样秒,一分钟 60 帧)。
-        formatter: (p) => p.name + ": " + p.percent.toFixed(1) + "% (" + fmtHours(p.value / 3600) + ")",
+        // ECharts 饼图 trigger:item: p.value 是累计覆盖秒(cover_s,真实墙钟)。
+        // 小时数 = 秒数 / 3600,由 fmtHours 内部完成——勿再除以 3600 造成双重换算。
+        formatter: (p) => p.name + ": " + p.percent.toFixed(1) + "% (" + fmtHours(p.value) + ")",
       }),
       legend: { bottom: 0, left: "center", icon: "circle", itemWidth: 8, itemHeight: 8,
         textStyle: { color: C.label, fontSize: 11 } },
@@ -2177,17 +2182,24 @@
     });
     const list = [];
     const from = currentFrom, to = currentTo;
-    for (let ts = startOfLocalDay(from); ts < to; ts += DAY) {
+    // 步进用日历 setDate(+1) 推"下一天本地午夜",而非固定 +DAY:夏令时切换日相邻
+    // 两午夜间隔 23/25 小时,固定步进会从此永远偏离本地午夜,dayMap.get 全部落空。
+    // dailyTotals 已用 same 归一化,此处保持一致。
+    for (let ts = startOfLocalDay(from); ts < to; ) {
+      const next = new Date(ts);
+      next.setDate(next.getDate() + 1);
+      const nextTs = next.getTime();
       let row = dayMap.get(ts);
       if (!row && ts === startOfToday) {
         const minutes = rowsBetween(DATA.minutes, ts, Date.now());
         if (minutes.length) row = minutes.reduce(aggregateReduce, blankRow(ts));
       }
       if (!row && source !== "days") {
-        const hours = rowsBetween(DATA.hours, ts, ts + DAY);
+        const hours = rowsBetween(DATA.hours, ts, nextTs);
         if (hours.length) row = hours.reduce(aggregateReduce, blankRow(ts));
       }
       if (row) list.push(row);
+      ts = nextTs;
     }
     const head = [
       I.colDay, I.colCpuAvg, I.colCpuPeak, I.colMemAvg, I.colMemPressure,
@@ -2216,7 +2228,7 @@
         [fmtBytes(v(r, "disk_write")), ""],
         [ac == null ? "—" : fmtPct(ac * 100, 0), ""],
         [fmtW(v(r, "power_avg")), ""],
-        [fmtHours(frames(r)), ""],
+        [fmtHours(coverSeconds(r)), ""],
       ];
       cells.forEach(([text, cls]) => {
         const td = el("td");

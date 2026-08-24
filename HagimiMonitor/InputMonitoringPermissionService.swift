@@ -17,7 +17,12 @@ final class InputMonitoringPermissionService: ObservableObject {
 
     @Published private(set) var isTrusted: Bool = CGPreflightListenEventAccess()
 
+    /// 轮询最大时长(秒)。授权通过或用户拒绝/忽略均在此窗口内定案;
+    /// 超时仍未授权即停止轮询,避免常驻菜单栏 app 无限空转查询权限状态。
+    private static let maxPollingSeconds: Int = 120
+
     private var pollTimer: DispatchSourceTimer?
+    private var polledSeconds = 0
 
     deinit {
         pollTimer?.cancel()
@@ -43,12 +48,15 @@ final class InputMonitoringPermissionService: ObservableObject {
 
     private func startPollingUntilGranted() {
         pollTimer?.cancel()
+        polledSeconds = 0
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + 1, repeating: 1)
         timer.setEventHandler { [weak self] in
             guard let self else { return }
             self.refresh()
-            if self.isTrusted {
+            self.polledSeconds += 1
+            // 授权通过或超过最长等待窗口(用户拒绝/忽略)即停止轮询。
+            if self.isTrusted || self.polledSeconds >= Self.maxPollingSeconds {
                 self.pollTimer?.cancel()
                 self.pollTimer = nil
             }

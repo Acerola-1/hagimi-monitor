@@ -184,16 +184,19 @@ sync_original_branch() {
 
 echo "=== 发布 ${TAG} ==="
 
-# 检查工作区（仅允许版本号和发布说明文件变更）
-if [[ -n $(git status --porcelain | grep -vE "$PBXPROJ|$NOTES_FILE") ]]; then
+# 检查工作区（仅允许版本号和发布说明文件变更）。用 fixed-string 匹配,
+# 避免 pbxproj/md 路径里的点号被当作正则通配符。
+if [[ -n $(git status --porcelain | grep -vF -e "$PBXPROJ" -e "$NOTES_FILE") ]]; then
   echo "错误: 工作区有未提交的更改，请先提交或暂存"
-  git status --short | grep -vE "$PBXPROJ|$NOTES_FILE"
+  git status --short | grep -vF -e "$PBXPROJ" -e "$NOTES_FILE"
   exit 1
 fi
 
-# 检查 tag 是否已存在
-if git tag -l "$TAG" | grep -q "$TAG"; then
-  echo "错误: tag ${TAG} 已存在"
+# 检查 tag 是否已存在:本地与远端都要查。CI/其他机器创建的 tag 可能只存在于远端,
+# 仅查本地会误判"不存在"而在推送时被远端拒绝,留下半成品的发布提交。
+if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1 \
+   || git tag -l "$TAG" | grep -q "$TAG"; then
+  echo "错误: tag ${TAG} 已存在（本地或远端）"
   echo "如需重新发布，请先删除: git tag -d ${TAG} && git push origin --delete ${TAG}"
   exit 1
 fi

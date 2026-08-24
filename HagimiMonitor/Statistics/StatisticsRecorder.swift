@@ -574,20 +574,6 @@ final class StatisticsRecorder: ObservableObject {
 
     /// 删除单个浏览桶(统计库三层区间 + 应用统计对应日区间),完成后刷新概览。
     /// 报表缓存不在此列,由存储页独立入口清理。
-    func deleteBucket(_ bucket: StorageBucket, completion: @escaping () -> Void) {
-        maintenanceQueue.async { [weak self] in
-            if let self {
-                self.database?.deleteRange(from: bucket.start, to: bucket.end)
-                self.processStore?.deleteRange(
-                    fromDay: StatisticsProcessStore.dayKey(bucket.start, calendar: self.calendar),
-                    toDay: StatisticsProcessStore.dayKey(bucket.end, calendar: self.calendar)
-                )
-                self.refreshOverview()
-            }
-            DispatchQueue.main.async { completion() }
-        }
-    }
-
     /// 清空应用统计(进程聚合/身份图标/打卡),完成后刷新概览。
     func clearAppStats(completion: @escaping () -> Void) {
         maintenanceQueue.async { [weak self] in

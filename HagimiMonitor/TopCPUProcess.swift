@@ -31,6 +31,11 @@ struct RawCPUProcess {
 /// 避免在 enumerateLines 逐行闭包里为每个进程重新编译同一个 pattern。
 #if DIRECT_DISTRIBUTION
 private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]+)\\s+(.+)$")
+
+/// ps 子进程采样的超时阈值。ps 在极端系统状态下可能挂起不退出,若无防护会永久
+/// 堵死 procSampleQueue,连带内存/CPU/GPU/磁盘四类 TOP 列表全部停摆。
+/// 参照同仓 system_profiler 探针(蓝牙/SMART/充电上限)的信号量超时 + terminate 模式。
+private let psSampleTimeout: TimeInterval = 8
 #endif
 
 /// 后台采样 CPU 占用最高的 N 个进程。
@@ -109,12 +114,23 @@ private func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [Raw
         return []
     }
 
-    let data = pipe.fileHandleForReading.readDataToEndOfFile()
-    pipe.fileHandleForReading.closeFile()
+    // 读输出放后台线程,信号量等待,超时终止进程并放弃本次结果(保留上一次列表)。
+    nonisolated(unsafe) var data: Data?
+    let done = DispatchSemaphore(value: 0)
+    DispatchQueue.global(qos: .utility).async {
+        data = pipe.fileHandleForReading.readDataToEndOfFile()
+        done.signal()
+    }
+    if done.wait(timeout: .now() + psSampleTimeout) == .timedOut {
+        task.terminate()
+        return []
+    }
     task.waitUntilExit()
+    let outputData = data ?? Data()
+    pipe.fileHandleForReading.closeFile()
 
     guard task.terminationStatus == 0,
-          let output = String(data: data, encoding: .utf8), !output.isEmpty else {
+          let output = String(data: outputData, encoding: .utf8), !output.isEmpty else {
         return []
     }
 

@@ -1,5 +1,5 @@
 import Testing
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 
 struct DDCRawConversionTests {
     @Test func percentToRawClampsBelowZero() {
