@@ -72,10 +72,12 @@ docs/hagimi-promo-2880
 build/
 
 # AI IDE configs
+.agents/
 .claude/
 .trae/
 .codex/
 .opencode/
+.pi/
 .qoder/
 .zcode/
 AGENTS.md
