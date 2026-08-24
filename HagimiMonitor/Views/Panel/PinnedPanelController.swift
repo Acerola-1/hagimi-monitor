@@ -14,11 +14,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
-    /// 展开动画进行中标记:此期间 contentSizeDidChange 逐帧上报被忽略——
-    /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 会与 CA 冲突。
-    private var isAnimatingExpansion = false
-    /// 展开/收起动画代号:只有最新一次动画的复位回调生效(连续 toggle 防竞态)。
-    private var expansionAnimationToken = 0
+    /// 展开/收起动画执行器(token 代际 + isAnimating 抑制 + 结束对账)。
+    /// 与菜单栏面板共享同一套竞态防护,见 PanelExpansionAnimation。
+    private let expansionAnimation = PanelExpansionAnimation()
     /// 最近一次实测内容尺寸,动画结束对账用。
     private var lastReportedContentSize: CGSize = .zero
     /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
@@ -243,16 +241,8 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         frame.size = size
         frame.origin.y = top - size.height
         if animated {
-            expansionAnimationToken += 1
-            let token = expansionAnimationToken
-            isAnimatingExpansion = true
-            let context = NSAnimationContext.current
-            context.duration = MonitorConstants.panelExpansionDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            panel.animator().setFrame(frame, display: false)
-            DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
-                guard let self, self.expansionAnimationToken == token else { return }
-                self.isAnimatingExpansion = false
+            expansionAnimation.animate(panel: panel, to: frame) { [weak self] in
+                guard let self else { return }
                 // 对账:动画期间被丢弃的尺寸上报在此补贴合,窗口不会卡在错误高度。
                 if self.panel.frame.size != self.lastReportedContentSize,
                    self.lastReportedContentSize.height > 0 {
@@ -271,10 +261,10 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private func contentSizeDidChange(to size: CGSize) {
         lastReportedContentSize = size
         // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
-        guard !isAnimatingExpansion else { return }
+        guard !expansionAnimation.isAnimatingExpansion else { return }
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.isAnimatingExpansion, self.panel.frame.size != size else { return }
+            guard let self, !self.expansionAnimation.isAnimatingExpansion, self.panel.frame.size != size else { return }
             // 固定顶部，内容展开时只向下生长。
             var frame = self.panel.frame
             let top = frame.maxY

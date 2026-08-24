@@ -22,6 +22,9 @@ struct TopNetworkProcess: Identifiable, Equatable {
 struct RawNetworkProcess {
     let pid: pid_t
     let name: String
+    /// 宿主可执行文件路径(采样时捕获,enrich 复用——避免每行重复 executablePath 系统调用,
+    /// 与 CPU/内存/GPU/磁盘四类 Raw*Process 的 path 字段口径一致)。
+    let path: String
     let download: UInt64
     let upload: UInt64
 }
@@ -147,18 +150,14 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
     result.reserveCapacity(groups.count)
 
     for (groupKey, group) in groups {
-        if !includeSystemProcesses {
-            let path = executablePath(for: groupKey)
-            let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { path.contains($0) }
-            let isSystem = path.isEmpty || systemProcessPathPrefixes.contains { path.hasPrefix($0) }
-            if !isAlwaysVisible, isSystem {
-                continue
-            }
+        let path = executablePath(for: groupKey)
+        if isSystemProcessPath(path, includeSystemProcesses: includeSystemProcesses) {
+            continue
         }
 
         let name = group.name.isEmpty ? "pid \(groupKey)" : group.name
         result.append(RawNetworkProcess(
-            pid: groupKey, name: name,
+            pid: groupKey, name: name, path: path,
             download: group.download, upload: group.upload
         ))
     }
@@ -190,7 +189,7 @@ func enrichNetwork(_ rawProcesses: [RawNetworkProcess]) -> [TopNetworkProcess] {
             name = raw.name
         }
 
-        let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: executablePath(for: raw.pid))
+        let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)
 
         return TopNetworkProcess(
             pid: raw.pid, name: name,

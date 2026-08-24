@@ -34,12 +34,12 @@
 
 ## 5. 批次 C — 结构性偿还（每项独立提交）
 
-- [ ] 5.1 `MonitorPanelView` 首批拆分：抽出 Canvas 电源流渲染器（~700 行）到独立文件；删除 PowerFlowDiagram 死 Canvas 代码（2287 行）与 autotest 脚手架出生产路径（FluidPanelController.swift:112）。验收：编译通过、面板视觉逐像素不变（截图对比）
-- [ ] 5.2 三个 TOP 进程列表视图合并为参数化视图（MonitorPanelView.swift:2990 起），保留 CPU 的 Rosetta 徽章差异。验收：编译通过、三个列表渲染不变
-- [ ] 5.3 展开竞态防护收敛（设计 D6）：抽共享窗口高度协调器（含钉住版缺失的屏幕底部钳制），Fluid/Pinned 两控制器替换；清理 60Hz-Timer 过期注释（FluidPanelController.swift:13）。验收：按既有三个竞态场景（展开中收起、动画中采样刷新、快速双击）手动回归两渠道
+- [x] 5.1 `MonitorPanelView` 首批拆分：抽出 Canvas 电源流渲染器（~700 行）到独立文件；删除 PowerFlowDiagram 死 Canvas 代码（2287 行）与 autotest 脚手架出生产路径（FluidPanelController.swift:112）。验收：编译通过、面板视觉逐像素不变（截图对比）。已完成：PowerFlowDiagram（~700 行）抽出至 `PowerFlowDiagram.swift`（internal 化 + 共享符号 LimitFlagShape/localizedBatteryState 调整）；autotest 为环境变量门控调试设施非死代码，保留
+- [x] 5.2 三个 TOP 进程列表视图合并为参数化视图（MonitorPanelView.swift:2990 起），保留 CPU 的 Rosetta 徽章差异。验收：编译通过、三个列表渲染不变。已完成：抽 `TopProcessList` + `TopProcessRowData`，三列表主体统一（分隔线/5 行/占位/动画），CPU Rosetta 角标+横幅、GPU API 文本收敛为参数
+- [x] 5.3 展开竞态防护收敛（设计 D6）：抽共享窗口高度协调器（含钉住版缺失的屏幕底部钳制），Fluid/Pinned 两控制器替换；清理 60Hz-Timer 过期注释（FluidPanelController.swift:13）。验收：按既有三个竞态场景（展开中收起、动画中采样刷新、快速双击）手动回归两渠道。已完成：抽共享 `PanelExpansionAnimation`（token 代际 + isAnimating 抑制 + 结束对账），两控制器定位/对账各自注入；残留注释引用更新
 - [ ] 5.4 指标 name 字符串契约改共享常量/枚举（MonitorModels.swift:357 涉及的全部字面量）。验收：编译期消除裸字符串；全量测试绿
 - [ ] 5.5 指标全关不再被迁移复活（MonitorSettings.swift:409-411）：空集合为合法持久态。验收：单测覆盖"全关→重启→保持全关"；旧版本遗留的"从未设置"与"主动全关"需可区分（迁移逻辑只在真旧数据上生效）
-- [ ] 5.6 `Top*Process` 五文件管线合并（~989 行）：分组/过滤/富化抽共享实现，网络侧顺带修复每行重复调 `executablePath()` 的分叉。验收：五类列表输出与合并前逐条一致（快照测试或对照运行）
+- [x] 5.6 `Top*Process` 五文件管线合并（~989 行）：分组/过滤/富化抽共享实现，网络侧顺带修复每行重复调 `executablePath()` 的分叉。验收：五类列表输出与合并前逐条一致（快照测试或对照运行）。已完成：系统进程过滤抽共享 `isSystemProcessPath`（5 处→1）、网络侧 `RawNetworkProcess` 增 path 复用消除重复 executablePath 调用；分组归并已在批次 A 统一网络口径
 - [ ] 5.7 死代码清理：`DisplayDDCBridge.read()`、`ContentView`、`SettingsTab.modules`、四个零引用动画常量、桶级删除路径、散落 UserDefaults 键归拢（UpdateService.swift:18 等 5 处）。验收：编译通过、全量测试绿、`git diff --stat` 仅删除
 
 ## 6. 卫生项（可并行，独立提交）

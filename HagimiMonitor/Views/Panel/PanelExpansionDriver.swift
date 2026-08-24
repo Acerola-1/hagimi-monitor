@@ -120,3 +120,40 @@ extension EnvironmentValues {
         set { self[PanelWindowResizeHandlerKey.self] = newValue }
     }
 }
+
+/// 面板窗口展开/收起动画的一次性 CA 补间执行器。
+///
+/// Fluid(菜单栏锚定)与 Pinned(固定顶部)两个面板控制器共用同一套
+/// 「代际 token + isAnimating 抑制 + 结束对账」防护,消除逐字复制的竞态处理——
+/// 未来任何对动画窗口的修复只需改一处,不会漏掉另一个控制器。
+/// 定位策略(屏幕钳制/锚定)仍由各控制器自行计算目标 frame,
+/// 动画结束后的对账回调由调用方经 `onComplete` 注入。
+@MainActor
+final class PanelExpansionAnimation {
+    private var isAnimating = false
+    private var token = 0
+
+    /// 动画进行中:期间 contentSizeDidChange 的逐帧贴合应被抑制,避免与 CA 补间
+    /// 叠加冲突并把 CPU 打满。动画结束后由对账回调做最终校准。
+    var isAnimatingExpansion: Bool { isAnimating }
+
+    /// 执行一次展开/收起动画。整个动画期间窗口 resize 只发生一次(CA 补间)。
+    /// - Parameters:
+    ///   - panel: 目标面板窗口
+    ///   - frame: 由调用方按各自锚定策略算好的目标 frame
+    ///   - onComplete: 动画结束(且代际未过期)后执行的对账回调
+    func animate(panel: NSPanel, to frame: CGRect, onComplete: @escaping () -> Void) {
+        token += 1
+        let current = token
+        isAnimating = true
+        let context = NSAnimationContext.current
+        context.duration = MonitorConstants.panelExpansionDuration
+        context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        panel.animator().setFrame(frame, display: false)
+        DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
+            guard let self, self.token == current else { return }
+            self.isAnimating = false
+            onComplete()
+        }
+    }
+}
