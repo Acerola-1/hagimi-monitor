@@ -1,0 +1,289 @@
+diff --git a/HagimiMonitor/MonitorPanelView.swift b/HagimiMonitor/MonitorPanelView.swift
+index 178d1557..43f448e3 100644
+--- a/HagimiMonitor/MonitorPanelView.swift
++++ b/HagimiMonitor/MonitorPanelView.swift
+@@ -35,7 +35,9 @@ struct MonitorPanelView: View {
+             scheme: colorScheme
+         )
+ 
+-        CompatibleGlassContainer(spacing: 8) {
++        // 容器合并距离必须小于行间距(VStack spacing 6):旧实现 spacing 8 > 6 使所有行
++        // 永远处于可融合状态,展开动画逐帧重算融合边界,是当年闪烁的直接诱因。
++        CompatibleGlassContainer(spacing: 2) {
+             VStack(spacing: 6) {
+                 header(theme: theme)
+                     .transaction { $0.animation = nil }
+@@ -570,7 +572,11 @@ private struct MetricGlassRow: View, Equatable {
+         .onTapGesture {
+             toggleExpansion?()
+         }
+-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
++        .compatibleGlassEffect(
++            tint: theme.rowGlassTint(for: module.kind),
++            cornerRadius: MonitorConstants.rowCornerRadius,
++            style: .liquidInteractive
++        )
+     }
+ 
+     @ViewBuilder
+@@ -965,7 +971,11 @@ private struct NetworkGlassRow: View, Equatable {
+                 toggleExpansion?()
+             }
+         }
+-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
++        .compatibleGlassEffect(
++            tint: theme.rowGlassTint(for: module.kind),
++            cornerRadius: MonitorConstants.rowCornerRadius,
++            style: .liquidInteractive
++        )
+     }
+ 
+     private var detailMetrics: [MonitorMetric] {
+@@ -1054,7 +1064,11 @@ private struct BatteryGlassRow: View, Equatable {
+                 toggleExpansion?()
+             }
+         }
+-        .compatibleGlassEffect(tint: theme.rowGlassTint(for: module.kind), cornerRadius: MonitorConstants.rowCornerRadius)
++        .compatibleGlassEffect(
++            tint: theme.rowGlassTint(for: module.kind),
++            cornerRadius: MonitorConstants.rowCornerRadius,
++            style: .liquidInteractive
++        )
+     }
+ 
+     private var hasBattery: Bool {
+diff --git a/HagimiMonitor/Views/CompatibleGlassContainer.swift b/HagimiMonitor/Views/CompatibleGlassContainer.swift
+index 40aa6074..0246a73c 100644
+--- a/HagimiMonitor/Views/CompatibleGlassContainer.swift
++++ b/HagimiMonitor/Views/CompatibleGlassContainer.swift
+@@ -28,35 +28,68 @@ struct CompatibleGlassContainer<Content: View>: View {
+     }
+ }
+ 
+-// MARK: - Compatible Glass Effect Modifier
++// MARK: - Compatible Glass Style
+ 
+-/// 行级毛玻璃效果，macOS 26 与 15 统一实现。
++/// 玻璃效果的呈现风格。
+ ///
+-/// 设计取舍:液态玻璃(`.glassEffect`)在 26 上对行而言视觉与毛玻璃无异，
+-/// 却把行绑进 `GlassEffectContainer` 的几何合并逻辑，是展开闪烁的诱因之一。
+-/// 故行级统一降为 `NSVisualEffectView` 毛玻璃，液态玻璃仅保留在底部按钮
+-/// (见 `compatibleButtonStyle`)。
++/// 历史:行级液态玻璃曾在 v0.9.0 前被整体降级为毛玻璃。当时的闪烁根因后来查明是
++/// 「容器合并距离(spacing: 8) > 行间距(6)」——所有行永远处于可融合状态,展开动画
++/// 逐帧触发融合边界重算;叠加旧 `MenuBarExtra(.window)` 整窗重绘,表现为整面板闪烁。
++/// 现宿主已换成自建 NSPanel(resize 不 rebuild 视图树),容器 spacing 也已降到行距
++/// 以下,故重新引入液态玻璃,由调用方按场景选择风格。
++enum CompatibleGlassStyle {
++    /// `NSVisualEffectView` 毛玻璃(全版本同一实现)。
++    case frosted
++    /// macOS 26+ 原生液态玻璃,静态表面(设置卡片等);15 回退毛玻璃。
++    case liquid
++    /// macOS 26+ 原生液态玻璃 + `.interactive()`,用于可点击表面(面板行);15 回退毛玻璃。
++    case liquidInteractive
++}
++
++// MARK: - Compatible Glass Effect Modifier
++
++/// 跨版本玻璃效果。macOS 26+ 按 `style` 渲染原生液态玻璃或毛玻璃,
++/// macOS 15 一律回退 `NSVisualEffectView` 毛玻璃。
+ ///
+-/// 关键:`blendingMode` 必须用 `.withinWindow`，不能用 `.behindWindow`。
+-/// `.behindWindow` 采样窗口背后的桌面——`MenuBarExtra(.window)` 展开时会 resize
+-/// 宿主窗口，每一帧都要重新向 WindowServer 请求背景合成，导致整个面板(含顶部
+-/// SYSTEM·LIVE)闪烁、像被重新加载。`.withinWindow` 只混合窗口内内容，resize
+-/// 不再触发桌面重采样，从根上消除闪烁。
++/// 15 回退层关键:`blendingMode` 必须用 `.withinWindow`，不能用 `.behindWindow`。
++/// `.behindWindow` 采样窗口背后的桌面——面板展开时逐帧 resize，每一帧都要重新向
++/// WindowServer 请求背景合成，导致整个面板(含顶部 SYSTEM·LIVE)闪烁、像被重新
++/// 加载。`.withinWindow` 只混合窗口内内容，resize 不再触发桌面重采样。
+ struct CompatibleGlassEffect: ViewModifier {
+     var tint: Color
+     var cornerRadius: CGFloat
++    var style: CompatibleGlassStyle = .frosted
+ 
+     func body(content: Content) -> some View {
+         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+-        content
+-            .background {
+-                shape
+-                    .fill(tint)
+-                    .background {
+-                        VisualEffectView(material: .menu, blendingMode: .withinWindow)
+-                            .clipShape(shape)
+-                    }
+-            }
++        if #available(macOS 26, *), style != .frosted {
++            content
++                .glassEffect(liquidGlass, in: shape)
++        } else {
++            content
++                .background {
++                    shape
++                        .fill(tint)
++                        .background {
++                            VisualEffectView(material: .menu, blendingMode: .withinWindow)
++                                .clipShape(shape)
++                        }
++                }
++        }
++    }
++
++    /// 液态玻璃配置:tint 复用行级配色体系压住亮度(裸 `.regular` 深色模式偏亮偏透),
++    /// 可点击表面追加 `.interactive()` 获得指针悬停/按压反馈。
++    @available(macOS 26, *)
++    private var liquidGlass: Glass {
++        var glass = Glass.regular
++        if tint != .clear {
++            glass = glass.tint(tint)
++        }
++        if style == .liquidInteractive {
++            glass = glass.interactive()
++        }
++        return glass
+     }
+ }
+ 
+@@ -84,8 +117,13 @@ extension View {
+     /// - Parameters:
+     ///   - tint: 玻璃效果着色
+     ///   - cornerRadius: 圆角半径
+-    func compatibleGlassEffect(tint: Color = .clear, cornerRadius: CGFloat) -> some View {
+-        modifier(CompatibleGlassEffect(tint: tint, cornerRadius: cornerRadius))
++    ///   - style: 玻璃风格,默认毛玻璃;26+ 上可选液态玻璃(15 自动回退毛玻璃)
++    func compatibleGlassEffect(
++        tint: Color = .clear,
++        cornerRadius: CGFloat,
++        style: CompatibleGlassStyle = .frosted
++    ) -> some View {
++        modifier(CompatibleGlassEffect(tint: tint, cornerRadius: cornerRadius, style: style))
+     }
+ 
+     /// 跨版本兼容的 `.glassEffectID` 替代。
+@@ -94,12 +132,15 @@ extension View {
+         modifier(CompatibleGlassEffectID(id: id, namespace: namespace))
+     }
+ 
+-    /// 面板底部按钮样式:统一用毛玻璃材质胶囊(`PanelMaterialButtonStyle`)。
+-    /// 面板整体(含各行)已是 `.menu` 毛玻璃基调,底部按钮若用 26 原生
+-    /// `.buttonStyle(.glass)` 液态玻璃,深色模式下会偏亮偏透、与周围格格不入,
+-    /// 故所有版本都统一为与行同款的毛玻璃胶囊。
++    /// 按钮样式:macOS 26+ 用原生 `.glass` 液态玻璃胶囊(行级已同步换液态玻璃,
++    /// 基调一致);macOS 15 回退毛玻璃材质胶囊(`PanelMaterialButtonStyle`)。
++    @ViewBuilder
+     func compatibleButtonStyle() -> some View {
+-        self.buttonStyle(PanelMaterialButtonStyle())
++        if #available(macOS 26, *) {
++            self.buttonStyle(.glass)
++        } else {
++            self.buttonStyle(PanelMaterialButtonStyle())
++        }
+     }
+ }
+ 
+diff --git a/HagimiMonitor/Views/HeaderCatCameo.swift b/HagimiMonitor/Views/HeaderCatCameo.swift
+index 98f1fc4c..500f913c 100644
+--- a/HagimiMonitor/Views/HeaderCatCameo.swift
++++ b/HagimiMonitor/Views/HeaderCatCameo.swift
+@@ -177,13 +177,27 @@ struct CatThanksCard: View {
+             .padding(.vertical, 15)
+             // 220pt：容得下英文局部化里 "Support RunCat" + "Got it" 两个胶囊不换行。
+             .frame(width: 220)
+-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+-            .overlay(
+-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+-                    .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
+-            )
++            .modifier(CatThanksCardBackground())
+             .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+         }
+         .transition(.opacity)
+     }
+ }
++
++/// 致谢卡片背景:macOS 26+ 用液态玻璃(静态 overlay,不参与面板 resize,无闪烁风险),
++/// macOS 15 回退 `.regularMaterial`。
++private struct CatThanksCardBackground: ViewModifier {
++    func body(content: Content) -> some View {
++        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
++        if #available(macOS 26, *) {
++            content
++                .glassEffect(.regular, in: shape)
++        } else {
++            content
++                .background(.regularMaterial, in: shape)
++                .overlay(
++                    shape.strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
++                )
++        }
++    }
++}
+diff --git a/HagimiMonitor/Views/Settings/GeneralSettingsView.swift b/HagimiMonitor/Views/Settings/GeneralSettingsView.swift
+index ee3e19ca..3baab426 100644
+--- a/HagimiMonitor/Views/Settings/GeneralSettingsView.swift
++++ b/HagimiMonitor/Views/Settings/GeneralSettingsView.swift
+@@ -250,7 +250,7 @@ private struct MenuBarDisplaySettingsSection: View {
+                             .fixedSize()
+                             .padding(.horizontal, 10)
+                             .padding(.vertical, 6)
+-                            .background(.quaternary.opacity(0.55), in: Capsule())
++                            .modifier(MenuBarPreviewChipBackground())
+ 
+                         Spacer(minLength: 0)
+                     }
+@@ -359,6 +359,19 @@ private struct MenuBarDisplaySettingsSection: View {
+     }
+ }
+ 
++/// 菜单栏预览胶囊背景:macOS 26+ 用液态玻璃,更贴近真实菜单栏质感;15 回退 `.quaternary`。
++private struct MenuBarPreviewChipBackground: ViewModifier {
++    func body(content: Content) -> some View {
++        if #available(macOS 26, *) {
++            content
++                .glassEffect(.regular, in: .capsule)
++        } else {
++            content
++                .background(.quaternary.opacity(0.55), in: Capsule())
++        }
++    }
++}
++
+ private struct MenuBarMetricSelectionRow: View {
+     let kind: MenuBarMetricKind
+     let isSelected: Bool
+diff --git a/HagimiMonitor/Views/Settings/SettingsLayout.swift b/HagimiMonitor/Views/Settings/SettingsLayout.swift
+index 71172af5..160a6362 100644
+--- a/HagimiMonitor/Views/Settings/SettingsLayout.swift
++++ b/HagimiMonitor/Views/Settings/SettingsLayout.swift
+@@ -45,7 +45,7 @@ struct SettingsGroup<Content: View>: View {
+                     VStack(spacing: 0) {
+                         content
+                     }
+-                    .compatibleGlassEffect(cornerRadius: 13)
++                    .compatibleGlassEffect(cornerRadius: 13, style: .liquid)
+                 }
+             } else {
+                 VStack(spacing: 0) {
+@@ -172,7 +172,7 @@ struct SettingsIconHeader<Accessory: View>: View {
+         if #available(macOS 26, *) {
+             CompatibleGlassContainer {
+                 header
+-                    .compatibleGlassEffect(cornerRadius: 12)
++                    .compatibleGlassEffect(cornerRadius: 12, style: .liquid)
+             }
+         } else {
+             header
+diff --git a/HagimiMonitorDirectOnly/DisplayControlsSection.swift b/HagimiMonitorDirectOnly/DisplayControlsSection.swift
+index 2a350698..4eddec00 100644
+--- a/HagimiMonitorDirectOnly/DisplayControlsSection.swift
++++ b/HagimiMonitorDirectOnly/DisplayControlsSection.swift
+@@ -120,7 +120,7 @@ struct DisplayControlsSection: View {
+                 isExpanded = newValue
+             }
+         }
+-        .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14)
++        .compatibleGlassEffect(tint: palette.displayGlassTint, cornerRadius: 14, style: .liquidInteractive)
+     }
+ 
+     @ViewBuilder
