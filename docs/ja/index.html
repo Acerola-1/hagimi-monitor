@@ -124,6 +124,17 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 .stat .l{font-size:14px;color:var(--muted);margin-top:6px;letter-spacing:.02em;}
 .sep{width:1px;background:var(--border);align-self:stretch;}
 
+/* ============ Feature blocks ============ */
+.stack{display:flex;flex-direction:column;gap:28px;margin-top:44px;align-items:center;}
+.shot{
+  border:1px solid var(--border);border-radius:16px;overflow:hidden;
+  background:#fff;text-align:left;max-width:960px;width:100%;
+}
+.shot img{display:block;width:100%;height:auto;}
+.shot.narrow{max-width:360px;}
+.shot .shot-cap{padding:14px 18px 16px;font-size:13px;color:var(--muted);line-height:1.5;}
+.shot .shot-cap b{display:block;color:var(--ink);font-weight:600;font-size:15px;margin-bottom:2px;}
+
 /* ============ Themes ============ */
 .themes .section-inner{display:flex;flex-direction:column;gap:36px;}
 .themes h2{font-size:clamp(34px,4.5vw,44px);}
@@ -451,20 +462,36 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 
 
-<!-- Data & Quick Tools -->
-<section class="lightweight" id="extras" style="background:#fff;">
+<!-- Data Statistics -->
+<section class="lightweight" id="stats" style="background:#fff;">
   <div class="section-inner fade-in">
     <div class="kicker">モニタリングだけではない</div>
-    <h2>データ統計<br>とクイックツール</h2>
-    <p class="lead" style="text-align:center;max-width:720px;">実行データを自動記録し、トレンド曲線やヒートマップ付きのウェブレポートを生成。キーボードロック、システムスリープ防止、画面消灯防止をワンクリックで有効化できます。</p>
-    <div class="stats" style="margin-top:44px;">
-      <div class="stat"><div class="n" style="font-size:clamp(24px,4vw,38px);">HTML</div><div class="l">ビジュアルレポート · 今日デフォルト</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n">SQLite</div><div class="l">階層集約で保存</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n" style="font-size:clamp(22px,3.6vw,34px);">F1–F12</div><div class="l">キーボードロック全遮断</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n">20<small>min</small></div><div class="l">自動解除の保険</div></div>
+    <h2>データ統計</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">実行データを階層的に集約して保存し、トレンド曲線やヒートマップ付きのウェブレポートをワンクリックで生成。ヘルススコアや履歴もいつでも確認できます。</p>
+    <div class="stack">
+      <div class="shot">
+        <img src="../images/stats-report.png" alt="データ統計ウェブレポート">
+        <div class="shot-cap"><b>ウェブデータレポート</b>ヘルススコア、トレンド曲線、ヒートマップ。今日をデフォルト表示し、履歴はワンクリックで参照できます。</div>
+      </div>
+      <div class="shot">
+        <img src="../images/stats-settings.png" alt="データ統計設定画面">
+        <div class="shot-cap"><b>統計設定</b>階層集約で保存し、いつでも確認・管理可能。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick Tools -->
+<section class="lightweight" id="quicktools">
+  <div class="section-inner fade-in">
+    <div class="kicker">その他の機能</div>
+    <h2>クイックツール</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">キーボードロック、システムスリープ防止、画面消灯防止——頻繁に使う操作をワンクリックで切り替え、日常の作業がより快適になります。</p>
+    <div class="stack">
+      <div class="shot narrow">
+        <img src="../images/quick-tools.png" alt="クイックツールバー">
+        <div class="shot-cap"><b>クイックツール</b>キーボードロック、スリープ防止、画面消灯防止をワンクリックで有効化。</div>
+      </div>
     </div>
   </div>
 </section>

@@ -124,6 +124,17 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 .stat .l{font-size:14px;color:var(--muted);margin-top:6px;letter-spacing:.02em;}
 .sep{width:1px;background:var(--border);align-self:stretch;}
 
+/* ============ Feature blocks ============ */
+.stack{display:flex;flex-direction:column;gap:28px;margin-top:44px;align-items:center;}
+.shot{
+  border:1px solid var(--border);border-radius:16px;overflow:hidden;
+  background:#fff;text-align:left;max-width:960px;width:100%;
+}
+.shot img{display:block;width:100%;height:auto;}
+.shot.narrow{max-width:360px;}
+.shot .shot-cap{padding:14px 18px 16px;font-size:13px;color:var(--muted);line-height:1.5;}
+.shot .shot-cap b{display:block;color:var(--ink);font-weight:600;font-size:15px;margin-bottom:2px;}
+
 /* ============ Themes ============ */
 .themes .section-inner{display:flex;flex-direction:column;gap:36px;}
 .themes h2{font-size:clamp(34px,4.5vw,44px);}
@@ -475,20 +486,36 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 
 
-<!-- Data & Quick Tools -->
-<section class="lightweight" id="extras" style="background:#fff;">
+<!-- Data Statistics -->
+<section class="lightweight" id="stats" style="background:#fff;">
   <div class="section-inner fade-in">
     <div class="kicker">不止监控</div>
-    <h2>数据统计<br>与快捷功能</h2>
-    <p class="lead" style="text-align:center;max-width:720px;">自动记录运行数据并生成带趋势曲线、热力图的网页报表；一键开启键盘锁定、系统防休眠与屏幕不息屏，日常办公更省心。</p>
-    <div class="stats" style="margin-top:44px;">
-      <div class="stat"><div class="n" style="font-size:clamp(26px,4vw,40px);">HTML</div><div class="l">可视化报表 · 默认今日</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n">SQLite</div><div class="l">分层聚合入库</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n" style="font-size:clamp(24px,3.6vw,36px);">F1–F12</div><div class="l">键盘锁定全拦截</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n">20<small>min</small></div><div class="l">自动解锁兜底</div></div>
+    <h2>数据统计</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">运行数据分层聚合入库，一键生成带趋势曲线、热力图的网页报表。健康评分、历史走势，随时回看。</p>
+    <div class="stack">
+      <div class="shot">
+        <img src="../images/stats-report.png" alt="数据统计网页报表">
+        <div class="shot-cap"><b>网页数据报表</b>健康评分、趋势曲线与热力图，默认展示今日，历史一键回看。</div>
+      </div>
+      <div class="shot">
+        <img src="../images/stats-settings.png" alt="数据统计设置页面">
+        <div class="shot-cap"><b>统计设置</b>分层聚合入库，数据随时可查、可管理。</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick Tools -->
+<section class="lightweight" id="quicktools">
+  <div class="section-inner fade-in">
+    <div class="kicker">更多能力</div>
+    <h2>快捷功能</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">键盘锁定、系统防休眠、屏幕不息屏——常用操作一键开关，日常办公更省心。</p>
+    <div class="stack">
+      <div class="shot narrow">
+        <img src="../images/quick-tools.png" alt="快捷工具栏">
+        <div class="shot-cap"><b>快捷工具</b>键盘锁定、防休眠与不息屏，一键开启。</div>
+      </div>
     </div>
   </div>
 </section>
