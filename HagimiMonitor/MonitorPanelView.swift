@@ -45,12 +45,12 @@ struct MonitorPanelView: View {
         showsQuickPanelControls = quickPanelPresentation != nil
     }
 
-    /// 主体 ScrollView 的高度上限:内容总高上限减去 header、上下内边距(10×2)
-    /// 与 header—主体间距(6)。header 首帧尚未测定时偏大,由窗口层 clamp 兜底。
-    /// 无上限(钉住面板等宿主)时返 nil,不施加约束。
+    /// 主体 ScrollView 的高度上限:内容总高上限减去 header、顶/底内边距(8/6)
+    /// 与 header—主体间距(4),另留 4pt 布局缓冲。header 首帧尚未测定时偏大,
+    /// 由窗口层 clamp 兜底。无上限(钉住面板等宿主)时返 nil,不施加约束。
     private var scrollBodyMaxHeight: CGFloat? {
         guard maxContentHeight != .infinity else { return nil }
-        return max(120, maxContentHeight - headerHeight - 26)
+        return max(120, maxContentHeight - headerHeight - 22)
     }
 
     /// 主体封顶时内容总高度的实际钳制值(header + 内边距/间距 + 主体上限),
@@ -58,7 +58,7 @@ struct MonitorPanelView: View {
     /// 无上限(钉住面板等宿主)时为无穷。
     private var effectiveContentHeightCap: CGFloat {
         guard let scrollBodyMaxHeight else { return .infinity }
-        return scrollBodyMaxHeight + headerHeight + 26
+        return scrollBodyMaxHeight + headerHeight + 22
     }
 
     var body: some View {
@@ -70,7 +70,7 @@ struct MonitorPanelView: View {
         )
 
         CompatibleGlassContainer(spacing: 8) {
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 header(theme: theme)
                     .transaction { $0.animation = nil }
                     .background(
@@ -208,8 +208,9 @@ struct MonitorPanelView: View {
                     }
                 }
             }
-            // 底边留白与面板内部行间节奏(6pt)对齐;顶/侧保持 10pt。
-            .padding(.top, 10)
+            // 顶部留白收紧至 8pt 与 header—主体间距 4pt 配合压缩首屏空白;
+            // 底边留白与行间节奏(6pt)对齐,侧边保持 10pt。
+            .padding(.top, 8)
             .padding(.horizontal, 10)
             .padding(.bottom, 6)
             .frame(
