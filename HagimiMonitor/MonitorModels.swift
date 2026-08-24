@@ -671,6 +671,14 @@ final class MonitorStore: ObservableObject {
     /// 撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
     func beginExpansionAnimation() {
         expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
+        // 动画窗口内同步停更负载环 30fps 相位,不与展开动画抢主线程。
+        loadAnimator.suspend(until: expansionAnimationDeadline)
+    }
+
+    /// 是否处于展开/收起动画窗口期。功率流等 GPU 重型流光在窗口内停更,
+    /// 让出动画期间的渲染余量(外接屏扩放负载时尤为关键)。
+    var isExpansionAnimating: Bool {
+        Date() < expansionAnimationDeadline
     }
 
     /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证
@@ -1221,6 +1229,8 @@ final class MenuBarLoadAnimator: ObservableObject {
 
     private var targetComputeLoad = 0.0
     private var smoothingTimerCancellable: AnyCancellable?
+    /// 展开动画窗口截止时刻:窗口内暂停 30fps 推进,动画结束后恢复平滑。
+    private var suspensionDeadline = Date.distantPast
 
     func updateTarget(_ target: Double) {
         guard ComputeLoadModel.shouldUpdateMenuBarTarget(
@@ -1233,7 +1243,13 @@ final class MenuBarLoadAnimator: ObservableObject {
         ensureSmoothingTimer()
     }
 
+    /// 暂停平滑推进至指定时刻(用于展开动画窗口),动画结束后自然恢复。
+    func suspend(until deadline: Date) {
+        suspensionDeadline = deadline
+    }
+
     private func advanceSmoothing() {
+        guard Date() >= suspensionDeadline else { return }
         let next = ComputeLoadModel.smoothedDisplayValue(
             current: displayedComputeLoad,
             target: targetComputeLoad

@@ -496,7 +496,8 @@ struct MonitorPanelView: View {
                 details: enabledMetrics(for: module),
                 isExpanded: isExpanded,
                 showPowerFlow: store.settings.batteryShowPowerFlow,
-                panelVisible: store.isPanelVisible
+                panelVisible: store.isPanelVisible,
+                powerFlowActive: !store.isExpansionAnimating
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -1722,6 +1723,8 @@ private struct BatteryGlassRow: View, Equatable {
     var showPowerFlow = true
     /// 面板可见性:与 isExpanded 一起门控功率流的流光动画。
     var panelVisible = true
+    /// 功率流流光启用:false 时回落到纯静态绘制,用于展开动画窗口期停更 GPU 流光。
+    var powerFlowActive = true
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
@@ -1732,6 +1735,7 @@ private struct BatteryGlassRow: View, Equatable {
             && lhs.isExpanded == rhs.isExpanded
             && lhs.showPowerFlow == rhs.showPowerFlow
             && lhs.panelVisible == rhs.panelVisible
+            && lhs.powerFlowActive == rhs.powerFlowActive
     }
 
     private var tint: Color {
@@ -1810,7 +1814,7 @@ private struct BatteryGlassRow: View, Equatable {
                             module: module,
                             theme: theme,
                             tint: tint,
-                            animate: isExpanded && showPowerFlow && panelVisible
+                            animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
                         )
                     }
                 }
