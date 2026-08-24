@@ -6176,28 +6176,6 @@
         }
       }
     },
-    "panel.statistics": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Data Statistics"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "データ統計"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "数据统计"
-          }
-        }
-      }
-    },
     "panel.pin": {
       "localizations": {
         "en": {
@@ -6480,6 +6458,28 @@
           "stringUnit": {
             "state": "translated",
             "value": "设置"
+          }
+        }
+      }
+    },
+    "panel.statistics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data Statistics"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "データ統計"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据统计"
           }
         }
       }
@@ -8724,28 +8724,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "峰值"
-          }
-        }
-      }
-    },
-    "stats.r.applyCustom": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apply"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "適用"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用"
           }
         }
       }
@@ -11852,6 +11830,28 @@
         }
       }
     },
+    "stats.r.selectRange": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select date range"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日付範囲を選択"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择日期范围"
+          }
+        }
+      }
+    },
     "stats.r.thermalCritical": {
       "localizations": {
         "en": {
@@ -13182,6 +13182,28 @@
         }
       }
     },
+    "stats.settings.report-details": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Details"
+          }
+        },
+        "ja": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "詳細"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "详情"
+          }
+        }
+      }
+    },
     "stats.settings.report-title": {
       "localizations": {
         "en": {
@@ -14426,28 +14448,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "© 2026 Acerola"
-          }
-        }
-      }
-    },
-    "stats.settings.report-details": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Details"
-          }
-        },
-        "ja": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "詳細"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "详情"
           }
         }
       }

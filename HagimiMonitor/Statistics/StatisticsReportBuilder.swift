@@ -21,6 +21,8 @@ enum StatisticsReportBuilder {
     /// 报表模板与内嵌图表库的资源名。
     private static let templateResource = "ReportTemplate"
     private static let echartsResource = "echarts"
+    /// 日期范围选择用的日期选择库(Flatpickr)及其基础样式,单文件产物需一并内联。
+    private static let flatpickrResource = "flatpickr"
 
     /// 组装并写出报表文件。可在任意线程调用(内部只做文件与数据库读)。
     static func write(
@@ -29,11 +31,15 @@ enum StatisticsReportBuilder {
         process: StatisticsProcessSnapshot? = nil
     ) throws -> URL {
         guard let templateURL = Bundle.main.url(forResource: templateResource, withExtension: "html"),
-              let echartsURL = Bundle.main.url(forResource: echartsResource, withExtension: "min.js") else {
+              let echartsURL = Bundle.main.url(forResource: echartsResource, withExtension: "min.js"),
+              let flatpickrJSURL = Bundle.main.url(forResource: flatpickrResource, withExtension: "min.js"),
+              let flatpickrCSSURL = Bundle.main.url(forResource: flatpickrResource, withExtension: "min.css") else {
             throw StatisticsReportError.missingResources
         }
         let template = try String(contentsOf: templateURL, encoding: .utf8)
         let echarts = try String(contentsOf: echartsURL, encoding: .utf8)
+        let flatpickrJS = try String(contentsOf: flatpickrJSURL, encoding: .utf8)
+        let flatpickrCSS = try String(contentsOf: flatpickrCSSURL, encoding: .utf8)
 
         // JSON 内联进 <script> 时,"</" 可能提前终结脚本标签,统一转义为合法的 "<\/"。
         // 编码失败(NaN/非 JSON 值混入 payload)抛错走统一的失败上报,不 trap 进程。
@@ -46,21 +52,24 @@ enum StatisticsReportBuilder {
         let escapedJSON = json.replacingOccurrences(of: "</", with: "<\\/")
         let html = template
             .replacingOccurrences(of: "/*__ECHARTS__*/", with: echarts)
+            .replacingOccurrences(of: "/*__FLATPICKR__*/", with: flatpickrJS)
+            .replacingOccurrences(of: "/*__FLATPICKR_CSS__*/", with: flatpickrCSS)
             .replacingOccurrences(of: "window.__DATA__ = /*__DATA__*/null;", with: "window.__DATA__ = \(escapedJSON);")
             .replacingOccurrences(of: "__APP_ICON_B64__", with: appIconBase64())
         try html.write(to: outputURL, atomically: true, encoding: .utf8)
         return outputURL
     }
 
-    /// 应用图标渲染为 128px PNG 的 base64,注入模板品牌位。
-    /// 报表是单文件产物,图标需随文件内嵌;128px 覆盖页内最大 58px 展示位的 2x 屏。
-    /// 位图绘制为纯数据操作,后台线程安全;失败返回空串,品牌位退化为纯文字。
+    /// 应用图标渲染为 256px PNG 的 base64,注入模板品牌位。
+    /// 报表是单文件产物,图标需随文件内嵌;256px 覆盖页内最大 58px 展示位的 4x 屏,
+    /// 避免 2x 以下在 Retina 放大时发糊。位图绘制为纯数据操作,后台线程安全;
+    /// 失败返回空串,品牌位退化为纯文字。
     private static func appIconBase64() -> String {
         guard let icon = NSImage(named: "AppIcon") else { return "" }
-        let size = NSSize(width: 128, height: 128)
+        let size = NSSize(width: 256, height: 256)
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
-            pixelsWide: 128, pixelsHigh: 128,
+            pixelsWide: 256, pixelsHigh: 256,
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
         ) else { return "" }
@@ -143,7 +152,7 @@ enum StatisticsReportBuilder {
     /// 三语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
     private static let stringKeys = [
         "reportTitle", "reportSub", "metaDays", "metaGenerated",
-        "rToday", "rWeek", "rMonth", "rYear", "rAll", "applyCustom",
+        "rToday", "rWeek", "rMonth", "rYear", "rAll", "selectRange",
         "kCpu", "kGpu", "kMem", "kMemPressure", "kNetDown", "kNetUp", "kDisk", "kPower",
         "kPeak", "kPeakRate", "kDiskW",
         "secOverview", "secHeatmap", "secCpu", "secCpuPE", "secCpuDist", "secGpu",
