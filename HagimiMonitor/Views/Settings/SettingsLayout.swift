@@ -12,7 +12,7 @@ struct SettingsPage<Content: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ScrollView(.vertical, showsIndicators: true) {
+            ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 24) {
                     content
                 }

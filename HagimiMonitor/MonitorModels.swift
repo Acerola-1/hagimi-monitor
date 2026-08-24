@@ -531,7 +531,8 @@ final class MonitorStore: ObservableObject {
         fanSampler.$fans
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newFans in
-                self?.fans = newFans
+                guard let self else { return }
+                settleAfterExpansion { self.fans = newFans }
             }
             .store(in: &cancellables)
 
@@ -539,7 +540,8 @@ final class MonitorStore: ObservableObject {
         fanSampler.$status
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newStatus in
-                self?.fanStatus = newStatus
+                guard let self else { return }
+                settleAfterExpansion { self.fanStatus = newStatus }
             }
             .store(in: &cancellables)
 
@@ -554,14 +556,16 @@ final class MonitorStore: ObservableObject {
         bluetoothSampler.$devices
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newDevices in
-                self?.bluetoothDevices = newDevices
+                guard let self else { return }
+                settleAfterExpansion { self.bluetoothDevices = newDevices }
             }
             .store(in: &cancellables)
 
         bluetoothSampler.$controllerOn
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isOn in
-                self?.bluetoothControllerOn = isOn
+                guard let self else { return }
+                settleAfterExpansion { self.bluetoothControllerOn = isOn }
             }
             .store(in: &cancellables)
 
@@ -1061,6 +1065,19 @@ final class MonitorStore: ObservableObject {
         sampler.sampleAsync(kinds: kinds, previousModules: previousModules, on: samplingQueue) { [weak self] result in
             guard let self else { return }
             self.applySamplingResult(result)
+        }
+    }
+
+    /// 动画窗口期内的 @Published 应用推迟:展开/收起动画的 ~0.2s 内,把非主采样的
+    /// 独立采样器(风扇/蓝牙)刷新同样排空,给逐帧动画让出主线程余量——主采样已按
+    /// 同一 deadline 推迟,这里补齐剩余会拖动面板子树重算的指标,外接屏扩放渲染
+    /// 负载时余量越少越易掉帧。
+    private func settleAfterExpansion(_ apply: @escaping () -> Void) {
+        let deadline = expansionAnimationDeadline
+        if Date() < deadline {
+            DispatchQueue.main.asyncAfter(deadline: .now() + deadline.timeIntervalSinceNow, execute: apply)
+        } else {
+            apply()
         }
     }
 
