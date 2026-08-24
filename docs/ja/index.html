@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hagimi Monitor — Macを一目で把握</title>
-<meta name="description" content="Hagimi Monitor は macOS メニューバーに常駐するシステムモニターです。CPU、GPU、メモリ、ストレージ、ネットワーク、バッテリーをリアルタイムで追跡します。">
+<meta name="description" content="Hagimi Monitor は macOS メニューバーに常駐するシステムモニターです。CPU、GPU、メモリ、ストレージ、ネットワーク、バッテリー、Bluetooth、ディスプレイをリアルタイムで追跡し、統計レポートやキーボードロックなどのクイックツールも備えています。">
 <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
 <style>
 :root{
@@ -325,9 +325,9 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 <section class="hero" id="features">
   <div class="section-inner">
     <div class="hero-left fade-in">
-      <div class="kicker">6つのコア指標を一画面に</div>
+      <div class="kicker">8つの監視モジュールを一画面に</div>
       <h1>全方位モニタリング<br>一目で把握</h1>
-      <p class="lead">CPU、GPU、メモリ、ストレージ、ネットワーク、バッテリー — メニューバーをクリックするだけで、スパークライン、使用率バー、トッププロセスを含むリアルタイムパネルが表示されます。</p>
+      <p class="lead">CPU、GPU、メモリ、ストレージ、ネットワーク、バッテリー、Bluetooth、ディスプレイ — メニューバーをクリックするだけで、スパークライン、使用率バー、トッププロセスに加え、統計レポートやクイックツールも備えたリアルタイムパネルが表示されます。</p>
       <div class="hero-chips">
         <div class="chip"><span class="dot" style="background:#d27a4a"></span>CPU · リアルタイム</div>
         <div class="chip"><span class="dot" style="background:#5d8cf0"></span>GPU · 負荷推移</div>
@@ -335,6 +335,8 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
         <div class="chip"><span class="dot" style="background:#9a865e"></span>ストレージ · 容量</div>
         <div class="chip"><span class="dot" style="background:#43a6a0"></span>ネットワーク · 速度</div>
         <div class="chip"><span class="dot" style="background:#65af52"></span>バッテリー · 健康</div>
+        <div class="chip"><span class="dot" style="background:#4f7fd6"></span>Bluetooth · 電池残量</div>
+        <div class="chip"><span class="dot" style="background:#8f7ad8"></span>ディスプレイ · 情報</div>
       </div>
       <div class="hero-actions">
         <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
@@ -449,6 +451,24 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 
 
+<!-- Data & Quick Tools -->
+<section class="lightweight" id="extras" style="background:#fff;">
+  <div class="section-inner fade-in">
+    <div class="kicker">モニタリングだけではない</div>
+    <h2>データ統計<br>とクイックツール</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">実行データを自動記録し、トレンド曲線やヒートマップ付きのウェブレポートを生成。キーボードロック、システムスリープ防止、画面消灯防止をワンクリックで有効化できます。</p>
+    <div class="stats" style="margin-top:44px;">
+      <div class="stat"><div class="n" style="font-size:clamp(24px,4vw,38px);">HTML</div><div class="l">ビジュアルレポート · 今日デフォルト</div></div>
+      <div class="sep"></div>
+      <div class="stat"><div class="n">SQLite</div><div class="l">階層集約で保存</div></div>
+      <div class="sep"></div>
+      <div class="stat"><div class="n" style="font-size:clamp(22px,3.6vw,34px);">F1–F12</div><div class="l">キーボードロック全遮断</div></div>
+      <div class="sep"></div>
+      <div class="stat"><div class="n">20<small>min</small></div><div class="l">自動解除の保険</div></div>
+    </div>
+  </div>
+</section>
+
 <!-- Compare -->
 <section class="compare" id="compare">
   <div class="section-inner fade-in">
@@ -461,12 +481,14 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
           <tr><th>機能</th><th>GitHub 直接配布版</th><th>App Store 版</th></tr>
         </thead>
         <tbody>
-          <tr><td>6つの監視モジュール（CPU / GPU / メモリ / ストレージ / ネットワーク / バッテリー）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>履歴統計 · ヘルススコア · イベント検知</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>8つの監視モジュール（CPU / GPU / メモリ / ストレージ / ネットワーク / バッテリー / Bluetooth / ディスプレイ）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>履歴統計 · ヘルススコア · イベント検知（HTML レポート）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>クイックツール（キーボードロック / スリープ防止 / 画面消灯防止）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>2つのテーマ · 豊富なメニューバースタイル</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>CPU / メモリ トッププロセス一覧</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>ストレージ / ネットワーク トッププロセス一覧</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
+          <tr><td>温度センサーとファン回転数読み取り</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
           <tr><td>ディスプレイ制御（輝度 / 音量 / コントラスト · メディアキー）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>トッププロセス監視（CPU / メモリ / ストレージ / ネットワーク）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>温度センサー読み取り（CPU 温度）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
         </tbody>
       </table>
     </div>

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hagimi Monitor — 你的 Mac，一眼即懂</title>
-<meta name="description" content="Hagimi Monitor 是一款优雅的 macOS 菜单栏系统监控工具，实时追踪 CPU、GPU、内存、存储、网络和电池状态。">
+<meta name="description" content="Hagimi Monitor 是一款优雅的 macOS 菜单栏系统监控工具，实时追踪 CPU、GPU、内存、存储、网络、电池、蓝牙与显示器状态，并内置数据统计报告与键盘锁定等快捷功能。">
 <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
 <style>
 :root{
@@ -325,9 +325,9 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 <section class="hero" id="features">
   <div class="section-inner">
     <div class="hero-left fade-in">
-      <div class="kicker">六大核心指标，一屏尽览</div>
+      <div class="kicker">八大监控模块，一屏尽览</div>
       <h1>全方位监测<br>一目了然</h1>
-      <p class="lead">CPU、GPU、内存、存储、网络、电池——菜单栏轻点即展开实时面板，含折线趋势、占用进度与 Top 进程明细。</p>
+      <p class="lead">CPU、GPU、内存、存储、网络、电池、蓝牙、显示器——菜单栏轻点即展开实时面板，含折线趋势、占用进度与 Top 进程明细，并内置数据统计报告与快捷功能。</p>
       <div class="hero-chips">
         <div class="chip"><span class="dot" style="background:#d27a4a"></span>CPU · 实时折线</div>
         <div class="chip"><span class="dot" style="background:#5d8cf0"></span>GPU · 负载趋势</div>
@@ -335,6 +335,8 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
         <div class="chip"><span class="dot" style="background:#9a865e"></span>存储 · 卷用量</div>
         <div class="chip"><span class="dot" style="background:#43a6a0"></span>网络 · 上下行速率</div>
         <div class="chip"><span class="dot" style="background:#65af52"></span>电池 · 健康与循环</div>
+        <div class="chip"><span class="dot" style="background:#4f7fd6"></span>蓝牙 · 设备电量</div>
+        <div class="chip"><span class="dot" style="background:#8f7ad8"></span>显示器 · 信息与亮度</div>
       </div>
       <div class="hero-actions">
         <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
@@ -375,7 +377,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
       </div>
       <div class="bar-hero-text">
         <h2>综合评估系统压力<br>精准反馈</h2>
-        <p class="lead">负载环融合 CPU、GPU 与内存压力，通过 Softmax 聚合算法生成综合分数。颜色随负载状态实时变化——绿色空闲、蓝色工作、橙色繁忙、红色高压。</p>
+        <p class="lead">负载环融合 CPU、GPU 与内存压力，通过 Softmax 聚合算法生成综合分数。颜色随负载状态实时变化——绿色空闲、青色工作、橙色繁忙、红色高压。</p>
         <p class="lead" style="margin-top:14px;color:var(--accent);font-weight:500;font-size:14px;">如果你不喜欢，没关系——我们另有多种样式供选择 ↓</p>
       </div>
     </div>
@@ -473,6 +475,24 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 
 
+<!-- Data & Quick Tools -->
+<section class="lightweight" id="extras" style="background:#fff;">
+  <div class="section-inner fade-in">
+    <div class="kicker">不止监控</div>
+    <h2>数据统计<br>与快捷功能</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">自动记录运行数据并生成带趋势曲线、热力图的网页报表；一键开启键盘锁定、系统防休眠与屏幕不息屏，日常办公更省心。</p>
+    <div class="stats" style="margin-top:44px;">
+      <div class="stat"><div class="n" style="font-size:clamp(26px,4vw,40px);">HTML</div><div class="l">可视化报表 · 默认今日</div></div>
+      <div class="sep"></div>
+      <div class="stat"><div class="n">SQLite</div><div class="l">分层聚合入库</div></div>
+      <div class="sep"></div>
+      <div class="stat"><div class="n" style="font-size:clamp(24px,3.6vw,36px);">F1–F12</div><div class="l">键盘锁定全拦截</div></div>
+      <div class="sep"></div>
+      <div class="stat"><div class="n">20<small>min</small></div><div class="l">自动解锁兜底</div></div>
+    </div>
+  </div>
+</section>
+
 <!-- Compare -->
 <section class="compare" id="compare">
   <div class="section-inner fade-in">
@@ -485,12 +505,14 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
           <tr><th>功能</th><th>GitHub 直连版</th><th>App Store 版</th></tr>
         </thead>
         <tbody>
-          <tr><td>六大监控模块（CPU / GPU / 内存 / 存储 / 网络 / 电池）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>历史统计 · 健康评分 · 事件检测</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>八大监控模块（CPU / GPU / 内存 / 存储 / 网络 / 电池 / 蓝牙 / 显示器）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>数据统计 · 健康评分 · 事件检测（HTML 报表）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>快捷功能（键盘锁定 / 防休眠 / 不息屏）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>双主题 · 多种菜单栏样式</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>CPU / 内存 TOP 进程列表</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>存储 / 网络 TOP 进程列表</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
+          <tr><td>温度传感器与风扇转速读取</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
           <tr><td>显示器控制（亮度 / 音量 / 对比度 · 媒体键）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>TOP 进程监控（CPU / 内存 / 存储 / 网络 TOP 进程）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>温度传感器读取（CPU 温度）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
         </tbody>
       </table>
     </div>
