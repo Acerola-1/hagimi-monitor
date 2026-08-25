@@ -1150,27 +1150,24 @@ private struct MetricDetailGrid: View {
     /// 并剔除 core-split 格子(同源数值不重复展示)。
     var cpuCoreDetail: CPUCoreDetail? = nil
 
-    /// 需要占满整行的字段:长值(IP、启动时间)塞两列会撑破列宽或不可控换行;
-    /// wifi-rssi 格结构性超宽(标签+信号条+数值+单位四件套,半格装不下);
-    /// gateway-latency 是其语义配对,一并整行保持网络块纵列节奏;
-    /// capacity 为「剩余 / 满充 mAh」斜杠长值,半格装不下。
-    /// 命中项显式整行、排到网格末尾。
-    private static let fullRowMetricIDs: Set<String> = [
-        "ipv4", "ipv6", "public-ip", "uptime", "adapter", "wifi-ssid",
-        "wifi-rssi", "gateway-latency", "capacity"
-    ]
-
     private var leadingInset: CGFloat { 28 }
     private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
 
+    /// 整行判定查静态登记表(见 StaticMetricSizing):按当前语言查表,
+    /// 登记依据是各语言 × 最坏值 × 最窄面板宽的构建期审计,布局不随
+    /// 采样值与面板宽度重排。
+    private func isFullRow(_ metric: MonitorMetric) -> Bool {
+        StaticMetricSizing.isFullRow(kind: kind, name: metric.name)
+    }
+
     private var shortMetrics: [MonitorMetric] {
-        metrics.filter { !Self.fullRowMetricIDs.contains($0.name) && !isMergedThermalRow($0) }
+        metrics.filter { !isFullRow($0) && !isMergedThermalRow($0) && !isReplacedByCoreDetail($0) }
     }
 
     private var fullRowMetrics: [MonitorMetric] {
-        metrics.filter { Self.fullRowMetricIDs.contains($0.name) && !isMergedThermalRow($0) }
+        metrics.filter { isFullRow($0) && !isMergedThermalRow($0) }
     }
 
     /// core-split 被 P/E 两行展示取代时从格子列表剔除。
@@ -1197,7 +1194,8 @@ private struct MetricDetailGrid: View {
 
     // 逐格内衬网格(stat tile 形态):每个指标独立 trackFill 圆角内衬色块,
     // 边界属于格子自己,不依赖行数;单元保持「标签左·数值右」,数值字重
-    // 提到 bold 强化存在感。
+    // 提到 bold 强化存在感。半行两列网格在前,热压力合并行与整行指标
+    // 沉底——半行数量为奇数时空洞落在模块末尾,不打断中段节奏。
     private var content: some View {
         VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
             if let cpuCoreDetail {
@@ -1311,9 +1309,12 @@ private struct MetricDetailGrid: View {
     }
 
     /// 数值/单位两段组合:数字 mono bold 主角化,单位 caption 弱化;
-    /// 无 unit 标记或后缀不匹配("--"、文本态、长值)时回退整串渲染。
+    /// 无 unit 标记或后缀不匹配("--"、文本态、长值)时回退整串渲染,
+    /// 整串回退走中部截断——SSID/IP/IPv6 等无界值保留中段可辨识部分。
     /// 两段同 layoutPriority(2) 一起预留宽度,单位另加 fixedSize:
     /// 单位若掉到默认优先级,窄格中会被挤成省略号。
+    /// 数字加 minimumScaleFactor:值偶尔超宽(超出静态登记口径的硬件极值)
+    /// 时收缩字号代替截断,下限 75% 仍可读。
     private func splitValue(_ metric: MonitorMetric, text: String) -> some View {
         let parts = splitValueUnit(text, unit: metric.unit)
         return HStack(alignment: .firstTextBaseline, spacing: 2) {
@@ -1321,6 +1322,8 @@ private struct MetricDetailGrid: View {
                 .monitorPanelMonoFont(valueStyle, weight: .bold)
                 .foregroundStyle(metricValueColor(metric))
                 .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.75)
                 .layoutPriority(2)
             if let unit = parts.unit {
                 Text(unit)
@@ -1886,7 +1889,7 @@ private struct BatteryGlassRow: View, Equatable {
         // 充电功率已上移到行首常驻 CHG pill,明细不再重复展示。
         // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
         // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
-        // 斜杠长值,由 fullRowMetricIDs 自动整行排到末尾。
+        // 斜杠长值,由静态登记整行排到模块末尾。
         let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "capacity"]
 
         let enabledNames = Set(details.map(\.name))
@@ -2815,7 +2818,7 @@ private struct BluetoothDeviceList: View {
         return theme.valueText
     }
 
-    /// 设备类型副标题:三语文案见 Localizable 的 bluetooth.type.* 键。
+    /// 设备类型副标题:两语文案见 Localizable 的 bluetooth.type.* 键。
     private func typeLabel(for type: BluetoothDeviceType) -> String {
         switch type {
         case .mouse: String(localized: "bluetooth.type.mouse")

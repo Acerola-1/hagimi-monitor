@@ -149,7 +149,7 @@ enum StatisticsReportBuilder {
     // MARK: - 报表文案
 
     /// 模板 JS 以短键读文案;此处短键 → xcstrings 键(stats.r.*)一一映射,
-    /// 三语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
+    /// 两语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
     private static let stringKeys = [
         "reportTitle", "reportSub", "metaDays", "metaGenerated",
         "rToday", "rWeek", "rMonth", "rYear", "rAll", "selectRange",
