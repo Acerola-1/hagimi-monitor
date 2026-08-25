@@ -149,7 +149,7 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
         let fitting = controller.view.fittingSize
         popover.contentSize = fitting.width > 1 && fitting.height > 1
             ? fitting
-            : CGSize(width: 250, height: 220)
+            : CGSize(width: 290, height: 220)
         hostingController = controller
         return controller
     }
@@ -177,7 +177,9 @@ struct QuickToolsPopoverView: View {
             }
         }
         .padding(12)
-        .frame(width: 250)
+        // 浮层宽度按最长英文标题「Prevent Idle Sleep」预算:标题可用
+        // 空间 = 宽 − 内外边距 − 徽章 32 − 间距 − 开关,290pt 时留有余量。
+        .frame(width: 290)
         .onAppear { store.refreshKeyboardLockPermission() }
         // 浮层开着期间每 2s 校准一次键盘锁定授权状态(App Store 渠道撤销
         // 无事件通知,只能轮询);浮层关闭时 hostingController 释放,本视图
