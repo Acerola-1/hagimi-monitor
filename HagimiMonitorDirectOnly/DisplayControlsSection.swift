@@ -4,6 +4,11 @@ import CoreGraphics
 import OSLog
 import SwiftUI
 
+extension Notification.Name {
+    /// 调试自动测试:触发第一台显示器档案区的展开/收起。
+    static let autotestArchiveToggle = Notification.Name("autotestArchiveToggle")
+}
+
 struct DisplayControlsSection: View {
     @ObservedObject var settings: MonitorSettings
     let isPanelVisible: Bool
@@ -128,6 +133,21 @@ struct DisplayControlsSection: View {
                 DisplayInfoSection.collectDisplays().map { ($0.id, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
+        }
+        // 调试自动测试:延迟待面板自动呼出后,自动跑「展开分节 → 展开档案 →
+        // 收起档案」三轮序列,供日志观察嵌套展开/收起期间的窗口贴合行为。
+        .task {
+            guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil else { return }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if !isExpanded { toggleExpansion() }
+            for round in 0..<3 {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                NSLog("[autotest] seq round=%d archive toggle -> true", round)
+                NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                NSLog("[autotest] seq round=%d archive toggle -> false", round)
+                NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
+            }
         }
         .compatibleGlassEffect(cornerRadius: 14) {
             palette.displayGlassFill
@@ -318,6 +338,12 @@ private struct DisplayControlGroup: View {
             }
         }
         .padding(.leading, 28)
+        // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
+        .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
+            guard archiveKey == "display-controls-arc-\(controller.displays.first?.id ?? 0)" else { return }
+            NSLog("[autotest] group archive toggle key=%@", archiveKey)
+            toggleArchive()
+        }
     }
 
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,

@@ -9,33 +9,33 @@ import SwiftUI
 /// 由 CoreAnimation 在合成器侧完成,不在主线程逐帧重算——这是与外部 60Hz Timer
 /// 驱动 `@Published` 的本质区别(后者每帧整树 body 重算 + 布局,CPU 打满)。
 ///
-/// 本驱动器不再发布逐帧相位,只做两件事:
-/// 1. 跟踪各展开区自然高度(CollapsibleDetail 上报),据此预测窗口目标高度;
-/// 2. 在 toggle 发生时一次性把目标高度下发给窗口层——animated 则由 CoreAnimation
-///    补间窗口 frame,instant 则同步贴合。
+/// 窗口目标高度用**增量式**预测:维护当前内容总高度(未封顶),toggle 时按
+/// 「相位变化 × 该区自然高度」增减。不用「收起基线 + Σ(各区高度 × 相位)」的
+/// 绝对式公式——嵌套展开区(显示器档案在分节内)的高度会被外层自然高度重复
+/// 包含,且外层上报滞后于 toggle,绝对式在这两种情形下都会解出错误目标
+/// (窗口与内容不同步,收尾靠对账瞬间跳回)。增量式只动被 toggle 的 key,
+/// 与其他区的上报时机、嵌套层级完全解耦。稳态(非动画、未封顶)用实测值
+/// 校准,消除增量累积误差。
 ///
 /// 内容与窗口分走两条同时长同曲线(easeInOut 0.15s)的动画路径:内容由 SwiftUI
 /// 动画系统插值,窗口由 CA 插值。两者端点对齐,中间帧曲线相近。
 @MainActor
 final class PanelExpansionDriver: ObservableObject {
     /// 各展开区当前目标相位(0=收起,1=展开)。非动画期间等于 0 或 1。
-    /// 仅用于窗口高度预测,不再驱动布局——布局由 SwiftUI 动画系统接管。
+    /// 仅用于增量计算,不再驱动布局——布局由 SwiftUI 动画系统接管。
     private(set) var phase: [String: CGFloat] = [:]
 
-    /// 各展开区内容的自然高度(CollapsibleDetail 上报),用于窗口高度预测。
+    /// 各展开区内容的自然高度(CollapsibleDetail 上报),用于增量计算。
     private var naturalHeights: [String: CGFloat] = [:]
     /// 最近一次实测的内容总高度(面板内容 GeometryReader 上报)。
     private var lastMeasuredContentHeight: CGFloat = 0
-    /// 收起态(全部展开区高度为 0)的内容总高度。非动画期间从实测值反推校准。
-    private var collapsedBaseHeight: CGFloat = 0
-    /// 展开/收起动画截止时刻。动画窗口内跳过基线校准——相位已瞬翻到目标值,
-    /// 而实测高度还在 SwiftUI 插值中(滞后),此时反推会解出负数基线,
-    /// 收起时预测高度据此算出错误值,窗口被钳到 minPanelHeight。
+    /// 内容总高度的当前预测值(未封顶)。稳态 = 实测;toggle 时按增量维护。
+    private var predictedHeight: CGFloat = 0
+    /// 展开/收起动画截止时刻。动画窗口内实测处于插值中间态,跳过稳态校准。
     private var animationDeadline: Date = .distantPast
     /// 内容总高度上限(菜单栏面板 = 屏幕可用高度,由视图上报;钉住面板为无穷)。
-    /// 封顶期间 ScrollView 把实测高度钳在上限,「实测 = 基线 + Σ相位高度」的
-    /// 反推等式失真(会解出过小甚至为负的基线,再经 predicted 把窗口带到
-    /// 错误高度)——此时跳过校准、保留上次一致值,预测值同样钳在上限内。
+    /// 封顶期间 ScrollView 把实测钳在上限,无法反映未封顶真实高度,校准跳过、
+    /// 保留增量维护的未封顶预测;下发窗口时才钳制,收起时正确「解封」。
     private var contentHeightCap: CGFloat = .infinity
 
     /// 窗口贴合回调:(目标内容总高度, 是否动画)。
@@ -43,26 +43,44 @@ final class PanelExpansionDriver: ObservableObject {
     /// nil 时(预览/无窗口宿主)不贴合,不影响动画本身。
     var onWindowResize: ((CGFloat, Bool) -> Void)?
 
+    /// 窗口目标高度 = 未封顶预测钳制在上限内。
+    private var windowTargetHeight: CGFloat {
+        min(max(predictedHeight, 0), contentHeightCap)
+    }
+
     /// 把一批展开区动画到各自目标相位(0 或 1)。
     /// 相位瞬时设到目标(布局动画由 SwiftUI withAnimation 处理),
     /// 窗口目标高度一次性下发给窗口层做 CA 补间。
     func animate(targets: [String: CGFloat]) {
         guard !targets.isEmpty else { return }
-        for (key, target) in targets {
-            phase[key] = target
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            for (key, target) in targets {
+                NSLog("[autotest] driver.animate key=%@ target=%.0f nat=%.1f pred=%.1f",
+                      key, target, naturalHeights[key] ?? -1, predictedHeight)
+            }
         }
+        applyPhaseDelta(targets)
         animationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
-        onWindowResize?(predictedContentHeight, true)
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            NSLog("[autotest] driver.animate -> target=%.1f pred=%.1f cap=%.1f",
+                  windowTargetHeight, predictedHeight, contentHeightCap)
+        }
+        onWindowResize?(windowTargetHeight, true)
+        // 动画最后一帧的实测上报落在截止标记内、校准被跳过,此后不再有上报。
+        // 过期后用终态实测补校一次,消除增量的累积误差(自然高度测量偏差等)。
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + MonitorConstants.panelExpansionDuration + 0.06
+        ) { [weak self] in
+            self?.calibrateToMeasured()
+        }
     }
 
     /// 瞬时把相位设到目标(无动画)。用于面板隐藏期/初始化阶段同步最终布局状态。
     func setInstantly(targets: [String: CGFloat]) {
         guard !targets.isEmpty else { return }
-        for (key, target) in targets {
-            phase[key] = target
-        }
+        applyPhaseDelta(targets)
         animationDeadline = .distantPast
-        onWindowResize?(predictedContentHeight, false)
+        onWindowResize?(windowTargetHeight, false)
     }
 
     /// 单 key 版 `setInstantly`:同步语义调用方(初始化/隐藏重置)的便捷入口。
@@ -77,14 +95,19 @@ final class PanelExpansionDriver: ObservableObject {
 
     /// CollapsibleDetail 上报其展开内容的自然高度(内容常驻,首次挂载即测量)。
     func reportNaturalHeight(_ key: String, _ height: CGFloat) {
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil,
+           naturalHeights[key] != height {
+            NSLog("[autotest] driver.natural key=%@ old=%.1f new=%.1f",
+                  key, naturalHeights[key] ?? -1, height)
+        }
         naturalHeights[key] = height
-        recalibrateBaseHeight()
+        calibrateToMeasured()
     }
 
     /// 面板内容 GeometryReader 上报实测总高度(稳态校准用)。
     func reportMeasuredContentHeight(_ height: CGFloat) {
         lastMeasuredContentHeight = height
-        recalibrateBaseHeight()
+        calibrateToMeasured()
     }
 
     /// 视图上报内容总高度上限(菜单栏下沿到屏幕底部的可用空间)。
@@ -93,26 +116,34 @@ final class PanelExpansionDriver: ObservableObject {
         contentHeightCap = cap
     }
 
-    /// 非动画期间从实测值反推收起态基线高度。
-    private func recalibrateBaseHeight() {
-        guard lastMeasuredContentHeight > 0 else { return }
-        // 动画窗口内跳过:相位已瞬翻而实测高度仍在插值,反推会解出错误基线。
-        guard Date() >= animationDeadline else { return }
-        // 封顶中:实测高度被钳在上限,反推不出基线(等式失真),保留上次校准值。
-        guard lastMeasuredContentHeight < contentHeightCap - 0.5 else { return }
-        let totalExpanded = naturalHeights.reduce(into: 0.0) { acc, kv in
-            acc += kv.value * (phase[kv.key] ?? 0)
+    /// 相位增量应用:预测高度按各 key「相位变化 × 自然高度」增减。
+    /// 嵌套展开区(显示器档案在分节内)的高度只在此处作为增量出现一次,
+    /// 外层自然高度的滞后上报不影响本次预测。
+    private func applyPhaseDelta(_ targets: [String: CGFloat]) {
+        for (key, target) in targets {
+            let old = phase[key] ?? 0
+            predictedHeight += (target - old) * (naturalHeights[key] ?? 0)
+            phase[key] = target
         }
-        collapsedBaseHeight = lastMeasuredContentHeight - totalExpanded
     }
 
-    /// 当前预测的内容总高度 = 收起基线 + 各展开区按相位占用的高度,
-    /// 并钳制在内容上限内(封顶时内容实际高度不再随展开增长,窗口不应超出)。
-    private var predictedContentHeight: CGFloat {
-        let totalExpanded = naturalHeights.reduce(into: 0.0) { acc, kv in
-            acc += kv.value * (phase[kv.key] ?? 0)
+    /// 稳态校准:预测直接取实测,消除增量累积误差(自然高度测量偏差、
+    /// 数据驱动的非动画高度变化等)。跳过两种不可信情形:
+    /// 1. 动画窗口内:实测处于插值中间态;
+    /// 2. 封顶态:未封顶预测已达上限,内容被 ScrollView 钳制,实测不反映真实
+    ///    高度——判定必须看**预测**而非实测,展开动画的尾帧实测可能瞬时低于
+    ///    上限(布局未完全钳制),据实测判定会把未封顶预测错误覆盖成中间态值,
+    ///    之后所有收起的增量都基于污染基线,窗口收过头再靠对账瞬间弹回。
+    private func calibrateToMeasured() {
+        guard lastMeasuredContentHeight > 0 else { return }
+        guard Date() >= animationDeadline else { return }
+        guard predictedHeight < contentHeightCap - 0.5 else { return }
+        guard lastMeasuredContentHeight < contentHeightCap - 0.5 else { return }
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil,
+           abs(predictedHeight - lastMeasuredContentHeight) > 0.5 {
+            NSLog("[autotest] driver.calibrate pred %.1f -> %.1f", predictedHeight, lastMeasuredContentHeight)
         }
-        return min(max(collapsedBaseHeight + totalExpanded, 0), contentHeightCap)
+        predictedHeight = lastMeasuredContentHeight
     }
 }
 

@@ -225,6 +225,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         if intrinsic.width > 1, intrinsic.height > 1 {
             panel.setContentSize(intrinsic)
         }
+
+        // 调试自动测试:启动 0.5s 后自动呼出面板(无需人工点击状态栏)。
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self, !self.panel.isVisible else { return }
+                self.showPanel()
+            }
+        }
     }
 
     private func configureStatusItem() {
@@ -472,6 +480,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
         guard panel.isVisible, let buttonWindow = statusItem.button?.window else { return }
         let size = CGSize(width: panel.frame.width, height: contentHeight)
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            NSLog("[autotest] applyWindowHeight h=%.1f anim=%d cur=%.1f equal=%d",
+                  contentHeight, animated ? 1 : 0, panel.frame.height,
+                  panel.frame.size == size ? 1 : 0)
+        }
         guard panel.frame.size != size else { return }
 
         updateContentHeightCap()
@@ -529,7 +542,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 推导、天然同相;数据驱动的尺寸变化同样瞬时贴合。
     private func contentSizeDidChange(to size: CGSize) {
         if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
-            NSLog("[autotest] sizeDidChange h=%.1f visible=%d", size.height, panel.isVisible ? 1 : 0)
+            NSLog("[autotest] sizeDidChange h=%.1f visible=%d anim=%d cur=%.1f",
+                  size.height, panel.isVisible ? 1 : 0,
+                  expansionAnimation.isAnimatingExpansion ? 1 : 0, panel.frame.height)
         }
         lastReportedContentSize = size
         // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
@@ -537,6 +552,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
             guard let self, !self.expansionAnimation.isAnimatingExpansion, self.panel.frame.size != size else { return }
+            if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+                NSLog("[autotest] sizeDidChange -> setFrame h=%.1f", size.height)
+            }
             self.setPanelFrame(size: size)
         }
     }
