@@ -100,6 +100,11 @@ final class MonitorSettings: ObservableObject {
     @Published var networkShowSystemProcesses: Bool = true
     /// 功率流图开关(Beta):电源模块展开区的功率流可视化,默认开启,双渠道(含沙盒)均可用。
     @Published var batteryShowPowerFlow: Bool = true
+    /// 小工具(快捷功能)入口是否在面板中显示。
+    @Published var quickToolsVisible: Bool = true
+    /// 在工具浮层中显示的工具集合。集合由 QuickToolKind 驱动,新增工具只补枚举
+    /// case 与本地化,存储/迁移/设置页/浮层自动跟随,无需逐处改动。
+    @Published private(set) var visibleQuickTools: Set<QuickToolKind> = []
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     /// 呼出面板时默认展开的模块集合(逐模块设置,非全局开关)。
     @Published private(set) var defaultExpandedKinds: Set<MonitorKind> = []
@@ -159,6 +164,28 @@ final class MonitorSettings: ObservableObject {
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
         batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
+        quickToolsVisible = defaults.object(forKey: Keys.quickToolsVisible) as? Bool ?? true
+        if let storedTools = defaults.array(forKey: Keys.visibleQuickTools) as? [String] {
+            let stored = Set(storedTools.compactMap { key in
+                QuickToolKind.allCases.first { $0.storageKey == key }
+            })
+            // 一次性迁移:各版本新增的工具 case 不在老存量里,升级后会被当成
+            // 「用户已隐藏」。按引入版本登记(见 introducedByVersion),只补
+            // 新工具,不复活用户手动关掉的老工具;之后手动开关正常读写。
+            if !defaults.bool(forKey: Keys.quickToolsMigrated) {
+                let introducedByVersion: [QuickToolKind] = []
+                let merged = stored.union(introducedByVersion)
+                if merged != stored {
+                    visibleQuickTools = merged
+                    defaults.set(merged.map(\.storageKey), forKey: Keys.visibleQuickTools)
+                }
+                defaults.set(true, forKey: Keys.quickToolsMigrated)
+            } else {
+                visibleQuickTools = stored
+            }
+        } else {
+            visibleQuickTools = Set(QuickToolKind.allCases)
+        }
 
         pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double
         pinnedPanelOriginY = defaults.object(forKey: Keys.pinnedPanelOriginY) as? Double
@@ -252,6 +279,23 @@ final class MonitorSettings: ObservableObject {
             visibleKinds.insert(kind)
         } else {
             visibleKinds.remove(kind)
+        }
+    }
+
+    func isQuickToolVisible(_ kind: QuickToolKind) -> Bool {
+        visibleQuickTools.contains(kind)
+    }
+
+    func setQuickToolVisible(_ isVisible: Bool, for kind: QuickToolKind) {
+        if isVisible {
+            visibleQuickTools.insert(kind)
+        } else {
+            visibleQuickTools.remove(kind)
+            // 全部工具隐藏时「在面板中显示」自动关闭:留一个只有空浮层的
+            // 工具入口没有意义,联动避免出现「按钮在、点开无内容」的状态。
+            if visibleQuickTools.isEmpty {
+                quickToolsVisible = false
+            }
         }
     }
 
@@ -621,6 +665,20 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $quickToolsVisible
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.quickToolsVisible)
+            }
+            .store(in: &cancellables)
+
+        $visibleQuickTools
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.map(\.storageKey), forKey: Keys.visibleQuickTools)
+            }
+            .store(in: &cancellables)
+
         $visibleKinds
             .dropFirst()
             .sink { [weak self] newValue in
@@ -729,6 +787,11 @@ private enum Keys {
     static let showNetworkProcesses = "settings.network.showProcesses"
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
+    static let quickToolsVisible = "settings.quickTools.visible"
+    static let visibleQuickTools = "settings.quickTools.visibleKinds"
+    /// 一次性迁移标记:小工具新增工具 case 时,把新工具并回老用户的已启用集合
+    /// (语义同 fanVisibilityMigrated:缺省会补,用户手动关过的不复活)。
+    static let quickToolsMigrated = "settings.quickToolsMigrated"
     static let visibleKinds = "settings.visibleKinds"
     /// 一次性迁移标记:风扇模块从「硬件自动门控」升级为「用户可开关」时,
     /// 给老用户的已存储可见列表补上 fan(否则会被当作「用户已隐藏」)。

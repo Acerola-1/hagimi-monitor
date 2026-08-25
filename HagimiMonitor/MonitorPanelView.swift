@@ -147,7 +147,11 @@ struct MonitorPanelView: View {
 
                                 // 快捷功能入口:激活角标与浮层打开态高亮由子视图
                                 // 自行观察 store,开关变化不牵动整块面板重绘。
-                                QuickToolsEntryButton(theme: theme)
+                                // 设置「小工具」关闭入口时不渲染(全部工具隐藏时
+                                // 该开关会被联动关闭,见 MonitorSettings)。
+                                if store.settings.quickToolsVisible {
+                                    QuickToolsEntryButton(settings: store.settings, theme: theme)
+                                }
 
                                 Button {
                                     fluidOpenSettings()
@@ -343,13 +347,13 @@ struct MonitorPanelView: View {
                 // 先舍弃统计入口。
                 ViewThatFits(in: .horizontal) {
                     HStack(spacing: 6) {
-                        PanelHeaderToolBadges(theme: theme)
+                        PanelHeaderToolBadges(settings: store.settings, theme: theme)
                         statsEntryButton(theme: theme)
                         pinnedControls(theme: theme)
                     }
 
                     HStack(spacing: 6) {
-                        PanelHeaderToolBadges(theme: theme)
+                        PanelHeaderToolBadges(settings: store.settings, theme: theme)
                         pinnedControls(theme: theme)
                     }
                 }
@@ -365,16 +369,16 @@ struct MonitorPanelView: View {
                                 tint: theme.captionText
                             )
                         }
-                        PanelHeaderToolBadges(theme: theme)
+                        PanelHeaderToolBadges(settings: store.settings, theme: theme)
                         statsEntryButton(theme: theme)
                     }
 
                     HStack(spacing: 6) {
-                        PanelHeaderToolBadges(theme: theme)
+                        PanelHeaderToolBadges(settings: store.settings, theme: theme)
                         statsEntryButton(theme: theme)
                     }
 
-                    PanelHeaderToolBadges(theme: theme)
+                    PanelHeaderToolBadges(settings: store.settings, theme: theme)
                 }
             }
         }
@@ -698,6 +702,7 @@ private struct QuickPanelControlButtonStyle: ButtonStyle {
 /// 独立子视图观察 QuickToolsStore:开关变化只重绘本簇,不牵动整块面板。
 private struct PanelHeaderToolBadges: View {
     @ObservedObject private var store = QuickToolsStore.shared
+    @ObservedObject var settings: MonitorSettings
     let theme: MonitorPanelTheme
     @State private var anchor = QuickToolsAnchorBox()
 
@@ -732,7 +737,7 @@ private struct PanelHeaderToolBadges: View {
         .frame(minHeight: 18)
         .contentShape(Rectangle())
         .onTapGesture {
-            store.popoverPresenter.toggle(theme: theme, anchor: anchor)
+            store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
         }
         .background(QuickToolsAnchorView(box: anchor))
         // 菜单栏上已无任何激活工具时,收起本簇锚定的浮层,避免它随塌缩的

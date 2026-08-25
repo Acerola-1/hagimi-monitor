@@ -35,6 +35,17 @@ final class QuickToolsStore: ObservableObject {
         return systemSleepPrevented || displayAwake
     }
 
+    /// 单个工具是否处于激活状态。浮层过滤磁贴时对激活中的工具豁免:
+    /// 用户隐藏了工具但该工具仍在运行(如键盘锁定),入口不能因此消失,
+    /// 否则会失去唯一的关闭入口。
+    func isActive(_ kind: QuickToolKind) -> Bool {
+        switch kind {
+        case .keyboardLock: keyboardLocked
+        case .systemAwake: systemSleepPrevented
+        case .displayAwake: displayAwake
+        }
+    }
+
     /// 工具浮层呈现器:浮层是面板的子窗口,生命周期必须长于
     /// MonitorPanelView(面板每秒重渲染会重建 @State),故挂在本单例上。
     lazy var popoverPresenter = QuickToolsPopoverPresenter { [weak self] in

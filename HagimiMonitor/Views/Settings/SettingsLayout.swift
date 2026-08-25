@@ -17,7 +17,7 @@ struct SettingsPage<Content: View>: View {
                     content
                 }
                 .controlSize(.small)
-                .padding(.top, 22)
+                .padding(.top, 34)
                 .padding(.horizontal, 36)
                 .padding(.bottom, 28)
                 .frame(maxWidth: .infinity, alignment: .topLeading)
