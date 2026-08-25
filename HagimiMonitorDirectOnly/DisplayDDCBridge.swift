@@ -88,32 +88,6 @@ final class DisplayDDCBridge {
         return DDCProbeResult(capability: capability, value: nil)
     }
 
-    /// 轮询读:用缓存的生效码单码读一次(重试 3)。仅用于异步校正 UI 数值。
-    /// 读不到返回 nil——绝不因此改变能力判断或向用户报错(只写型显示器很常见)。
-    func read(_ control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
-        let key = ControlKey(displayID: displayID, control: control)
-        guard let service = servicesByDisplayID[displayID] else {
-            return nil
-        }
-        if gate.isSuppressed {
-            return nil
-        }
-
-        guard let vcp = controlCodes[key] ?? DDCVCPCode.candidates(for: control).first else {
-            return nil
-        }
-        guard let reply = DDCTransport.read(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, retries: 3),
-              reply.resultCode == 0x00, reply.max > 0
-        else {
-            return nil
-        }
-
-        let safeMax = DDCRawConversion.sanitize(max: reply.max)
-        let safeCurrent = min(reply.current, safeMax)
-        maxValues[key] = safeMax
-        return DDCRawConversion.percent(raw: safeCurrent, max: safeMax)
-    }
-
     /// 乐观盲写:用缓存生效码(或候选码)写入,写几遍抗丢包,**不做写后回读校验**。
     /// - 门禁抑制(睡眠/唤醒/重配置窗口)→ .skipped:不缓存该值,窗口结束后再写。
     /// - 显示器明确不支持该控制 → .busError:防御性跳过(正常情况下 UI 已置灰、不会调用)。
@@ -505,15 +479,16 @@ private final class Arm64DDCMatcher {
     /// M1/M2 机内 HDMI 口通过 MCDP29xx 芯片做内部 DP→HDMI 转换,该芯片需要
     /// 使用 0xB7 作为 chipAddress 而非标准的 0x37,否则 DDC 报文无法到达显示器。
     /// 这是"HDMI 显示器亮度控制失效"的已知根因(m1ddc/BetterDisplay 均有此适配)。
-    /// 沿父链向上搜索(kIORegistryIterateParents),兼容 EPICProviderClass 属性位于
-    /// 更上层节点的情况,而非仅检查一级父节点。
+    /// 沿父链向上递归搜索(kIORegistryIterateParents | kIORegistryIterateRecursively),
+    /// 兼容 EPICProviderClass 属性位于更上层祖先节点的情况——只带 Parents 时
+    /// 仅检查一级父节点,祖先链上的标识会被漏检。
     private func isMCDP29XXProxy(entry: io_service_t) -> Bool {
         guard let value = IORegistryEntrySearchCFProperty(
             entry,
             kIOServicePlane,
             "EPICProviderClass" as CFString,
             kCFAllocatorDefault,
-            IOOptionBits(kIORegistryIterateParents)
+            IOOptionBits(kIORegistryIterateParents) | IOOptionBits(kIORegistryIterateRecursively)
         ) as? String else {
             return false
         }

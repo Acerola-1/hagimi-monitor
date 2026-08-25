@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hagimi Monitor — Your Mac, at a Glance</title>
-<meta name="description" content="Hagimi Monitor is an elegant macOS menu bar system monitor that tracks CPU, GPU, memory, storage, network, and battery in real-time.">
+<meta name="description" content="Hagimi Monitor is an elegant macOS menu bar system monitor that tracks CPU, GPU, memory, storage, network, battery, Bluetooth, and display in real-time, with built-in data statistics reports and quick tools like keyboard lock.">
 <link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
 <style>
 :root{
@@ -123,6 +123,17 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 .stat .n small{font-size:24px;color:var(--muted);font-weight:500;}
 .stat .l{font-size:14px;color:var(--muted);margin-top:6px;letter-spacing:.02em;}
 .sep{width:1px;background:var(--border);align-self:stretch;}
+
+/* ============ Feature blocks ============ */
+.stack{display:flex;flex-direction:column;gap:28px;margin-top:44px;align-items:center;}
+.shot{
+  border:1px solid var(--border);border-radius:16px;overflow:hidden;
+  background:#fff;text-align:left;max-width:960px;width:100%;
+}
+.shot img{display:block;width:100%;height:auto;}
+.shot.narrow{max-width:360px;}
+.shot .shot-cap{padding:14px 18px 16px;font-size:13px;color:var(--muted);line-height:1.5;}
+.shot .shot-cap b{display:block;color:var(--ink);font-weight:600;font-size:15px;margin-bottom:2px;}
 
 /* ============ Themes ============ */
 .themes .section-inner{display:flex;flex-direction:column;gap:36px;}
@@ -325,9 +336,9 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 <section class="hero" id="features">
   <div class="section-inner">
     <div class="hero-left fade-in">
-      <div class="kicker">Six core metrics, all in one view</div>
+      <div class="kicker">Eight monitoring modules, all in one view</div>
       <h1>Complete Monitoring<br>at a Glance</h1>
-      <p class="lead">CPU, GPU, memory, storage, network, battery — a single click on the menu bar reveals a real-time panel with sparklines, usage bars, and top processes.</p>
+      <p class="lead">CPU, GPU, memory, storage, network, battery, Bluetooth, and display — a single click on the menu bar reveals a real-time panel with sparklines, usage bars, and top processes, plus built-in statistics reports and quick tools.</p>
       <div class="hero-chips">
         <div class="chip"><span class="dot" style="background:#d27a4a"></span>CPU · Real-time Chart</div>
         <div class="chip"><span class="dot" style="background:#5d8cf0"></span>GPU · Load Trend</div>
@@ -335,6 +346,8 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
         <div class="chip"><span class="dot" style="background:#9a865e"></span>Storage · Volume</div>
         <div class="chip"><span class="dot" style="background:#43a6a0"></span>Network · Up/Down</div>
         <div class="chip"><span class="dot" style="background:#65af52"></span>Battery · Health</div>
+        <div class="chip"><span class="dot" style="background:#4f7fd6"></span>Bluetooth · Battery</div>
+        <div class="chip"><span class="dot" style="background:#8f7ad8"></span>Display · Info</div>
       </div>
       <div class="hero-actions">
         <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
@@ -449,6 +462,40 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 
 
+<!-- Data Statistics -->
+<section class="lightweight" id="stats" style="background:#fff;">
+  <div class="section-inner fade-in">
+    <div class="kicker">More Than Monitoring</div>
+    <h2>Data Statistics</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">Runtime data is aggregated into layers and stored, generating a web report with trend curves and heatmaps. Health score and history, reviewable anytime.</p>
+    <div class="stack">
+      <div class="shot">
+        <img src="../images/stats-report.png" alt="Statistics web report">
+        <div class="shot-cap"><b>Web data report</b>Health score, trend curves, and heatmaps — defaults to Today, with history at a glance.</div>
+      </div>
+      <div class="shot">
+        <img src="../images/stats-settings.png" alt="Statistics settings page">
+        <div class="shot-cap"><b>Statistics settings</b>Layered aggregation storage, data always queryable.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Quick Tools -->
+<section class="lightweight" id="quicktools">
+  <div class="section-inner fade-in">
+    <div class="kicker">More Capabilities</div>
+    <h2>Quick Tools</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">Keyboard lock, sleep prevention, and display-awake — toggle frequent actions with one click for a more focused workflow.</p>
+    <div class="stack">
+      <div class="shot narrow">
+        <img src="../images/quick-tools.png" alt="Quick tools bar">
+        <div class="shot-cap"><b>Quick tools</b>Keyboard lock, sleep prevention, and display-awake — one click to enable.</div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- Compare -->
 <section class="compare" id="compare">
   <div class="section-inner fade-in">
@@ -461,12 +508,14 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
           <tr><th>Feature</th><th>GitHub Direct</th><th>App Store</th></tr>
         </thead>
         <tbody>
-          <tr><td>Six monitoring modules (CPU / GPU / Memory / Storage / Network / Battery)</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>History stats · Health score · Event detection</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>Eight monitoring modules (CPU / GPU / Memory / Storage / Network / Battery / Bluetooth / Display)</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>Statistics · Health score · Event detection (HTML report)</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>Quick tools (keyboard lock / sleep prevention / display-awake)</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>Two themes · Multiple menu bar styles</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>CPU / Memory top process list</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>Storage / Network top process list</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
+          <tr><td>Temperature sensor and fan speed reading</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
           <tr><td>Display control (brightness / volume / contrast · media keys)</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>Top process monitoring (CPU / Memory / Storage / Network top processes)</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>Temperature sensor reading (CPU temperature)</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
         </tbody>
       </table>
     </div>

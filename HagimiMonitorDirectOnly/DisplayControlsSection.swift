@@ -4,6 +4,11 @@ import CoreGraphics
 import OSLog
 import SwiftUI
 
+extension Notification.Name {
+    /// 调试自动测试:触发第一台显示器档案区的展开/收起。
+    static let autotestArchiveToggle = Notification.Name("autotestArchiveToggle")
+}
+
 struct DisplayControlsSection: View {
     @ObservedObject var settings: MonitorSettings
     let isPanelVisible: Bool
@@ -128,6 +133,21 @@ struct DisplayControlsSection: View {
                 DisplayInfoSection.collectDisplays().map { ($0.id, $0) },
                 uniquingKeysWith: { first, _ in first }
             )
+        }
+        // 调试自动测试:延迟待面板自动呼出后,自动跑「展开分节 → 展开档案 →
+        // 收起档案」三轮序列,供日志观察嵌套展开/收起期间的窗口贴合行为。
+        .task {
+            guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil else { return }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if !isExpanded { toggleExpansion() }
+            for round in 0..<3 {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                NSLog("[autotest] seq round=%d archive toggle -> true", round)
+                NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                NSLog("[autotest] seq round=%d archive toggle -> false", round)
+                NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
+            }
         }
         .compatibleGlassEffect(cornerRadius: 14) {
             palette.displayGlassFill
@@ -318,6 +338,12 @@ private struct DisplayControlGroup: View {
             }
         }
         .padding(.leading, 28)
+        // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
+        .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
+            guard archiveKey == "display-controls-arc-\(controller.displays.first?.id ?? 0)" else { return }
+            NSLog("[autotest] group archive toggle key=%@", archiveKey)
+            toggleArchive()
+        }
     }
 
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
@@ -421,6 +447,11 @@ final class DisplayControlController: ObservableObject {
     private var recentlySetValues: [CGDirectDisplayID: [DisplayControlKind: (value: Double, at: Date)]] = [:]
     private static let gripWindow: TimeInterval = 4
 
+    /// 门禁抑制窗口内被跳过的写入(最近一次目标值)。窗口结束后由
+    /// `replaySuppressedWrites` 补发,否则用户设定值只停留在 UI 层,
+    /// 显示器永远停在旧值。
+    private var suppressedWrites: [ControlKey: Double] = [:]
+
     /// 面板打开且详情展开期间的轮询定时器。系统设置/其他 app 改亮度音量不会
     /// 产生任何通知,DDC 又是只能主动读取的哑协议,唯一能发现外部变化的办法就是
     /// 这段时间内持续轮询;收起或面板隐藏后停掉,避免空转占用 DDC 总线。
@@ -491,12 +522,15 @@ final class DisplayControlController: ObservableObject {
                 for removedID in previousIDs.subtracting(detectedIDs) {
                     self.worker.clearLastValues(displayID: removedID)
                     self.recentlySetValues[removedID] = nil
+                    self.suppressedWrites = self.suppressedWrites.filter { $0.key.displayID != removedID }
                     GammaDimmingController.shared.reset(displayID: removedID)
                 }
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
                     self.seedFallbackValues(for: display)
                 }
+                // 抑制窗口已结束(change handler 在窗口结束后触发):补发被跳过的写入。
+                self.replaySuppressedWrites()
                 self.mediaKeyController.refresh()
             }
         }
@@ -565,6 +599,12 @@ final class DisplayControlController: ObservableObject {
         case .written, .skipped:
             // 乐观盲写模型:报文上总线(.written)或门禁抑制跳过(.skipped)都视为
             // 生效,对齐本地真值并刷新抓握窗口。不做写后回读,不可读的显示器不报错。
+            // 差异只在持久化与重放:skipped 未真正落地,记录待窗口结束补发;written 已生效,清除待重放。
+            if result.outcome == .skipped {
+                suppressedWrites[result.key] = result.value
+            } else {
+                suppressedWrites[result.key] = nil
+            }
             updateLocalValue(result.value, for: result.key.control, displayID: result.key.displayID)
             fallbackValues[result.key.displayID, default: [:]][result.key.control] = result.value
             recentlySetValues[result.key.displayID, default: [:]][result.key.control] = (result.value, Date())
@@ -582,6 +622,22 @@ final class DisplayControlController: ObservableObject {
         pendingValues[result.key.displayID]?[result.key.control] = nil
         if pendingValues[result.key.displayID]?.isEmpty == true {
             pendingValues[result.key.displayID] = nil
+        }
+    }
+
+    /// 补发门禁抑制窗口内被跳过的写入。由 `refreshAsync` 在窗口结束(change handler 触发)后调用;
+    /// 只重放最近一次目标值,显示器已移除或不支持的控制直接丢弃。重放走正常 debounce 写路径。
+    private func replaySuppressedWrites() {
+        let pending = suppressedWrites
+        guard !pending.isEmpty else { return }
+        suppressedWrites.removeAll()
+        for (key, value) in pending {
+            guard let display = displays.first(where: { $0.id == key.displayID }),
+                  display.supports(key.control) else {
+                continue
+            }
+            AppLogger.ui.debug("Replaying suppressed write for display \(key.displayID), control: \(key.control.storageKey, privacy: .public)")
+            setValueAsync(value, for: key.control, displayID: key.displayID)
         }
     }
 }
@@ -920,6 +976,9 @@ private final class DisplayControlService {
     }
 
     private func saveStoredValue(_ value: Double, for control: DisplayControlKind, displayStorageID: String) {
+        // 静音(0)不覆盖持久化音量:跨会话解除静音需恢复到上次非零值,
+        // 而非退化到兜底。亮度等 0 值是合法持久态,照常写入。
+        if control == .volume, value <= 0 { return }
         defaults.set(min(100, max(0, value)), forKey: storedValueKey(for: control, displayStorageID: displayStorageID))
     }
 

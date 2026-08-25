@@ -95,12 +95,8 @@ final class DiskSnapshotCursor {
         for (groupKey, group) in groups {
             let hostPath = group.path
 
-            if !includeSystemProcesses {
-                let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { hostPath.contains($0) }
-                let isSystem = hostPath.isEmpty || systemProcessPathPrefixes.contains { hostPath.hasPrefix($0) }
-                if !isAlwaysVisible, isSystem {
-                    continue
-                }
+            if isSystemProcessPath(hostPath, includeSystemProcesses: includeSystemProcesses) {
+                continue
             }
 
             let fallbackName = hostPath.isEmpty ? "pid \(groupKey)" : (hostPath as NSString).lastPathComponent

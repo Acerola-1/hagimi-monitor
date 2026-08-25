@@ -72,10 +72,12 @@ docs/hagimi-promo-2880
 build/
 
 # AI IDE configs
+.agents/
 .claude/
 .trae/
 .codex/
 .opencode/
+.pi/
 .qoder/
 .zcode/
 AGENTS.md
@@ -88,3 +90,6 @@ promo-codes.html
 # 本地临时产物（构建缓存、探针二进制、截图）
 tmp/
 *.profraw
+
+# macOS 桌面杂项
+.DS_Store

@@ -483,7 +483,8 @@ struct DisplayArchiveGrid: View {
 
     private var identityRows: [Row] {
         [
-            row("metric.display.manufacturer", display.manufacturer ?? "--"),
+            // 品牌名(如 Panasonic)加 en 标签超半格预算,整行展示
+            row("metric.display.manufacturer", display.manufacturer ?? "--", structuralFullRow: true),
             row("metric.display.model", display.model ?? "--"),
             row("metric.display.serial", display.serial ?? "--", structuralFullRow: true),
             row("metric.display.manufacture-date", display.manufactureDate ?? "--", structuralFullRow: true)
@@ -542,7 +543,9 @@ struct DisplayArchiveGrid: View {
 }
 
 /// 基础四项的 stat tile 网格(分辨率/刷新率/HDR/位深),两渠道共用。
-/// HDR 格展示支持与否(硬件能力口径,非当前开关态)。
+/// 分辨率值固定 9 字符,加 en 标签超半格预算,升整行跨列;其余三项
+/// 半行两列,位深落单空洞留在行尾。HDR 格展示支持与否(硬件能力口径,
+/// 非当前开关态)。
 struct DisplayInfoBaseGrid: View {
     let display: DisplayInfo
     let palette: MonitorPalette
@@ -554,9 +557,10 @@ struct DisplayInfoBaseGrid: View {
         ) {
             GridRow {
                 DisplayArchiveTile(label: String(localized: "metric.display.resolution"), value: display.resolution, palette: palette)
-                DisplayArchiveTile(label: String(localized: "metric.display.refresh-rate"), value: display.refreshRate, palette: palette)
+                    .gridCellColumns(2)
             }
             GridRow {
+                DisplayArchiveTile(label: String(localized: "metric.display.refresh-rate"), value: display.refreshRate, palette: palette)
                 DisplayArchiveTile(
                     label: "HDR",
                     value: display.hdrSupported.map {
@@ -566,6 +570,8 @@ struct DisplayInfoBaseGrid: View {
                     } ?? "--",
                     palette: palette
                 )
+            }
+            GridRow {
                 DisplayArchiveTile(label: String(localized: "metric.display.color-depth"), value: display.colorDepth, palette: palette)
             }
         }

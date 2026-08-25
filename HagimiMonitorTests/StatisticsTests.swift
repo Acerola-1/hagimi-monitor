@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 
 // MARK: - 测试辅助
 
@@ -208,6 +208,9 @@ struct StatisticsRecorderTests {
             MonitorMetric(name: "download", value: "1 MB/s", numericValue: 1_000_000),
         ])
         recorder.record(modules: [network], fans: [], at: base)
+        // 先同步封第一个分钟:跨分钟触发的 sealCompletedMinute 走 maintenanceQueue 异步,
+        // 不先封口会导致 reportSnapshot 时第一个分钟行可能尚未落库。
+        recorder.sealCompletedMinuteForTesting()
         // 睡眠 1 小时后的观测:间隔远超积分上限,不累加旧速率
         recorder.record(modules: [network], fans: [], at: base.addingTimeInterval(3600))
         recorder.sealCompletedMinuteForTesting()

@@ -68,8 +68,56 @@ enum MemoryPrimaryMetricPreference: String, CaseIterable, Identifiable {
     }
 }
 
+/// 界面语言偏好:跟随系统或强制中文/英文。
+/// 切换通过覆写 `AppleLanguages` 并重启进程生效——面板/设置等常驻视图树、
+/// AppKit 菜单的本地化字符串均已按当前语言求值,不重启会出现新旧混杂,
+/// 整进程重启是唯一原子切换方式(重启提示见 GeneralSettingsView)。
+enum AppLanguagePreference: String, CaseIterable, Identifiable {
+    case system
+    case chinese
+    case english
+
+    var id: String { rawValue }
+
+    /// 选项文案:语言名固定用各自原文(简体中文/English),任何界面语言下
+    /// 用户都能认出;仅「跟随系统」随当前界面语言本地化。
+    var title: String {
+        switch self {
+        case .system:
+            String(localized: "language.system")
+        case .chinese:
+            "简体中文"
+        case .english:
+            "English"
+        }
+    }
+
+    /// 覆写 AppleLanguages 用的语言代码;system 为 nil(移除覆写,回落系统首选)。
+    var appleLanguageCode: String? {
+        switch self {
+        case .system:
+            nil
+        case .chinese:
+            "zh-Hans"
+        case .english:
+            "en"
+        }
+    }
+
+    /// 把偏好写入系统语言覆写键。该键在进程启动时由系统读取,变更后需重启生效。
+    func applyAppleLanguageOverride() {
+        let defaults = UserDefaults.standard
+        if let appleLanguageCode {
+            defaults.set([appleLanguageCode], forKey: "AppleLanguages")
+        } else {
+            defaults.removeObject(forKey: "AppleLanguages")
+        }
+    }
+}
+
 final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false
+    @Published var languagePreference: AppLanguagePreference = .system
     @Published var themePreference: AppThemePreference = .system
     @Published var colorSchemePreference: MonitorColorSchemePreference = .vibrant
     @Published var ringSource: HaloRingSource = .combined
@@ -100,6 +148,11 @@ final class MonitorSettings: ObservableObject {
     @Published var networkShowSystemProcesses: Bool = true
     /// 功率流图开关(Beta):电源模块展开区的功率流可视化,默认开启,双渠道(含沙盒)均可用。
     @Published var batteryShowPowerFlow: Bool = true
+    /// 小工具(快捷功能)入口是否在面板中显示。
+    @Published var quickToolsVisible: Bool = true
+    /// 在工具浮层中显示的工具集合。集合由 QuickToolKind 驱动,新增工具只补枚举
+    /// case 与本地化,存储/迁移/设置页/浮层自动跟随,无需逐处改动。
+    @Published private(set) var visibleQuickTools: Set<QuickToolKind> = []
     @Published private(set) var visibleKinds: Set<MonitorKind> = []
     /// 呼出面板时默认展开的模块集合(逐模块设置,非全局开关)。
     @Published private(set) var defaultExpandedKinds: Set<MonitorKind> = []
@@ -118,6 +171,9 @@ final class MonitorSettings: ObservableObject {
 
         let themeRawValue = defaults.string(forKey: Keys.themePreference) ?? AppThemePreference.system.rawValue
         themePreference = AppThemePreference(rawValue: themeRawValue) ?? .system
+
+        let languageRawValue = defaults.string(forKey: Keys.languagePreference) ?? AppLanguagePreference.system.rawValue
+        languagePreference = AppLanguagePreference(rawValue: languageRawValue) ?? .system
 
         let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.vibrant.rawValue
         colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .vibrant
@@ -159,6 +215,28 @@ final class MonitorSettings: ObservableObject {
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
         batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
+        quickToolsVisible = defaults.object(forKey: Keys.quickToolsVisible) as? Bool ?? true
+        if let storedTools = defaults.array(forKey: Keys.visibleQuickTools) as? [String] {
+            let stored = Set(storedTools.compactMap { key in
+                QuickToolKind.allCases.first { $0.storageKey == key }
+            })
+            // 一次性迁移:各版本新增的工具 case 不在老存量里,升级后会被当成
+            // 「用户已隐藏」。按引入版本登记(见 introducedByVersion),只补
+            // 新工具,不复活用户手动关掉的老工具;之后手动开关正常读写。
+            if !defaults.bool(forKey: Keys.quickToolsMigrated) {
+                let introducedByVersion: [QuickToolKind] = []
+                let merged = stored.union(introducedByVersion)
+                if merged != stored {
+                    visibleQuickTools = merged
+                    defaults.set(merged.map(\.storageKey), forKey: Keys.visibleQuickTools)
+                }
+                defaults.set(true, forKey: Keys.quickToolsMigrated)
+            } else {
+                visibleQuickTools = stored
+            }
+        } else {
+            visibleQuickTools = Set(QuickToolKind.allCases)
+        }
 
         pinnedPanelOriginX = defaults.object(forKey: Keys.pinnedPanelOriginX) as? Double
         pinnedPanelOriginY = defaults.object(forKey: Keys.pinnedPanelOriginY) as? Double
@@ -209,6 +287,10 @@ final class MonitorSettings: ObservableObject {
         // 之后用户的手动开关走正常读写,不再被本迁移覆盖。
         if !defaults.bool(forKey: Keys.metricsDefaultOnMigrated) {
             for kind in MonitorKind.allCases where loadedMetrics[kind] != nil {
+                // 用户明确关闭全部指标(存储为空数组)的模块是合法全关状态,
+                // 不被默认补齐迁移复活。
+                let stored = defaults.array(forKey: Keys.enabledMetricsPrefix + kind.rawValue) as? [String] ?? []
+                guard !stored.isEmpty else { continue }
                 var merged = loadedMetrics[kind] ?? []
                 let defaultsForKind = defaultMetricIds(for: kind)
                 merged.formUnion(defaultsForKind)
@@ -223,7 +305,7 @@ final class MonitorSettings: ObservableObject {
         // 列表里,升级后会被当成「用户已关」。只把这三项并入电池存量并回写,
         // 不重跑全量并回,避免复活用户手动关过的其他指标。
         if !defaults.bool(forKey: Keys.batteryElectricalMetricsMigrated) {
-            if var merged = loadedMetrics[.battery] {
+            if var merged = loadedMetrics[.battery], !merged.isEmpty {
                 merged.formUnion(["voltage", "current", "capacity"])
                 if merged != loadedMetrics[.battery] {
                     loadedMetrics[.battery] = merged
@@ -248,6 +330,23 @@ final class MonitorSettings: ObservableObject {
             visibleKinds.insert(kind)
         } else {
             visibleKinds.remove(kind)
+        }
+    }
+
+    func isQuickToolVisible(_ kind: QuickToolKind) -> Bool {
+        visibleQuickTools.contains(kind)
+    }
+
+    func setQuickToolVisible(_ isVisible: Bool, for kind: QuickToolKind) {
+        if isVisible {
+            visibleQuickTools.insert(kind)
+        } else {
+            visibleQuickTools.remove(kind)
+            // 全部工具隐藏时「在面板中显示」自动关闭:留一个只有空浮层的
+            // 工具入口没有意义,联动避免出现「按钮在、点开无内容」的状态。
+            if visibleQuickTools.isEmpty {
+                quickToolsVisible = false
+            }
         }
     }
 
@@ -407,6 +506,9 @@ final class MonitorSettings: ObservableObject {
         let filtered = result.intersection(availableIds)
 
         if filtered.isEmpty {
+            // 用户主动关闭全部指标(存储为空数组)是合法持久态,保持为空;
+            // 仅当存储非空但过滤后为空(历史失效指标)时才回退默认。
+            guard !ids.isEmpty else { return [] }
             return Array(defaultMetricIds(for: kind))
         }
 
@@ -422,6 +524,16 @@ final class MonitorSettings: ObservableObject {
             .dropFirst()
             .sink { [weak self] newValue in
                 self?.persistLaunchAtLogin(newValue)
+            }
+            .store(in: &cancellables)
+
+        $languagePreference
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.languagePreference)
+                // 语言覆写与偏好同步写入;新进程重启后才生效,
+                // 重启提示由设置页发起(见 GeneralSettingsView)。
+                newValue.applyAppleLanguageOverride()
             }
             .store(in: &cancellables)
 
@@ -614,6 +726,20 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $quickToolsVisible
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.quickToolsVisible)
+            }
+            .store(in: &cancellables)
+
+        $visibleQuickTools
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.map(\.storageKey), forKey: Keys.visibleQuickTools)
+            }
+            .store(in: &cancellables)
+
         $visibleKinds
             .dropFirst()
             .sink { [weak self] newValue in
@@ -693,6 +819,7 @@ final class MonitorSettings: ObservableObject {
 
 private enum Keys {
     static let themePreference = "settings.themePreference"
+    static let languagePreference = "settings.languagePreference"
     static let colorSchemePreference = "settings.colorSchemePreference"
     static let ringSource = "settings.ringSource"
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
@@ -722,6 +849,11 @@ private enum Keys {
     static let showNetworkProcesses = "settings.network.showProcesses"
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
+    static let quickToolsVisible = "settings.quickTools.visible"
+    static let visibleQuickTools = "settings.quickTools.visibleKinds"
+    /// 一次性迁移标记:小工具新增工具 case 时,把新工具并回老用户的已启用集合
+    /// (语义同 fanVisibilityMigrated:缺省会补,用户手动关过的不复活)。
+    static let quickToolsMigrated = "settings.quickToolsMigrated"
     static let visibleKinds = "settings.visibleKinds"
     /// 一次性迁移标记:风扇模块从「硬件自动门控」升级为「用户可开关」时,
     /// 给老用户的已存储可见列表补上 fan(否则会被当作「用户已隐藏」)。

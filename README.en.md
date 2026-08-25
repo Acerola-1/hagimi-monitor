@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  HagimiMonitor is an elegant macOS menu bar system monitor that displays CPU, GPU, memory, storage, network, battery, and display status through a dynamic ring and a compact glass panel.
+  HagimiMonitor is an elegant macOS menu bar system monitor that displays CPU, GPU, memory, storage, network, battery, Bluetooth, and display status through a dynamic ring and a compact glass panel, with built-in data statistics reports and quick tools like keyboard lock.
 </p>
 
 <p align="center">
@@ -71,29 +71,40 @@ The default state stays compact. Click the menu bar item to expand complete deta
 
 The dynamic ring icon reflects system load in real time, smoothly combining CPU and GPU usage into one pressure indicator. Light load, busy, or near critical — visible at a glance.
 
-### Seven Monitoring Modules
+### Eight Monitoring Modules
 
 From the menu bar to the detailed panel, key metrics are always within reach:
 
-- **CPU**: system / user / idle usage, uptime, temperature reading, process-level usage
-- **GPU**: graphics load, render / tiler performance, VRAM info
-- **Memory**: usage rate, memory pressure, swap, pressure level changes
-- **Storage**: system disk, external volumes, read / write rates
-- **Network**: upload / download rates, network interface type, IP information
-- **Battery & Power**: level, power status, power draw, health, and other available info
-- **Display**: brightness, volume, and contrast control depending on DDC/CI support
+- **CPU**: system / user / idle usage, uptime, P/E split, thermal pressure; the direct edition adds temperature reading and per-core load rings
+- **GPU**: graphics load, render / tiler performance, VRAM info, process-level usage
+- **Memory**: usage rate, memory pressure, swap, compressed memory, pressure level changes
+- **Storage**: system disk, external volumes, read / write rates, SMART health
+- **Network**: upload / download rates, interface type, IP info, Wi-Fi signal and latency
+- **Battery & Power**: level, power status, power draw, health, cycle count, and other available info
+- **Bluetooth**: battery monitoring for connected devices (GATT-first reading)
+- **Display**: display info in both editions; brightness / volume / contrast control depends on DDC/CI support (direct edition only)
+
+> CPU temperature and fan speed rely on SMC (AppleSMC), which is inaccessible to the App Store sandbox, so they are only available in the direct edition.
 
 ### Glass UI and Unified Colors
 
 The panel uses a lightweight glassmorphism UI, with a unified Palette for module accents, status semantics, dividers, progress tracks, and light / dark mode adaptation.
 
-### Statistics, Health Score, and Event Detection
+### Menu Bar Styles, Your Choice
 
-HagimiMonitor provides longer-term views around system state:
+More than just the dynamic ring — icon, text, and compact single-line layouts are all available, with a static total width that never jitters. You can also pin the panel and summon it with a global shortcut.
 
-- 0-100 Mac health score across CPU, GPU, disk, memory pressure, and thermal dimensions
-- Multi-range statistics for 24 hours, 7 days, 30 days, and one year
+### Statistics and Health Score
+
+HagimiMonitor provides longer-term views and generates a web report (defaults to today; switchable to 24 hours / 7 days / 30 days / one year):
+
+- Sampling into SQLite with minute / hour / day aggregation to auto-generate an HTML report with trend curves and heatmaps
+- 0-100 Mac health score across CPU, GPU, disk, fan, and memory pressure dimensions
 - Automatic detection for CPU high load, memory pressure, low disk space, network traffic peaks, and other key events
+
+### Quick Tools
+
+Keyboard lock (blocks all keys including F1–F12, with a 20-minute auto-unlock fallback), system sleep prevention, and display-awake — togglable from the menu bar or pinned panel, with active state lit up in real time in the panel header.
 
 ### External Display Control
 
@@ -109,19 +120,23 @@ HagimiMonitor offers two ways to get it, with the same core monitoring experienc
 
 | Feature | GitHub (Free) | App Store (Support) |
 | --- | :---: | :---: |
-| Seven monitoring modules (CPU / GPU / Memory / Storage / Network / Battery / Display info) | ✅ | ✅ |
-| Statistics · Health score · Event detection | ✅ | ✅ |
-| Dual themes · Glassmorphism UI | ✅ | ✅ |
+| Eight monitoring modules (CPU / GPU / Memory / Storage / Network / Battery / Bluetooth / Display) | ✅ | ✅ |
+| Statistics · Health score · Event detection (HTML report + storage management) | ✅ | ✅ |
+| Quick tools (keyboard lock / sleep prevention / display-awake) | ✅ | ✅ |
+| Dual themes · Glassmorphism · Multiple menu bar styles | ✅ | ✅ |
+| CPU top process list | ✅ | ✅ |
+| Memory top process list | ✅ | ✅ |
+| Storage / network top process list | ✅ | ❌ Sandbox limit |
+| Temperature sensor reading (CPU temperature) | ✅ | ❌ SMC sandbox limit |
+| Fan speed reading | ✅ | ❌ SMC sandbox limit |
 | External display control (DDC/CI brightness / volume / contrast) | ✅ | ❌ Sandbox limit |
 | Media key capture | ✅ | ❌ Sandbox limit |
-| Top process monitoring (CPU / Memory / Storage / Network top processes) | ✅ | ❌ Sandbox limit |
-| Temperature sensor reading (CPU temperature) | ✅ | ❌ Sandbox limit |
 | Updates | Built-in auto-update | App Store updates |
 | Price | Free | Paid · Support the developer |
 
 > Due to App Store sandbox restrictions, some features cannot work properly in the sandboxed environment, so the App Store edition is not feature-complete.
 
-> 💚 **The App Store edition is a token of thanks**: both editions share the same core monitoring experience. If HagimiMonitor helps you and you don't need the out-of-sandbox features — display control, top process monitoring, temperature reading — buying it on the [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) is like leaving a coffee — a small, sincere way to support and encourage an indie developer. Whichever edition you choose, thank you all the same.
+> 💚 **The App Store edition is a token of thanks**: both editions share the same core monitoring experience. If HagimiMonitor helps you and you don't need the out-of-sandbox features — display control, storage / network top processes, temperature / fan readings — buying it on the [App Store](https://apps.apple.com/app/hagimimonitor/id6792169908) is like leaving a coffee — a small, sincere way to support and encourage an indie developer. Whichever edition you choose, thank you all the same.
 
 ## Installation
 

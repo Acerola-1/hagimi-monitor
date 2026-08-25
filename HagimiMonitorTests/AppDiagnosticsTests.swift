@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 
 @Suite("App Diagnostics Tests")
 struct AppDiagnosticsTests {

@@ -34,6 +34,16 @@ let systemProcessPathPrefixes: [String] = [
     "/Library/Filesystems/",
 ]
 
+/// 系统进程判定:常驻白名单(alwaysVisibleSystemAppMarkers)放行,否则系统路径排除。
+/// 五类 TOP 采样(CPU/内存/GPU/磁盘/网络)共用,避免口径分叉——路径空表示
+/// 宿主已退出的孤儿分组,也视为系统进程。
+func isSystemProcessPath(_ path: String, includeSystemProcesses: Bool) -> Bool {
+    if includeSystemProcesses { return false }
+    let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { path.contains($0) }
+    if isAlwaysVisible { return false }
+    return path.isEmpty || systemProcessPathPrefixes.contains { path.hasPrefix($0) }
+}
+
 /// 系统目录下但仍应始终显示的 App(按可执行文件路径片段匹配)。
 /// 有意为之的特例:目前仅 Safari。它是用户主动使用的浏览器,网页(WebContent)内存
 /// 常占大头,但宿主进程在 /System/ 下会被系统进程规则误杀,导致网页内存完全不计入排名。
@@ -180,12 +190,8 @@ func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses: Bool = fal
         // 系统进程过滤:以宿主进程路径为准。
         // 路径为空通常是内核级进程(如 kernel_task),也归为系统进程。
         // Safari 等白名单 App 虽在系统目录下,但始终显示(否则网页内存无法计入)。
-        if !includeSystemProcesses {
-            let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { hostPath.contains($0) }
-            let isSystem = hostPath.isEmpty || systemProcessPathPrefixes.contains { hostPath.hasPrefix($0) }
-            if !isAlwaysVisible, isSystem {
-                continue
-            }
+        if isSystemProcessPath(hostPath, includeSystemProcesses: includeSystemProcesses) {
+            continue
         }
 
         // 兜底名:路径末尾组件;路径为空(白名单系统进程才会走到这)回退到 pid。

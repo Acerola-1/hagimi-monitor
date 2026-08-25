@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>HagimiMonitor</title>
 <style>
+  /*__FLATPICKR_CSS__*/
   :root {
     --bg: #080b12;
     --bg-grad-1: rgba(122, 162, 247, 0.12);
@@ -125,39 +126,62 @@
   .ranges button.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);
     box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent); }
   .custom-range { position: relative; flex: none; }
-  .cal-btn {
-    appearance: none; cursor: pointer; width: 33px; height: 33px; border-radius: 9px;
-    display: grid; place-items: center;
-    background: var(--card); border: 1px solid var(--card-border); color: var(--text-2);
+  /* 自定义日期范围:Flatpickr 日期选择库的字段与日历皮肤,跟随报告暗色令牌体系 */
+  .cal-field {
+    appearance: none; cursor: pointer; min-width: 132px;
+    font: 600 12px/1 var(--font);
+    padding: 8px 12px; border-radius: 8px;
+    background: var(--card); border: 1px solid var(--card-border);
+    color: var(--text-2); color-scheme: inherit;
     box-shadow: 0 1px 0 var(--card-glow) inset;
     transition: color 0.15s ease, border-color 0.15s ease;
   }
-  .cal-btn:hover { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent); }
-  .cal-btn.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent);
+  .cal-field::placeholder { color: var(--text-3); font-weight: 500; }
+  .cal-field:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 42%, transparent); }
+  .cal-field:focus { outline: none; color: var(--text); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+  .cal-field.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent);
     box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent); }
-  .cal-btn .icon { width: 15px; height: 15px; }
-  .cal-pop {
-    position: absolute; top: calc(100% + 12px); right: 0; z-index: 60;
-    display: flex; align-items: center; gap: 8px;
-    padding: 12px 14px; border-radius: 14px;
-    background: var(--tooltip-bg); border: 1px solid var(--tooltip-border);
-    backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4);
-    box-shadow: var(--shadow);
+  /* Flatpickr 日历面板结构,覆盖其默认浅色皮肤为暗色毛玻璃 */
+  .flatpickr-calendar {
+    margin-top: 8px; width: auto; padding: 8px;
+    background: var(--tooltip-bg); border: 1px solid var(--tooltip-border); border-radius: 14px;
+    box-shadow: var(--shadow); color: var(--text-2);
   }
-  .cal-sep { color: var(--text-3); font-size: 12px; }
-  .cal-pop input[type="date"] {
-    appearance: none; font: 500 12px/1 var(--font);
-    background: var(--card); border: 1px solid var(--card-border);
-    border-radius: 9px; padding: 7px 9px; outline: none;
-    color: var(--text-2); color-scheme: inherit;
+  .flatpickr-calendar.open { z-index: 60; }
+  .flatpickr-weekday, .flatpickr-day, .flatpickr-monthDropdown-month, .flatpickr-current-year {
+    font-family: var(--font);
   }
-  .cal-pop input[type="date"]:focus { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
-  .cal-pop button {
-    appearance: none; font: 600 12px/1 var(--font); cursor: pointer;
-    color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
-    padding: 8px 13px; border-radius: 9px;
+  .flatpickr-months .flatpickr-prev-month, .flatpickr-months .flatpickr-next-month,
+  .flatpickr-months .flatpickr-month, .flatpickr-current-month input.cur-year,
+  .flatpickr-current-month .numInputWrapper {
+    color: var(--text);
   }
+  .flatpickr-monthDropdown-month, .flatpickr-current-month input.cur-year { color: var(--text); }
+  .flatpickr-weekday { color: var(--text-3); font-weight: 600; font-size: 11px; }
+  .flatpickr-innerContainer, .flatpickr-days, .dayContainer { background: transparent; }
+  .flatpickr-day {
+    color: var(--text-2); border: 0; border-radius: 8px; font-size: 12px;
+  }
+  .flatpickr-day:hover:not(.flatpickr-disabled) { color: var(--text); background: var(--inset); }
+  .flatpickr-day.flatpickr-disabled, .flatpickr-day.disabled { color: var(--text-3); opacity: 0.4; }
+  .flatpickr-day.flatpickr-disabled:hover { background: transparent; }
+  .flatpickr-day.selected, .flatpickr-day.startRange, .flatpickr-day.endRange {
+    color: #fff; background: color-mix(in srgb, var(--accent) 85%, #000); border: 0;
+    box-shadow: none;
+  }
+  .flatpickr-day.selected:hover, .flatpickr-day.startRange:hover, .flatpickr-day.endRange:hover {
+    color: #fff; background: var(--accent);
+  }
+  .flatpickr-day.inRange { background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--text); }
+  .flatpickr-day.startRange { border-radius: 8px 0 0 8px; }
+  .flatpickr-day.endRange { border-radius: 0 8px 8px 0; }
+  .flatpickr-day.today { box-shadow: inset 0 0 0 1px var(--accent); }
+  .flatpickr-prev-month, .flatpickr-next-month { fill: var(--text-3); }
+  .flatpickr-prev-month:hover, .flatpickr-next-month:hover { fill: var(--accent); }
+  .flatpickr-current-month .numInputWrapper span.arrowUp, .flatpickr-current-month .numInputWrapper span.arrowDown { display: none; }
+  .flatpickr-current-month .numInputWrapper input { color: var(--text); font-size: 13px; font-weight: 600; }
+  .flatpickr-monthDropdown-months { background: var(--tooltip-bg); color: var(--text); border-radius: 6px; }
+  .flatpickr-months .flatpickr-month { padding: 4px 0 8px; }
 
   /* ── 卡片通用 ──────────────────────────── */
   .card {
@@ -237,7 +261,7 @@
   .kpi:hover { background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card-hover); transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 20%, var(--card-border)); }
   .kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   .kpi .label { font-size: 11px; color: var(--text-3); font-weight: 650; letter-spacing: 0.4px; }
-  .kpi .value { font-size: 23px; font-weight: 700; margin-top: 9px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+  .kpi .value { font-weight: 700; margin-top: 9px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
   .kpi .sub { font-size: 11px; color: var(--text-3); margin-top: 3px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
   .spark-wrap { margin-top: auto; padding-top: 10px; display: block; }
   .spark { width: 100%; height: 30px; display: block; overflow: visible; }
@@ -412,7 +436,6 @@
   }
   .kpi-chip .icon { width: 17px; height: 17px; margin: 0; }
   .kpi:hover .kpi-chip { transform: scale(1.08); box-shadow: 0 0 18px color-mix(in srgb, currentColor 20%, transparent); }
-  .kpi .value { font-size: 22px; }
 
   /* ── 分区标题图标芯片化 ────────────────── */
   .sec-head .icon-chip {
@@ -537,15 +560,7 @@
         <div class="nav-links" id="nav-links"><span class="nav-pill" id="nav-pill"></span></div>
         <div class="ranges" id="ranges"></div>
         <div class="custom-range" id="custom-range">
-          <button class="cal-btn" id="cal-btn" type="button" aria-label="date range">
-            <svg class="icon"><use href="#i-calendar"/></svg>
-          </button>
-          <div class="cal-pop" id="cal-pop" hidden>
-            <input type="date" id="date-from">
-            <span class="cal-sep" aria-hidden="true">–</span>
-            <input type="date" id="date-to">
-            <button id="apply-custom" type="button"></button>
-          </div>
+          <input type="text" id="cal-range" class="cal-field" readonly autocomplete="off">
         </div>
       </div>
     </div>
@@ -590,7 +605,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="sec-heatmap" data-keep-nav>
       <div class="card">
         <div class="sec-head">
           <svg class="icon"><use href="#i-flame"/></svg><h2 id="t-heatmap"></h2>
@@ -681,7 +696,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="sec-net-daily" data-keep-nav>
       <div class="card">
         <div class="sec-head">
           <svg class="icon c-net"><use href="#i-chart-column"/></svg><h2 id="t-net-daily" style="font-size:13.5px"></h2>
@@ -702,7 +717,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="sec-disk-daily" data-keep-nav>
       <div class="card">
         <div class="sec-head">
           <svg class="icon c-disk"><use href="#i-chart-column"/></svg><h2 id="t-disk-daily" style="font-size:13.5px"></h2>
@@ -815,6 +830,7 @@
 </div>
 
 <script>/*__ECHARTS__*/</script>
+<script>/*__FLATPICKR__*/</script>
 <script>window.__DATA__ = /*__DATA__*/null;</script>
 <script>
 "use strict";
@@ -869,8 +885,8 @@
   applyTheme();
   if (themeQuery.addEventListener) {
     themeQuery.addEventListener("change", () => {
+      // applyRange 会重渲含热力图在内的全部板块,无需在此单独渲热力图
       applyTheme();
-      if (currentFrom && currentTo) renderHeatmap(currentFrom, currentTo);
       applyRange();
     });
   }
@@ -907,7 +923,9 @@
   }
   function fmtSpan(seconds) {
     if (seconds == null) return "—";
-    if (seconds < 90) return Math.round(seconds) + " min";
+    // 分钟粒度事件最短 120s(2 桶),明确给分/时/天三级而非 .toFixed 截断,避免短时事件显示 "0.0 h"
+    if (seconds < 60) return "<1 min";
+    if (seconds < 3600) return Math.round(seconds / 60) + " min";
     if (seconds < 48 * 3600) return (seconds / 3600).toFixed(1) + " h";
     return (seconds / 86400).toFixed(1) + " d";
   }
@@ -932,7 +950,7 @@
   }
   function t(key, kv) {
     let s = I[key] || key;
-    if (kv) for (const k in kv) s = s.replace("{" + k + "}", kv[k]);
+    if (kv) for (const k in kv) s = s.replaceAll("{" + k + "}", kv[k]);
     return s;
   }
 
@@ -989,7 +1007,8 @@
   $("t-insights").textContent = I.secInsights;
   $("lbl-low").textContent = I.heatLow;
   $("lbl-high").textContent = I.heatHigh;
-  $("apply-custom").textContent = I.applyCustom;
+  // 日期范围字段的占位文案(选择后实时写入所选范围)
+  $("cal-range").placeholder = I.selectRange;
   $("footer").innerHTML = I.footer + "<br>" + I.footerLocal;
   ["overview", "cpu", "cpu-pe", "cpu-dist", "gpu", "gpu-dist", "gpu-mem", "mem",
    "net", "net-daily", "disk", "disk-daily", "power", "batt",
@@ -1209,7 +1228,7 @@
       a.mem += r[6] * r[7]; a.mn += r[7];
       a.net += r[8] + r[9];
     });
-    function entries(field, countField, total) {
+    function entries(field, countField) {
       return Object.keys(agg)
         .map((idx) => ({ idx: Number(idx), v: countField ? agg[idx][field] / (agg[idx][countField] || 1) : agg[idx][field] }))
         .filter((e) => e.v > 0.05)
@@ -1445,6 +1464,8 @@
   ];
   let currentRange = "today";
   let custom = null;
+  // 粘性导航收集结果:供 applyRange 同步跨日板块锚点的显隐
+  let navItems = [];
 
   RANGES.forEach(([key, label]) => {
     const b = el("button");
@@ -1454,28 +1475,42 @@
     $("ranges").appendChild(b);
   });
 
-  $("apply-custom").onclick = () => {
-    const f = $("date-from").value, to = $("date-to").value;
-    if (!f || !to) return;
-    const from = new Date(f + "T00:00:00").getTime();
-    let end = new Date(to + "T00:00:00").getTime() + DAY;
-    if (end <= from) end = from + DAY;
-    custom = [from, Math.min(end, Date.now() + DAY)];
-    currentRange = null;
-    applyRange();
-    $("cal-pop").hidden = true;
-  };
-
-  // 日历弹窗:按钮开关,点外部/Escape 关闭
-  $("cal-btn").onclick = (e) => {
-    e.stopPropagation();
-    $("cal-pop").hidden = !$("cal-pop").hidden;
-  };
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".custom-range")) $("cal-pop").hidden = true;
-  });
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") $("cal-pop").hidden = true;
+  // 日期范围:Flatpickr range 模式,选好首尾两天即即时应用并收起。
+  // 星期名取报表语言的 I.wd*,月份名用 Intl 按浏览器语言生成——报表语言取自
+  // 系统语言,与浏览器语言在绝大多数情形一致,故月份名同步三语可用。
+  const fmtMonth = (o) => new Intl.DateTimeFormat(navigator.language, o);
+  const monthLong = [...Array(12)].map((_, i) => fmtMonth({ month: "long" }).format(new Date(2000, i, 1)));
+  const monthShort = [...Array(12)].map((_, i) => fmtMonth({ month: "short" }).format(new Date(2000, i, 1)));
+  const weekdayShort = [I.wd0, I.wd1, I.wd2, I.wd3, I.wd4, I.wd5, I.wd6];
+  const calPicker = flatpickr("#cal-range", {
+    mode: "range",
+    dateFormat: "Y-m-d",
+    maxDate: "today",
+    showMonths: 1,
+    locale: {
+      firstDayOfWeek: 1,
+      rangeSeparator: " – ",
+      months: { shorthand: monthShort, longhand: monthLong },
+      weekdays: { shorthand: weekdayShort, longhand: weekdayShort },
+    },
+    onOpen: () => $("cal-range").classList.add("active"),
+    onClose: () => {
+      $("cal-range").classList.remove("active");
+      // 半选/取消(起点无终点或清空)比保留上一自定义范围干净;选中完整两天才应用
+      if (calPicker.selectedDates.length !== 2) {
+        if (calPicker.selectedDates.length === 1) calPicker.clear();
+        return;
+      }
+      const from = new Date(calPicker.selectedDates[0]).setHours(0, 0, 0, 0);
+      const end = new Date(calPicker.selectedDates[1]).setHours(0, 0, 0, 0);
+      // 结束边界取结束日当天最后一刻(end + DAY - 1ms),而非次日 0 点:
+      // 报表的日键过滤(day > toKey 排除 to 之后)依赖 to 的日键 = 结束日。
+      // 若用 end + DAY(次日 0 点),toKey = 次日,应用排行/电池健康会把结束日之后
+      // 一天也纳入统计。预设范围 to = Date.now()(日键 = 今天,包含今天)不受影响。
+      custom = [from, end + DAY - 1];
+      currentRange = null;
+      applyRange();
+    },
   });
 
   function pickSource(from, to) {
@@ -1714,7 +1749,8 @@
       const x = v(r, col);
       if (x == null) return;
       const b = x < 10 ? 0 : x < 30 ? 1 : x < 60 ? 2 : x < 90 ? 3 : 4;
-      buckets[b] += frames(r);
+      // 用真实墙钟覆盖秒(cover_s)而非采样帧数:采样推迟/失败时帧数偏离真实时间。
+      buckets[b] += coverSeconds(r);
     });
     const total = buckets.reduce((a, b) => a + b, 0);
     return total > 0 ? buckets : null;
@@ -1727,9 +1763,9 @@
       color: colors,
       tooltip: Object.assign({}, liveTooltip(), {
         trigger: "item",
-        // ECharts 饼图 trigger:item: p.value 是原始帧数, p.percent 是百分比。
-        // 小时数 = 帧数 / 3600(帧即采样秒,一分钟 60 帧)。
-        formatter: (p) => p.name + ": " + p.percent.toFixed(1) + "% (" + fmtHours(p.value / 3600) + ")",
+        // ECharts 饼图 trigger:item: p.value 是累计覆盖秒(cover_s,真实墙钟)。
+        // p.value 是累计覆盖秒,小时数由 fmtHours 内部完成秒→小时换算。
+        formatter: (p) => p.name + ": " + p.percent.toFixed(1) + "% (" + fmtHours(p.value) + ")",
       }),
       legend: { bottom: 0, left: "center", icon: "circle", itemWidth: 8, itemHeight: 8,
         textStyle: { color: C.label, fontSize: 11 } },
@@ -2104,7 +2140,10 @@
       }),
       legend: { top: 4, right: 8, icon: "roundRect", itemWidth: 12, itemHeight: 4,
         textStyle: { color: C.label, fontSize: 11.5 } },
-      grid: timeGrid(),
+      // 三轴显式定位避免重叠:热压力独占左轴(0~3);温度与风扇分列右侧两轴,
+      // 风扇轴再右移(offset)与温度轴错开,否则两条右轴刻度标签叠在一起看不清。
+      // CPU 与电池温度同量纲共用一条温度轴即可分辨趋势,无需再拆。
+      grid: Object.assign(timeGrid(), { right: 92 }),
       xAxis: baseAxis({ type: "time" }),
       yAxis: [
         baseAxis({ type: "value", min: 0, max: 3,
@@ -2113,9 +2152,10 @@
             color: C.label, fontSize: 10.5,
           },
           splitLine: { show: false } }),
-        baseAxis({ type: "value", scale: true,
+        baseAxis({ type: "value", scale: true, position: "right",
           axisLabel: { formatter: (val) => val + "°C", color: C.label, fontSize: 11 } }),
         baseAxis({ type: "value", scale: true, splitLine: { show: false },
+          position: "right", offset: 54,
           axisLabel: { formatter: (val) => (val / 1000) + "k", color: C.label, fontSize: 11 } }),
       ],
       dataZoom: [{ type: "inside" }],
@@ -2142,17 +2182,24 @@
     });
     const list = [];
     const from = currentFrom, to = currentTo;
-    for (let ts = startOfLocalDay(from); ts < to; ts += DAY) {
+    // 步进用日历 setDate(+1) 推"下一天本地午夜",而非固定 +DAY:夏令时切换日相邻
+    // 两午夜间隔 23/25 小时,固定步进会从此永远偏离本地午夜,dayMap.get 全部落空。
+    // dailyTotals 已用 same 归一化,此处保持一致。
+    for (let ts = startOfLocalDay(from); ts < to; ) {
+      const next = new Date(ts);
+      next.setDate(next.getDate() + 1);
+      const nextTs = next.getTime();
       let row = dayMap.get(ts);
       if (!row && ts === startOfToday) {
         const minutes = rowsBetween(DATA.minutes, ts, Date.now());
         if (minutes.length) row = minutes.reduce(aggregateReduce, blankRow(ts));
       }
       if (!row && source !== "days") {
-        const hours = rowsBetween(DATA.hours, ts, ts + DAY);
+        const hours = rowsBetween(DATA.hours, ts, nextTs);
         if (hours.length) row = hours.reduce(aggregateReduce, blankRow(ts));
       }
       if (row) list.push(row);
+      ts = nextTs;
     }
     const head = [
       I.colDay, I.colCpuAvg, I.colCpuPeak, I.colMemAvg, I.colMemPressure,
@@ -2181,7 +2228,7 @@
         [fmtBytes(v(r, "disk_write")), ""],
         [ac == null ? "—" : fmtPct(ac * 100, 0), ""],
         [fmtW(v(r, "power_avg")), ""],
-        [fmtHours(frames(r)), ""],
+        [fmtHours(coverSeconds(r)), ""],
       ];
       cells.forEach(([text, cls]) => {
         const td = el("td");
@@ -2306,7 +2353,19 @@
     document.querySelectorAll("#ranges button").forEach((b) => {
       b.classList.toggle("active", b.dataset.key === currentRange);
     });
-    $("cal-btn").classList.toggle("active", !!custom);
+    const rangeField = $("cal-range");
+    rangeField.classList.toggle("active", !!custom);
+    if (custom) rangeField.value = fmtDate(custom[0]) + " – " + fmtDate(custom[1] - 1);
+    else { rangeField.value = ""; if (calPicker.selectedDates.length) calPicker.clear(); }
+    // 跨日聚合板块(活动热力图、网络每日、磁盘每日)只在多维概览(周/月/自定义)
+    // 才有价值—今日下热力图退化为单日、每日柱状只剩一根。今日时隐藏,
+    // 其余范围恢复。data-keep-nav 标记保证隐藏时仍保留粘性导航锚点。
+    const isToday = currentRange === "today";
+    $("sec-heatmap").hidden = isToday;
+    $("sec-net-daily").hidden = isToday;
+    $("sec-disk-daily").hidden = isToday;
+    // 同步粘性导航锚点可见性:跨日板块今日隐藏时其链接同时收起
+    navItems.forEach(([link, sec]) => { if (sec.dataset["keepNav"]) link.hidden = sec.hidden; });
     let from, to;
     if (custom) {
       [from, to] = custom;
@@ -2379,16 +2438,6 @@
     $("sec-batt").hidden = true;
   }
 
-  const maxT = Math.max(
-    DATA.minutes.length ? timeOf(DATA.minutes[DATA.minutes.length - 1]) : 0,
-    DATA.hours.length ? timeOf(DATA.hours[DATA.hours.length - 1]) : 0,
-    DATA.days.length ? timeOf(DATA.days[DATA.days.length - 1]) : 0,
-  );
-  const iso = (ts) => new Date(ts - new Date(ts).getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  $("date-from").value = iso(maxT - 6 * DAY);
-  $("date-to").value = iso(maxT);
-
-  renderHeatmap(startOfToday - 59 * DAY, startOfToday + DAY);
   applyRange();
 
   // ── 视觉增强:分区标题图标芯片 / 粘性导航 / 滚动进场 / 回到顶部 ──
@@ -2417,9 +2466,11 @@
     const navLinks = $("nav-links");
     const navPill = $("nav-pill");
     const navProgress = $("nav-progress");
-    const navItems = [];
+    navItems = [];
     document.querySelectorAll("#content > section").forEach((sec, i) => {
-      if (sec.hidden || sec.classList.contains("inner-grid")) return;
+      // 常规 section 隐藏时不入导航;data-keep-nav(跨日聚合板块)例外,其锚点
+      // 常驻导航,仅随板块显隐切换链接可见性(今日隐藏、周/月显示)。
+      if ((sec.hidden && !sec.dataset["keepNav"]) || sec.classList.contains("inner-grid")) return;
       const heading = sec.querySelector("h2");
       if (!heading || !heading.textContent) return;
       if (!sec.id) sec.id = "sec-auto-" + i;
@@ -2428,8 +2479,10 @@
       link.textContent = sec.id === "sec-apps" && I.secAppsTitle ? I.secAppsTitle : heading.textContent;
       link.addEventListener("click", (e) => {
         e.preventDefault();
+        if (sec.hidden) return;
         sec.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
       });
+      link.hidden = sec.hidden;
       navLinks.appendChild(link);
       navItems.push([link, sec]);
     });

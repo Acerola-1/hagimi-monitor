@@ -42,14 +42,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 而 size reader 的首次上报在 init 布局阶段就已发生。
     private var lastReportedContentSize: CGSize = .zero
 
-    /// 展开动画进行中标记:此期间 contentSizeDidChange 的逐帧上报被忽略——
-    /// 窗口已由 CoreAnimation 一次性补间 frame,逐帧 setFrame 只会与 CA 动画
-    /// 叠加冲突并把 CPU 打满。动画结束后由 contentSizeDidChange 做最终校准。
-    private var isAnimatingExpansion = false
-    /// 展开/收起动画代号:每次 applyWindowHeight 递增,只有最新一次动画的复位
-    /// 回调生效。快速连续 toggle(如双击 header)时,早先动画的复位定时器不再
-    /// 提前清掉在途动画的标记(否则逐帧贴合突然放行,与 CA 冲突导致跳变)。
-    private var expansionAnimationToken = 0
+    /// 展开/收起动画执行器(token 代际 + isAnimating 抑制 + 结束对账)。
+    /// 与钉住面板共享同一套竞态防护,见 PanelExpansionAnimation。
+    private let expansionAnimation = PanelExpansionAnimation()
 
     /// 向 SwiftUI 侧下发布局约束(内容高度上限)。面板主体据此自行封顶并在
     /// 内部 ScrollView 滚动,header 固定在外、不参与滚动。
@@ -229,6 +224,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let intrinsic = hosting.intrinsicContentSize
         if intrinsic.width > 1, intrinsic.height > 1 {
             panel.setContentSize(intrinsic)
+        }
+
+        // 调试自动测试:启动 0.5s 后自动呼出面板(无需人工点击状态栏)。
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
+                guard let self, !self.panel.isVisible else { return }
+                self.showPanel()
+            }
         }
     }
 
@@ -472,11 +475,16 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// driver 在 toggle 时一次性调用:把目标内容高度下发给窗口层。
     /// animated=true 时由 CoreAnimation(`animator().setFrame`)补间窗口 frame,
-    /// 整个动画期间窗口 resize 只发生一次;`isAnimatingExpansion` 抑制期间的
-    /// contentSizeDidChange 逐帧贴合。animated=false 时同步贴合(初始化/隐藏重置)。
+    /// 整个动画期间窗口 resize 只发生一次;`expansionAnimation.isAnimatingExpansion`
+    /// 抑制期间的 contentSizeDidChange 逐帧贴合。animated=false 时同步贴合(初始化/隐藏重置)。
     private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
         guard panel.isVisible, let buttonWindow = statusItem.button?.window else { return }
         let size = CGSize(width: panel.frame.width, height: contentHeight)
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+            NSLog("[autotest] applyWindowHeight h=%.1f anim=%d cur=%.1f equal=%d",
+                  contentHeight, animated ? 1 : 0, panel.frame.height,
+                  panel.frame.size == size ? 1 : 0)
+        }
         guard panel.frame.size != size else { return }
 
         updateContentHeightCap()
@@ -503,16 +511,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             }
         }
         if animated {
-            expansionAnimationToken += 1
-            let token = expansionAnimationToken
-            isAnimatingExpansion = true
-            let context = NSAnimationContext.current
-            context.duration = MonitorConstants.panelExpansionDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-            panel.animator().setFrame(newFrame, display: false)
-            DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
-                guard let self, self.expansionAnimationToken == token else { return }
-                self.isAnimatingExpansion = false
+            expansionAnimation.animate(panel: panel, to: newFrame) { [weak self] in
+                guard let self else { return }
                 // 对账:动画期间被丢弃的尺寸上报在此补贴合一次。不做这步,
                 // 若最终上报恰好落在动画窗口内被丢弃且无重试,窗口会永久卡在
                 // 错误高度(快速连续 toggle 时尤为可见)。
@@ -542,14 +542,19 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 推导、天然同相;数据驱动的尺寸变化同样瞬时贴合。
     private func contentSizeDidChange(to size: CGSize) {
         if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
-            NSLog("[autotest] sizeDidChange h=%.1f visible=%d", size.height, panel.isVisible ? 1 : 0)
+            NSLog("[autotest] sizeDidChange h=%.1f visible=%d anim=%d cur=%.1f",
+                  size.height, panel.isVisible ? 1 : 0,
+                  expansionAnimation.isAnimatingExpansion ? 1 : 0, panel.frame.height)
         }
         lastReportedContentSize = size
         // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
-        guard !isAnimatingExpansion else { return }
+        guard !expansionAnimation.isAnimatingExpansion else { return }
         guard panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.isAnimatingExpansion, self.panel.frame.size != size else { return }
+            guard let self, !self.expansionAnimation.isAnimatingExpansion, self.panel.frame.size != size else { return }
+            if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+                NSLog("[autotest] sizeDidChange -> setFrame h=%.1f", size.height)
+            }
             self.setPanelFrame(size: size)
         }
     }

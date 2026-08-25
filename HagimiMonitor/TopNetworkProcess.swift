@@ -22,6 +22,9 @@ struct TopNetworkProcess: Identifiable, Equatable {
 struct RawNetworkProcess {
     let pid: pid_t
     let name: String
+    /// 宿主可执行文件路径(采样时捕获,enrich 复用——避免每行重复 executablePath 系统调用,
+    /// 与 CPU/内存/GPU/磁盘四类 Raw*Process 的 path 字段口径一致)。
+    let path: String
     let download: UInt64
     let upload: UInt64
 }
@@ -36,6 +39,10 @@ private struct NetworkSnapshotEntry {
 /// 网络快照，用于计算增量。
 private var previousNetworkSnapshot: [pid_t: NetworkSnapshotEntry] = [:]
 private var previousNetworkSnapshotTime: Date?
+
+/// nettop 子进程采样的超时阈值。nettop 在异常网络栈/僵尸状态下可能挂起不退出,
+/// 若无防护会永久堵死串行采样队列(面板/统计/展开补采全部停摆)。
+private let nettopSampleTimeout: TimeInterval = 8
 
 /// 后台采样网络流量最高的 N 个进程。
 /// 使用 `nettop -P -L 1 -n` 获取每个进程的上下行字节，维护快照计算速率（字节/秒）。
@@ -62,12 +69,23 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
     }
 
     inputPipe.fileHandleForWriting.closeFile()
-    let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-    outputPipe.fileHandleForReading.closeFile()
+    // 读输出放后台线程,信号量等待,超时终止进程并放弃本次结果(保留上一次列表)。
+    nonisolated(unsafe) var data: Data?
+    let done = DispatchSemaphore(value: 0)
+    DispatchQueue.global(qos: .utility).async {
+        data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+        done.signal()
+    }
+    if done.wait(timeout: .now() + nettopSampleTimeout) == .timedOut {
+        task.terminate()
+        return []
+    }
     task.waitUntilExit()
+    let outputData = data ?? Data()
+    outputPipe.fileHandleForReading.closeFile()
 
     guard task.terminationStatus == 0,
-          let output = String(data: data, encoding: .utf8), !output.isEmpty else {
+          let output = String(data: outputData, encoding: .utf8), !output.isEmpty else {
         return []
     }
 
@@ -95,7 +113,7 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
     // 计算增量与速率（字节/秒）。dt 在此路径上必然 > 0（首次采样已被 continue 拦截），无需额外下限保护。
     let now = Date()
     let dt = previousNetworkSnapshotTime.map { now.timeIntervalSince($0) } ?? 0
-    var result: [RawNetworkProcess] = []
+    var perProcessRate: [pid_t: (download: UInt64, upload: UInt64)] = [:]
 
     for (pid, current) in currentList {
         let prev = previousNetworkSnapshot[pid]
@@ -109,21 +127,37 @@ func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = fa
         let downloadRate = UInt64(Double(downloadDelta) / dt)
         let uploadRate = UInt64(Double(uploadDelta) / dt)
         guard downloadDelta > 0 || uploadDelta > 0 else { continue }
+        perProcessRate[pid] = (downloadRate, uploadRate)
+    }
 
-        // 系统进程过滤
-        if !includeSystemProcesses {
-            let path = executablePath(for: pid)
-            let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { path.contains($0) }
-            let isSystem = path.isEmpty || systemProcessPathPrefixes.contains { path.hasPrefix($0) }
-            if !isAlwaysVisible, isSystem {
-                continue
-            }
+    // 按 responsible pid 归并:助手进程(浏览器渲染进程、各类 Helper)的流量并入宿主
+    // 应用,与 CPU/内存/GPU/磁盘四类 TOP 列表口径一致——否则 Safari 的 WebContent 子进程
+    // 会逐条单列,真实流量被拆散到截断线以下,宿主应用可能不进榜单。
+    var groups: [pid_t: (name: String, download: UInt64, upload: UInt64)] = [:]
+    for (pid, rate) in perProcessRate {
+        let responsiblePid = responsiblePidResolver(pid)
+        let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
+        if groups[groupKey] == nil {
+            groups[groupKey] = (name: currentList[groupKey]?.rawName ?? "", download: 0, upload: 0)
+        }
+        groups[groupKey]?.download += rate.download
+        groups[groupKey]?.upload += rate.upload
+    }
+
+    // 系统进程过滤 + 生成结果
+    var result: [RawNetworkProcess] = []
+    result.reserveCapacity(groups.count)
+
+    for (groupKey, group) in groups {
+        let path = executablePath(for: groupKey)
+        if isSystemProcessPath(path, includeSystemProcesses: includeSystemProcesses) {
+            continue
         }
 
-        let name = current.rawName.isEmpty ? "pid \(pid)" : current.rawName
+        let name = group.name.isEmpty ? "pid \(groupKey)" : group.name
         result.append(RawNetworkProcess(
-            pid: pid, name: name,
-            download: downloadRate, upload: uploadRate
+            pid: groupKey, name: name, path: path,
+            download: group.download, upload: group.upload
         ))
     }
 
@@ -154,7 +188,7 @@ func enrichNetwork(_ rawProcesses: [RawNetworkProcess]) -> [TopNetworkProcess] {
             name = raw.name
         }
 
-        let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: executablePath(for: raw.pid))
+        let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)
 
         return TopNetworkProcess(
             pid: raw.pid, name: name,

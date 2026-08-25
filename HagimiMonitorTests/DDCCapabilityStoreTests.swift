@@ -1,5 +1,5 @@
 import Testing
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 import CoreGraphics
 
 /// 能力模型取代旧的失败计数禁用逻辑。核心不变式:

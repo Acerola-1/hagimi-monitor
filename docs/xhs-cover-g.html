@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>HagimiMonitor V1.5 · 封面G · 巨字编辑部</title>
+<style>
+  :root { --bg:#f5f5f7; --ink:#1d1d1f; --accent:#0071e3; --muted:#6e6e73; --border:#d2d2d7;
+    --display:"SF Pro Display",system-ui,-apple-system,"PingFang SC",sans-serif;
+    --body:"SF Pro Text",system-ui,-apple-system,"PingFang SC",sans-serif; }
+  *{box-sizing:border-box;margin:0} html,body{background:#fff}
+  .page{width:1080px;height:1440px;position:relative;overflow:hidden;font-family:var(--body);color:var(--ink);
+    background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.028) 0 1px, transparent 1px 108px),
+      radial-gradient(760px 420px at 90% -8%, rgba(0,113,227,.10), transparent 60%),
+      var(--bg);
+    padding:64px 88px 56px;display:flex;flex-direction:column}
+
+  .brand{display:flex;align-items:center;gap:16px}
+  .brand img{width:58px;height:58px;border-radius:15px;box-shadow:0 8px 24px rgba(0,0,0,.13)}
+  .brand .n{font-family:var(--display);font-size:27px;font-weight:600;letter-spacing:-.02em}
+  .pill{margin-left:auto;display:flex;align-items:center;gap:12px;background:#fff;border:1px solid var(--border);
+    border-radius:999px;padding:11px 24px;font-size:13px;font-weight:700;letter-spacing:.16em;color:var(--accent)}
+  .pill b{font-family:var(--display);font-size:19px;letter-spacing:.02em;color:var(--ink)}
+
+  .kicker{margin-top:44px;font-size:19px;font-weight:700;color:var(--accent);letter-spacing:.14em}
+  /* 巨型版本号:全页视觉锚点;padding-right 抵消负字距行框亏空,避免末位字形被裁 */
+  .big{margin-top:10px;text-align:right;font-family:var(--display);font-weight:800;font-size:330px;line-height:.86;
+    letter-spacing:-.05em;padding-right:.06em;font-variant-numeric:tabular-nums;
+    background:linear-gradient(160deg,var(--ink) 28%,var(--accent) 92%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .big em{font-style:normal;font-size:132px;font-weight:700;letter-spacing:0;vertical-align:34px;margin-right:10px}
+  h1{margin-top:6px;font-family:var(--display);font-size:82px;line-height:1.12;font-weight:800;letter-spacing:-.03em}
+  h1 span{background:linear-gradient(100deg,var(--accent),#0a84ff);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .tag{margin-top:18px;font-size:23px;color:var(--muted);letter-spacing:.05em}
+  .tag b{color:var(--accent);font-weight:600}
+
+  .list{margin-top:42px;display:grid;grid-auto-flow:column;grid-template-rows:repeat(5,auto);column-gap:56px}
+  .row{border-top:1px solid var(--border);padding:15px 0 13px}
+  .in{display:flex;align-items:baseline;gap:14px}
+  .num{flex:none;width:34px;font-family:var(--display);font-size:17px;font-weight:800;color:var(--accent);
+    font-variant-numeric:tabular-nums}
+  .t{font-family:var(--display);font-size:23px;font-weight:650;letter-spacing:-.01em}
+  .d{margin:4px 0 0 48px;font-size:14.5px;color:var(--muted)}
+
+  .foot{margin-top:auto;padding-top:24px;border-top:1px solid var(--border);display:flex;align-items:center;
+    font-size:17px;color:var(--muted)}
+  .foot .r{margin-left:auto;font-weight:700;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="brand"><img src="images/icon.png" alt=""><span class="n">Hagimi Monitor</span>
+    <span class="pill">MAJOR RELEASE</span></div>
+
+  <div class="kicker">1.0.0 以来最大更新</div>
+  <div class="big"><em>V</em>1.5</div>
+  <h1>十项升级，<span>全面进化</span></h1>
+  <div class="tag">更快 · 更美 · <b>更懂你的 Mac</b></div>
+
+  <div class="list">
+    <div class="row"><div class="in"><span class="num">01</span><span class="t">全新 UI 设计</span></div><div class="d">渐变色 + 深色内衬，视觉焕然一新</div></div>
+    <div class="row"><div class="in"><span class="num">02</span><span class="t">Mac 健康评分</span></div><div class="d">掌握忙碌与压力，附可视化历史数据</div></div>
+    <div class="row"><div class="in"><span class="num">03</span><span class="t">GPU 监测升级</span></div><div class="d">新增占用 TOP 排行，一眼看清显卡压力</div></div>
+    <div class="row"><div class="in"><span class="num">04</span><span class="t">蓝牙设备监测</span></div><div class="d">支持常见设备电量显示</div></div>
+    <div class="row"><div class="in"><span class="num">05</span><span class="t">电源模块重制</span></div><div class="d">功率流升级，展示更完整供电信息</div></div>
+    <div class="row"><div class="in"><span class="num">06</span><span class="t">显示器模块增强</span></div><div class="d">更多信息展示，支持一键复制</div></div>
+    <div class="row"><div class="in"><span class="num">07</span><span class="t">三款实用小工具</span></div><div class="d">键盘锁 / 防休眠 / 不息屏，持续扩展</div></div>
+    <div class="row"><div class="in"><span class="num">08</span><span class="t">App Store 大升级</span></div><div class="d">补齐 CPU/内存 TOP、蓝牙等直连版能力</div></div>
+    <div class="row"><div class="in"><span class="num">09</span><span class="t">大量代码优化</span></div><div class="d">性能提升，动画更流畅、后台占用更低</div></div>
+    <div class="row"><div class="in"><span class="num">10</span><span class="t">大量 Bug 修复</span></div><div class="d">细节体验打磨，欢迎你来发现</div></div>
+  </div>
+
+  <div class="foot"><span>App Store / GitHub 双渠道下载</span><span class="r">@Acerola</span></div>
+</div>
+</body>
+</html>

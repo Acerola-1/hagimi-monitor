@@ -10,6 +10,17 @@ enum QuickToolKind: CaseIterable {
     case systemAwake
     case displayAwake
 
+    /// 设置持久化用的稳定标识:与展示名/图标解耦,改名不影响已存设置;
+    /// 新增工具需补 case 与 titleKey/symbol/storageKey,并在
+    /// MonitorSettings 的 introducedByVersion 迁移登记一次。
+    var storageKey: String {
+        switch self {
+        case .keyboardLock: "keyboardLock"
+        case .systemAwake: "systemAwake"
+        case .displayAwake: "displayAwake"
+        }
+    }
+
     var titleKey: String.LocalizationValue {
         switch self {
         case .keyboardLock: "quicktools.keyboard-lock"
@@ -82,15 +93,16 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
         popover.delegate = self
     }
 
-    /// 以入口按钮的锚点盒向下弹出/收起浮层。
-    func toggle(theme: MonitorPanelTheme, anchor: QuickToolsAnchorBox) {
+    /// 以入口按钮的锚点盒向下弹出/收起浮层。settings 提供工具显隐过滤
+    /// (用户在设置「小工具」页关闭的工具不渲染磁贴)。
+    func toggle(theme: MonitorPanelTheme, settings: MonitorSettings, anchor: QuickToolsAnchorBox) {
         if popover.isShown {
             popover.performClose(nil)
             return
         }
         guard CACurrentMediaTime() - lastCloseMediaTime > 0.15 else { return }
         guard let anchorView = anchor.view, anchorView.window != nil else { return }
-        let controller = prepareHostingController(theme: theme)
+        let controller = prepareHostingController(theme: theme, settings: settings)
         popover.contentViewController = controller
         activeAnchor = anchor
         QuickToolsStore.shared.isPopoverPresented = true
@@ -127,17 +139,17 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
 
     /// 预热内容控制器:未布局时 fittingSize 读数为零,浮层会以零尺寸弹出
     /// 导致「点了没反应」;布局异常时退回定宽估算尺寸兜底。
-    private func prepareHostingController(theme: MonitorPanelTheme) -> NSHostingController<QuickToolsPopoverView> {
+    private func prepareHostingController(theme: MonitorPanelTheme, settings: MonitorSettings) -> NSHostingController<QuickToolsPopoverView> {
         if let existing = hostingController {
-            existing.rootView = QuickToolsPopoverView(theme: theme)
+            existing.rootView = QuickToolsPopoverView(settings: settings, theme: theme)
             return existing
         }
-        let controller = NSHostingController(rootView: QuickToolsPopoverView(theme: theme))
+        let controller = NSHostingController(rootView: QuickToolsPopoverView(settings: settings, theme: theme))
         controller.view.layoutSubtreeIfNeeded()
         let fitting = controller.view.fittingSize
         popover.contentSize = fitting.width > 1 && fitting.height > 1
             ? fitting
-            : CGSize(width: 250, height: 220)
+            : CGSize(width: 290, height: 220)
         hostingController = controller
         return controller
     }
@@ -148,16 +160,26 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
 /// 按钮弹出,内容即入口本身,标题行只占纵向空间。
 struct QuickToolsPopoverView: View {
     @ObservedObject private var store = QuickToolsStore.shared
+    @ObservedObject var settings: MonitorSettings
     let theme: MonitorPanelTheme
+
+    /// 按设置页「小工具」的显隐开关过滤磁贴;激活中的工具豁免(见
+    /// QuickToolsStore.isActive),保证运行中的工具永远有操作入口。
+    /// 新增工具补 QuickToolKind case 即自动出现。
+    private var visibleKinds: [QuickToolKind] {
+        QuickToolKind.allCases.filter { settings.isQuickToolVisible($0) || store.isActive($0) }
+    }
 
     var body: some View {
         VStack(spacing: 7) {
-            ForEach(QuickToolKind.allCases, id: \.self) { kind in
+            ForEach(visibleKinds, id: \.self) { kind in
                 QuickToolTile(kind: kind, theme: theme)
             }
         }
         .padding(12)
-        .frame(width: 250)
+        // 浮层宽度按最长英文标题「Prevent Idle Sleep」预算:标题可用
+        // 空间 = 宽 − 内外边距 − 徽章 32 − 间距 − 开关,290pt 时留有余量。
+        .frame(width: 290)
         .onAppear { store.refreshKeyboardLockPermission() }
         // 浮层开着期间每 2s 校准一次键盘锁定授权状态(App Store 渠道撤销
         // 无事件通知,只能轮询);浮层关闭时 hostingController 释放,本视图
@@ -286,12 +308,13 @@ private struct QuickToolTileButtonStyle: ButtonStyle {
 /// 开关状态与浮层开闭只重绘本按钮,不牵动整块面板,避免面板闪烁。
 struct QuickToolsEntryButton: View {
     @ObservedObject private var store = QuickToolsStore.shared
+    @ObservedObject var settings: MonitorSettings
     let theme: MonitorPanelTheme
     @State private var anchor = QuickToolsAnchorBox()
 
     var body: some View {
         Button {
-            store.popoverPresenter.toggle(theme: theme, anchor: anchor)
+            store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
         } label: {
             Label(String(localized: "panel.tools"), systemImage: "wrench.and.screwdriver")
                 .lineLimit(1)

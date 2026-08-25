@@ -130,12 +130,8 @@ func sampleTopGPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false)
         guard usage > 0.1 else { continue }
 
         let hostPath = group.path
-        if !includeSystemProcesses {
-            let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { hostPath.contains($0) }
-            let isSystem = hostPath.isEmpty || systemProcessPathPrefixes.contains { hostPath.hasPrefix($0) }
-            if !isAlwaysVisible, isSystem {
-                continue
-            }
+        if isSystemProcessPath(hostPath, includeSystemProcesses: includeSystemProcesses) {
+            continue
         }
 
         let fallbackName = hostPath.isEmpty ? "pid \(groupKey)" : (hostPath as NSString).lastPathComponent

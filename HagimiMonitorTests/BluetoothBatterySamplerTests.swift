@@ -1,6 +1,6 @@
 import Testing
 import Foundation
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 
 struct BluetoothBatteryParserTests {
     @Test func parsesSinglePercent() {

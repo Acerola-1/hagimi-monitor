@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app/Contents/Developer
+
+      # 沙盒 target:App Store 出包路径,先保证能编。
+      - name: Build (Sandbox)
+        run: >
+          xcodebuild build
+          -project hagimi-monitor.xcodeproj
+          -scheme HagimiMonitor
+          -configuration Debug
+          -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO
+
+      # Direct target:DisplayControl 代码路径,产物名已与沙盒区分。
+      - name: Build (Direct)
+        run: >
+          xcodebuild build
+          -project hagimi-monitor.xcodeproj
+          -scheme HagimiMonitorDirect
+          -configuration Debug
+          -destination 'platform=macOS'
+          CODE_SIGNING_ALLOWED=NO
+
+      # 单测以 Direct app 为宿主(DDC/ps 等符号在 Direct 模块),走 Direct scheme。
+      - name: Unit tests
+        run: >
+          xcodebuild test
+          -project hagimi-monitor.xcodeproj
+          -scheme HagimiMonitorDirect
+          -configuration Debug
+          -destination 'platform=macOS'
+          -only-testing:HagimiMonitorTests
+          CODE_SIGNING_ALLOWED=NO

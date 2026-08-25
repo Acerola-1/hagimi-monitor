@@ -36,6 +36,13 @@ final class UsageReporter: @unchecked Sendable {
     private var timer: DispatchSourceTimer?
     private var isSending = false
 
+    /// 遥测是否开启。默认开启;用户在设置中关闭后不再上报(见 `reportIfNeeded` 的守卫)。
+    /// 关闭/开启即时生效,无需重启。
+    var isEnabled: Bool {
+        get { defaults.object(forKey: Keys.enabled) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: Keys.enabled) }
+    }
+
     private init(
         endpoint: URL? = URL(string: "https://us.i.posthog.com/capture/"),
         defaults: UserDefaults = .standard,
@@ -60,6 +67,8 @@ final class UsageReporter: @unchecked Sendable {
     /// 等下一次触发（周期 tick 或下次启动）再试。
     func reportIfNeeded(trigger: Trigger) {
         guard let endpoint else { return }
+        // 遥测退出开关:用户关闭后不再上报,关闭/开启即时生效。
+        guard isEnabled else { return }
         queue.async { [weak self] in
             guard let self else { return }
             guard !self.isSending else { return }
@@ -173,4 +182,5 @@ final class UsageReporter: @unchecked Sendable {
 private enum Keys {
     static let installID = "telemetry.installID"
     static let lastReportedDate = "telemetry.lastReportedDate"
+    static let enabled = "telemetry.enabled"
 }

@@ -7,6 +7,14 @@ struct GeneralSettingsView: View {
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var store: MonitorStore
 
+    /// 外观组三个分段选择器的统一宽度:宽度由内容自适应时,各行段宽分布
+    /// 不同(如「English」与「浅色」字宽差异)导致分段边界错开,视觉不对齐。
+    private static let segmentedPickerWidth: CGFloat = 220
+
+    /// 语言切换待重启提示:偏好与 AppleLanguages 覆写已同步写入,
+    /// 仅提示用户重启(立即/稍后)以原子切换全部界面文案。
+    @State private var showsLanguageRestartAlert = false
+
     var body: some View {
         SettingsPage {
             SettingsGroup {
@@ -24,6 +32,19 @@ struct GeneralSettingsView: View {
             }
 
             SettingsGroup(String(localized: "settings.appearance")) {
+                SettingsRow(title: String(localized: "settings.language")) {
+                    Picker(String(localized: "settings.language"), selection: $settings.languagePreference) {
+                        ForEach(AppLanguagePreference.allCases) { language in
+                            Text(language.title).tag(language)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.segmented)
+                    .frame(width: Self.segmentedPickerWidth)
+                }
+
+                SettingsDivider()
+
                 SettingsRow(title: String(localized: "settings.theme")) {
                     Picker(String(localized: "settings.theme"), selection: $settings.themePreference) {
                         ForEach(AppThemePreference.allCases) { theme in
@@ -32,6 +53,7 @@ struct GeneralSettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
+                    .frame(width: Self.segmentedPickerWidth)
                 }
 
                 SettingsDivider()
@@ -44,10 +66,42 @@ struct GeneralSettingsView: View {
                     }
                     .labelsHidden()
                     .pickerStyle(.segmented)
+                    .frame(width: Self.segmentedPickerWidth)
                 }
             }
 
             MenuBarDisplaySettingsSection(settings: settings, store: store)
+        }
+        .onChange(of: settings.languagePreference) { _, _ in
+            showsLanguageRestartAlert = true
+        }
+        .alert(
+            String(localized: "settings.language.restart.title"),
+            isPresented: $showsLanguageRestartAlert
+        ) {
+            Button(String(localized: "settings.language.restart.later")) {}
+            Button(String(localized: "settings.language.restart.now")) {
+                relaunchApp()
+            }
+            .keyboardShortcut(.defaultAction)
+        } message: {
+            Text(String(localized: "settings.language.restart.message"))
+        }
+    }
+
+    /// 重新拉起自身并退出:AppleLanguages 覆写需整进程重启才原子生效
+    /// (常驻视图树与 AppKit 菜单的既有文案不会跟随运行期切换)。
+    /// 先拉起新进程再退出旧进程,菜单栏图标无肉眼可见的空窗。
+    private func relaunchApp() {
+        guard let executableURL = Bundle.main.executableURL else { return }
+        let process = Process()
+        process.executableURL = executableURL
+        do {
+            try process.run()
+            NSApp.terminate(nil)
+        } catch {
+            // 拉起失败(可执行文件被移动等极端情形)保留旧进程,
+            // 用户手动重启同样生效,不打断当前会话。
         }
     }
 }
@@ -91,6 +145,11 @@ private struct QuickAccessShortcutRecorder: View {
         }
         .animation(.easeInOut(duration: 0.15), value: model.isRecording)
         .animation(.easeInOut(duration: 0.15), value: model.shortcut)
+        // 设置窗口关闭只 orderOut 不销毁视图树,onDisappear 不触发;录制中的本地
+        // 按键监视器会一直吞掉全 app 按键、全局快捷键保持禁用。监听窗口关闭兜底拆除。
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.willCloseNotification)) { _ in
+            model.stopRecording()
+        }
         .onDisappear { model.stopRecording() }
     }
 

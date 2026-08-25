@@ -354,7 +354,7 @@ struct MonitorModule: Identifiable, Equatable {
             if value >= MonitorConstants.networkWarningThreshold { return .warning }
             return .calm
         case .battery:
-            if metrics.first(where: { $0.name == "type" })?.value == "ac-power" {
+            if metrics.first(where: { $0.name == MonitorMetricKey.type })?.value == MonitorMetricKey.acPower {
                 return .calm
             }
             if value <= MonitorConstants.batteryCriticalThreshold { return .critical }
@@ -389,6 +389,13 @@ struct MonitorModule: Identifiable, Equatable {
             isPlaceholder: true
         )
     }
+}
+
+/// 采样指标 name 的跨文件契约键。采样器产出与消费方(severity 判定等)共享,
+/// 任一端改名编译器即报错,避免裸字符串断约后的静默降级(如电池交流供电判成 critical)。
+enum MonitorMetricKey {
+    static let type = "type"
+    static let acPower = "ac-power"
 }
 
 final class MonitorStore: ObservableObject {
@@ -531,7 +538,8 @@ final class MonitorStore: ObservableObject {
         fanSampler.$fans
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newFans in
-                self?.fans = newFans
+                guard let self else { return }
+                settleAfterExpansion { self.fans = newFans }
             }
             .store(in: &cancellables)
 
@@ -539,7 +547,8 @@ final class MonitorStore: ObservableObject {
         fanSampler.$status
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newStatus in
-                self?.fanStatus = newStatus
+                guard let self else { return }
+                settleAfterExpansion { self.fanStatus = newStatus }
             }
             .store(in: &cancellables)
 
@@ -554,14 +563,16 @@ final class MonitorStore: ObservableObject {
         bluetoothSampler.$devices
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newDevices in
-                self?.bluetoothDevices = newDevices
+                guard let self else { return }
+                settleAfterExpansion { self.bluetoothDevices = newDevices }
             }
             .store(in: &cancellables)
 
         bluetoothSampler.$controllerOn
             .receive(on: DispatchQueue.main)
             .sink { [weak self] isOn in
-                self?.bluetoothControllerOn = isOn
+                guard let self else { return }
+                settleAfterExpansion { self.bluetoothControllerOn = isOn }
             }
             .store(in: &cancellables)
 
@@ -667,6 +678,14 @@ final class MonitorStore: ObservableObject {
     /// 撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
     func beginExpansionAnimation() {
         expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
+        // 动画窗口内同步停更负载环 30fps 相位,不与展开动画抢主线程。
+        loadAnimator.suspend(until: expansionAnimationDeadline)
+    }
+
+    /// 是否处于展开/收起动画窗口期。功率流等 GPU 重型流光在窗口内停更,
+    /// 让出动画期间的渲染余量(外接屏扩放负载时尤为关键)。
+    var isExpansionAnimating: Bool {
+        Date() < expansionAnimationDeadline
     }
 
     /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证
@@ -1064,6 +1083,19 @@ final class MonitorStore: ObservableObject {
         }
     }
 
+    /// 动画窗口期内的 @Published 应用推迟:展开/收起动画的 ~0.2s 内,把非主采样的
+    /// 独立采样器(风扇/蓝牙)刷新同样排空,给逐帧动画让出主线程余量——主采样已按
+    /// 同一 deadline 推迟,这里补齐剩余会拖动面板子树重算的指标,外接屏扩放渲染
+    /// 负载时余量越少越易掉帧。
+    private func settleAfterExpansion(_ apply: @escaping () -> Void) {
+        let deadline = expansionAnimationDeadline
+        if Date() < deadline {
+            DispatchQueue.main.asyncAfter(deadline: .now() + deadline.timeIntervalSinceNow, execute: apply)
+        } else {
+            apply()
+        }
+    }
+
     private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
         switch result {
         case .success(let snapshot):
@@ -1204,6 +1236,8 @@ final class MenuBarLoadAnimator: ObservableObject {
 
     private var targetComputeLoad = 0.0
     private var smoothingTimerCancellable: AnyCancellable?
+    /// 展开动画窗口截止时刻:窗口内暂停 30fps 推进,动画结束后恢复平滑。
+    private var suspensionDeadline = Date.distantPast
 
     func updateTarget(_ target: Double) {
         guard ComputeLoadModel.shouldUpdateMenuBarTarget(
@@ -1216,7 +1250,13 @@ final class MenuBarLoadAnimator: ObservableObject {
         ensureSmoothingTimer()
     }
 
+    /// 暂停平滑推进至指定时刻(用于展开动画窗口),动画结束后自然恢复。
+    func suspend(until deadline: Date) {
+        suspensionDeadline = deadline
+    }
+
     private func advanceSmoothing() {
+        guard Date() >= suspensionDeadline else { return }
         let next = ComputeLoadModel.smoothedDisplayValue(
             current: displayedComputeLoad,
             target: targetComputeLoad

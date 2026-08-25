@@ -120,11 +120,13 @@ nonisolated final class GammaDimmingController {
     private func applyGamma(displayID: CGDirectDisplayID, percent: Double) {
         let factor = CGGammaValue(percent / 100.0)
 
+        // 公式 out = (in^gamma) * (max-min) + min;调光 = 线性压暗 gamma=1, min=0, max=factor。
+        // 参数槽位依次为 red/green/blue 的 (min, max, gamma),调光值放 max 槽。
         let result = CGSetDisplayTransferByFormula(
             displayID,
-            1.0, 0.0, factor,
-            1.0, 0.0, factor,
-            1.0, 0.0, factor
+            0.0, factor, 1.0,
+            0.0, factor, 1.0,
+            0.0, factor, 1.0
         )
 
         if result == .success {

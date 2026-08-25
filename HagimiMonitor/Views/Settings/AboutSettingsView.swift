@@ -86,6 +86,15 @@ struct AboutSettingsView: View {
                     .compatibleButtonStyle()
                     .frame(width: accessoryColumnWidth, alignment: .leading)
                 }
+
+                SettingsRow(title: String(localized: "about.telemetry"), subtitle: String(localized: "about.telemetry.detail")) {
+                    Toggle("", isOn: Binding(
+                        get: { UsageReporter.shared.isEnabled },
+                        set: { UsageReporter.shared.isEnabled = $0 }
+                    ))
+                    .toggleStyle(.switch)
+                    .labelsHidden()
+                }
             }
 
             Text(String(localized: "© 2026 Acerola"))

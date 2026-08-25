@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import HagimiMonitor
+@testable import HagimiMonitorDirect
 
 struct SettingsTests {
     @Test func defaultThemePreference() {
@@ -51,7 +51,7 @@ struct SettingsTests {
         let settings = MonitorSettings(defaults: defaults)
 
         #expect(settings.menuBarDisplayMode == .ring)
-        #expect(settings.menuBarMetricKinds == [.cpuUsage])
+        #expect(settings.menuBarMetricKinds == MenuBarMetricKind.defaultSelection)
         #expect(settings.ringSource == .combined)
     }
 
@@ -60,12 +60,12 @@ struct SettingsTests {
         defaults.removePersistentDomain(forName: "menuBarMetricSelectionLimit")
         let settings = MonitorSettings(defaults: defaults)
 
-        settings.setMenuBarMetric(.gpuUsage, selected: true)
+        // 默认选择已占满上限(4 项),后续 set 全部被拒绝。
         settings.setMenuBarMetric(.memoryUsage, selected: true)
         settings.setMenuBarMetric(.batteryLevel, selected: true)
         settings.setMenuBarMetric(.networkDownload, selected: true)
 
-        #expect(settings.menuBarMetricKinds == [.cpuUsage, .gpuUsage, .memoryUsage, .batteryLevel])
+        #expect(settings.menuBarMetricKinds == MenuBarMetricKind.defaultSelection)
         #expect(!settings.canSelectMenuBarMetric(.networkDownload))
     }
 
@@ -74,9 +74,12 @@ struct SettingsTests {
         defaults.removePersistentDomain(forName: "menuBarMetricSelectionCannotBecomeEmpty")
         let settings = MonitorSettings(defaults: defaults)
 
-        settings.setMenuBarMetric(.cpuUsage, selected: false)
+        // 移除全部后回退到默认选择,选择集永不为空。
+        for kind in MenuBarMetricKind.defaultSelection {
+            settings.setMenuBarMetric(kind, selected: false)
+        }
 
-        #expect(settings.menuBarMetricKinds == [.cpuUsage])
+        #expect(settings.menuBarMetricKinds == MenuBarMetricKind.defaultSelection)
     }
 
     @Test func menuBarMetricOrderCanMove() {
@@ -84,10 +87,10 @@ struct SettingsTests {
         defaults.removePersistentDomain(forName: "menuBarMetricOrderCanMove")
         let settings = MonitorSettings(defaults: defaults)
 
-        settings.setMenuBarMetric(.gpuUsage, selected: true)
+        // gpuUsage 已在默认选择中(index 2),上移一位到 index 1。
         settings.moveMenuBarMetric(.gpuUsage, direction: -1)
 
-        #expect(settings.menuBarMetricKinds == [.gpuUsage, .cpuUsage])
+        #expect(settings.menuBarMetricKinds == [.cpuUsage, .gpuUsage, .cpuTemperature, .systemPower])
     }
 
     @Test func menuBarDisplaySettingsPersist() async throws {
@@ -103,7 +106,7 @@ struct SettingsTests {
         let restored = MonitorSettings(defaults: defaults)
 
         #expect(restored.menuBarDisplayMode == .metrics)
-        #expect(restored.menuBarMetricKinds == [.gpuUsage, .cpuUsage])
+        #expect(restored.menuBarMetricKinds == [.cpuUsage, .gpuUsage, .cpuTemperature, .systemPower])
     }
 
     @Test func defaultExpandedKindsDefaultsToEmptyAndPersists() async throws {
