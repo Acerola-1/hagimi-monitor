@@ -1,47 +1,50 @@
 <?xml version="1.0" standalone="yes"?>
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
-        <title>HagimiMonitor</title>
+        <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.5.0</title>
-            <pubDate>Sun, 23 Aug 2026 15:44:25 +0000</pubDate>
-            <sparkle:version>77</sparkle:version>
-            <sparkle:shortVersionString>1.5.0</sparkle:shortVersionString>
+            <title>1.5.1</title>
+            <pubDate>Tue, 25 Aug 2026 14:43:26 +0000</pubDate>
+            <sparkle:version>78</sparkle:version>
+            <sparkle:shortVersionString>1.5.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
+## 更新内容
+
+## 重要说明
+
+自 1.5.1 版本起，HagimiMonitor 将只维护简体中文与英文两种界面语言，不再提供其他语言的本地化。设置新增「界面语言」切换（设置 → 常规），可在跟随系统 / 简体中文 / English 间自由选择。
+
 ## 新功能
 
-- 新增数据统计系统：基于 SQLite 的分层聚合（分钟 / 小时 / 日），自动生成网页可视化报表（HTML），含区间筛选、热力图与趋势曲线，默认展示区间为今日；新增健康评分 V2、存储管理，设置页可配置并直达报表。
-- 键盘锁定双渠道统一：App Store 版弃用全屏遮罩，改为与直连版一致的事件 tap 拦截；App Store 版凭输入监控授权即可拦截全部按键（含 F1–F12 功能键），与媒体键接管互斥；未授权时磁贴显示所需权限提示，授权即隐。
-- 面板头部改造：移除右上角每日时钟，改为随行激活工具提示簇，键盘锁定、防休眠、不息屏等激活工具以小图标实时点亮（键盘锁定含自动解锁逐秒倒计时）；新增数据统计常驻入口；菜单栏上无激活工具时 header 浮层自动收起。
-- CPU 面板：温度与热压力合并为整行展示。
-- 显示器模块：新增档案详情与复制，双渠道信息呈现统一。
+- 界面语言切换：设置-常规新增「界面语言」，支持跟随系统 / 简体中文 / English，切换后重启生效。
+- 设置新增「小工具」页：可控制面板工具入口与浮层中各工具磁贴的显示；运行中的工具不会被隐藏，始终保留关闭入口。
+- 关于页新增「使用统计」开关，可随时关闭匿名使用数据上报。
 
-## 优化与性能
+## 优化与体验
 
-- 菜单栏横排布局引擎：支持图标+数字、文字+数字、紧凑三种单行横向布局，总宽静态计算不随实时数值跳动；常用值锚定消除内部跳动，尾部单位弱化。
-- 面板展开动画重构：以 SwiftUI 原生动画系统替代 60Hz Timer，收敛为单一驱动源。
-- 内存压力等级按 severity 分级着色。
-- 推迟蓝牙授权弹窗至面板可见时触发。
-- 统计链路收尾：占位模块不入库、电池接口失败不计入空调功率、日历弹窗补交互。
-- 活力配色可读性改造与电源流向图改版。
+- 快捷工具浮层加宽，英文界面下磁贴标题完整显示不再省略。
+- 面板动画稳定性：修复收起全部面板时的闪烁与卡顿、面板贴屏幕顶部时收起的跳变；展开动画期间负载环、流光与采样刷新自动让位，展开收起更顺滑。
+- 数据统计报表日期范围交互重做，修复跨日聚合与短时区间格式问题。
+- 面板指标格布局按语言静态规划，不再随采样数值跳动。
+- 收紧面板顶部留白；设置页隐藏滚动条。
+- 显示器音量：静音恢复时优先回到上次使用的音量（跨会话记忆）。
 
 ## 修复
 
-- 面板展开动画竞态与基线校准中毒。
-- 底部渐隐改用封顶高度作门控。
-- 电池条文字垂直居中。
+- 网络进程排行在系统查询超时时不再卡顿。
+- 打开设置窗口偶发的标签页直达失效。
 
 ## 其他
 
-- 设置窗口重构：宽度钉死、高度可拉伸并始终完整显示侧栏。
+- 感谢 @myg321 的建议：英文浮层磁贴文字显示不全、自定义工具显隐开关（#99）。
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.5.0/HagimiMonitor-v1.5.0.zip" length="4503425" type="application/octet-stream" sparkle:edSignature="Klw7kKnkgQ82msPyZp1gFx2U+lUh2ChFIr4NEBwHC+Pwdzg0ovGaIQuTDex3KGENuk38ipowB5LPScw+9UUzCA=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.5.1/HagimiMonitor-v1.5.1.zip" length="4539941" type="application/octet-stream" sparkle:edSignature="/AlJCrj8DqRQhUkQYmILXYweSQXz7+voBIYKYZpDsr9JGOwDrcX5csA4ozxpRUdHbvDWGH9fRkTeTiMzEeGoBw=="/>
         </item>
     </channel>
 </rss>
