@@ -68,8 +68,56 @@ enum MemoryPrimaryMetricPreference: String, CaseIterable, Identifiable {
     }
 }
 
+/// 界面语言偏好:跟随系统或强制中文/英文。
+/// 切换通过覆写 `AppleLanguages` 并重启进程生效——面板/设置等常驻视图树、
+/// AppKit 菜单的本地化字符串均已按当前语言求值,不重启会出现新旧混杂,
+/// 整进程重启是唯一原子切换方式(重启提示见 GeneralSettingsView)。
+enum AppLanguagePreference: String, CaseIterable, Identifiable {
+    case system
+    case chinese
+    case english
+
+    var id: String { rawValue }
+
+    /// 选项文案:语言名固定用各自原文(简体中文/English),任何界面语言下
+    /// 用户都能认出;仅「跟随系统」随当前界面语言本地化。
+    var title: String {
+        switch self {
+        case .system:
+            String(localized: "language.system")
+        case .chinese:
+            "简体中文"
+        case .english:
+            "English"
+        }
+    }
+
+    /// 覆写 AppleLanguages 用的语言代码;system 为 nil(移除覆写,回落系统首选)。
+    var appleLanguageCode: String? {
+        switch self {
+        case .system:
+            nil
+        case .chinese:
+            "zh-Hans"
+        case .english:
+            "en"
+        }
+    }
+
+    /// 把偏好写入系统语言覆写键。该键在进程启动时由系统读取,变更后需重启生效。
+    func applyAppleLanguageOverride() {
+        let defaults = UserDefaults.standard
+        if let appleLanguageCode {
+            defaults.set([appleLanguageCode], forKey: "AppleLanguages")
+        } else {
+            defaults.removeObject(forKey: "AppleLanguages")
+        }
+    }
+}
+
 final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false
+    @Published var languagePreference: AppLanguagePreference = .system
     @Published var themePreference: AppThemePreference = .system
     @Published var colorSchemePreference: MonitorColorSchemePreference = .vibrant
     @Published var ringSource: HaloRingSource = .combined
@@ -123,6 +171,9 @@ final class MonitorSettings: ObservableObject {
 
         let themeRawValue = defaults.string(forKey: Keys.themePreference) ?? AppThemePreference.system.rawValue
         themePreference = AppThemePreference(rawValue: themeRawValue) ?? .system
+
+        let languageRawValue = defaults.string(forKey: Keys.languagePreference) ?? AppLanguagePreference.system.rawValue
+        languagePreference = AppLanguagePreference(rawValue: languageRawValue) ?? .system
 
         let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.vibrant.rawValue
         colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .vibrant
@@ -476,6 +527,16 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $languagePreference
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.languagePreference)
+                // 语言覆写与偏好同步写入;新进程重启后才生效,
+                // 重启提示由设置页发起(见 GeneralSettingsView)。
+                newValue.applyAppleLanguageOverride()
+            }
+            .store(in: &cancellables)
+
         $themePreference
             .dropFirst()
             .sink { [weak self] newValue in
@@ -758,6 +819,7 @@ final class MonitorSettings: ObservableObject {
 
 private enum Keys {
     static let themePreference = "settings.themePreference"
+    static let languagePreference = "settings.languagePreference"
     static let colorSchemePreference = "settings.colorSchemePreference"
     static let ringSource = "settings.ringSource"
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
