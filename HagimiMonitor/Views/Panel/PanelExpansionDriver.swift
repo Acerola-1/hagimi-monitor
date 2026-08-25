@@ -28,6 +28,10 @@ final class PanelExpansionDriver: ObservableObject {
     private var lastMeasuredContentHeight: CGFloat = 0
     /// 收起态(全部展开区高度为 0)的内容总高度。非动画期间从实测值反推校准。
     private var collapsedBaseHeight: CGFloat = 0
+    /// 展开/收起动画截止时刻。动画窗口内跳过基线校准——相位已瞬翻到目标值,
+    /// 而实测高度还在 SwiftUI 插值中(滞后),此时反推会解出负数基线,
+    /// 收起时预测高度据此算出错误值,窗口被钳到 minPanelHeight。
+    private var animationDeadline: Date = .distantPast
     /// 内容总高度上限(菜单栏面板 = 屏幕可用高度,由视图上报;钉住面板为无穷)。
     /// 封顶期间 ScrollView 把实测高度钳在上限,「实测 = 基线 + Σ相位高度」的
     /// 反推等式失真(会解出过小甚至为负的基线,再经 predicted 把窗口带到
@@ -47,6 +51,7 @@ final class PanelExpansionDriver: ObservableObject {
         for (key, target) in targets {
             phase[key] = target
         }
+        animationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
         onWindowResize?(predictedContentHeight, true)
     }
 
@@ -56,6 +61,7 @@ final class PanelExpansionDriver: ObservableObject {
         for (key, target) in targets {
             phase[key] = target
         }
+        animationDeadline = .distantPast
         onWindowResize?(predictedContentHeight, false)
     }
 
@@ -90,6 +96,11 @@ final class PanelExpansionDriver: ObservableObject {
     /// 非动画期间从实测值反推收起态基线高度。
     private func recalibrateBaseHeight() {
         guard lastMeasuredContentHeight > 0 else { return }
+        // 动画窗口内跳过:相位已瞬翻到目标值,而实测高度还在插值中,
+        // 此时反推会解出错误基线(展开时为负数),收起时预测高度据此
+        // 算出错误值,窗口被钳到 minPanelHeight。基线在动画前已是
+        // 稳态校准值,保留即可。
+        guard Date() >= animationDeadline else { return }
         // 封顶中:实测高度被钳在上限,反推不出基线(等式失真),保留上次校准值。
         guard lastMeasuredContentHeight < contentHeightCap - 0.5 else { return }
         let totalExpanded = naturalHeights.reduce(into: 0.0) { acc, kv in
