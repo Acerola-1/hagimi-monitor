@@ -411,8 +411,8 @@ final class MonitorSettings: ObservableObject {
         let filtered = result.intersection(availableIds)
 
         if filtered.isEmpty {
-            // 用户主动关闭全部指标(存储为空数组)是合法持久态,不得回退默认。
-            // 仅当存储非空但过滤后为空(历史失效指标)时才回退,避免复活用户已关闭的指标。
+            // 用户主动关闭全部指标(存储为空数组)是合法持久态,保持为空;
+            // 仅当存储非空但过滤后为空(历史失效指标)时才回退默认。
             guard !ids.isEmpty else { return [] }
             return Array(defaultMetricIds(for: kind))
         }

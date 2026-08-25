@@ -34,13 +34,12 @@ jobs:
           -destination 'platform=macOS'
           CODE_SIGNING_ALLOWED=NO
 
-      # 单测以 Direct app 为宿主(DDC/ps 等符号在 Direct 模块)。UI 测试暂不纳入:
-      # 其 target 死重待定(见 fix-code-review-findings design Open Questions)。
+      # 单测以 Direct app 为宿主(DDC/ps 等符号在 Direct 模块),走 Direct scheme。
       - name: Unit tests
         run: >
           xcodebuild test
           -project hagimi-monitor.xcodeproj
-          -scheme HagimiMonitor
+          -scheme HagimiMonitorDirect
           -configuration Debug
           -destination 'platform=macOS'
           -only-testing:HagimiMonitorTests

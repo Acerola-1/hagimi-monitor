@@ -422,8 +422,8 @@ final class DisplayControlController: ObservableObject {
     private static let gripWindow: TimeInterval = 4
 
     /// 门禁抑制窗口内被跳过的写入(最近一次目标值)。窗口结束后由
-    /// `replaySuppressedWrites` 补发,兑现"窗口结束后再写"的语义——
-    /// 否则用户设定值只停留在 UI 层,显示器永远停在旧值。
+    /// `replaySuppressedWrites` 补发,否则用户设定值只停留在 UI 层,
+    /// 显示器永远停在旧值。
     private var suppressedWrites: [ControlKey: Double] = [:]
 
     /// 面板打开且详情展开期间的轮询定时器。系统设置/其他 app 改亮度音量不会
@@ -950,6 +950,9 @@ private final class DisplayControlService {
     }
 
     private func saveStoredValue(_ value: Double, for control: DisplayControlKind, displayStorageID: String) {
+        // 静音(0)不覆盖持久化音量:跨会话解除静音需恢复到上次非零值,
+        // 而非退化到兜底。亮度等 0 值是合法持久态,照常写入。
+        if control == .volume, value <= 0 { return }
         defaults.set(min(100, max(0, value)), forKey: storedValueKey(for: control, displayStorageID: displayStorageID))
     }
 

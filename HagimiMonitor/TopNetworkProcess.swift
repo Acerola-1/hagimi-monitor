@@ -42,7 +42,6 @@ private var previousNetworkSnapshotTime: Date?
 
 /// nettop 子进程采样的超时阈值。nettop 在异常网络栈/僵尸状态下可能挂起不退出,
 /// 若无防护会永久堵死串行采样队列(面板/统计/展开补采全部停摆)。
-/// 参照同仓 system_profiler 探针(蓝牙/SMART/充电上限)的信号量超时 + terminate 模式。
 private let nettopSampleTimeout: TimeInterval = 8
 
 /// 后台采样网络流量最高的 N 个进程。

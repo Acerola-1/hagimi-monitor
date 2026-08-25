@@ -96,10 +96,7 @@ final class PanelExpansionDriver: ObservableObject {
     /// 非动画期间从实测值反推收起态基线高度。
     private func recalibrateBaseHeight() {
         guard lastMeasuredContentHeight > 0 else { return }
-        // 动画窗口内跳过:相位已瞬翻到目标值,而实测高度还在插值中,
-        // 此时反推会解出错误基线(展开时为负数),收起时预测高度据此
-        // 算出错误值,窗口被钳到 minPanelHeight。基线在动画前已是
-        // 稳态校准值,保留即可。
+        // 动画窗口内跳过:相位已瞬翻而实测高度仍在插值,反推会解出错误基线。
         guard Date() >= animationDeadline else { return }
         // 封顶中:实测高度被钳在上限,反推不出基线(等式失真),保留上次校准值。
         guard lastMeasuredContentHeight < contentHeightCap - 0.5 else { return }
@@ -135,8 +132,7 @@ extension EnvironmentValues {
 /// 面板窗口展开/收起动画的一次性 CA 补间执行器。
 ///
 /// Fluid(菜单栏锚定)与 Pinned(固定顶部)两个面板控制器共用同一套
-/// 「代际 token + isAnimating 抑制 + 结束对账」防护,消除逐字复制的竞态处理——
-/// 未来任何对动画窗口的修复只需改一处,不会漏掉另一个控制器。
+/// 「代际 token + isAnimating 抑制 + 结束对账」防护,消除逐字复制的竞态处理。
 /// 定位策略(屏幕钳制/锚定)仍由各控制器自行计算目标 frame,
 /// 动画结束后的对账回调由调用方经 `onComplete` 注入。
 @MainActor

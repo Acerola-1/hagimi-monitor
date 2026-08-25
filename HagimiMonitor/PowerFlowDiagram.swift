@@ -7,7 +7,7 @@ import SwiftUI
 /// 数据全部来自 BatterySampler 的遥测指标(power-in / power / battery-flow / status),
 /// 沙盒版同样可用。活跃导管走相位联动的能量脉冲:单一相位沿
 /// 适配器→汇流点→系统全路径行进,段内 easeInOutCubic 缓动,汇流点交接辉光;
-/// 细导管(<3pt)降级纯色脉冲不叠发光层;电池 stub 为呼吸脉动。
+/// 细导管(<3pt)降级纯色脉冲不叠发光层;电池 stub 走同一光轨语言(行进脉冲)。
 /// 仅展开且面板可见时挂载 TimelineView 30fps 驱动,收起/隐藏即回到纯静态绘制。
 struct PowerFlowDiagram: View {
     let module: MonitorModule
@@ -340,37 +340,6 @@ struct PowerFlowDiagram: View {
         )
     }
 
-    /// 电池 stub 呼吸脉动:亮度与线宽正弦起伏、端点光点胀缩,替代移动彗星——
-    /// 16pt 短路径不承载移动光轨,呼吸表达能量注入/抽出的绵密感。
-    private func drawBreathingStub(
-        _ context: inout GraphicsContext,
-        from: CGPoint,
-        to: CGPoint,
-        color: Color,
-        width: CGFloat,
-        time: TimeInterval
-    ) {
-        let breath = 0.5 + 0.5 * sin(time * .pi / 1.4)
-        let a = 0.35 + 0.45 * breath
-        var stub = Path()
-        stub.move(to: from)
-        stub.addLine(to: to)
-        context.stroke(
-            stub,
-            with: .linearGradient(
-                Gradient(colors: [color.opacity(a * 0.31), color.opacity(a)]),
-                startPoint: from,
-                endPoint: to
-            ),
-            style: StrokeStyle(lineWidth: width * (0.85 + 0.4 * breath), lineCap: .round)
-        )
-        let r = 1.5 + 1.6 * breath
-        context.fill(
-            Path(ellipseIn: CGRect(x: to.x - r, y: to.y - r, width: r * 2, height: r * 2)),
-            with: .color(color.opacity(0.5 + 0.45 * breath))
-        )
-    }
-
     private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
         CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
     }
@@ -695,10 +664,6 @@ struct PowerFlowDiagram: View {
     /// 语义导管(充电/放电)头部直接用白点,像火花。
     private var neutralBeamHead: Color {
         isDark ? .white : Color.black.opacity(0.6)
-    }
-
-    private var faintEdge: Color {
-        isDark ? Color(hex: 0x7A91B4).opacity(0.16) : Color.black.opacity(0.10)
     }
 
     private func rawValue(_ name: String) -> String {

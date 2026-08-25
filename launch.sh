@@ -40,7 +40,8 @@ PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)/build"
 case "$VERSION" in
     direct|full|pro)
         SCHEME="HagimiMonitorDirect"
-        APP_NAME="HagimiMonitor"
+        # Direct target 产物名已改为 HagimiMonitorDirect(消除与沙盒 target 同名冲突)
+        APP_NAME="HagimiMonitorDirect"
         ;;
     appstore|store|sandbox)
         SCHEME="HagimiMonitor"
@@ -48,7 +49,7 @@ case "$VERSION" in
         ;;
     *)
         SCHEME="HagimiMonitorDirect"
-        APP_NAME="HagimiMonitor"
+        APP_NAME="HagimiMonitorDirect"
         ;;
 esac
 

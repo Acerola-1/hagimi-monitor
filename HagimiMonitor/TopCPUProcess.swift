@@ -34,7 +34,6 @@ private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]
 
 /// ps 子进程采样的超时阈值。ps 在极端系统状态下可能挂起不退出,若无防护会永久
 /// 堵死 procSampleQueue,连带内存/CPU/GPU/磁盘四类 TOP 列表全部停摆。
-/// 参照同仓 system_profiler 探针(蓝牙/SMART/充电上限)的信号量超时 + terminate 模式。
 private let psSampleTimeout: TimeInterval = 8
 #endif
 

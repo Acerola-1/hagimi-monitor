@@ -1764,7 +1764,7 @@
       tooltip: Object.assign({}, liveTooltip(), {
         trigger: "item",
         // ECharts 饼图 trigger:item: p.value 是累计覆盖秒(cover_s,真实墙钟)。
-        // 小时数 = 秒数 / 3600,由 fmtHours 内部完成——勿再除以 3600 造成双重换算。
+        // p.value 是累计覆盖秒,小时数由 fmtHours 内部完成秒→小时换算。
         formatter: (p) => p.name + ": " + p.percent.toFixed(1) + "% (" + fmtHours(p.value) + ")",
       }),
       legend: { bottom: 0, left: "center", icon: "circle", itemWidth: 8, itemHeight: 8,
