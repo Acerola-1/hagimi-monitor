@@ -2,6 +2,15 @@ import Foundation
 import OSLog
 import SQLite3
 
+/// 单库磁盘占用的两方分解。有效数据 = 在用页中扣除表结构页的部分 + 未合并的
+/// WAL 写入;系统侧 = 表结构页 + 空闲页(已删行、待复用) + WAL 索引文件。
+struct StorageBreakdown: Equatable {
+    var dataBytes: Int64 = 0
+    var systemBytes: Int64 = 0
+
+    static let zero = StorageBreakdown()
+}
+
 /// 数值列的跨粒度聚合方式:
 /// - weightedAverage: 上层均值 = Σ(下层均值×下层n) / Σn(占比型同此口径)
 /// - maximum:         取下层最大值(峰值)
@@ -400,7 +409,9 @@ final class StatisticsDatabase {
         }
     }
 
-    /// 删除三层中早于指定时刻的行,并 VACUUM 收缩文件使占用立即回落。
+    /// 删除三层中早于指定时刻的行,并收缩文件使占用立即回落。
+    /// checkpoint(TRUNCATE) 为防御性收尾:清掉 VACUUM 后可能残留的 WAL 帧,
+    /// 让文件占用统计立即归位。
     func deleteBefore(_ date: Date) {
         queue.sync {
             let cutoff = Int64(date.timeIntervalSince1970)
@@ -408,6 +419,7 @@ final class StatisticsDatabase {
             execute("DELETE FROM stats_hour WHERE t < \(cutoff)")
             execute("DELETE FROM stats_day WHERE t < \(cutoff)")
             execute("VACUUM")
+            execute("PRAGMA wal_checkpoint(TRUNCATE)")
         }
     }
 
@@ -419,6 +431,7 @@ final class StatisticsDatabase {
             execute("DELETE FROM stats_day")
             resetWatermarks()
             execute("VACUUM")
+            execute("PRAGMA wal_checkpoint(TRUNCATE)")
         }
     }
 
@@ -433,6 +446,7 @@ final class StatisticsDatabase {
             // 范围删除可能落在水位之后(会影响后续汇总),重置水位触发一次全量重算。
             resetWatermarks()
             execute("VACUUM")
+            execute("PRAGMA wal_checkpoint(TRUNCATE)")
         }
     }
 
@@ -441,6 +455,44 @@ final class StatisticsDatabase {
     }
 
     // MARK: - SQLite 基础设施
+
+    /// 空库表结构页字节(main 文件,checkpoint 后实测)。作为占用分解里
+    /// 「结构」与「数据」的分界线,schema 演进后测量值自动跟随。
+    /// 进程内只测一次。
+    static let schemaMainBytes: Int64 = {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("stats-schema-probe-\(UUID().uuidString).sqlite3")
+        defer {
+            for suffix in ["", "-wal", "-shm"] {
+                try? FileManager.default.removeItem(atPath: url.path + suffix)
+            }
+        }
+        let probe = StatisticsDatabase(url: url)
+        probe.deleteAll()
+        return (try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int64 ?? 0
+    }()
+
+    /// 库文件占用的数据/系统两方分解(口径见 StorageBreakdown)。
+    /// main 按文件实际大小扣除结构页与空闲页——未 checkpoint 的新增页尚在
+    /// WAL 侧,不含在 main 里,与 walBytes 相加不重复;空闲页整块归系统侧。
+    var breakdown: StorageBreakdown {
+        queue.sync {
+            func fileSize(_ path: String) -> Int64 {
+                (try? FileManager.default.attributesOfItem(atPath: path))?[.size] as? Int64 ?? 0
+            }
+            let walBytes = fileSize(url.path + "-wal")
+            let shmBytes = fileSize(url.path + "-shm")
+            guard handle != nil else { return .zero }
+            let pageSize = Int64(scalarQuery("PRAGMA page_size") ?? 4096)
+            let freeCount = Int64(scalarQuery("PRAGMA freelist_count") ?? 0)
+            let schemaBytes = Self.schemaMainBytes
+            let dataOnMain = max(fileSize(url.path) - schemaBytes - freeCount * pageSize, 0)
+            return StorageBreakdown(
+                dataBytes: dataOnMain + walBytes,
+                systemBytes: schemaBytes + freeCount * pageSize + shmBytes
+            )
+        }
+    }
 
     /// 读表的现有列名,供迁移判断。
     private func columnNames(of table: String) -> Set<String> {

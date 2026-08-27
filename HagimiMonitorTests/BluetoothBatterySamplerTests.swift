@@ -76,6 +76,24 @@ struct BluetoothDeviceTypeTests {
     @Test func infersOtherForUnknownName() {
         #expect(BluetoothDeviceType.inferred(fromName: "苏轼的鹅鸡") == .other)
     }
+
+    @Test func mapsGAPAppearance() {
+        // 值表:SIG Assigned Numbers appearance_values.yaml(Wearable Audio 0x0940 段、
+        // Audio Sink 0x0840 段、HID 0x03C0 段)。
+        #expect(BluetoothDeviceType.fromAppearance(0x0941) == .headphones) // Earbud
+        #expect(BluetoothDeviceType.fromAppearance(0x0943) == .headphones) // Headphones
+        #expect(BluetoothDeviceType.fromAppearance(0x0945) == .headphones) // Left Earbud
+        #expect(BluetoothDeviceType.fromAppearance(0x0942) == .headset)    // Headset
+        #expect(BluetoothDeviceType.fromAppearance(0x0841) == .speaker)    // Standalone Speaker
+        #expect(BluetoothDeviceType.fromAppearance(0x0845) == .speaker)    // Speakerphone
+        #expect(BluetoothDeviceType.fromAppearance(0x03C1) == .keyboard)
+        #expect(BluetoothDeviceType.fromAppearance(0x03C2) == .mouse)
+        #expect(BluetoothDeviceType.fromAppearance(0x03C4) == .gamepad)
+        #expect(BluetoothDeviceType.fromAppearance(0x03C5) == .trackpad)   // Digitizer Tablet
+        // 无对应图标语言的形态(phone 等)返回 nil,调用方沿名称推断兜底。
+        #expect(BluetoothDeviceType.fromAppearance(0x0040) == nil)
+        #expect(BluetoothDeviceType.fromAppearance(0x0002) == nil)
+    }
 }
 
 struct BluetoothNormalizeMACTests {
@@ -101,9 +119,45 @@ struct BluetoothMergeTests {
     private static func snapshot(
         _ name: String,
         uuid: String = "00000000-0000-0000-0000-000000000001",
-        battery: Int? = nil
+        battery: Int? = nil,
+        appearance: UInt16? = nil
     ) -> BLEDeviceSnapshot {
-        BLEDeviceSnapshot(identifier: UUID(uuidString: uuid)!, name: name, batteryLevel: battery)
+        BLEDeviceSnapshot(identifier: UUID(uuidString: uuid)!, name: name, batteryLevel: battery, appearance: appearance)
+    }
+
+    @Test func appearanceFillsUnknownTypeForBoundDevice() {
+        // App Store 回归修复:BLE-only 耳机在沙盒内无 CoD 可读(IO major=0)、
+        // profiler 为空,名称又不含关键词,类型只能靠 GATT Appearance 兜住,
+        // 否则图标落 questionmark 问号位。
+        let binding = ["001122334455": "00000000-0000-0000-0000-0000000000AA"]
+        let io = [Self.device("苏轼的鹅鸡", address: "001122334455")] // CoD 未知 → .other
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: io,
+            profilerDevices: [],
+            bleSnapshots: [
+                Self.snapshot("改名后的新名", uuid: "00000000-0000-0000-0000-0000000000AA",
+                              battery: 80, appearance: 0x0941),
+            ],
+            bindings: binding
+        )
+        let earbuds = result.devices.first { $0.address == "001122334455" }
+        #expect(earbuds?.type == .headphones)
+        #expect(earbuds?.batteryLevel == 80)
+    }
+
+    @Test func appearanceTypesCBOnlyDeviceAheadOfNameGuess() {
+        // CB 独有设备:Appearance 是设备自报形态,优先于名称关键词推断。
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: [],
+            profilerDevices: [],
+            bleSnapshots: [
+                Self.snapshot("SBT-5 无线终端", uuid: "00000000-0000-0000-0000-0000000000CC",
+                              battery: 60, appearance: 0x0943),
+            ],
+            bindings: [:]
+        )
+        #expect(result.devices.count == 1)
+        #expect(result.devices[0].type == .headphones)
     }
 
     @Test func directBuildMergesAllThreeSources() {

@@ -59,7 +59,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     case network
     case battery
     /// 蓝牙设备电量:独立于 SystemMonitorSampler,数据由 BluetoothBatterySampler 注入,
-    /// 仅蓝牙开启且有已连接设备时存在。声明在 battery 之后,面板中落在电源行与
+    /// 蓝牙开启时常驻(无连接设备时显示 0 台)。声明在 battery 之后,面板中落在电源行与
     /// 显示器区之间;可见性与其余模块一致走用户开关。
     case bluetooth
 
@@ -576,7 +576,30 @@ final class MonitorStore: ObservableObject {
             }
             .store(in: &cancellables)
 
-        bluetoothSampler.start()
+        // 蓝牙采样随模块可见性启停:行被用户隐藏后,10s profiler 探针与
+        // BLE 常驻连接只有成本;蓝牙无风扇那样的后台告警刚需,不适用「启动
+        // 即常驻」。重新勾选时 start() 幂等重建全部管线。
+        settings.$visibleKinds
+            .map { $0.contains(.bluetooth) }
+            .removeDuplicates()
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] visible in
+                guard let self else { return }
+                if visible {
+                    self.bluetoothSampler.start()
+                    if self.visiblePanelKinds.isEmpty == false {
+                        self.bluetoothSampler.activateBLE()
+                    }
+                } else {
+                    self.bluetoothSampler.stop()
+                }
+            }
+            .store(in: &cancellables)
+
+        if settings.isVisible(.bluetooth) {
+            bluetoothSampler.start()
+        }
 
         startStatisticsProcessSampling()
     }
@@ -586,11 +609,50 @@ final class MonitorStore: ObservableObject {
     /// 统计专用 TOP 应用采样定时器(面板无关常驻):60s 一次、始终包含系统进程,
     /// 结果交 StatisticsRecorder 聚合落 SwiftData。与面板进程采样共用同一条串行队列;
     /// 磁盘增量走独立游标,保证 60s 统计窗口不被面板 5s 采样截断。
+    /// 随「数据统计」开关启停:关闭时不做进程采样,也不积累分钟累加器。
     private var statsProcTimer: AnyCancellable?
     private let statsDiskCursor = DiskSnapshotCursor()
 
+    private var statisticsSamplingActive = false
+
     private func startStatisticsProcessSampling() {
         guard statisticsRecorder.processStore != nil else { return }
+        // 以持久化值对齐初始状态:关闭态启动时补一次 suspend,让 recorder 的
+        // 默认 recordingActive=true 落回关闭;订阅用 dropFirst 只处理切换。
+        let enabled = settings.statisticsEnabled
+        statisticsSamplingActive = enabled
+        settings.$statisticsEnabled
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                self?.setStatisticsSampling(enabled)
+            }
+            .store(in: &cancellables)
+        if enabled {
+            installStatisticsProcessTimer()
+        } else {
+            statisticsRecorder.suspend()
+        }
+    }
+
+    /// 开关切换:开启时重装定时器并补一次水位维护(关闭期间积累的水位由
+    /// maintain 全量重扫自然补齐);关闭时撤销定时器并丢弃进行中的分钟累加,
+    /// 让「停止记录」立刻干净生效,不再写入半个未关闭的分钟。
+    private func setStatisticsSampling(_ enabled: Bool) {
+        guard statisticsRecorder.processStore != nil else { return }
+        if enabled {
+            guard !statisticsSamplingActive else { return }
+            statisticsSamplingActive = true
+            statisticsRecorder.resume()
+            installStatisticsProcessTimer()
+        } else {
+            statisticsSamplingActive = false
+            statsProcTimer = nil
+            statisticsRecorder.suspend()
+        }
+    }
+
+    private func installStatisticsProcessTimer() {
         statsProcTimer = Timer.publish(every: 60, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -643,8 +705,8 @@ final class MonitorStore: ObservableObject {
     func panelDidAppear(_ kind: PanelKind) {
         let wasEmpty = visiblePanelKinds.isEmpty
         visiblePanelKinds.insert(kind)
-        // 蓝牙数据只在面板可见时被消费(菜单栏指标不含蓝牙):CoreBluetooth
-        // 的系统授权弹窗推迟到此刻触发,不打断应用启动。
+        // CoreBluetooth 的系统授权弹窗推迟到面板首次可见时触发,不打断应用
+        // 启动;已授权则幂等补挂监视(覆盖运行期授权变化)。
         bluetoothSampler.activateBLE()
         if wasEmpty {
             isPanelVisible = true
@@ -1146,7 +1208,9 @@ final class MonitorStore: ObservableObject {
             modules = newVisibleModules
         }
         updateMenuBarTargetComputeLoad()
-        statisticsRecorder.record(modules: allModules, fans: fans, at: Date())
+        if statisticsSamplingActive {
+            statisticsRecorder.record(modules: allModules, fans: fans, at: Date())
+        }
     }
 
 

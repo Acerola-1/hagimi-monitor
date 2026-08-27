@@ -23,6 +23,12 @@ private func tempDatabaseURL(_ name: String) -> URL {
         .appendingPathComponent("stats-tests-\(name)-\(UUID().uuidString).sqlite3")
 }
 
+/// 测试帧基准时戳:对齐分钟边界的近时刻。记录器初始化会异步触发按真实当前时刻的
+/// maintain,超出保留窗口的历史行会被剪掉,测试行必须落在保留窗口内。
+private func recentMinuteBase(_ secondsAgo: TimeInterval = 600) -> Date {
+    Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970 / 60) * 60 - secondsAgo)
+}
+
 // MARK: - 行聚合
 
 struct StatisticsRowTests {
@@ -166,7 +172,7 @@ struct StatisticsDatabaseTests {
 struct StatisticsRecorderTests {
     @Test func aggregatesMetricsAndIntegratesRates() {
         let recorder = StatisticsRecorder(databaseURL: tempDatabaseURL("recorder"))
-        let base = Date(timeIntervalSince1970: 1_700_000_000)
+        let base = recentMinuteBase()
 
         let cpu = makeModule(.cpu, value: 40, metrics: [
             MonitorMetric(name: "system", value: "10%", numericValue: 10),
@@ -203,7 +209,7 @@ struct StatisticsRecorderTests {
 
     @Test func sleepGapDoesNotInflateTotals() {
         let recorder = StatisticsRecorder(databaseURL: tempDatabaseURL("gap"))
-        let base = Date(timeIntervalSince1970: 1_700_100_000)
+        let base = recentMinuteBase()
         let network = makeModule(.network, value: 0, metrics: [
             MonitorMetric(name: "download", value: "1 MB/s", numericValue: 1_000_000),
         ])
@@ -223,7 +229,7 @@ struct StatisticsRecorderTests {
 
     @Test func powerCompositionFractions() {
         let recorder = StatisticsRecorder(databaseURL: tempDatabaseURL("battery"))
-        let base = Date(timeIntervalSince1970: 1_700_200_000)
+        let base = recentMinuteBase()
 
         func battery(_ status: String) -> MonitorModule {
             makeModule(.battery, value: 80, metrics: [
@@ -250,7 +256,7 @@ struct StatisticsRecorderTests {
 
     @Test func desktopAcModuleSkipsBatteryOnlyColumns() {
         let recorder = StatisticsRecorder(databaseURL: tempDatabaseURL("desktop"))
-        let base = Date(timeIntervalSince1970: 1_700_300_000)
+        let base = recentMinuteBase()
         let acModule = makeModule(.battery, value: 100, metrics: [
             MonitorMetric(name: "type", value: "ac-power"),
             MonitorMetric(name: "status", value: "ac-power"),
@@ -263,5 +269,84 @@ struct StatisticsRecorderTests {
         #expect(row?.acFrac == 1)
         #expect(row?.battLevelAvg == nil, "桌面 ac-power 模块不得产出电量历史")
         #expect(row?.powerAvg == 28)
+    }
+
+    @Test func suspendDropsFramesAndCursorsUntilResume() {
+        let recorder = StatisticsRecorder(databaseURL: tempDatabaseURL("suspend"))
+        let base = recentMinuteBase()
+        let cpu = makeModule(.cpu, value: 40)
+        let network = makeModule(.network, value: 0, metrics: [
+            MonitorMetric(name: "download", value: "1 MB/s", numericValue: 1_000_000),
+        ])
+
+        recorder.record(modules: [cpu, network], fans: [], at: base)
+        recorder.suspend()
+        recorder.record(modules: [cpu, network], fans: [], at: base.addingTimeInterval(1))
+        recorder.record(modules: [cpu, network], fans: [], at: base.addingTimeInterval(2))
+        recorder.sealCompletedMinuteForTesting()
+
+        // 关闭期间帧不积累:进行中的分钟在 suspend 时已丢弃,封口无行可落。
+        var minutes = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes ?? []
+        #expect(minutes.isEmpty)
+
+        // 恢复后正常记录;速率游标已在 suspend 清零:若未清零,base 到恢复后首帧的 2s 会
+        // 按旧速率积进 2MB,清零后只计恢复后两帧之间的 1s。
+        recorder.resume()
+        recorder.record(modules: [cpu, network], fans: [], at: base.addingTimeInterval(2))
+        recorder.record(modules: [cpu, network], fans: [], at: base.addingTimeInterval(3))
+        recorder.sealCompletedMinuteForTesting()
+
+        minutes = recorder.reportSnapshot(now: base.addingTimeInterval(300))?.minutes ?? []
+        #expect(minutes.count == 1)
+        #expect(minutes[0].cpuAvg == 40)
+        #expect((minutes[0].netDown ?? 0) == 1_000_000)
+    }
+}
+
+// MARK: - 占用分解与打卡保留
+
+struct StatisticsBreakdownTests {
+    @Test func breakdownSplitsDataFromSystemAfterDeleteAll() {
+        let database = StatisticsDatabase(url: tempDatabaseURL("breakdown"))
+        let base = Int64(Date().timeIntervalSince1970 / 60) * 60 - 300 * 60
+        let cpuAvgIndex = StatisticsRow.columns.firstIndex { $0.name == "cpu_avg" }!
+        var values = [Double?](repeating: nil, count: StatisticsRow.columns.count)
+        values[cpuAvgIndex] = 30
+        for offset in 0..<300 {
+            database.insertMinuteRow(StatisticsRow(t: base + Int64(offset) * 60, n: 60, values: values))
+        }
+        // 有效数据显著存在;清空后归零且系统侧(结构页+WAL索引)仍在
+        #expect(database.breakdown.dataBytes > 0)
+
+        database.deleteAll()
+
+        let cleared = database.breakdown
+        #expect(cleared.dataBytes == 0)
+        #expect(cleared.systemBytes > 0)
+    }
+}
+
+@MainActor
+struct ProcessStoreCheckinTests {
+    @Test func deleteAllKeepsCheckins() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("procstore-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StatisticsProcessStore(directory: directory)
+        let calendar = Calendar(identifier: .gregorian)
+        let firstDay = Date(timeIntervalSince1970: 1_760_000_000)
+        store.recordUsageDay(at: firstDay, calendar: calendar)
+        store.recordUsageDay(at: firstDay.addingTimeInterval(86_400), calendar: calendar)
+        _ = store.usageSummary()
+        #expect(store.activeDays().count == 2)
+        let beforeMeta = try #require(store.usageSummary())
+
+        store.deleteAll()
+
+        let afterMeta = try #require(store.usageSummary())
+        #expect(afterMeta.firstUseDay == beforeMeta.firstUseDay)
+        #expect(afterMeta.totalActiveDays == beforeMeta.totalActiveDays)
+        #expect(afterMeta.lastActiveDay == beforeMeta.lastActiveDay)
+        #expect(store.activeDays().count == 2)
     }
 }

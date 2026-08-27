@@ -5,6 +5,7 @@ import SwiftUI
 /// 数据由 StatisticsRecorder 每分钟封口后发布,本视图只读展示。
 struct StatisticsSettingsView: View {
     @ObservedObject var recorder: StatisticsRecorder
+    @ObservedObject var settings: MonitorSettings
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedRange: StatisticsOverviewRange = .today
     /// 跳转存储管理页(入口收在本页底部,归属数据统计)。
@@ -18,37 +19,49 @@ struct StatisticsSettingsView: View {
         SettingsPage {
             header
 
-            if hasAnyData {
-                SettingsGroup(String(localized: "stats.settings.overview"),
-                              titleAccessory: { reportEntryButton }) {
-                    rangePicker
-                    healthCard
-                    overviewGrid
-                }
-            } else {
-                SettingsGroup {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(String(localized: "stats.settings.empty-title"), systemImage: "hourglass")
-                            .font(.body.weight(.medium))
-                        Text(String(localized: "stats.settings.empty-body"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            SettingsGroup {
+                SettingsRow(
+                    title: String(localized: "stats.settings.toggle")
+                ) {
+                    Toggle("", isOn: $settings.statisticsEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
             }
 
-            // 无数据时总览组不显示,报表入口退回独立行兜底;有数据时入口已收进总览标题行。
-            if !hasAnyData {
-                SettingsGroup {
-                    entryRow(
-                        icon: "safari",
-                        title: String(localized: "stats.settings.report-title"),
-                        subtitle: nil,
-                        action: { StatisticsReportFlow.open(recorder: recorder) }
-                    )
+            if settings.statisticsEnabled {
+                if hasAnyData {
+                    SettingsGroup(String(localized: "stats.settings.overview"),
+                                  titleAccessory: { reportEntryButton }) {
+                        rangePicker
+                        healthCard
+                        overviewGrid
+                    }
+                } else {
+                    SettingsGroup {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(String(localized: "stats.settings.empty-title"), systemImage: "hourglass")
+                                .font(.body.weight(.medium))
+                            Text(String(localized: "stats.settings.empty-body"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                // 无数据时总览组不显示,报表入口退回独立行兜底;有数据时入口已收进总览标题行。
+                if !hasAnyData {
+                    SettingsGroup {
+                        entryRow(
+                            icon: "safari",
+                            title: String(localized: "stats.settings.report-title"),
+                            subtitle: nil,
+                            action: { StatisticsReportFlow.open(recorder: recorder) }
+                        )
+                    }
                 }
             }
 
@@ -60,8 +73,6 @@ struct StatisticsSettingsView: View {
                     action: openStorage
                 )
             }
-
-            SettingsTip(String(localized: "stats.settings.local-only"))
         }
     }
 
@@ -333,13 +344,13 @@ struct StatisticsSettingsView: View {
         let fraction = min(health.score / 100, 1)
         return ZStack {
             Circle()
-                .stroke(Color.secondary.opacity(0.12), lineWidth: 8)
+                .stroke(Color.secondary.opacity(0.15), lineWidth: 8)
 
             Circle()
                 .trim(from: 0, to: fraction)
                 .stroke(
                     AngularGradient(
-                        colors: [tint.opacity(0.4), tint],
+                        colors: [tint.opacity(0.72), tint],
                         center: .center,
                         startAngle: .degrees(0),
                         endAngle: .degrees(360 * fraction)
@@ -354,8 +365,8 @@ struct StatisticsSettingsView: View {
                     .monospacedDigit()
                     .foregroundStyle(tint)
                 Text(health.level.title)
-                    .font(.system(size: 8.5, weight: .semibold))
-                    .foregroundStyle(tint.opacity(0.85))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(tint.opacity(0.9))
             }
         }
         .frame(width: 76, height: 76)
@@ -391,22 +402,22 @@ struct StatisticsSettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(tint.opacity(colorScheme == .dark ? 0.07 : 0.06))
+                .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(tint.opacity(0.14), lineWidth: 0.5)
+                .strokeBorder(tint.opacity(0.20), lineWidth: 0.5)
         )
     }
 
     private func levelColor(_ level: StatisticsHealthScore.Level) -> Color {
         let dark = colorScheme == .dark
         switch level {
-        case .excellent: return Color(hex: dark ? 0x34C759 : 0x2F9E64)
-        case .good: return Color(hex: dark ? 0x64D2FF : 0x3BAFDA)
-        case .fair: return Color(hex: dark ? 0xFFD60A : 0xD4A843)
-        case .poor: return Color(hex: dark ? 0xFF9F0A : 0xE08E45)
-        case .critical: return Color(hex: dark ? 0xFF6961 : 0xD94848)
+        case .excellent: return Color(hex: dark ? 0x34C759 : 0x2EAE68)
+        case .good: return Color(hex: dark ? 0x64D2FF : 0x2BAEE0)
+        case .fair: return Color(hex: dark ? 0xFFD60A : 0xE3B23C)
+        case .poor: return Color(hex: dark ? 0xFF9F0A : 0xE89042)
+        case .critical: return Color(hex: dark ? 0xFF6961 : 0xDF5252)
         }
     }
 
@@ -530,11 +541,11 @@ struct StatisticsSettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(spec.tint.opacity(colorScheme == .dark ? 0.07 : 0.06))
+                .fill(spec.tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(spec.tint.opacity(0.14), lineWidth: 0.5)
+                .strokeBorder(spec.tint.opacity(0.20), lineWidth: 0.5)
         )
     }
 

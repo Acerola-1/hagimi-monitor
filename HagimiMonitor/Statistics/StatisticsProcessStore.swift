@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import OSLog
+import SQLite3
 import SwiftData
 
 // MARK: - SwiftData 实体
@@ -94,6 +95,10 @@ final class StatisticsProcessStore {
     private var container: ModelContainer?
     private var context: ModelContext?
     private var databaseURL: URL?
+    /// breakdown 查询复用的只读 SQLite 连接,随容器重建同步更换。
+    private var breakdownHandle: OpaquePointer?
+    /// 重建失败时暂存的打卡,下次重建成功后补写回新库。
+    private var pendingCheckin: (days: [Int64], meta: (firstUseDay: Int64, totalActiveDays: Int64, lastActiveDay: Int64)?)?
 
     /// 一日内的进程聚合累加器(仅队列线程访问),封口刷入 SwiftData。
     private struct AppAccumulator {
@@ -120,19 +125,58 @@ final class StatisticsProcessStore {
         queue.sync {
             do {
                 try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-                let url = directory.appendingPathComponent("AppStats.sqlite")
-                databaseURL = url
-                let config = ModelConfiguration(url: url)
-                container = try ModelContainer(
-                    for: StatsAppIdentity.self, StatsAppDaily.self, StatsBatteryDaily.self,
-                         StatsUsageMeta.self, StatsActiveDay.self,
-                    configurations: config
-                )
-                context = container.map { ModelContext($0) }
-                context?.autosaveEnabled = false
+                databaseURL = directory.appendingPathComponent("AppStats.sqlite")
+                try reopenStoreLocked()
             } catch {
                 AppLogger.settings.error("Statistics process store init failed: \(String(describing: error), privacy: .public)")
             }
+        }
+    }
+
+    /// 建立(或重建)库容器与上下文。调用前必须已持有 queue。
+    private func reopenStoreLocked() throws {
+        guard let databaseURL else { return }
+        if let breakdownHandle {
+            sqlite3_close_v2(breakdownHandle)
+            self.breakdownHandle = nil
+        }
+        let config = ModelConfiguration(url: databaseURL)
+        let newContainer = try ModelContainer(
+            for: StatsAppIdentity.self, StatsAppDaily.self, StatsBatteryDaily.self,
+                 StatsUsageMeta.self, StatsActiveDay.self,
+            configurations: config
+        )
+        let newContext = ModelContext(newContainer)
+        newContext.autosaveEnabled = false
+        container = newContainer
+        context = newContext
+        restorePendingCheckinsLocked()
+    }
+
+    /// 上下文缺失时按需重建库容器(容器损坏/整库重建失败后的停写期),
+    /// 重建成功后暂存的打卡随之补写回新库。
+    private func ensureContextLocked() {
+        guard context == nil, databaseURL != nil else { return }
+        try? reopenStoreLocked()
+    }
+
+    private func restorePendingCheckinsLocked() {
+        guard let pending = pendingCheckin, let context else { return }
+        for day in pending.days {
+            context.insert(StatsActiveDay(day: day))
+        }
+        if let meta = pending.meta {
+            context.insert(StatsUsageMeta(
+                firstUseDay: meta.firstUseDay,
+                totalActiveDays: meta.totalActiveDays,
+                lastActiveDay: meta.lastActiveDay
+            ))
+        }
+        pendingCheckin = nil
+        do {
+            try context.save()
+        } catch {
+            AppLogger.settings.error("Statistics checkin restore failed: \(String(describing: error), privacy: .public)")
         }
     }
 
@@ -141,6 +185,60 @@ final class StatisticsProcessStore {
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?
             .appendingPathComponent(Bundle.main.bundleIdentifier ?? "HagimiMonitor", isDirectory: true)
+    }
+
+    /// 空库表结构页字节(main 文件):临时目录建同 schema 空库实测,
+    /// schema 演进后测量值自动跟随。进程内只测一次。
+    private static let schemaMainBytesProbe: Int64 = {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("appstats-schema-probe-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let probe = StatisticsProcessStore(directory: directory)
+        let mainURL = directory.appendingPathComponent("AppStats.sqlite")
+        return (try? FileManager.default.attributesOfItem(atPath: mainURL.path))?[.size] as? Int64 ?? 0
+    }()
+
+    /// 库文件占用的数据/系统两方分解(口径见 StorageBreakdown)。
+    /// 只读连接随容器缓存复用,避免每次分解都建连;WAL 多读者安全,与写入互不干扰。
+    var breakdown: StorageBreakdown {
+        queue.sync {
+            guard let url = databaseURL else { return .zero }
+            func fileSize(_ suffix: String) -> Int64 {
+                (try? FileManager.default.attributesOfItem(atPath: url.path + suffix))?[.size] as? Int64 ?? 0
+            }
+            let walBytes = fileSize("-wal")
+            let shmBytes = fileSize("-shm")
+            var pageSize: Int64 = 4096
+            var freeCount: Int64 = 0
+            if breakdownHandle == nil {
+                var opened: OpaquePointer?
+                if sqlite3_open_v2(url.path, &opened, SQLITE_OPEN_READONLY, nil) == SQLITE_OK, let opened {
+                    sqlite3_busy_timeout(opened, 2_000)
+                    breakdownHandle = opened
+                }
+            }
+            if let handle = breakdownHandle {
+                pageSize = Self.scalarPragma(handle, "page_size") ?? 4096
+                freeCount = Self.scalarPragma(handle, "freelist_count") ?? 0
+            }
+
+            // main 以文件实际大小为基准:未 checkpoint 的新增页尚在 WAL 侧,
+            // 不含在 main 里,与 walBytes 相加不重复。
+            let schemaBytes = Self.schemaMainBytesProbe
+            let dataOnMain = max(fileSize("") - schemaBytes - freeCount * pageSize, 0)
+            return StorageBreakdown(
+                dataBytes: dataOnMain + walBytes,
+                systemBytes: schemaBytes + freeCount * pageSize + shmBytes
+            )
+        }
+    }
+
+    private static func scalarPragma(_ handle: OpaquePointer?, _ name: String) -> Int64? {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, "PRAGMA \(name)", -1, &statement, nil) == SQLITE_OK, let statement else { return nil }
+        defer { sqlite3_finalize(statement) }
+        guard sqlite3_step(statement) == SQLITE_ROW else { return nil }
+        return sqlite3_column_int64(statement, 0)
     }
 
     // MARK: - 写入
@@ -159,6 +257,7 @@ final class StatisticsProcessStore {
         let day = Self.dayKey(date, calendar: calendar)
         queue.async { [weak self] in
             guard let self else { return }
+            self.ensureContextLocked()
             if day != self.currentDay {
                 self.flushLocked()
                 self.currentDay = day
@@ -205,7 +304,9 @@ final class StatisticsProcessStore {
     func recordBattery(cycleCount: Int, healthPercent: Double, at date: Date, calendar: Calendar) {
         let day = Self.dayKey(date, calendar: calendar)
         queue.async { [weak self] in
-            guard let self, let context = self.context else { return }
+            guard let self else { return }
+            self.ensureContextLocked()
+            guard let context = self.context else { return }
             let predicate = #Predicate<StatsBatteryDaily> { $0.day == day }
             if let existing = try? context.fetch(FetchDescriptor(predicate: predicate)).first {
                 existing.cycleCount = cycleCount
@@ -221,7 +322,9 @@ final class StatisticsProcessStore {
     func recordUsageDay(at date: Date, calendar: Calendar) {
         let day = Self.dayKey(date, calendar: calendar)
         queue.async { [weak self] in
-            guard let self, let context = self.context else { return }
+            guard let self else { return }
+            self.ensureContextLocked()
+            guard let context = self.context else { return }
             let descriptor = FetchDescriptor<StatsUsageMeta>()
             let meta = (try? context.fetch(descriptor).first) ?? {
                 let created = StatsUsageMeta(firstUseDay: day, totalActiveDays: 0, lastActiveDay: 0)
@@ -251,6 +354,7 @@ final class StatisticsProcessStore {
     }
 
     private func flushLocked() {
+        ensureContextLocked()
         guard let context else { return }
         let day = currentDay
         guard day > 0 else { return }
@@ -525,26 +629,67 @@ final class StatisticsProcessStore {
         }
     }
 
-    /// 清空全部应用统计(含身份图标与打卡)。
+    /// 清空全部应用统计(应用聚合/身份图标/电池快照)。Core Data 逐行删除只把
+    /// 页挂进 freelist,文件体积永不收缩——数 MB 的图标库清空后占用纹丝不动,
+    /// 连同库文件一并销毁再按原 schema 重建,是让占用真实回落到空库地板的
+    /// 唯一途径。
+    /// 使用打卡(活跃日与连续天数)是用户的连续性记录,不随清空丢失:
+    /// 销毁前取出,重建后原样写回。
     func deleteAll() {
         queue.sync {
-            guard let context else { return }
-            deleteAllLocked(StatsAppDaily.self)
-            deleteAllLocked(StatsAppIdentity.self)
-            deleteAllLocked(StatsBatteryDaily.self)
-            deleteAllLocked(StatsActiveDay.self)
-            deleteAllLocked(StatsUsageMeta.self)
+            guard let url = databaseURL else { return }
+            var checkinDays: [Int64] = []
+            var checkinMeta: (firstUseDay: Int64, totalActiveDays: Int64, lastActiveDay: Int64)?
+            if let ctx = context {
+                do {
+                    let days = try ctx.fetch(FetchDescriptor<StatsActiveDay>(sortBy: [SortDescriptor(\.day)]))
+                    checkinDays = days.map(\.day)
+                    checkinMeta = try ctx.fetch(FetchDescriptor<StatsUsageMeta>()).first
+                        .map { ($0.firstUseDay, $0.totalActiveDays, $0.lastActiveDay) }
+                } catch {
+                    // 打卡备份失败即中止清空:承诺保留的连续性记录优先于清空本身。
+                    AppLogger.settings.error("Statistics checkin backup failed, deleteAll aborted: \(String(describing: error), privacy: .public)")
+                    return
+                }
+            }
+
             accumulators.removeAll()
             iconCache.removeAll()
             iconSkipSet.removeAll()
-            try? context.save()
+            currentDay = 0
+            // 先断开容器再删文件;即便旧连接延迟关闭,POSIX unlink 下它写的
+            // 是已摘除的 inode,不影响同路径上的新库。
+            context = nil
+            container = nil
+            for suffix in ["", "-wal", "-shm"] {
+                try? FileManager.default.removeItem(atPath: url.path + suffix)
+            }
+            do {
+                try reopenStoreLocked()
+            } catch {
+                AppLogger.settings.error("Statistics process store rebuild failed: \(String(describing: error), privacy: .public)")
+                // 停写期由写入入口按需重建;打卡暂存,重建成功后补写回。
+                pendingCheckin = (checkinDays, checkinMeta)
+                return
+            }
+            guard let freshContext = context else { return }
+            for day in checkinDays {
+                freshContext.insert(StatsActiveDay(day: day))
+            }
+            if let meta = checkinMeta {
+                freshContext.insert(StatsUsageMeta(
+                    firstUseDay: meta.firstUseDay,
+                    totalActiveDays: meta.totalActiveDays,
+                    lastActiveDay: meta.lastActiveDay
+                ))
+            }
+            do {
+                try freshContext.save()
+            } catch {
+                // 插入仍留在上下文中,随后续落库的 save 一并持久化。
+                AppLogger.settings.error("Statistics checkin restore save failed: \(String(describing: error), privacy: .public)")
+            }
         }
-    }
-
-    private func deleteAllLocked<M: PersistentModel>(_ modelType: M.Type) {
-        guard let context else { return }
-        let rows = (try? context.fetch(FetchDescriptor<M>())) ?? []
-        rows.forEach { context.delete($0) }
     }
 
     /// 打卡行被删除后,按剩余活跃日重校元信息;无剩余则整体移除。

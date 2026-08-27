@@ -42,16 +42,18 @@ final class StatisticsRecorder: ObservableObject {
     @Published private(set) var usageFirstDay: Int64 = 0
     @Published private(set) var usageActiveDays: [Int64] = []
 
-    /// 三类本地存储产物的占用与记录规模。
+    /// 本地存储产物的占用分解与记录规模。「监控数据」只算真实在用的数据页;
+    /// 「系统数据」是表结构页、已删行待复用的空闲页与 WAL 索引——随清空/复用
+    /// 自然消长,单列展示以免被误读成未清理的数据。
     struct StorageInfo: Equatable {
-        var databaseBytes: Int64
-        var appStatsBytes: Int64
+        var monitorDataBytes: Int64
         var reportBytes: Int64
+        var systemBytes: Int64
         var minuteCount: Int64
         var hourCount: Int64
         var dayCount: Int64
 
-        var totalBytes: Int64 { databaseBytes + appStatsBytes + reportBytes }
+        var totalBytes: Int64 { monitorDataBytes + reportBytes + systemBytes }
     }
 
     /// 进程/电池/打卡的 SwiftData 存储(图标随身份持久化,卸载应用不丢历史)。
@@ -116,6 +118,9 @@ final class StatisticsRecorder: ObservableObject {
     /// 上一帧时刻,用于分段累计采样覆盖秒数(cover_s)。
     private var lastFrameAt: Date?
 
+    /// 统计开关状态:关闭期间 record 直返,不积累分钟累加器。
+    private var recordingActive = true
+
     /// 概览/落库共用的后台队列;数据库自身另有串行队列,这里只避免主线程做 IO。
     private let maintenanceQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.statistics-maintenance", qos: .utility)
 
@@ -140,6 +145,7 @@ final class StatisticsRecorder: ObservableObject {
 
     /// 一帧进程采样的直通入口(MonitorStore 统计定时器调用,主线程)。
     /// 网络速率为窗口均值,按 60s 统计节奏折算为分钟字节量。
+    /// 开关关闭后在途的异步采样帧经此门卫丢弃,不落入进程库。
     func recordProcesses(
         cpu: [TopCPUProcess],
         memory: [TopMemoryProcess],
@@ -148,6 +154,7 @@ final class StatisticsRecorder: ObservableObject {
         disk: [TopDiskProcess],
         at date: Date
     ) {
+        guard recordingActive else { return }
         processStore?.record(
             cpu: cpu.map { (name: $0.name, pid: $0.pid, usage: $0.cpuUsage) },
             memory: memory.map { (name: $0.name, pid: $0.pid, bytes: Double($0.memoryUsage)) },
@@ -161,9 +168,36 @@ final class StatisticsRecorder: ObservableObject {
 
     // MARK: - 采集(主线程,微秒级)
 
+    /// 暂停统计记录(设置「数据统计」开关关闭):丢弃进行中的分钟累加与速率
+    /// 积分游标。游标不清零的话,重新开启后第一帧会把关闭时长按旧速率外推
+    /// 成巨量流量(间隔越界保护只丢段,不清游标语义仍是「跳过」而非「停用」)。
+    func suspend() {
+        recordingActive = false
+        accumulator = Accumulator()
+        currentMinuteStart = nil
+        lastNetDown = nil
+        lastNetUp = nil
+        lastDiskRead = nil
+        lastDiskWrite = nil
+        lastFrameAt = nil
+        lastBatterySlow = nil
+    }
+
+    /// 恢复统计记录(开关重新开启):后台补一次汇总维护,把关闭期间该封口
+    /// 的分钟桶按水位正常汇总,随后刷新设置页概览。
+    func resume() {
+        recordingActive = true
+        maintenanceQueue.async { [weak self] in
+            self?.database?.maintain(now: Date())
+            self?.refreshOverview()
+        }
+    }
+
     /// 记录一帧。由 MonitorStore 在每次采样成功应用后调用;各指标采样节奏
     /// (1~10s)不同,按「本帧里有什么就累加什么」独立统计,互不等待。
+    /// 统计开关关闭期间直返,不积累任何分钟数据。
     func record(modules: [MonitorModule], fans: [FanInfo], at date: Date) {
+        guard recordingActive else { return }
         let minuteStart = Int64((date.timeIntervalSince1970 / 60).rounded(.down) * 60)
         if minuteStart != currentMinuteStart {
             sealCompletedMinute()
@@ -461,10 +495,12 @@ final class StatisticsRecorder: ObservableObject {
         let counts = database.rowCounts
         let reportBytes = (try? FileManager.default
             .attributesOfItem(atPath: StatisticsReportBuilder.outputURL.path))?[.size] as? Int64 ?? 0
+        let stat = database.breakdown
+        let app = processStore?.breakdown ?? .zero
         return StorageInfo(
-            databaseBytes: database.fileSize ?? 0,
-            appStatsBytes: processStore?.fileSize ?? 0,
+            monitorDataBytes: stat.dataBytes + app.dataBytes,
             reportBytes: reportBytes,
+            systemBytes: stat.systemBytes + app.systemBytes,
             minuteCount: counts.minute,
             hourCount: counts.hour,
             dayCount: counts.day
@@ -574,7 +610,7 @@ final class StatisticsRecorder: ObservableObject {
 
     /// 删除单个浏览桶(统计库三层区间 + 应用统计对应日区间),完成后刷新概览。
     /// 报表缓存不在此列,由存储页独立入口清理。
-    /// 清空应用统计(进程聚合/身份图标/打卡),完成后刷新概览。
+    /// 清空应用统计(进程聚合/身份图标/电池快照,使用打卡保留),完成后刷新概览。
     func clearAppStats(completion: @escaping () -> Void) {
         maintenanceQueue.async { [weak self] in
             if let self {
