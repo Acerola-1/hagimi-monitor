@@ -156,10 +156,11 @@ struct StorageSettingsView: View {
     private var ringColors: (monitor: Color, report: Color, fixed: Color) {
         let dark = colorScheme == .dark
         return (
-            // QQ 存储环同款青蓝 × 紫罗兰两主色,深色模式提亮一档
+            // QQ 存储环同款青蓝 × 紫罗兰两主色,深色模式提亮一档;
+            // 系统段用带蓝调的板岩灰,保持与主色的同一色彩家族。
             Color(hex: dark ? 0x38BDFF : 0x00A5EF),
             Color(hex: dark ? 0xCA92F8 : 0xB066E8),
-            Color.secondary
+            Color(hex: dark ? 0x94A0AE : 0x9AA5B3)
         )
     }
 
@@ -211,15 +212,15 @@ struct StorageSettingsView: View {
     private func legend(dot: Color, label: String, bytes: Int64) -> some View {
         HStack(spacing: 5) {
             Circle()
-                .fill(dot.opacity(0.9))
+                .fill(dot)
                 .frame(width: 7, height: 7)
             Text(label)
                 .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .foregroundStyle(.secondary)
             Text(byteCount(bytes))
                 .font(.caption2.weight(.medium))
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.primary.opacity(0.8))
         }
     }
 
@@ -304,8 +305,8 @@ private struct StorageRing: View {
 
     private static let lineWidth: CGFloat = 18
 
-    /// 各段近零间隙直接衔接:后绘段的圆头帽轻叠在前段末端,接缝收成一个
-    /// 圆形节点(QQ 存储环同款衔接),不放大段间裂口。
+    /// 段间以平头端面 + 统一间隙分隔,接缝是一条干净的切线;
+    /// 圆头帽会让后段叠压前段末端形成异色瘤点,不适合多段构成环。
     private var total: Int64 { max(segments.reduce(0) { $0 + $1.bytes }, 1) }
 
     /// 预计算各段起止比例(ViewBuilder 内不能累加状态)。
@@ -321,23 +322,25 @@ private struct StorageRing: View {
     }
 
     var body: some View {
-        let gap: Double = arcs.count > 1 ? 0.008 : 0
+        // 间隙按线宽折算成约 3pt 的弧长,多段时保持恒定观感。
+        let gap: Double = arcs.count > 1 ? 3.0 / (2 * .pi * 82) : 0
         ZStack {
             Circle()
-                .stroke(Color.secondary.opacity(0.10), lineWidth: Self.lineWidth)
+                .stroke(Color.secondary.opacity(0.12), lineWidth: Self.lineWidth)
 
             ForEach(arcs, id: \.id) { arc in
                 Circle()
                     .trim(from: arc.from + gap / 2, to: max(arc.from + gap / 2, arc.to - gap / 2))
                     .stroke(
-                        // 角向渐变让每段沿走向由浅入深,与页内健康评分环同语言
+                        // 角向渐变让每段沿走向由浅入深,与页内健康评分环同语言;
+                        // 渐变起点透明度抬高,避免段起点发灰与段终点形成明度断崖。
                         AngularGradient(
-                            colors: [arc.color.opacity(0.62), arc.color],
+                            colors: [arc.color.opacity(0.75), arc.color],
                             center: .center,
                             startAngle: .degrees(360 * arc.from),
                             endAngle: .degrees(360 * arc.to)
                         ),
-                        style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round)
+                        style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .butt)
                     )
                     .rotationEffect(.degrees(-90))
             }

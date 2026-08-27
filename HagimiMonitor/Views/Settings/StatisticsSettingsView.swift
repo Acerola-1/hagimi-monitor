@@ -345,13 +345,13 @@ struct StatisticsSettingsView: View {
         let fraction = min(health.score / 100, 1)
         return ZStack {
             Circle()
-                .stroke(Color.secondary.opacity(0.12), lineWidth: 8)
+                .stroke(Color.secondary.opacity(0.15), lineWidth: 8)
 
             Circle()
                 .trim(from: 0, to: fraction)
                 .stroke(
                     AngularGradient(
-                        colors: [tint.opacity(0.4), tint],
+                        colors: [tint.opacity(0.72), tint],
                         center: .center,
                         startAngle: .degrees(0),
                         endAngle: .degrees(360 * fraction)
@@ -366,8 +366,8 @@ struct StatisticsSettingsView: View {
                     .monospacedDigit()
                     .foregroundStyle(tint)
                 Text(health.level.title)
-                    .font(.system(size: 8.5, weight: .semibold))
-                    .foregroundStyle(tint.opacity(0.85))
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(tint.opacity(0.9))
             }
         }
         .frame(width: 76, height: 76)
@@ -403,22 +403,22 @@ struct StatisticsSettingsView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(tint.opacity(colorScheme == .dark ? 0.07 : 0.06))
+                .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(tint.opacity(0.14), lineWidth: 0.5)
+                .strokeBorder(tint.opacity(0.20), lineWidth: 0.5)
         )
     }
 
     private func levelColor(_ level: StatisticsHealthScore.Level) -> Color {
         let dark = colorScheme == .dark
         switch level {
-        case .excellent: return Color(hex: dark ? 0x34C759 : 0x2F9E64)
-        case .good: return Color(hex: dark ? 0x64D2FF : 0x3BAFDA)
-        case .fair: return Color(hex: dark ? 0xFFD60A : 0xD4A843)
-        case .poor: return Color(hex: dark ? 0xFF9F0A : 0xE08E45)
-        case .critical: return Color(hex: dark ? 0xFF6961 : 0xD94848)
+        case .excellent: return Color(hex: dark ? 0x34C759 : 0x2EAE68)
+        case .good: return Color(hex: dark ? 0x64D2FF : 0x2BAEE0)
+        case .fair: return Color(hex: dark ? 0xFFD60A : 0xE3B23C)
+        case .poor: return Color(hex: dark ? 0xFF9F0A : 0xE89042)
+        case .critical: return Color(hex: dark ? 0xFF6961 : 0xDF5252)
         }
     }
 
@@ -542,11 +542,11 @@ struct StatisticsSettingsView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(spec.tint.opacity(colorScheme == .dark ? 0.07 : 0.06))
+                .fill(spec.tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(spec.tint.opacity(0.14), lineWidth: 0.5)
+                .strokeBorder(spec.tint.opacity(0.20), lineWidth: 0.5)
         )
     }
 
