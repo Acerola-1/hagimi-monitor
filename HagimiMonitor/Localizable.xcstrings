@@ -9263,13 +9263,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "All history, app stats, usage check-ins, and the report cache will be deleted. This cannot be undone."
+            "value": "All monitoring history, app stats, and the report cache will be deleted. This cannot be undone. Usage check-ins are kept."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "将删除所有历史记录、应用统计、打卡数据与报表缓存,此操作无法撤销。"
+            "value": "将删除所有历史监控记录、应用统计与报表缓存，此操作无法撤销。使用打卡记录将保留。"
           }
         }
       }
@@ -9542,22 +9542,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "网络"
-          }
-        }
-      }
-    },
-    "stats.settings.local-only": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "All data stays on this Mac; the report works offline"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "全部数据仅保存在本机，报表可离线查看"
           }
         }
       }
@@ -9866,6 +9850,38 @@
         }
       }
     },
+    "stats.settings.toggle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Record statistics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "记录数据统计"
+          }
+        }
+      }
+    },
+    "stats.settings.toggle-subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When off, monitoring data and app check-ins stop recording; saved history is kept"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭后停止记录监控数据与使用打卡，已保存的历史数据不受影响"
+          }
+        }
+      }
+    },
     "stats.settings.write": {
       "localizations": {
         "en": {
@@ -10170,18 +10186,18 @@
         }
       }
     },
-    "stats.storage.subtitle": {
+    "stats.storage.system": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Local data never leaves this Mac. Review or free up space anytime."
+            "value": "System Data"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "本地数据仅保存在这台 Mac,可随时查看与清理。"
+            "value": "系统数据"
           }
         }
       }

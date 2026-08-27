@@ -5,8 +5,8 @@ import Combine
 import OSLog
 
 /// 蓝牙设备类别,用于面板图标映射。来源优先级:CoD(IOBluetooth)>
-/// device_minorType(system_profiler)>名称关键词推断;均未知归 other,
-/// 不猜测设备形态。
+/// device_minorType(system_profiler)>GAP Appearance(GATT 自报)>
+/// 名称关键词推断;均未知归 other,不猜测设备形态。
 enum BluetoothDeviceType: Equatable {
     case mouse
     case keyboard
@@ -53,6 +53,24 @@ enum BluetoothDeviceType: Equatable {
             }
         default:
             return nil
+        }
+    }
+
+    /// GAP Appearance(GATT 0x2A01,uint16:高 10 位类别、低 6 位子类)映射,
+    /// 值表出自 SIG Assigned Numbers(appearance_values.yaml)。仅映射本应用
+    /// 有图标语言的形态,其余返回 nil 由调用方沿名称推断兜底。
+    static func fromAppearance(_ appearance: UInt16) -> BluetoothDeviceType? {
+        switch appearance {
+        case 0x03C1: return .keyboard            // HID:Keyboard
+        case 0x03C2: return .mouse               // HID:Mouse
+        case 0x03C3, 0x03C4: return .gamepad     // HID:Joystick/Gamepad
+        case 0x03C5: return .trackpad            // HID:Digitizer Tablet
+        case 0x0841, 0x0842, 0x0843, 0x0844, 0x0845:
+            return .speaker                      // Audio Sink:各类扬声器/Speakerphone
+        case 0x0941, 0x0943, 0x0944, 0x0945, 0x0946:
+            return .headphones                   // Wearable Audio:Earbud/Headphones/Neck Band/L/R
+        case 0x0942: return .headset             // Wearable Audio:Headset
+        default: return nil
         }
     }
 
@@ -149,8 +167,8 @@ enum BluetoothBatteryParser {
 ///    (device_batteryLevel* 键;控制中心读数同源)。
 ///    沙盒内 bluetoothd 拒绝向沙盒客户端提供数据(实测返回空骨架),
 ///    直连版与 IOBluetooth 读数互为冗余;
-/// 3. CoreBluetooth 直读 GATT 电池服务(BLEBatteryReader)——BLE 设备
-///    实时电量与清单补充(2A19 Notify 推送)。
+/// 3. CoreBluetooth 直读 GATT(BLEBatteryReader)——BLE 设备实时电量与清单补充
+///    (2A19 Notify 推送),以及形态类别(2A01 GAP Appearance)。
 ///
 /// 电量优先级:GATT(设备自报精确值,实时推送)> 系统侧读数
 /// (IOBluetooth/profiler 同源,粗粒度分档)。
@@ -159,9 +177,9 @@ enum BluetoothBatteryParser {
 /// BLE identifier)关联。绑定在无歧义窗口(同名匹配/名称相似度唯一配对)
 /// 学习一次后永久生效,此后设备改名、多设备并存都能稳定合并。
 ///
-/// 成本与缓存:system_profiler 启动数百毫秒,绝不能随每秒采样拉起——
-/// 探针 10s 轮询,后台队列执行;IOBluetooth 查询微秒级,主线程独立刷新;
-/// BLE 电量由常驻读取器订阅推送。结果经 @Published 回主线程。
+/// 成本与缓存:system_profiler 启动数百毫秒,探针按 10s 周期在后台队列轮询;
+/// IOBluetooth 查询微秒级,主线程独立刷新;BLE 电量由常驻读取器订阅推送。
+/// 结果经 @Published 回主线程。
 ///
 /// 响应速度:10s 轮询只是兜底,连断变化由 IOBluetooth 通知事件驱动——
 /// 全局连接通知(per-class)+ 每设备断开通知(per-device,随清单动态注册),
@@ -171,8 +189,8 @@ final class BluetoothBatterySampler: NSObject {
     /// 兜底轮询周期:连断变化由 IOBluetooth 通知即时驱动,此周期仅覆盖
     /// 通知遗漏场景(如设备休眠导致的静默链路变化)。
     private static let sampleInterval: TimeInterval = 10
-    /// system_profiler 正常数百毫秒返回,个别蓝牙控制器无响应时可能挂起;
-    /// 超过此时长终止进程并放弃本次结果,绝不让探针卡死后台队列。
+    /// system_profiler 正常数百毫秒返回,个别蓝牙控制器无响应时可能挂起,
+    /// 超过此时长终止进程并放弃本次结果。
     private static let probeTimeout: DispatchTimeInterval = .seconds(8)
     /// 身份绑定表的持久化键:归一化 MAC -> BLE identifier(UUID)。
     private static let bindingsDefaultsKey = "bluetooth.identityBindings"
@@ -200,8 +218,11 @@ final class BluetoothBatterySampler: NSObject {
     private var eventRefreshWork: DispatchWorkItem?
     /// 防抖窗口内出现过连接事件(决定刷新后是否安排电量重试)。
     private var pendingConnectEvent = false
-    /// 连接后电量渐进重试任务。
-    private var batteryRetryWorks: [DispatchWorkItem] = []
+    /// 连接后电量渐进重试任务(归一化地址 → 任务组),新设备独立调度,
+    /// 后续其他设备连接不重建已设备的重试链。
+    private var batteryRetryWorksByAddress: [String: [DispatchWorkItem]] = [:]
+    /// 最近一轮 IOBluetooth 清单的地址集,用于识别「新连接」的设备。
+    private var previouslySeenAddresses: Set<String> = []
     /// 电量粘性缓存(归一化地址 -> 最近读到的系统侧电量):
     /// IOBluetooth 的 AVRCP 电量属性会间歇性回空,设备保持连接期间
     /// 沿用最近读数保证显示连续;设备离场(清单消失)时清除,
@@ -247,6 +268,8 @@ final class BluetoothBatterySampler: NSObject {
         )
         // 快速路径先行(微秒级,面板首开即有清单),profiler 异步补充电量。
         refreshIO()
+        // 启动时已连接的设备不算「新连接」,后续重试只针对事件驱动的新设备。
+        previouslySeenAddresses = Set(ioDevices.map(\.address))
         probeProfiler()
         timer = Timer.publish(every: Self.sampleInterval, on: .main, in: .common)
             .autoconnect()
@@ -282,9 +305,19 @@ final class BluetoothBatterySampler: NSObject {
         eventRefreshWork?.cancel()
         eventRefreshWork = nil
         pendingConnectEvent = false
-        batteryRetryWorks.forEach { $0.cancel() }
-        batteryRetryWorks.removeAll()
+        batteryRetryWorksByAddress.values.forEach { works in
+            works.forEach { $0.cancel() }
+        }
+        batteryRetryWorksByAddress.removeAll()
+        previouslySeenAddresses.removeAll()
         lastKnownBattery.removeAll()
+        ioDevices = []
+        profilerControllerOn = false
+        profilerDevices = []
+        bleSnapshots = []
+        cbControllerOn = false
+        bleReader.stop()
+        publishMerged()
     }
 
     /// 快速路径:IOBluetooth 枚举(微秒级)主线程执行,连断状态即时发布,
@@ -339,7 +372,7 @@ final class BluetoothBatterySampler: NSObject {
             self.refreshIO()
             self.bleReader.refreshImmediately()
             if shouldRetry {
-                self.scheduleBatteryRetries()
+                self.scheduleBatteryRetriesForNewDevices()
             }
         }
         eventRefreshWork = work
@@ -347,17 +380,28 @@ final class BluetoothBatterySampler: NSObject {
     }
 
     /// 新连接设备的 AVRCP/HFP 电量上报滞后于链路建立,且首报可能
-    /// 间歇性回空(属性随会话建立渐进填充):2s/6s/15s/30s 渐进重试,
-    /// 每轮都更新粘性缓存,读到即稳定显示。
-    private func scheduleBatteryRetries() {
-        batteryRetryWorks.forEach { $0.cancel() }
-        batteryRetryWorks.removeAll()
-        for delay in [TimeInterval(2), TimeInterval(6), TimeInterval(15), TimeInterval(30)] {
-            let work = DispatchWorkItem { [weak self] in
-                self?.refreshIO()
+    /// 间歇性回空(属性随会话建立渐进填充):仅对新出现的设备安排
+    /// 2s/6s/15s/30s 渐进重试,每轮都更新粘性缓存,读到即稳定显示;
+    /// 已在场设备的重试链不受后续连接事件影响。无新设备时不重排。
+    private func scheduleBatteryRetriesForNewDevices() {
+        let newAddresses = Set(ioDevices.map(\.address)).subtracting(previouslySeenAddresses)
+        previouslySeenAddresses = Set(ioDevices.map(\.address))
+        for address in newAddresses where batteryRetryWorksByAddress[address] == nil {
+            batteryRetryWorksByAddress[address] = [2, 6, 15, 30].map { delay in
+                let work = DispatchWorkItem { [weak self] in
+                    guard let self else { return }
+                    if lastKnownBattery[address] == nil {
+                        refreshIO()
+                    }
+                    // 读到电量即取消本设备剩余重试;未读到则留给下一档。
+                    if lastKnownBattery[address] != nil,
+                       let chain = batteryRetryWorksByAddress.removeValue(forKey: address) {
+                        chain.forEach { $0.cancel() }
+                    }
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + TimeInterval(delay), execute: work)
+                return work
             }
-            batteryRetryWorks.append(work)
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: work)
         }
     }
 
@@ -424,11 +468,12 @@ final class BluetoothBatterySampler: NSObject {
                 batteryLevel: fresh ?? lastKnownBattery[address]
             )
         }
-        // 清单里消失的设备注销其断开通知并清电量缓存。
+        // 清单里消失的设备注销其断开通知并清电量缓存与重试链。
         for (address, observer) in disconnectObservers where byAddress[address] == nil {
             observer.unregister()
             disconnectObservers.removeValue(forKey: address)
             lastKnownBattery.removeValue(forKey: address)
+            batteryRetryWorksByAddress.removeValue(forKey: address)?.forEach { $0.cancel() }
         }
         return Array(byAddress.values)
     }
@@ -446,7 +491,7 @@ final class BluetoothBatterySampler: NSObject {
     /// 是沙盒内该类设备电量的唯一来源(实测 macOS 26)。
     /// 属性会间歇性回空(AVRCP 会话重建/懒加载期间),由调用方的
     /// 粘性缓存保证显示连续性。
-    /// 读取顺序:多单体(左/右/仓)取非零最小值,单体设备取 Single/Combined/裸键。
+    /// 读取顺序:多单体(左/右/仓)取非零最小值,单体设备取 Single/Combined/headsetBattery/裸键。
     /// responds(to:) 先确认 getter 存在(系统 API 变更时安全降级为 nil),
     /// valueForKey 装箱值统一按 NSNumber 提取,覆盖全部数值装箱类型。
     private static func ioBatteryPercent(of device: IOBluetoothDevice) -> Int? {
@@ -497,10 +542,15 @@ final class BluetoothBatterySampler: NSObject {
             // 用 GAP 实时名覆盖;IOBluetooth 条目(services nil)的系统名
             // 已实时,保留。
             let name = device.services == nil ? device.name : (snapshot.name ?? device.name)
+            // 类型已定位(CoD/profiler 元数据)则保留;仍未知时用设备自报的
+            // GAP Appearance 补位——这是设备端的形态声明,不是名称猜测。
+            let type = device.type != .other
+                ? device.type
+                : snapshot.appearance.flatMap(BluetoothDeviceType.fromAppearance) ?? device.type
             merged[index] = BluetoothDeviceInfo(
                 address: device.address,
                 name: name,
-                type: device.type,
+                type: type,
                 // GATT 2A19 是设备自报的精确读数且经 Notify 实时推送;
                 // profiler 的 AVRCP 值是系统粗粒度分档,仅作兜底。
                 batteryLevel: snapshot.batteryLevel ?? device.batteryLevel,
@@ -587,13 +637,15 @@ final class BluetoothBatterySampler: NSObject {
             }
         }
 
-        // 4) 未消化的 BLE 条目为 CB 独有设备:identifier 作稳定 id 补入。
+        // 4) 未消化的 BLE 条目为 CB 独有设备:identifier 作稳定 id 补入,
+        //    类型按 GAP Appearance(设备自报)优先、名称关键词兜底。
         for snapshot in remainingSnapshots {
             let name = snapshot.name ?? String(snapshot.identifier.uuidString.prefix(8))
             merged.append(BluetoothDeviceInfo(
                 address: "ble-\(snapshot.identifier.uuidString)",
                 name: name,
-                type: BluetoothDeviceType.inferred(fromName: name),
+                type: snapshot.appearance.flatMap(BluetoothDeviceType.fromAppearance)
+                    ?? BluetoothDeviceType.inferred(fromName: name),
                 batteryLevel: snapshot.batteryLevel
             ))
         }

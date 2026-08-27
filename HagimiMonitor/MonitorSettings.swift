@@ -148,6 +148,8 @@ final class MonitorSettings: ObservableObject {
     @Published var networkShowSystemProcesses: Bool = true
     /// 功率流图开关(Beta):电源模块展开区的功率流可视化,默认开启,双渠道(含沙盒)均可用。
     @Published var batteryShowPowerFlow: Bool = true
+    /// 数据统计总开关:关闭后停止记录监控数据与使用打卡,历史数据保留。
+    @Published var statisticsEnabled: Bool = true
     /// 小工具(快捷功能)入口是否在面板中显示。
     @Published var quickToolsVisible: Bool = true
     /// 在工具浮层中显示的工具集合。集合由 QuickToolKind 驱动,新增工具只补枚举
@@ -215,6 +217,7 @@ final class MonitorSettings: ObservableObject {
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
         batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
+        statisticsEnabled = defaults.object(forKey: Keys.statisticsEnabled) as? Bool ?? true
         quickToolsVisible = defaults.object(forKey: Keys.quickToolsVisible) as? Bool ?? true
         if let storedTools = defaults.array(forKey: Keys.visibleQuickTools) as? [String] {
             let stored = Set(storedTools.compactMap { key in
@@ -726,6 +729,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $statisticsEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.statisticsEnabled)
+            }
+            .store(in: &cancellables)
+
         $quickToolsVisible
             .dropFirst()
             .sink { [weak self] newValue in
@@ -849,6 +859,7 @@ private enum Keys {
     static let showNetworkProcesses = "settings.network.showProcesses"
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
+    static let statisticsEnabled = "settings.statistics.enabled"
     static let quickToolsVisible = "settings.quickTools.visible"
     static let visibleQuickTools = "settings.quickTools.visibleKinds"
     /// 一次性迁移标记:小工具新增工具 case 时,把新工具并回老用户的已启用集合

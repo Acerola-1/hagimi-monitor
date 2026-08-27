@@ -51,7 +51,7 @@ struct SettingsRootView: View {
             QuickToolsSettingsView(settings: settings)
 
         case .statistics:
-            StatisticsSettingsView(recorder: store.statisticsRecorder) {
+            StatisticsSettingsView(recorder: store.statisticsRecorder, settings: settings) {
                 selection = .storage
             }
 

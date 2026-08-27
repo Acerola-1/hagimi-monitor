@@ -408,13 +408,17 @@ struct MonitorPanelView: View {
 
     /// header 常驻的数据统计入口:打开设置页「数据统计」页签(与 App 菜单
     /// 「打开数据报表…」分工——此处为速览,完整 HTML 报表另有专属入口)。
+    /// 随「数据统计」开关闭合:停止记录期间入口同步收起。
+    @ViewBuilder
     private func statsEntryButton(theme: MonitorPanelTheme) -> some View {
-        QuickPanelControlButton(
-            imageName: "chart.bar.doc.horizontal",
-            help: String(localized: "panel.statistics"),
-            tint: theme.secondaryText
-        ) {
-            SettingsWindowPresenter.open(tab: .statistics)
+        if store.settings.statisticsEnabled {
+            QuickPanelControlButton(
+                imageName: "chart.bar.doc.horizontal",
+                help: String(localized: "panel.statistics"),
+                tint: theme.secondaryText
+            ) {
+                SettingsWindowPresenter.open(tab: .statistics)
+            }
         }
     }
 

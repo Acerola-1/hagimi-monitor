@@ -5,6 +5,7 @@ import SwiftUI
 /// 数据由 StatisticsRecorder 每分钟封口后发布,本视图只读展示。
 struct StatisticsSettingsView: View {
     @ObservedObject var recorder: StatisticsRecorder
+    @ObservedObject var settings: MonitorSettings
     @Environment(\.colorScheme) private var colorScheme
     @State private var selectedRange: StatisticsOverviewRange = .today
     /// 跳转存储管理页(入口收在本页底部,归属数据统计)。
@@ -18,37 +19,50 @@ struct StatisticsSettingsView: View {
         SettingsPage {
             header
 
-            if hasAnyData {
-                SettingsGroup(String(localized: "stats.settings.overview"),
-                              titleAccessory: { reportEntryButton }) {
-                    rangePicker
-                    healthCard
-                    overviewGrid
-                }
-            } else {
-                SettingsGroup {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Label(String(localized: "stats.settings.empty-title"), systemImage: "hourglass")
-                            .font(.body.weight(.medium))
-                        Text(String(localized: "stats.settings.empty-body"))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+            SettingsGroup {
+                SettingsRow(
+                    title: String(localized: "stats.settings.toggle"),
+                    subtitle: String(localized: "stats.settings.toggle-subtitle")
+                ) {
+                    Toggle("", isOn: $settings.statisticsEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
                 }
             }
 
-            // 无数据时总览组不显示,报表入口退回独立行兜底;有数据时入口已收进总览标题行。
-            if !hasAnyData {
-                SettingsGroup {
-                    entryRow(
-                        icon: "safari",
-                        title: String(localized: "stats.settings.report-title"),
-                        subtitle: nil,
-                        action: { StatisticsReportFlow.open(recorder: recorder) }
-                    )
+            if settings.statisticsEnabled {
+                if hasAnyData {
+                    SettingsGroup(String(localized: "stats.settings.overview"),
+                                  titleAccessory: { reportEntryButton }) {
+                        rangePicker
+                        healthCard
+                        overviewGrid
+                    }
+                } else {
+                    SettingsGroup {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Label(String(localized: "stats.settings.empty-title"), systemImage: "hourglass")
+                                .font(.body.weight(.medium))
+                            Text(String(localized: "stats.settings.empty-body"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 12)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+
+                // 无数据时总览组不显示,报表入口退回独立行兜底;有数据时入口已收进总览标题行。
+                if !hasAnyData {
+                    SettingsGroup {
+                        entryRow(
+                            icon: "safari",
+                            title: String(localized: "stats.settings.report-title"),
+                            subtitle: nil,
+                            action: { StatisticsReportFlow.open(recorder: recorder) }
+                        )
+                    }
                 }
             }
 
@@ -60,8 +74,6 @@ struct StatisticsSettingsView: View {
                     action: openStorage
                 )
             }
-
-            SettingsTip(String(localized: "stats.settings.local-only"))
         }
     }
 
