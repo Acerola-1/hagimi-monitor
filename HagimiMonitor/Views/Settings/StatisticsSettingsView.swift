@@ -21,8 +21,7 @@ struct StatisticsSettingsView: View {
 
             SettingsGroup {
                 SettingsRow(
-                    title: String(localized: "stats.settings.toggle"),
-                    subtitle: String(localized: "stats.settings.toggle-subtitle")
+                    title: String(localized: "stats.settings.toggle")
                 ) {
                     Toggle("", isOn: $settings.statisticsEnabled)
                         .labelsHidden()

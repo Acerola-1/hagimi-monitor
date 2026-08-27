@@ -9866,22 +9866,6 @@
         }
       }
     },
-    "stats.settings.toggle-subtitle": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "When off, monitoring data and app check-ins stop recording; saved history is kept"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭后停止记录监控数据与使用打卡，已保存的历史数据不受影响"
-          }
-        }
-      }
-    },
     "stats.settings.write": {
       "localizations": {
         "en": {
