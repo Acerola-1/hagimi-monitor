@@ -65,7 +65,8 @@ struct DisplayControlsSection: View {
                     .foregroundStyle(palette.captionText)
                     .frame(width: 18, height: 18)
                     .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .animation(.easeInOut(duration: MonitorConstants.panelExpansionDuration), value: isExpanded)
+                    .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                       dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -121,7 +122,8 @@ struct DisplayControlsSection: View {
             // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
             // 钉住面板开着改设置时可见,与手动展开同一驱动源直接预览。
             guard isExpanded != newValue else { return }
-            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
                 isExpanded = newValue
             }
             animate(Self.sectionKey, newValue, true)
@@ -199,7 +201,8 @@ struct DisplayControlsSection: View {
     /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
     /// 时间线打架,造成「收一半停顿再补完」的卡顿。
     private func toggleExpansion() {
-        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
             isExpanded.toggle()
         }
         animate(Self.sectionKey, isExpanded, true)
@@ -349,7 +352,8 @@ private struct DisplayControlGroup: View {
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
     /// 并把本档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
             archiveExpanded.toggle()
         }
         animate(archiveKey, archiveExpanded, true)

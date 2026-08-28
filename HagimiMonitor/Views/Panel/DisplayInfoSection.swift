@@ -101,7 +101,8 @@ struct DisplayInfoSection: View {
             if !isExpanded {
                 displays = Self.collectDisplays()
             }
-            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
                 isExpanded.toggle()
             }
             animate(Self.sectionKey, isExpanded, true)
@@ -362,7 +363,8 @@ private struct DisplayInfoCard: View {
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
     /// 并把本卡档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
             archiveExpanded.toggle()
         }
         animate(archiveKey, archiveExpanded, true)

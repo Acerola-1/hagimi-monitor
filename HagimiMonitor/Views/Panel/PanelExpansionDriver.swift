@@ -17,8 +17,10 @@ import SwiftUI
 /// 与其他区的上报时机、嵌套层级完全解耦。稳态(非动画、未封顶)用实测值
 /// 校准,消除增量累积误差。
 ///
-/// 内容与窗口分走两条同时长同曲线(easeInOut 0.15s)的动画路径:内容由 SwiftUI
-/// 动画系统插值,窗口由 CA 插值。两者端点对齐,中间帧曲线相近。
+/// 内容与窗口分走两条并行动画路径:内容由 SwiftUI 弹簧
+/// (`spring(response:0.32, dampingFraction:0.82)`)插值,窗口由 CA 以 easeOut 0.20s
+/// 补间。弹簧在中断时保持速度重定向,快速连点不重启;easeOut 起始速度快,窗口立即
+/// 向新目标靠拢。两端点一致,中间帧曲线相近。
 @MainActor
 final class PanelExpansionDriver: ObservableObject {
     /// 各展开区当前目标相位(0=收起,1=展开)。非动画期间等于 0 或 1。
@@ -33,6 +35,9 @@ final class PanelExpansionDriver: ObservableObject {
     private var predictedHeight: CGFloat = 0
     /// 展开/收起动画截止时刻。动画窗口内实测处于插值中间态,跳过稳态校准。
     private var animationDeadline: Date = .distantPast
+    /// 可取消的校准任务:快速连点时每次 toggle 都调度一次校准,
+    /// 不取消会导致多个校准堆积、在弹簧尚未衰减时过早捕获中间态。
+    private var calibrationWorkItem: DispatchWorkItem?
     /// 内容总高度上限(菜单栏面板 = 屏幕可用高度,由视图上报;钉住面板为无穷)。
     /// 封顶期间 ScrollView 把实测钳在上限,无法反映未封顶真实高度,校准跳过、
     /// 保留增量维护的未封顶预测;下发窗口时才钳制,收起时正确「解封」。
@@ -60,19 +65,22 @@ final class PanelExpansionDriver: ObservableObject {
             }
         }
         applyPhaseDelta(targets)
-        animationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
+        animationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionSettleTime)
         if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
             NSLog("[autotest] driver.animate -> target=%.1f pred=%.1f cap=%.1f",
                   windowTargetHeight, predictedHeight, contentHeightCap)
         }
         onWindowResize?(windowTargetHeight, true)
-        // 动画最后一帧的实测上报落在截止标记内、校准被跳过,此后不再有上报。
-        // 过期后用终态实测补校一次,消除增量的累积误差(自然高度测量偏差等)。
-        DispatchQueue.main.asyncAfter(
-            deadline: .now() + MonitorConstants.panelExpansionDuration + 0.06
-        ) { [weak self] in
+        // 取消前一次校准(快速连点时避免多个堆积),弹簧衰减后再做一次终态校准。
+        calibrationWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
             self?.calibrateToMeasured()
         }
+        calibrationWorkItem = item
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + MonitorConstants.panelExpansionSettleTime + 0.05,
+            execute: item
+        )
     }
 
     /// 瞬时把相位设到目标(无动画)。用于面板隐藏期/初始化阶段同步最终布局状态。
@@ -186,7 +194,7 @@ final class PanelExpansionAnimation {
         isAnimating = true
         let context = NSAnimationContext.current
         context.duration = MonitorConstants.panelExpansionDuration
-        context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
         panel.animator().setFrame(frame, display: false)
         DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
             guard let self, self.token == current else { return }

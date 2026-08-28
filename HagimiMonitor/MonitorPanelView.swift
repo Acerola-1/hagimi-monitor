@@ -206,7 +206,8 @@ struct MonitorPanelView: View {
                     // (如风扇控制区)不被截在视口外看不见。
                     .onChange(of: expandedKinds) { oldSet, newSet in
                         guard let added = newSet.subtracting(oldSet).first else { return }
-                        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+                        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
                             proxy.scrollTo(added, anchor: .bottom)
                         }
                     }
@@ -645,7 +646,8 @@ struct MonitorPanelView: View {
         // 置位一次性动画截止标记:动画窗口内的采样结果推迟应用,避免 1-3s 节奏的
         // 模块刷新恰好撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
         store.beginExpansionAnimation()
-        withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
             mutate()
         }
         let current = expandedKinds
@@ -2709,7 +2711,8 @@ private struct BluetoothGlassRow: View, Equatable {
                     .foregroundStyle(theme.captionText)
                     .frame(width: 18, height: 18)
                     .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .animation(.easeInOut(duration: MonitorConstants.panelExpansionDuration), value: isExpanded)
+                    .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                       dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
                     .opacity(devices.isEmpty ? 0 : 1)
             }
             .padding(.horizontal, 10)
@@ -2981,7 +2984,8 @@ struct CollapsibleDetail<Content: View>: View {
                             // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
                             // onChange 回调无动画上下文,裸更新会让容器高度与下方内容
                             // 的位移瞬跳;显式包一次补间,让它平滑并入既有展开节奏。
-                            withAnimation(.easeInOut(duration: MonitorConstants.panelExpansionDuration)) {
+                            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
                                 contentHeight = newValue
                             }
                             expansion.reportNaturalHeight(expansionKey, newValue)
@@ -2997,6 +3001,7 @@ struct CollapsibleDetail<Content: View>: View {
             .allowsHitTesting(isExpanded)
             // toggle 时 SwiftUI 动画系统补间高度与透明度;contentAvailable 变化
             // (数据驱动)不触发此动画,瞬时切换。
-            .animation(.easeInOut(duration: MonitorConstants.panelExpansionDuration), value: isExpanded)
+            .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                               dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
     }
 }
