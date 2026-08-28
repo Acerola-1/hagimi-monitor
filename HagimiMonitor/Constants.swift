@@ -34,9 +34,6 @@ enum MonitorConstants {
     static let rowTintFaintOpacity = 0.02
 
     // MARK: - Panel Expansion
-    // 窗口层 CA 补间时长。easeOut 曲线使中断重定向时起始速度快,
-    // 快速连点场景下窗口立即向新目标靠拢,不会像 easeInOut 那样"顿"一下再动。
-    static let panelExpansionDuration: TimeInterval = 0.20
     // SwiftUI 弹簧参数:内容高度 / chevron / 滚动揭示等所有展开相关动画。
     // 弹簧在中断时保持当前速度重定向,不像 easeInOut 从零重启,
     // 快速连点展开/收起时内容平滑过渡、无重启顿挫。

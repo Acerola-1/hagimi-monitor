@@ -17,10 +17,12 @@ import SwiftUI
 /// 与其他区的上报时机、嵌套层级完全解耦。稳态(非动画、未封顶)用实测值
 /// 校准,消除增量累积误差。
 ///
-/// 内容与窗口分走两条并行动画路径:内容由 SwiftUI 弹簧
-/// (`spring(response:0.32, dampingFraction:0.82)`)插值,窗口由 CA 以 easeOut 0.20s
-/// 补间。弹簧在中断时保持速度重定向,快速连点不重启;easeOut 起始速度快,窗口立即
-/// 向新目标靠拢。两端点一致,中间帧曲线相近。
+/// 窗口与内容同相的关键:内容高度的**可见**插值由 CoreAnimation 在合成器侧
+/// 完成,布局模型在 toggle 时一次性落到终值,尺寸上报因此直接给出终高、没有
+/// 逐帧中间值。窗口层拿到终高后以与内容**同参数**的阻尼弹簧(见
+/// `PanelWindowSpring`)在显示帧时钟上跟随:同参、同起点、中断重定向同样保持
+/// 速度,边框与内容全程同相。异参/异时长的一条独立补间(无论 CA 还是瞬时
+/// 贴合)都会在中途或收尾暴露可见的分段跳变。
 @MainActor
 final class PanelExpansionDriver: ObservableObject {
     /// 各展开区当前目标相位(0=收起,1=展开)。非动画期间等于 0 或 1。
@@ -44,7 +46,8 @@ final class PanelExpansionDriver: ObservableObject {
     private var contentHeightCap: CGFloat = .infinity
 
     /// 窗口贴合回调:(目标内容总高度, 是否动画)。
-    /// animated=true 时由 CoreAnimation 补间窗口 frame;false 时同步贴合。
+    /// animated=true(展开/收起):下发预测终高,窗口层以与内容同参数的弹簧跟随;
+    /// animated=false(初始化/隐藏重置):窗口层直接贴合。
     /// nil 时(预览/无窗口宿主)不贴合,不影响动画本身。
     var onWindowResize: ((CGFloat, Bool) -> Void)?
 
@@ -55,7 +58,7 @@ final class PanelExpansionDriver: ObservableObject {
 
     /// 把一批展开区动画到各自目标相位(0 或 1)。
     /// 相位瞬时设到目标(布局动画由 SwiftUI withAnimation 处理),
-    /// 窗口目标高度一次性下发给窗口层做 CA 补间。
+    /// 窗口目标高度一次性下发给窗口层:窗口以与内容同参数的弹簧跟随。
     func animate(targets: [String: CGFloat]) {
         guard !targets.isEmpty else { return }
         if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
@@ -168,38 +171,138 @@ extension EnvironmentValues {
     }
 }
 
-/// 面板窗口展开/收起动画的一次性 CA 补间执行器。
+/// 窗口高度弹簧跟随器:窗口 frame 以与内容侧完全相同的弹簧参数跟随内容高度。
 ///
-/// Fluid(菜单栏锚定)与 Pinned(固定顶部)两个面板控制器共用同一套
-/// 「代际 token + isAnimating 抑制 + 结束对账」防护,消除逐字复制的竞态处理。
-/// 定位策略(屏幕钳制/锚定)仍由各控制器自行计算目标 frame,
-/// 动画结束后的对账回调由调用方经 `onComplete` 注入。
+/// 内容高度的可见插值由 CoreAnimation 在合成器侧完成,布局模型在 toggle 时
+/// 一次性落到终值,尺寸上报直接把终值交给窗口层;此处以同参数
+/// (`panelExpansionSpringResponse` / `panelExpansionSpringDamping`)的欠阻尼
+/// 弹簧在显示帧时钟上向该终值运动,与内容可见运动同参同起点,全程同相。
+/// 位置取闭式解(不做数值积分),帧率无关、无累积误差;重定向时保留当前
+/// 位置与速度,与 SwiftUI 弹簧的中断行为同构,快速连点不重启不顿挫。
 @MainActor
-final class PanelExpansionAnimation {
-    private var isAnimating = false
-    private var token = 0
+final class PanelWindowSpring: NSObject {
+    private let applyHeight: (CGFloat) -> Void
+    private let currentScreen: () -> NSScreen?
 
-    /// 动画进行中:期间 contentSizeDidChange 的逐帧贴合应被抑制,避免与 CA 补间
-    /// 叠加冲突并把 CPU 打满。动画结束后由对账回调做最终校准。
-    var isAnimatingExpansion: Bool { isAnimating }
+    private var displayLink: CADisplayLink?
+    private(set) var isAnimating = false
+    private var target: CGFloat = 0
+    private var startPos: CGFloat = 0
+    private var startVel: CGFloat = 0
+    private var startTime: CFTimeInterval = 0
+    /// 弹簧衰减到目标后调用一次(动画正常收尾),供窗口层对账实际内容尺寸。
+    private var onSettle: (() -> Void)?
 
-    /// 执行一次展开/收起动画。整个动画期间窗口 resize 只发生一次(CA 补间)。
-    /// - Parameters:
-    ///   - panel: 目标面板窗口
-    ///   - frame: 由调用方按各自锚定策略算好的目标 frame
-    ///   - onComplete: 动画结束(且代际未过期)后执行的对账回调
-    func animate(panel: NSPanel, to frame: CGRect, onComplete: @escaping () -> Void) {
-        token += 1
-        let current = token
-        isAnimating = true
-        let context = NSAnimationContext.current
-        context.duration = MonitorConstants.panelExpansionDuration
-        context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-        panel.animator().setFrame(frame, display: false)
-        DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelExpansionDuration + 0.02) { [weak self] in
-            guard let self, self.token == current else { return }
-            self.isAnimating = false
-            onComplete()
+    private static let omega = 2 * Double.pi / MonitorConstants.panelExpansionSpringResponse
+    private static let zetaOmega = MonitorConstants.panelExpansionSpringDamping * omega
+    private static let dampedOmega = omega * (1 - pow(MonitorConstants.panelExpansionSpringDamping, 2)).squareRoot()
+
+    init(applyHeight: @escaping (CGFloat) -> Void, screen: @escaping () -> NSScreen?) {
+        self.applyHeight = applyHeight
+        self.currentScreen = screen
+    }
+
+    deinit {
+        displayLink?.invalidate()
+    }
+
+    /// 向新目标启动/续接弹簧。静止时从窗口当前高度出发;动画中重定向则取
+    /// 轨迹瞬时位置与速度续接(与内容弹簧的中断重定向同构)。
+    /// `onSettle` 在弹簧收敛到目标后调用一次,供窗口层对账实际内容尺寸。
+    func retarget(to height: CGFloat, from current: CGFloat, onSettle: (() -> Void)? = nil) {
+        let now = CACurrentMediaTime()
+        if isAnimating {
+            let s = now - startTime
+            startPos = position(at: s)
+            startVel = velocity(at: s)
+        } else {
+            startPos = current
+            startVel = 0
         }
+        target = height
+        startTime = now
+        self.onSettle = onSettle
+        guard abs(startPos - target) > 0.5 else {
+            stop()
+            applyHeight(target)
+            fireSettle()
+            return
+        }
+        isAnimating = true
+        ensureDisplayLink()
+    }
+
+    /// 停止弹簧并瞬时贴合(初始化/隐藏重置/非动画尺寸变化)。
+    func setInstantly(to height: CGFloat) {
+        stop()
+        applyHeight(height)
+    }
+
+    /// 停止弹簧、不再贴合(面板重新呼出前清场,让重定位接管)。
+    func cancel() {
+        stop()
+    }
+
+    private func stop() {
+        isAnimating = false
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    private func ensureDisplayLink() {
+        guard displayLink == nil else { return }
+        guard let screen = currentScreen() ?? NSScreen.main else {
+            stop()
+            applyHeight(target)
+            fireSettle()
+            return
+        }
+        let link = screen.displayLink(target: self, selector: #selector(step(_:)))
+        link.add(to: .main, forMode: .common)
+        displayLink = link
+    }
+
+    @objc private func step(_ link: CADisplayLink) {
+        let s = link.targetTimestamp - startTime
+        guard s > 0 else { return }
+        let x = position(at: s)
+        let v = velocity(at: s)
+        if abs(x - target) < 0.25, abs(v) < 2 {
+            stop()
+            applyHeight(target)
+            fireSettle()
+            return
+        }
+        if s > 2 {
+            stop()
+            applyHeight(target)
+            fireSettle()
+            return
+        }
+        applyHeight(x)
+    }
+
+    private func fireSettle() {
+        let settle = onSettle
+        onSettle = nil
+        settle?()
+    }
+
+    /// 欠阻尼弹簧闭式解:x = T + e^{-ζωs}(A·cos ω_d·s + B·sin ω_d·s)。
+    private func position(at s: CFTimeInterval) -> CGFloat {
+        let a = startPos - target
+        let b = (startVel + Self.zetaOmega * a) / Self.dampedOmega
+        let phase = Self.dampedOmega * s
+        return target + exp(-Self.zetaOmega * s) * (a * cos(phase) + b * sin(phase))
+    }
+
+    private func velocity(at s: CFTimeInterval) -> CGFloat {
+        let a = startPos - target
+        let b = (startVel + Self.zetaOmega * a) / Self.dampedOmega
+        let phase = Self.dampedOmega * s
+        let cosP = cos(phase), sinP = sin(phase)
+        let decay = exp(-Self.zetaOmega * s)
+        return decay * (-Self.zetaOmega * (a * cosP + b * sinP)
+                        + (-a * Self.dampedOmega * sinP + b * Self.dampedOmega * cosP))
     }
 }

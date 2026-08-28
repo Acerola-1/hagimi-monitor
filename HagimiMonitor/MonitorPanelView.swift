@@ -264,8 +264,8 @@ struct MonitorPanelView: View {
             applyDefaultExpansion()
         }
         .onAppear {
-            // 桥接窗口层注入的贴合回调:driver toggle 时把目标高度与是否动画
-            // 下发给窗口层,animated 时由 CoreAnimation 补间窗口 frame。
+            // 桥接窗口层注入的贴合回调:动画路径下发预测终高,窗口以与内容
+            // 同参数的弹簧跟随;同步路径(初始化/隐藏重置)直接贴合。
             panelExpansion.onWindowResize = windowResizeHandler
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             applyDefaultExpansion()
@@ -634,9 +634,9 @@ struct MonitorPanelView: View {
     }
 
     /// toggle 时 `expandedKinds` 变化驱动 `CollapsibleDetail` 的 `.frame(height:)`
-    /// 与 `.opacity` 动画——由 `withAnimation` 包裹状态变更,SwiftUI 动画系统在
-    /// CoreAnimation 层插值,不在主线程逐帧重算。窗口目标高度由 driver 一次性
-    /// 下发给窗口层做 CA 补间。
+    /// 与 `.opacity` 动画——由 `withAnimation` 包裹状态变更,可见插值在
+    /// CoreAnimation 合成器侧完成。窗口目标高度由 driver 一次性下发,窗口层
+    /// 以与内容同参数的弹簧跟随,与内容同相。
     private func setExpansion(_ mutate: () -> Void) {
         // 展开补间与浮层子窗口并存会引发布局抖动,展开前确保浮层已收起。
         QuickToolsStore.shared.popoverPresenter.dismiss()
