@@ -161,6 +161,13 @@ private func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [Raw
 private var previousCPUSnapshot: [pid_t: (user: UInt64, system: UInt64)] = [:]
 private var previousCPUSnapshotTime: Date?
 
+/// 弃掉基线:下次采样重建,首拍返空。展开时调用,避免首帧拿到
+/// 「开面板至今」的长窗口均值。
+func resetCPUProcessBaseline() {
+    previousCPUSnapshot = [:]
+    previousCPUSnapshotTime = nil
+}
+
 /// mach ticks -> 纳秒的换算系数(Apple Silicon 上为 125/3,Intel 上为 1)。
 private let machTimeToNanos: Double = {
     var timebase = mach_timebase_info_data_t()

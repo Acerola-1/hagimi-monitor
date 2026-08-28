@@ -5,17 +5,22 @@ import Foundation
 struct TopDiskProcess: Identifiable, Equatable {
     let pid: pid_t
     let name: String
-    /// 自上次采样以来读取的字节数增量。
+    /// 自上次采样以来读取的字节增量。统计入库按窗口字节量累计,依赖该字段。
     let bytesRead: UInt64
-    /// 自上次采样以来写入的字节数增量。
+    /// 自上次采样以来写入的字节增量。
     let bytesWritten: UInt64
+    /// 按窗口时长归一的读速率(字节/秒),面板展示用——与网络 TOP 口径一致,
+    /// 量纲不随采样窗口长短变化。
+    let readRate: Double
+    /// 按窗口时长归一的写速率(字节/秒)。
+    let writeRate: Double
     let icon: NSImage?
 
     var id: pid_t { pid }
 
     static func == (lhs: TopDiskProcess, rhs: TopDiskProcess) -> Bool {
         lhs.pid == rhs.pid && lhs.name == rhs.name
-            && lhs.bytesRead == rhs.bytesRead && lhs.bytesWritten == rhs.bytesWritten
+            && lhs.readRate == rhs.readRate && lhs.writeRate == rhs.writeRate
     }
 }
 
@@ -25,13 +30,24 @@ struct RawDiskProcess {
     let fallbackName: String
     let bytesRead: UInt64
     let bytesWritten: UInt64
+    /// 产出该组增量的差分窗口时长(秒),供速率归一。
+    let windowSeconds: Double
 }
 
 /// 磁盘 I/O 差分游标:持有独立的进程累计基线,增量 = 本次累计 − 基线。
 /// 面板(5s)与统计(60s)各持一个实例——基线共享时统计窗口会被面板采样
 /// 截断成 5s 残量,入库量随面板开合漂移约一个数量级。
+/// 游标同时记录快照时刻,把差分窗口时长随结果下发,供展示侧归一成速率。
 final class DiskSnapshotCursor {
     private var previous: [pid_t: (read: UInt64, write: UInt64)] = [:]
+    private var previousTime: Date?
+
+    /// 弃掉基线:下次采样重建,首拍返空。展开时调用,避免首帧拿到
+    /// 「开面板至今」的长窗口均值。
+    func reset() {
+        previous = [:]
+        previousTime = nil
+    }
 
     /// 后台采样磁盘 I/O 最高的 N 个进程。
     /// 使用 `proc_pid_rusage` 读取 `ri_diskio_bytesread` / `ri_diskio_byteswritten`,
@@ -45,6 +61,11 @@ final class DiskSnapshotCursor {
         let bufferSizeInBytes = Int32(capacity * MemoryLayout<pid_t>.size)
         let pidCount = Int(proc_listallpids(&pids, bufferSizeInBytes))
         guard pidCount > 0 else { return [] }
+
+        let now = Date()
+        // 窗口下限 0.1s,与模块采样层(StorageSampler/NetworkSampler)同口径,
+        // 防两次采样间隔过近时除法放大噪声。
+        let window = previousTime.map { max(0.1, now.timeIntervalSince($0)) } ?? 0
 
         // responsiblePid -> (path, readDelta, writeDelta)
         var groups: [pid_t: (path: String, readDelta: UInt64, writeDelta: UInt64)] = [:]
@@ -87,6 +108,7 @@ final class DiskSnapshotCursor {
         }
 
         previous = currentSnapshot
+        previousTime = now
 
         // 过滤系统进程，生成结果
         var result: [RawDiskProcess] = []
@@ -107,7 +129,8 @@ final class DiskSnapshotCursor {
                 path: hostPath,
                 fallbackName: fallbackName,
                 bytesRead: group.readDelta,
-                bytesWritten: group.writeDelta
+                bytesWritten: group.writeDelta,
+                windowSeconds: window
             ))
         }
 
@@ -119,6 +142,11 @@ final class DiskSnapshotCursor {
 
 /// 面板进程列表专用游标(全局兼容入口)。
 private let panelDiskCursor = DiskSnapshotCursor()
+
+/// 弃掉面板磁盘基线:下次采样重建,首拍返空。展开时调用。
+func resetDiskProcessBaseline() {
+    panelDiskCursor.reset()
+}
 
 /// 面板采样入口:委托面板专用游标,保持既有全局调用点不变。
 func sampleTopDiskProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawDiskProcess] {
@@ -143,6 +171,8 @@ func enrichDisk(_ rawProcesses: [RawDiskProcess]) -> [TopDiskProcess] {
         return TopDiskProcess(
             pid: raw.pid, name: name,
             bytesRead: raw.bytesRead, bytesWritten: raw.bytesWritten,
+            readRate: raw.windowSeconds > 0 ? Double(raw.bytesRead) / raw.windowSeconds : 0,
+            writeRate: raw.windowSeconds > 0 ? Double(raw.bytesWritten) / raw.windowSeconds : 0,
             icon: icon
         )
     }

@@ -56,7 +56,7 @@ final class AutotestPerfMeter {
         startProcCPU = processCPUTime()
         startWall = CACurrentMediaTime()
 
-        let window = MonitorConstants.panelExpansionDuration + 0.08
+        let window = MonitorConstants.panelExpansionSettleTime + 0.05
         DispatchQueue.main.asyncAfter(deadline: .now() + window) { [weak self] in
             MainActor.assumeIsolated {
                 self?.finish(label: label, token: token)

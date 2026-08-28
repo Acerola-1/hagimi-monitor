@@ -32,6 +32,12 @@ struct RawGPUProcess {
 /// 文件级全局快照,线程安全依赖 procSampleQueue 的串行性。
 private var previousGPUSnapshot: (perPid: [pid_t: UInt64], timestamp: TimeInterval)?
 
+/// 弃掉基线:下次采样重建,首拍返空。展开时调用,避免首帧拿到
+/// 「开面板至今」的长窗口均值。
+func resetGPUProcessBaseline() {
+    previousGPUSnapshot = nil
+}
+
 /// AGX 驱动的每进程累计 GPU 时间:IOAccelerator 服务的 user client 子节点
 /// (AGXDeviceUserClient)在 AppUsage 属性里按图形 API 记录 accumulatedGPUTime。
 /// user client 不在 service plane,IOServiceMatching 匹配不到,须从 IOAccelerator

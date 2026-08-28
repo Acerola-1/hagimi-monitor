@@ -1,14 +1,13 @@
 import AppKit
 import SwiftUI
 
-/// 功率流图(冻结原型重制):上排适配器/系统双节点流式排布,下方全宽电池条
-/// (填充=电量,旗标=充电限制),短 stub 垂直连到汇流点;导管粗细 ∝ 瓦数。
+/// 功率流图(冻结原型重制):上排适配器/系统双节点流式布局,下方全宽电池条
+/// (填充=电量,旗标=充电限制),短竖导管垂直连到汇流点;导管粗细 ∝ 瓦数。
 /// 节点走正常流式布局,连线按容器几何计算绘制,构造上不会重叠。
 /// 数据全部来自 BatterySampler 的遥测指标(power-in / power / battery-flow / status),
-/// 沙盒版同样可用。活跃导管走相位联动的能量脉冲:单一相位沿
-/// 适配器→汇流点→系统全路径行进,段内 easeInOutCubic 缓动,汇流点交接辉光;
-/// 细导管(<3pt)降级纯色脉冲不叠发光层;电池 stub 走同一光轨语言(行进脉冲)。
-/// 仅展开且面板可见时挂载 TimelineView 30fps 驱动,收起/隐藏即回到纯静态绘制。
+/// 沙盒版同样可用。活跃导管走辉光 + 相位联动的能量脉冲(充电绿 / 放电黄 /
+/// 不足红,颜色语义不受低电量模式影响)。仅展开且面板可见时挂载
+/// TimelineView 30fps 驱动,收起/隐藏即回到纯静态绘制。
 struct PowerFlowDiagram: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
@@ -99,30 +98,13 @@ struct PowerFlowDiagram: View {
                        style: StrokeStyle(lineWidth: width, lineCap: .round))
     }
 
-    private func strokeSegment(
-        _ context: inout GraphicsContext,
-        from: CGPoint,
-        to: CGPoint,
-        color: Color,
-        width: CGFloat,
-        dashed: Bool = false
-    ) {
-        var line = Path()
-        line.move(to: from)
-        line.addLine(to: to)
-        let style = dashed
-            ? StrokeStyle(lineWidth: width, lineCap: .round, dash: [3, 4])
-            : StrokeStyle(lineWidth: width, lineCap: .round)
-        context.stroke(line, with: .color(color), style: style)
-    }
-
     private func drawEdges(_ context: inout GraphicsContext, size: CGSize, time: TimeInterval?) {
         let topY = Self.nodeHeight / 2
         let junction = CGPoint(x: size.width / 2, y: topY)
         let adapterRight = CGPoint(x: Self.nodeWidth, y: topY)
         let systemLeft = CGPoint(x: size.width - Self.nodeWidth, y: topY)
 
-        // 无电池台式机:适配器 → 系统一条直通细线辉光,不渲染汇流点与 stub。
+        // 无电池台式机:适配器 → 系统一条直通细线辉光,不渲染汇流点与导管。
         if !hasBattery {
             glowSegment(&context, from: adapterRight, to: systemLeft,
                         color: connected ? activeTint : neutralEdge, width: edgeWidth(systemWatts))
@@ -149,32 +131,32 @@ struct PowerFlowDiagram: View {
         drawLinkedBeams(&context, adapterRight: adapterRight, junction: junction,
                         systemLeft: systemLeft, time: time)
 
-        // S3 汇流点 ↕ 电池 stub:充电绿色、放电琥珀(适配器不足时转红)、无流动虚线轨道。
-        // stub 与水平线保持同一光轨语言:行进脉冲而非呼吸,短路径用更短尾避免溢出。
+        // 汇流点 ↕ 电池导管:充电绿 / 放电琥珀(适配器不足转红)/ 无流动淡线,
+        // 与水平线同一辉光语言;脉冲按流向行进(充电注入电池、放电汇入节点)。
         let stubEnd = CGPoint(x: junction.x, y: Self.nodeHeight + Self.stubHeight)
         switch flowDirection {
         case .charging:
-            strokeSegment(&context, from: junction, to: stubEnd,
-                          color: flowTint.opacity(0.75), width: edgeWidth(batteryMagnitude))
+            glowSegment(&context, from: junction, to: stubEnd,
+                        color: chargeTint, width: edgeWidth(batteryMagnitude))
             if let time {
-                let cycle = max(1.2, min(2.4, 4.0 / (1 + (batteryMagnitude ?? 0) / 15)))
+                let cycle = max(1.4, min(2.6, 4.0 / (1 + batteryMagnitude / 15)))
                 let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
                 drawPulse(&context, from: junction, to: stubEnd,
-                          progress: easeInOutCubic(u), color: flowTint, head: .white.opacity(0.96),
-                          width: edgeWidth(batteryMagnitude), tailFraction: 0.005)
+                          progress: easeInOutCubic(u), color: chargeTint, head: .white.opacity(0.96),
+                          width: edgeWidth(batteryMagnitude), tailFraction: 0.3)
             }
         case .discharging:
             let color = isInsufficient
-                ? theme.palette.severityTint(for: .critical).opacity(0.8)
-                : theme.palette.severityTint(for: .warning).opacity(0.75)
-            strokeSegment(&context, from: stubEnd, to: junction,
-                          color: color, width: edgeWidth(batteryMagnitude))
+                ? theme.palette.severityTint(for: .critical).opacity(0.85)
+                : theme.palette.severityTint(for: .warning).opacity(0.8)
+            glowSegment(&context, from: stubEnd, to: junction,
+                        color: color, width: edgeWidth(batteryMagnitude), glowAlpha: 0.3)
             if let time {
-                let cycle = max(1.2, min(2.4, 4.0 / (1 + (batteryMagnitude ?? 0) / 15)))
+                let cycle = max(1.4, min(2.6, 4.0 / (1 + batteryMagnitude / 15)))
                 let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
                 drawPulse(&context, from: stubEnd, to: junction,
                           progress: easeInOutCubic(u), color: color, head: .white.opacity(0.96),
-                          width: edgeWidth(batteryMagnitude), tailFraction: 0.005)
+                          width: edgeWidth(batteryMagnitude), tailFraction: 0.3)
             }
         case .idle:
             glowSegment(&context, from: junction, to: stubEnd,
@@ -631,24 +613,30 @@ struct PowerFlowDiagram: View {
 
     // MARK: 配色
 
-    /// 低电量模式:除行头图标外,功率流同步转琥珀——电池条填充/边框、充电
-    /// stub、sparkline 全部换警示色,系统限电状态在图内直接可读。
+    /// 低电量模式:电池条填充/边框转琥珀,系统限电状态在图内直接可读;
+    /// 流向导管不参与变色——充电绿/放电黄的流向语义恒定(见 activeTint)。
     private var isLowPowerMode: Bool {
         hasBattery && rawValue("low-power-mode") == "on"
     }
 
-    /// 功率流有效主题色:低电量模式时覆盖为 warning 琥珀;适配器不足的红色
-    /// 判定优先级更高(在 barFillGradient/barBorder 内先于本值返回)。
+    /// 功率流有效主题色:低电量模式时覆盖为 warning 琥珀——只作用于电池条
+    /// (填充/边框),表达「电池处于省电状态」;流向导管的颜色不随之变黄,
+    /// 见 chargeTint / activeTint。适配器不足的红色判定在 barFillGradient/
+    /// barBorder 内优先于本值。
     private var flowTint: Color {
         isLowPowerMode ? theme.palette.severityTint(for: .warning) : tint
     }
 
-    /// 连线状态色:充电用主题绿;放电用警示黄,适配器不足优先转警示红。
-    /// 与原型「充电绿 / 放电黄 / 不足红」一致,整条水平线共享同一状态色。
+    /// 充电流向底色:模块绿,任何模式下恒定——「正在充电」这条语义不应被
+    /// 低电量模式染黄,低电量琥珀由电池条独立承载。
+    private var chargeTint: Color { tint }
+
+    /// 连线状态色:充电用模块绿;放电用警示黄,适配器不足优先转警示红。
+    /// 「充电绿 / 放电黄 / 不足红」整条路径共享同一状态色。
     private var activeTint: Color {
         if isInsufficient { return theme.palette.severityTint(for: .critical) }
         if flowDirection == .discharging { return theme.palette.severityTint(for: .warning) }
-        return flowTint
+        return tint
     }
 
     private var neutralEdge: Color {
