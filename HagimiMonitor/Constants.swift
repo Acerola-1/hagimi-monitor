@@ -34,10 +34,14 @@ enum MonitorConstants {
     static let rowTintFaintOpacity = 0.02
 
     // MARK: - Panel Expansion
-    // 子栏目展开/收起动画时长。`PanelExpansionDriver` 的相位补间、chevron 旋转
-    // 等次级动效共用这一时长与 easeInOut 曲线,端点对齐;动画窗口内的采样
-    // 推迟(见 MonitorStore.beginExpansionAnimation)也以它为基准。
-    static let panelExpansionDuration: TimeInterval = 0.15
+    // SwiftUI 弹簧参数:内容高度 / chevron / 滚动揭示等所有展开相关动画。
+    // 弹簧在中断时保持当前速度重定向,不像 easeInOut 从零重启,
+    // 快速连点展开/收起时内容平滑过渡、无重启顿挫。
+    static let panelExpansionSpringResponse: TimeInterval = 0.32
+    static let panelExpansionSpringDamping: Double = 0.82
+    // 弹簧衰减到不可察觉的时间。采样推迟 / 校准 / 负载环暂停均以此为窗口,
+    // 覆盖弹簧尾段微振,避免校准过早捕获中间态。
+    static let panelExpansionSettleTime: TimeInterval = 0.50
 
     // MARK: - Sampling
     static let sparklineMaxPoints = 24

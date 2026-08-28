@@ -739,7 +739,7 @@ final class MonitorStore: ObservableObject {
     /// 窗口期内的采样结果推迟到动画结束后再刷 UI,避免 1-3s 节奏的模块刷新恰好
     /// 撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
     func beginExpansionAnimation() {
-        expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionDuration + 0.05)
+        expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionSettleTime)
         // 动画窗口内同步停更负载环 30fps 相位,不与展开动画抢主线程。
         loadAnimator.suspend(until: expansionAnimationDeadline)
     }
@@ -1145,14 +1145,22 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    /// 动画窗口期内的 @Published 应用推迟:展开/收起动画的 ~0.2s 内,把非主采样的
+    /// 动画窗口期内的 @Published 应用推迟:展开/收起弹簧动画的 ~0.5s 衰减期内,把非主采样的
     /// 独立采样器(风扇/蓝牙)刷新同样排空,给逐帧动画让出主线程余量——主采样已按
     /// 同一 deadline 推迟,这里补齐剩余会拖动面板子树重算的指标,外接屏扩放渲染
     /// 负载时余量越少越易掉帧。
     private func settleAfterExpansion(_ apply: @escaping () -> Void) {
         let deadline = expansionAnimationDeadline
         if Date() < deadline {
-            DispatchQueue.main.asyncAfter(deadline: .now() + deadline.timeIntervalSinceNow, execute: apply)
+            DispatchQueue.main.asyncAfter(deadline: .now() + deadline.timeIntervalSinceNow) { [weak self] in
+                guard let self else { apply(); return }
+                if Date() < self.expansionAnimationDeadline {
+                    let next = self.expansionAnimationDeadline.timeIntervalSinceNow
+                    DispatchQueue.main.asyncAfter(deadline: .now() + next, execute: apply)
+                } else {
+                    apply()
+                }
+            }
         } else {
             apply()
         }
@@ -1161,7 +1169,7 @@ final class MonitorStore: ObservableObject {
     private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
         switch result {
         case .success(let snapshot):
-            // 展开/收起动画窗口期内推迟应用:采样命中动画的 0.15s 窗口时,
+            // 展开/收起动画窗口期内推迟应用:采样命中弹簧动画的衰减窗口时,
             // @Published 刷新会拖着面板视图树在动画帧间重算,造成肉眼可见的顿挫。
             // 推迟到动画结束后再刷,主队列 FIFO 保证多次推迟的顺序不乱。
             // (调试对照:HAGIMI_NODEFER_SAMPLING=1 时关闭推迟,用于帧探针 A/B 对比。)
@@ -1169,7 +1177,17 @@ final class MonitorStore: ObservableObject {
             if !deferDisabled, Date() < expansionAnimationDeadline {
                 let delay = expansionAnimationDeadline.timeIntervalSinceNow
                 DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    self?.applySamplingSuccess(snapshot)
+                    guard let self else { return }
+                    // 重检:连点期间 deadline 被后续 toggle 推后,原定时点可能仍落在新窗口内,
+                    // 此时再推迟一次而不是强行应用,避免 @Published 刷新撞弹簧动画帧。
+                    if Date() < self.expansionAnimationDeadline {
+                        let next = self.expansionAnimationDeadline.timeIntervalSinceNow
+                        DispatchQueue.main.asyncAfter(deadline: .now() + next) { [weak self] in
+                            self?.applySamplingSuccess(snapshot)
+                        }
+                    } else {
+                        self.applySamplingSuccess(snapshot)
+                    }
                 }
             } else {
                 applySamplingSuccess(snapshot)

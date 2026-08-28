@@ -14,10 +14,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
-    /// 展开/收起动画执行器(token 代际 + isAnimating 抑制 + 结束对账)。
-    /// 与菜单栏面板共享同一套竞态防护,见 PanelExpansionAnimation。
-    private let expansionAnimation = PanelExpansionAnimation()
-    /// 最近一次实测内容尺寸,动画结束对账用。
+    /// 最近一次实测内容尺寸,弹簧收尾对账用。
     private var lastReportedContentSize: CGSize = .zero
     /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
     private static let minPanelHeight: CGFloat = 96
@@ -169,6 +166,8 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     /// 显示快捷键面板。每次呼出都从普通状态开始。
     func show() {
         guard !panel.isVisible else { return }
+        // 隐藏时未收敛的窗口弹簧在此清场,本次呼出由重定位接管。
+        windowSpring.cancel()
         presentation.resetPin()
         updatePresentationMode()
 
@@ -228,49 +227,68 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
     // MARK: - Sizing / Positioning
 
-    /// driver 在 toggle 时一次性调用:把目标内容高度下发给窗口层。
-    /// animated=true 时由 CoreAnimation 补间窗口 frame;false 时同步贴合。
-    /// 固定顶部,向下生长。
+    /// 窗口高度弹簧跟随器:以与内容侧完全相同的弹簧参数驱动窗口 frame,
+    /// 与合成器侧的内容高度插值同参同相(详见 FluidPanelController 同名属性)。
+    private lazy var windowSpring = PanelWindowSpring(
+        applyHeight: { [weak self] height in self?.applySpringHeight(height) },
+        screen: { [weak self] in self?.panel.screen }
+    )
+
+    /// driver 下发窗口目标高度。
+    /// animated=true(展开/收起):预测终高交给同参弹簧逐帧跟随,收敛后对账;
+    /// animated=false(初始化/隐藏重置):直接贴合。
     private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
         guard panel.isVisible else { return }
-        // 高度下限兜底:预测链异常时防止窗口被带到 0/负高度(表现为「整页消失」)。
-        let size = CGSize(width: panel.frame.width, height: max(contentHeight, Self.minPanelHeight))
+        if animated {
+            windowSpring.retarget(to: contentHeight, from: panel.frame.height) { [weak self] in
+                self?.reconcileWindowToContentSize()
+            }
+        } else {
+            windowSpring.setInstantly(to: contentHeight)
+        }
+    }
+
+    /// 弹簧逐帧高度 → 窗口贴合。固定顶部,向下生长;高度下限兜底:
+    /// 预测链异常时防止窗口被带到 0/负高度(表现为「整页消失」)。
+    private func applySpringHeight(_ height: CGFloat) {
+        let size = CGSize(width: panel.frame.width, height: max(height, Self.minPanelHeight))
         guard panel.frame.size != size else { return }
         var frame = panel.frame
         let top = frame.maxY
         frame.size = size
         frame.origin.y = top - size.height
-        if animated {
-            expansionAnimation.animate(panel: panel, to: frame) { [weak self] in
-                guard let self else { return }
-                // 对账:动画期间被丢弃的尺寸上报在此补贴合,窗口不会卡在错误高度。
-                if self.panel.frame.size != self.lastReportedContentSize,
-                   self.lastReportedContentSize.height > 0 {
-                    var frame = self.panel.frame
-                    let top = frame.maxY
-                    frame.size = self.lastReportedContentSize
-                    frame.origin.y = top - frame.height
-                    self.panel.setFrame(frame, display: true)
-                }
-            }
-        } else {
-            panel.setFrame(frame, display: true)
-        }
+        panel.setFrame(frame, display: true)
+    }
+
+    /// 弹簧收尾对账:窗口尺寸与最近一次内容实测尺寸不一致时补贴合一次。
+    private func reconcileWindowToContentSize() {
+        guard lastReportedContentSize.height > 0,
+              panel.frame.size != lastReportedContentSize else { return }
+        var frame = panel.frame
+        let top = frame.maxY
+        frame.size = lastReportedContentSize
+        frame.origin.y = top - frame.height
+        panel.setFrame(frame, display: true)
     }
 
     private func contentSizeDidChange(to size: CGSize) {
         lastReportedContentSize = size
-        // 展开动画期间窗口由 CoreAnimation 补间,逐帧贴合会与 CA 冲突并打满 CPU。
-        guard !expansionAnimation.isAnimatingExpansion else { return }
-        guard panel.frame.size != size else { return }
+        guard windowSpring.isAnimating || panel.frame.size != size else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.expansionAnimation.isAnimatingExpansion, self.panel.frame.size != size else { return }
-            // 固定顶部，内容展开时只向下生长。
-            var frame = self.panel.frame
-            let top = frame.maxY
-            frame.size = size
-            frame.origin.y = top - size.height
-            self.panel.setFrame(frame, display: true)
+            guard let self else { return }
+            if self.store.isExpansionAnimating || self.windowSpring.isAnimating {
+                self.windowSpring.retarget(to: size.height, from: self.panel.frame.height) { [weak self] in
+                    self?.reconcileWindowToContentSize()
+                }
+            } else {
+                guard self.panel.frame.size != size else { return }
+                // 固定顶部，内容展开时只向下生长。
+                var frame = self.panel.frame
+                let top = frame.maxY
+                frame.size = size
+                frame.origin.y = top - size.height
+                self.panel.setFrame(frame, display: true)
+            }
         }
     }
 
