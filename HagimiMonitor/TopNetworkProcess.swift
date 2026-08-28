@@ -40,6 +40,18 @@ private struct NetworkSnapshotEntry {
 private var previousNetworkSnapshot: [pid_t: NetworkSnapshotEntry] = [:]
 private var previousNetworkSnapshotTime: Date?
 
+/// 基线年龄(秒);无基线返回无穷大。展开时据此决定复用还是弃掉重建。
+func networkProcessBaselineAge() -> TimeInterval {
+    previousNetworkSnapshotTime.map { Date().timeIntervalSince($0) } ?? .infinity
+}
+
+/// 弃掉基线:下次采样重建,首拍返空。基线陈旧时调用,避免首帧拿到
+/// 「开面板至今」的长窗口均值。
+func resetNetworkProcessBaseline() {
+    previousNetworkSnapshot = [:]
+    previousNetworkSnapshotTime = nil
+}
+
 /// nettop 子进程采样的超时阈值。nettop 在异常网络栈/僵尸状态下可能挂起不退出,
 /// 若无防护会永久堵死串行采样队列(面板/统计/展开补采全部停摆)。
 private let nettopSampleTimeout: TimeInterval = 8

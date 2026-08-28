@@ -434,8 +434,9 @@ final class MonitorStore: ObservableObject {
 
     /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
     /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就构建大量进程
-    /// 图标」造成的内存/CPU 峰值。例外:网络/磁盘这两个增量型采样会在面板打开时
-    /// 预热一次基线快照(见 prewarmProcessBaselines),以缩短展开后的出数延迟。
+    /// 图标」造成的内存/CPU 峰值。例外:网络会在面板打开时预热一次基线快照
+    /// (见 prewarmProcessBaselines);其余增量型在展开时重建基线(见
+    /// updateExpandedKinds),首帧从占位符起步、短窗口出数。
     private var expandedKindsBySource: [PanelKind: Set<MonitorKind>] = [:]
 
     private var allModules: [MonitorModule]
@@ -710,8 +711,10 @@ final class MonitorStore: ObservableObject {
         bluetoothSampler.activateBLE()
         if wasEmpty {
             isPanelVisible = true
-            // 打开面板的首刷不允许空结果清列表:增量型首采常返空,若覆盖会
-            // 把上次会话留下的列表闪成空白;旧数据由后续定时周期(完整窗口)替换。
+            // 列表已在隐藏时清空;此处首刷仅在配置了「默认展开」时非空
+            // (视图在隐藏期重建 expandedKindsBySource),同样弃掉陈旧基线,
+            // 防长窗口均值落上首帧。
+            resetIncrementalBaselines(for: expandedProcessKinds)
             refreshProcesses(for: expandedProcessKinds, allowClear: false)
             prewarmProcessBaselines()
             startProcSampleTimer()
@@ -726,6 +729,13 @@ final class MonitorStore: ObservableObject {
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
             stopProcSampleTimer()
+            // 清空 TOP 列表:上次会话的陈旧榜单不残留,下次展开从占位符起步,
+            // 避免旧数据闪现后被新采样整表替换。
+            topMemoryProcesses = []
+            topCPUProcesses = []
+            topGPUProcesses = []
+            topDiskProcesses = []
+            topNetworkProcesses = []
             // FanSampler 常驻运行(后台告警),面板关闭时不停止。
         }
     }
@@ -733,6 +743,28 @@ final class MonitorStore: ObservableObject {
     /// 所有可见面板展开模块的并集。进程采样只覆盖这个集合。
     private var expandedProcessKinds: Set<MonitorKind> {
         expandedKindsBySource.values.reduce(into: Set<MonitorKind>()) { $0.formUnion($1) }
+    }
+
+    /// 重置指定类目的增量型 TOP 基线:采样前的陈旧基线(来源可能是上次
+    /// 面板可见期、统计采样或网络预热)弃掉重建,重置后首拍只建基线返空,
+    /// 首帧不再出现长窗口均值。基线快照只被固定采样队列读写,重置同队列投递。
+    /// 磁盘/GPU/沙盒 CPU 采样毫秒级,无条件重置;nettop 单次 1~2s,基线年龄
+    /// < 5s 时复用以保出数速度,更陈旧则弃掉走链式补采重建。
+    private func resetIncrementalBaselines(for kinds: Set<MonitorKind>) {
+        if !kinds.intersection([.storage, .gpu, .cpu]).isEmpty {
+            procSampleQueue.async {
+                if kinds.contains(.storage) { resetDiskProcessBaseline() }
+                if kinds.contains(.gpu) { resetGPUProcessBaseline() }
+                #if !DIRECT_DISTRIBUTION
+                if kinds.contains(.cpu) { resetCPUProcessBaseline() }
+                #endif
+            }
+        }
+        if kinds.contains(.network) {
+            nettopQueue.async {
+                if networkProcessBaselineAge() >= 5 { resetNetworkProcessBaseline() }
+            }
+        }
     }
 
     /// 由 SwiftUI 侧在每次展开/收起起点调用:置位动画截止时刻。
@@ -750,13 +782,41 @@ final class MonitorStore: ObservableObject {
         Date() < expansionAnimationDeadline
     }
 
-    /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,保证
-    /// 「展开即见数据」;集合收缩时对应类目自然停采(下一轮定时器不再覆盖它)。
+    /// 把一个 @Published 应用动作推迟到展开/收起动画窗口结束再执行,窗口外直接执行。
+    /// 窗口内刷新会拖着面板视图树在动画帧间重算,造成肉眼可见的顿挫;
+    /// 推迟到弹簧收尾后再刷,主队列 FIFO 保证多次推迟的顺序不乱。
+    /// (调试对照:HAGIMI_NODEFER_SAMPLING=1 时关闭推迟,用于帧探针 A/B 对比。)
+    private func deferUntilExpansionSettles(_ action: @escaping () -> Void) {
+        let deferDisabled = ProcessInfo.processInfo.environment["HAGIMI_NODEFER_SAMPLING"] != nil
+        guard !deferDisabled, Date() < expansionAnimationDeadline else {
+            action()
+            return
+        }
+        let delay = expansionAnimationDeadline.timeIntervalSinceNow
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            // 重检:连点期间 deadline 被后续 toggle 推后,原定时点可能仍落在新窗口内,
+            // 此时再推迟一次而不是强行应用,避免 @Published 刷新撞弹簧动画帧。
+            if Date() < self.expansionAnimationDeadline {
+                let next = self.expansionAnimationDeadline.timeIntervalSinceNow
+                DispatchQueue.main.asyncAfter(deadline: .now() + next) {
+                    action()
+                }
+            } else {
+                action()
+            }
+        }
+    }
+
+    /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,
+    /// 结果命中动画窗口时推迟到收尾应用(见 deferUntilExpansionSettles);
+    /// 集合收缩时对应类目自然停采(下一轮定时器不再覆盖它)。
     func updateExpandedKinds(_ kinds: Set<MonitorKind>, for source: PanelKind) {
         let previous = expandedProcessKinds
         expandedKindsBySource[source] = kinds
         let newlyExpanded = expandedProcessKinds.subtracting(previous)
         guard isPanelVisible, !newlyExpanded.isEmpty else { return }
+        resetIncrementalBaselines(for: newlyExpanded)
         // 展开触发的采样不允许用空结果清空列表(allowClear=false):增量型首采
         // (网络建基线/磁盘窗口过短)常返空,若直接覆盖,用户会看到旧数据一闪
         // 后被清成空白、再硬等补采。旧数据保留到真实新数据或定时周期替换。
@@ -837,51 +897,28 @@ final class MonitorStore: ObservableObject {
         refreshProcesses(for: expandedProcessKinds)
     }
 
-    /// 面板打开时为增量型 TOP 采样预热基线快照。直连版覆盖网络/磁盘/GPU;
-    /// 沙盒版 CPU 列表同为差分型(TASKINFO 累计值差分),一并预热。
+    /// 面板打开时为增量型 TOP 采样预热基线快照。仅剩网络:磁盘/GPU/沙盒 CPU
+    /// 展开时会重建基线(见 updateExpandedKinds),预热对它们已无意义。
     /// 基线是跨调用持久的全局快照:提前建好后,用户展开时首次采样即可
-    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s),其余
-    /// 变为展开即出数;基线窗口=打开面板以来的时长,速率也更准。
+    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s);
+    /// 基线窗口=打开面板以来的时长,速率也更准。
     /// 这是对「按需采样」原则的有限放宽:仅面板可见时触发一次、只覆盖设置里
     /// 开启了 TOP 列表的类目、丢弃返回值(不 enrich、不建图标),后台常驻仍零开销。
     private func prewarmProcessBaselines() {
         let enabled = enabledProcessKinds()
-        // 已展开的类目走 updateExpandedKinds 的正常采样链路(含链式/延时补采),无需预热。
+        // 已展开的类目走 updateExpandedKinds 的正常采样链路(含链式补采),无需预热。
         let expanded = expandedProcessKinds
-        var baselineKinds: [MonitorKind] = [.network, .storage, .gpu]
-        #if !DIRECT_DISTRIBUTION
-        baselineKinds.append(.cpu)
-        #endif
-        let targets = Set(baselineKinds.filter {
-            enabled.contains($0) && !expanded.contains($0)
-        })
-        guard !targets.isEmpty else { return }
-
-        procSampleQueue.async {
-            // 磁盘/GPU 快照极快,与 nettop 分在两条队列,互不阻塞。
-            if targets.contains(.storage) {
-                _ = sampleTopDiskProcesses()
-            }
-            if targets.contains(.gpu) {
-                _ = sampleTopGPUProcesses()
-            }
-            #if !DIRECT_DISTRIBUTION
-            if targets.contains(.cpu) {
-                _ = sampleTopCPUProcesses()
-            }
-            #endif
-        }
-        if targets.contains(.network) {
-            nettopQueue.async {
-                _ = sampleTopNetworkProcesses()
-            }
+        guard enabled.contains(.network), !expanded.contains(.network) else { return }
+        nettopQueue.async {
+            _ = sampleTopNetworkProcesses()
         }
     }
 
     /// 对指定类目采样(仅限其中设置已开启的列表)。快速采样(磁盘/GPU/CPU/内存)
     /// 在 procSampleQueue、nettop 在 nettopQueue 各自串行执行(串行是每类全局
-    /// 快照无锁安全的前提),全部完成后回主线程更新 @Published 属性。只采「展开
-    /// ∩ 设置开启」的类目,避免为不可见的列表 spawn ps/nettop 子进程、构建图标。
+    /// 快照无锁安全的前提),全部完成后回主线程更新 @Published 属性——命中
+    /// 展开/收起动画窗口时推迟到弹簧收尾(见 deferUntilExpansionSettles)。
+    /// 只采「展开 ∩ 设置开启」的类目,避免为不可见的列表 spawn ps/nettop 子进程、构建图标。
     /// allowClear=false 时空结果不覆盖已有列表(见 updateExpandedKinds);
     /// completion 回传本次采样返空的类目,供链式补采判断。
     private func refreshProcesses(
@@ -962,21 +999,27 @@ final class MonitorStore: ObservableObject {
             }
         }
 
-        // 全部采样完成后,在主线程更新 @Published 属性。
+        // 全部采样完成后,在主线程更新 @Published 属性。命中展开/收起动画窗口时
+        // 推迟到弹簧收尾(与模块采样同规则),避免整表替换撞动画帧、拖视图树重算。
         group.notify(queue: .main) { [weak self] in
             guard let self else { return }
-            var emptyKinds = Set<MonitorKind>()
-            func publish<T>(_ kind: MonitorKind, _ result: [T]?, assign: ([T]) -> Void) {
-                guard let result else { return }
-                if result.isEmpty { emptyKinds.insert(kind) }
-                if !result.isEmpty || allowClear { assign(result) }
+            self.deferUntilExpansionSettles {
+                // 面板已隐藏:列表在隐藏时清空,在途或推迟落地的陈旧结果
+                // 不得复活榜单(推迟最长可达一个动画窗口)。
+                guard self.isPanelVisible else { return }
+                var emptyKinds = Set<MonitorKind>()
+                func publish<T>(_ kind: MonitorKind, _ result: [T]?, assign: ([T]) -> Void) {
+                    guard let result else { return }
+                    if result.isEmpty { emptyKinds.insert(kind) }
+                    if !result.isEmpty || allowClear { assign(result) }
+                }
+                publish(.memory, memoryProcesses) { self.topMemoryProcesses = $0 }
+                publish(.cpu, cpuProcesses) { self.topCPUProcesses = $0 }
+                publish(.gpu, gpuProcesses) { self.topGPUProcesses = $0 }
+                publish(.storage, diskProcesses) { self.topDiskProcesses = $0 }
+                publish(.network, networkProcesses) { self.topNetworkProcesses = $0 }
+                completion?(emptyKinds)
             }
-            publish(.memory, memoryProcesses) { self.topMemoryProcesses = $0 }
-            publish(.cpu, cpuProcesses) { self.topCPUProcesses = $0 }
-            publish(.gpu, gpuProcesses) { self.topGPUProcesses = $0 }
-            publish(.storage, diskProcesses) { self.topDiskProcesses = $0 }
-            publish(.network, networkProcesses) { self.topNetworkProcesses = $0 }
-            completion?(emptyKinds)
         }
     }
 
@@ -1169,28 +1212,10 @@ final class MonitorStore: ObservableObject {
     private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
         switch result {
         case .success(let snapshot):
-            // 展开/收起动画窗口期内推迟应用:采样命中弹簧动画的衰减窗口时,
-            // @Published 刷新会拖着面板视图树在动画帧间重算,造成肉眼可见的顿挫。
-            // 推迟到动画结束后再刷,主队列 FIFO 保证多次推迟的顺序不乱。
-            // (调试对照:HAGIMI_NODEFER_SAMPLING=1 时关闭推迟,用于帧探针 A/B 对比。)
-            let deferDisabled = ProcessInfo.processInfo.environment["HAGIMI_NODEFER_SAMPLING"] != nil
-            if !deferDisabled, Date() < expansionAnimationDeadline {
-                let delay = expansionAnimationDeadline.timeIntervalSinceNow
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                    guard let self else { return }
-                    // 重检:连点期间 deadline 被后续 toggle 推后,原定时点可能仍落在新窗口内,
-                    // 此时再推迟一次而不是强行应用,避免 @Published 刷新撞弹簧动画帧。
-                    if Date() < self.expansionAnimationDeadline {
-                        let next = self.expansionAnimationDeadline.timeIntervalSinceNow
-                        DispatchQueue.main.asyncAfter(deadline: .now() + next) { [weak self] in
-                            self?.applySamplingSuccess(snapshot)
-                        }
-                    } else {
-                        self.applySamplingSuccess(snapshot)
-                    }
-                }
-            } else {
-                applySamplingSuccess(snapshot)
+            // 展开/收起动画窗口期内推迟应用,与 TOP 列表发布同规则
+            // (见 deferUntilExpansionSettles)。
+            deferUntilExpansionSettles { [weak self] in
+                self?.applySamplingSuccess(snapshot)
             }
 
         case .failure(let error):

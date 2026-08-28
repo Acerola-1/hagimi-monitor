@@ -2540,8 +2540,8 @@ private struct InlineDiskProcessList: View {
                 id: Int(proc.pid),
                 name: proc.name,
                 icon: proc.icon,
-                upText: byteCountString(Int64(proc.bytesWritten)),
-                downText: byteCountString(Int64(proc.bytesRead))
+                upText: bytesPerSecond(proc.writeRate),
+                downText: bytesPerSecond(proc.readRate)
             )
         }
     }
