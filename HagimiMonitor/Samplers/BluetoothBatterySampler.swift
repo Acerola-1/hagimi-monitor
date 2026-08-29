@@ -185,6 +185,16 @@ enum BluetoothBatteryParser {
 /// 全局连接通知(per-class)+ 每设备断开通知(per-device,随清单动态注册),
 /// 0.5s 防抖合并后立即跑快速路径。新连接设备的 AVRCP/HFP 电量上报
 /// 滞后于链路建立,防抖窗口后再做渐进重试(2s/6s/15s/30s)。
+/// 蓝牙控制器三态。unknown 表示数据源尚未给出任何确认(启动期 IOBluetooth /
+/// CoreBluetooth / system_profiler 都未返回);on / off 是数据源的权威结论。
+/// 面板行据此门控:unknown 保留占位行(与其他模块启动期占位一致),只有
+/// off 才移除——否则启动竞态会让行消失又出现(表现为面板高度闪断)。
+enum BluetoothControllerState {
+    case unknown
+    case on
+    case off
+}
+
 final class BluetoothBatterySampler: NSObject {
     /// 兜底轮询周期:连断变化由 IOBluetooth 通知即时驱动,此周期仅覆盖
     /// 通知遗漏场景(如设备休眠导致的静默链路变化)。
@@ -201,13 +211,16 @@ final class BluetoothBatterySampler: NSObject {
 
     /// IOBluetooth 最新快照(主线程镜像,已连接设备,归一化地址)。
     private var ioDevices: [BluetoothDeviceInfo] = []
-    /// system_profiler 最新结果的主线程镜像。
-    private var profilerControllerOn = false
+    /// system_profiler 最新结果的主线程镜像:控制器状态仅在探针成功解析出
+    /// controller_state 字段后才有值(进程失败/超时/沙盒空骨架保持 nil,
+    /// 不构成关闭证据);设备清单同理,失败时维持上次结果。
+    private var profilerControllerOn: Bool?
     private var profilerDevices: [BluetoothDeviceInfo] = []
     /// BLE 侧已连接外设快照,由读取器在主线程发布。
     private var bleSnapshots: [BLEDeviceSnapshot] = []
-    /// CoreBluetooth 视角的控制器开关;未授权时保持 false。
-    private var cbControllerOn = false
+    /// CoreBluetooth 视角的控制器开关:central 状态回调到达后才有值
+    /// (poweredOn/poweredOff),授权未决或未回调时保持 nil。
+    private var cbControllerOn: Bool?
     /// 已学身份绑定(归一化 MAC -> BLE UUID),跨启动持久。
     private var identityBindings: [String: String] = [:]
     /// 全局连接通知持有体;unregister 后置 nil,避免重复注销。
@@ -231,8 +244,8 @@ final class BluetoothBatterySampler: NSObject {
 
     /// 已连接蓝牙设备(按「有电量优先、再按名称」排序)。
     @Published private(set) var devices: [BluetoothDeviceInfo] = []
-    /// 蓝牙控制器是否开启;关闭时面板不渲染蓝牙行。
-    @Published private(set) var controllerOn = false
+    /// 蓝牙控制器三态;off 时面板移除蓝牙行,unknown 保留占位行。
+    @Published private(set) var controllerOn: BluetoothControllerState = .unknown
 
     override init() {
         // 迁移历史绑定键(原始 MAC 格式)为归一化格式。
@@ -312,10 +325,10 @@ final class BluetoothBatterySampler: NSObject {
         previouslySeenAddresses.removeAll()
         lastKnownBattery.removeAll()
         ioDevices = []
-        profilerControllerOn = false
+        profilerControllerOn = nil
         profilerDevices = []
         bleSnapshots = []
-        cbControllerOn = false
+        cbControllerOn = nil
         bleReader.stop()
         publishMerged()
     }
@@ -407,7 +420,17 @@ final class BluetoothBatterySampler: NSObject {
 
     /// 合并三数据源并发布:新学到的身份绑定持久化;排序后发布。
     private func publishMerged() {
-        controllerOn = profilerControllerOn || cbControllerOn || !ioDevices.isEmpty
+        // 控制器状态三态合并:on 证据优先(任一源确认开启,包括有已连接
+        // 设备),其次 off 证据(BLE poweredOff / profiler 权威报告关闭,
+        // 单一权威来源即可判定);两者皆无保持 unknown。ioDevices 为空
+        // 不构成 off 证据——枚举为空可能只是设备未连接或清单未就绪。
+        if cbControllerOn == true || profilerControllerOn == true || !ioDevices.isEmpty {
+            controllerOn = .on
+        } else if cbControllerOn == false || profilerControllerOn == false {
+            controllerOn = .off
+        } else {
+            controllerOn = .unknown
+        }
         let result = Self.merge(
             ioDevices: ioDevices,
             profilerDevices: profilerDevices,
@@ -683,7 +706,7 @@ final class BluetoothBatterySampler: NSObject {
         }
     }
 
-    private static func probe() -> (controllerOn: Bool, devices: [BluetoothDeviceInfo]) {
+    private static func probe() -> (controllerOn: Bool?, devices: [BluetoothDeviceInfo]) {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
         task.arguments = ["SPBluetoothDataType", "-json"]
@@ -695,7 +718,7 @@ final class BluetoothBatterySampler: NSObject {
         do {
             try task.run()
         } catch {
-            return (false, [])
+            return (nil, [])
         }
 
         // readDataToEndOfFile 会阻塞到进程退出,若 system_profiler 挂起则永久不返。
@@ -709,26 +732,29 @@ final class BluetoothBatterySampler: NSObject {
 
         if done.wait(timeout: .now() + probeTimeout) == .timedOut {
             task.terminate()
-            return (false, [])
+            return (nil, [])
         }
         task.waitUntilExit()
 
         guard task.terminationStatus == 0, let output else {
-            return (false, [])
+            return (nil, [])
         }
         return parse(profilerJSON: output)
     }
 
     /// 解析 system_profiler SPBluetoothDataType -json 输出。拆成纯函数便于单测。
-    static func parse(profilerJSON data: Data) -> (controllerOn: Bool, devices: [BluetoothDeviceInfo]) {
+    /// controllerOn 仅在输出携带 controller_state 字段时给出权威结论
+    /// (attrib_on 为开,其余值为关);JSON 失效或字段缺失(沙盒空骨架)返回 nil,
+    /// 与「探针成功但报告蓝牙关闭」区分开,前者不构成关闭证据。
+    static func parse(profilerJSON data: Data) -> (controllerOn: Bool?, devices: [BluetoothDeviceInfo]) {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let entries = root["SPBluetoothDataType"] as? [[String: Any]],
               let entry = entries.first else {
-            return (false, [])
+            return (nil, [])
         }
 
-        let controller = entry["controller_properties"] as? [String: Any]
-        let controllerOn = (controller?["controller_state"] as? String) == "attrib_on"
+        let controllerState = (entry["controller_properties"] as? [String: Any])?["controller_state"] as? String
+        let controllerOn = controllerState.map { $0 == "attrib_on" }
 
         var devices: [BluetoothDeviceInfo] = []
         // device_connected 是「单键字典」数组:每个元素形如 { "设备名": { 属性... } }。

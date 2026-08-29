@@ -334,7 +334,7 @@ struct BluetoothProfilerJSONTests {
 
     @Test func parsesConnectedDevicesOnly() {
         let result = BluetoothBatterySampler.parse(profilerJSON: Self.fixture)
-        #expect(result.controllerOn)
+        #expect(result.controllerOn == true)
         #expect(result.devices.count == 3)
         #expect(!result.devices.contains { $0.name == "Old Headset" })
     }
@@ -371,19 +371,20 @@ struct BluetoothProfilerJSONTests {
         }
         """.utf8)
         let result = BluetoothBatterySampler.parse(profilerJSON: json)
-        #expect(!result.controllerOn)
+        #expect(result.controllerOn == false)
         #expect(result.devices.isEmpty)
     }
 
-    @Test func returnsEmptyForMalformedJSON() {
+    @Test func returnsUnknownForMalformedJSON() {
         let result = BluetoothBatterySampler.parse(profilerJSON: Data("not json".utf8))
-        #expect(!result.controllerOn)
+        // JSON 失效 = 数据不完整,不构成关闭证据。
+        #expect(result.controllerOn == nil)
         #expect(result.devices.isEmpty)
     }
 
-    @Test func returnsEmptyForSandboxSkeleton() {
+    @Test func returnsUnknownForSandboxSkeleton() {
         // App Store 沙盒内 system_profiler 返回空骨架(无 controller_state、
-        // 无设备):解析结果为空且 controllerOn=false。
+        // 无设备):字段缺失不是权威关闭结论,保持 unknown。
         let json = Data("""
         {
           "SPBluetoothDataType": [
@@ -394,7 +395,7 @@ struct BluetoothProfilerJSONTests {
         }
         """.utf8)
         let result = BluetoothBatterySampler.parse(profilerJSON: json)
-        #expect(!result.controllerOn)
+        #expect(result.controllerOn == nil)
         #expect(result.devices.isEmpty)
     }
 }

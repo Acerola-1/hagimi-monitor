@@ -102,8 +102,9 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         }
     }
 
-    /// 全部关停:取消周期刷新与自持连接、清空读数,并把快照/开关状态
-    /// 归零回主线程(订阅方据此摘除面板行)。stop 后 ensureWatching 幂等重建。
+    /// 全部关停:取消周期刷新与自持连接、清空读数,并把快照清空回主线程。
+    /// 控制器状态不在此发布——停用模块不是「蓝牙关闭」的权威证据,
+    /// sampler 侧清理后自行发布。stop 后 ensureWatching 幂等重建。
     func stop() {
         queue.async { [weak self] in
             guard let self else { return }
@@ -126,7 +127,6 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
             self.lastPublishedControllerState = nil
             DispatchQueue.main.async { [weak self] in
                 self?.onSnapshotsUpdate?([])
-                self?.onControllerStateUpdate?(false)
             }
         }
     }

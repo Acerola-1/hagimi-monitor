@@ -471,8 +471,9 @@ final class MonitorStore: ObservableObject {
     private let bluetoothSampler = BluetoothBatterySampler()
     /// 当前已连接蓝牙设备。由 bluetoothSampler.$devices Combine sink 同步更新。
     @Published private(set) var bluetoothDevices: [BluetoothDeviceInfo] = []
-    /// 蓝牙控制器是否开启。由 bluetoothSampler.$controllerOn sink 同步更新。
-    @Published private(set) var bluetoothControllerOn = false
+    /// 蓝牙控制器三态。由 bluetoothSampler.$controllerOn sink 同步更新;
+    /// unknown(数据源尚未确认)时面板保留蓝牙占位行,只有 off 才移除行。
+    @Published private(set) var bluetoothControllerState: BluetoothControllerState = .unknown
 
     init() {
         let settings = MonitorSettings()
@@ -571,9 +572,9 @@ final class MonitorStore: ObservableObject {
 
         bluetoothSampler.$controllerOn
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isOn in
+            .sink { [weak self] state in
                 guard let self else { return }
-                settleAfterExpansion { self.bluetoothControllerOn = isOn }
+                settleAfterExpansion { self.bluetoothControllerState = state }
             }
             .store(in: &cancellables)
 
@@ -1301,26 +1302,32 @@ final class MonitorStore: ObservableObject {
 
     /// 把 BluetoothBatterySampler 的输出合成成 .bluetooth MonitorModule,插入到
     /// allModules 的电池之后(面板中落在电源行与显示器区之间):
-    /// - 蓝牙关闭:不插入模块,面板行消失
+    /// - 蓝牙确认关闭:不插入模块,面板行消失
     /// - 蓝牙开启即常驻(无连接设备时显示 0 台,与风扇「无硬件才隐藏」的
     ///   门控不同:蓝牙开关是瞬态,隐藏会让用户误以为功能消失)
+    /// - 数据源尚未确认(unknown):保留占位行,与其他模块启动期占位一致;
+    ///   「尚未确认」不是「已关闭」,按关闭处理会让行在启动竞态下消失又出现
     /// - summary = 设备数,value = 上报电量设备中的最低值(均未上报时为 0,
     ///   severity 已对无电量情形判 calm 不误报)
     private func applyBluetoothModule() {
         allModules.removeAll { $0.kind == .bluetooth }
-        guard bluetoothControllerOn else { return }
+        guard bluetoothControllerState != .off else { return }
 
+        let isConfirmed = bluetoothControllerState == .on
         let lowestLevel = bluetoothDevices.compactMap(\.batteryLevel).min()
-        let summary = String(localized: "bluetooth.summary.count \(bluetoothDevices.count)")
 
         var bluetoothModule = MonitorModule(
             kind: .bluetooth,
-            value: Double(lowestLevel ?? 0),
-            summary: summary,
+            value: isConfirmed ? Double(lowestLevel ?? 0) : 0,
+            summary: isConfirmed
+                ? String(localized: "bluetooth.summary.count \(bluetoothDevices.count)")
+                : "--",
             metrics: [],
             samples: []
         )
-        bluetoothModule.bluetoothDevices = bluetoothDevices
+        if isConfirmed {
+            bluetoothModule.bluetoothDevices = bluetoothDevices
+        }
 
         if let batteryIdx = allModules.firstIndex(where: { $0.kind == .battery }) {
             allModules.insert(bluetoothModule, at: batteryIdx + 1)
