@@ -14,6 +14,9 @@ struct DisplayInfo: Identifiable, Equatable {
     /// HDR(EDR)是否支持;按 NSScreen 的 EDR 能力判定,反映显示器
     /// 硬件能力而非当前开关态。nil = 无法判定,展示"--"。
     let hdrSupported: Bool?
+    /// HDR 是否处于开启态(当前实际 EDR 增益 > 1);控制卡摘要行的
+    /// 「· HDR」按此判定,与上面的能力位区分。nil = 无法判定。
+    let hdrActive: Bool?
     /// 链路最大位深(如 "10 bit"),来自系统驱动 DisplayHints 的 MaxBpc;
     /// 内建屏与未适配的 HDMI 外接读不到,显示 "--"。口径为「链路/面板
     /// 支持的最大每通道位数」:8bit+FRC 面板同样上报 10,与 Dell/Apple
@@ -245,6 +248,10 @@ struct DisplaySection: View {
         .onChange(of: isPanelVisible) { _, newValue in
             if newValue {
                 controller.refreshAsync()
+                // 面板重开即重采只读信息:摘要行的 HDR 是状态量,关闭期间
+                // 系统设置里的开关变化在此补齐(缓存只对滑杆拖动等高频
+                // body 重算免疫,低频的用户动作时刻重采不违背其设计)。
+                resampleDisplayInfo()
             } else {
                 // 面板隐藏后重置为「默认展开」设置:不可见期间无补间直接同步,
                 // 下次呼出即已是设定的初始状态,与 MonitorPanelView 的重置时机一致。
@@ -272,10 +279,13 @@ struct DisplaySection: View {
         .onChange(of: controller.displays.map(\.id)) { _, _ in
             // 显示器集合变化(插拔/首次探测完成)才重采只读信息。轮询回读或拖滑杆
             // 只改亮度值、id 集合不变,不会触发本重算。
-            displayInfoByID = Dictionary(
-                Self.collectDisplays().map { ($0.id, $0) },
-                uniquingKeysWith: { first, _ in first }
-            )
+            resampleDisplayInfo()
+        }
+        // 屏幕参数变化(HDR 开关/分辨率调整/插拔):摘要行的 HDR 是状态量,
+        // 不能等下一次插拔才刷新。通知本身低频(仅真实重配置时发出),不挂
+        // 5s 轮询——那会把缓存刻意规避的 IORegistry 枚举开销加回常态。
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
+            resampleDisplayInfo()
         }
         // 调试自动测试:延迟待面板自动呼出后,自动跑「展开分节 → 展开档案 →
         // 收起档案」三轮序列,供日志观察嵌套展开/收起期间的窗口贴合行为。
@@ -357,6 +367,16 @@ struct DisplaySection: View {
         let unitCount = String(localized: "display.unit-count")
         return unitCount.isEmpty ? "\(displays.count)" : "\(displays.count) \(unitCount)"
     }
+
+    /// 重采只读信息缓存(按显示器 id 归并)。触发源均为低频用户动作:
+    /// 插拔/首次探测(id 集合变化)、面板重开、屏幕参数重配置;
+    /// 滑杆拖动与轮询回读不触发,高频路径不触碰 IORegistry 枚举。
+    private func resampleDisplayInfo() {
+        displayInfoByID = Dictionary(
+            Self.collectDisplays().map { ($0.id, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+    }
     #endif
 
     // MARK: 采集(两渠道共用)
@@ -393,6 +413,10 @@ struct DisplaySection: View {
             // EDR/HDR 硬件能力(与当前是否处于 HDR 增益态无关)。
             let hdrSupported = screen.map {
                 $0.maximumPotentialExtendedDynamicRangeColorComponentValue > 1.01
+            }
+            // HDR 开启态判定:实际 EDR 增益 > 1,系统仅在 HDR 启用时抬高 headroom。
+            let hdrActive = screen.map {
+                $0.maximumExtendedDynamicRangeColorComponentValue > 1.01
             }
 
             let archive = Self.matchAttributes(
@@ -451,6 +475,7 @@ struct DisplaySection: View {
                 resolution: resolution,
                 refreshRate: refreshRate,
                 hdrSupported: hdrSupported,
+                hdrActive: hdrActive,
                 colorDepth: Self.linkColorDepth(
                     hints: linkHints,
                     displayName: screen?.localizedName,
@@ -1020,9 +1045,10 @@ enum DisplayAttributesProbe {
 }
 
 #if DISPLAY_CONTROL
-/// 直连渠道单台显示器的控制组卡:图标 + 名称 + 内建/外接角标 +
-/// 只读信息(基础四项 + 可折叠档案,与沙盒渠道信息行同构)+
-/// 亮度/音量/对比度滑杆,不支持项展示诚实静态提示。
+/// 直连渠道单台显示器的控制组卡,两种形态经档案角标切换:
+/// 收起态 = 图标 + 名称 + 内建/外接角标 + 一行摘要(分辨率 · 刷新率 ·
+/// HDR 开启时 · 位深)+ 控制滑杆;展开态 = 完整信息(基础四项 + 档案 +
+/// 复制),摘要与滑杆让位。不支持项在滑杆下方展示诚实静态提示。
 private struct DisplayControlGroup: View {
     let display: ControlledDisplay
     /// 该显示器的只读信息(分辨率/刷新率/HDR 与档案),并入控制区展示;采集失败为 nil 不占位。
@@ -1080,68 +1106,81 @@ private struct DisplayControlGroup: View {
                     }
                 }
 
-                // 信息区:基础四项 + 可折叠档案,与沙盒渠道信息行同构;
-                // 同处 gridRowGap 间距容器,展开后格子间留白统一。
-                if let info = displayInfo {
-                    VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
-                        DisplayInfoBaseGrid(display: info, palette: palette)
+                // 摘要行:分辨率 · 刷新率 · HDR(当前开启时) · 位深,一行 caption;
+                // 档案展开后完整信息呈现,摘要让位,卡片即纯信息态。
+                if let info = displayInfo, let summary = infoSummaryLine, !archiveExpanded {
+                    Text(summary)
+                        .monitorPanelCaptionFont(.caption2)
+                        .foregroundStyle(palette.captionText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .transition(.opacity)
+                }
 
-                        CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
-                            VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
-                                DisplayArchiveGrid(display: info, palette: palette)
-                                DisplayArchiveCopyButton(display: info, palette: palette)
-                            }
+                if let info = displayInfo {
+                    CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
+                        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+                            Text(String(localized: "display.archive.basic"))
+                                .monitorPanelCaptionFont(.caption2)
+                                .foregroundStyle(palette.captionText)
+                            DisplayInfoBaseGrid(display: info, palette: palette)
+                            DisplayArchiveGrid(display: info, palette: palette)
+                            DisplayArchiveCopyButton(display: info, palette: palette)
                         }
                     }
                 }
 
-                VStack(spacing: 7) {
-                    if settings.displayBrightnessControlEnabled {
-                        DisplayControlSlider(
-                            label: String(localized: "settings.brightness"),
-                            systemImage: "sun.max",
-                            value: binding(for: .brightness),
-                            isEnabled: display.supports(.brightness),
-                            palette: palette,
-                            tint: tint
-                        )
-                    }
-
-                    if settings.displayVolumeControlEnabled, !display.isBuiltIn {
-                        DisplayControlSlider(
-                            label: String(localized: "settings.volume"),
-                            systemImage: "speaker.wave.2",
-                            value: binding(for: .volume),
-                            isEnabled: display.supports(.volume),
-                            palette: palette,
-                            tint: tint
-                        )
-                    }
-
-                    if settings.displayContrastControlEnabled, !display.isBuiltIn {
-                        DisplayControlSlider(
-                            label: String(localized: "settings.contrast"),
-                            systemImage: "circle.lefthalf.filled",
-                            value: binding(for: .contrast),
-                            isEnabled: display.supports(.contrast),
-                            palette: palette,
-                            tint: tint
-                        )
-                    }
-
-                    if showsUnsupportedNotice {
-                        HStack(alignment: .top, spacing: 5) {
-                            Image(systemName: "info.circle")
-                                .font(.caption2)
-                                .foregroundStyle(palette.captionText)
-                            Text(String(localized: "display.control-unavailable"))
-                                .monitorPanelCaptionFont(.caption2)
-                                .foregroundStyle(palette.captionText)
-                                .fixedSize(horizontal: false, vertical: true)
-                                .frame(maxWidth: .infinity, alignment: .leading)
+                // 档案展开即信息完整呈现,控制滑杆让位;收起后回到控制态。
+                if !archiveExpanded {
+                    VStack(spacing: 7) {
+                        if settings.displayBrightnessControlEnabled {
+                            DisplayControlSlider(
+                                label: String(localized: "settings.brightness"),
+                                systemImage: "sun.max",
+                                value: binding(for: .brightness),
+                                isEnabled: display.supports(.brightness),
+                                palette: palette,
+                                tint: tint
+                            )
                         }
-                        .transition(.opacity)
+
+                        if settings.displayVolumeControlEnabled, !display.isBuiltIn {
+                            DisplayControlSlider(
+                                label: String(localized: "settings.volume"),
+                                systemImage: "speaker.wave.2",
+                                value: binding(for: .volume),
+                                isEnabled: display.supports(.volume),
+                                palette: palette,
+                                tint: tint
+                            )
+                        }
+
+                        if settings.displayContrastControlEnabled, !display.isBuiltIn {
+                            DisplayControlSlider(
+                                label: String(localized: "settings.contrast"),
+                                systemImage: "circle.lefthalf.filled",
+                                value: binding(for: .contrast),
+                                isEnabled: display.supports(.contrast),
+                                palette: palette,
+                                tint: tint
+                            )
+                        }
+
+                        if showsUnsupportedNotice {
+                            HStack(alignment: .top, spacing: 5) {
+                                Image(systemName: "info.circle")
+                                    .font(.caption2)
+                                    .foregroundStyle(palette.captionText)
+                                Text(String(localized: "display.control-unavailable"))
+                                    .monitorPanelCaptionFont(.caption2)
+                                    .foregroundStyle(palette.captionText)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+                            .transition(.opacity)
+                        }
                     }
+                    .transition(.opacity)
                 }
             }
         }
@@ -1178,6 +1217,19 @@ private struct DisplayControlGroup: View {
         (settings.displayBrightnessControlEnabled && !display.supports(.brightness))
             || (settings.displayVolumeControlEnabled && !display.isBuiltIn && !display.supports(.volume))
             || (settings.displayContrastControlEnabled && !display.isBuiltIn && !display.supports(.contrast))
+    }
+
+    /// 摘要行文本:分辨率 · 刷新率 · HDR(当前开启时) · 位深;读不到的
+    /// 段(--)整段跳过,全部缺失时摘要行不占位。
+    private var infoSummaryLine: String? {
+        guard let info = displayInfo else { return nil }
+        var segments = [info.resolution, info.refreshRate]
+        if info.hdrActive == true {
+            segments.append("HDR")
+        }
+        segments.append(info.colorDepth)
+        let line = segments.filter { $0 != "--" }.joined(separator: " · ")
+        return line.isEmpty ? nil : line
     }
 }
 

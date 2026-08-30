@@ -1002,6 +1002,22 @@
         }
       }
     },
+    "display.archive.basic": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Basics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "基础信息"
+          }
+        }
+      }
+    },
     "display.archive.copied": {
       "localizations": {
         "en": {
