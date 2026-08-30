@@ -42,32 +42,65 @@ struct DisplayInfo: Identifiable, Equatable {
     let manufactureDate: String?
 }
 
-/// 显示器信息区(B4,两渠道通用):行头"N 台 · 外接 M",
-/// 展开后按显示器分节展示基础四项,点「详情」再展完整档案。
-/// 数据全部来自公开 API + IORegistry 只读属性,沙盒安全。
-struct DisplayInfoSection: View {
+#if DISPLAY_CONTROL
+extension Notification.Name {
+    /// 调试自动测试:触发第一台显示器档案区的展开/收起。
+    static let autotestArchiveToggle = Notification.Name("autotestArchiveToggle")
+}
+#endif
+
+/// 显示器区块,两渠道单一实现:行头「N 台 · 外接 M」+ 可展开明细。
+/// 沙盒渠道为只读信息行(基础四项 + 逐台档案);直连渠道的展开区并入
+/// DDC 亮度/音量/对比度控制,控制器与桥接层依赖非沙盒 API,位于
+/// HagimiMonitorDirectOnly 的 DisplayControlController。
+/// 信息卡、档案网格与采集探针两渠道共用同一份代码。
+struct DisplaySection: View {
     let theme: MonitorPanelTheme
+    /// 直连渠道:控制区消费设置(能力开关/内建屏显隐/默认展开)并观察其变化;
+    /// 沙盒渠道不消费,仅为统一接线携带,不订阅。
+    #if DISPLAY_CONTROL
+    @ObservedObject var settings: MonitorSettings
+    #else
+    let settings: MonitorSettings
+    #endif
+    /// 面板可见性,控制区用作轮询门控;沙盒渠道不消费,仅为统一接线携带。
+    let isPanelVisible: Bool
     /// 发起某展开区的相位变化(0 或 1)并置位窗口层的采样推迟截止标记。
     /// `animated` 为 false 时无补间直接同步(初始化/隐藏重置等同步语义场景)。
     var animate: (String, Bool, Bool) -> Void
 
-    /// 本节展开区 key(与显示器档案卡的 key 区分)。
-    private static let sectionKey = "display-info"
+    /// 本节展开区 key(与各显示器档案卡的 key 区分)。
+    private static let sectionKey = "display"
 
     @State private var isExpanded = false
+    #if DISPLAY_CONTROL
+    @StateObject private var controller = DisplayControlController()
+    /// 显示器只读信息(分辨率/刷新率/HDR/位深)缓存。这些值运行期基本不变,
+    /// 只在显示器集合变化时重采;拖滑杆等高频 body 重算不再反复触发昂贵的
+    /// IORegistry 枚举与 DDC 分类探测。
+    @State private var displayInfoByID: [CGDirectDisplayID: DisplayInfo] = [:]
+    #else
     @State private var displays: [DisplayInfo] = []
-
-    private var displayTint: Color {
-        theme.palette.displayTint
-    }
+    #endif
 
     var body: some View {
+        #if DISPLAY_CONTROL
+        controlsContent
+        #else
+        infoContent
+        #endif
+    }
+
+    // MARK: 沙盒渠道:只读信息行
+
+    #if !DISPLAY_CONTROL
+    private var infoContent: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
                 Image(systemName: "slider.horizontal.below.rectangle")
                     .font(.callout.weight(.semibold))
                     .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(displayTint)
+                    .foregroundStyle(theme.palette.displayTint)
                     .frame(width: 18)
 
                 Text(String(localized: "kind.display") + ":")
@@ -125,21 +158,210 @@ struct DisplayInfoSection: View {
         String(format: String(localized: "panel.displays.count"), displays.count)
     }
 
-    // MARK: 单台显示器分节
-
     private func displaySection(_ display: DisplayInfo) -> some View {
         DisplayInfoCard(
             display: display,
             palette: theme.palette,
-            archiveKey: "display-info-arc-\(display.id)",
+            archiveKey: "display-arc-\(display.id)",
             animate: animate
         )
     }
+    #endif
 
-    // MARK: 采集
+    // MARK: 直连渠道:控制区(信息并入各组卡)
 
-    /// 采集当前显示器信息快照。Direct 版的 DisplayControlsSection 也复用此采集
-    /// (把分辨率/刷新率并进控制区展示),故为 internal 而非 private。
+    #if DISPLAY_CONTROL
+    private var controlsContent: some View {
+        let palette = theme.palette
+        let tint = palette.displayTint
+        let visibleDisplays = controller.displays
+                .filter { settings.showBuiltInDisplays || !$0.isBuiltIn }
+                .sorted { $0.isBuiltIn && !$1.isBuiltIn }
+        let hasControls = settings.displayBrightnessControlEnabled
+            || settings.displayVolumeControlEnabled
+            || settings.displayContrastControlEnabled
+
+        return VStack(spacing: 0) {
+            HStack(spacing: 10) {
+                Image(systemName: "slider.horizontal.below.rectangle")
+                    .font(.callout.weight(.semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(tint)
+                    .frame(width: 18)
+
+                Text(String(localized: "kind.display") + ":")
+                    .monitorPanelMetricLabelFont()
+                    .foregroundStyle(palette.primaryText)
+                    .lineLimit(1)
+
+                Text(summary(for: visibleDisplays, hasControls: hasControls))
+                    .monitorPanelRoundedFont(weight: .semibold)
+                    .foregroundStyle(palette.valueText)
+                    .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                Image(systemName: "chevron.down")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(palette.captionText)
+                    .frame(width: 18, height: 18)
+                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                    .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                       dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                toggleExpansion()
+            }
+
+            CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded) {
+                detailContent(
+                    visibleDisplays: visibleDisplays,
+                    hasControls: hasControls,
+                    palette: palette,
+                    tint: tint
+                )
+                .padding(.horizontal, 10)
+                .padding(.bottom, 9)
+            }
+        }
+        .onAppear {
+            controller.attach(settings: settings)
+            controller.refreshAsync()
+            // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
+            // 无补间直接同步驱动器相位,避免相位残留 0 导致内容高度为零。
+            isExpanded = settings.displayControlsExpandedByDefault
+            animate(Self.sectionKey, isExpanded, false)
+            controller.setPolling(active: isPanelVisible && isExpanded)
+        }
+        // MonitorPanelView 只创建一次、常驻在 NSPanel 里,显隐只是窗口级 order,
+        // 不会重新触发 onAppear——面板每次重新打开都要重新读一次 DDC 当前值。
+        // 但只在这个瞬间刷新一次还不够:面板开着不关、只是反复展开/收起显示器,
+        // 或者面板一直停在展开状态,这期间系统设置/其他 app 改的亮度音量同样
+        // 发现不了(DDC 没有变化通知,只能主动读)。所以展开且面板可见期间持续
+        // 轮询,离开任一条件就停,避免空转占用 DDC 总线。
+        .onChange(of: isPanelVisible) { _, newValue in
+            if newValue {
+                controller.refreshAsync()
+            } else {
+                // 面板隐藏后重置为「默认展开」设置:不可见期间无补间直接同步,
+                // 下次呼出即已是设定的初始状态,与 MonitorPanelView 的重置时机一致。
+                isExpanded = settings.displayControlsExpandedByDefault
+                animate(Self.sectionKey, isExpanded, false)
+            }
+            controller.setPolling(active: newValue && isExpanded)
+        }
+        .onChange(of: isExpanded) { _, newValue in
+            if newValue {
+                controller.refreshAsync()
+            }
+            controller.setPolling(active: isPanelVisible && newValue)
+        }
+        .onChange(of: settings.displayControlsExpandedByDefault) { _, newValue in
+            // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
+            // 钉住面板开着改设置时可见,与手动展开同一驱动源直接预览。
+            guard isExpanded != newValue else { return }
+            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+                isExpanded = newValue
+            }
+            animate(Self.sectionKey, newValue, true)
+        }
+        .onChange(of: controller.displays.map(\.id)) { _, _ in
+            // 显示器集合变化(插拔/首次探测完成)才重采只读信息。轮询回读或拖滑杆
+            // 只改亮度值、id 集合不变,不会触发本重算。
+            displayInfoByID = Dictionary(
+                Self.collectDisplays().map { ($0.id, $0) },
+                uniquingKeysWith: { first, _ in first }
+            )
+        }
+        // 调试自动测试:延迟待面板自动呼出后,自动跑「展开分节 → 展开档案 →
+        // 收起档案」三轮序列,供日志观察嵌套展开/收起期间的窗口贴合行为。
+        .task {
+            guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil else { return }
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            if !isExpanded { toggleExpansion() }
+            for round in 0..<3 {
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                NSLog("[autotest] seq round=%d archive toggle -> true", round)
+                NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
+                try? await Task.sleep(nanoseconds: 1_200_000_000)
+                NSLog("[autotest] seq round=%d archive toggle -> false", round)
+                NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
+            }
+        }
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+            palette.displayGlassFill
+        }
+    }
+
+    @ViewBuilder
+    private func detailContent(
+        visibleDisplays: [ControlledDisplay],
+        hasControls: Bool,
+        palette: MonitorPalette,
+        tint: Color
+    ) -> some View {
+        if !hasControls {
+            DisplayEmptyState(text: String(localized: "display.no-controls"), palette: palette)
+        } else if visibleDisplays.isEmpty {
+            DisplayEmptyState(text: settings.showBuiltInDisplays ? String(localized: "display.no-displays") : String(localized: "display.no-external-displays"), palette: palette)
+        } else {
+            VStack(spacing: 8) {
+                Rectangle()
+                    .fill(palette.displaySeparator)
+                    .frame(height: 1)
+                    .padding(.leading, 28)
+
+                ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(palette.displaySeparator.opacity(0.72))
+                            .frame(height: 1)
+                            .padding(.leading, 28)
+                    }
+
+                    DisplayControlGroup(
+                        display: display,
+                        displayInfo: displayInfoByID[display.id],
+                        settings: settings,
+                        controller: controller,
+                        palette: palette,
+                        tint: tint,
+                        archiveKey: "display-arc-\(display.id)",
+                        animate: animate
+                    )
+                }
+            }
+        }
+    }
+
+    /// 布局补间统一由 `PanelExpansionDriver` 驱动,窗口层逐帧被动跟随。
+    /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
+    /// 时间线打架,造成「收一半停顿再补完」的卡顿。
+    private func toggleExpansion() {
+        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+            isExpanded.toggle()
+        }
+        animate(Self.sectionKey, isExpanded, true)
+    }
+
+    private func summary(for displays: [ControlledDisplay], hasControls: Bool) -> String {
+        guard hasControls else {
+            return String(localized: "display.controls-disabled")
+        }
+
+        let unitCount = String(localized: "display.unit-count")
+        return unitCount.isEmpty ? "\(displays.count)" : "\(displays.count) \(unitCount)"
+    }
+    #endif
+
+    // MARK: 采集(两渠道共用)
+
+    /// 采集当前显示器信息快照,供信息行与直连渠道的控制组卡共用。
     static func collectDisplays() -> [DisplayInfo] {
         var count: UInt32 = 0
         guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else {
@@ -311,14 +533,14 @@ struct DisplayInfoSection: View {
 }
 
 /// 单台显示器卡片:分节标题(名称 + 展开角标)+ 基础四项 tile + 可折叠档案区。
-/// 与 Direct 控制卡共用同一套信息组件,两渠道信息呈现完全一致。
+/// 沙盒渠道的信息行与直连渠道的控制组卡共用同一套信息组件,两渠道信息呈现完全一致。
 /// 基础四项与档案区同处 gridRowGap 间距容器,展开后格子间留白统一。
 private struct DisplayInfoCard: View {
     let display: DisplayInfo
     let palette: MonitorPalette
     /// 本卡档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
     let archiveKey: String
-    /// 发起动画的闭包,与 DisplayInfoSection 同一驱动源。
+    /// 发起动画的闭包,与 DisplaySection 同一驱动源。
     var animate: (String, Bool, Bool) -> Void
 
     @State private var archiveExpanded = false
@@ -796,3 +1018,224 @@ enum DisplayAttributesProbe {
             .takeRetainedValue() as? Int ?? 0
     }
 }
+
+#if DISPLAY_CONTROL
+/// 直连渠道单台显示器的控制组卡:图标 + 名称 + 内建/外接角标 +
+/// 只读信息(基础四项 + 可折叠档案,与沙盒渠道信息行同构)+
+/// 亮度/音量/对比度滑杆,不支持项展示诚实静态提示。
+private struct DisplayControlGroup: View {
+    let display: ControlledDisplay
+    /// 该显示器的只读信息(分辨率/刷新率/HDR 与档案),并入控制区展示;采集失败为 nil 不占位。
+    let displayInfo: DisplayInfo?
+    @ObservedObject var settings: MonitorSettings
+    @ObservedObject var controller: DisplayControlController
+    let palette: MonitorPalette
+    let tint: Color
+
+    /// 本显示器档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
+    let archiveKey: String
+    /// 发起动画的闭包,与 DisplaySection 同一驱动源。
+    var animate: (String, Bool, Bool) -> Void
+
+    @State private var archiveExpanded = false
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
+                .font(.subheadline.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(tint)
+                .frame(width: 14)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 7) {
+                HStack(spacing: 8) {
+                    Text(display.name)
+                        .monitorPanelCaptionFont(.footnote, weight: .semibold)
+                        .foregroundStyle(palette.primaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .layoutPriority(1)
+                        .help(display.name)
+
+                    Spacer(minLength: 8)
+
+                    Text(display.isBuiltIn ? String(localized: "display.built-in") : String(localized: "display.external"))
+                        .monitorPanelRoundedFont(.caption2, weight: .semibold)
+                        .foregroundStyle(palette.secondaryText)
+                        .lineLimit(1)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background {
+                            Capsule()
+                                .fill(palette.displayBadgeFill)
+                        }
+
+                    if displayInfo != nil {
+                        DisplayArchiveToggle(
+                            palette: palette,
+                            archiveExpanded: archiveExpanded,
+                            onToggle: toggleArchive
+                        )
+                    }
+                }
+
+                // 信息区:基础四项 + 可折叠档案,与沙盒渠道信息行同构;
+                // 同处 gridRowGap 间距容器,展开后格子间留白统一。
+                if let info = displayInfo {
+                    VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
+                        DisplayInfoBaseGrid(display: info, palette: palette)
+
+                        CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
+                            VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+                                DisplayArchiveGrid(display: info, palette: palette)
+                                DisplayArchiveCopyButton(display: info, palette: palette)
+                            }
+                        }
+                    }
+                }
+
+                VStack(spacing: 7) {
+                    if settings.displayBrightnessControlEnabled {
+                        DisplayControlSlider(
+                            label: String(localized: "settings.brightness"),
+                            systemImage: "sun.max",
+                            value: binding(for: .brightness),
+                            isEnabled: display.supports(.brightness),
+                            palette: palette,
+                            tint: tint
+                        )
+                    }
+
+                    if settings.displayVolumeControlEnabled, !display.isBuiltIn {
+                        DisplayControlSlider(
+                            label: String(localized: "settings.volume"),
+                            systemImage: "speaker.wave.2",
+                            value: binding(for: .volume),
+                            isEnabled: display.supports(.volume),
+                            palette: palette,
+                            tint: tint
+                        )
+                    }
+
+                    if settings.displayContrastControlEnabled, !display.isBuiltIn {
+                        DisplayControlSlider(
+                            label: String(localized: "settings.contrast"),
+                            systemImage: "circle.lefthalf.filled",
+                            value: binding(for: .contrast),
+                            isEnabled: display.supports(.contrast),
+                            palette: palette,
+                            tint: tint
+                        )
+                    }
+
+                    if showsUnsupportedNotice {
+                        HStack(alignment: .top, spacing: 5) {
+                            Image(systemName: "info.circle")
+                                .font(.caption2)
+                                .foregroundStyle(palette.captionText)
+                            Text(String(localized: "display.control-unavailable"))
+                                .monitorPanelCaptionFont(.caption2)
+                                .foregroundStyle(palette.captionText)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .transition(.opacity)
+                    }
+                }
+            }
+        }
+        .padding(.leading, 28)
+        // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
+        .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
+            guard archiveKey == "display-arc-\(controller.displays.first?.id ?? 0)" else { return }
+            NSLog("[autotest] group archive toggle key=%@", archiveKey)
+            toggleArchive()
+        }
+    }
+
+    /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
+    /// 并把本档案相位交驱动器补间(0↔1)。
+    private func toggleArchive() {
+        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+            archiveExpanded.toggle()
+        }
+        animate(archiveKey, archiveExpanded, true)
+    }
+
+    private func binding(for control: DisplayControlKind) -> Binding<Double> {
+        Binding(
+            get: { controller.value(for: control, displayID: display.id) },
+            set: { controller.setValueAsync($0, for: control, displayID: display.id) }
+        )
+    }
+
+    /// 是否展示"此显示器不支持该项控制"的诚实静态提示。仅当某条**已启用且正在显示**的
+    /// 控制被显示器明确判定为不支持(supports == false,由 capability .unsupported 驱动)
+    /// 时才出现——不再对瞬时写入失败报警。
+    private var showsUnsupportedNotice: Bool {
+        (settings.displayBrightnessControlEnabled && !display.supports(.brightness))
+            || (settings.displayVolumeControlEnabled && !display.isBuiltIn && !display.supports(.volume))
+            || (settings.displayContrastControlEnabled && !display.isBuiltIn && !display.supports(.contrast))
+    }
+}
+
+/// 控制滑杆行:图标 + 标签 + Slider + 百分比值;不支持项整行降透明。
+private struct DisplayControlSlider: View {
+    let label: String
+    let systemImage: String
+    @Binding var value: Double
+    let isEnabled: Bool
+    let palette: MonitorPalette
+    let tint: Color
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.caption2.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(isEnabled ? tint : palette.captionText)
+                .frame(width: 14)
+
+            Text(label)
+                .monitorPanelCaptionFont(.caption2)
+                .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
+                .frame(width: 34, alignment: .leading)
+
+            Slider(value: $value, in: 0...100, step: 1)
+                .tint(tint)
+                .controlSize(.small)
+                .disabled(!isEnabled)
+
+            Text("\(Int(value.rounded()))%")
+                .monitorPanelRoundedFont(.caption2, weight: .semibold)
+                .monospacedDigit()
+                .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
+                .frame(width: 34, alignment: .trailing)
+        }
+        .opacity(isEnabled ? 1 : 0.48)
+    }
+}
+
+/// 展开区空态:分隔线 + 说明文案(无可用控制/无显示器)。
+private struct DisplayEmptyState: View {
+    let text: String
+    let palette: MonitorPalette
+
+    var body: some View {
+        VStack(spacing: 7) {
+            Rectangle()
+                .fill(palette.displaySeparator)
+                .frame(height: 1)
+                .padding(.leading, 28)
+
+            Text(text)
+                .monitorPanelCaptionFont(.caption2)
+                .foregroundStyle(palette.captionText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.leading, 28)
+        }
+    }
+}
+#endif

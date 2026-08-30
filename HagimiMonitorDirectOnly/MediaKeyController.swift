@@ -230,8 +230,8 @@ final class MediaKeyController {
         lastNonZeroVolume[displayID] = value
     }
 
-    /// 从 UserDefaults 读取持久化音量(DDC 写入成功时由 DisplayControlsSection 保存)。
-    /// 与 DisplayControlsSection.storedValueKey 的 key 格式保持一致。
+    /// 从 UserDefaults 读取持久化音量(DDC 写入成功时由 DisplayControlService 保存)。
+    /// 与 DisplayControlService.storedValueKey 的 key 格式保持一致。
     private func persistedNonZeroVolume(for displayID: CGDirectDisplayID) -> Double? {
         guard let controller,
               let display = controller.displays.first(where: { $0.id == displayID }) else {

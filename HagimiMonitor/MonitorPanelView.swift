@@ -95,29 +95,11 @@ struct MonitorPanelView: View {
                                     .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
                             }
 
-                            // 显示器信息区(B4):沙盒版没有控制区,独立成行展示;
-                            // Direct 版信息并入 DisplayControlsSection 展开区,
-                            // 避免出现两行「显示器」重复。
-                            #if !DISPLAY_CONTROL
+                            // 显示器区块:两渠道单一实现(DisplaySection),
+                            // 沙盒渠道为只读信息行,直连渠道展开区并入 DDC 控制。
                             if store.settings.displayModuleVisible {
-                                DisplayInfoSection(
+                                DisplaySection(
                                     theme: theme,
-                                    animate: { key, toFull, animated in
-                                        store.beginExpansionAnimation()
-                                        if animated {
-                                            panelExpansion.animate(key, toFull ? 1 : 0)
-                                        } else {
-                                            panelExpansion.setInstantly(key, toFull ? 1 : 0)
-                                        }
-                                    }
-                                )
-                                .compatibleGlassEffectID("display-info", in: glassNamespace)
-                            }
-                            #endif
-
-                            #if DISPLAY_CONTROL
-                            if store.settings.displayModuleVisible {
-                                DisplayControlsSection(
                                     settings: store.settings,
                                     isPanelVisible: store.isPanelVisible,
                                     animate: { key, toFull, animated in
@@ -129,9 +111,8 @@ struct MonitorPanelView: View {
                                         }
                                     }
                                 )
-                                .compatibleGlassEffectID("display-controls", in: glassNamespace)
+                                .compatibleGlassEffectID("display", in: glassNamespace)
                             }
-                            #endif
 
                             // 底部三按钮与行卡片同规格:同内边距/同字体/同间距,
                             // 高度与行间留白都与模块行一致;文案用短形式避免折行。
@@ -591,7 +572,7 @@ struct MonitorPanelView: View {
 
     /// 当前可见 row 的 kind 集合,顺序与渲染顺序一致。
     /// `store.modules` 已由 settings 过滤过,所以只取它即可。
-    /// `DisplayControlsSection` 不是 module,天然不在内。
+    /// `DisplaySection` 不是 module,天然不在内。
     private var visibleKinds: [MonitorKind] {
         store.modules.map(\.kind)
     }
@@ -859,7 +840,7 @@ private struct MetricGlassRow: View, Equatable {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            // 手势只挂行头(与 DisplayControlsSection 同款):macOS 上覆盖整个
+            // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
             .onTapGesture {
@@ -1801,7 +1782,7 @@ private struct BatteryGlassRow: View, Equatable {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplayControlsSection
+            // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplaySection
             // 同款纪律:整行 onTapGesture 会抢占深层控件的点击)。
             .contentShape(Rectangle())
             .onTapGesture {
@@ -2941,7 +2922,7 @@ private struct ProcessIcon: View {
 /// 内容可用性消失(如蓝牙设备全部断开)时高度直接钳 0,瞬时归零、不参与动画--
 /// 数据驱动的收起没有用户手势,不需要过渡动画。
 ///
-/// 供各 metric 行与 `DisplayControlsSection`(Direct 目标)共用,故非 private。
+/// 供各 metric 行与 `DisplaySection` 共用,故非 private。
 struct CollapsibleDetail<Content: View>: View {
     /// 面板根注入的展开驱动器:仅用于上报自然高度供窗口高度预测。
     @EnvironmentObject private var expansion: PanelExpansionDriver
