@@ -195,6 +195,7 @@ struct QuickToolsPopoverView: View {
         .onChange(of: store.keyboardLockPermissionHint) { _, _ in
             store.popoverPresenter.refreshContentSize()
         }
+        .environment(\.liquidGlassEnabled, settings.liquidGlassEnabled)
     }
 }
 

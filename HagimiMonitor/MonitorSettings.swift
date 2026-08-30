@@ -120,6 +120,9 @@ final class MonitorSettings: ObservableObject {
     @Published var languagePreference: AppLanguagePreference = .system
     @Published var themePreference: AppThemePreference = .system
     @Published var colorSchemePreference: MonitorColorSchemePreference = .vibrant
+    /// macOS 26 Liquid Glass 总开关。关闭时统一回退到原有材质/色块样式，
+    /// 同时停用自定义折射滤镜；默认开启以保持新版外观。
+    @Published var liquidGlassEnabled: Bool = true
     @Published var ringSource: HaloRingSource = .combined
     @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
     @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
@@ -179,6 +182,7 @@ final class MonitorSettings: ObservableObject {
 
         let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.vibrant.rawValue
         colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .vibrant
+        liquidGlassEnabled = defaults.object(forKey: Keys.liquidGlassEnabled) as? Bool ?? true
 
         ringSource = .combined
 
@@ -554,6 +558,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $liquidGlassEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.liquidGlassEnabled)
+            }
+            .store(in: &cancellables)
+
         $ringSource
             .dropFirst()
             .sink { [weak self] _ in
@@ -831,6 +842,7 @@ private enum Keys {
     static let themePreference = "settings.themePreference"
     static let languagePreference = "settings.languagePreference"
     static let colorSchemePreference = "settings.colorSchemePreference"
+    static let liquidGlassEnabled = "settings.liquidGlassEnabled"
     static let ringSource = "settings.ringSource"
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
     static let menuBarMetricKinds = "settings.menuBar.metricKinds"

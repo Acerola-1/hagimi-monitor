@@ -194,10 +194,24 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 26+ 将 NSGlassEffectView 作为独立背景层，15 保留 popover NSVisualEffectView 回退。
         panel.contentView = CompatiblePanelGlassHost.make(
             contentView: hosting,
-            cornerRadius: Self.panelCornerRadius
+            cornerRadius: Self.panelCornerRadius,
+            liquidGlassEnabled: store.settings.liquidGlassEnabled
         )
 
         hostingView = hosting
+
+        // 设置窗口中的总开关即时替换面板背景层；不重建 hosting view，
+        // 因而不会丢失展开状态或触发窗口尺寸跳变。
+        store.settings.$liquidGlassEnabled
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                CompatiblePanelGlassHost.update(
+                    self.panel.contentView,
+                    liquidGlassEnabled: enabled
+                )
+            }
+            .store(in: &cancellables)
 
         // 用内容固有尺寸初始化窗口大小(对齐 FluidMenuBarExtra)。避免首帧为默认 200 高。
         hosting.layoutSubtreeIfNeeded()

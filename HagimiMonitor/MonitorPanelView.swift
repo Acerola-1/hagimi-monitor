@@ -303,6 +303,7 @@ struct MonitorPanelView: View {
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
         .environmentObject(panelExpansion)
+        .environment(\.liquidGlassEnabled, store.settings.liquidGlassEnabled)
     }
 
     /// 需进程采样的类目集 = 行内展开的模块。
@@ -316,7 +317,7 @@ struct MonitorPanelView: View {
     }
 
     private var panelBackgroundColor: Color {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), store.settings.liquidGlassEnabled {
             // 窗口底由 NSGlassEffectView 渲染，不再叠加自绘半透明材质。
             .clear
         } else {

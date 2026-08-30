@@ -146,6 +146,29 @@ struct HagimiMonitorTests {
         #expect(settings.colorSchemePreference == .vibrant)
     }
 
+    @Test func liquidGlassDefaultsToEnabled() {
+        let suite = "HagimiMonitorTests.liquidGlass.default"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(settings.liquidGlassEnabled)
+    }
+
+    @Test func liquidGlassPreferencePersistsAndLoads() {
+        let suite = "HagimiMonitorTests.liquidGlass.persisted"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(false, forKey: "settings.liquidGlassEnabled")
+
+        let settings = MonitorSettings(defaults: defaults)
+        #expect(!settings.liquidGlassEnabled)
+
+        settings.liquidGlassEnabled = true
+        #expect(defaults.bool(forKey: "settings.liquidGlassEnabled"))
+    }
+
     @Test func batteryAvailableMetricsExcludePowerFlowChain() {
         let ids = MonitorKind.battery.availableMetrics.map(\.id)
         // 转换损耗已从可开关指标中移除:功率流图承载功率数据,指标网格只留健康度/循环/温度。

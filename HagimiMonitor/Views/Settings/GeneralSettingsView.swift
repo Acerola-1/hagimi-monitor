@@ -68,6 +68,19 @@ struct GeneralSettingsView: View {
                     .pickerStyle(.segmented)
                     .frame(width: Self.segmentedPickerWidth)
                 }
+
+                if #available(macOS 26, *) {
+                    SettingsDivider()
+
+                    SettingsRow(
+                        title: String(localized: "settings.liquid-glass"),
+                        subtitle: String(localized: "settings.liquid-glass.subtitle")
+                    ) {
+                        Toggle("", isOn: $settings.liquidGlassEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                    }
+                }
             }
 
             MenuBarDisplaySettingsSection(settings: settings, store: store)

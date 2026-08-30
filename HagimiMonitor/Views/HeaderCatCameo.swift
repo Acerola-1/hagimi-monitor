@@ -199,10 +199,12 @@ struct CatThanksCard: View {
 
 /// 致谢卡片在 26+ 使用系统 Liquid Glass，15 保留 `.regularMaterial`。
 private struct CatThanksCardBackground: ViewModifier {
+    @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
+
     func body(content: Content) -> some View {
         let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
         CompatibleGlassContainer(spacing: 0) {
-            if #available(macOS 26, *) {
+            if #available(macOS 26, *), liquidGlassEnabled {
                 content
                     .glassEffect(.regular, in: shape)
             } else {

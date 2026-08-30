@@ -11,6 +11,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private let panel: NSPanel
     private let presentation = QuickPanelPresentation()
     private var hostingView: NSHostingView<AnyView>?
+    private var cancellables: Set<AnyCancellable> = []
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
@@ -96,10 +97,22 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         // 与菜单栏面板一致：26+ 用独立 NSGlassEffectView 背景层，15 保留毛玻璃回退。
         panel.contentView = CompatiblePanelGlassHost.make(
             contentView: hosting,
-            cornerRadius: Self.panelCornerRadius
+            cornerRadius: Self.panelCornerRadius,
+            liquidGlassEnabled: store.settings.liquidGlassEnabled
         )
 
         hostingView = hosting
+
+        store.settings.$liquidGlassEnabled
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                CompatiblePanelGlassHost.update(
+                    self.panel.contentView,
+                    liquidGlassEnabled: enabled
+                )
+            }
+            .store(in: &cancellables)
 
         // 用内容固有尺寸初始化窗口大小。
         hosting.layoutSubtreeIfNeeded()

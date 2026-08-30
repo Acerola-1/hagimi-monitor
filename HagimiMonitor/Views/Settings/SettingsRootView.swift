@@ -12,8 +12,9 @@ struct SettingsRootView: View {
                 .frame(width: 164)
                 .background {
                     // 26 上 `.sidebar` 列表样式自带系统液态玻璃侧栏,
-                    // 手铺 `.bar` 会把它压成平面材质,仅在 15 上补铺。
-                    if #unavailable(macOS 26) {
+                    // 手铺 `.bar` 会把它压成平面材质；关闭液态玻璃或运行在
+                    // 旧系统时补回经典侧栏背景。
+                    if !usesSystemLiquidGlassSidebar {
                         Rectangle()
                             .fill(.bar)
                             .ignoresSafeArea(edges: .top)
@@ -31,6 +32,15 @@ struct SettingsRootView: View {
                 .ignoresSafeArea(edges: .top)
         }
         .background(SettingsWindowTracker(selection: $selection))
+        .environment(\.liquidGlassEnabled, settings.liquidGlassEnabled)
+    }
+
+    private var usesSystemLiquidGlassSidebar: Bool {
+        if #available(macOS 26, *) {
+            settings.liquidGlassEnabled
+        } else {
+            false
+        }
     }
 
     @ViewBuilder

@@ -3,6 +3,21 @@ import CoreImage
 import QuartzCore
 import SwiftUI
 
+// MARK: - Liquid Glass Preference Environment
+
+private struct LiquidGlassEnabledKey: EnvironmentKey {
+    static let defaultValue = true
+}
+
+extension EnvironmentValues {
+    /// 当前视图树是否启用 macOS 26 Liquid Glass。默认开启；应用根视图
+    /// 使用持久化设置覆盖，预览和独立组件无需额外配置。
+    var liquidGlassEnabled: Bool {
+        get { self[LiquidGlassEnabledKey.self] }
+        set { self[LiquidGlassEnabledKey.self] = newValue }
+    }
+}
+
 // MARK: - Compatible Glass Container
 
 /// 跨版本兼容的玻璃批处理容器。macOS 26+ 使用系统
@@ -10,9 +25,10 @@ import SwiftUI
 struct CompatibleGlassContainer<Content: View>: View {
     var spacing: CGFloat? = nil
     @ViewBuilder let content: () -> Content
+    @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
 
     var body: some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), liquidGlassEnabled {
             if let spacing {
                 GlassEffectContainer(spacing: spacing) {
                     content()
@@ -254,9 +270,10 @@ struct CompatibleGlassEffect<GlassShape: Shape, Fill: View>: ViewModifier {
     var tint: Color?
     var style: CompatibleGlassStyle
     var fallbackFill: Fill
+    @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), liquidGlassEnabled {
             content
                 .background {
                     if style.usesLensRefraction {
@@ -306,9 +323,10 @@ struct CompatibleLiquidSurface<GlassShape: Shape, FallbackFill: View>: ViewModif
     var tint: Color?
     var style: CompatibleGlassStyle
     var fallbackFill: FallbackFill
+    @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), liquidGlassEnabled {
             content
                 .background {
                     if style.usesLensRefraction {
@@ -454,40 +472,67 @@ extension View {
     }
 
     /// 26+ 使用系统 `.glass` 按钮，15 保留原有毛玻璃按钮。
-    @ViewBuilder
     func compatibleButtonStyle() -> some View {
-        if #available(macOS 26, *) {
-            self.buttonStyle(.glass(.clear))
-        } else {
-            self.buttonStyle(PanelMaterialButtonStyle())
-        }
+        modifier(CompatiblePanelButtonStyleModifier())
     }
 
     /// 普通尺寸控件的系统玻璃按钮样式。与面板底部等宽按钮不同，
     /// macOS 15 回退到标准 bordered 样式，不额外改变标签布局。
-    @ViewBuilder
     func compatibleSystemGlassButtonStyle(prominent: Bool = false) -> some View {
-        if #available(macOS 26, *) {
-            if prominent {
-                self.buttonStyle(.glassProminent)
-            } else {
-                self.buttonStyle(.glass)
-            }
-        } else if prominent {
-            self.buttonStyle(.borderedProminent)
-        } else {
-            self.buttonStyle(.bordered)
-        }
+        modifier(CompatibleSystemGlassButtonStyleModifier(prominent: prominent))
     }
 
     /// 链接按钮的 Liquid Glass 升级。26+ 明确使用系统玻璃按钮，15 保留
     /// 原 `.link` 外观，避免为了兼容新系统改变旧系统的链接语义与布局。
-    @ViewBuilder
     func compatibleGlassLinkButtonStyle() -> some View {
-        if #available(macOS 26, *) {
-            self.buttonStyle(.glass)
+        modifier(CompatibleGlassLinkButtonStyleModifier())
+    }
+}
+
+// MARK: - Compatible Button Styles
+
+private struct CompatiblePanelButtonStyleModifier: ViewModifier {
+    @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), liquidGlassEnabled {
+            content.buttonStyle(.glass(.clear))
         } else {
-            self.buttonStyle(.link)
+            content.buttonStyle(PanelMaterialButtonStyle())
+        }
+    }
+}
+
+private struct CompatibleSystemGlassButtonStyleModifier: ViewModifier {
+    let prominent: Bool
+    @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), liquidGlassEnabled {
+            if prominent {
+                content.buttonStyle(.glassProminent)
+            } else {
+                content.buttonStyle(.glass)
+            }
+        } else if prominent {
+            content.buttonStyle(.borderedProminent)
+        } else {
+            content.buttonStyle(.bordered)
+        }
+    }
+}
+
+private struct CompatibleGlassLinkButtonStyleModifier: ViewModifier {
+    @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(macOS 26, *), liquidGlassEnabled {
+            content.buttonStyle(.glass)
+        } else {
+            content.buttonStyle(.link)
         }
     }
 }
@@ -501,64 +546,117 @@ extension View {
 enum CompatiblePanelGlassHost {
     private static let backgroundGlassAlpha: CGFloat = 0.94
 
-    static func make(contentView: NSView, cornerRadius: CGFloat) -> NSView {
+    static func make(
+        contentView: NSView,
+        cornerRadius: CGFloat,
+        liquidGlassEnabled: Bool
+    ) -> NSView {
+        CompatiblePanelGlassHostView(
+            contentView: contentView,
+            cornerRadius: cornerRadius,
+            liquidGlassEnabled: liquidGlassEnabled,
+            backgroundGlassAlpha: backgroundGlassAlpha
+        )
+    }
+
+    static func update(_ host: NSView?, liquidGlassEnabled: Bool) {
+        (host as? CompatiblePanelGlassHostView)?.setLiquidGlassEnabled(liquidGlassEnabled)
+    }
+}
+
+/// 背景材质和 SwiftUI 前景分层承载，使开关变化时只替换背景层，前景视图、
+/// 展开状态及窗口尺寸均保持不变。
+@MainActor
+private final class CompatiblePanelGlassHostView: NSView {
+    private let foregroundContentView: NSView
+    private let panelCornerRadius: CGFloat
+    private let backgroundGlassAlpha: CGFloat
+    private var backdropView: NSView?
+    private var backdropConstraints: [NSLayoutConstraint] = []
+    private var liquidGlassEnabled: Bool
+
+    init(
+        contentView: NSView,
+        cornerRadius: CGFloat,
+        liquidGlassEnabled: Bool,
+        backgroundGlassAlpha: CGFloat
+    ) {
+        foregroundContentView = contentView
+        panelCornerRadius = cornerRadius
+        self.liquidGlassEnabled = liquidGlassEnabled
+        self.backgroundGlassAlpha = backgroundGlassAlpha
+        super.init(frame: .zero)
+
+        wantsLayer = true
+        layer?.cornerRadius = cornerRadius
+        layer?.masksToBounds = true
+
         contentView.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(contentView)
+        NSLayoutConstraint.activate([
+            contentView.topAnchor.constraint(equalTo: topAnchor),
+            contentView.leadingAnchor.constraint(equalTo: leadingAnchor),
+            contentView.trailingAnchor.constraint(equalTo: trailingAnchor),
+            contentView.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ])
+        installBackdrop()
+    }
 
-        let container: NSView
-        if #available(macOS 26, *) {
-            let host = NSView()
-            host.wantsLayer = true
-            host.layer?.cornerRadius = cornerRadius
-            host.layer?.masksToBounds = true
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 
+    func setLiquidGlassEnabled(_ enabled: Bool) {
+        guard liquidGlassEnabled != enabled else { return }
+        liquidGlassEnabled = enabled
+        installBackdrop()
+    }
+
+    private func installBackdrop() {
+        NSLayoutConstraint.deactivate(backdropConstraints)
+        backdropConstraints.removeAll()
+        backdropView?.removeFromSuperview()
+
+        let backdrop: NSView
+        if #available(macOS 26, *), liquidGlassEnabled {
             // 让滤镜处理 NSGlassEffectView 已采样到的桌面内容；直接对透明窗口底
             // 使用 backgroundFilters 无法保证跨窗口采样，content filter 则稳定。
             let refraction = LiquidGlassRefractionNSView(profile: .panel, filterTarget: .content)
-            refraction.translatesAutoresizingMaskIntoConstraints = false
-
             let glass = NSGlassEffectView()
             glass.translatesAutoresizingMaskIntoConstraints = false
             glass.style = .clear
-            glass.cornerRadius = cornerRadius
+            glass.cornerRadius = panelCornerRadius
             glass.alphaValue = backgroundGlassAlpha
-
             refraction.addSubview(glass)
-            host.addSubview(refraction)
-            host.addSubview(contentView)
             NSLayoutConstraint.activate([
-                refraction.topAnchor.constraint(equalTo: host.topAnchor),
-                refraction.leadingAnchor.constraint(equalTo: host.leadingAnchor),
-                refraction.trailingAnchor.constraint(equalTo: host.trailingAnchor),
-                refraction.bottomAnchor.constraint(equalTo: host.bottomAnchor),
                 glass.topAnchor.constraint(equalTo: refraction.topAnchor),
                 glass.leadingAnchor.constraint(equalTo: refraction.leadingAnchor),
                 glass.trailingAnchor.constraint(equalTo: refraction.trailingAnchor),
-                glass.bottomAnchor.constraint(equalTo: refraction.bottomAnchor),
-                contentView.topAnchor.constraint(equalTo: host.topAnchor),
-                contentView.leadingAnchor.constraint(equalTo: host.leadingAnchor),
-                contentView.trailingAnchor.constraint(equalTo: host.trailingAnchor),
-                contentView.bottomAnchor.constraint(equalTo: host.bottomAnchor)
+                glass.bottomAnchor.constraint(equalTo: refraction.bottomAnchor)
             ])
-            container = host
+            backdrop = refraction
         } else {
             let visualEffect = NSVisualEffectView()
             visualEffect.material = .popover
             visualEffect.blendingMode = .behindWindow
             visualEffect.state = .active
-            visualEffect.wantsLayer = true
-            visualEffect.layer?.cornerRadius = cornerRadius
-            visualEffect.layer?.masksToBounds = true
-            visualEffect.addSubview(contentView)
-            container = visualEffect
-
-            NSLayoutConstraint.activate([
-                contentView.topAnchor.constraint(equalTo: container.topAnchor),
-                contentView.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-                contentView.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-                contentView.bottomAnchor.constraint(equalTo: container.bottomAnchor)
-            ])
+            backdrop = visualEffect
         }
-        return container
+
+        backdrop.translatesAutoresizingMaskIntoConstraints = false
+        backdrop.wantsLayer = true
+        backdrop.layer?.cornerRadius = panelCornerRadius
+        backdrop.layer?.masksToBounds = true
+        addSubview(backdrop, positioned: .below, relativeTo: foregroundContentView)
+        backdropConstraints = [
+            backdrop.topAnchor.constraint(equalTo: topAnchor),
+            backdrop.leadingAnchor.constraint(equalTo: leadingAnchor),
+            backdrop.trailingAnchor.constraint(equalTo: trailingAnchor),
+            backdrop.bottomAnchor.constraint(equalTo: bottomAnchor)
+        ]
+        NSLayoutConstraint.activate(backdropConstraints)
+        backdropView = backdrop
     }
 }
 

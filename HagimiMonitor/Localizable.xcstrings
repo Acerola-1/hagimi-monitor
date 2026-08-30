@@ -5925,6 +5925,38 @@
         }
       }
     },
+    "settings.liquid-glass" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Liquid Glass"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "液态玻璃"
+          }
+        }
+      }
+    },
+    "settings.liquid-glass.subtitle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use Liquid Glass for panels and interface surfaces"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为监控面板与界面表面使用液态玻璃效果"
+          }
+        }
+      }
+    },
     "settings.memory.primary-metric" : {
       "localizations" : {
         "en" : {
