@@ -151,7 +151,11 @@ struct DisplayControlsSection: View {
                 NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
             }
         }
-        .compatibleGlassEffect(cornerRadius: 14) {
+        .compatibleGlassEffect(
+            tint: palette.displayGlassTint,
+            cornerRadius: 14,
+            style: .liquidLensInteractive
+        ) {
             palette.displayGlassFill
         }
     }
@@ -255,18 +259,23 @@ private struct DisplayControlGroup: View {
 
                     Spacer(minLength: 8)
 
-                    Text(display.isBuiltIn ? String(localized: "display.built-in") : String(localized: "display.external"))
-                        .monitorPanelRoundedFont(.caption2, weight: .semibold)
-                        .foregroundStyle(palette.secondaryText)
-                        .lineLimit(1)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background {
-                            Capsule()
-                                .fill(palette.displayBadgeFill)
-                        }
+                    CompatibleGlassContainer(spacing: 0) {
+                        Text(display.isBuiltIn ? String(localized: "display.built-in") : String(localized: "display.external"))
+                            .monitorPanelRoundedFont(.caption2, weight: .semibold)
+                            .foregroundStyle(palette.secondaryText)
+                            .lineLimit(1)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .compatibleLiquidSurface(
+                                tint: tint.opacity(0.12),
+                                in: Capsule(),
+                                style: .liquidClear
+                            ) {
+                                palette.displayBadgeFill
+                            }
+                    }
 
-                    if let info = displayInfo {
+                    if displayInfo != nil {
                         DisplayArchiveToggle(
                             palette: palette,
                             archiveExpanded: archiveExpanded,

@@ -69,7 +69,9 @@ struct MonitorPanelView: View {
             scheme: colorScheme
         )
 
-        CompatibleGlassContainer(spacing: 8) {
+        // 0pt 仍让系统批处理所有 Liquid Glass 子项，但不启用邻近融合；CPU、GPU、
+        // 内存等每一行始终保持为独立玻璃片，展开动画也不会与相邻行粘连。
+        CompatibleGlassContainer(spacing: 0) {
             VStack(spacing: 4) {
                 header(theme: theme)
                     .transaction { $0.animation = nil }
@@ -314,9 +316,14 @@ struct MonitorPanelView: View {
     }
 
     private var panelBackgroundColor: Color {
-        colorScheme == .dark
-            ? Color.black.opacity(0.35)
-            : Color.white.opacity(0.45)
+        if #available(macOS 26, *) {
+            // 窗口底由 NSGlassEffectView 渲染，不再叠加自绘半透明材质。
+            .clear
+        } else {
+            colorScheme == .dark
+                ? Color.black.opacity(0.35)
+                : Color.white.opacity(0.45)
+        }
     }
 
     private func header(theme: MonitorPanelTheme) -> some View {
@@ -328,9 +335,9 @@ struct MonitorPanelView: View {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
-                    // 仅面板可见时脉冲:面板视图树常驻(NSPanel 不销毁),隐藏期间
-                    // 持续动画会白白驱动渲染。
-                    .compatiblePulseEffect(isActive: store.isPanelVisible)
+                    // 面板打开时只脉冲一次；不在可见期间运行无限动画，
+                    // 避免持续驱动整个毛玻璃窗口的 GPU 合成。
+                    .compatiblePulseEffect(trigger: store.isPanelVisible)
 
                 Text(String(localized: "SYSTEM · LIVE"))
                     .monitorPanelLabelFont(tracking: 1.1)
@@ -505,9 +512,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 details: enabledMetrics(for: module),
                 isExpanded: isExpanded,
-                showPowerFlow: store.settings.batteryShowPowerFlow,
-                panelVisible: store.isPanelVisible,
-                powerFlowActive: !store.isExpansionAnimating
+                showPowerFlow: store.settings.batteryShowPowerFlow
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -691,13 +696,22 @@ private struct QuickPanelControlButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         let backgroundOpacity = configuration.isPressed ? 0.34 : (isHovering ? 0.18 : 0)
+        let glassTintOpacity = configuration.isPressed ? 0.24 : (isHovering ? 0.16 : 0.08)
 
-        configuration.label
-            .foregroundStyle(tint)
-            .background(Circle().fill(tint.opacity(backgroundOpacity)))
-            .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.12), value: isHovering)
+        CompatibleGlassContainer(spacing: 0) {
+            configuration.label
+                .foregroundStyle(tint)
+                .compatibleLiquidSurface(
+                    tint: tint.opacity(glassTintOpacity),
+                    in: Circle(),
+                    style: .liquidClearInteractive
+                ) {
+                    Circle().fill(tint.opacity(backgroundOpacity))
+                }
+                .scaleEffect(configuration.isPressed ? 0.9 : 1)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+                .animation(.easeOut(duration: 0.12), value: isHovering)
+        }
     }
 }
 
@@ -717,38 +731,51 @@ private struct PanelHeaderToolBadges: View {
     }
 
     var body: some View {
-        HStack(spacing: 5) {
-            if store.keyboardLocked {
-                HStack(spacing: 3) {
-                    Image(systemName: "keyboard")
-                        .font(.system(size: 11, weight: .semibold))
-                    if let deadline = store.keyboardLockAutoUnlockDate {
-                        autoUnlockCountdown(deadline: deadline)
+        Group {
+            if store.anyActive {
+                CompatibleGlassContainer(spacing: 0) {
+                    HStack(spacing: 5) {
+                        if store.keyboardLocked {
+                            HStack(spacing: 3) {
+                                Image(systemName: "keyboard")
+                                    .font(.system(size: 11, weight: .semibold))
+                                if let deadline = store.keyboardLockAutoUnlockDate {
+                                    autoUnlockCountdown(deadline: deadline)
+                                }
+                            }
+                            .help(String(localized: "quicktools.keyboard-lock"))
+                        }
+                        if store.systemSleepPrevented {
+                            Image(systemName: "laptopcomputer")
+                                .font(.system(size: 11, weight: .semibold))
+                                .help(String(localized: "quicktools.system-awake"))
+                        }
+                        if store.displayAwake {
+                            Image(systemName: "sun.max")
+                                .font(.system(size: 11, weight: .semibold))
+                                .help(String(localized: "quicktools.display-awake"))
+                        }
                     }
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 6)
+                    .frame(minHeight: 18)
+                    .compatibleLiquidSurface(
+                        tint: tint.opacity(0.12),
+                        in: Capsule(),
+                        style: .liquidClearInteractive
+                    ) {
+                        Color.clear
+                    }
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
+                    }
+                    .background(QuickToolsAnchorView(box: anchor))
                 }
-                .help(String(localized: "quicktools.keyboard-lock"))
-            }
-            if store.systemSleepPrevented {
-                Image(systemName: "laptopcomputer")
-                    .font(.system(size: 11, weight: .semibold))
-                    .help(String(localized: "quicktools.system-awake"))
-            }
-            if store.displayAwake {
-                Image(systemName: "sun.max")
-                    .font(.system(size: 11, weight: .semibold))
-                    .help(String(localized: "quicktools.display-awake"))
             }
         }
-        .foregroundStyle(tint)
-        .frame(minHeight: 18)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
-        }
-        .background(QuickToolsAnchorView(box: anchor))
-        // 菜单栏上已无任何激活工具时,收起本簇锚定的浮层,避免它随塌缩的
-        // 徽章簇漂移到统计入口下方(脱离触发来源变得突兀)。仅作用于 header
-        // 徽章打开的浮层;底部「工具」入口锚点稳定,不受此约束。
+        // 本 modifier 留在条件分支外，确保最后一个工具关闭、徽章退出视图树时
+        // 仍能同步收起由该徽章锚定的 popover。
         .onChange(of: store.anyActive) { _, active in
             if !active, store.popoverPresenter.isShown(from: anchor) {
                 store.popoverPresenter.dismiss()
@@ -909,7 +936,11 @@ private struct MetricGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidLensInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -1025,10 +1056,9 @@ private struct CPUCoresDetail: View {
             // (深一档),避免与底色糊成一片。
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(theme.palette.trackFill)
-            )
+            .compatibleLiquidSurface(cornerRadius: 7, style: .liquidClear) {
+                theme.palette.trackFill
+            }
 
             HStack(spacing: MetricGridMetrics.columnSpacing) {
                 if let efficiency = detail.efficiencyUsage {
@@ -1068,7 +1098,9 @@ private struct CPUCoresDetail: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+        .compatibleLiquidSurface(cornerRadius: 7, style: .liquidClear) {
+            theme.trackFill
+        }
     }
 }
 
@@ -1193,8 +1225,10 @@ private struct MetricDetailGrid: View {
                 .frame(height: 1)
                 .padding(.leading, leadingInset)
 
-            content
-                .padding(.leading, leadingInset)
+            CompatibleGlassContainer(spacing: 0) {
+                content
+                    .padding(.leading, leadingInset)
+            }
         }
     }
 
@@ -1238,7 +1272,9 @@ private struct MetricDetailGrid: View {
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+            .compatibleLiquidSurface(cornerRadius: 7, style: .liquidClear) {
+                theme.trackFill
+            }
     }
 
     /// 热压力整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
@@ -1494,25 +1530,27 @@ private struct StorageVolumeDetailList: View {
     let theme: MonitorPanelTheme
 
     var body: some View {
-        VStack(spacing: 8) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: kind))
-                .frame(height: 1)
-                .padding(.leading, 28)
-
+        CompatibleGlassContainer(spacing: 0) {
             VStack(spacing: 8) {
-                ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
-                    if index > 0 {
-                        Rectangle()
-                            .fill(theme.rowSeparator(for: kind).opacity(0.72))
-                            .frame(height: 1)
-                            .padding(.leading, 22)
-                    }
+                Rectangle()
+                    .fill(theme.rowSeparator(for: kind))
+                    .frame(height: 1)
+                    .padding(.leading, 28)
 
-                    StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
+                VStack(spacing: 8) {
+                    ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(theme.rowSeparator(for: kind).opacity(0.72))
+                                .frame(height: 1)
+                                .padding(.leading, 22)
+                        }
+
+                        StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
+                    }
                 }
+                .padding(.leading, 28)
             }
-            .padding(.leading, 28)
         }
     }
 }
@@ -1549,9 +1587,12 @@ private struct StorageVolumeRow: View {
                         .lineLimit(1)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background {
-                            Capsule()
-                                .fill(theme.badgeFill(for: kind))
+                        .compatibleLiquidSurface(
+                            tint: tint.opacity(0.12),
+                            in: Capsule(),
+                            style: .liquidClear
+                        ) {
+                            theme.badgeFill(for: kind)
                         }
                 }
 
@@ -1705,7 +1746,11 @@ private struct NetworkGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidLensInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -1736,10 +1781,6 @@ private struct BatteryGlassRow: View, Equatable {
     var isExpanded = false
     /// 功率流图开关(Beta,settings.battery.showPowerFlow):关闭后展开区仅保留指标网格。
     var showPowerFlow = true
-    /// 面板可见性:与 isExpanded 一起门控功率流的流光动画。
-    var panelVisible = true
-    /// 功率流流光启用:false 时回落到纯静态绘制,用于展开动画窗口期停更 GPU 流光。
-    var powerFlowActive = true
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
@@ -1749,8 +1790,6 @@ private struct BatteryGlassRow: View, Equatable {
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
             && lhs.showPowerFlow == rhs.showPowerFlow
-            && lhs.panelVisible == rhs.panelVisible
-            && lhs.powerFlowActive == rhs.powerFlowActive
     }
 
     private var tint: Color {
@@ -1792,12 +1831,14 @@ private struct BatteryGlassRow: View, Equatable {
                 // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
                 // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
                 // 台式机无电池无充电概念,只显功耗 pill。
-                if hasBattery {
-                    PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
-                        .layoutPriority(0)
+                HStack(spacing: 6) {
+                    if hasBattery {
+                        PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
+                    }
+                    PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
                 }
-                PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                    .layoutPriority(0)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1828,8 +1869,7 @@ private struct BatteryGlassRow: View, Equatable {
                         PowerFlowDiagram(
                             module: module,
                             theme: theme,
-                            tint: tint,
-                            animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
+                            tint: tint
                         )
                     }
                 }
@@ -1837,7 +1877,11 @@ private struct BatteryGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidLensInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -1878,9 +1922,9 @@ private struct BatteryGlassRow: View, Equatable {
 
     /// CHG pill 内容:充电中显充电功率,其余状态(电池供电/插电直供)显占位符。
     private var chargingPillValue: String {
-        guard isCharging else { return "-" }
+        guard isCharging else { return "—" }
         let raw = rawValue("charging-power")
-        return raw == "--" ? "-" : raw
+        return raw == "--" ? "—" : raw
     }
 
     private var summaryText: String {
@@ -2117,24 +2161,38 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
 /// 电源行专用的定宽 pill:符号标识(⚡充电 / 仪表功耗)+ 数值。
 /// 定宽保证数值位数变化/充电状态切换时行内元素不抖动。
 private struct PowerLabelPill: View {
+    private static let width: CGFloat = 74
+
     let symbol: String
     let value: String
     let theme: MonitorPanelTheme
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: symbol)
-                .font(.caption2.weight(.semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(theme.secondaryText.opacity(0.72))
-            Text(value)
-                .foregroundStyle(theme.secondaryText)
+        CompatibleGlassContainer(spacing: 0) {
+            HStack(spacing: 4) {
+                Image(systemName: symbol)
+                    .font(.caption2.weight(.semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(theme.secondaryText.opacity(0.72))
+                    .frame(width: 12)
+                Text(value)
+                    .foregroundStyle(theme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+            }
+            .font(.system(.footnote, design: .monospaced).weight(.medium))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 8)
+            .frame(width: Self.width, height: 22)
+            .compatibleLiquidSurface(
+                tint: theme.palette.moduleTint(for: .battery).opacity(0.10),
+                in: Capsule(),
+                style: .liquidLens
+            ) {
+                Color.clear
+            }
         }
-        .font(.system(.footnote, design: .monospaced).weight(.medium))
-        .monospacedDigit()
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .frame(width: 74, alignment: .trailing)
     }
 }
 
@@ -2157,27 +2215,37 @@ private struct NetworkRatePill: View {
     var body: some View {
         let parts = parts
 
-        HStack(spacing: 3) {
-            Image(systemName: systemImage)
-                .font(.caption2.weight(.semibold))
-                .frame(width: 10)
+        CompatibleGlassContainer(spacing: 0) {
+            HStack(spacing: 3) {
+                Image(systemName: systemImage)
+                    .font(.caption2.weight(.semibold))
+                    .frame(width: 10)
 
-            Text(parts.value)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
-                .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
+                Text(parts.value)
+                    .monitorPanelMonoFont(.caption2, weight: .medium)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.68)
+                    .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
 
-            Text(parts.unit)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .frame(width: 26, alignment: .leading)
+                Text(parts.unit)
+                    .monitorPanelMonoFont(.caption2, weight: .medium)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+                    .frame(width: 26, alignment: .leading)
+            }
+            .foregroundStyle(theme.secondaryText)
+            .fixedSize(horizontal: true, vertical: false)
+            // Compact network rate pill: bounded width preserves room for both upload and download rates.
+            .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
+            .padding(.vertical, 3)
+            .compatibleLiquidSurface(
+                tint: theme.palette.moduleTint(for: .network).opacity(0.10),
+                in: Capsule(),
+                style: .liquidLens
+            ) {
+                Color.clear
+            }
         }
-        .foregroundStyle(theme.secondaryText)
-        .fixedSize(horizontal: true, vertical: false)
-        // Compact network rate pill: bounded width preserves room for both upload and download rates.
-        .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
     }
 }
 
@@ -2319,63 +2387,65 @@ private struct TopProcessList: View {
     var body: some View {
         let translatedCount = rows.filter(\.translated).count
 
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: kind))
-                .frame(height: 1)
-                .padding(.leading, 28)
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(spacing: 5) {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: kind))
+                    .frame(height: 1)
+                    .padding(.leading, 28)
 
-            VStack(spacing: 4) {
-                ForEach(0 ..< Self.rowCount, id: \.self) { index in
-                    if index < rows.count {
-                        let proc = rows[index]
-                        HStack(spacing: 6) {
-                            ProcessIcon(icon: proc.icon, theme: theme)
-                                .frame(width: 16, height: 16)
+                VStack(spacing: 4) {
+                    ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                        if index < rows.count {
+                            let proc = rows[index]
+                            HStack(spacing: 6) {
+                                ProcessIcon(icon: proc.icon, theme: theme)
+                                    .frame(width: 16, height: 16)
 
-                            Text(proc.name)
-                                .monitorPanelCaptionFont(.footnote)
-                                .foregroundStyle(theme.primaryText)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                                Text(proc.name)
+                                    .monitorPanelCaptionFont(.footnote)
+                                    .foregroundStyle(theme.primaryText)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
 
-                            // Rosetta 转译角标:macOS 28 起 Intel 应用将无法运行,
-                            // 在 TOP 进程行内尽早暴露(仅 arm64 宿主可能为 true)。
-                            if proc.translated {
-                                RosettaBadge()
-                            }
+                                // Rosetta 转译角标:macOS 28 起 Intel 应用将无法运行,
+                                // 在 TOP 进程行内尽早暴露(仅 arm64 宿主可能为 true)。
+                                if proc.translated {
+                                    RosettaBadge()
+                                }
 
-                            Spacer(minLength: 4)
+                                Spacer(minLength: 4)
 
-                            Text(proc.valueText)
-                                .monitorPanelMonoFont(.caption2, weight: .medium)
-                                .foregroundStyle(theme.secondaryText)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .layoutPriority(1)
-
-                            // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
-                            // GPU 时间,空值(旧驱动/未上报)时不渲染。
-                            if let apiText = proc.apiText {
-                                Text(apiText)
-                                    .monitorPanelCaptionFont(.caption2)
-                                    .foregroundStyle(theme.captionText)
+                                Text(proc.valueText)
+                                    .monitorPanelMonoFont(.caption2, weight: .medium)
+                                    .foregroundStyle(theme.secondaryText)
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
+                                    .layoutPriority(1)
+
+                                // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
+                                // GPU 时间,空值(旧驱动/未上报)时不渲染。
+                                if let apiText = proc.apiText {
+                                    Text(apiText)
+                                        .monitorPanelCaptionFont(.caption2)
+                                        .foregroundStyle(theme.captionText)
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                }
                             }
+                        } else {
+                            ProcessPlaceholderRow(theme: theme)
                         }
-                    } else {
-                        ProcessPlaceholderRow(theme: theme)
                     }
                 }
-            }
-            .padding(.leading, 28)
-            .animation(.easeInOut(duration: 0.2), value: rows.count)
+                .padding(.leading, 28)
+                .animation(.easeInOut(duration: 0.2), value: rows.count)
 
-            // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
-            if showRosettaBanner, translatedCount > 0 {
-                RosettaBanner(count: translatedCount, theme: theme)
-                    .padding(.leading, 28)
+                // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
+                if showRosettaBanner, translatedCount > 0 {
+                    RosettaBanner(count: translatedCount, theme: theme)
+                        .padding(.leading, 28)
+                }
             }
         }
     }
@@ -2463,7 +2533,13 @@ private struct RosettaBadge: View {
             .foregroundStyle(colorScheme == .dark ? Color(hex: 0xE0B45E) : warning)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
-            .background(RoundedRectangle(cornerRadius: 4).fill(warning.opacity(colorScheme == .dark ? 0.15 : 0.12)))
+            .compatibleLiquidSurface(
+                tint: warning.opacity(0.16),
+                cornerRadius: 4,
+                style: .liquidClear
+            ) {
+                warning.opacity(colorScheme == .dark ? 0.15 : 0.12)
+            }
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(warning.opacity(colorScheme == .dark ? 0.45 : 0.38), lineWidth: 1))
     }
 }
@@ -2483,7 +2559,13 @@ private struct RosettaBanner: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 9).fill(warning.opacity(colorScheme == .dark ? 0.09 : 0.07)))
+            .compatibleLiquidSurface(
+                tint: warning.opacity(0.12),
+                cornerRadius: 9,
+                style: .liquidClear
+            ) {
+                warning.opacity(colorScheme == .dark ? 0.09 : 0.07)
+            }
             .overlay(RoundedRectangle(cornerRadius: 9).stroke(warning.opacity(0.30), lineWidth: 1))
     }
 }
@@ -2730,7 +2812,11 @@ private struct BluetoothGlassRow: View, Equatable {
                     .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidLensInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -2743,18 +2829,20 @@ private struct BluetoothDeviceList: View {
     let theme: MonitorPanelTheme
 
     var body: some View {
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: .bluetooth))
-                .frame(height: 1)
-                .padding(.leading, 28)
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(spacing: 5) {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: .bluetooth))
+                    .frame(height: 1)
+                    .padding(.leading, 28)
 
-            VStack(spacing: 8) {
-                ForEach(devices) { device in
-                    deviceRow(device)
+                VStack(spacing: 8) {
+                    ForEach(devices) { device in
+                        deviceRow(device)
+                    }
                 }
+                .padding(.leading, 28)
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -2766,9 +2854,12 @@ private struct BluetoothDeviceList: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(theme.moduleTint(for: .bluetooth))
                 .frame(width: 26, height: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(theme.badgeFill(for: .bluetooth))
+                .compatibleLiquidSurface(
+                    tint: theme.moduleTint(for: .bluetooth).opacity(0.12),
+                    cornerRadius: 7,
+                    style: .liquidClear
+                ) {
+                    theme.badgeFill(for: .bluetooth)
                 }
 
             VStack(alignment: .leading, spacing: 1) {

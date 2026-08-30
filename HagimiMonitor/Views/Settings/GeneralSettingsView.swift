@@ -115,20 +115,25 @@ private struct QuickAccessShortcutRecorder: View {
 
     var body: some View {
         Button(action: model.toggleRecording) {
-            content
-                .frame(width: 168, height: 26)
-                .background(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(Color(nsColor: .controlBackgroundColor))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .strokeBorder(
-                            model.isRecording ? Color.accentColor : Color(nsColor: .separatorColor),
-                            lineWidth: model.isRecording ? 1.5 : 1
-                        )
-                )
-                .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            CompatibleGlassContainer(spacing: 0) {
+                content
+                    .frame(width: 168, height: 26)
+                    .compatibleLiquidSurface(
+                        tint: model.isRecording ? Color.accentColor.opacity(0.16) : nil,
+                        cornerRadius: 7,
+                        style: .liquidInteractive
+                    ) {
+                        Color(nsColor: .controlBackgroundColor)
+                    }
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(
+                                model.isRecording ? Color.accentColor : Color(nsColor: .separatorColor),
+                                lineWidth: model.isRecording ? 1.5 : 1
+                            )
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+            }
         }
         .buttonStyle(.plain)
         .overlay(alignment: .trailing) {
@@ -282,10 +287,14 @@ private struct ShortcutKeyCap: View {
     }
 
     var body: some View {
-        Text(symbol)
-            .font((compact ? Font.caption2 : Font.caption).weight(.semibold))
-            .frame(minWidth: compact ? 15 : 18, minHeight: compact ? 15 : 18)
-            .background(.quaternary.opacity(0.65), in: RoundedRectangle(cornerRadius: compact ? 3 : 4, style: .continuous))
+        CompatibleGlassContainer(spacing: 0) {
+            Text(symbol)
+                .font((compact ? Font.caption2 : Font.caption).weight(.semibold))
+                .frame(minWidth: compact ? 15 : 18, minHeight: compact ? 15 : 18)
+                .compatibleLiquidSurface(cornerRadius: compact ? 3 : 4) {
+                    Rectangle().fill(.quaternary.opacity(0.65))
+                }
+        }
     }
 }
 
@@ -307,7 +316,7 @@ private struct MenuBarDisplaySettingsSection: View {
                             .fixedSize()
                             .padding(.horizontal, 10)
                             .padding(.vertical, 6)
-                            .background(.quaternary.opacity(0.55), in: Capsule())
+                            .modifier(MenuBarPreviewChipBackground())
 
                         Spacer(minLength: 0)
                     }
@@ -416,6 +425,18 @@ private struct MenuBarDisplaySettingsSection: View {
     }
 }
 
+/// 菜单栏预览胶囊在 26+ 使用系统 Liquid Glass，15 保留原填充。
+private struct MenuBarPreviewChipBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        CompatibleGlassContainer(spacing: 0) {
+            content
+                .compatibleLiquidSurface(in: Capsule()) {
+                    Rectangle().fill(.quaternary.opacity(0.55))
+                }
+        }
+    }
+}
+
 private struct MenuBarMetricSelectionRow: View {
     let kind: MenuBarMetricKind
     let isSelected: Bool
@@ -424,27 +445,35 @@ private struct MenuBarMetricSelectionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.clear)
-                    .frame(width: 16, height: 16)
+            CompatibleGlassContainer(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.clear)
+                        .frame(width: 16, height: 16)
 
-                Image(systemName: kind.symbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isEnabled ? .secondary : .tertiary)
-                    .frame(width: 18)
+                    Image(systemName: kind.symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isEnabled ? .secondary : .tertiary)
+                        .frame(width: 18)
 
-                Text(kind.title)
-                    .font(.body)
-                    .foregroundStyle(isEnabled ? .primary : .secondary)
+                    Text(kind.title)
+                        .font(.body)
+                        .foregroundStyle(isEnabled ? .primary : .secondary)
 
-                Spacer(minLength: 16)
+                    Spacer(minLength: 16)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(minHeight: 44)
+                .compatibleLiquidSurface(
+                    cornerRadius: 9,
+                    style: .liquidInteractive
+                ) {
+                    Color.clear
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
@@ -460,18 +489,21 @@ private struct MenuBarMetricOrderRow: View {
 
     var body: some View {
         SettingsRow(title: kind.title) {
-            HStack(spacing: 6) {
-                Button(action: moveUp) {
-                    Image(systemName: "chevron.up")
-                }
-                .disabled(!canMoveUp)
+            CompatibleGlassContainer(spacing: 4) {
+                HStack(spacing: 6) {
+                    Button(action: moveUp) {
+                        Image(systemName: "chevron.up")
+                    }
+                    .compatibleSystemGlassButtonStyle()
+                    .disabled(!canMoveUp)
 
-                Button(action: moveDown) {
-                    Image(systemName: "chevron.down")
+                    Button(action: moveDown) {
+                        Image(systemName: "chevron.down")
+                    }
+                    .compatibleSystemGlassButtonStyle()
+                    .disabled(!canMoveDown)
                 }
-                .disabled(!canMoveDown)
             }
-            .buttonStyle(.bordered)
         }
     }
 }

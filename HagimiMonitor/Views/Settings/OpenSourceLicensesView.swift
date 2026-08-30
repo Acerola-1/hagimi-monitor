@@ -50,8 +50,11 @@ struct OpenSourceLicensesView: View {
                 Text(String(localized: "about.open-source.title"))
                     .font(.headline)
                 Spacer(minLength: 12)
-                Button(String(localized: "about.open-source.close"), action: onClose)
-                    .keyboardShortcut(.defaultAction)
+                CompatibleGlassContainer(spacing: 0) {
+                    Button(String(localized: "about.open-source.close"), action: onClose)
+                        .compatibleSystemGlassButtonStyle()
+                        .keyboardShortcut(.defaultAction)
+                }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 14)
@@ -75,29 +78,39 @@ struct OpenSourceLicensesView: View {
     }
 
     private func row(for entry: Entry) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text(entry.name)
-                    .font(.body.weight(.semibold))
-                Text(entry.note)
+        CompatibleGlassContainer(spacing: 0) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(entry.name)
+                        .font(.body.weight(.semibold))
+                    Text(entry.note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(entry.license)
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer(minLength: 12)
+
+                CompatibleGlassContainer(spacing: 0) {
+                    Button {
+                        NSWorkspace.shared.open(entry.url)
+                    } label: {
+                        Label(String(localized: "about.open-source.repo"), systemImage: "arrow.up.right.square")
+                    }
+                    .compatibleGlassLinkButtonStyle()
                     .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(entry.license)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                }
             }
-
-            Spacer(minLength: 12)
-
-            Button {
-                NSWorkspace.shared.open(entry.url)
-            } label: {
-                Label(String(localized: "about.open-source.repo"), systemImage: "arrow.up.right.square")
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .compatibleLiquidSurface(
+                cornerRadius: 10,
+                style: .liquidInteractive
+            ) {
+                Color.clear
             }
-            .buttonStyle(.link)
-            .font(.caption)
         }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 12)
     }
 }

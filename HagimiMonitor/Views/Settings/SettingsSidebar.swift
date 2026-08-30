@@ -87,12 +87,16 @@ struct SettingsSidebar: View {
 #if DISPLAY_CONTROL
 private struct BetaBadge: View {
     var body: some View {
-        Text(String(localized: "settings.sidebar.beta-badge"))
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(.secondary.opacity(0.15), in: Capsule())
+        CompatibleGlassContainer(spacing: 0) {
+            Text(String(localized: "settings.sidebar.beta-badge"))
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .compatibleLiquidSurface(in: Capsule()) {
+                    Color.secondary.opacity(0.15)
+                }
+        }
     }
 }
 #endif
@@ -100,12 +104,16 @@ private struct BetaBadge: View {
 #if DIRECT_DISTRIBUTION
 private struct UpdateAvailableBadge: View {
     var body: some View {
-        Text(String(localized: "settings.sidebar.new-badge"))
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(.orange)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(.orange.opacity(0.15), in: Capsule())
+        CompatibleGlassContainer(spacing: 0) {
+            Text(String(localized: "settings.sidebar.new-badge"))
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.orange)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .compatibleLiquidSurface(tint: .orange.opacity(0.14), in: Capsule()) {
+                    Color.orange.opacity(0.15)
+                }
+        }
     }
 }
 #endif

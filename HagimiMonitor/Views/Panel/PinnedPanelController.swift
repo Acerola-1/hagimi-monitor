@@ -76,16 +76,6 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        // 毛玻璃背景,与 FluidPanelController 一致。
-        let visualEffect = NSVisualEffectView()
-        visualEffect.material = .popover
-        visualEffect.blendingMode = .behindWindow
-        visualEffect.state = .active
-        visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = Self.panelCornerRadius
-        visualEffect.layer?.masksToBounds = true
-        panel.contentView = visualEffect
-
         let root = MonitorPanelView(store: store, quickPanelPresentation: presentation)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action { [weak self] in
                 self?.hide(resetPin: true)
@@ -100,18 +90,14 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
         let hosting = NSHostingView(rootView: AnyView(root))
         hosting.sizingOptions = []
-        hosting.translatesAutoresizingMaskIntoConstraints = false
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
         hosting.layer?.masksToBounds = true
-        visualEffect.addSubview(hosting)
-
-        NSLayoutConstraint.activate([
-            hosting.topAnchor.constraint(equalTo: visualEffect.topAnchor),
-            hosting.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
-            hosting.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor)
-        ])
+        // 与菜单栏面板一致：26+ 用独立 NSGlassEffectView 背景层，15 保留毛玻璃回退。
+        panel.contentView = CompatiblePanelGlassHost.make(
+            contentView: hosting,
+            cornerRadius: Self.panelCornerRadius
+        )
 
         hostingView = hosting
 

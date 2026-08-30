@@ -85,15 +85,26 @@ struct MonitorPalette {
         }
     }
 
-    /// 行玻璃填充:平衡为均布中性玻璃;活力为垂直衰减渐变——行头保持满浓度,
-    /// 向下衰减至近中性,展开区小字不受模块色相干扰(参数见 MonitorConstants)。
+    /// macOS 15 行玻璃回退填充:平衡为均布中性玻璃;活力为垂直衰减渐变——
+    /// 行头保持满浓度,向下衰减至近中性,展开区小字不受模块色相干扰。
     @ViewBuilder
     func rowGlassFill(for kind: MonitorKind) -> some View {
         switch preference {
         case .balanced:
             neutralGlassTint
         case .vibrant:
-            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: vibrantGlassOpacity)
+            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: fallbackVibrantGlassOpacity)
+        }
+    }
+
+    /// macOS 26 Liquid Glass 的系统 tint。这里只保留很淡的模块色相，让每行仍能
+    /// 辨认所属模块，同时避免浓 tint 把系统折射、高光遮成普通实色卡片。
+    func rowGlassTint(for kind: MonitorKind) -> Color {
+        switch preference {
+        case .balanced:
+            liquidNeutralGlassTint
+        case .vibrant:
+            moduleTint(for: kind).opacity(liquidVibrantGlassOpacity)
         }
     }
 
@@ -103,13 +114,29 @@ struct MonitorPalette {
         case .balanced:
             neutralGlassTint
         case .vibrant:
-            RowGlassFadeFill(tint: displayTint, fullOpacity: vibrantGlassOpacity)
+            RowGlassFadeFill(tint: displayTint, fullOpacity: fallbackVibrantGlassOpacity)
         }
     }
 
-    /// 活力行玻璃满浓度不透明度:暗底需要更高浓度才能显出模块色相。
-    private var vibrantGlassOpacity: Double {
+    /// 显示器行的 macOS 26 Liquid Glass tint。
+    var displayGlassTint: Color {
+        switch preference {
+        case .balanced:
+            liquidNeutralGlassTint
+        case .vibrant:
+            displayTint.opacity(liquidVibrantGlassOpacity)
+        }
+    }
+
+    /// 旧系统回退仍靠自绘颜色表现模块归属，保留原有浓度。
+    private var fallbackVibrantGlassOpacity: Double {
         isDark ? 0.16 : 0.08
+    }
+
+    /// 系统 Liquid Glass 自带材质与折射，tint 只负责轻微染色；其浓度必须显著
+    /// 低于旧系统的自绘回退，才能让每个子项看起来是玻璃而不是半透明色块。
+    private var liquidVibrantGlassOpacity: Double {
+        isDark ? 0.06 : 0.035
     }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
@@ -150,6 +177,10 @@ struct MonitorPalette {
 
     private var neutralGlassTint: Color {
         Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
+    }
+
+    private var liquidNeutralGlassTint: Color {
+        Color(hex: 0x7A91B4).opacity(isDark ? 0.04 : 0.025)
     }
 
     private var neutralSeparator: Color {

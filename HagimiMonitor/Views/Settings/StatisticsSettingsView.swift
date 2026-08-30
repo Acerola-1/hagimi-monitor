@@ -82,48 +82,59 @@ struct StatisticsSettingsView: View {
     @State private var dayCoverage: [Int64: Double] = [:]
 
     private var header: some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) { showCheckin.toggle() }
-                if showCheckin { loadDayCoverage() }
-            } label: {
-                HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: [Color.accentColor.opacity(0.9), Color.accentColor.opacity(0.55)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 46, height: 46)
-                        .overlay(
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.easeOut(duration: 0.2)) { showCheckin.toggle() }
+                    if showCheckin { loadDayCoverage() }
+                } label: {
+                    HStack(spacing: 12) {
+                        CompatibleGlassContainer(spacing: 0) {
                             Image(systemName: "chart.bar.doc.horizontal")
                                 .font(.system(size: 20, weight: .medium))
                                 .foregroundStyle(.white)
-                        )
+                                .frame(width: 46, height: 46)
+                                .compatibleLiquidSurface(
+                                    tint: Color.accentColor.opacity(0.24),
+                                    cornerRadius: 11
+                                ) {
+                                    LinearGradient(
+                                        colors: [Color.accentColor.opacity(0.9), Color.accentColor.opacity(0.55)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                }
+                        }
 
-                    Text(headerPrimary)
-                        .font(.headline.weight(.semibold))
+                        Text(headerPrimary)
+                            .font(.headline.weight(.semibold))
 
-                    Spacer(minLength: 0)
+                        Spacer(minLength: 0)
 
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(showCheckin ? -180 : 0))
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 14)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(StaticPressButtonStyle())
-
-            if showCheckin {
-                checkinPanel
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                            .rotationEffect(.degrees(showCheckin ? -180 : 0))
+                    }
+                    .padding(.vertical, 12)
                     .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(StaticPressButtonStyle())
+
+                if showCheckin {
+                    checkinPanel
+                        .padding(.horizontal, 14)
+                        .padding(.bottom, 14)
+                }
+            }
+            .compatibleLiquidSurface(
+                cornerRadius: 12,
+                style: .liquidInteractive
+            ) {
+                Rectangle().fill(.quaternary.opacity(0.42))
             }
         }
-        .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private var headerPrimary: String {
@@ -241,46 +252,56 @@ struct StatisticsSettingsView: View {
 
     /// 总览标题行右侧的报表快捷入口:与总览内容同属一屏,不必滚动到底部找入口。
     private var reportEntryButton: some View {
-        Button {
-            StatisticsReportFlow.open(recorder: recorder)
-        } label: {
-            Label(String(localized: "stats.settings.report-details"), systemImage: "safari")
-                .font(.caption.weight(.medium))
+        CompatibleGlassContainer(spacing: 0) {
+            Button {
+                StatisticsReportFlow.open(recorder: recorder)
+            } label: {
+                Label(String(localized: "stats.settings.report-details"), systemImage: "safari")
+                    .font(.caption.weight(.medium))
+            }
+            .compatibleSystemGlassButtonStyle()
+            .controlSize(.small)
         }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
     }
 
     /// 报表与存储管理入口共用的导航行:图标+标题(+可选副标题)+右箭头,视觉统一。
     @ViewBuilder
     private func entryRow(icon: String, title: String, subtitle: String?, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.body)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 24)
+            CompatibleGlassContainer(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: icon)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 2) {
-                    Text(title)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 2) {
+                        Text(title)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                        if let subtitle {
+                            Text(subtitle)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
+
+                    Spacer(minLength: 16)
+
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
                 }
-
-                Spacer(minLength: 16)
-
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.tertiary)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .compatibleLiquidSurface(
+                    cornerRadius: 10,
+                    style: .liquidInteractive
+                ) {
+                    Color.clear
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }
@@ -313,29 +334,31 @@ struct StatisticsSettingsView: View {
     @ViewBuilder
     private var healthCard: some View {
         if let health = healthScore {
-            HStack(spacing: 18) {
-                scoreRing(health)
+            CompatibleGlassContainer(spacing: 0) {
+                HStack(spacing: 18) {
+                    scoreRing(health)
 
-                VStack(alignment: .leading, spacing: 8) {
-                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
-                                        GridItem(.flexible(), alignment: .leading)],
-                              alignment: .leading, spacing: 6) {
-                        ForEach(health.dimensions) { dimension in
-                            dimensionBadge(dimension)
+                    VStack(alignment: .leading, spacing: 8) {
+                        LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                            GridItem(.flexible(), alignment: .leading)],
+                                  alignment: .leading, spacing: 6) {
+                            ForEach(health.dimensions) { dimension in
+                                dimensionBadge(dimension)
+                            }
+                        }
+
+                        if health.thermalCapped {
+                            Label(String(localized: "stats.r.healthCapped"), systemImage: "flame")
+                                .font(.caption2.weight(.medium))
+                                .foregroundStyle(.orange)
                         }
                     }
-
-                    if health.thermalCapped {
-                        Label(String(localized: "stats.r.healthCapped"), systemImage: "flame")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.orange)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.top, 10)
+                .padding(.bottom, 12)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 12)
         }
     }
 
@@ -400,10 +423,9 @@ struct StatisticsSettingsView: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
-        )
+        .compatibleLiquidSurface(tint: tint.opacity(0.12), cornerRadius: 8) {
+            tint.opacity(colorScheme == .dark ? 0.10 : 0.09)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .strokeBorder(tint.opacity(0.20), lineWidth: 0.5)
@@ -484,31 +506,37 @@ struct StatisticsSettingsView: View {
     }
 
     private var overviewGrid: some View {
-        VStack(spacing: 10) {
-            ForEach(0..<(tiles.count / 3), id: \.self) { rowIndex in
-                HStack(spacing: 10) {
-                    ForEach(0..<3, id: \.self) { column in
-                        tile(tiles[rowIndex * 3 + column])
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(spacing: 10) {
+                ForEach(0..<(tiles.count / 3), id: \.self) { rowIndex in
+                    HStack(spacing: 10) {
+                        ForEach(0..<3, id: \.self) { column in
+                            tile(tiles[rowIndex * 3 + column])
+                        }
                     }
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 4)
+            .padding(.bottom, 14)
         }
-        .padding(.horizontal, 14)
-        .padding(.top, 4)
-        .padding(.bottom, 14)
     }
 
     private func tile(_ spec: TileSpec) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 7) {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(spec.tint.opacity(0.16))
-                    .frame(width: 22, height: 22)
-                    .overlay(
-                        Image(systemName: spec.icon)
+                CompatibleGlassContainer(spacing: 0) {
+                    Image(systemName: spec.icon)
                             .font(.system(size: 11.5, weight: .semibold))
                             .foregroundStyle(spec.tint)
-                    )
+                            .frame(width: 22, height: 22)
+                            .compatibleLiquidSurface(
+                                tint: spec.tint.opacity(0.16),
+                                cornerRadius: 7
+                            ) {
+                                spec.tint.opacity(0.16)
+                            }
+                }
 
                 Text(spec.title)
                     .font(.caption.weight(.semibold))
@@ -539,10 +567,9 @@ struct StatisticsSettingsView: View {
         .padding(.vertical, 11)
         // 撑满行高:单行内容的格子(如系统负载)与两行格子同高同外观,顶对齐
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(spec.tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
-        )
+        .compatibleLiquidSurface(tint: spec.tint.opacity(0.12), cornerRadius: 12) {
+            spec.tint.opacity(colorScheme == .dark ? 0.10 : 0.09)
+        }
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(spec.tint.opacity(0.20), lineWidth: 0.5)

@@ -171,15 +171,17 @@ struct QuickToolsPopoverView: View {
     }
 
     var body: some View {
-        VStack(spacing: 7) {
-            ForEach(visibleKinds, id: \.self) { kind in
-                QuickToolTile(kind: kind, theme: theme)
+        CompatibleGlassContainer(spacing: 2) {
+            VStack(spacing: 7) {
+                ForEach(visibleKinds, id: \.self) { kind in
+                    QuickToolTile(kind: kind, theme: theme)
+                }
             }
+            .padding(12)
+            // 浮层宽度按最长英文标题「Prevent Idle Sleep」预算:标题可用
+            // 空间 = 宽 − 内外边距 − 徽章 32 − 间距 − 开关,290pt 时留有余量。
+            .frame(width: 290)
         }
-        .padding(12)
-        // 浮层宽度按最长英文标题「Prevent Idle Sleep」预算:标题可用
-        // 空间 = 宽 − 内外边距 − 徽章 32 − 间距 − 开关,290pt 时留有余量。
-        .frame(width: 290)
         .onAppear { store.refreshKeyboardLockPermission() }
         // 浮层开着期间每 2s 校准一次键盘锁定授权状态(App Store 渠道撤销
         // 无事件通知,只能轮询);浮层关闭时 hostingController 释放,本视图
@@ -228,14 +230,20 @@ private struct QuickToolTile: View {
         Button(action: toggle) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 10) {
-                    ZStack {
-                        Circle()
-                            .fill(isOn ? accent : theme.palette.trackFill)
-                        Image(systemName: kind.symbol)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(isOn ? Color.white : theme.secondaryText)
+                    CompatibleGlassContainer(spacing: 0) {
+                        ZStack {
+                            Image(systemName: kind.symbol)
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(isOn ? Color.white : theme.secondaryText)
+                        }
+                        .frame(width: 32, height: 32)
+                        .compatibleLiquidSurface(
+                            tint: isOn ? accent.opacity(0.32) : nil,
+                            in: Circle()
+                        ) {
+                            isOn ? accent : theme.palette.trackFill
+                        }
                     }
-                    .frame(width: 32, height: 32)
 
                     Text(String(localized: kind.titleKey))
                         .font(.system(size: 12.5, weight: .semibold))
@@ -267,10 +275,13 @@ private struct QuickToolTile: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
-                    .fill(isOn ? theme.palette.quickToolActiveFill : theme.palette.trackFill)
-            )
+            .compatibleLiquidSurface(
+                tint: isOn ? accent.opacity(0.18) : nil,
+                cornerRadius: MonitorConstants.rowCornerRadius,
+                style: .liquidInteractive
+            ) {
+                isOn ? theme.palette.quickToolActiveFill : theme.palette.trackFill
+            }
             .overlay(
                 RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
                     .strokeBorder(isOn ? accent.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 0.5)

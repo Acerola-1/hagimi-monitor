@@ -137,53 +137,81 @@ struct CatThanksCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 12)
 
-                HStack(spacing: 8) {
-                    Button {
-                        NSWorkspace.shared.open(runCatURL)
-                    } label: {
-                        HStack(spacing: 4) {
-                            Image(systemName: "heart.fill")
-                                .font(.system(size: 8.5))
-                                .foregroundStyle(.pink)
-                            Text(String(localized: "cat-cameo.thanks.support"))
-                        }
-                        .font(.system(size: 11, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .fixedSize()
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(.primary.opacity(0.08)))
-                        .overlay(Capsule().strokeBorder(.primary.opacity(0.10), lineWidth: 0.5))
-                        .contentShape(Capsule())
-                    }
-                    .buttonStyle(.plain)
-
-                    Button(action: onClose) {
-                        Text(String(localized: "cat-cameo.thanks.close"))
-                            .font(.system(size: 11, weight: .medium, design: .rounded))
-                            .foregroundStyle(.secondary)
+                CompatibleGlassContainer(spacing: 3) {
+                    HStack(spacing: 8) {
+                        Button {
+                            NSWorkspace.shared.open(runCatURL)
+                        } label: {
+                            HStack(spacing: 4) {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 8.5))
+                                    .foregroundStyle(.pink)
+                                Text(String(localized: "cat-cameo.thanks.support"))
+                            }
+                            .font(.system(size: 11, weight: .semibold, design: .rounded))
                             .lineLimit(1)
                             .fixedSize()
-                            .padding(.horizontal, 12)
+                            .padding(.horizontal, 11)
                             .padding(.vertical, 5)
-                            .background(Capsule().fill(.primary.opacity(0.05)))
+                            .compatibleLiquidSurface(
+                                tint: Color.pink.opacity(0.10),
+                                in: Capsule(),
+                                style: .liquidInteractive
+                            ) {
+                                Color.primary.opacity(0.08)
+                            }
+                            .overlay(Capsule().strokeBorder(.primary.opacity(0.10), lineWidth: 0.5))
                             .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+
+                        Button(action: onClose) {
+                            Text(String(localized: "cat-cameo.thanks.close"))
+                                .font(.system(size: 11, weight: .medium, design: .rounded))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                                .fixedSize()
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 5)
+                                .compatibleLiquidSurface(
+                                    in: Capsule(),
+                                    style: .liquidInteractive
+                                ) {
+                                    Color.primary.opacity(0.05)
+                                }
+                                .contentShape(Capsule())
+                        }
+                        .buttonStyle(.plain)
+                        .keyboardShortcut(.defaultAction)
                     }
-                    .buttonStyle(.plain)
-                    .keyboardShortcut(.defaultAction)
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 15)
             // 220pt：容得下英文局部化里 "Support RunCat" + "Got it" 两个胶囊不换行。
             .frame(width: 220)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
-            )
+            .modifier(CatThanksCardBackground())
             .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
         }
         .transition(.opacity)
+    }
+}
+
+/// 致谢卡片在 26+ 使用系统 Liquid Glass，15 保留 `.regularMaterial`。
+private struct CatThanksCardBackground: ViewModifier {
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: 12, style: .continuous)
+        CompatibleGlassContainer(spacing: 0) {
+            if #available(macOS 26, *) {
+                content
+                    .glassEffect(.regular, in: shape)
+            } else {
+                content
+                    .background(.regularMaterial, in: shape)
+                    .overlay(
+                        shape.strokeBorder(.primary.opacity(0.08), lineWidth: 0.5)
+                    )
+            }
+        }
     }
 }

@@ -140,7 +140,8 @@ struct AboutSettingsView: View {
                 Text(String(localized: "about.download-from-github"))
                     .font(.caption)
             }
-            .buttonStyle(.link)
+            .compatibleGlassLinkButtonStyle()
+            .controlSize(.small)
         }
         #else
         EmptyView()
@@ -205,12 +206,7 @@ struct AboutSettingsView: View {
 
     @ViewBuilder
     private func primaryButton(title: String, action: @escaping () -> Void) -> some View {
-        if #available(macOS 26, *) {
-            Button(title, action: action)
-                .buttonStyle(.glassProminent)
-        } else {
-            Button(title, action: action)
-                .buttonStyle(.borderedProminent)
-        }
+        Button(title, action: action)
+            .compatibleSystemGlassButtonStyle(prominent: true)
     }
 }

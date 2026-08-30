@@ -45,38 +45,44 @@ struct MediaKeySettingsSection: View {
     }
 
     private var permissionHint: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Image(systemName: "lock.fill")
-                    .font(.callout)
-                    .foregroundStyle(.orange)
-                Text(String(localized: "mediaKey.permission-title"))
-                    .font(.callout.weight(.medium))
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Image(systemName: "lock.fill")
+                        .font(.callout)
+                        .foregroundStyle(.orange)
+                    Text(String(localized: "mediaKey.permission-title"))
+                        .font(.callout.weight(.medium))
+                }
+
+                Text(String(localized: "mediaKey.permission-explanation"))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                CompatibleGlassContainer(spacing: 4) {
+                    HStack(spacing: 8) {
+                        Button(String(localized: "mediaKey.open-system-settings")) {
+                            permission.request()
+                        }
+                        .compatibleSystemGlassButtonStyle(prominent: true)
+                        .controlSize(.small)
+
+                        Button(String(localized: "mediaKey.refresh-permission")) {
+                            permission.refresh()
+                        }
+                        .compatibleSystemGlassButtonStyle()
+                        .controlSize(.small)
+
+                        Spacer(minLength: 0)
+                    }
+                }
             }
-
-            Text(String(localized: "mediaKey.permission-explanation"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            HStack(spacing: 8) {
-                Button(String(localized: "mediaKey.open-system-settings")) {
-                    permission.request()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-
-                Button(String(localized: "mediaKey.refresh-permission")) {
-                    permission.refresh()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-
-                Spacer(minLength: 0)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .compatibleLiquidSurface(tint: .orange.opacity(0.08), cornerRadius: 11) {
+                Rectangle().fill(.quaternary.opacity(0.28))
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.quaternary.opacity(0.28), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
     }
 }

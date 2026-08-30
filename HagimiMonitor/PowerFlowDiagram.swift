@@ -6,14 +6,12 @@ import SwiftUI
 /// 节点走正常流式布局,连线按容器几何计算绘制,构造上不会重叠。
 /// 数据全部来自 BatterySampler 的遥测指标(power-in / power / battery-flow / status),
 /// 沙盒版同样可用。活跃导管走辉光 + 相位联动的能量脉冲(充电绿 / 放电黄 /
-/// 不足红,颜色语义不受低电量模式影响)。仅展开且面板可见时挂载
-/// TimelineView 30fps 驱动,收起/隐藏即回到纯静态绘制。
+/// 不足红,颜色语义不受低电量模式影响)。为避免玻璃窗口被逐帧重合成，
+/// 连线保持静态，仅随采样数据变化更新。
 struct PowerFlowDiagram: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let tint: Color
-    /// 流光动画门控:仅当行展开且面板可见时为 true。
-    let animate: Bool
 
     private static let nodeWidth: CGFloat = 104
     private static let nodeHeight: CGFloat = 46
@@ -22,18 +20,20 @@ struct PowerFlowDiagram: View {
 
     var body: some View {
         if systemWatts != nil {
-            VStack(alignment: .leading, spacing: 7) {
-                flowArea
+            CompatibleGlassContainer(spacing: 0) {
+                VStack(alignment: .leading, spacing: 7) {
+                    flowArea
 
-                if let note = flowNoteText {
-                    Text(note)
-                        .font(.system(size: 10))
-                        .foregroundStyle(isInsufficient ? theme.palette.severityTint(for: .critical) : theme.captionText)
-                        .lineLimit(2)
+                    if let note = flowNoteText {
+                        Text(note)
+                            .font(.system(size: 10))
+                            .foregroundStyle(isInsufficient ? theme.palette.severityTint(for: .critical) : theme.captionText)
+                            .lineLimit(2)
+                    }
                 }
+                // 与明细网格同 28pt 缩进,分区标题与图内容左缘对齐。
+                .padding(.leading, 28)
             }
-            // 与明细网格同 28pt 缩进,分区标题与图内容左缘对齐。
-            .padding(.leading, 28)
         }
     }
 
@@ -41,17 +41,8 @@ struct PowerFlowDiagram: View {
 
     private var flowArea: some View {
         ZStack(alignment: .top) {
-            // 流光动画仅在门控通过时挂载 TimelineView;收起/隐藏后回到纯静态 Canvas。
-            if animate {
-                TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
-                    Canvas { context, size in
-                        drawEdges(&context, size: size, time: timeline.date.timeIntervalSinceReferenceDate)
-                    }
-                }
-            } else {
-                Canvas { context, size in
-                    drawEdges(&context, size: size, time: nil)
-                }
+            Canvas { context, size in
+                drawEdges(&context, size: size, time: nil)
             }
 
             VStack(spacing: Self.stubHeight) {
@@ -344,7 +335,13 @@ struct PowerFlowDiagram: View {
         .padding(.vertical, 5)
         .padding(.horizontal, 4)
         .frame(width: Self.nodeWidth, height: Self.nodeHeight)
-        .background(RoundedRectangle(cornerRadius: 9).fill(theme.trackFill))
+        .compatibleLiquidSurface(
+            tint: tint.opacity(0.08),
+            cornerRadius: 9,
+            style: .liquidClear
+        ) {
+            theme.trackFill
+        }
         .opacity(connected ? 1 : 0.4)
     }
 
@@ -388,7 +385,13 @@ struct PowerFlowDiagram: View {
         .padding(.vertical, 5)
         .padding(.horizontal, 4)
         .frame(width: Self.nodeWidth, height: Self.nodeHeight)
-        .background(RoundedRectangle(cornerRadius: 9).fill(theme.trackFill))
+        .compatibleLiquidSurface(
+            tint: tint.opacity(0.08),
+            cornerRadius: 9,
+            style: .liquidClear
+        ) {
+            theme.trackFill
+        }
     }
 
     // MARK: 全宽电池条
@@ -428,7 +431,13 @@ struct PowerFlowDiagram: View {
             }
         }
         .frame(height: Self.barHeight)
-        .background(RoundedRectangle(cornerRadius: 10).fill(theme.trackFill))
+        .compatibleLiquidSurface(
+            tint: flowTint.opacity(0.08),
+            cornerRadius: 10,
+            style: .liquidClear
+        ) {
+            theme.trackFill
+        }
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(barBorder, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
         // 卡标挂在裁剪层之外,顶端探出条外的部分不被裁掉。

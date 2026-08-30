@@ -227,12 +227,16 @@ struct ModuleSettingsView: View {
 /// 小号 Beta 胶囊徐章:用于标注实验性设置项(如功率流),与侧边栏 BetaBadge 同样式。
 private struct PowerFlowBetaBadge: View {
     var body: some View {
-        Text(String(localized: "settings.sidebar.beta-badge"))
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(.secondary.opacity(0.15), in: Capsule())
+        CompatibleGlassContainer(spacing: 0) {
+            Text(String(localized: "settings.sidebar.beta-badge"))
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 5)
+                .padding(.vertical, 1)
+                .compatibleLiquidSurface(in: Capsule()) {
+                    Color.secondary.opacity(0.15)
+                }
+        }
     }
 }
 
@@ -244,22 +248,30 @@ private struct MetricSelectionRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.clear)
-                    .frame(width: 16, height: 16)
+            CompatibleGlassContainer(spacing: 0) {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.clear)
+                        .frame(width: 16, height: 16)
 
-                Text(title)
-                    .font(.body)
-                    .foregroundStyle(isEnabled ? .primary : .secondary)
+                    Text(title)
+                        .font(.body)
+                        .foregroundStyle(isEnabled ? .primary : .secondary)
 
-                Spacer(minLength: 16)
+                    Spacer(minLength: 16)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .frame(minHeight: 44)
+                .compatibleLiquidSurface(
+                    cornerRadius: 9,
+                    style: .liquidInteractive
+                ) {
+                    Color.clear
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)

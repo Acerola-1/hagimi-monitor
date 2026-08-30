@@ -710,6 +710,10 @@ final class MonitorStore: ObservableObject {
         // 启动;已授权则幂等补挂监视(覆盖运行期授权变化)。
         bluetoothSampler.activateBLE()
         if wasEmpty {
+            // 面板可见期间不再让菜单栏负载环以 30fps 持续提交图像。
+            // 透明 Liquid Glass 窗口会把菜单栏的每次损伤一并带入屏幕合成；
+            // 可见期改为随采样低频跳转，关闭后再恢复平滑动画。
+            loadAnimator.setPanelVisible(true)
             isPanelVisible = true
             // 列表已在隐藏时清空;此处首刷仅在配置了「默认展开」时非空
             // (视图在隐藏期重建 expandedKindsBySource),同样弃掉陈旧基线,
@@ -728,6 +732,7 @@ final class MonitorStore: ObservableObject {
         expandedKindsBySource[kind] = nil
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
+            loadAnimator.setPanelVisible(false)
             stopProcSampleTimer()
             // 清空 TOP 列表:上次会话的陈旧榜单不残留,下次展开从占位符起步,
             // 避免旧数据闪现后被新采样整表替换。
@@ -1343,6 +1348,9 @@ final class MenuBarLoadAnimator: ObservableObject {
 
     private var targetComputeLoad = 0.0
     private var smoothingTimerCancellable: AnyCancellable?
+    /// 任一监控面板可见时，菜单栏环只随采样低频更新；避免 30fps 状态项
+    /// 重绘持续触发透明 Liquid Glass 窗口与桌面的屏幕合成。
+    private var panelVisible = false
     /// 展开动画窗口截止时刻:窗口内暂停 30fps 推进,动画结束后恢复平滑。
     private var suspensionDeadline = Date.distantPast
 
@@ -1354,7 +1362,25 @@ final class MenuBarLoadAnimator: ObservableObject {
             return
         }
         targetComputeLoad = target
+        if panelVisible {
+            publishTargetImmediately()
+            return
+        }
         ensureSmoothingTimer()
+    }
+
+    /// 可见期保留准确读数，但把菜单栏动画从 30fps 降为采样驱动（通常 1fps）。
+    /// 面板收起后恢复原平滑策略；若可见期已追上目标则不会额外启动计时器。
+    func setPanelVisible(_ visible: Bool) {
+        guard panelVisible != visible else { return }
+        panelVisible = visible
+        if visible {
+            smoothingTimerCancellable?.cancel()
+            smoothingTimerCancellable = nil
+            publishTargetImmediately()
+        } else if Self.quantizeLoad(targetComputeLoad) != displayedComputeLoad {
+            ensureSmoothingTimer()
+        }
     }
 
     /// 暂停平滑推进至指定时刻(用于展开动画窗口),动画结束后自然恢复。
@@ -1387,12 +1413,19 @@ final class MenuBarLoadAnimator: ObservableObject {
     }
 
     private func ensureSmoothingTimer() {
-        guard smoothingTimerCancellable == nil else { return }
+        guard !panelVisible, smoothingTimerCancellable == nil else { return }
         smoothingTimerCancellable = Timer.publish(every: MonitorConstants.menuBarLoadSmoothFrameInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 self?.advanceSmoothing()
             }
+    }
+
+    private func publishTargetImmediately() {
+        let target = Self.quantizeLoad(targetComputeLoad)
+        if displayedComputeLoad != target {
+            displayedComputeLoad = target
+        }
     }
 
     deinit {
