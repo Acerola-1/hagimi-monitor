@@ -3,25 +3,32 @@ import SwiftUI
 struct MonitorPalette {
     let preference: MonitorColorSchemePreference
     let colorScheme: ColorScheme
+    /// Liquid Glass 开启时面板始终使用浅色文字，避免系统亮色外观
+    /// 把文字切成黑色后，与 40% 黑色玻璃衬底失去对比度。
+    let forceLightText: Bool
 
     private var isDark: Bool {
         colorScheme == .dark
     }
 
+    private var usesLightText: Bool {
+        isDark || forceLightText
+    }
+
     var primaryText: Color {
-        isDark ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
+        usesLightText ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
     }
 
     var valueText: Color {
-        isDark ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
+        usesLightText ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
     }
 
     var secondaryText: Color {
-        isDark ? Color.white.opacity(0.82) : Color(hex: 0x465164)
+        usesLightText ? Color.white.opacity(0.82) : Color(hex: 0x465164)
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.78) : Color(hex: 0x4E5868)
+        usesLightText ? Color.white.opacity(0.78) : Color(hex: 0x4E5868)
     }
 
     var trackFill: Color {

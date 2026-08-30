@@ -44,7 +44,6 @@ struct StorageSettingsView: View {
                     } label: {
                         Text(String(localized: "stats.settings.cleanup-choose"))
                     }
-                    .compatibleSystemGlassButtonStyle()
                     .fixedSize()
                 }
 
@@ -61,7 +60,6 @@ struct StorageSettingsView: View {
                     } label: {
                         Text(String(localized: "stats.storage.clear"))
                     }
-                    .compatibleSystemGlassButtonStyle()
                     .fixedSize()
                 }
             }
@@ -82,7 +80,6 @@ struct StorageSettingsView: View {
                         Text(String(localized: "stats.settings.cleanup-all-button"))
                             .foregroundStyle(.red)
                     }
-                    .compatibleSystemGlassButtonStyle()
                     .fixedSize()
                     .disabled(busy)
                 }
@@ -143,20 +140,12 @@ struct StorageSettingsView: View {
 
     private var backButton: some View {
         Button(action: onBack) {
-            CompatibleGlassContainer(spacing: 0) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(backHovered ? Color.primary : Color.secondary)
-                    .frame(width: 30, height: 30)
-                    .compatibleLiquidSurface(
-                        tint: Color.secondary.opacity(backHovered ? 0.14 : 0.07),
-                        in: Circle(),
-                        style: .liquidInteractive
-                    ) {
-                        Color.secondary.opacity(backHovered ? 0.16 : 0.09)
-                    }
-                    .contentShape(Circle())
-            }
+            Image(systemName: "chevron.left")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(backHovered ? Color.primary : Color.secondary)
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.secondary.opacity(backHovered ? 0.16 : 0.09)))
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .onHover { backHovered = $0 }

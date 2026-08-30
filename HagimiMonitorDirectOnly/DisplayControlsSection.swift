@@ -30,7 +30,8 @@ struct DisplayControlsSection: View {
     var body: some View {
         let palette = MonitorPalette(
             preference: settings.colorSchemePreference,
-            colorScheme: colorScheme
+            colorScheme: colorScheme,
+            forceLightText: keepsLiquidGlassTextLight
         )
         let tint = palette.displayTint
         let visibleDisplays = controller.displays
@@ -157,6 +158,16 @@ struct DisplayControlsSection: View {
             style: .liquidLensInteractive
         ) {
             palette.displayGlassFill
+        }
+    }
+
+    /// 与主面板的文字策略一致：只在系统 Liquid Glass 实际生效时
+    /// 保持白字，关闭效果后恢复亮色模式的自适应深色文字。
+    private var keepsLiquidGlassTextLight: Bool {
+        if #available(macOS 26, *) {
+            settings.liquidGlassEnabled
+        } else {
+            false
         }
     }
 

@@ -62,11 +62,13 @@ struct MonitorPanelView: View {
     }
 
     var body: some View {
-        // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
+        // theme 按 (配色偏好, 系统外观, 文字明度) 缓存,避免每秒采样刷新时
+        // 重建整棵 Color 树。
         // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
         let theme = ThemeCache.theme(
             preference: store.settings.colorSchemePreference,
-            scheme: colorScheme
+            scheme: colorScheme,
+            forceLightText: keepsLiquidGlassTextLight
         )
 
         // 0pt 仍让系统批处理所有 Liquid Glass 子项，但不启用邻近融合；CPU、GPU、
@@ -145,7 +147,7 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(readabilityShade: true)
 
                                 // 快捷功能入口:激活角标与浮层打开态高亮由子视图
                                 // 自行观察 store,开关变化不牵动整块面板重绘。
@@ -162,7 +164,7 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(readabilityShade: true)
                             }
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
@@ -324,6 +326,16 @@ struct MonitorPanelView: View {
             colorScheme == .dark
                 ? Color.black.opacity(0.35)
                 : Color.white.opacity(0.45)
+        }
+    }
+
+    /// 40% 黑色玻璃衬底在亮色系统外观下仍需要白色文字；
+    /// 关闭 Liquid Glass 或运行在旧系统时保留原有的自适应文字颜色。
+    private var keepsLiquidGlassTextLight: Bool {
+        if #available(macOS 26, *) {
+            store.settings.liquidGlassEnabled
+        } else {
+            false
         }
     }
 
@@ -823,12 +835,14 @@ private struct MetricGlassRow: View, Equatable {
     var showDiskProcesses = true
     var toggleExpansion: (() -> Void)?
 
-    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
-    // 闭包不参与相等判定。未变化的行 == 成立时 SwiftUI 跳过整行重绘。
+    // theme 完全由 (preference, colorScheme, forceLightText) 决定(见 ThemeCache),
+    // 故只比这三个键字段;闭包不参与相等判定。未变化的行 == 成立时
+    // SwiftUI 跳过整行重绘。
     static func == (lhs: MetricGlassRow, rhs: MetricGlassRow) -> Bool {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.detail == rhs.detail
             && lhs.detailColor == rhs.detailColor
             && lhs.samples == rhs.samples
@@ -1668,6 +1682,7 @@ private struct NetworkGlassRow: View, Equatable {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
             && lhs.topNetworkProcesses == rhs.topNetworkProcesses
@@ -1696,31 +1711,28 @@ private struct NetworkGlassRow: View, Equatable {
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                HStack(spacing: 6) {
-                    HStack(spacing: 6) {
-                        Text(String(localized: "kind.network") + ":")
-                            .monitorPanelMetricLabelFont()
-                            .foregroundStyle(theme.primaryText)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-
-                        Text(localizedNetworkInterface(module.summary))
-                            .monitorPanelMonoFont(weight: .semibold)
-                            .foregroundStyle(theme.valueText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+                Text(String(localized: "kind.network") + ":")
+                    .monitorPanelMetricLabelFont()
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                     .layoutPriority(2)
 
-                    Spacer(minLength: 2)
+                Text(localizedNetworkInterface(module.summary))
+                    .monitorPanelMonoFont(weight: .semibold)
+                    .foregroundStyle(theme.valueText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(3)
 
-                    HStack(spacing: 6) {
-                        NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
-                        NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
-                    }
-                    .layoutPriority(1)
+                Spacer(minLength: 4)
+
+                HStack(spacing: 6) {
+                    NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
+                    NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
                 }
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1788,6 +1800,7 @@ private struct BatteryGlassRow: View, Equatable {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
             && lhs.showPowerFlow == rhs.showPowerFlow
@@ -2198,47 +2211,31 @@ private struct PowerLabelPill: View {
 }
 
 private struct NetworkRatePill: View {
+    private static let width: CGFloat = 74
+
     let systemImage: String
     let text: String
     let theme: MonitorPanelTheme
 
-    private var parts: (value: String, unit: String) {
-        guard let split = text.lastIndex(of: " ") else {
-            return (text, "")
-        }
-
-        return (
-            String(text[..<split]),
-            String(text[text.index(after: split)...])
-        )
-    }
-
     var body: some View {
-        let parts = parts
-
         CompatibleGlassContainer(spacing: 0) {
-            HStack(spacing: 3) {
+            HStack(spacing: 4) {
                 Image(systemName: systemImage)
                     .font(.caption2.weight(.semibold))
-                    .frame(width: 10)
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(theme.secondaryText.opacity(0.72))
+                    .frame(width: 12)
 
-                Text(parts.value)
-                    .monitorPanelMonoFont(.caption2, weight: .medium)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.68)
-                    .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
-
-                Text(parts.unit)
-                    .monitorPanelMonoFont(.caption2, weight: .medium)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                    .frame(width: 26, alignment: .leading)
+                Text(text)
+                    .foregroundStyle(theme.secondaryText)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
             }
-            .foregroundStyle(theme.secondaryText)
-            .fixedSize(horizontal: true, vertical: false)
-            // Compact network rate pill: bounded width preserves room for both upload and download rates.
-            .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
-            .padding(.vertical, 3)
+            .font(.system(.footnote, design: .monospaced).weight(.medium))
+            .monospacedDigit()
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .padding(.horizontal, 8)
+            .frame(width: Self.width, height: 22)
             .compatibleLiquidSurface(
                 tint: theme.palette.moduleTint(for: .network).opacity(0.10),
                 in: Capsule(),
@@ -2328,27 +2325,37 @@ struct MonitorPanelTheme {
     }
 }
 
-/// 按 `(偏好, 外观)` 缓存 MonitorPanelTheme。preference 只有 balanced/vibrant 两个值,
-/// colorScheme 只有 light/dark,最多 4 个组合,命中率近乎 100%,避免每帧重建整棵
+/// 按 `(偏好, 外观, 文字明度)` 缓存 MonitorPanelTheme。最多 8 个组合,
+/// 命中率近乎 100%,避免每帧重建整棵
 /// Color 树。访问仅发生在 MainActor(body 求值),无需加锁。
 @MainActor
 enum ThemeCache {
     private struct Key: Hashable {
         let preference: MonitorColorSchemePreference
         let scheme: ColorScheme
+        let forceLightText: Bool
     }
 
     private static var cache: [Key: MonitorPanelTheme] = [:]
 
     static func theme(
         preference: MonitorColorSchemePreference,
-        scheme: ColorScheme
+        scheme: ColorScheme,
+        forceLightText: Bool
     ) -> MonitorPanelTheme {
-        let key = Key(preference: preference, scheme: scheme)
+        let key = Key(
+            preference: preference,
+            scheme: scheme,
+            forceLightText: forceLightText
+        )
         if let cached = cache[key] {
             return cached
         }
-        let theme = MonitorPanelTheme(palette: MonitorPalette(preference: preference, colorScheme: scheme))
+        let theme = MonitorPanelTheme(palette: MonitorPalette(
+            preference: preference,
+            colorScheme: scheme,
+            forceLightText: forceLightText
+        ))
         cache[key] = theme
         return theme
     }
@@ -2752,6 +2759,7 @@ private struct BluetoothGlassRow: View, Equatable {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
+            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.isExpanded == rhs.isExpanded
     }
 

@@ -81,6 +81,12 @@ enum CompatibleGlassStyle: Equatable {
         }
     }
 
+    /// 所有玻璃表面统一使用 40% 黑色衬底，交互态与静态态保持
+    /// 同一明度，避免悬停时闪变。
+    fileprivate var readabilityShadeOpacity: Double {
+        0.40
+    }
+
     @available(macOS 26, *)
     fileprivate var systemGlass: Glass {
         switch self {
@@ -257,6 +263,33 @@ private struct LiquidGlassOpticalRim<GlassShape: Shape>: View {
     }
 }
 
+/// 位于玻璃和前景内容之间的静态黑色衬底。它不覆盖文字/图标，
+/// 因此保留现有的白色前景，只压暗玻璃采样到的复杂背景。
+private struct LiquidGlassReadabilityShade<GlassShape: Shape>: View {
+    let shape: GlassShape
+    let opacity: Double
+
+    var body: some View {
+        shape
+            .fill(
+                LinearGradient(
+                    colors: [
+                        Color.black.opacity(opacity * 0.68),
+                        Color.black.opacity(opacity)
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .overlay {
+                shape
+                    .stroke(Color.black.opacity(opacity * 0.72), lineWidth: 0.75)
+                    .clipShape(shape)
+            }
+            .allowsHitTesting(false)
+    }
+}
+
 // MARK: - Compatible Glass Effect Modifier
 
 /// 跨版本玻璃效果。macOS 26+ 使用原生 `.glassEffect`；macOS 15
@@ -275,6 +308,12 @@ struct CompatibleGlassEffect<GlassShape: Shape, Fill: View>: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26, *), liquidGlassEnabled {
             content
+                .background {
+                    LiquidGlassReadabilityShade(
+                        shape: shape,
+                        opacity: style.readabilityShadeOpacity
+                    )
+                }
                 .background {
                     if style.usesLensRefraction {
                         LiquidGlassRefractionBackdrop(profile: .surface)
@@ -329,6 +368,12 @@ struct CompatibleLiquidSurface<GlassShape: Shape, FallbackFill: View>: ViewModif
         if #available(macOS 26, *), liquidGlassEnabled {
             content
                 .background {
+                    LiquidGlassReadabilityShade(
+                        shape: shape,
+                        opacity: style.readabilityShadeOpacity
+                    )
+                }
+                .background {
                     if style.usesLensRefraction {
                         LiquidGlassRefractionBackdrop(profile: .surface)
                             .clipShape(shape)
@@ -362,6 +407,25 @@ struct CompatibleLiquidSurface<GlassShape: Shape, FallbackFill: View>: ViewModif
     }
 }
 
+/// 设置窗口专用的经典毛玻璃背景。无论系统版本或 Liquid Glass 开关
+/// 状态都保持主线 `.menu + .withinWindow` 外观，避免面板效果泄漏到设置页。
+private struct CompatibleClassicGlassEffect: ViewModifier {
+    let cornerRadius: CGFloat
+
+    func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        content
+            .background {
+                Color.clear
+                    .clipShape(shape)
+                    .background {
+                        VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                            .clipShape(shape)
+                    }
+            }
+    }
+}
+
 // MARK: - Compatible Glass Effect ID Modifier
 
 /// `.glassEffectID` 的兼容占位。行展开是同一视图的高度生长，
@@ -378,6 +442,11 @@ struct CompatibleGlassEffectID: ViewModifier {
 // MARK: - View Extensions
 
 extension View {
+    /// 设置页使用的主线经典毛玻璃，不参与 Liquid Glass 管线。
+    func compatibleClassicGlassEffect(cornerRadius: CGFloat) -> some View {
+        modifier(CompatibleClassicGlassEffect(cornerRadius: cornerRadius))
+    }
+
     /// 统一玻璃效果：26+ 走 Liquid Glass，15 走原有毛玻璃回退。
     func compatibleGlassEffect(
         tint: Color? = nil,
@@ -471,9 +540,10 @@ extension View {
         modifier(CompatibleGlassEffectID(id: id, namespace: namespace))
     }
 
-    /// 26+ 使用系统 `.glass` 按钮，15 保留原有毛玻璃按钮。
-    func compatibleButtonStyle() -> some View {
-        modifier(CompatiblePanelButtonStyleModifier())
+    /// 默认保持主线经典毛玻璃按钮；`readabilityShade` 仅供监控面板
+    /// 底部按钮使用，26+ 切换为系统 Liquid Glass 并共用 40% 压暗强度。
+    func compatibleButtonStyle(readabilityShade: Bool = false) -> some View {
+        modifier(CompatiblePanelButtonStyleModifier(readabilityShade: readabilityShade))
     }
 
     /// 普通尺寸控件的系统玻璃按钮样式。与面板底部等宽按钮不同，
@@ -492,15 +562,36 @@ extension View {
 // MARK: - Compatible Button Styles
 
 private struct CompatiblePanelButtonStyleModifier: ViewModifier {
+    let readabilityShade: Bool
     @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
 
     @ViewBuilder
     func body(content: Content) -> some View {
-        if #available(macOS 26, *), liquidGlassEnabled {
-            content.buttonStyle(.glass(.clear))
+        if #available(macOS 26, *), liquidGlassEnabled, readabilityShade {
+            content
+                .buttonStyle(.glass(.clear))
+                // 系统玻璃按钮默认轮廓会随控件尺寸变化；底部三按钮
+                // 显式对齐模块行的 14pt 连续圆角，避免玻璃轮廓与黑色衬底错边。
+                .buttonBorderShape(
+                    .roundedRectangle(radius: MonitorConstants.rowCornerRadius)
+                )
+                .background {
+                    LiquidGlassReadabilityShade(
+                        shape: panelButtonShape,
+                        opacity: CompatibleGlassStyle.liquidClear.readabilityShadeOpacity
+                    )
+                }
+                .contentShape(panelButtonShape)
         } else {
             content.buttonStyle(PanelMaterialButtonStyle())
         }
+    }
+
+    private var panelButtonShape: RoundedRectangle {
+        RoundedRectangle(
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .continuous
+        )
     }
 }
 

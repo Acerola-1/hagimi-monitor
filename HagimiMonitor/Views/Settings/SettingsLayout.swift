@@ -56,16 +56,14 @@ struct SettingsGroup<Content: View, TitleAccessory: View>: View {
             }
 
             if #available(macOS 26, *) {
-                CompatibleGlassContainer(spacing: 0) {
-                    VStack(spacing: 0) {
-                        // 前景控件使用独立容器，避免按钮、徽章和指标块与
-                        // 整组背景玻璃自动融合成一张平面卡片。
-                        CompatibleGlassContainer(spacing: 0) {
-                            content
-                        }
-                    }
-                    .compatibleGlassEffect(cornerRadius: 13, style: .liquid)
+                // 不包 GlassEffectContainer:卡片已是 NSVisualEffectView 毛玻璃
+                // (见 compatibleClassicGlassEffect),容器对其无作用,反而在 appearance
+                // 切换(主题/配色变化)时整块重合成,是组内控件闪烁的诱因
+                // (面板行级因同一诱因已降级,见 CompatibleGlassEffect 注释)。
+                VStack(spacing: 0) {
+                    content
                 }
+                .compatibleClassicGlassEffect(cornerRadius: 13)
             } else {
                 VStack(spacing: 0) {
                     content
@@ -190,18 +188,14 @@ struct SettingsIconHeader<Accessory: View>: View {
 
             Spacer(minLength: 0)
 
-            CompatibleGlassContainer(spacing: 0) {
-                accessory
-            }
+            accessory
         }
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
 
         if #available(macOS 26, *) {
-            CompatibleGlassContainer(spacing: 0) {
-                header
-                    .compatibleGlassEffect(cornerRadius: 12, style: .liquid)
-            }
+            header
+                .compatibleClassicGlassEffect(cornerRadius: 12)
         } else {
             header
                 .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))

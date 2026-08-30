@@ -332,7 +332,7 @@ struct QuickToolsEntryButton: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
         }
-        .compatibleButtonStyle()
+        .compatibleButtonStyle(readabilityShade: true)
         .background(QuickToolsAnchorView(box: anchor))
         .overlay(
             RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
