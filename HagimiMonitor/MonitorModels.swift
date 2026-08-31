@@ -139,6 +139,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "system", title: String(localized: "metric.cpu.system"), isDefault: true),
                 MetricSwitch(id: "user", title: String(localized: "metric.cpu.user"), isDefault: true),
                 MetricSwitch(id: "idle", title: String(localized: "metric.cpu.idle"), isDefault: true),
+                MetricSwitch(id: "process-count", title: String(localized: "metric.cpu.process-count"), isDefault: true),
                 MetricSwitch(id: "uptime", title: String(localized: "metric.cpu.uptime"), isDefault: true),
                 MetricSwitch(id: "thermal-pressure", title: String(localized: "metric.cpu.thermal-pressure"), isDefault: true),
                 MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),

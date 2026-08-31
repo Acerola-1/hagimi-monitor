@@ -32,7 +32,7 @@ final class CPUSampler: MonitorSampler {
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         let info = hostCPULoadInfo()
-        let metrics: [MonitorMetric]
+        var metrics: [MonitorMetric]
         let total: Double
         var cpuCoreDetail: CPUCoreDetail?
 
@@ -61,6 +61,11 @@ final class CPUSampler: MonitorSampler {
                 MonitorMetric(name: "idle", value: "--"),
                 MonitorMetric(name: "uptime", value: systemUptime())
             ]
+        }
+
+        // 进程计数无差分依赖,首帧即可出数;读不到时不出该指标。
+        if let count = processCount() {
+            metrics.append(MonitorMetric(name: "process-count", value: String(count), numericValue: Double(count)))
         }
 
         if let info {
@@ -206,6 +211,29 @@ final class CPUSampler: MonitorSampler {
         let all = user + system + idle + nice
         guard all > 0 else { return 0 }
         return min(100, max(0, (user + system + nice) / all * 100))
+    }
+
+    /// 系统进程总数:sysctl(KERN_PROC_ALL) 枚举计数,沙盒内放行
+    /// (proc_listallpids 依赖的 process-info 操作在沙盒下被策略拒绝)。
+    /// 首查拿所需缓冲区大小,两次调用间进程数可能波动,以实际填入的
+    /// size 为准;pid ≤ 0 的空槽不计入。
+    private func processCount() -> Int? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
+        var size = 0
+        guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return nil }
+
+        var buffer = [UInt8](repeating: 0, count: size)
+        guard sysctl(&mib, 4, &buffer, &size, nil, 0) == 0 else { return nil }
+
+        let slots = size / MemoryLayout<kinfo_proc>.stride
+        var count = 0
+        buffer.withUnsafeBytes { raw in
+            let procs = raw.bindMemory(to: kinfo_proc.self)
+            for i in 0..<slots where procs[i].kp_proc.p_pid > 0 {
+                count += 1
+            }
+        }
+        return count
     }
 
     private func systemUptime() -> String {

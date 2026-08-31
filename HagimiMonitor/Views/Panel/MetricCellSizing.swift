@@ -133,6 +133,8 @@ extension StaticMetricSizing {
         AuditEntry(kind: .cpu, name: "user", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .cpu, name: "idle", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .cpu, name: "uptime", layout: .measured(WorstValue(number: "888天88小时", unit: nil))),
+        // 整数计数,按五位封顶
+        AuditEntry(kind: .cpu, name: "process-count", layout: .measured(WorstValue(number: "99999", unit: nil))),
         AuditEntry(kind: .cpu, name: "thermal-pressure", layout: .specialForm),
         AuditEntry(kind: .cpu, name: "core-split", layout: .specialForm),
         // GPU(bytes() 千进制两位小数,最宽形态在百 GB 内)

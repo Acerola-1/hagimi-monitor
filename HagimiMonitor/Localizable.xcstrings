@@ -3671,6 +3671,23 @@
         }
       }
     },
+    "metric.cpu.process-count": {
+      "comment": "CPU 明细网格指标;值为系统进程总数。",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Procs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程数"
+          }
+        }
+      }
+    },
     "metric.cpu.system": {
       "localizations": {
         "en": {
