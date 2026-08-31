@@ -178,5 +178,9 @@ struct HagimiMonitorTests {
         #expect(!ids.contains("power-in"))
         #expect(!ids.contains("battery-flow"))
         #expect(!ids.contains("time-remaining"))
+        #expect(ids.contains("power"))
+        #expect(ids.contains("display-power"))
+        #expect(ids.contains("cpu-power"))
+        #expect(ids.contains("gpu-power"))
     }
 }

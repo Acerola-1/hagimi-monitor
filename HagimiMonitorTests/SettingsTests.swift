@@ -3,6 +3,33 @@ import Testing
 @testable import HagimiMonitorDirect
 
 struct SettingsTests {
+    @Test func batteryComponentPowerMetricsMigrateIntoNonEmptySelection() {
+        let suite = "batteryComponentPowerMetricsMigrateIntoNonEmptySelection"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(["health"], forKey: "settings.enabledMetrics.battery")
+        defaults.set(true, forKey: "settings.batteryElectricalMetricsMigrated")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        for id in ["power", "display-power", "cpu-power", "gpu-power"] {
+            #expect(settings.isMetricEnabled(id, for: .battery))
+        }
+        #expect(defaults.bool(forKey: "settings.batteryComponentPowerMetricsMigrated"))
+    }
+
+    @Test func batteryComponentPowerMigrationPreservesExplicitAllOffSelection() {
+        let suite = "batteryComponentPowerMigrationPreservesExplicitAllOffSelection"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set([String](), forKey: "settings.enabledMetrics.battery")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(!settings.isMetricEnabled("power", for: .battery))
+        #expect(!settings.isMetricEnabled("display-power", for: .battery))
+    }
+
     @Test func defaultThemePreference() {
         let settings = MonitorSettings()
         #expect(settings.themePreference == .system)

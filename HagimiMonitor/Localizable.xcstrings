@@ -3529,6 +3529,22 @@
         }
       }
     },
+    "metric.battery.cpu-power" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CPU"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "CPU"
+          }
+        }
+      }
+    },
     "metric.battery.cycle-count" : {
       "localizations" : {
         "en" : {
@@ -3541,6 +3557,38 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "循环数"
+          }
+        }
+      }
+    },
+    "metric.battery.display-power" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Display"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "屏幕"
+          }
+        }
+      }
+    },
+    "metric.battery.gpu-power" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPU"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "GPU"
           }
         }
       }
@@ -3562,18 +3610,17 @@
       }
     },
     "metric.battery.power" : {
-      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "System Power"
+            "value" : "Total"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "实时功耗"
+            "value" : "整机"
           }
         }
       }

@@ -1933,7 +1933,11 @@ private struct BatteryGlassRow: View, Equatable {
         // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
         // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
         // 斜杠长值,由静态登记整行排到模块末尾。
-        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "capacity"]
+        var names = ["health", "cycle-count", "temperature", "power-loss"]
+        #if DIRECT_DISTRIBUTION
+        names.append(contentsOf: ["power", "display-power", "cpu-power", "gpu-power"])
+        #endif
+        names.append(contentsOf: ["voltage", "current", "capacity"])
 
         let enabledNames = Set(details.map(\.name))
 

@@ -175,19 +175,31 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "wifi-ssid", title: String(localized: "metric.network.wifi-ssid"), isDefault: true),
             ]
         case .battery:
-            return [
+            var metrics = [
                 // 充电功率在电源行以常驻 CHG pill 展示,不作为可开关的明细项。
                 // 充电限制/低电量模式不进明细网格:前者只保留在功率流电池条的
                 // 刻度线上,后者只保留行头图标着色(纯状态文本行信息量低)。
                 MetricSwitch(id: "health", title: String(localized: "metric.battery.health"), isDefault: true),
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
-                MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true),
+                MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true)
+            ]
+            #if DIRECT_DISTRIBUTION
+            // IOReport 是私有 API，整机与分项功耗只在 Direct 版开放为明细开关。
+            metrics.append(contentsOf: [
+                MetricSwitch(id: "power", title: String(localized: "metric.battery.power"), isDefault: true),
+                MetricSwitch(id: "display-power", title: String(localized: "metric.battery.display-power"), isDefault: true),
+                MetricSwitch(id: "cpu-power", title: String(localized: "metric.battery.cpu-power"), isDefault: true),
+                MetricSwitch(id: "gpu-power", title: String(localized: "metric.battery.gpu-power"), isDefault: true)
+            ])
+            #endif
+            metrics.append(contentsOf: [
                 MetricSwitch(id: "voltage", title: String(localized: "metric.battery.voltage"), isDefault: true),
                 MetricSwitch(id: "current", title: String(localized: "metric.battery.current"), isDefault: true),
                 // 剩余/满充容量合并为单一开关(展示为「剩余 / 满充 mAh」整行格)。
-                MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true),
-            ]
+                MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true)
+            ])
+            return metrics
         case .fan:
             // 风扇行无子指标开关,展开区直接显示所有风扇(由 FanList 渲染)。
             return []

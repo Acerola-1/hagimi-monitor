@@ -172,12 +172,17 @@ extension StaticMetricSizing {
         AuditEntry(kind: .battery, name: "cycle-count", layout: .measured(WorstValue(number: "88888", unit: nil))),
         AuditEntry(kind: .battery, name: "temperature", layout: .measured(WorstValue(number: "100", unit: "°C"))),
         AuditEntry(kind: .battery, name: "power-loss", layout: .measured(WorstValue(number: "888.8", unit: "W"))),
+        // Apple Silicon 便携式设备的整机/CPU/GPU 按三位瓦数、内建屏按
+        // 两位瓦数上界登记；覆盖硬件范围并保持最窄半格可读。
+        AuditEntry(kind: .battery, name: "power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
+        AuditEntry(kind: .battery, name: "display-power", layout: .measured(WorstValue(number: "88.8", unit: "W"))),
+        AuditEntry(kind: .battery, name: "cpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
+        AuditEntry(kind: .battery, name: "gpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "voltage", layout: .measured(WorstValue(number: "88.88", unit: "V"))),
         AuditEntry(kind: .battery, name: "current", layout: .measured(WorstValue(number: "8888", unit: "mA"))),
         AuditEntry(kind: .battery, name: "capacity", layout: .measured(WorstValue(number: "8888 / 8888 mAh", unit: nil))),
         AuditEntry(kind: .battery, name: "status", layout: .specialForm),
         AuditEntry(kind: .battery, name: "adapter", layout: .specialForm),
-        AuditEntry(kind: .battery, name: "power", layout: .specialForm),
         AuditEntry(kind: .battery, name: "charging-power", layout: .specialForm),
         AuditEntry(kind: .battery, name: "type", layout: .specialForm)
     ]
