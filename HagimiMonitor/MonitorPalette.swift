@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct MonitorPalette {
@@ -9,19 +10,19 @@ struct MonitorPalette {
     }
 
     var primaryText: Color {
-        isDark ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
+        Color(nsColor: .labelColor)
     }
 
     var valueText: Color {
-        isDark ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
+        Color(nsColor: .labelColor)
     }
 
     var secondaryText: Color {
-        isDark ? Color.white.opacity(0.82) : Color(hex: 0x465164)
+        Color(nsColor: .secondaryLabelColor)
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.78) : Color(hex: 0x4E5868)
+        Color(nsColor: .secondaryLabelColor)
     }
 
     var trackFill: Color {
@@ -85,15 +86,26 @@ struct MonitorPalette {
         }
     }
 
-    /// 行玻璃填充:平衡为均布中性玻璃;活力为垂直衰减渐变——行头保持满浓度,
-    /// 向下衰减至近中性,展开区小字不受模块色相干扰(参数见 MonitorConstants)。
+    /// macOS 15 行玻璃回退填充。两套配色都保留模块色，并向展开区逐渐
+    /// 衰减，避免大面积色块干扰明细文字。
     @ViewBuilder
     func rowGlassFill(for kind: MonitorKind) -> some View {
         switch preference {
         case .balanced:
-            neutralGlassTint
+            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: fallbackBalancedGlassOpacity)
         case .vibrant:
-            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: vibrantGlassOpacity)
+            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: fallbackVibrantGlassOpacity)
+        }
+    }
+
+    /// macOS 26 原生 Liquid Glass 的模块 tint。颜色只进入系统玻璃管线，
+    /// 折射、高光和前景对比度仍由系统负责。
+    func rowGlassTint(for kind: MonitorKind) -> Color {
+        switch preference {
+        case .balanced:
+            moduleTint(for: kind).opacity(liquidBalancedGlassOpacity)
+        case .vibrant:
+            moduleTint(for: kind).opacity(liquidVibrantGlassOpacity)
         }
     }
 
@@ -101,15 +113,39 @@ struct MonitorPalette {
     var displayGlassFill: some View {
         switch preference {
         case .balanced:
-            neutralGlassTint
+            RowGlassFadeFill(tint: displayTint, fullOpacity: fallbackBalancedGlassOpacity)
         case .vibrant:
-            RowGlassFadeFill(tint: displayTint, fullOpacity: vibrantGlassOpacity)
+            RowGlassFadeFill(tint: displayTint, fullOpacity: fallbackVibrantGlassOpacity)
         }
     }
 
-    /// 活力行玻璃满浓度不透明度:暗底需要更高浓度才能显出模块色相。
-    private var vibrantGlassOpacity: Double {
-        isDark ? 0.16 : 0.08
+    /// 显示器行的 macOS 26 Liquid Glass tint。
+    var displayGlassTint: Color {
+        switch preference {
+        case .balanced:
+            displayTint.opacity(liquidBalancedGlassOpacity)
+        case .vibrant:
+            displayTint.opacity(liquidVibrantGlassOpacity)
+        }
+    }
+
+    private var fallbackBalancedGlassOpacity: Double {
+        isDark ? 0.12 : 0.06
+    }
+
+    /// 旧系统回退靠自绘颜色表现模块归属，活力主题适当提高色彩层次。
+    private var fallbackVibrantGlassOpacity: Double {
+        isDark ? 0.18 : 0.10
+    }
+
+    private var liquidBalancedGlassOpacity: Double {
+        isDark ? 0.11 : 0.07
+    }
+
+    /// 原生 regular glass 只接受单色 tint；这里保持足够辨识度，同时避免
+    /// 颜色过浓干扰材质自适应的前景对比度。
+    private var liquidVibrantGlassOpacity: Double {
+        isDark ? 0.15 : 0.09
     }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
@@ -146,10 +182,6 @@ struct MonitorPalette {
         case .vibrant:
             moduleTint(for: kind).opacity(isDark ? 0.20 : 0.12)
         }
-    }
-
-    private var neutralGlassTint: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
     }
 
     private var neutralSeparator: Color {

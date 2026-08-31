@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		5AA0000000000000000000A3 /* Sparkle in Frameworks */ = {isa = PBXBuildFile; productRef = 5AA0000000000000000000A2 /* Sparkle */; };
+		F591ACFB30443DA4003170ED /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 5BB0000000000000000000B3 /* KeyboardShortcuts */; };
+		F591ACFC30443DA4003170ED /* KeyboardShortcuts in Frameworks */ = {isa = PBXBuildFile; productRef = 5BB0000000000000000000B2 /* KeyboardShortcuts */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,7 +33,7 @@
 		2E0C71892FB19C2D00908371 /* HagimiMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E0C71982FB19C2E00908371 /* HagimiMonitorTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HagimiMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		2E0C71A22FB19C2E00908371 /* HagimiMonitorUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HagimiMonitorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		2E0C71B52FB1A10000908371 /* HagimiMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		2E0C71B52FB1A10000908371 /* HagimiMonitorDirect.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HagimiMonitorDirect.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -62,6 +64,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F591ACFB30443DA4003170ED /* KeyboardShortcuts in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -83,6 +86,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F591ACFC30443DA4003170ED /* KeyboardShortcuts in Frameworks */,
 				5AA0000000000000000000A3 /* Sparkle in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -105,7 +109,7 @@
 			isa = PBXGroup;
 			children = (
 				2E0C71892FB19C2D00908371 /* HagimiMonitor.app */,
-				2E0C71B52FB1A10000908371 /* HagimiMonitor.app */,
+				2E0C71B52FB1A10000908371 /* HagimiMonitorDirect.app */,
 				2E0C71982FB19C2E00908371 /* HagimiMonitorTests.xctest */,
 				2E0C71A22FB19C2E00908371 /* HagimiMonitorUITests.xctest */,
 			);
@@ -206,7 +210,7 @@
 				5BB0000000000000000000B2 /* KeyboardShortcuts */,
 			);
 			productName = HagimiMonitor;
-			productReference = 2E0C71B52FB1A10000908371 /* HagimiMonitor.app */;
+			productReference = 2E0C71B52FB1A10000908371 /* HagimiMonitorDirect.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -639,6 +643,7 @@
 				);
 				MARKETING_VERSION = 1.5.3;
 				OTHER_LDFLAGS = (
+					"-lIOReport",
 					"-framework",
 					CoreDisplay,
 					"-framework",
@@ -689,6 +694,7 @@
 				);
 				MARKETING_VERSION = 1.5.3;
 				OTHER_LDFLAGS = (
+					"-lIOReport",
 					"-framework",
 					CoreDisplay,
 					"-framework",

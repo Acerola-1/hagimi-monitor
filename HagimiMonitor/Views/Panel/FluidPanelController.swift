@@ -60,7 +60,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 面板与菜单栏按钮左边缘对齐时,补偿窗口阴影/边框带来的 2pt 偏移。
     private static let windowBorderSize: CGFloat = 2
 
-    /// 面板圆角半径。由 window 层的 NSVisualEffectView / hosting layer 裁剪,
+    /// 面板圆角半径。由 window 层的系统玻璃宿主 / hosting layer 裁剪,
     /// 恢复系统 popover 般的圆角外观(自建 borderless 窗口默认是方角)。
     /// 与行卡片/底部按钮同为 rowCornerRadius,整个面板圆角弧度一致。
     private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
@@ -175,18 +175,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        // contentView 用 popover 毛玻璃:提供圆角遮罩 + 通透底(对齐 FluidMenuBarExtra),
-        // 是系统 popover 般外观的关键——直接以透明 hosting 作 contentView 会丢圆角与
-        // 毛玻璃底,面板退化成方盒子。
-        let visualEffect = NSVisualEffectView()
-        visualEffect.material = .popover
-        visualEffect.blendingMode = .behindWindow
-        visualEffect.state = .active
-        visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = Self.panelCornerRadius
-        visualEffect.layer?.masksToBounds = true
-        panel.contentView = visualEffect
-
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
         let root = FluidPanelRootView(store: store, metrics: layoutMetrics)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
@@ -199,21 +187,31 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         let hosting = NSHostingView(rootView: AnyView(root))
         hosting.sizingOptions = []
-        hosting.translatesAutoresizingMaskIntoConstraints = false
         // hosting 也做圆角裁剪,否则 SwiftUI 内容(含 panelBackgroundColor 矩形)方角会溢出圆角。
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
         hosting.layer?.masksToBounds = true
-        visualEffect.addSubview(hosting)
-
-        NSLayoutConstraint.activate([
-            hosting.topAnchor.constraint(equalTo: visualEffect.topAnchor),
-            hosting.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
-            hosting.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor)
-        ])
+        // 26+ 将 NSGlassEffectView 作为独立背景层，15 保留 popover NSVisualEffectView 回退。
+        panel.contentView = CompatiblePanelGlassHost.make(
+            contentView: hosting,
+            cornerRadius: Self.panelCornerRadius,
+            liquidGlassEnabled: store.settings.liquidGlassEnabled
+        )
 
         hostingView = hosting
+
+        // 设置窗口中的总开关即时替换面板背景层；不重建 hosting view，
+        // 因而不会丢失展开状态或触发窗口尺寸跳变。
+        store.settings.$liquidGlassEnabled
+            .removeDuplicates()
+            .sink { [weak self] enabled in
+                guard let self else { return }
+                CompatiblePanelGlassHost.update(
+                    self.panel.contentView,
+                    liquidGlassEnabled: enabled
+                )
+            }
+            .store(in: &cancellables)
 
         // 用内容固有尺寸初始化窗口大小(对齐 FluidMenuBarExtra)。避免首帧为默认 200 高。
         hosting.layoutSubtreeIfNeeded()

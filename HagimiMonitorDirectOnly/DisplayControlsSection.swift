@@ -151,7 +151,11 @@ struct DisplayControlsSection: View {
                 NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
             }
         }
-        .compatibleGlassEffect(cornerRadius: 14) {
+        .compatibleGlassEffect(
+            tint: palette.displayGlassTint,
+            cornerRadius: 14,
+            style: .liquidClearInteractive
+        ) {
             palette.displayGlassFill
         }
     }
@@ -172,14 +176,12 @@ struct DisplayControlsSection: View {
                 Rectangle()
                     .fill(palette.displaySeparator)
                     .frame(height: 1)
-                    .padding(.leading, 28)
 
                 ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
                     if index > 0 {
                         Rectangle()
                             .fill(palette.displaySeparator.opacity(0.72))
                             .frame(height: 1)
-                            .padding(.leading, 28)
                     }
 
                     DisplayControlGroup(
@@ -255,18 +257,23 @@ private struct DisplayControlGroup: View {
 
                     Spacer(minLength: 8)
 
-                    Text(display.isBuiltIn ? String(localized: "display.built-in") : String(localized: "display.external"))
-                        .monitorPanelRoundedFont(.caption2, weight: .semibold)
-                        .foregroundStyle(palette.secondaryText)
-                        .lineLimit(1)
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background {
-                            Capsule()
-                                .fill(palette.displayBadgeFill)
-                        }
+                    CompatibleGlassContainer(spacing: 0) {
+                        Text(display.isBuiltIn ? String(localized: "display.built-in") : String(localized: "display.external"))
+                            .monitorPanelRoundedFont(.caption2, weight: .semibold)
+                            .foregroundStyle(palette.secondaryText)
+                            .lineLimit(1)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .compatibleLiquidSurface(
+                                tint: tint.opacity(0.12),
+                                in: Capsule(),
+                                style: .liquidClear
+                            ) {
+                                palette.displayBadgeFill
+                            }
+                    }
 
-                    if let info = displayInfo {
+                    if displayInfo != nil {
                         DisplayArchiveToggle(
                             palette: palette,
                             archiveExpanded: archiveExpanded,
@@ -340,7 +347,6 @@ private struct DisplayControlGroup: View {
                 }
             }
         }
-        .padding(.leading, 28)
         // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
         .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
             guard archiveKey == "display-controls-arc-\(controller.displays.first?.id ?? 0)" else { return }
@@ -421,13 +427,11 @@ private struct DisplayEmptyState: View {
             Rectangle()
                 .fill(palette.displaySeparator)
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             Text(text)
                 .monitorPanelCaptionFont(.caption2)
                 .foregroundStyle(palette.captionText)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 28)
         }
     }
 }

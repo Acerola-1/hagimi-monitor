@@ -35,8 +35,6 @@ struct AboutSettingsView: View {
                 aboutHeader
             }
 
-            Spacer(minLength: 0)
-
             SettingsGroup {
                 // 发布版本入口仅在直接分发(GitHub)版显示。App Store 版不得引导用户
                 // 前往 App 外(GitHub Releases)下载安装包——那里正是本 App 的免费分发页,
@@ -51,6 +49,8 @@ struct AboutSettingsView: View {
                     .compatibleButtonStyle()
                     .frame(width: accessoryColumnWidth, alignment: .leading)
                 }
+
+                SettingsDivider()
                 #endif
 
                 SettingsRow(title: String(localized: "about.feedback")) {
@@ -72,9 +72,13 @@ struct AboutSettingsView: View {
                     .frame(width: accessoryColumnWidth, alignment: .leading)
                 }
 
+                SettingsDivider()
+
                 SettingsRow(title: String(localized: "about.diagnostics"), subtitle: logExportMessage) {
                     exportLogsButton
                 }
+
+                SettingsDivider()
 
                 // 开源软件声明:与诊断日志同款行样式,右侧按钮弹出第三方开源软件/素材列表。
                 SettingsRow(title: String(localized: "about.open-source")) {
@@ -87,6 +91,8 @@ struct AboutSettingsView: View {
                     .frame(width: accessoryColumnWidth, alignment: .leading)
                 }
 
+                SettingsDivider()
+
                 SettingsRow(title: String(localized: "about.telemetry"), subtitle: String(localized: "about.telemetry.detail")) {
                     Toggle("", isOn: Binding(
                         get: { UsageReporter.shared.isEnabled },
@@ -94,13 +100,19 @@ struct AboutSettingsView: View {
                     ))
                     .toggleStyle(.switch)
                     .labelsHidden()
+                    .frame(width: accessoryColumnWidth, alignment: .trailing)
                 }
             }
+
+            // 两个信息卡片保持紧凑排列，仅把版权信息推至窗口底部；避免原先
+            // Spacer 位于卡片之间时随窗口高度产生数百点的断层空白。
+            Spacer(minLength: 0)
 
             Text(String(localized: "© 2026 Acerola"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
+                .padding(.top, 2)
         }
         .sheet(isPresented: $isShowingLicenses) {
             OpenSourceLicensesView(onClose: { isShowingLicenses = false })

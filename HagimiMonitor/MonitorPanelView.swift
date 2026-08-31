@@ -62,14 +62,17 @@ struct MonitorPanelView: View {
     }
 
     var body: some View {
-        // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
+        // theme 按 (配色偏好, 系统外观) 缓存,避免每秒采样刷新时
+        // 重建整棵 Color 树。文字使用系统语义色，由外观自动适配。
         // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
         let theme = ThemeCache.theme(
             preference: store.settings.colorSchemePreference,
             scheme: colorScheme
         )
 
-        CompatibleGlassContainer(spacing: 8) {
+        // 0pt 仍让系统批处理所有 Liquid Glass 子项，但不启用邻近融合；CPU、GPU、
+        // 内存等每一行始终保持为独立玻璃片，展开动画也不会与相邻行粘连。
+        CompatibleGlassContainer(spacing: 0) {
             VStack(spacing: 4) {
                 header(theme: theme)
                     .transaction { $0.animation = nil }
@@ -143,7 +146,7 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(readabilityShade: true)
 
                                 // 快捷功能入口:激活角标与浮层打开态高亮由子视图
                                 // 自行观察 store,开关变化不牵动整块面板重绘。
@@ -160,7 +163,7 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(readabilityShade: true)
                             }
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
@@ -301,6 +304,7 @@ struct MonitorPanelView: View {
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
         .environmentObject(panelExpansion)
+        .environment(\.liquidGlassEnabled, store.settings.liquidGlassEnabled)
     }
 
     /// 需进程采样的类目集 = 行内展开的模块。
@@ -314,9 +318,14 @@ struct MonitorPanelView: View {
     }
 
     private var panelBackgroundColor: Color {
-        colorScheme == .dark
-            ? Color.black.opacity(0.35)
-            : Color.white.opacity(0.45)
+        if #available(macOS 26, *), store.settings.liquidGlassEnabled {
+            // 窗口底由 NSGlassEffectView 渲染，不再叠加自绘半透明材质。
+            .clear
+        } else {
+            colorScheme == .dark
+                ? Color.black.opacity(0.35)
+                : Color.white.opacity(0.45)
+        }
     }
 
     private func header(theme: MonitorPanelTheme) -> some View {
@@ -328,9 +337,9 @@ struct MonitorPanelView: View {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
-                    // 仅面板可见时脉冲:面板视图树常驻(NSPanel 不销毁),隐藏期间
-                    // 持续动画会白白驱动渲染。
-                    .compatiblePulseEffect(isActive: store.isPanelVisible)
+                    // 面板打开时只脉冲一次；不在可见期间运行无限动画，
+                    // 避免持续驱动整个毛玻璃窗口的 GPU 合成。
+                    .compatiblePulseEffect(trigger: store.isPanelVisible)
 
                 Text(String(localized: "SYSTEM · LIVE"))
                     .monitorPanelLabelFont(tracking: 1.1)
@@ -505,9 +514,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 details: enabledMetrics(for: module),
                 isExpanded: isExpanded,
-                showPowerFlow: store.settings.batteryShowPowerFlow,
-                panelVisible: store.isPanelVisible,
-                powerFlowActive: !store.isExpansionAnimating
+                showPowerFlow: store.settings.batteryShowPowerFlow
             ) {
                 toggleExpansion(for: module.kind)
             }
@@ -691,13 +698,22 @@ private struct QuickPanelControlButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         let backgroundOpacity = configuration.isPressed ? 0.34 : (isHovering ? 0.18 : 0)
+        let glassTintOpacity = configuration.isPressed ? 0.24 : (isHovering ? 0.16 : 0.08)
 
-        configuration.label
-            .foregroundStyle(tint)
-            .background(Circle().fill(tint.opacity(backgroundOpacity)))
-            .scaleEffect(configuration.isPressed ? 0.9 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.12), value: isHovering)
+        CompatibleGlassContainer(spacing: 0) {
+            configuration.label
+                .foregroundStyle(tint)
+                .compatibleLiquidSurface(
+                    tint: tint.opacity(glassTintOpacity),
+                    in: Circle(),
+                    style: .liquidClearInteractive
+                ) {
+                    Circle().fill(tint.opacity(backgroundOpacity))
+                }
+                .scaleEffect(configuration.isPressed ? 0.9 : 1)
+                .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+                .animation(.easeOut(duration: 0.12), value: isHovering)
+        }
     }
 }
 
@@ -717,38 +733,51 @@ private struct PanelHeaderToolBadges: View {
     }
 
     var body: some View {
-        HStack(spacing: 5) {
-            if store.keyboardLocked {
-                HStack(spacing: 3) {
-                    Image(systemName: "keyboard")
-                        .font(.system(size: 11, weight: .semibold))
-                    if let deadline = store.keyboardLockAutoUnlockDate {
-                        autoUnlockCountdown(deadline: deadline)
+        Group {
+            if store.anyActive {
+                CompatibleGlassContainer(spacing: 0) {
+                    HStack(spacing: 5) {
+                        if store.keyboardLocked {
+                            HStack(spacing: 3) {
+                                Image(systemName: "keyboard")
+                                    .font(.system(size: 11, weight: .semibold))
+                                if let deadline = store.keyboardLockAutoUnlockDate {
+                                    autoUnlockCountdown(deadline: deadline)
+                                }
+                            }
+                            .help(String(localized: "quicktools.keyboard-lock"))
+                        }
+                        if store.systemSleepPrevented {
+                            Image(systemName: "laptopcomputer")
+                                .font(.system(size: 11, weight: .semibold))
+                                .help(String(localized: "quicktools.system-awake"))
+                        }
+                        if store.displayAwake {
+                            Image(systemName: "sun.max")
+                                .font(.system(size: 11, weight: .semibold))
+                                .help(String(localized: "quicktools.display-awake"))
+                        }
                     }
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 6)
+                    .frame(minHeight: 18)
+                    .compatibleLiquidSurface(
+                        tint: tint.opacity(0.12),
+                        in: Capsule(),
+                        style: .liquidClearInteractive
+                    ) {
+                        Color.clear
+                    }
+                    .contentShape(Capsule())
+                    .onTapGesture {
+                        store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
+                    }
+                    .background(QuickToolsAnchorView(box: anchor))
                 }
-                .help(String(localized: "quicktools.keyboard-lock"))
-            }
-            if store.systemSleepPrevented {
-                Image(systemName: "laptopcomputer")
-                    .font(.system(size: 11, weight: .semibold))
-                    .help(String(localized: "quicktools.system-awake"))
-            }
-            if store.displayAwake {
-                Image(systemName: "sun.max")
-                    .font(.system(size: 11, weight: .semibold))
-                    .help(String(localized: "quicktools.display-awake"))
             }
         }
-        .foregroundStyle(tint)
-        .frame(minHeight: 18)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
-        }
-        .background(QuickToolsAnchorView(box: anchor))
-        // 菜单栏上已无任何激活工具时,收起本簇锚定的浮层,避免它随塌缩的
-        // 徽章簇漂移到统计入口下方(脱离触发来源变得突兀)。仅作用于 header
-        // 徽章打开的浮层;底部「工具」入口锚点稳定,不受此约束。
+        // 本 modifier 留在条件分支外，确保最后一个工具关闭、徽章退出视图树时
+        // 仍能同步收起由该徽章锚定的 popover。
         .onChange(of: store.anyActive) { _, active in
             if !active, store.popoverPresenter.isShown(from: anchor) {
                 store.popoverPresenter.dismiss()
@@ -795,8 +824,9 @@ private struct MetricGlassRow: View, Equatable {
     var showDiskProcesses = true
     var toggleExpansion: (() -> Void)?
 
-    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
-    // 闭包不参与相等判定。未变化的行 == 成立时 SwiftUI 跳过整行重绘。
+    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),
+    // 故只比这两个键字段;闭包不参与相等判定。未变化的行 == 成立时
+    // SwiftUI 跳过整行重绘。
     static func == (lhs: MetricGlassRow, rhs: MetricGlassRow) -> Bool {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
@@ -909,7 +939,11 @@ private struct MetricGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -996,7 +1030,7 @@ private struct MetricGlassRow: View, Equatable {
 /// CPU 展开区 P/E 核两行展示:第一行逐核负载环形图(逐行铺满、多核
 /// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
 /// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
-/// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
+/// 继承分隔线与对称内边距;占用展示取代 core-split 格子避免重复。
 private struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
@@ -1025,10 +1059,9 @@ private struct CPUCoresDetail: View {
             // (深一档),避免与底色糊成一片。
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(theme.palette.trackFill)
-            )
+            .compatibleLiquidSurface(cornerRadius: 7, style: .liquidClear) {
+                theme.palette.trackFill
+            }
 
             HStack(spacing: MetricGridMetrics.columnSpacing) {
                 if let efficiency = detail.efficiencyUsage {
@@ -1068,7 +1101,9 @@ private struct CPUCoresDetail: View {
         .padding(.vertical, 4)
         .padding(.horizontal, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+        .compatibleLiquidSurface(cornerRadius: 7, style: .liquidClear) {
+            theme.trackFill
+        }
     }
 }
 
@@ -1156,7 +1191,6 @@ private struct MetricDetailGrid: View {
     /// 并剔除 core-split 格子(同源数值不重复展示)。
     var cpuCoreDetail: CPUCoreDetail? = nil
 
-    private var leadingInset: CGFloat { 28 }
     private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
@@ -1191,10 +1225,10 @@ private struct MetricDetailGrid: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, leadingInset)
 
-            content
-                .padding(.leading, leadingInset)
+            CompatibleGlassContainer(spacing: 0) {
+                content
+            }
         }
     }
 
@@ -1238,7 +1272,9 @@ private struct MetricDetailGrid: View {
             .padding(.vertical, 4)
             .padding(.horizontal, 8)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+            .compatibleLiquidSurface(cornerRadius: 7, style: .liquidClear) {
+                theme.trackFill
+            }
     }
 
     /// 热压力整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
@@ -1494,25 +1530,25 @@ private struct StorageVolumeDetailList: View {
     let theme: MonitorPanelTheme
 
     var body: some View {
-        VStack(spacing: 8) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: kind))
-                .frame(height: 1)
-                .padding(.leading, 28)
-
+        CompatibleGlassContainer(spacing: 0) {
             VStack(spacing: 8) {
-                ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
-                    if index > 0 {
-                        Rectangle()
-                            .fill(theme.rowSeparator(for: kind).opacity(0.72))
-                            .frame(height: 1)
-                            .padding(.leading, 22)
-                    }
+                Rectangle()
+                    .fill(theme.rowSeparator(for: kind))
+                    .frame(height: 1)
 
-                    StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
+                VStack(spacing: 8) {
+                    ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(theme.rowSeparator(for: kind).opacity(0.72))
+                                .frame(height: 1)
+                                .padding(.leading, 22)
+                        }
+
+                        StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
+                    }
                 }
             }
-            .padding(.leading, 28)
         }
     }
 }
@@ -1549,9 +1585,12 @@ private struct StorageVolumeRow: View {
                         .lineLimit(1)
                         .padding(.horizontal, 6)
                         .padding(.vertical, 2)
-                        .background {
-                            Capsule()
-                                .fill(theme.badgeFill(for: kind))
+                        .compatibleLiquidSurface(
+                            tint: tint.opacity(0.12),
+                            in: Capsule(),
+                            style: .liquidClear
+                        ) {
+                            theme.badgeFill(for: kind)
                         }
                 }
 
@@ -1654,31 +1693,28 @@ private struct NetworkGlassRow: View, Equatable {
                     .foregroundStyle(tint)
                     .frame(width: 18)
 
-                HStack(spacing: 6) {
-                    HStack(spacing: 6) {
-                        Text(String(localized: "kind.network") + ":")
-                            .monitorPanelMetricLabelFont()
-                            .foregroundStyle(theme.primaryText)
-                            .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
-
-                        Text(localizedNetworkInterface(module.summary))
-                            .monitorPanelMonoFont(weight: .semibold)
-                            .foregroundStyle(theme.valueText)
-                            .lineLimit(1)
-                            .minimumScaleFactor(0.82)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+                Text(String(localized: "kind.network") + ":")
+                    .monitorPanelMetricLabelFont()
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
                     .layoutPriority(2)
 
-                    Spacer(minLength: 2)
+                Text(localizedNetworkInterface(module.summary))
+                    .monitorPanelMonoFont(weight: .semibold)
+                    .foregroundStyle(theme.valueText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+                    .layoutPriority(3)
 
-                    HStack(spacing: 6) {
-                        NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
-                        NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
-                    }
-                    .layoutPriority(1)
+                Spacer(minLength: 4)
+
+                HStack(spacing: 4) {
+                    NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
+                    NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
                 }
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1705,7 +1741,11 @@ private struct NetworkGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -1736,10 +1776,6 @@ private struct BatteryGlassRow: View, Equatable {
     var isExpanded = false
     /// 功率流图开关(Beta,settings.battery.showPowerFlow):关闭后展开区仅保留指标网格。
     var showPowerFlow = true
-    /// 面板可见性:与 isExpanded 一起门控功率流的流光动画。
-    var panelVisible = true
-    /// 功率流流光启用:false 时回落到纯静态绘制,用于展开动画窗口期停更 GPU 流光。
-    var powerFlowActive = true
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
@@ -1749,8 +1785,6 @@ private struct BatteryGlassRow: View, Equatable {
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
             && lhs.showPowerFlow == rhs.showPowerFlow
-            && lhs.panelVisible == rhs.panelVisible
-            && lhs.powerFlowActive == rhs.powerFlowActive
     }
 
     private var tint: Color {
@@ -1792,12 +1826,14 @@ private struct BatteryGlassRow: View, Equatable {
                 // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
                 // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
                 // 台式机无电池无充电概念,只显功耗 pill。
-                if hasBattery {
-                    PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
-                        .layoutPriority(0)
+                HStack(spacing: 4) {
+                    if hasBattery {
+                        PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
+                    }
+                    PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
                 }
-                PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                    .layoutPriority(0)
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(1)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1823,13 +1859,10 @@ private struct BatteryGlassRow: View, Equatable {
                     if showPowerFlow && numericValue("power") != nil {
                         PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
                             .padding(.top, 3)
-                            // 与明细网格同 28pt 缩进,分区标题与下方图内容左缘对齐(原型基准)。
-                            .padding(.leading, 28)
                         PowerFlowDiagram(
                             module: module,
                             theme: theme,
-                            tint: tint,
-                            animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
+                            tint: tint
                         )
                     }
                 }
@@ -1837,7 +1870,11 @@ private struct BatteryGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -1878,9 +1915,9 @@ private struct BatteryGlassRow: View, Equatable {
 
     /// CHG pill 内容:充电中显充电功率,其余状态(电池供电/插电直供)显占位符。
     private var chargingPillValue: String {
-        guard isCharging else { return "-" }
+        guard isCharging else { return "—" }
         let raw = rawValue("charging-power")
-        return raw == "--" ? "-" : raw
+        return raw == "--" ? "—" : raw
     }
 
     private var summaryText: String {
@@ -1896,7 +1933,11 @@ private struct BatteryGlassRow: View, Equatable {
         // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
         // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
         // 斜杠长值,由静态登记整行排到模块末尾。
-        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "capacity"]
+        var names = ["health", "cycle-count", "temperature", "power-loss"]
+        #if DIRECT_DISTRIBUTION
+        names.append(contentsOf: ["power", "display-power", "cpu-power", "gpu-power"])
+        #endif
+        names.append(contentsOf: ["voltage", "current", "capacity"])
 
         let enabledNames = Set(details.map(\.name))
 
@@ -2117,67 +2158,59 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
 /// 电源行专用的定宽 pill:符号标识(⚡充电 / 仪表功耗)+ 数值。
 /// 定宽保证数值位数变化/充电状态切换时行内元素不抖动。
 private struct PowerLabelPill: View {
+    private static let width: CGFloat = 68
+
     let symbol: String
     let value: String
     let theme: MonitorPanelTheme
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             Image(systemName: symbol)
                 .font(.caption2.weight(.semibold))
                 .symbolRenderingMode(.monochrome)
-                .foregroundStyle(theme.secondaryText.opacity(0.72))
+                .foregroundStyle(theme.palette.moduleTint(for: .battery))
+                .frame(width: 12)
             Text(value)
                 .foregroundStyle(theme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .font(.system(.footnote, design: .monospaced).weight(.medium))
+        .font(.system(.caption2, design: .monospaced).weight(.medium))
         .monospacedDigit()
         .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .frame(width: 74, alignment: .trailing)
+        .minimumScaleFactor(0.82)
+        .padding(.horizontal, 6)
+        .frame(width: Self.width, height: 20)
+        .background(theme.trackFill, in: Capsule())
     }
 }
 
 private struct NetworkRatePill: View {
+    private static let width: CGFloat = 68
+
     let systemImage: String
     let text: String
     let theme: MonitorPanelTheme
 
-    private var parts: (value: String, unit: String) {
-        guard let split = text.lastIndex(of: " ") else {
-            return (text, "")
-        }
-
-        return (
-            String(text[..<split]),
-            String(text[text.index(after: split)...])
-        )
-    }
-
     var body: some View {
-        let parts = parts
-
         HStack(spacing: 3) {
             Image(systemName: systemImage)
                 .font(.caption2.weight(.semibold))
-                .frame(width: 10)
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(theme.palette.moduleTint(for: .network))
+                .frame(width: 12)
 
-            Text(parts.value)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
-                .lineLimit(1)
-                .minimumScaleFactor(0.68)
-                .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
-
-            Text(parts.unit)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .frame(width: 26, alignment: .leading)
+            Text(text)
+                .foregroundStyle(theme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .foregroundStyle(theme.secondaryText)
-        .fixedSize(horizontal: true, vertical: false)
-        // Compact network rate pill: bounded width preserves room for both upload and download rates.
-        .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
+        .font(.system(.caption2, design: .monospaced).weight(.medium))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.82)
+        .padding(.horizontal, 6)
+        .frame(width: Self.width, height: 20)
+        .background(theme.trackFill, in: Capsule())
     }
 }
 
@@ -2259,8 +2292,8 @@ struct MonitorPanelTheme {
     }
 }
 
-/// 按 `(偏好, 外观)` 缓存 MonitorPanelTheme。preference 只有 balanced/vibrant 两个值,
-/// colorScheme 只有 light/dark,最多 4 个组合,命中率近乎 100%,避免每帧重建整棵
+/// 按 `(偏好, 外观)` 缓存 MonitorPanelTheme。最多 4 个组合,
+/// 命中率近乎 100%,避免每帧重建整棵
 /// Color 树。访问仅发生在 MainActor(body 求值),无需加锁。
 @MainActor
 enum ThemeCache {
@@ -2279,7 +2312,10 @@ enum ThemeCache {
         if let cached = cache[key] {
             return cached
         }
-        let theme = MonitorPanelTheme(palette: MonitorPalette(preference: preference, colorScheme: scheme))
+        let theme = MonitorPanelTheme(palette: MonitorPalette(
+            preference: preference,
+            colorScheme: scheme
+        ))
         cache[key] = theme
         return theme
     }
@@ -2319,63 +2355,62 @@ private struct TopProcessList: View {
     var body: some View {
         let translatedCount = rows.filter(\.translated).count
 
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: kind))
-                .frame(height: 1)
-                .padding(.leading, 28)
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(spacing: 5) {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: kind))
+                    .frame(height: 1)
 
-            VStack(spacing: 4) {
-                ForEach(0 ..< Self.rowCount, id: \.self) { index in
-                    if index < rows.count {
-                        let proc = rows[index]
-                        HStack(spacing: 6) {
-                            ProcessIcon(icon: proc.icon, theme: theme)
-                                .frame(width: 16, height: 16)
+                VStack(spacing: 4) {
+                    ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                        if index < rows.count {
+                            let proc = rows[index]
+                            HStack(spacing: 6) {
+                                ProcessIcon(icon: proc.icon, theme: theme)
+                                    .frame(width: 16, height: 16)
 
-                            Text(proc.name)
-                                .monitorPanelCaptionFont(.footnote)
-                                .foregroundStyle(theme.primaryText)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+                                Text(proc.name)
+                                    .monitorPanelCaptionFont(.footnote)
+                                    .foregroundStyle(theme.primaryText)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
 
-                            // Rosetta 转译角标:macOS 28 起 Intel 应用将无法运行,
-                            // 在 TOP 进程行内尽早暴露(仅 arm64 宿主可能为 true)。
-                            if proc.translated {
-                                RosettaBadge()
-                            }
+                                // Rosetta 转译角标:macOS 28 起 Intel 应用将无法运行,
+                                // 在 TOP 进程行内尽早暴露(仅 arm64 宿主可能为 true)。
+                                if proc.translated {
+                                    RosettaBadge()
+                                }
 
-                            Spacer(minLength: 4)
+                                Spacer(minLength: 4)
 
-                            Text(proc.valueText)
-                                .monitorPanelMonoFont(.caption2, weight: .medium)
-                                .foregroundStyle(theme.secondaryText)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .layoutPriority(1)
-
-                            // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
-                            // GPU 时间,空值(旧驱动/未上报)时不渲染。
-                            if let apiText = proc.apiText {
-                                Text(apiText)
-                                    .monitorPanelCaptionFont(.caption2)
-                                    .foregroundStyle(theme.captionText)
+                                Text(proc.valueText)
+                                    .monitorPanelMonoFont(.caption2, weight: .medium)
+                                    .foregroundStyle(theme.secondaryText)
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
+                                    .layoutPriority(1)
+
+                                // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
+                                // GPU 时间,空值(旧驱动/未上报)时不渲染。
+                                if let apiText = proc.apiText {
+                                    Text(apiText)
+                                        .monitorPanelCaptionFont(.caption2)
+                                        .foregroundStyle(theme.captionText)
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                }
                             }
+                        } else {
+                            ProcessPlaceholderRow(theme: theme)
                         }
-                    } else {
-                        ProcessPlaceholderRow(theme: theme)
                     }
                 }
-            }
-            .padding(.leading, 28)
-            .animation(.easeInOut(duration: 0.2), value: rows.count)
+                .animation(.easeInOut(duration: 0.2), value: rows.count)
 
-            // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
-            if showRosettaBanner, translatedCount > 0 {
-                RosettaBanner(count: translatedCount, theme: theme)
-                    .padding(.leading, 28)
+                // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
+                if showRosettaBanner, translatedCount > 0 {
+                    RosettaBanner(count: translatedCount, theme: theme)
+                }
             }
         }
     }
@@ -2463,7 +2498,13 @@ private struct RosettaBadge: View {
             .foregroundStyle(colorScheme == .dark ? Color(hex: 0xE0B45E) : warning)
             .padding(.horizontal, 4)
             .padding(.vertical, 1)
-            .background(RoundedRectangle(cornerRadius: 4).fill(warning.opacity(colorScheme == .dark ? 0.15 : 0.12)))
+            .compatibleLiquidSurface(
+                tint: warning.opacity(0.16),
+                cornerRadius: 4,
+                style: .liquidClear
+            ) {
+                warning.opacity(colorScheme == .dark ? 0.15 : 0.12)
+            }
             .overlay(RoundedRectangle(cornerRadius: 4).stroke(warning.opacity(colorScheme == .dark ? 0.45 : 0.38), lineWidth: 1))
     }
 }
@@ -2483,7 +2524,13 @@ private struct RosettaBanner: View {
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 9).fill(warning.opacity(colorScheme == .dark ? 0.09 : 0.07)))
+            .compatibleLiquidSurface(
+                tint: warning.opacity(0.12),
+                cornerRadius: 9,
+                style: .liquidClear
+            ) {
+                warning.opacity(colorScheme == .dark ? 0.09 : 0.07)
+            }
             .overlay(RoundedRectangle(cornerRadius: 9).stroke(warning.opacity(0.30), lineWidth: 1))
     }
 }
@@ -2551,14 +2598,12 @@ private struct InlineDiskProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .storage))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2588,14 +2633,12 @@ private struct InlineNetworkProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .network))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2613,14 +2656,12 @@ private struct FanList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .fan))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(fans) { fan in
                     fanRow(fan)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -2730,7 +2771,11 @@ private struct BluetoothGlassRow: View, Equatable {
                     .padding(.bottom, 9)
             }
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.rowGlassTint(for: module.kind),
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidInteractive
+        ) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -2743,18 +2788,18 @@ private struct BluetoothDeviceList: View {
     let theme: MonitorPanelTheme
 
     var body: some View {
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: .bluetooth))
-                .frame(height: 1)
-                .padding(.leading, 28)
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(spacing: 5) {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: .bluetooth))
+                    .frame(height: 1)
 
-            VStack(spacing: 8) {
-                ForEach(devices) { device in
-                    deviceRow(device)
+                VStack(spacing: 8) {
+                    ForEach(devices) { device in
+                        deviceRow(device)
+                    }
                 }
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -2766,9 +2811,12 @@ private struct BluetoothDeviceList: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(theme.moduleTint(for: .bluetooth))
                 .frame(width: 26, height: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(theme.badgeFill(for: .bluetooth))
+                .compatibleLiquidSurface(
+                    tint: theme.moduleTint(for: .bluetooth).opacity(0.12),
+                    cornerRadius: 7,
+                    style: .liquidClear
+                ) {
+                    theme.badgeFill(for: .bluetooth)
                 }
 
             VStack(alignment: .leading, spacing: 1) {

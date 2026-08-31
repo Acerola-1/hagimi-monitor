@@ -107,7 +107,11 @@ struct DisplayInfoSection: View {
             }
             animate(Self.sectionKey, isExpanded, true)
         }
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(
+            tint: theme.palette.displayGlassTint,
+            cornerRadius: MonitorConstants.rowCornerRadius,
+            style: .liquidInteractive
+        ) {
             theme.palette.displayGlassFill
         }
         .onAppear {
@@ -339,7 +343,6 @@ private struct DisplayInfoCard: View {
                     onToggle: toggleArchive
                 )
             }
-            .padding(.leading, 28)
 
             VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
                 DisplayInfoBaseGrid(display: display, palette: palette)
@@ -348,7 +351,6 @@ private struct DisplayInfoCard: View {
                     archiveContent
                 }
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -380,12 +382,21 @@ struct DisplayArchiveToggle: View {
 
     var body: some View {
         Button(action: onToggle) {
-            Image(systemName: "chevron.right")
-                .font(.system(size: 8.5, weight: .bold))
-                .rotationEffect(.degrees(archiveExpanded ? 90 : 0))
-                .foregroundStyle(palette.captionText)
-                .frame(width: 16, height: 16)
-                .contentShape(Rectangle())
+            CompatibleGlassContainer(spacing: 0) {
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .rotationEffect(.degrees(archiveExpanded ? 90 : 0))
+                    .foregroundStyle(palette.captionText)
+                    .frame(width: 16, height: 16)
+                    .compatibleLiquidSurface(
+                        tint: palette.displayTint.opacity(0.12),
+                        in: Circle(),
+                        style: .liquidClearInteractive
+                    ) {
+                        Color.clear
+                    }
+                    .contentShape(Rectangle())
+            }
         }
         .buttonStyle(.plain)
         .help(String(localized: archiveExpanded ? "display.archive.hide" : "display.archive.show"))
@@ -401,24 +412,30 @@ struct DisplayArchiveCopyButton: View {
     @State private var justCopied = false
 
     var body: some View {
-        HStack {
-            Spacer()
-            Button(action: copy) {
-                HStack(spacing: 4) {
-                    Image(systemName: justCopied ? "checkmark" : "doc.on.doc")
-                        .font(.system(size: 9.5, weight: .semibold))
-                    Text(String(localized: justCopied ? "display.archive.copied" : "display.archive.copy"))
-                        .monitorPanelCaptionFont(.caption2)
+        CompatibleGlassContainer(spacing: 0) {
+            HStack {
+                Spacer()
+                Button(action: copy) {
+                    HStack(spacing: 4) {
+                        Image(systemName: justCopied ? "checkmark" : "doc.on.doc")
+                            .font(.system(size: 9.5, weight: .semibold))
+                        Text(String(localized: justCopied ? "display.archive.copied" : "display.archive.copy"))
+                            .monitorPanelCaptionFont(.caption2)
+                    }
+                    .foregroundStyle(justCopied ? palette.severityTint(for: .calm) : palette.captionText)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .compatibleLiquidSurface(
+                        tint: palette.displayTint.opacity(0.10),
+                        in: Capsule(),
+                        style: .liquidClearInteractive
+                    ) {
+                        palette.trackFill
+                    }
+                    .contentShape(Capsule())
                 }
-                .foregroundStyle(justCopied ? palette.severityTint(for: .calm) : palette.captionText)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background {
-                    Capsule().fill(palette.trackFill)
-                }
-                .contentShape(Capsule())
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
         }
     }
 
@@ -452,13 +469,15 @@ struct DisplayArchiveGrid: View {
     private static let halfRowValueBudget = 10
 
     var body: some View {
-        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
-            grid(for: specRows)
-            Text(String(localized: "display.archive.identity"))
-                .monitorPanelCaptionFont(.caption2)
-                .foregroundStyle(palette.captionText)
-                .padding(.top, 1)
-            grid(for: identityRows)
+        CompatibleGlassContainer(spacing: 0) {
+            VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+                grid(for: specRows)
+                Text(String(localized: "display.archive.identity"))
+                    .monitorPanelCaptionFont(.caption2)
+                    .foregroundStyle(palette.captionText)
+                    .padding(.top, 1)
+                grid(for: identityRows)
+            }
         }
     }
 
@@ -553,28 +572,30 @@ struct DisplayInfoBaseGrid: View {
     let palette: MonitorPalette
 
     var body: some View {
-        Grid(
-            horizontalSpacing: MetricGridMetrics.columnSpacing,
-            verticalSpacing: MetricGridMetrics.gridRowGap
-        ) {
-            GridRow {
-                DisplayArchiveTile(label: String(localized: "metric.display.resolution"), value: display.resolution, palette: palette)
-                    .gridCellColumns(2)
-            }
-            GridRow {
-                DisplayArchiveTile(label: String(localized: "metric.display.refresh-rate"), value: display.refreshRate, palette: palette)
-                DisplayArchiveTile(
-                    label: "HDR",
-                    value: display.hdrSupported.map {
-                        $0
-                            ? String(localized: "metric-value.display.hdr.supported")
-                            : String(localized: "metric-value.display.hdr.unsupported")
-                    } ?? "--",
-                    palette: palette
-                )
-            }
-            GridRow {
-                DisplayArchiveTile(label: String(localized: "metric.display.color-depth"), value: display.colorDepth, palette: palette)
+        CompatibleGlassContainer(spacing: 0) {
+            Grid(
+                horizontalSpacing: MetricGridMetrics.columnSpacing,
+                verticalSpacing: MetricGridMetrics.gridRowGap
+            ) {
+                GridRow {
+                    DisplayArchiveTile(label: String(localized: "metric.display.resolution"), value: display.resolution, palette: palette)
+                        .gridCellColumns(2)
+                }
+                GridRow {
+                    DisplayArchiveTile(label: String(localized: "metric.display.refresh-rate"), value: display.refreshRate, palette: palette)
+                    DisplayArchiveTile(
+                        label: "HDR",
+                        value: display.hdrSupported.map {
+                            $0
+                                ? String(localized: "metric-value.display.hdr.supported")
+                                : String(localized: "metric-value.display.hdr.unsupported")
+                        } ?? "--",
+                        palette: palette
+                    )
+                }
+                GridRow {
+                    DisplayArchiveTile(label: String(localized: "metric.display.color-depth"), value: display.colorDepth, palette: palette)
+                }
             }
         }
     }
@@ -605,9 +626,12 @@ private struct DisplayArchiveTile: View {
         }
         .padding(.horizontal, 9)
         .padding(.vertical, 6)
-        .background {
-            RoundedRectangle(cornerRadius: 9)
-                .fill(palette.trackFill)
+        .compatibleLiquidSurface(
+            tint: palette.displayTint.opacity(0.08),
+            cornerRadius: 9,
+            style: .liquidClear
+        ) {
+            palette.trackFill
         }
     }
 }

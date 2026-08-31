@@ -2,27 +2,25 @@ import SwiftUI
 
 // MARK: - Compatible Pulse Effect
 
-/// 跨版本兼容的脉冲动画。macOS 26+ 使用原生 `.symbolEffect(.pulse)`，
-/// macOS 15 使用 `.opacity` 循环动画模拟脉冲效果。
-/// `isActive` 为 false 时静止不脉冲——面板视图树常驻不销毁,
-/// 隐藏期间的持续动画只会白白驱动渲染。
+/// 跨版本兼容的单次脉冲。macOS 26+ 仅在 `trigger` 变为 `true` 时
+/// 播放一次原生 `.symbolEffect(.pulse)`；macOS 15 降级为静态。
+///
+/// 不可在面板可见期间使用 `.repeating` / `repeatForever`：即使只动一个
+/// 5pt 圆点，也会让透明毛玻璃窗口持续提交合成帧，阻止 GPU 进入空闲。
 struct CompatiblePulseEffect: ViewModifier {
-    var isActive: Bool = true
-    @State private var isPulsing = false
+    var trigger: Bool
+    @State private var pulseToken = 0
 
     func body(content: Content) -> some View {
         if #available(macOS 26, *) {
             content
-                .symbolEffect(.pulse, options: .repeating.speed(0.8), isActive: isActive)
-        } else if isActive {
-            content
-                .opacity(isPulsing ? 0.4 : 1.0)
-                .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isPulsing)
-                .onAppear { isPulsing = true }
+                .symbolEffect(.pulse, options: .speed(0.8), value: pulseToken)
+                .onChange(of: trigger, initial: true) { _, isActive in
+                    guard isActive else { return }
+                    pulseToken += 1
+                }
         } else {
-            // 静止分支:与脉冲分支结构不同(身份切换),确保 repeatForever 彻底停止。
             content
-                .opacity(1.0)
         }
     }
 }
@@ -30,8 +28,8 @@ struct CompatiblePulseEffect: ViewModifier {
 // MARK: - View Extensions
 
 extension View {
-    /// 跨版本兼容的脉冲动画替代。
-    func compatiblePulseEffect(isActive: Bool = true) -> some View {
-        modifier(CompatiblePulseEffect(isActive: isActive))
+    /// `trigger` 变为 `true` 时播放一次脉冲，不持续占用显示刷新时钟。
+    func compatiblePulseEffect(trigger: Bool) -> some View {
+        modifier(CompatiblePulseEffect(trigger: trigger))
     }
 }
