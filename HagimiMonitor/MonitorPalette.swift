@@ -1,34 +1,28 @@
+import AppKit
 import SwiftUI
 
 struct MonitorPalette {
     let preference: MonitorColorSchemePreference
     let colorScheme: ColorScheme
-    /// Liquid Glass 开启时面板始终使用浅色文字，避免系统亮色外观
-    /// 把文字切成黑色后，与 40% 黑色玻璃衬底失去对比度。
-    let forceLightText: Bool
 
     private var isDark: Bool {
         colorScheme == .dark
     }
 
-    private var usesLightText: Bool {
-        isDark || forceLightText
-    }
-
     var primaryText: Color {
-        usesLightText ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
+        Color(nsColor: .labelColor)
     }
 
     var valueText: Color {
-        usesLightText ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
+        Color(nsColor: .labelColor)
     }
 
     var secondaryText: Color {
-        usesLightText ? Color.white.opacity(0.82) : Color(hex: 0x465164)
+        Color(nsColor: .secondaryLabelColor)
     }
 
     var captionText: Color {
-        usesLightText ? Color.white.opacity(0.78) : Color(hex: 0x4E5868)
+        Color(nsColor: .secondaryLabelColor)
     }
 
     var trackFill: Color {
@@ -92,24 +86,24 @@ struct MonitorPalette {
         }
     }
 
-    /// macOS 15 行玻璃回退填充:平衡为均布中性玻璃;活力为垂直衰减渐变——
-    /// 行头保持满浓度,向下衰减至近中性,展开区小字不受模块色相干扰。
+    /// macOS 15 行玻璃回退填充。两套配色都保留模块色，并向展开区逐渐
+    /// 衰减，避免大面积色块干扰明细文字。
     @ViewBuilder
     func rowGlassFill(for kind: MonitorKind) -> some View {
         switch preference {
         case .balanced:
-            neutralGlassTint
+            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: fallbackBalancedGlassOpacity)
         case .vibrant:
             RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: fallbackVibrantGlassOpacity)
         }
     }
 
-    /// macOS 26 Liquid Glass 的系统 tint。这里只保留很淡的模块色相，让每行仍能
-    /// 辨认所属模块，同时避免浓 tint 把系统折射、高光遮成普通实色卡片。
+    /// macOS 26 原生 Liquid Glass 的模块 tint。颜色只进入系统玻璃管线，
+    /// 折射、高光和前景对比度仍由系统负责。
     func rowGlassTint(for kind: MonitorKind) -> Color {
         switch preference {
         case .balanced:
-            liquidNeutralGlassTint
+            moduleTint(for: kind).opacity(liquidBalancedGlassOpacity)
         case .vibrant:
             moduleTint(for: kind).opacity(liquidVibrantGlassOpacity)
         }
@@ -119,7 +113,7 @@ struct MonitorPalette {
     var displayGlassFill: some View {
         switch preference {
         case .balanced:
-            neutralGlassTint
+            RowGlassFadeFill(tint: displayTint, fullOpacity: fallbackBalancedGlassOpacity)
         case .vibrant:
             RowGlassFadeFill(tint: displayTint, fullOpacity: fallbackVibrantGlassOpacity)
         }
@@ -129,21 +123,29 @@ struct MonitorPalette {
     var displayGlassTint: Color {
         switch preference {
         case .balanced:
-            liquidNeutralGlassTint
+            displayTint.opacity(liquidBalancedGlassOpacity)
         case .vibrant:
             displayTint.opacity(liquidVibrantGlassOpacity)
         }
     }
 
-    /// 旧系统回退仍靠自绘颜色表现模块归属，保留原有浓度。
-    private var fallbackVibrantGlassOpacity: Double {
-        isDark ? 0.16 : 0.08
+    private var fallbackBalancedGlassOpacity: Double {
+        isDark ? 0.12 : 0.06
     }
 
-    /// 系统 Liquid Glass 自带材质与折射，tint 只负责轻微染色；其浓度必须显著
-    /// 低于旧系统的自绘回退，才能让每个子项看起来是玻璃而不是半透明色块。
+    /// 旧系统回退靠自绘颜色表现模块归属，活力主题适当提高色彩层次。
+    private var fallbackVibrantGlassOpacity: Double {
+        isDark ? 0.18 : 0.10
+    }
+
+    private var liquidBalancedGlassOpacity: Double {
+        isDark ? 0.11 : 0.07
+    }
+
+    /// 原生 clear glass 只接受单色 tint；这里保持足够辨识度，同时让底层
+    /// regular glass 和边缘高光清晰透出。
     private var liquidVibrantGlassOpacity: Double {
-        isDark ? 0.06 : 0.035
+        isDark ? 0.15 : 0.09
     }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
@@ -180,14 +182,6 @@ struct MonitorPalette {
         case .vibrant:
             moduleTint(for: kind).opacity(isDark ? 0.20 : 0.12)
         }
-    }
-
-    private var neutralGlassTint: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
-    }
-
-    private var liquidNeutralGlassTint: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.04 : 0.025)
     }
 
     private var neutralSeparator: Color {

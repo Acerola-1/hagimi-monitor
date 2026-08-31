@@ -110,7 +110,7 @@ struct DisplayInfoSection: View {
         .compatibleGlassEffect(
             tint: theme.palette.displayGlassTint,
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidLensInteractive
+            style: .liquidClearInteractive
         ) {
             theme.palette.displayGlassFill
         }
@@ -343,7 +343,6 @@ private struct DisplayInfoCard: View {
                     onToggle: toggleArchive
                 )
             }
-            .padding(.leading, 28)
 
             VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
                 DisplayInfoBaseGrid(display: display, palette: palette)
@@ -352,7 +351,6 @@ private struct DisplayInfoCard: View {
                     archiveContent
                 }
             }
-            .padding(.leading, 28)
         }
     }
 

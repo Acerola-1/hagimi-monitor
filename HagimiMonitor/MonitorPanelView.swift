@@ -62,13 +62,12 @@ struct MonitorPanelView: View {
     }
 
     var body: some View {
-        // theme 按 (配色偏好, 系统外观, 文字明度) 缓存,避免每秒采样刷新时
-        // 重建整棵 Color 树。
+        // theme 按 (配色偏好, 系统外观) 缓存,避免每秒采样刷新时
+        // 重建整棵 Color 树。文字使用系统语义色，由外观自动适配。
         // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
         let theme = ThemeCache.theme(
             preference: store.settings.colorSchemePreference,
-            scheme: colorScheme,
-            forceLightText: keepsLiquidGlassTextLight
+            scheme: colorScheme
         )
 
         // 0pt 仍让系统批处理所有 Liquid Glass 子项，但不启用邻近融合；CPU、GPU、
@@ -326,16 +325,6 @@ struct MonitorPanelView: View {
             colorScheme == .dark
                 ? Color.black.opacity(0.35)
                 : Color.white.opacity(0.45)
-        }
-    }
-
-    /// 40% 黑色玻璃衬底在亮色系统外观下仍需要白色文字；
-    /// 关闭 Liquid Glass 或运行在旧系统时保留原有的自适应文字颜色。
-    private var keepsLiquidGlassTextLight: Bool {
-        if #available(macOS 26, *) {
-            store.settings.liquidGlassEnabled
-        } else {
-            false
         }
     }
 
@@ -835,14 +824,13 @@ private struct MetricGlassRow: View, Equatable {
     var showDiskProcesses = true
     var toggleExpansion: (() -> Void)?
 
-    // theme 完全由 (preference, colorScheme, forceLightText) 决定(见 ThemeCache),
-    // 故只比这三个键字段;闭包不参与相等判定。未变化的行 == 成立时
+    // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),
+    // 故只比这两个键字段;闭包不参与相等判定。未变化的行 == 成立时
     // SwiftUI 跳过整行重绘。
     static func == (lhs: MetricGlassRow, rhs: MetricGlassRow) -> Bool {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.detail == rhs.detail
             && lhs.detailColor == rhs.detailColor
             && lhs.samples == rhs.samples
@@ -954,7 +942,7 @@ private struct MetricGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidLensInteractive
+            style: .liquidClearInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -1042,7 +1030,7 @@ private struct MetricGlassRow: View, Equatable {
 /// CPU 展开区 P/E 核两行展示:第一行逐核负载环形图(逐行铺满、多核
 /// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
 /// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
-/// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
+/// 继承分隔线与对称内边距;占用展示取代 core-split 格子避免重复。
 private struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
@@ -1203,7 +1191,6 @@ private struct MetricDetailGrid: View {
     /// 并剔除 core-split 格子(同源数值不重复展示)。
     var cpuCoreDetail: CPUCoreDetail? = nil
 
-    private var leadingInset: CGFloat { 28 }
     private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
@@ -1238,11 +1225,9 @@ private struct MetricDetailGrid: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, leadingInset)
 
             CompatibleGlassContainer(spacing: 0) {
                 content
-                    .padding(.leading, leadingInset)
             }
         }
     }
@@ -1550,7 +1535,6 @@ private struct StorageVolumeDetailList: View {
                 Rectangle()
                     .fill(theme.rowSeparator(for: kind))
                     .frame(height: 1)
-                    .padding(.leading, 28)
 
                 VStack(spacing: 8) {
                     ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
@@ -1564,7 +1548,6 @@ private struct StorageVolumeDetailList: View {
                         StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
                     }
                 }
-                .padding(.leading, 28)
             }
         }
     }
@@ -1682,7 +1665,6 @@ private struct NetworkGlassRow: View, Equatable {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
             && lhs.topNetworkProcesses == rhs.topNetworkProcesses
@@ -1727,7 +1709,7 @@ private struct NetworkGlassRow: View, Equatable {
 
                 Spacer(minLength: 4)
 
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
                     NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
                 }
@@ -1762,7 +1744,7 @@ private struct NetworkGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidLensInteractive
+            style: .liquidClearInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -1800,7 +1782,6 @@ private struct BatteryGlassRow: View, Equatable {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.details == rhs.details
             && lhs.isExpanded == rhs.isExpanded
             && lhs.showPowerFlow == rhs.showPowerFlow
@@ -1845,7 +1826,7 @@ private struct BatteryGlassRow: View, Equatable {
                 // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
                 // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
                 // 台式机无电池无充电概念,只显功耗 pill。
-                HStack(spacing: 6) {
+                HStack(spacing: 4) {
                     if hasBattery {
                         PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
                     }
@@ -1878,8 +1859,6 @@ private struct BatteryGlassRow: View, Equatable {
                     if showPowerFlow && numericValue("power") != nil {
                         PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
                             .padding(.top, 3)
-                            // 与明细网格同 28pt 缩进,分区标题与下方图内容左缘对齐(原型基准)。
-                            .padding(.leading, 28)
                         PowerFlowDiagram(
                             module: module,
                             theme: theme,
@@ -1894,7 +1873,7 @@ private struct BatteryGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidLensInteractive
+            style: .liquidClearInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -2175,75 +2154,59 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
 /// 电源行专用的定宽 pill:符号标识(⚡充电 / 仪表功耗)+ 数值。
 /// 定宽保证数值位数变化/充电状态切换时行内元素不抖动。
 private struct PowerLabelPill: View {
-    private static let width: CGFloat = 74
+    private static let width: CGFloat = 68
 
     let symbol: String
     let value: String
     let theme: MonitorPanelTheme
 
     var body: some View {
-        CompatibleGlassContainer(spacing: 0) {
-            HStack(spacing: 4) {
-                Image(systemName: symbol)
-                    .font(.caption2.weight(.semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(theme.secondaryText.opacity(0.72))
-                    .frame(width: 12)
-                Text(value)
-                    .foregroundStyle(theme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .font(.system(.footnote, design: .monospaced).weight(.medium))
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .padding(.horizontal, 8)
-            .frame(width: Self.width, height: 22)
-            .compatibleLiquidSurface(
-                tint: theme.palette.moduleTint(for: .battery).opacity(0.10),
-                in: Capsule(),
-                style: .liquidLens
-            ) {
-                Color.clear
-            }
+        HStack(spacing: 3) {
+            Image(systemName: symbol)
+                .font(.caption2.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(theme.palette.moduleTint(for: .battery))
+                .frame(width: 12)
+            Text(value)
+                .foregroundStyle(theme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .font(.system(.caption2, design: .monospaced).weight(.medium))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.82)
+        .padding(.horizontal, 6)
+        .frame(width: Self.width, height: 20)
+        .background(theme.trackFill, in: Capsule())
     }
 }
 
 private struct NetworkRatePill: View {
-    private static let width: CGFloat = 74
+    private static let width: CGFloat = 68
 
     let systemImage: String
     let text: String
     let theme: MonitorPanelTheme
 
     var body: some View {
-        CompatibleGlassContainer(spacing: 0) {
-            HStack(spacing: 4) {
-                Image(systemName: systemImage)
-                    .font(.caption2.weight(.semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(theme.secondaryText.opacity(0.72))
-                    .frame(width: 12)
+        HStack(spacing: 3) {
+            Image(systemName: systemImage)
+                .font(.caption2.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(theme.palette.moduleTint(for: .network))
+                .frame(width: 12)
 
-                Text(text)
-                    .foregroundStyle(theme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .trailing)
-            }
-            .font(.system(.footnote, design: .monospaced).weight(.medium))
-            .monospacedDigit()
-            .lineLimit(1)
-            .minimumScaleFactor(0.75)
-            .padding(.horizontal, 8)
-            .frame(width: Self.width, height: 22)
-            .compatibleLiquidSurface(
-                tint: theme.palette.moduleTint(for: .network).opacity(0.10),
-                in: Capsule(),
-                style: .liquidLens
-            ) {
-                Color.clear
-            }
+            Text(text)
+                .foregroundStyle(theme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
+        .font(.system(.caption2, design: .monospaced).weight(.medium))
+        .monospacedDigit()
+        .lineLimit(1)
+        .minimumScaleFactor(0.82)
+        .padding(.horizontal, 6)
+        .frame(width: Self.width, height: 20)
+        .background(theme.trackFill, in: Capsule())
     }
 }
 
@@ -2325,7 +2288,7 @@ struct MonitorPanelTheme {
     }
 }
 
-/// 按 `(偏好, 外观, 文字明度)` 缓存 MonitorPanelTheme。最多 8 个组合,
+/// 按 `(偏好, 外观)` 缓存 MonitorPanelTheme。最多 4 个组合,
 /// 命中率近乎 100%,避免每帧重建整棵
 /// Color 树。访问仅发生在 MainActor(body 求值),无需加锁。
 @MainActor
@@ -2333,28 +2296,21 @@ enum ThemeCache {
     private struct Key: Hashable {
         let preference: MonitorColorSchemePreference
         let scheme: ColorScheme
-        let forceLightText: Bool
     }
 
     private static var cache: [Key: MonitorPanelTheme] = [:]
 
     static func theme(
         preference: MonitorColorSchemePreference,
-        scheme: ColorScheme,
-        forceLightText: Bool
+        scheme: ColorScheme
     ) -> MonitorPanelTheme {
-        let key = Key(
-            preference: preference,
-            scheme: scheme,
-            forceLightText: forceLightText
-        )
+        let key = Key(preference: preference, scheme: scheme)
         if let cached = cache[key] {
             return cached
         }
         let theme = MonitorPanelTheme(palette: MonitorPalette(
             preference: preference,
-            colorScheme: scheme,
-            forceLightText: forceLightText
+            colorScheme: scheme
         ))
         cache[key] = theme
         return theme
@@ -2400,7 +2356,6 @@ private struct TopProcessList: View {
                 Rectangle()
                     .fill(theme.rowSeparator(for: kind))
                     .frame(height: 1)
-                    .padding(.leading, 28)
 
                 VStack(spacing: 4) {
                     ForEach(0 ..< Self.rowCount, id: \.self) { index in
@@ -2446,13 +2401,11 @@ private struct TopProcessList: View {
                         }
                     }
                 }
-                .padding(.leading, 28)
                 .animation(.easeInOut(duration: 0.2), value: rows.count)
 
                 // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
                 if showRosettaBanner, translatedCount > 0 {
                     RosettaBanner(count: translatedCount, theme: theme)
-                        .padding(.leading, 28)
                 }
             }
         }
@@ -2641,14 +2594,12 @@ private struct InlineDiskProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .storage))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2678,14 +2629,12 @@ private struct InlineNetworkProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .network))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2703,14 +2652,12 @@ private struct FanList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .fan))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(fans) { fan in
                     fanRow(fan)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -2759,7 +2706,6 @@ private struct BluetoothGlassRow: View, Equatable {
         lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.theme.palette.forceLightText == rhs.theme.palette.forceLightText
             && lhs.isExpanded == rhs.isExpanded
     }
 
@@ -2824,7 +2770,7 @@ private struct BluetoothGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidLensInteractive
+            style: .liquidClearInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -2843,14 +2789,12 @@ private struct BluetoothDeviceList: View {
                 Rectangle()
                     .fill(theme.rowSeparator(for: .bluetooth))
                     .frame(height: 1)
-                    .padding(.leading, 28)
 
                 VStack(spacing: 8) {
                     ForEach(devices) { device in
                         deviceRow(device)
                     }
                 }
-                .padding(.leading, 28)
             }
         }
     }

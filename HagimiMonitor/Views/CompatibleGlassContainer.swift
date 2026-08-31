@@ -1,6 +1,4 @@
 import AppKit
-import CoreImage
-import QuartzCore
 import SwiftUI
 
 // MARK: - Liquid Glass Preference Environment
@@ -46,45 +44,26 @@ struct CompatibleGlassContainer<Content: View>: View {
 
 // MARK: - Compatible Glass Style
 
-/// macOS 26 的系统 Liquid Glass 风格。`liquidClear` 使用系统 Clear
-/// Liquid Glass，适合需要直接看见背景折射、避免磨砂感的监控面板；macOS 15
-/// 所有风格均回退到 `NSVisualEffectView(.menu, .withinWindow)`。
+/// macOS 26 的系统 Liquid Glass 风格。整窗 regular glass 提供稳定的可读性
+/// 衬底，监控行使用 clear glass 透出层次；macOS 15 所有风格均回退到
+/// `NSVisualEffectView(.menu, .withinWindow)`。
 enum CompatibleGlassStyle: Equatable {
     /// 静态玻璃，用于设置卡片和非交互表面。
     case liquid
-    /// 交互玻璃，用于可点击的监控行。
+    /// 标准交互玻璃，用于需要更强可读性衬底的控件。
     case liquidInteractive
-    /// 高通透静态玻璃，用于指标格、徽章等内层表面。
+    /// 静态内层表面，用于指标格、徽章等内容元素。
     case liquidClear
     /// 高通透交互玻璃，用于监控行和可点击的内层表面。
     case liquidClearInteractive
-    /// 带真实背景位移的高通透玻璃，用于需要凸透镜质感的主要色块。
-    case liquidLens
-    /// 带真实背景位移和指针反馈的高通透玻璃，用于主要监控行。
-    case liquidLensInteractive
 
     fileprivate var isInteractive: Bool {
         switch self {
-        case .liquidInteractive, .liquidClearInteractive, .liquidLensInteractive:
+        case .liquidInteractive, .liquidClearInteractive:
             true
-        case .liquid, .liquidClear, .liquidLens:
+        case .liquid, .liquidClear:
             false
         }
-    }
-
-    fileprivate var usesLensRefraction: Bool {
-        switch self {
-        case .liquidLens, .liquidLensInteractive:
-            true
-        case .liquid, .liquidInteractive, .liquidClear, .liquidClearInteractive:
-            false
-        }
-    }
-
-    /// 所有玻璃表面统一使用 40% 黑色衬底，交互态与静态态保持
-    /// 同一明度，避免悬停时闪变。
-    fileprivate var readabilityShadeOpacity: Double {
-        0.40
     }
 
     @available(macOS 26, *)
@@ -92,209 +71,17 @@ enum CompatibleGlassStyle: Equatable {
         switch self {
         case .liquid, .liquidInteractive:
             .regular
-        case .liquidClear, .liquidClearInteractive, .liquidLens, .liquidLensInteractive:
+        case .liquidClear, .liquidClearInteractive:
             .clear
         }
     }
 }
 
-// MARK: - Optical Refraction
-
-/// 系统 `Glass` 只公开 regular / clear 两种材质，没有折射强度旋钮。这里使用
-/// macOS 公开的 Core Image 背景滤镜补上真实像素位移，再由 `Glass.clear` 负责
-/// 系统高光与交互反馈。滤镜无时间轴，只在玻璃尺寸变化时重配。
-private final class LiquidGlassRefractionNSView: NSView {
-    enum Profile: Equatable {
-        /// 横向胶囊走 Glass Lozenge；较高的展开卡片自动改用柔和凸面折射。
-        case surface
-        /// 整个面板使用覆盖全窗口的凸面折射。
-        case panel
-    }
-
-    enum FilterTarget: Equatable {
-        /// 折射当前视图后方的同窗内容，供 SwiftUI 色块使用。
-        case background
-        /// 折射当前视图承载的系统玻璃输出，供最外层窗口使用。
-        case content
-    }
-
-    var profile: Profile {
-        didSet {
-            if oldValue != profile {
-                invalidateFilterConfiguration()
-            }
-        }
-    }
-
-    var filterTarget: FilterTarget {
-        didSet {
-            if oldValue != filterTarget {
-                invalidateFilterConfiguration()
-            }
-        }
-    }
-
-    private var configuredSize: CGSize = .zero
-
-    init(profile: Profile, filterTarget: FilterTarget = .background) {
-        self.profile = profile
-        self.filterTarget = filterTarget
-        super.init(frame: .zero)
-        wantsLayer = true
-        layer?.masksToBounds = true
-        // 极低 alpha 只用于建立背景滤镜的合成覆盖区，肉眼不可见。
-        layer?.backgroundColor = NSColor.white.withAlphaComponent(0.001).cgColor
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
-    }
-
-    override func layout() {
-        super.layout()
-        configureBackgroundFilterIfNeeded()
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        nil
-    }
-
-    private func invalidateFilterConfiguration() {
-        configuredSize = .zero
-        needsLayout = true
-    }
-
-    private func configureBackgroundFilterIfNeeded() {
-        let size = bounds.size
-        guard size.width > 1, size.height > 1, size != configuredSize else { return }
-        configuredSize = size
-
-        let filter: CIFilter?
-        switch profile {
-        case .panel:
-            filter = bumpFilter(size: size, scale: 0.30)
-        case .surface:
-            // 收起的监控行/胶囊用真正的长圆玻璃折射；展开后的高卡片如果继续
-            // 使用 lozenge 会在中部形成横带，因此改用覆盖全卡片的凸面折射。
-            if size.width >= size.height * 1.55, size.height <= 64 {
-                filter = lozengeFilter(size: size)
-            } else {
-                filter = bumpFilter(size: size, scale: 0.20)
-            }
-        }
-
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        switch filterTarget {
-        case .background:
-            contentFilters = []
-            backgroundFilters = filter.map { [$0] } ?? []
-        case .content:
-            backgroundFilters = []
-            contentFilters = filter.map { [$0] } ?? []
-        }
-        CATransaction.commit()
-    }
-
-    private func lozengeFilter(size: CGSize) -> CIFilter? {
-        guard let filter = CIFilter(name: "CIGlassLozenge") else { return nil }
-        let radius = max(8, size.height * 0.56)
-        let left = min(radius, size.width / 2)
-        let right = max(left, size.width - radius)
-        filter.setValue(CIVector(x: left, y: size.height / 2), forKey: "inputPoint0")
-        filter.setValue(CIVector(x: right, y: size.height / 2), forKey: "inputPoint1")
-        filter.setValue(radius, forKey: "inputRadius")
-        // 1.0 为无折射，1.42 接近实体玻璃且不会把小字背景拉成断层。
-        filter.setValue(1.42, forKey: "inputRefraction")
-        return filter
-    }
-
-    private func bumpFilter(size: CGSize, scale: CGFloat) -> CIFilter? {
-        guard let filter = CIFilter(name: "CIBumpDistortion") else { return nil }
-        filter.setValue(CIVector(x: size.width / 2, y: size.height / 2), forKey: kCIInputCenterKey)
-        filter.setValue(hypot(size.width, size.height) * 0.60, forKey: kCIInputRadiusKey)
-        filter.setValue(scale, forKey: kCIInputScaleKey)
-        return filter
-    }
-}
-
-private struct LiquidGlassRefractionBackdrop: NSViewRepresentable {
-    let profile: LiquidGlassRefractionNSView.Profile
-
-    func makeNSView(context: Context) -> LiquidGlassRefractionNSView {
-        LiquidGlassRefractionNSView(profile: profile)
-    }
-
-    func updateNSView(_ nsView: LiquidGlassRefractionNSView, context: Context) {
-        if nsView.profile != profile {
-            nsView.profile = profile
-        }
-        if nsView.filterTarget != .background {
-            nsView.filterTarget = .background
-        }
-    }
-}
-
-/// 参考系统控制中心的边缘焦散：真实位移由 Core Image 完成，本层只补足玻璃
-/// 周缘方向性高光/暗边，让圆角看起来有厚度而不是一层透明填色。
-private struct LiquidGlassOpticalRim<GlassShape: Shape>: View {
-    let shape: GlassShape
-
-    var body: some View {
-        shape
-            .stroke(
-                AngularGradient(
-                    stops: [
-                        .init(color: .white.opacity(0.62), location: 0.00),
-                        .init(color: .white.opacity(0.10), location: 0.22),
-                        .init(color: .black.opacity(0.16), location: 0.48),
-                        .init(color: .white.opacity(0.34), location: 0.76),
-                        .init(color: .white.opacity(0.62), location: 1.00)
-                    ],
-                    center: .center,
-                    startAngle: .degrees(-35),
-                    endAngle: .degrees(325)
-                ),
-                lineWidth: 1
-            )
-            .clipShape(shape)
-            .allowsHitTesting(false)
-    }
-}
-
-/// 位于玻璃和前景内容之间的静态黑色衬底。它不覆盖文字/图标，
-/// 因此保留现有的白色前景，只压暗玻璃采样到的复杂背景。
-private struct LiquidGlassReadabilityShade<GlassShape: Shape>: View {
-    let shape: GlassShape
-    let opacity: Double
-
-    var body: some View {
-        shape
-            .fill(
-                LinearGradient(
-                    colors: [
-                        Color.black.opacity(opacity * 0.68),
-                        Color.black.opacity(opacity)
-                    ],
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-            )
-            .overlay {
-                shape
-                    .stroke(Color.black.opacity(opacity * 0.72), lineWidth: 0.75)
-                    .clipShape(shape)
-            }
-            .allowsHitTesting(false)
-    }
-}
-
 // MARK: - Compatible Glass Effect Modifier
 
-/// 跨版本玻璃效果。macOS 26+ 使用原生 `.glassEffect`；macOS 15
-/// 保留旧的 `NSVisualEffectView` 回退。`fallbackFill` 只在 15 上渲染，
-/// 因此 26 上不会在 Liquid Glass 之上叠加自绘渐变材质。
+/// 监控行的跨版本玻璃效果。行本身可点击展开，因此在 macOS 26+ 使用
+/// 原生 regular Liquid Glass，并把模块色作为系统 tint；不叠加自绘黑色
+/// 遮罩或折射滤镜。macOS 15 保留原有 `NSVisualEffectView` 回退。
 ///
 /// 15 回退必须使用 `.withinWindow`：面板 resize 时 `.behindWindow` 会逐帧
 /// 重采样桌面，重新引入整窗闪烁。
@@ -308,25 +95,7 @@ struct CompatibleGlassEffect<GlassShape: Shape, Fill: View>: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26, *), liquidGlassEnabled {
             content
-                .background {
-                    LiquidGlassReadabilityShade(
-                        shape: shape,
-                        opacity: style.readabilityShadeOpacity
-                    )
-                }
-                .background {
-                    if style.usesLensRefraction {
-                        LiquidGlassRefractionBackdrop(profile: .surface)
-                            .clipShape(shape)
-                            .allowsHitTesting(false)
-                    }
-                }
                 .glassEffect(liquidGlass, in: shape)
-                .overlay {
-                    if style.usesLensRefraction {
-                        LiquidGlassOpticalRim(shape: shape)
-                    }
-                }
         } else {
             content
                 .background {
@@ -340,7 +109,6 @@ struct CompatibleGlassEffect<GlassShape: Shape, Fill: View>: ViewModifier {
         }
     }
 
-    /// 只把颜色 tint 交给系统玻璃管线，折射、高光和指针反馈均由系统绘制。
     @available(macOS 26, *)
     private var liquidGlass: Glass {
         var glass = style.systemGlass
@@ -354,9 +122,8 @@ struct CompatibleGlassEffect<GlassShape: Shape, Fill: View>: ViewModifier {
     }
 }
 
-/// 只在 macOS 26+ 把既有前景色块升级成系统 Liquid Glass；macOS 15
-/// 精确保留原填充，不额外叠加 `NSVisualEffectView`。适用于指标格、徽章、
-/// 提示卡等原本不是毛玻璃的内层表面。
+/// 内层内容表面保留原有动态填充；只有真正可交互的控件才在 macOS 26+
+/// 升级为系统 Liquid Glass。这样指标格、徽章和数据胶囊不会形成嵌套玻璃。
 struct CompatibleLiquidSurface<GlassShape: Shape, FallbackFill: View>: ViewModifier {
     var shape: GlassShape
     var tint: Color?
@@ -365,27 +132,9 @@ struct CompatibleLiquidSurface<GlassShape: Shape, FallbackFill: View>: ViewModif
     @Environment(\.liquidGlassEnabled) private var liquidGlassEnabled
 
     func body(content: Content) -> some View {
-        if #available(macOS 26, *), liquidGlassEnabled {
+        if #available(macOS 26, *), liquidGlassEnabled, style.isInteractive {
             content
-                .background {
-                    LiquidGlassReadabilityShade(
-                        shape: shape,
-                        opacity: style.readabilityShadeOpacity
-                    )
-                }
-                .background {
-                    if style.usesLensRefraction {
-                        LiquidGlassRefractionBackdrop(profile: .surface)
-                            .clipShape(shape)
-                            .allowsHitTesting(false)
-                    }
-                }
                 .glassEffect(liquidGlass, in: shape)
-                .overlay {
-                    if style.usesLensRefraction {
-                        LiquidGlassOpticalRim(shape: shape)
-                    }
-                }
         } else {
             content
                 .background {
@@ -540,8 +289,8 @@ extension View {
         modifier(CompatibleGlassEffectID(id: id, namespace: namespace))
     }
 
-    /// 默认保持主线经典毛玻璃按钮；`readabilityShade` 仅供监控面板
-    /// 底部按钮使用，26+ 切换为系统 Liquid Glass 并共用 40% 压暗强度。
+    /// 默认保持主线经典毛玻璃按钮；监控面板底部按钮在 26+ 使用系统
+    /// regular Liquid Glass，由系统自行保证前景对比度。
     func compatibleButtonStyle(readabilityShade: Bool = false) -> some View {
         modifier(CompatiblePanelButtonStyleModifier(readabilityShade: readabilityShade))
     }
@@ -569,18 +318,10 @@ private struct CompatiblePanelButtonStyleModifier: ViewModifier {
     func body(content: Content) -> some View {
         if #available(macOS 26, *), liquidGlassEnabled, readabilityShade {
             content
-                .buttonStyle(.glass(.clear))
-                // 系统玻璃按钮默认轮廓会随控件尺寸变化；底部三按钮
-                // 显式对齐模块行的 14pt 连续圆角，避免玻璃轮廓与黑色衬底错边。
+                .buttonStyle(.glass)
                 .buttonBorderShape(
                     .roundedRectangle(radius: MonitorConstants.rowCornerRadius)
                 )
-                .background {
-                    LiquidGlassReadabilityShade(
-                        shape: panelButtonShape,
-                        opacity: CompatibleGlassStyle.liquidClear.readabilityShadeOpacity
-                    )
-                }
                 .contentShape(panelButtonShape)
         } else {
             content.buttonStyle(PanelMaterialButtonStyle())
@@ -630,12 +371,13 @@ private struct CompatibleGlassLinkButtonStyleModifier: ViewModifier {
 
 // MARK: - NSPanel Glass Host
 
-/// 为自建 NSPanel 创建系统玻璃宿主。26+ 先用公开 Core Image 滤镜产生真实背景
-/// 位移，再叠系统 Clear Liquid Glass 的高光；前景内容是独立兄弟层，不受背景
-/// 透明度影响。15 保留 `.popover + .behindWindow` 背景。
+/// 为自建 NSPanel 创建系统玻璃宿主。26+ 使用 regular Liquid Glass：面板包含
+/// 大量文字，regular 会主动调节亮度与模糊以维持可读性。15 保留
+/// `.popover + .behindWindow` 背景。
 @MainActor
 enum CompatiblePanelGlassHost {
-    private static let backgroundGlassAlpha: CGFloat = 0.94
+    /// 略微透出桌面背景，保留 regular glass 的可读性调节，避免整窗材质显得厚重。
+    private static let backgroundGlassAlpha: CGFloat = 0.92
 
     static func make(
         contentView: NSView,
@@ -711,22 +453,10 @@ private final class CompatiblePanelGlassHostView: NSView {
 
         let backdrop: NSView
         if #available(macOS 26, *), liquidGlassEnabled {
-            // 让滤镜处理 NSGlassEffectView 已采样到的桌面内容；直接对透明窗口底
-            // 使用 backgroundFilters 无法保证跨窗口采样，content filter 则稳定。
-            let refraction = LiquidGlassRefractionNSView(profile: .panel, filterTarget: .content)
             let glass = NSGlassEffectView()
-            glass.translatesAutoresizingMaskIntoConstraints = false
-            glass.style = .clear
+            glass.style = .regular
             glass.cornerRadius = panelCornerRadius
-            glass.alphaValue = backgroundGlassAlpha
-            refraction.addSubview(glass)
-            NSLayoutConstraint.activate([
-                glass.topAnchor.constraint(equalTo: refraction.topAnchor),
-                glass.leadingAnchor.constraint(equalTo: refraction.leadingAnchor),
-                glass.trailingAnchor.constraint(equalTo: refraction.trailingAnchor),
-                glass.bottomAnchor.constraint(equalTo: refraction.bottomAnchor)
-            ])
-            backdrop = refraction
+            backdrop = glass
         } else {
             let visualEffect = NSVisualEffectView()
             visualEffect.material = .popover
@@ -735,6 +465,8 @@ private final class CompatiblePanelGlassHostView: NSView {
             backdrop = visualEffect
         }
 
+        // 新旧系统共用同一背景透明度，切换 Liquid Glass 时视觉密度保持一致。
+        backdrop.alphaValue = backgroundGlassAlpha
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         backdrop.wantsLayer = true
         backdrop.layer?.cornerRadius = panelCornerRadius

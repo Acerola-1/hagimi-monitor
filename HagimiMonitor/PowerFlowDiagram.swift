@@ -31,8 +31,6 @@ struct PowerFlowDiagram: View {
                             .lineLimit(2)
                     }
                 }
-                // 与明细网格同 28pt 缩进,分区标题与图内容左缘对齐。
-                .padding(.leading, 28)
             }
         }
     }

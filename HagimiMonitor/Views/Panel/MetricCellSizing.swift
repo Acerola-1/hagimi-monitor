@@ -20,8 +20,8 @@ enum MetricGridMetrics {
 /// 构建期审计(HagimiMonitorTests/MetricWidthAuditTests)。
 enum StaticMetricSizing {
     /// 半格内容宽,按最窄支持面板宽 300 推导:
-    /// 300 − 两侧内边距 10×2 − 网格前导缩进 28 = 252,两列减 8 间距得
-    /// 每列 122,再减格子左右内衬 8×2 = 106。按最窄档登记,
+    /// 300 − 面板与明细两层左右内边距各 10×2 = 260,两列减 8 间距得
+    /// 每列 126,再减格子左右内衬 8×2 并保留 4pt 安全量 = 106。按最窄档登记,
     /// 300~460 全区间判定一致成立,面板调整不触发重排。
     static let halfCellContentWidth: CGFloat = 106
 

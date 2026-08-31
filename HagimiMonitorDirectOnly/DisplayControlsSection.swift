@@ -30,8 +30,7 @@ struct DisplayControlsSection: View {
     var body: some View {
         let palette = MonitorPalette(
             preference: settings.colorSchemePreference,
-            colorScheme: colorScheme,
-            forceLightText: keepsLiquidGlassTextLight
+            colorScheme: colorScheme
         )
         let tint = palette.displayTint
         let visibleDisplays = controller.displays
@@ -155,19 +154,9 @@ struct DisplayControlsSection: View {
         .compatibleGlassEffect(
             tint: palette.displayGlassTint,
             cornerRadius: 14,
-            style: .liquidLensInteractive
+            style: .liquidClearInteractive
         ) {
             palette.displayGlassFill
-        }
-    }
-
-    /// 与主面板的文字策略一致：只在系统 Liquid Glass 实际生效时
-    /// 保持白字，关闭效果后恢复亮色模式的自适应深色文字。
-    private var keepsLiquidGlassTextLight: Bool {
-        if #available(macOS 26, *) {
-            settings.liquidGlassEnabled
-        } else {
-            false
         }
     }
 
@@ -187,14 +176,12 @@ struct DisplayControlsSection: View {
                 Rectangle()
                     .fill(palette.displaySeparator)
                     .frame(height: 1)
-                    .padding(.leading, 28)
 
                 ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
                     if index > 0 {
                         Rectangle()
                             .fill(palette.displaySeparator.opacity(0.72))
                             .frame(height: 1)
-                            .padding(.leading, 28)
                     }
 
                     DisplayControlGroup(
@@ -360,7 +347,6 @@ private struct DisplayControlGroup: View {
                 }
             }
         }
-        .padding(.leading, 28)
         // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
         .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
             guard archiveKey == "display-controls-arc-\(controller.displays.first?.id ?? 0)" else { return }
@@ -441,13 +427,11 @@ private struct DisplayEmptyState: View {
             Rectangle()
                 .fill(palette.displaySeparator)
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             Text(text)
                 .monitorPanelCaptionFont(.caption2)
                 .foregroundStyle(palette.captionText)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 28)
         }
     }
 }
