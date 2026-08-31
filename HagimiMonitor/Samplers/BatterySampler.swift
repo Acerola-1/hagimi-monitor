@@ -387,33 +387,15 @@ final class BatterySampler: MonitorSampler {
             return nil
         }
 
-        // 优先用固件直接给出的整机负载(mW):实测与 SystemPowerIn − |BatteryPower|
-        // 逐位相等(固件同口径),但免去差值法两字段采样瞬间错位导致差值为负、
-        // 只能返 nil 的失真;且充电/直供/电池三态下都直接有效。
-        if let systemLoad = doubleValue(value["SystemLoad"]), systemLoad > 0 {
-            return systemLoad / 1_000
-        }
+        let systemLoad = doubleValue(value["SystemLoad"])
+        let systemPowerIn = doubleValue(value["SystemPowerIn"])
+        let batteryPower = signedDoubleValue(value["BatteryPower"])
 
-        guard let powerIn = doubleValue(value["SystemPowerIn"]), powerIn > 0 else {
-            if let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 {
-                return abs(bp) / 1_000
-            }
-            return nil
-        }
-
-        let batteryPower = signedDoubleValue(value["BatteryPower"]) ?? 0
-
-        if batteryPower == 0 {
-            return powerIn / 1_000
-        }
-
-        let systemPower = powerIn - abs(batteryPower)
-        if systemPower > 0 {
-            return systemPower / 1_000
-        }
-
-        // 遥测瞬时不同步导致差值为负，返回 nil 而非跳到完整 powerIn
-        return nil
+        return systemPowerWattsFromTelemetry(
+            systemLoad: systemLoad,
+            systemPowerIn: systemPowerIn,
+            batteryPower: batteryPower
+        )
     }
 
     private func serviceWithProperty(_ key: String) -> io_service_t {
@@ -463,6 +445,36 @@ final class BatterySampler: MonitorSampler {
 ///
 /// 合并策略：先序遍历，遇到先来的键不覆盖（即根节点优先）。这样 26 上等价于原行为，
 /// 27 上则能用子节点的值补全根节点缺失的字段。
+func systemPowerWattsFromTelemetry(systemLoad: Double? = nil, systemPowerIn: Double? = nil, batteryPower: Double? = nil) -> Double? {
+    if let systemLoad, systemLoad > 0 {
+        return systemLoad / 1_000
+    }
+
+    guard let systemPowerIn, systemPowerIn > 0 else {
+        if let batteryPower, batteryPower != 0 {
+            return abs(batteryPower) / 1_000
+        }
+        return nil
+    }
+
+    guard let batteryPower else {
+        return systemPowerIn / 1_000
+    }
+
+    // 充电时，BatteryPower 为负值，表示电池在吸收功率；系统负载应当是输入功率减去充电功率。
+    // 也就是说，若电源输入是 1200 mW、充电功率为 200 mW，则系统负载应为 1000 mW，而不是 1400 mW。
+    if batteryPower == 0 {
+        return systemPowerIn / 1_000
+    }
+
+    let systemPower = systemPowerIn - abs(batteryPower)
+    if systemPower > 0 {
+        return systemPower / 1_000
+    }
+
+    return nil
+}
+
 private func collectBatteryData(_ root: io_registry_entry_t) -> [String: Any] {
     var merged: [String: Any] = [:]
 
