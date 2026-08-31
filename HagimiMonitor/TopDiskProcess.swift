@@ -35,19 +35,12 @@ struct RawDiskProcess {
 }
 
 /// 磁盘 I/O 差分游标:持有独立的进程累计基线,增量 = 本次累计 − 基线。
-/// 面板(5s)与统计(60s)各持一个实例——基线共享时统计窗口会被面板采样
-/// 截断成 5s 残量,入库量随面板开合漂移约一个数量级。
+/// 面板(2s)与统计(60s)各持一个实例——基线共享时统计窗口会被面板采样
+/// 截断成残量,×60s 外推入库即为失真数据。
 /// 游标同时记录快照时刻,把差分窗口时长随结果下发,供展示侧归一成速率。
 final class DiskSnapshotCursor {
     private var previous: [pid_t: (read: UInt64, write: UInt64)] = [:]
     private var previousTime: Date?
-
-    /// 弃掉基线:下次采样重建,首拍返空。展开时调用,避免首帧拿到
-    /// 「开面板至今」的长窗口均值。
-    func reset() {
-        previous = [:]
-        previousTime = nil
-    }
 
     /// 后台采样磁盘 I/O 最高的 N 个进程。
     /// 使用 `proc_pid_rusage` 读取 `ri_diskio_bytesread` / `ri_diskio_byteswritten`,
@@ -142,11 +135,6 @@ final class DiskSnapshotCursor {
 
 /// 面板进程列表专用游标(全局兼容入口)。
 private let panelDiskCursor = DiskSnapshotCursor()
-
-/// 弃掉面板磁盘基线:下次采样重建,首拍返空。展开时调用。
-func resetDiskProcessBaseline() {
-    panelDiskCursor.reset()
-}
 
 /// 面板采样入口:委托面板专用游标,保持既有全局调用点不变。
 func sampleTopDiskProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawDiskProcess] {

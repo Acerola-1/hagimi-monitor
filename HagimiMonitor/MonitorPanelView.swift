@@ -250,12 +250,6 @@ struct MonitorPanelView: View {
             panelExpansion.onWindowResize = windowResizeHandler
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             applyDefaultExpansion()
-            // 上报当前需进程采样的集合(展开的行):面板重开时 @State 可能保留上次选项,
-            // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
-            reportActiveProcessKinds()
-        }
-        .onChange(of: expandedKinds) { _, _ in
-            reportActiveProcessKinds()
         }
         // 实测内容总高度上报驱动器:非动画期间据此反推收起态基线高度,
         // 动画开始时由 targetContentHeight 叠加目标相位高度预测窗口目标尺寸。
@@ -282,16 +276,6 @@ struct MonitorPanelView: View {
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
         .environmentObject(panelExpansion)
-    }
-
-    /// 需进程采样的类目集 = 行内展开的模块。
-    private func reportActiveProcessKinds() {
-        store.updateExpandedKinds(expandedKinds, for: panelSource)
-    }
-
-    /// 本面板对应的进程采样来源。带快捷面板控件的是钉住面板,否则是菜单栏面板。
-    private var panelSource: PanelKind {
-        showsQuickPanelControls ? .pinned : .menuBar
     }
 
     private var panelBackgroundColor: Color {
