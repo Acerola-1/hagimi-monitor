@@ -966,7 +966,7 @@ private struct MetricGlassRow: View, Equatable {
 /// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
 /// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
 /// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
-private struct CPUCoresDetail: View {
+struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
 
@@ -1371,7 +1371,7 @@ private struct MetricDetailGrid: View {
 }
 
 /// Wi-Fi 信号格:四根升序小柱,点亮数 = 信号等级,网络模块色;未点亮暗灰。
-private struct WifiSignalBars: View {
+struct WifiSignalBars: View {
     let level: Int
     @Environment(\.colorScheme) private var colorScheme
 
@@ -1389,6 +1389,10 @@ private struct WifiSignalBars: View {
         }
     }
 }
+
+/// 网络明细网格固定渲染顺序:(信号, 延迟) 同排,SSID 长值整行,地址类殿后
+/// (对齐冻结原型网格配对);设置页预览卡复用同一顺序,两处网格排序同源。
+let networkDetailMetricOrder = ["wifi-rssi", "gateway-latency", "wifi-ssid", "ipv4", "ipv6", "public-ip"]
 
 /// 网络明细指标门控(与用户设置无关,纯当前网络条件):条件不符的指标不渲染,
 /// 避免面板挂 "--" 噪音行;条件恢复后自动出现。
@@ -1680,11 +1684,9 @@ private struct NetworkGlassRow: View, Equatable {
     }
 
     private var detailMetrics: [MonitorMetric] {
-        // 顺序对齐冻结原型网格配对:(信号, 延迟),SSID 长值整行,地址类殿后。
         // 门控规则见 filteredNetworkMetrics:断网/有线/无 Wi-Fi 时不挂 "--" 行。
-        let names = ["wifi-rssi", "gateway-latency", "wifi-ssid", "ipv4", "ipv6", "public-ip"]
         let enabledNames = Set(details.map(\.name))
-        let selected = names.compactMap { name -> MonitorMetric? in
+        let selected = networkDetailMetricOrder.compactMap { name -> MonitorMetric? in
             guard enabledNames.contains(name) else { return nil }
             return module.metrics.first(where: { $0.name == name })
         }
@@ -1909,7 +1911,7 @@ func localizedBatteryState(_ id: String) -> String {
 
 /// 展开区分区标题:一段小标题 + 贯穿分隔线,用来把上方的电池指标网格
 /// (健康度/温度/循环/损耗)与下方的功率流图、耗电排行明确切分成独立区块。
-private struct PowerSectionHeader: View {
+struct PowerSectionHeader: View {
     let title: String
     let theme: MonitorPanelTheme
 
