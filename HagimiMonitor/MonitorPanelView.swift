@@ -10,7 +10,10 @@ private struct BodyScrollEdges: Equatable {
 }
 
 struct MonitorPanelView: View {
-    @ObservedObject var store: MonitorStore
+    /// 只读引用:面板树的失效信号统一经 refreshGate 门控(隐藏期冻结),
+    /// 直接观察 store 会让隐藏态面板随每次采样发布重算。
+    let store: MonitorStore
+    @ObservedObject private var refreshGate: PanelRefreshGate
     @ObservedObject private var quickPanelPresentation: QuickPanelPresentation
     private let showsQuickPanelControls: Bool
     @Environment(\.colorScheme) private var colorScheme
@@ -38,8 +41,9 @@ struct MonitorPanelView: View {
     /// 预览/无窗口宿主为 nil。
     @Environment(\.panelWindowResizeHandler) private var windowResizeHandler
 
-    init(store: MonitorStore, quickPanelPresentation: QuickPanelPresentation? = nil) {
+    init(store: MonitorStore, refreshGate: PanelRefreshGate, quickPanelPresentation: QuickPanelPresentation? = nil) {
         self.store = store
+        _refreshGate = ObservedObject(wrappedValue: refreshGate)
         let presentation = quickPanelPresentation ?? QuickPanelPresentation()
         _quickPanelPresentation = ObservedObject(wrappedValue: presentation)
         showsQuickPanelControls = quickPanelPresentation != nil

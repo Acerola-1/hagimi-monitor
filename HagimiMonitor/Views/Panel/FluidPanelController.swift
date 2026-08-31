@@ -28,6 +28,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private let panel: NSPanel
     private var hostingView: NSHostingView<AnyView>?
 
+    /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
+    private let panelRefreshGate: PanelRefreshGate
+
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
     private var cancellables: Set<AnyCancellable> = []
@@ -79,6 +82,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     ) {
         self.store = store
         self.openSettingsAction = openSettings
+        panelRefreshGate = PanelRefreshGate(store: store)
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
@@ -188,7 +192,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.contentView = visualEffect
 
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
-        let root = FluidPanelRootView(store: store, metrics: layoutMetrics)
+        let root = FluidPanelRootView(store: store, refreshGate: panelRefreshGate, metrics: layoutMetrics)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
             .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
                 self?.applyWindowHeight(height, animated: animated)
@@ -376,6 +380,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             panel.contentView = savedContentView
             self.savedContentView = nil
         }
+        // 开闸补发:隐藏期冻结的视图树先追平 store 当前值,
+        // 随后的强制布局/测量才带最新数据。
+        panelRefreshGate.open()
         // 隐藏时未收敛的窗口弹簧在此清场,本次呼出由重定位接管。
         windowSpring.cancel()
         // 先同步高度上限(可能换了屏幕/Dock 变化),再让 SwiftUI 布局。
@@ -436,6 +443,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             self.panel.alphaValue = 1
             self.statusItem.button?.highlight(false)
             self.store.panelDidDisappear()
+            // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
+            // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
+            self.panelRefreshGate.close()
             self.reclaimHiddenPanelResources()
         }
     }
@@ -716,6 +726,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.alphaValue = 1
         statusItem.button?.highlight(false)
         store.panelDidDisappear()
+        panelRefreshGate.close()
         reclaimHiddenPanelResources()
     }
 
@@ -779,10 +790,11 @@ final class FluidPanelLayoutMetrics: ObservableObject {
 /// 上限变化(换屏/Dock 变化)时重新注入。
 private struct FluidPanelRootView: View {
     let store: MonitorStore
+    let refreshGate: PanelRefreshGate
     @ObservedObject var metrics: FluidPanelLayoutMetrics
 
     var body: some View {
-        MonitorPanelView(store: store)
+        MonitorPanelView(store: store, refreshGate: refreshGate)
             .environment(\.panelMaxContentHeight, metrics.maxContentHeight)
     }
 }

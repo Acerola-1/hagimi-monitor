@@ -14,6 +14,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
+    /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
+    private let panelRefreshGate: PanelRefreshGate
+
     /// 最近一次实测内容尺寸,弹簧收尾对账用。
     private var lastReportedContentSize: CGSize = .zero
     /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
@@ -25,6 +28,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     init(store: MonitorStore, openSettings: @escaping () -> Void) {
         self.store = store
         self.openSettingsAction = openSettings
+        panelRefreshGate = PanelRefreshGate(store: store)
 
         panel = NSPanel(
             contentRect: CGRect(x: 0, y: 0, width: MonitorConstants.panelIdealWidth, height: 200),
@@ -86,7 +90,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         visualEffect.layer?.masksToBounds = true
         panel.contentView = visualEffect
 
-        let root = MonitorPanelView(store: store, quickPanelPresentation: presentation)
+        let root = MonitorPanelView(store: store, refreshGate: panelRefreshGate, quickPanelPresentation: presentation)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action { [weak self] in
                 self?.hide(resetPin: true)
                 self?.openSettingsAction()
@@ -166,6 +170,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     /// 显示快捷键面板。每次呼出都从普通状态开始。
     func show() {
         guard !panel.isVisible else { return }
+        // 开闸补发:隐藏期冻结的视图树先追平 store 当前值,
+        // 随后的强制布局/测量才带最新数据。
+        panelRefreshGate.open()
         // 隐藏时未收敛的窗口弹簧在此清场,本次呼出由重定位接管。
         windowSpring.cancel()
         presentation.resetPin()
@@ -209,6 +216,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
             presentation.resetPin()
             updatePresentationMode()
         }
+        // 关门晚于上面的隐藏回调与图钉重置发布,保证它们送达视图
+        // (isPanelVisible 变 false 驱动隐藏复位);此后冻结面板树。
+        panelRefreshGate.close()
     }
 
     /// 切换快捷键面板显隐。
