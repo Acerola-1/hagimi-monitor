@@ -44,8 +44,9 @@ struct CompatibleGlassContainer<Content: View>: View {
 
 // MARK: - Compatible Glass Style
 
-/// macOS 26 的系统 Liquid Glass 风格。整窗 regular glass 提供稳定的可读性
-/// 衬底，监控行使用 clear glass 透出层次；macOS 15 所有风格均回退到
+/// macOS 26 的系统 Liquid Glass 风格。承载文字的监控行使用 regular glass
+/// 维持可读性并避免 clear glass 的高亮轮廓过度抢眼；clear 仅留给小型、
+/// 高通透的前景控件。macOS 15 所有风格均回退到
 /// `NSVisualEffectView(.menu, .withinWindow)`。
 enum CompatibleGlassStyle: Equatable {
     /// 静态玻璃，用于设置卡片和非交互表面。

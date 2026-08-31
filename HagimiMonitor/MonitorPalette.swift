@@ -142,8 +142,8 @@ struct MonitorPalette {
         isDark ? 0.11 : 0.07
     }
 
-    /// 原生 clear glass 只接受单色 tint；这里保持足够辨识度，同时让底层
-    /// regular glass 和边缘高光清晰透出。
+    /// 原生 regular glass 只接受单色 tint；这里保持足够辨识度，同时避免
+    /// 颜色过浓干扰材质自适应的前景对比度。
     private var liquidVibrantGlassOpacity: Double {
         isDark ? 0.15 : 0.09
     }

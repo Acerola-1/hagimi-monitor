@@ -942,7 +942,7 @@ private struct MetricGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidClearInteractive
+            style: .liquidInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -1744,7 +1744,7 @@ private struct NetworkGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidClearInteractive
+            style: .liquidInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -1873,7 +1873,7 @@ private struct BatteryGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidClearInteractive
+            style: .liquidInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -2774,7 +2774,7 @@ private struct BluetoothGlassRow: View, Equatable {
         .compatibleGlassEffect(
             tint: theme.palette.rowGlassTint(for: module.kind),
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidClearInteractive
+            style: .liquidInteractive
         ) {
             theme.rowGlassFill(for: module.kind)
         }

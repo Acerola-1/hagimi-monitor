@@ -110,7 +110,7 @@ struct DisplayInfoSection: View {
         .compatibleGlassEffect(
             tint: theme.palette.displayGlassTint,
             cornerRadius: MonitorConstants.rowCornerRadius,
-            style: .liquidClearInteractive
+            style: .liquidInteractive
         ) {
             theme.palette.displayGlassFill
         }
