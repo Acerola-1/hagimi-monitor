@@ -372,30 +372,33 @@ struct StatisticsSettingsView: View {
         .frame(width: 76, height: 76)
     }
 
-    /// 维度迷你卡:与总览 tile 同语言的圆角色块,内含维度名、应力值与进度条。
+    /// 维度迷你卡:与总览 tile 同语言的圆角色块。名称独占一行、应力值右对齐在
+    /// 进度条行尾,名称不与数值抢宽,两词以上的维度名(如 CPU saturation)任何语言都单行。
     private func dimensionBadge(_ dimension: StatisticsHealthScore.Dimension) -> some View {
         let tint = levelColor(dimension.level)
         return VStack(alignment: .leading, spacing: 5) {
-            HStack {
-                Text(dimension.name)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                Spacer(minLength: 4)
+            Text(dimension.name)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+
+            HStack(spacing: 6) {
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(tint.opacity(0.15))
+                        RoundedRectangle(cornerRadius: 2, style: .continuous)
+                            .fill(tint)
+                            .frame(width: geo.size.width * dimension.stressShare)
+                    }
+                }
+                .frame(height: 4)
+
                 Text(dimension.rawText)
                     .font(.caption2.weight(.semibold))
                     .monospacedDigit()
                     .foregroundStyle(tint)
             }
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(tint.opacity(0.15))
-                    RoundedRectangle(cornerRadius: 2, style: .continuous)
-                        .fill(tint)
-                        .frame(width: geo.size.width * dimension.stressShare)
-                }
-            }
-            .frame(height: 4)
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -515,29 +518,16 @@ struct StatisticsSettingsView: View {
                     .foregroundStyle(.secondary)
             }
 
-            ForEach(Array(spec.lines.enumerated()), id: \.offset) { _, metric in
-                HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    HStack(spacing: 2) {
-                        if let systemImage = metric.systemImage {
-                            Image(systemName: systemImage)
-                                .font(.system(size: 8.5, weight: .semibold))
-                        }
-                        if !metric.label.isEmpty {
-                            Text(metric.label)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                        }
-                    }
-                    Text(metric.value)
-                        .font(.callout.weight(.medium))
-                        .monospacedDigit()
-                        .foregroundStyle(.primary)
-                }
+            // 标签与数值同行放不下时整卡降级为「标签在上、数值在下」的堆叠形态;
+            // 降级以整卡为单位、卡内不混排两种形态,数值自身永不拆行(单位不掉行)。
+            ViewThatFits(in: .horizontal) {
+                tileLines(spec.lines, stacked: false)
+                tileLines(spec.lines, stacked: true)
             }
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 11)
-        // 撑满行高:单行内容的格子(如系统负载)与两行格子同高同外观,顶对齐
+        // 撑满行高:单行内容的格子(如系统负载)与多行格子同高同外观,顶对齐
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -547,6 +537,57 @@ struct StatisticsSettingsView: View {
             RoundedRectangle(cornerRadius: 12, style: .continuous)
                 .strokeBorder(spec.tint.opacity(0.20), lineWidth: 0.5)
         )
+    }
+
+    /// 指标行组:紧凑形态标签左、数值紧随其后;堆叠形态标签独占一行、图标与数值成行
+    /// (箭头这类方向符号在语义上属于数值)。
+    private func tileLines(_ lines: [MetricLine], stacked: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(Array(lines.enumerated()), id: \.offset) { _, metric in
+                if stacked {
+                    VStack(alignment: .leading, spacing: 2) {
+                        if !metric.label.isEmpty {
+                            Text(metric.label)
+                                .font(.caption2)
+                                .foregroundStyle(.tertiary)
+                                .lineLimit(1)
+                        }
+                        HStack(spacing: 2) {
+                            if let systemImage = metric.systemImage {
+                                Image(systemName: systemImage)
+                                    .font(.system(size: 8.5, weight: .semibold))
+                            }
+                            Text(metric.value)
+                                .font(.callout.weight(.medium))
+                                .monospacedDigit()
+                                .foregroundStyle(.primary)
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.75)
+                        }
+                    }
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        HStack(spacing: 2) {
+                            if let systemImage = metric.systemImage {
+                                Image(systemName: systemImage)
+                                    .font(.system(size: 8.5, weight: .semibold))
+                            }
+                            if !metric.label.isEmpty {
+                                Text(metric.label)
+                                    .font(.caption2)
+                                    .foregroundStyle(.tertiary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Text(metric.value)
+                            .font(.callout.weight(.medium))
+                            .monospacedDigit()
+                            .foregroundStyle(.primary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+        }
     }
 
     // MARK: - 格式化
