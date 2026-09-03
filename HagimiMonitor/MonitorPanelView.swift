@@ -767,14 +767,18 @@ private struct MetricGlassRow: View, Equatable {
     // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
     // 闭包不参与相等判定。未变化的行 == 成立时 SwiftUI 跳过整行重绘。
     static func == (lhs: MetricGlassRow, rhs: MetricGlassRow) -> Bool {
-        lhs.module == rhs.module
+        guard lhs.isExpanded == rhs.isExpanded else { return false }
+        guard lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.detail == rhs.detail
             && lhs.detailColor == rhs.detailColor
-            && lhs.samples == rhs.samples
-            && lhs.details == rhs.details
-            && lhs.isExpanded == rhs.isExpanded
+            && lhs.samples == rhs.samples else { return false }
+        // 收起态下明细网格与进程列表均不可见，跳过对未展开内容的深度比对，阻断无关重绘。
+        if !lhs.isExpanded {
+            return true
+        }
+        return lhs.details == rhs.details
             && lhs.topMemoryProcesses == rhs.topMemoryProcesses
             && lhs.showMemoryProcesses == rhs.showMemoryProcesses
             && lhs.topCPUProcesses == rhs.topCPUProcesses
@@ -1596,11 +1600,14 @@ private struct NetworkGlassRow: View, Equatable {
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: NetworkGlassRow, rhs: NetworkGlassRow) -> Bool {
-        lhs.module == rhs.module
+        guard lhs.isExpanded == rhs.isExpanded else { return false }
+        guard lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
-            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.details == rhs.details
-            && lhs.isExpanded == rhs.isExpanded
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme else { return false }
+        if !lhs.isExpanded {
+            return true
+        }
+        return lhs.details == rhs.details
             && lhs.topNetworkProcesses == rhs.topNetworkProcesses
             && lhs.showNetworkProcesses == rhs.showNetworkProcesses
     }
@@ -1714,11 +1721,14 @@ private struct BatteryGlassRow: View, Equatable {
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
-        lhs.module == rhs.module
+        guard lhs.isExpanded == rhs.isExpanded else { return false }
+        guard lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
-            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.details == rhs.details
-            && lhs.isExpanded == rhs.isExpanded
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme else { return false }
+        if !lhs.isExpanded {
+            return true
+        }
+        return lhs.details == rhs.details
             && lhs.showPowerFlow == rhs.showPowerFlow
             && lhs.panelVisible == rhs.panelVisible
             && lhs.powerFlowActive == rhs.powerFlowActive
@@ -2953,10 +2963,14 @@ struct CollapsibleDetail<Content: View>: View {
                         }
                         .onChange(of: geometry.size.height) { _, newValue in
                             // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
-                            // onChange 回调无动画上下文,裸更新会让容器高度与下方内容
-                            // 的位移瞬跳;显式包一次补间,让它平滑并入既有展开节奏。
-                            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+                            // 仅在当前处于展开态时包一次补间平滑过渡;收起态静默赋值,
+                            // 避免在不可见的折叠区启动无谓的后台弹簧补间。
+                            if expanded {
+                                withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                                      dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+                                    contentHeight = newValue
+                                }
+                            } else {
                                 contentHeight = newValue
                             }
                             expansion.reportNaturalHeight(expansionKey, newValue)

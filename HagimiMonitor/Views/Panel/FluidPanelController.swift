@@ -544,11 +544,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
         lastReportedContentSize = size
         guard windowSpring.isAnimating || panel.frame.size != size else { return }
+        // 弹簧若已在向实测高度运动(差值 < 0.5pt),无需打断并重启;收敛后由 reconcile 兜底对账。
+        if windowSpring.isAnimating, abs(windowSpring.target - size.height) < 0.5 {
+            return
+        }
         DispatchQueue.main.async { [weak self] in
             // contentView 已卸(隐藏回收后)不再贴合:隐藏窗口已收到最小高度,
             // 积压的上报若此时撑大它,回收省下的纹理资源会立刻被吃回去。
             guard let self, self.panel.contentView != nil else { return }
             if self.store.isExpansionAnimating || self.windowSpring.isAnimating {
+                if self.windowSpring.isAnimating, abs(self.windowSpring.target - size.height) < 0.5 {
+                    return
+                }
                 self.windowSpring.retarget(to: size.height, from: self.panel.frame.height) { [weak self] in
                     self?.reconcileWindowToContentSize()
                 }

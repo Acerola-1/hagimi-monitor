@@ -284,9 +284,15 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private func contentSizeDidChange(to size: CGSize) {
         lastReportedContentSize = size
         guard windowSpring.isAnimating || panel.frame.size != size else { return }
+        if windowSpring.isAnimating, abs(windowSpring.target - size.height) < 0.5 {
+            return
+        }
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
             if self.store.isExpansionAnimating || self.windowSpring.isAnimating {
+                if self.windowSpring.isAnimating, abs(self.windowSpring.target - size.height) < 0.5 {
+                    return
+                }
                 self.windowSpring.retarget(to: size.height, from: self.panel.frame.height) { [weak self] in
                     self?.reconcileWindowToContentSize()
                 }

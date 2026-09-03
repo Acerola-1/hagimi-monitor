@@ -186,7 +186,7 @@ final class PanelWindowSpring: NSObject {
 
     private var displayLink: CADisplayLink?
     private(set) var isAnimating = false
-    private var target: CGFloat = 0
+    private(set) var target: CGFloat = 0
     private var startPos: CGFloat = 0
     private var startVel: CGFloat = 0
     private var startTime: CFTimeInterval = 0
