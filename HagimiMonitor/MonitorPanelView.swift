@@ -1792,8 +1792,10 @@ private struct BatteryGlassRow: View, Equatable {
                     PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
                         .layoutPriority(0)
                 }
-                PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                    .layoutPriority(0)
+                if hasBattery || numericValue("power") != nil {
+                    PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
+                        .layoutPriority(0)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1882,8 +1884,10 @@ private struct BatteryGlassRow: View, Equatable {
     private var summaryText: String {
         if hasBattery {
             localizedBatteryState(module.summary)
+        } else if let adapter = numericValue("adapter") {
+            wattString(adapter, rounded: true)
         } else {
-            value("adapter")
+            localizedBatteryState("ac-power")
         }
     }
 

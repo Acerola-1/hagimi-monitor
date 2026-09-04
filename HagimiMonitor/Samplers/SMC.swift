@@ -37,6 +37,16 @@ final class SMCReader: FanSMCReading {
         return temperatures.reduce(0, +) / Double(temperatures.count)
     }
 
+    /// 读取 SMC key `PSTR`（整机系统总负载，flt 类型，单位 W）。读取失败返回 nil。
+    func systemPower() -> Double? {
+        readValue("PSTR")
+    }
+
+    /// 读取 SMC key `PDTR`（DC 输入轨功率，flt 类型，单位 W）。
+    func dcInputPower() -> Double? {
+        readValue("PDTR")
+    }
+
     /// 读取 SMC key `FNum`,返回机器物理风扇数。无风扇机型或读取失败时返回 nil。
     /// FNum 是机器静态属性,启动时读一次缓存即可,无需每次采样都读。
     func fanCount() -> Int? {

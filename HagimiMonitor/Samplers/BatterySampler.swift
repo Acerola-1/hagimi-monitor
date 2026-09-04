@@ -18,6 +18,11 @@ final class BatterySampler: MonitorSampler {
     // 系统设置显示的是 powerd 低通滤波后的值,这里用 EMA + 整数迟滞复刻其稳定性。
     private var smoothedHealthRatio: Double?   // 平滑后的 maxCapacity/designCapacity
     private var displayedHealthPercent: Double? // 当前对外显示的整数百分比
+    // SMC 功率链读取器: App Store 沙盒版因 IOServiceOpen(AppleSMC) 受限无法使用,
+    // 仅在 DISPLAY_CONTROL(Direct 版)下启用,为无电池机型或遥测缺报提供第二数据链。
+    #if DISPLAY_CONTROL
+    private let smcReader: SMCReader? = SMCReader()
+    #endif
 
     deinit {
         if powerTelemetryService != IO_OBJECT_NULL {
@@ -58,7 +63,14 @@ final class BatterySampler: MonitorSampler {
         let chargingPower = connected
             ? (smart.telemetryChargingWatts ?? smart.chargingPowerWatts)
             : nil
+        #if DISPLAY_CONTROL
+        let systemPower = smart.systemPowerWatts
+            ?? powerTelemetryWatts()
+            ?? smcReader?.systemPower()
+            ?? smcReader?.dcInputPower()
+        #else
         let systemPower = smart.systemPowerWatts ?? powerTelemetryWatts()
+        #endif
 
         // 功率流:适配器实际输入、电池流向(正=充电/负=放电)。
         let powerIn = connected ? smart.powerInWatts : nil
@@ -150,7 +162,18 @@ final class BatterySampler: MonitorSampler {
     /// IOPS 失败时电源状态不可信(统计过滤,避免电池供电被误记成 AC)。
     private func externalPowerModule(isPlaceholder: Bool) -> MonitorModule {
         let adapterWatts = externalAdapterWatts()
+        // 桌面机型无 AppleSmartBattery, PowerTelemetry 恒为 nil;
+        // Direct 版由 SMC 补充:优先取 PSTR(整机负载),缺失时以 PDTR(DC 输入)作为负载的近似兜底。
+        // 输入轨 powerInWatts 仅由 PDTR 实测填充,无真实读数时保持 nil,绝不用负载反向伪造输入。
+        #if DISPLAY_CONTROL
         let powerWatts = powerTelemetryWatts()
+            ?? smcReader?.systemPower()
+            ?? smcReader?.dcInputPower()
+        let powerInWatts = smcReader?.dcInputPower()
+        #else
+        let powerWatts = powerTelemetryWatts()
+        let powerInWatts: Double? = nil
+        #endif
         return MonitorModule(
             kind: .battery,
             value: 100,
@@ -159,7 +182,8 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.acPower),
                 MonitorMetric(name: "status", value: "ac-power"),
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
-                MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W")
+                MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W"),
+                MonitorMetric(name: "power-in", value: wattString(powerInWatts), numericValue: powerInWatts, unit: " W")
             ],
             samples: seedSamples(100),
             isPlaceholder: isPlaceholder

@@ -579,16 +579,22 @@ struct PowerFlowDiagram: View {
     }
 
     private var adapterLabel: String {
-        let base = String(localized: "panel.power-flow.adapter")
+        let base = hasBattery
+            ? String(localized: "panel.power-flow.adapter")
+            : String(localized: "battery-state.ac-power")
         let rated = rawValue("adapter")
         return rated == "--" ? base : "\(base) · \(rated)"
     }
 
     /// 适配器节点数值:未插电显「—」;插电但 SystemPowerIn 尚未由固件填出(USB-C PD
     /// 协商/遥测预热窗口)显「采集中」,而非空白或 0——如实表达「已连接、读数在路上」。
+    /// 桌面无电池机型若无遥测瓦数，回退显示交流供电状态而非停留在采集中。
     private var adapterValueText: String {
         guard connected else { return "—" }
         if let powerInWatts { return wattString(powerInWatts) }
+        if !hasBattery {
+            return String(localized: "battery-state.ac-power")
+        }
         return String(localized: "panel.power-flow.collecting")
     }
 
