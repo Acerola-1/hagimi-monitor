@@ -1223,7 +1223,6 @@ private struct DisplayControlGroup: View {
 
             if settings.displayBrightnessControlEnabled {
                 DisplayControlSlider(
-                    label: String(localized: "settings.brightness"),
                     systemImage: "sun.max",
                     value: binding(for: .brightness),
                     isEnabled: display.supports(.brightness),
@@ -1234,7 +1233,6 @@ private struct DisplayControlGroup: View {
 
             if settings.displayVolumeControlEnabled, !display.isBuiltIn {
                 DisplayControlSlider(
-                    label: String(localized: "settings.volume"),
                     systemImage: "speaker.wave.2",
                     value: binding(for: .volume),
                     isEnabled: display.supports(.volume),
@@ -1245,7 +1243,6 @@ private struct DisplayControlGroup: View {
 
             if settings.displayContrastControlEnabled, !display.isBuiltIn {
                 DisplayControlSlider(
-                    label: String(localized: "settings.contrast"),
                     systemImage: "circle.lefthalf.filled",
                     value: binding(for: .contrast),
                     isEnabled: display.supports(.contrast),
@@ -1329,9 +1326,8 @@ private struct DisplayControlGroup: View {
     }
 }
 
-/// 控制滑杆行:图标 + 标签 + Slider + 百分比值;不支持项整行降透明。
+/// 控制滑杆行:图标 + Slider + 百分比值;不支持项整行降透明。
 private struct DisplayControlSlider: View {
-    let label: String
     let systemImage: String
     @Binding var value: Double
     let isEnabled: Bool
@@ -1345,11 +1341,6 @@ private struct DisplayControlSlider: View {
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(isEnabled ? tint : palette.captionText)
                 .frame(width: 14)
-
-            Text(label)
-                .monitorPanelCaptionFont(.caption2)
-                .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
-                .frame(width: 34, alignment: .leading)
 
             Slider(value: $value, in: 0...100, step: 1)
                 .tint(tint)
