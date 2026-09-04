@@ -22,8 +22,8 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
     private static let minPanelHeight: CGFloat = 96
 
-    /// 面板圆角半径,与 FluidPanelController 一致(rowCornerRadius)。
-    private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
+    /// 面板外框圆角:与 FluidPanelController 一致(panelCornerRadius)。
+    private static let panelCornerRadius = CGFloat(MonitorConstants.panelCornerRadius)
 
     init(store: MonitorStore, openSettings: @escaping () -> Void) {
         self.store = store
@@ -87,6 +87,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         visualEffect.state = .active
         visualEffect.wantsLayer = true
         visualEffect.layer?.cornerRadius = Self.panelCornerRadius
+        visualEffect.layer?.cornerCurve = .continuous
         visualEffect.layer?.masksToBounds = true
         panel.contentView = visualEffect
 
@@ -107,6 +108,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         hosting.translatesAutoresizingMaskIntoConstraints = false
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
+        hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
         visualEffect.addSubview(hosting)
 

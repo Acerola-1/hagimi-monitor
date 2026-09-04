@@ -65,8 +65,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 面板圆角半径。由 window 层的 NSVisualEffectView / hosting layer 裁剪,
     /// 恢复系统 popover 般的圆角外观(自建 borderless 窗口默认是方角)。
-    /// 与行卡片/底部按钮同为 rowCornerRadius,整个面板圆角弧度一致。
-    private static let panelCornerRadius = CGFloat(MonitorConstants.rowCornerRadius)
+    /// 面板外框圆角:与行卡片/底部按钮(rowCornerRadius=14)及留白(6pt)同心,满足 R_outer = R_inner + padding。
+    private static let panelCornerRadius = CGFloat(MonitorConstants.panelCornerRadius)
 
     /// 面板底部距屏幕可视区下缘(Dock 上沿)的最小留白。
     private static let panelBottomMargin: CGFloat = 10
@@ -188,6 +188,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         visualEffect.state = .active
         visualEffect.wantsLayer = true
         visualEffect.layer?.cornerRadius = Self.panelCornerRadius
+        visualEffect.layer?.cornerCurve = .continuous
         visualEffect.layer?.masksToBounds = true
         panel.contentView = visualEffect
 
@@ -207,6 +208,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // hosting 也做圆角裁剪,否则 SwiftUI 内容(含 panelBackgroundColor 矩形)方角会溢出圆角。
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
+        hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
         visualEffect.addSubview(hosting)
 
