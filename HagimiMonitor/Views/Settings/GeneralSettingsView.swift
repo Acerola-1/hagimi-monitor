@@ -360,40 +360,34 @@ private struct MenuBarDisplaySettingsSection: View {
                 SettingsDivider()
 
                 VStack(spacing: 0) {
-                    ForEach(MenuBarMetricKind.userSelectableCases(hasFan: store.fanAvailable)) { kind in
-                        MenuBarMetricSelectionRow(
+                    ForEach(orderedSelectableKinds) { kind in
+                        MenuBarMetricRow(
                             kind: kind,
                             isSelected: settings.isMenuBarMetricSelected(kind),
-                            isEnabled: settings.canSelectMenuBarMetric(kind)
-                        ) {
-                            settings.setMenuBarMetric(kind, selected: !settings.isMenuBarMetricSelected(kind))
-                        }
-
-                        if kind != MenuBarMetricKind.userSelectableCases(hasFan: store.fanAvailable).last {
-                            SettingsDivider()
-                        }
-                    }
-                }
-
-                SettingsDivider()
-
-                VStack(spacing: 0) {
-                    ForEach(settings.menuBarMetricKinds) { kind in
-                        MenuBarMetricOrderRow(
-                            kind: kind,
+                            isEnabled: settings.canSelectMenuBarMetric(kind),
                             canMoveUp: settings.menuBarMetricKinds.first != kind,
                             canMoveDown: settings.menuBarMetricKinds.last != kind,
+                            toggle: { settings.setMenuBarMetric(kind, selected: !settings.isMenuBarMetricSelected(kind)) },
                             moveUp: { settings.moveMenuBarMetric(kind, direction: -1) },
                             moveDown: { settings.moveMenuBarMetric(kind, direction: 1) }
                         )
 
-                        if kind != settings.menuBarMetricKinds.last {
+                        if kind != orderedSelectableKinds.last {
                             SettingsDivider()
                         }
                     }
                 }
             }
         }
+    }
+
+    /// 单列表展示顺序:已勾选指标按菜单栏实际顺序靠前,未勾选指标按候选原序在后。
+    /// 勾选/取消即令条目在两组间移动;排序手柄只作用于已勾选条目。
+    private var orderedSelectableKinds: [MenuBarMetricKind] {
+        let all = MenuBarMetricKind.userSelectableCases(hasFan: store.fanAvailable)
+        let selected = settings.menuBarMetricKinds.filter { all.contains($0) }
+        let unselected = all.filter { !settings.menuBarMetricKinds.contains($0) }
+        return selected + unselected
     }
 
     @ViewBuilder
@@ -416,62 +410,61 @@ private struct MenuBarDisplaySettingsSection: View {
     }
 }
 
-private struct MenuBarMetricSelectionRow: View {
+/// 菜单栏指标单列表行:勾选态、图标、名称与(仅已勾选时)上下排序手柄同处一行。
+/// 左侧整块可点击切换勾选,右侧手柄调整菜单栏先后顺序,勾选与排序合为一张列表。
+private struct MenuBarMetricRow: View {
     let kind: MenuBarMetricKind
     let isSelected: Bool
+    /// 是否可切换:已勾选恒可取消,未勾选在选满上限时置灰。
     let isEnabled: Bool
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isSelected ? Color.accentColor : Color.clear)
-                    .frame(width: 16, height: 16)
-
-                Image(systemName: kind.symbol)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(isEnabled ? .secondary : .tertiary)
-                    .frame(width: 18)
-
-                Text(kind.title)
-                    .font(.body)
-                    .foregroundStyle(isEnabled ? .primary : .secondary)
-
-                Spacer(minLength: 16)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .frame(minHeight: 44)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!isEnabled)
-    }
-}
-
-private struct MenuBarMetricOrderRow: View {
-    let kind: MenuBarMetricKind
     let canMoveUp: Bool
     let canMoveDown: Bool
+    let toggle: () -> Void
     let moveUp: () -> Void
     let moveDown: () -> Void
 
     var body: some View {
-        SettingsRow(title: kind.title) {
-            HStack(spacing: 6) {
-                Button(action: moveUp) {
-                    Image(systemName: "chevron.up")
-                }
-                .disabled(!canMoveUp)
+        HStack(spacing: 8) {
+            Button(action: toggle) {
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isSelected ? Color.accentColor : Color.clear)
+                        .frame(width: 16, height: 16)
 
-                Button(action: moveDown) {
-                    Image(systemName: "chevron.down")
+                    Image(systemName: kind.symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isEnabled ? .secondary : .tertiary)
+                        .frame(width: 18)
+
+                    Text(kind.title)
+                        .font(.body)
+                        .foregroundStyle(isEnabled ? .primary : .secondary)
+
+                    Spacer(minLength: 16)
                 }
-                .disabled(!canMoveDown)
+                .contentShape(Rectangle())
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(.plain)
+            .disabled(!isEnabled)
+
+            if isSelected {
+                HStack(spacing: 6) {
+                    Button(action: moveUp) {
+                        Image(systemName: "chevron.up")
+                    }
+                    .disabled(!canMoveUp)
+
+                    Button(action: moveDown) {
+                        Image(systemName: "chevron.down")
+                    }
+                    .disabled(!canMoveDown)
+                }
+                .buttonStyle(.bordered)
+            }
         }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(minHeight: 44)
     }
 }

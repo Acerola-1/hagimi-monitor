@@ -608,6 +608,7 @@ final class StatisticsProcessStore {
             batteryRows.forEach { context.delete($0) }
             repairUsageMetaLocked()
             try? context.save()
+            compactDatabaseLocked()
         }
     }
 
@@ -626,6 +627,23 @@ final class StatisticsProcessStore {
             batteryRows.forEach { context.delete($0) }
             repairUsageMetaLocked()
             try? context.save()
+            compactDatabaseLocked()
+        }
+    }
+
+    /// 截断 WAL 并压缩数据库主文件,回收已删除行释放的空闲页(freelist)。
+    private func compactDatabaseLocked() {
+        guard let url = databaseURL else { return }
+        if let breakdownHandle {
+            sqlite3_close_v2(breakdownHandle)
+            self.breakdownHandle = nil
+        }
+        var rwHandle: OpaquePointer?
+        if sqlite3_open_v2(url.path, &rwHandle, SQLITE_OPEN_READWRITE, nil) == SQLITE_OK, let rwHandle {
+            sqlite3_busy_timeout(rwHandle, 3_000)
+            sqlite3_exec(rwHandle, "PRAGMA wal_checkpoint(TRUNCATE)", nil, nil, nil)
+            sqlite3_exec(rwHandle, "VACUUM", nil, nil, nil)
+            sqlite3_close_v2(rwHandle)
         }
     }
 

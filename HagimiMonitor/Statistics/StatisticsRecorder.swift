@@ -42,18 +42,21 @@ final class StatisticsRecorder: ObservableObject {
     @Published private(set) var usageFirstDay: Int64 = 0
     @Published private(set) var usageActiveDays: [Int64] = []
 
-    /// 本地存储产物的占用分解与记录规模。「监控数据」只算真实在用的数据页;
-    /// 「系统数据」是表结构页、已删行待复用的空闲页与 WAL 索引——随清空/复用
-    /// 自然消长,单列展示以免被误读成未清理的数据。
+    /// 本地存储产物的四分类占用分解与记录规模。
+    /// - 硬件指标：统计库中的有效数据页与活跃写入；
+    /// - 应用记录：应用统计库中的应用资源用量、图标缓存与电池历史；
+    /// - 报表缓存：独立离线硬件规格档案页面；
+    /// - 系统开销：数据库表结构、待复用空闲空间、WAL 索引以及运行日志。
     struct StorageInfo: Equatable {
-        var monitorDataBytes: Int64
+        var metricBytes: Int64
+        var appBytes: Int64
         var reportBytes: Int64
         var systemBytes: Int64
         var minuteCount: Int64
         var hourCount: Int64
         var dayCount: Int64
 
-        var totalBytes: Int64 { monitorDataBytes + reportBytes + systemBytes }
+        var totalBytes: Int64 { metricBytes + appBytes + reportBytes + systemBytes }
     }
 
     /// 进程/电池/打卡的 SwiftData 存储(图标随身份持久化,卸载应用不丢历史)。
@@ -490,17 +493,19 @@ final class StatisticsRecorder: ObservableObject {
         }
     }
 
-    /// 汇总三类存储产物的占用与记录规模(后台队列执行)。
+    /// 汇总四类存储产物的占用与记录规模(后台队列执行)。
     private func currentStorageInfo(database: StatisticsDatabase) -> StorageInfo {
         let counts = database.rowCounts
         let reportBytes = (try? FileManager.default
             .attributesOfItem(atPath: StatisticsReportBuilder.outputURL.path))?[.size] as? Int64 ?? 0
         let stat = database.breakdown
         let app = processStore?.breakdown ?? .zero
+        let logBytes = AppLogStore.totalLogsBytes()
         return StorageInfo(
-            monitorDataBytes: stat.dataBytes + app.dataBytes,
+            metricBytes: stat.dataBytes,
+            appBytes: app.dataBytes,
             reportBytes: reportBytes,
-            systemBytes: stat.systemBytes + app.systemBytes,
+            systemBytes: stat.systemBytes + app.systemBytes + logBytes,
             minuteCount: counts.minute,
             hourCount: counts.hour,
             dayCount: counts.day

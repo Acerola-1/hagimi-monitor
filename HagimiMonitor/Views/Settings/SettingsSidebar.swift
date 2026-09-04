@@ -23,12 +23,23 @@ struct SettingsSidebar: View {
     @ObservedObject private var updateService = UpdateService.shared
     #endif
 
+    private var listSelection: Binding<SettingsRoute> {
+        Binding(
+            get: { selection == .storage ? .statistics : selection },
+            set: { selection = $0 }
+        )
+    }
+
     var body: some View {
-        List(selection: $selection) {
+        List(selection: listSelection) {
+            // 常规:单条目,标题与条目文字(「常规」)重复,不单列分组标题。
             Section {
                 Label(String(localized: "settings.sidebar.general"), systemImage: "gearshape")
                     .tag(SettingsRoute.general)
+            }
 
+            // 监控:各硬件模块与显示器。
+            Section {
                 // 蓝牙入口无条件显示:「无连接设备/蓝牙关闭」是瞬态,拿它门控
                 // 常驻设置项会让用户误以为功能消失(与风扇的硬件级门控不同)。
                 ForEach(MonitorKind.userVisibleCases.filter { $0 != .fan || fanAvailable }) { kind in
@@ -57,13 +68,27 @@ struct SettingsSidebar: View {
                     #endif
                 }
                 .tag(SettingsRoute.displayModule)
+            } header: {
+                Text(String(localized: "settings.sidebar.modules"))
+            }
 
+            // 扩展:小工具与数据统计(数据存储管理作为数据统计的子页,不占侧栏条目)。
+            Section {
                 Label(String(localized: "settings.sidebar.quick-tools"), systemImage: "wrench.and.screwdriver")
                     .tag(SettingsRoute.quickTools)
 
                 Label(String(localized: "settings.sidebar.statistics"), systemImage: "chart.bar.doc.horizontal")
                     .tag(SettingsRoute.statistics)
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        selection = .statistics
+                    }
+            } header: {
+                Text(String(localized: "settings.sidebar.extensions"))
+            }
 
+            // 关于:单条目,标题与条目文字(「关于」)重复,不单列分组标题。
+            Section {
                 #if DIRECT_DISTRIBUTION
                 HStack(spacing: 6) {
                     Label(String(localized: "settings.sidebar.about"), systemImage: "info.circle")

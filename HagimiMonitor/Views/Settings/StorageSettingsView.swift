@@ -11,15 +11,10 @@ struct StorageSettingsView: View {
     @State private var pendingDeleteDays: Int?
     @State private var confirmClearAll = false
     @State private var confirmClearReport = false
+    @State private var confirmClearApps = false
     @State private var busy = false
 
     private var info: StatisticsRecorder.StorageInfo? { recorder.storageInfo }
-
-    /// 监控数据有效值 = 统计库 + 进程库在用数据页(含未合并 WAL),合并展示;
-    /// 表结构页/空闲页等固定开销在环形图中单列归入系统数据。
-    private var monitorBytes: Int64 {
-        info?.monitorDataBytes ?? 0
-    }
 
     var body: some View {
         SettingsPage {
@@ -31,9 +26,10 @@ struct StorageSettingsView: View {
 
             SettingsGroup(String(localized: "stats.storage.categories")) {
                 categoryRow(
-                    title: String(localized: "stats.settings.storage-data"),
-                    bytes: monitorBytes,
-                    detail: String(localized: "stats.storage.category-data-desc")
+                    title: String(localized: "stats.storage.metric"),
+                    bytes: info?.metricBytes ?? 0,
+                    detail: String(localized: "stats.storage.category-metrics-desc"),
+                    disabled: (info?.metricBytes ?? 0) == 0
                 ) {
                     Menu {
                         ForEach([30, 90, 180, 365], id: \.self) { days in
@@ -50,7 +46,23 @@ struct StorageSettingsView: View {
                 SettingsDivider()
 
                 categoryRow(
-                    title: String(localized: "stats.settings.storage-report"),
+                    title: String(localized: "stats.storage.apps"),
+                    bytes: info?.appBytes ?? 0,
+                    detail: String(localized: "stats.storage.category-apps-desc"),
+                    disabled: (info?.appBytes ?? 0) == 0
+                ) {
+                    Button(role: .destructive) {
+                        confirmClearApps = true
+                    } label: {
+                        Text(String(localized: "stats.storage.clear"))
+                    }
+                    .fixedSize()
+                }
+
+                SettingsDivider()
+
+                categoryRow(
+                    title: String(localized: "stats.storage.report"),
                     bytes: info?.reportBytes ?? 0,
                     detail: String(localized: "stats.storage.category-report-desc"),
                     disabled: (info?.reportBytes ?? 0) == 0
@@ -61,6 +73,16 @@ struct StorageSettingsView: View {
                         Text(String(localized: "stats.storage.clear"))
                     }
                     .fixedSize()
+                }
+
+                SettingsDivider()
+
+                categoryRow(
+                    title: String(localized: "stats.storage.system"),
+                    bytes: info?.systemBytes ?? 0,
+                    detail: String(localized: "stats.storage.category-system-desc")
+                ) {
+                    EmptyView()
                 }
             }
 
@@ -132,6 +154,20 @@ struct StorageSettingsView: View {
         } message: {
             Text(String(localized: "stats.storage.clear-report-confirm"))
         }
+        .confirmationDialog(
+            Text(String(localized: "stats.storage.clear-apps")),
+            isPresented: $confirmClearApps,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                run { recorder.clearAppStats(completion: $0) }
+            } label: {
+                Text(String(localized: "stats.settings.cleanup-confirm-button"))
+            }
+            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "stats.storage.clear-apps-confirm"))
+        }
     }
 
     // MARK: - 返回
@@ -153,12 +189,11 @@ struct StorageSettingsView: View {
 
     // MARK: - 环形构成图
 
-    private var ringColors: (monitor: Color, report: Color, fixed: Color) {
+    private var ringColors: (metric: Color, app: Color, report: Color, system: Color) {
         let dark = colorScheme == .dark
         return (
-            // QQ 存储环同款青蓝 × 紫罗兰两主色,深色模式提亮一档;
-            // 系统段用带蓝调的板岩灰,保持与主色的同一色彩家族。
             Color(hex: dark ? 0x38BDFF : 0x00A5EF),
+            Color(hex: dark ? 0x34D399 : 0x059669),
             Color(hex: dark ? 0xCA92F8 : 0xB066E8),
             Color(hex: dark ? 0x94A0AE : 0x9AA5B3)
         )
@@ -168,9 +203,10 @@ struct StorageSettingsView: View {
     private var ringCard: some View {
         let colors = ringColors
         let segments: [StorageRing.Segment] = [
-            StorageRing.Segment(id: "monitor", bytes: monitorBytes, color: colors.monitor),
+            StorageRing.Segment(id: "metric", bytes: info?.metricBytes ?? 0, color: colors.metric),
+            StorageRing.Segment(id: "app", bytes: info?.appBytes ?? 0, color: colors.app),
             StorageRing.Segment(id: "report", bytes: info?.reportBytes ?? 0, color: colors.report),
-            StorageRing.Segment(id: "fixed", bytes: info?.systemBytes ?? 0, color: colors.fixed),
+            StorageRing.Segment(id: "system", bytes: info?.systemBytes ?? 0, color: colors.system),
         ]
 
         VStack(spacing: 16) {
@@ -180,10 +216,11 @@ struct StorageSettingsView: View {
                 centerBottom: ringCaption
             )
 
-            HStack(spacing: 14) {
-                legend(dot: colors.monitor, label: String(localized: "stats.settings.storage-data"), bytes: monitorBytes)
-                legend(dot: colors.report, label: String(localized: "stats.settings.storage-report"), bytes: info?.reportBytes ?? 0)
-                legend(dot: colors.fixed, label: String(localized: "stats.storage.system"), bytes: info?.systemBytes ?? 0)
+            HStack(spacing: 10) {
+                legend(dot: colors.metric, label: String(localized: "stats.storage.metric"), bytes: info?.metricBytes ?? 0)
+                legend(dot: colors.app, label: String(localized: "stats.storage.apps"), bytes: info?.appBytes ?? 0)
+                legend(dot: colors.report, label: String(localized: "stats.storage.report"), bytes: info?.reportBytes ?? 0)
+                legend(dot: colors.system, label: String(localized: "stats.storage.system"), bytes: info?.systemBytes ?? 0)
             }
         }
         .frame(maxWidth: .infinity)
@@ -210,17 +247,19 @@ struct StorageSettingsView: View {
     }
 
     private func legend(dot: Color, label: String, bytes: Int64) -> some View {
-        HStack(spacing: 5) {
+        HStack(spacing: 4) {
             Circle()
                 .fill(dot)
                 .frame(width: 7, height: 7)
             Text(label)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
             Text(byteCount(bytes))
                 .font(.caption2.weight(.medium))
                 .monospacedDigit()
                 .foregroundStyle(.primary.opacity(0.8))
+                .lineLimit(1)
         }
     }
 
