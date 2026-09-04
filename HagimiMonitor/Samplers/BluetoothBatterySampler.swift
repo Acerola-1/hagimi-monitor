@@ -258,6 +258,11 @@ final class BluetoothBatterySampler: NSObject {
 
     func start() {
         guard timer == nil else { return }
+        // 单元测试运行期间跳过蓝牙采样的常驻启动,避免系统授权弹窗阻塞测试 runner。
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              NSClassFromString("XCTestCase") == nil else {
+            return
+        }
         bleReader.updateKnownIdentifiers(boundIdentifiers())
         bleReader.onSnapshotsUpdate = { [weak self] snapshots in
             guard let self else { return }

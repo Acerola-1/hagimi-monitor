@@ -37,6 +37,8 @@ struct MonitorPanelView: View {
     /// 经 environmentObject 注入子树;每个面板(菜单栏/钉住)各自持有,
     /// 展开动画互不牵动。
     @StateObject private var panelExpansion = PanelExpansionDriver()
+    /// 显示器模块(包含内嵌档案)动画状态凭据:供 MonitorPanelView 在子区块动画时将整体布局并入 withAnimation 事务
+    @State private var displaySectionMotionTicket: Int = 0
     /// 窗口层注入的贴合回调:driver 在 toggle 时把目标高度与是否动画下发给窗口层。
     /// 预览/无窗口宿主为 nil。
     @Environment(\.panelWindowResizeHandler) private var windowResizeHandler
@@ -66,6 +68,7 @@ struct MonitorPanelView: View {
     }
 
     var body: some View {
+        let _ = displaySectionMotionTicket
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
         // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
         let theme = ThemeCache.theme(
@@ -109,8 +112,13 @@ struct MonitorPanelView: View {
                                     animate: { key, toFull, animated in
                                         store.beginExpansionAnimation()
                                         if animated {
-                                            panelExpansion.animate(key, toFull ? 1 : 0)
+                                            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+                                                displaySectionMotionTicket &+= 1
+                                                panelExpansion.animate(key, toFull ? 1 : 0)
+                                            }
                                         } else {
+                                            displaySectionMotionTicket &+= 1
                                             panelExpansion.setInstantly(key, toFull ? 1 : 0)
                                         }
                                     }
@@ -236,7 +244,11 @@ struct MonitorPanelView: View {
                 if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         guard store.isPanelVisible else { return }
-                        setExpansion { expandedKinds = Set(visibleKinds) }
+                        if ProcessInfo.processInfo.environment["HAGIMI_AUTOTEST_SINGLE"] != nil {
+                            setExpansion { expandedKinds = [.cpu] }
+                        } else {
+                            setExpansion { expandedKinds = Set(visibleKinds) }
+                        }
                     }
                 }
             } else {
@@ -615,6 +627,7 @@ struct MonitorPanelView: View {
         // 置位一次性动画截止标记:动画窗口内的采样结果推迟应用,避免 1-3s 节奏的
         // 模块刷新恰好撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
         store.beginExpansionAnimation()
+
         withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
                               dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
             mutate()
@@ -2937,6 +2950,7 @@ struct CollapsibleDetail<Content: View>: View {
     /// 内容的自然高度。内容始终挂载并被 GeometryReader 测量,故在首次展开前就已就绪,
     /// 保证展开时高度从 0 平滑增长,而不是等测量回填后「跳」到终点。
     @State private var contentHeight: CGFloat = 0
+    @State private var hasAppeared = false
 
     init(
         expansionKey: String,
@@ -2952,6 +2966,7 @@ struct CollapsibleDetail<Content: View>: View {
 
     var body: some View {
         let expanded = contentAvailable && isExpanded
+
         content
             .opacity(expanded ? 1 : 0)
             .background(
@@ -2960,33 +2975,25 @@ struct CollapsibleDetail<Content: View>: View {
                         .onAppear {
                             contentHeight = geometry.size.height
                             expansion.reportNaturalHeight(expansionKey, geometry.size.height)
+                            DispatchQueue.main.async {
+                                hasAppeared = true
+                            }
                         }
                         .onChange(of: geometry.size.height) { _, newValue in
-                            // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
-                            // 仅在当前处于展开态时包一次补间平滑过渡;收起态静默赋值,
-                            // 避免在不可见的折叠区启动无谓的后台弹簧补间。
-                            if expanded {
-                                withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                                      dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
-                                    contentHeight = newValue
-                                }
-                            } else {
-                                contentHeight = newValue
-                            }
+                            contentHeight = newValue
                             expansion.reportNaturalHeight(expansionKey, newValue)
                         }
                 }
             )
-            // 展开时高度 = 自然高度,收起时 = 0;由 .animation(value: isExpanded)
-            // 在 CoreAnimation 层插值,不在主线程逐帧重算。顶部对齐 + 裁剪,
-            // 使内容随高度增长自上而下「卷出」。
+            // 展开时高度 = 自然高度,收起时 = 0;由 .animation 在 CoreAnimation 层插值,
+            // 不在主线程逐帧重算。顶部对齐 + 裁剪,使内容随高度自上而下「卷出」。
             .frame(height: expanded ? contentHeight : 0, alignment: .top)
             .clipped()
             // 收起(高度 0、不可见)不参与点击,避免拦截行的展开手势。
             .allowsHitTesting(isExpanded)
-            // toggle 时 SwiftUI 动画系统补间高度与透明度;contentAvailable 变化
-            // (数据驱动)不触发此动画,瞬时切换。
-            .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                               dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
+            // toggle 时或内容尺寸变化时平滑补间高度与透明度;首次出现前不设补间避免启动抖动。
+            .animation(hasAppeared ? .spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                             dampingFraction: MonitorConstants.panelExpansionSpringDamping) : nil,
+                       value: expanded ? contentHeight : 0)
     }
 }

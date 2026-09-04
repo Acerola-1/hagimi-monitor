@@ -120,6 +120,18 @@ struct DisplaySection: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !displays.isEmpty else { return }
+                if !isExpanded {
+                    displays = Self.collectDisplays()
+                }
+                withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                      dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+                    isExpanded.toggle()
+                }
+                animate(Self.sectionKey, isExpanded, true)
+            }
 
             CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded, contentAvailable: !displays.isEmpty) {
                 VStack(spacing: 9) {
@@ -130,18 +142,6 @@ struct DisplaySection: View {
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
             }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            guard !displays.isEmpty else { return }
-            if !isExpanded {
-                displays = Self.collectDisplays()
-            }
-            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
-                isExpanded.toggle()
-            }
-            animate(Self.sectionKey, isExpanded, true)
         }
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.palette.displayGlassFill
@@ -165,6 +165,7 @@ struct DisplaySection: View {
         DisplayInfoCard(
             display: display,
             palette: theme.palette,
+            isSectionExpanded: isExpanded,
             archiveKey: "display-arc-\(display.id)",
             animate: animate
         )
@@ -340,6 +341,7 @@ struct DisplaySection: View {
                         controller: controller,
                         palette: palette,
                         tint: tint,
+                        isSectionExpanded: isExpanded,
                         archiveKey: "display-arc-\(display.id)",
                         animate: animate
                     )
@@ -563,6 +565,7 @@ struct DisplaySection: View {
 private struct DisplayInfoCard: View {
     let display: DisplayInfo
     let palette: MonitorPalette
+    let isSectionExpanded: Bool
     /// 本卡档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
     let archiveKey: String
     /// 发起动画的闭包,与 DisplaySection 同一驱动源。
@@ -596,6 +599,12 @@ private struct DisplayInfoCard: View {
                 }
             }
             .padding(.leading, 28)
+        }
+        .onChange(of: isSectionExpanded) { _, newValue in
+            if !newValue && archiveExpanded {
+                archiveExpanded = false
+                animate(archiveKey, false, false)
+            }
         }
     }
 
@@ -1057,13 +1066,17 @@ private struct DisplayControlGroup: View {
     @ObservedObject var controller: DisplayControlController
     let palette: MonitorPalette
     let tint: Color
+    let isSectionExpanded: Bool
 
     /// 本显示器档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
     let archiveKey: String
     /// 发起动画的闭包,与 DisplaySection 同一驱动源。
     var animate: (String, Bool, Bool) -> Void
 
+    @EnvironmentObject private var expansion: PanelExpansionDriver
     @State private var archiveExpanded = false
+    @State private var controlsHeight: CGFloat = 0
+    @State private var archiveHeight: CGFloat = 0
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -1106,91 +1119,174 @@ private struct DisplayControlGroup: View {
                     }
                 }
 
-                // 摘要行:分辨率 · 刷新率 · HDR(当前开启时) · 位深,一行 caption;
-                // 档案展开后完整信息呈现,摘要让位,卡片即纯信息态。
-                if let info = displayInfo, let summary = infoSummaryLine, !archiveExpanded {
-                    Text(summary)
-                        .monitorPanelCaptionFont(.caption2)
-                        .foregroundStyle(palette.captionText)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                        .transition(.opacity)
-                }
-
-                if let info = displayInfo {
-                    CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
-                        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
-                            Text(String(localized: "display.archive.basic"))
-                                .monitorPanelCaptionFont(.caption2)
-                                .foregroundStyle(palette.captionText)
-                            DisplayInfoBaseGrid(display: info, palette: palette)
-                            DisplayArchiveGrid(display: info, palette: palette)
-                            DisplayArchiveCopyButton(display: info, palette: palette)
-                        }
-                    }
-                }
-
-                // 档案展开即信息完整呈现,控制滑杆让位;收起后回到控制态。
-                if !archiveExpanded {
-                    VStack(spacing: 7) {
-                        if settings.displayBrightnessControlEnabled {
-                            DisplayControlSlider(
-                                label: String(localized: "settings.brightness"),
-                                systemImage: "sun.max",
-                                value: binding(for: .brightness),
-                                isEnabled: display.supports(.brightness),
-                                palette: palette,
-                                tint: tint
-                            )
-                        }
-
-                        if settings.displayVolumeControlEnabled, !display.isBuiltIn {
-                            DisplayControlSlider(
-                                label: String(localized: "settings.volume"),
-                                systemImage: "speaker.wave.2",
-                                value: binding(for: .volume),
-                                isEnabled: display.supports(.volume),
-                                palette: palette,
-                                tint: tint
-                            )
-                        }
-
-                        if settings.displayContrastControlEnabled, !display.isBuiltIn {
-                            DisplayControlSlider(
-                                label: String(localized: "settings.contrast"),
-                                systemImage: "circle.lefthalf.filled",
-                                value: binding(for: .contrast),
-                                isEnabled: display.supports(.contrast),
-                                palette: palette,
-                                tint: tint
-                            )
-                        }
-
-                        if showsUnsupportedNotice {
-                            HStack(alignment: .top, spacing: 5) {
-                                Image(systemName: "info.circle")
-                                    .font(.caption2)
-                                    .foregroundStyle(palette.captionText)
-                                Text(String(localized: "display.control-unavailable"))
-                                    .monitorPanelCaptionFont(.caption2)
-                                    .foregroundStyle(palette.captionText)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .transition(.opacity)
-                        }
-                    }
-                    .transition(.opacity)
-                }
+                toggledContent
             }
         }
         .padding(.leading, 28)
+        .background {
+            // 在背景层挂载不可见的真实档案区进行无约束自然高度测量,
+            // 确保在档案收起态(frame 被限制为 controlsHeight)时,仍然可以
+            // 预先精准测得展开后的档案高度,从而在 toggle 的第一帧就上报准确的 delta。
+            if let info = displayInfo {
+                archiveContent(for: info)
+                    .hidden()
+                    .background(
+                        GeometryReader { geometry in
+                            Color.clear
+                                .onAppear {
+                                    let h = geometry.size.height
+                                    if h > 0, h != archiveHeight {
+                                        archiveHeight = h
+                                        updateDelta()
+                                    }
+                                }
+                                .onChange(of: geometry.size.height) { _, newH in
+                                    if newH > 0, newH != archiveHeight {
+                                        archiveHeight = newH
+                                        updateDelta()
+                                    }
+                                }
+                        }
+                    )
+            }
+        }
+        .onChange(of: isSectionExpanded) { _, newValue in
+            if !newValue && archiveExpanded {
+                archiveExpanded = false
+                animate(archiveKey, false, false)
+            }
+        }
+        .onChange(of: displayInfo?.id) { _, _ in
+            updateDelta()
+        }
         // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
         .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
             guard archiveKey == "display-arc-\(controller.displays.first?.id ?? 0)" else { return }
             NSLog("[autotest] group archive toggle key=%@", archiveKey)
             toggleArchive()
         }
+    }
+
+    /// 控制区与档案区的平滑过渡容器:
+    /// 控制区与档案区各自测量自然高度,高度差 delta 登记为该 archiveKey 的增量高度;
+    /// toggle 时 frame 高度在两者间连续插值,内部透明度交叉渐变,窗口层与内容层等量同相跟随。
+    private var toggledContent: some View {
+        let targetHeight: CGFloat? = archiveExpanded
+            ? (archiveHeight > 0 ? archiveHeight : nil)
+            : (controlsHeight > 0 ? controlsHeight : nil)
+
+        return ZStack(alignment: .top) {
+            controlsContent
+                .opacity(archiveExpanded ? 0 : 1)
+                .allowsHitTesting(!archiveExpanded)
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear {
+                                let h = geometry.size.height
+                                if h > 0, h != controlsHeight {
+                                    controlsHeight = h
+                                    updateDelta()
+                                }
+                            }
+                            .onChange(of: geometry.size.height) { _, newH in
+                                if newH > 0, newH != controlsHeight {
+                                    controlsHeight = newH
+                                    updateDelta()
+                                }
+                            }
+                    }
+                )
+
+            if let info = displayInfo {
+                archiveContent(for: info)
+                    .opacity(archiveExpanded ? 1 : 0)
+                    .allowsHitTesting(archiveExpanded)
+            }
+        }
+        .frame(height: targetHeight, alignment: .top)
+        .clipped()
+        .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                           dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: archiveExpanded)
+    }
+
+    private var controlsContent: some View {
+        VStack(spacing: 7) {
+            if let summary = infoSummaryLine {
+                Text(summary)
+                    .monitorPanelCaptionFont(.caption2)
+                    .foregroundStyle(palette.captionText)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+
+            if settings.displayBrightnessControlEnabled {
+                DisplayControlSlider(
+                    label: String(localized: "settings.brightness"),
+                    systemImage: "sun.max",
+                    value: binding(for: .brightness),
+                    isEnabled: display.supports(.brightness),
+                    palette: palette,
+                    tint: tint
+                )
+            }
+
+            if settings.displayVolumeControlEnabled, !display.isBuiltIn {
+                DisplayControlSlider(
+                    label: String(localized: "settings.volume"),
+                    systemImage: "speaker.wave.2",
+                    value: binding(for: .volume),
+                    isEnabled: display.supports(.volume),
+                    palette: palette,
+                    tint: tint
+                )
+            }
+
+            if settings.displayContrastControlEnabled, !display.isBuiltIn {
+                DisplayControlSlider(
+                    label: String(localized: "settings.contrast"),
+                    systemImage: "circle.lefthalf.filled",
+                    value: binding(for: .contrast),
+                    isEnabled: display.supports(.contrast),
+                    palette: palette,
+                    tint: tint
+                )
+            }
+
+            if showsUnsupportedNotice {
+                HStack(alignment: .top, spacing: 5) {
+                    Image(systemName: "info.circle")
+                        .font(.caption2)
+                        .foregroundStyle(palette.captionText)
+                    Text(String(localized: "display.control-unavailable"))
+                        .monitorPanelCaptionFont(.caption2)
+                        .foregroundStyle(palette.captionText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+        }
+    }
+
+    private func archiveContent(for info: DisplayInfo) -> some View {
+        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+            Text(String(localized: "display.archive.basic"))
+                .monitorPanelCaptionFont(.caption2)
+                .foregroundStyle(palette.captionText)
+            DisplayInfoBaseGrid(display: info, palette: palette)
+            DisplayArchiveGrid(display: info, palette: palette)
+            DisplayArchiveCopyButton(display: info, palette: palette)
+        }
+    }
+
+    /// 上报本卡的净增量高度到驱动器:
+    /// 控制卡在收起态具备滑杆高度(controlsHeight),展开档案后切换到档案高度(archiveHeight),
+    /// 净高度差为 archiveHeight - controlsHeight。
+    private func updateDelta() {
+        guard controlsHeight > 0, archiveHeight > 0 else { return }
+        let delta = max(archiveHeight - controlsHeight, 0)
+        expansion.reportNaturalHeight(archiveKey, delta)
     }
 
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
