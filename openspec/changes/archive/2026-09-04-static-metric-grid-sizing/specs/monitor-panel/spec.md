@@ -38,3 +38,12 @@ The panel SHALL handle long metric values, localized labels, display names, netw
 
 ### Requirement: core-split 指标格的 P/E 瓦片取代
 CPU 展开区 SHALL 以 P/E 占用瓦片展示分组占用;core-split 指标被瓦片取代后 SHALL 不再进入指标网格,避免同源数据双重渲染。
+
+#### Scenario: 逐核数据可用时 P/E 瓦片取代 core-split 格
+- **WHEN** CPU 采样侧产出逐核数据且 core-split 指标处于开启态
+- **THEN** CPU 展开区以 P/E 占用瓦片展示分组占用(与 core-split 同源同口径)
+- **AND** core-split 指标格不再进入指标网格,同源数值不重复渲染
+
+#### Scenario: core-split 关闭或无逐核数据
+- **WHEN** 用户关闭 core-split 指标,或采样侧未产出逐核数据
+- **THEN** P/E 占用瓦片与逐核环形图一并隐藏,不发生取代
