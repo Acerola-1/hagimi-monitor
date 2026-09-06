@@ -15,7 +15,7 @@ struct PowerFlowDiagram: View {
     /// 流光动画门控:仅当行展开且面板可见时为 true。
     let animate: Bool
 
-    private static let nodeWidth: CGFloat = 104
+    private static let nodeWidth: CGFloat = 90
     private static let nodeHeight: CGFloat = 46
     private static let stubHeight: CGFloat = 16
     private static let barHeight: CGFloat = 38
@@ -55,7 +55,7 @@ struct PowerFlowDiagram: View {
             }
 
             VStack(spacing: Self.stubHeight) {
-                HStack(spacing: 36) {
+                HStack(spacing: 0) {
                     adapterNode
                     Spacer(minLength: 0)
                     systemNode
@@ -131,7 +131,7 @@ struct PowerFlowDiagram: View {
         drawLinkedBeams(&context, adapterRight: adapterRight, junction: junction,
                         systemLeft: systemLeft, time: time)
 
-        // 汇流点 ↕ 电池导管:充电绿 / 放电琥珀(适配器不足转红)/ 无流动淡线,
+        // 汇流点 ↕ 电池导管:充电绿 / 放电能量色(正常模块绿,低电琥珀,不足红)/ 无流动淡线,
         // 与水平线同一辉光语言;脉冲按流向行进(充电注入电池、放电汇入节点)。
         let stubEnd = CGPoint(x: junction.x, y: Self.nodeHeight + Self.stubHeight)
         switch flowDirection {
@@ -146,9 +146,7 @@ struct PowerFlowDiagram: View {
                           width: edgeWidth(batteryMagnitude), tailFraction: 0.3)
             }
         case .discharging:
-            let color = isInsufficient
-                ? theme.palette.severityTint(for: .critical).opacity(0.85)
-                : theme.palette.severityTint(for: .warning).opacity(0.8)
+            let color = dischargeTint
             glowSegment(&context, from: stubEnd, to: junction,
                         color: color, width: edgeWidth(batteryMagnitude), glowAlpha: 0.3)
             if let time {
@@ -175,18 +173,18 @@ struct PowerFlowDiagram: View {
     ) {
         let breath = time.map { 0.5 + 0.5 * sin($0 * .pi / 1.4) } ?? 0.5
         let color = connected ? activeTint : neutralEdge
-        let r = 5 * (1 + 0.25 * breath)
+        let r = 3.8 * (1 + 0.25 * breath)
         context.fill(
-            Path(ellipseIn: CGRect(x: junction.x - r * 3.2, y: junction.y - r * 3.2,
-                                   width: r * 6.4, height: r * 6.4)),
+            Path(ellipseIn: CGRect(x: junction.x - r * 2.6, y: junction.y - r * 2.6,
+                                   width: r * 5.2, height: r * 5.2)),
             with: .radialGradient(
-                Gradient(colors: [color.opacity(0.4 * breath + 0.1), color.opacity(0)]),
+                Gradient(colors: [color.opacity(0.35 * breath + 0.08), color.opacity(0)]),
                 center: junction,
                 startRadius: 0,
-                endRadius: r * 3.2
+                endRadius: r * 2.6
             )
         )
-        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.5, y: junction.y - 2.5, width: 5, height: 5))
+        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.0, y: junction.y - 2.0, width: 4.0, height: 4.0))
         context.fill(dot, with: .color(.white.opacity(0.9 + 0.1 * breath)))
     }
 
@@ -252,11 +250,11 @@ struct PowerFlowDiagram: View {
         let d = abs(u - fJ)
         guard d < 0.10 else { return }
         let a = 1 - d / 0.10
-        let r = (4.5 + 4 * a) * 2.4
+        let r = (3.2 + 2.8 * a) * 2.2
         context.fill(
             Path(ellipseIn: CGRect(x: junction.x - r, y: junction.y - r, width: r * 2, height: r * 2)),
             with: .radialGradient(
-                Gradient(colors: [color.opacity(0.9 * a), color.opacity(0)]),
+                Gradient(colors: [color.opacity(0.85 * a), color.opacity(0)]),
                 center: junction,
                 startRadius: 0,
                 endRadius: r
@@ -402,7 +400,7 @@ struct PowerFlowDiagram: View {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(barFillGradient)
-                    .frame(width: max(0, CGFloat(module.value) / 100 * geo.size.width - 4),
+                    .frame(width: max(0, CGFloat(module.value) / 100 * (geo.size.width - 4)),
                            height: geo.size.height - 4)
                     .offset(x: 2)
 
@@ -431,8 +429,29 @@ struct PowerFlowDiagram: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(theme.trackFill))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(barBorder, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        // 顶部正中接驳端子:垂直导管由此落入电池条
+        .overlay(alignment: .top) {
+            socketTab
+        }
         // 卡标挂在裁剪层之外,顶端探出条外的部分不被裁掉。
         .overlay(limitTick)
+    }
+
+    /// 电池顶部接驳端子(Socket Tab):微型凹槽与接触片,垂直导管在此插接。
+    private var socketTab: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(theme.trackFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .stroke(barBorder, lineWidth: 1)
+                )
+            RoundedRectangle(cornerRadius: 1)
+                .fill(activeTint.opacity(flowDirection == .idle ? 0.30 : 0.70))
+                .frame(width: 8, height: 1.5)
+        }
+        .frame(width: 16, height: 4)
+        .offset(y: -2.5)
     }
 
     /// 充电上限卡标(冻结原型「方案 B 旗标」):条外上缘倒三角旗头 + 细线下探
@@ -444,7 +463,7 @@ struct PowerFlowDiagram: View {
                 LimitFlagShape()
                     .fill(isDark ? Color.white.opacity(0.68) : Color.black.opacity(0.42))
                     .frame(width: 8, height: 19)
-                    .offset(x: geo.size.width * CGFloat(limit) / 100 - 4, y: -6)
+                    .offset(x: 2 + (geo.size.width - 4) * CGFloat(limit) / 100 - 4, y: -6)
             }
         }
     }
@@ -637,11 +656,21 @@ struct PowerFlowDiagram: View {
     /// 低电量模式染黄,低电量琥珀由电池条独立承载。
     private var chargeTint: Color { tint }
 
-    /// 连线状态色:充电用模块绿;放电用警示黄,适配器不足优先转警示红。
-    /// 「充电绿 / 放电黄 / 不足红」整条路径共享同一状态色。
+    /// 放电流向底色:电池供电是正常工况，不应默认呈现警示黄；
+    /// 仅在开启低电量模式或电量偏低(<=20%)时呈现琥珀警示色，平时保持通透健康的模块主色。
+    private var dischargeTint: Color {
+        if isInsufficient { return theme.palette.severityTint(for: .critical) }
+        if isLowPowerMode || module.value <= 20 {
+            return theme.palette.severityTint(for: .warning)
+        }
+        return tint
+    }
+
+    /// 连线状态色:整条能量流动路径的状态色。
+    /// 充电用模块绿;适配器不足转红;放电时仅低电量/低电模式转警示黄,平时保持模块绿。
     private var activeTint: Color {
         if isInsufficient { return theme.palette.severityTint(for: .critical) }
-        if flowDirection == .discharging { return theme.palette.severityTint(for: .warning) }
+        if flowDirection == .discharging { return dischargeTint }
         return tint
     }
 
