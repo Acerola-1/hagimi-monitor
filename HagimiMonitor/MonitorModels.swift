@@ -186,6 +186,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true),
                 MetricSwitch(id: "voltage", title: String(localized: "metric.battery.voltage"), isDefault: true),
                 MetricSwitch(id: "current", title: String(localized: "metric.battery.current"), isDefault: true),
+                MetricSwitch(id: "cell-balance", title: String(localized: "metric.battery.cell-balance"), isDefault: true),
                 // 剩余/满充容量合并为单一开关(展示为「剩余 / 满充 mAh」整行格)。
                 MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true),
             ]

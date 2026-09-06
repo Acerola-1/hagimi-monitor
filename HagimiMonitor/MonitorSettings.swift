@@ -329,6 +329,18 @@ final class MonitorSettings: ObservableObject {
             }
             defaults.set(true, forKey: Keys.cpuProcessCountMigrated)
         }
+        // 一次性迁移:电池模块新增电芯平衡默认开指标,给存量用户的电池指标
+        // 列表补上该项,语义同 batteryElectricalMetricsMigrated。
+        if !defaults.bool(forKey: Keys.batteryCellBalanceMigrated) {
+            if var merged = loadedMetrics[.battery], !merged.isEmpty {
+                merged.formUnion(["cell-balance"])
+                if merged != loadedMetrics[.battery] {
+                    loadedMetrics[.battery] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.batteryCellBalanceMigrated)
+        }
         enabledMetrics = loadedMetrics
 
         launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -891,6 +903,9 @@ private enum Keys {
     /// 一次性迁移标记:CPU 模块新增进程数默认开指标时,给存量用户的
     /// CPU 指标列表补上该项(语义同 batteryElectricalMetricsMigrated)。
     static let cpuProcessCountMigrated = "settings.cpuProcessCountMigrated"
+    /// 一次性迁移标记:电池模块新增电芯平衡默认开指标时,给存量用户的
+    /// 电池指标列表补上该项(语义同 batteryElectricalMetricsMigrated)。
+    static let batteryCellBalanceMigrated = "settings.batteryCellBalanceMigrated"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"

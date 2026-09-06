@@ -92,7 +92,10 @@ enum MetricSampleCatalog {
         case (.battery, "health"):
             return MetricSample(parts: [MetricSamplePart(text: "92", unit: "%")])
         case (.battery, "cycle-count"):
-            return MetricSample(parts: [MetricSamplePart(text: "312")])
+            return MetricSample(parts: [MetricSamplePart(text: "312 / 1000")])
+        case (.battery, "cell-balance"):
+            let rating = String(localized: "cell-balance.rating.excellent")
+            return MetricSample(parts: [MetricSamplePart(text: "Δ1 mV (\(rating))")])
         case (.battery, "temperature"):
             return MetricSample(parts: [MetricSamplePart(text: "31", unit: "°C")])
         case (.battery, "power-loss"):
@@ -173,7 +176,11 @@ enum MetricSampleCatalog {
             MonitorMetric(name: "power", value: "18.3 W", numericValue: 18.3, unit: " W"),
             MonitorMetric(name: "power-in", value: "42.5 W", numericValue: 42.5, unit: " W"),
             MonitorMetric(name: "battery-flow", value: "24.2 W", numericValue: 24.2, unit: " W"),
-            MonitorMetric(name: "time-remaining", value: "45", numericValue: 45)
+            MonitorMetric(name: "time-remaining", value: "45", numericValue: 45),
+            MonitorMetric(name: "pd-contract", value: "20V / 4.8A (96W)"),
+            MonitorMetric(name: "input-telemetry", value: "20.12 V · 2.11 A"),
+            MonitorMetric(name: "not-charging-reason", value: "0", numericValue: 0),
+            MonitorMetric(name: "charging-allowed", value: "1", numericValue: 1)
         ],
         samples: sparklineSamples
     )

@@ -66,7 +66,8 @@ enum StaticMetricSizing {
             "network.public-ip",
             "network.ip-address",
             // 「8888 / 8888 mAh」单值即超出半格
-            "battery.capacity"
+            "battery.capacity",
+            "battery.cell-balance"
         ],
         "en": [
             "cpu.uptime",
@@ -76,6 +77,7 @@ enum StaticMetricSizing {
             "network.public-ip",
             "network.ip-address",
             "battery.capacity",
+            "battery.cell-balance",
             // 「Pressure」+「Critical」= 111pt 超预算
             "memory.pressure",
             // 「Compressed」标签 78pt,GB 级两位小数值放不下
@@ -172,6 +174,7 @@ extension StaticMetricSizing {
         // 电池
         AuditEntry(kind: .battery, name: "health", layout: .measured(WorstValue(number: "100", unit: "%"))),
         AuditEntry(kind: .battery, name: "cycle-count", layout: .measured(WorstValue(number: "88888", unit: nil))),
+        AuditEntry(kind: .battery, name: "cell-balance", layout: .measured(WorstValue(number: "Δ888 mV (极佳)", unit: nil))),
         AuditEntry(kind: .battery, name: "temperature", layout: .measured(WorstValue(number: "100", unit: "°C"))),
         AuditEntry(kind: .battery, name: "power-loss", layout: .measured(WorstValue(number: "888.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "voltage", layout: .measured(WorstValue(number: "88.88", unit: "V"))),

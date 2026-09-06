@@ -1889,12 +1889,17 @@ private struct BatteryGlassRow: View, Equatable {
             && lhs.powerFlowActive == rhs.powerFlowActive
     }
 
+    private var detailMeasurementKey: String {
+        [detailMetrics.map(\.name).joined(separator: ","),
+         "\(showPowerFlow)"].joined(separator: "|")
+    }
+
     private var tint: Color {
         theme.moduleTint(for: module.kind)
     }
 
     var body: some View {
-        PanelCardStack {
+        PanelCardStack(measurementKey: "\(module.kind.id)|\(canExpand)") {
             HStack(spacing: 10) {
                 // 充电时用 `battery.100percent.bolt`(电池中间带闪电)静态图标表示充电状态,
                 // 不再叠加 `.variableColor.iterative` 持续动画——该动画会让 SwiftUI 视图图每帧
@@ -1950,7 +1955,7 @@ private struct BatteryGlassRow: View, Equatable {
 
             .panelMeasure("row:" + module.kind.id)
 
-            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand, measurementKey: detailMeasurementKey) {
                 VStack(spacing: 9) {
                     MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     // 指标网格(健康度/温度/循环/损耗)与功率流图之间用带标题的分区分隔线
@@ -2038,7 +2043,7 @@ private struct BatteryGlassRow: View, Equatable {
         // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
         // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
         // 斜杠长值,由静态登记整行排到模块末尾。
-        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "capacity"]
+        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "cell-balance", "capacity"]
 
         let enabledNames = Set(details.map(\.name))
 

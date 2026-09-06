@@ -337,39 +337,31 @@ struct PowerFlowDiagram: View {
                 .monitorPanelMonoFont(.footnote, weight: .semibold)
                 .foregroundStyle(theme.valueText)
                 .lineLimit(1)
-            adapterLoadBar
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 4)
         .frame(width: Self.nodeWidth, height: Self.nodeHeight)
         .background(RoundedRectangle(cornerRadius: 9).fill(theme.trackFill))
         .opacity(connected ? 1 : 0.4)
+        .help(adapterHelpText)
     }
 
-    /// 适配器额定负载率细条:实际输入 / 额定瓦数。逼近上限逐级告警色,
-    /// 直观预警「适配器不足」场景;未插电时隐藏。
-    private var adapterLoadBar: some View {
-        let load: Double = {
-            guard let powerInWatts, let rated = numericValue("adapter"), rated > 0 else { return 0 }
-            return min(1, powerInWatts / rated)
-        }()
-        let fillColor: Color = if load > 0.92 {
-            theme.palette.severityTint(for: .critical)
-        } else if load > 0.75 {
-            theme.palette.severityTint(for: .warning)
-        } else {
-            isDark ? Color.white.opacity(0.55) : Color.black.opacity(0.45)
+    /// 悬浮提示:展示 PD 握手档位与实测电压电流。
+    private var adapterHelpText: String {
+        guard connected else { return adapterLabel }
+        var parts: [String] = []
+        let contract = rawValue("pd-contract")
+        if contract != "--" {
+            parts.append(String(format: String(localized: "panel.power-flow.tooltip.pd-contract"), contract))
         }
-        return ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.white.opacity(isDark ? 0.10 : 0.08))
-            RoundedRectangle(cornerRadius: 2)
-                .fill(fillColor)
-                .frame(width: load * (Self.nodeWidth - 28))
+        let telemetry = rawValue("input-telemetry")
+        if telemetry != "--" {
+            parts.append(String(format: String(localized: "panel.power-flow.tooltip.input-telemetry"), telemetry))
         }
-        .frame(height: 2.5)
-        .padding(.horizontal, 10)
-        .opacity(connected ? 1 : 0)
+        if parts.isEmpty {
+            return adapterLabel
+        }
+        return parts.joined(separator: "\n")
     }
 
     private var systemNode: some View {
@@ -516,11 +508,35 @@ struct PowerFlowDiagram: View {
 
     private var barEtaText: String? {
         if let eta = etaText { return eta }
-        // 真直供且无 ETA(已充满/达充电限制):展示「直供」状态语,条内信息不断档。
-        if status == "ac-power" {
-            return String(localized: "panel.power-flow.direct-supply")
+        // 仅当插电且未在充电（交流直供、达限维持或优化充电保护）时展示硬件停充原因细化说明
+        if connected && !isCharging {
+            return notChargingExplanation
         }
         return nil
+    }
+
+    /// 停充硬件原因解释:插电但未充电时的状态文案细化。
+    /// 区分「已充满直供」、「已达上限维持」、「优化电池充电保护中」与常规「直供中」。
+    private var notChargingExplanation: String {
+        let reason = numericValue("not-charging-reason").map(Int.init) ?? 0
+        let chargingAllowed = numericValue("charging-allowed").map(Int.init)
+        let limit = numericValue("charge-limit").map(Int.init)
+        let pct = Int(module.value.rounded())
+
+        // 满电直供
+        if pct >= 100 {
+            return String(localized: "panel.power-flow.fully-charged")
+        }
+        // 0x01000000 (16777216): 达限维持 (NotChargingReason bit 24 或固件不允许充电且达到电量上限)
+        if (reason & 0x01000000) != 0 || (chargingAllowed == 0 && (limit != nil && pct >= (limit! - 1))) {
+            return String(localized: "panel.power-flow.hold-limit")
+        }
+        // 其它非零停充原因: 优化电池充电或温控保护
+        if reason != 0 {
+            return String(localized: "panel.power-flow.optimized-protection")
+        }
+        // 默认交流直供
+        return String(localized: "panel.power-flow.direct-supply")
     }
 
     // MARK: 说明与迷你曲线
