@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import CoreGraphics
 import IOKit
 import SwiftUI
@@ -75,6 +76,7 @@ struct DisplaySection: View {
     /// 本节展开区 key(与各显示器档案卡的 key 区分)。
     private static let sectionKey = "display"
 
+    @EnvironmentObject private var expansion: PanelExpansionDriver
     @State private var isExpanded = false
     #if DISPLAY_CONTROL
     @StateObject private var controller = DisplayControlController()
@@ -89,8 +91,24 @@ struct DisplaySection: View {
     var body: some View {
         #if DISPLAY_CONTROL
         controlsContent
+            .onReceive(expansion.motion.hiddenPanelReset) {
+                guard PanelMotionExperiment.enabled else { return }
+                isExpanded = settings.displayControlsExpandedByDefault
+                animate(Self.sectionKey, isExpanded, false)
+                controller.setPolling(active: false)
+            }
+            .onReceive(expansion.motion.$isSuspended.removeDuplicates()) { suspended in
+                guard PanelMotionExperiment.enabled, !suspended, isPanelVisible else { return }
+                controller.refreshAsync()
+                controller.setPolling(active: isExpanded)
+            }
         #else
         infoContent
+            .onReceive(expansion.motion.hiddenPanelReset) {
+                guard PanelMotionExperiment.enabled else { return }
+                isExpanded = false
+                animate(Self.sectionKey, false, false)
+            }
         #endif
     }
 
@@ -98,7 +116,7 @@ struct DisplaySection: View {
 
     #if !DISPLAY_CONTROL
     private var infoContent: some View {
-        VStack(spacing: 0) {
+        PanelCardStack(measurementKey: "display") {
             HStack(spacing: 10) {
                 Image(systemName: "slider.horizontal.below.rectangle")
                     .font(.callout.weight(.semibold))
@@ -120,19 +138,28 @@ struct DisplaySection: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onTapGesture {
                 guard !displays.isEmpty else { return }
                 if !isExpanded {
                     displays = Self.collectDisplays()
                 }
-                withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                      dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+                withPanelExpansionState {
                     isExpanded.toggle()
                 }
                 animate(Self.sectionKey, isExpanded, true)
             }
 
+            if PanelMotionExperiment.enabled {
+                SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
+                    group: PanelChildGroup(ids: displays.map { "display-arc-\($0.id)" },
+                        leading: 38, trailing: 10, bottom: 9, spacing: 9),
+                    motion: expansion.motion, content:
+                        ForEach(displays) { display in
+                            displaySection(display).sectionLayoutID("display-arc-\(display.id)")
+                        })
+            } else {
             CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded, contentAvailable: !displays.isEmpty) {
                 VStack(spacing: 9) {
                     ForEach(displays) { display in
@@ -141,6 +168,7 @@ struct DisplaySection: View {
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
+            }
             }
         }
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
@@ -185,7 +213,7 @@ struct DisplaySection: View {
             || settings.displayVolumeControlEnabled
             || settings.displayContrastControlEnabled
 
-        return VStack(spacing: 0) {
+        return PanelCardStack(measurementKey: "display") {
             HStack(spacing: 10) {
                 Image(systemName: "slider.horizontal.below.rectangle")
                     .font(.callout.weight(.semibold))
@@ -209,18 +237,35 @@ struct DisplaySection: View {
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(palette.captionText)
                     .frame(width: 18, height: 18)
-                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                       dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
+                    .modifier(DisplayExpansionRotation(id: Self.sectionKey, expanded: isExpanded,
+                                                       collapsedAngle: -90, expandedAngle: 0))
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onTapGesture {
                 toggleExpansion()
             }
 
-            CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded) {
+            if PanelMotionExperiment.enabled && hasControls && !visibleDisplays.isEmpty {
+                SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
+                    group: PanelChildGroup(ids: visibleDisplays.map { "display-arc-\($0.id)" },
+                        leading: 38, trailing: 10, top: 9, bottom: 9, spacing: 17),
+                    motion: expansion.motion, content:
+                        ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
+                            DisplayControlGroup(display: display, displayInfo: displayInfoByID[display.id],
+                                settings: settings, controller: controller, palette: palette, tint: tint,
+                                isSectionExpanded: isExpanded, archiveKey: "display-arc-\(display.id)", animate: animate)
+                            .overlay(alignment: .top) {
+                                Rectangle().fill(palette.displaySeparator.opacity(index == 0 ? 1 : 0.72))
+                                    .frame(height: 1).offset(y: -9)
+                            }
+                            .sectionLayoutID("display-arc-\(display.id)")
+                        })
+            } else {
+            CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded,
+                measurementKey: "\(hasControls)|\(settings.showBuiltInDisplays)") {
                 detailContent(
                     visibleDisplays: visibleDisplays,
                     hasControls: hasControls,
@@ -229,6 +274,7 @@ struct DisplaySection: View {
                 )
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
+            }
             }
         }
         .onAppear {
@@ -271,8 +317,7 @@ struct DisplaySection: View {
             // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
             // 钉住面板开着改设置时可见,与手动展开同一驱动源直接预览。
             guard isExpanded != newValue else { return }
-            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+            withPanelExpansionState {
                 isExpanded = newValue
             }
             animate(Self.sectionKey, newValue, true)
@@ -354,8 +399,7 @@ struct DisplaySection: View {
     /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
     /// 时间线打架,造成「收一半停顿再补完」的卡顿。
     private func toggleExpansion() {
-        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+        withPanelExpansionState {
             isExpanded.toggle()
         }
         animate(Self.sectionKey, isExpanded, true)
@@ -573,8 +617,40 @@ private struct DisplayInfoCard: View {
 
     @State private var archiveExpanded = false
 
+    @EnvironmentObject private var expansion: PanelExpansionDriver
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 7) {
+        Group {
+            if PanelMotionExperiment.enabled {
+                PanelCardStack(measurementKey: String(describing: display)) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        title
+                        DisplayInfoBaseGrid(display: display, palette: palette)
+                    }
+                    .padding(.bottom, MetricGridMetrics.gridRowGap)
+                    .panelMeasure("row:" + archiveKey)
+                    SingleHostDetail(id: archiveKey, isExpanded: archiveExpanded, available: true,
+                        content: archiveContent, presentation: expansion.motion.presentation(for: archiveKey),
+                        measurementKey: String(describing: display))
+                }
+            } else {
+                legacyContent
+            }
+        }
+        .onReceive(expansion.motion.hiddenPanelReset) {
+            guard PanelMotionExperiment.enabled else { return }
+            archiveExpanded = false
+            animate(archiveKey, false, false)
+        }
+        .onChange(of: isSectionExpanded) { _, newValue in
+            if !newValue && archiveExpanded {
+                archiveExpanded = false
+                animate(archiveKey, false, PanelMotionExperiment.enabled)
+            }
+        }
+    }
+
+    private var title: some View {
             HStack(spacing: 8) {
                 Text(display.name)
                     .monitorPanelLabelFont(tracking: 0.8)
@@ -586,10 +662,16 @@ private struct DisplayInfoCard: View {
                 DisplayArchiveToggle(
                     palette: palette,
                     archiveExpanded: archiveExpanded,
-                    onToggle: toggleArchive
+                    onToggle: toggleArchive, expansionID: archiveKey
                 )
             }
-            .padding(.leading, 28)
+
+    }
+
+    private var legacyContent: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            title
+                .padding(.leading, 28)
 
             VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
                 DisplayInfoBaseGrid(display: display, palette: palette)
@@ -599,12 +681,6 @@ private struct DisplayInfoCard: View {
                 }
             }
             .padding(.leading, 28)
-        }
-        .onChange(of: isSectionExpanded) { _, newValue in
-            if !newValue && archiveExpanded {
-                archiveExpanded = false
-                animate(archiveKey, false, false)
-            }
         }
     }
 
@@ -619,11 +695,29 @@ private struct DisplayInfoCard: View {
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
     /// 并把本卡档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+        withPanelExpansionState {
             archiveExpanded.toggle()
         }
         animate(archiveKey, archiveExpanded, true)
+    }
+}
+
+private struct DisplayExpansionRotation: ViewModifier {
+    let id: String?
+    let expanded: Bool
+    var collapsedAngle: Double = 0
+    var expandedAngle: Double = 90
+    @EnvironmentObject private var expansion: PanelExpansionDriver
+
+    @ViewBuilder func body(content: Content) -> some View {
+        if PanelMotionExperiment.enabled, let id {
+            content.modifier(PanelPhaseRotation(presentation: expansion.motion.presentation(for: id),
+                                               collapsed: collapsedAngle, expanded: expandedAngle))
+        } else {
+            content.rotationEffect(.degrees(expanded ? expandedAngle : collapsedAngle))
+                .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                   dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: expanded)
+        }
     }
 }
 
@@ -633,12 +727,13 @@ struct DisplayArchiveToggle: View {
     let palette: MonitorPalette
     let archiveExpanded: Bool
     var onToggle: () -> Void
+    var expansionID: String? = nil
 
     var body: some View {
         Button(action: onToggle) {
             Image(systemName: "chevron.right")
                 .font(.system(size: 8.5, weight: .bold))
-                .rotationEffect(.degrees(archiveExpanded ? 90 : 0))
+                .modifier(DisplayExpansionRotation(id: expansionID, expanded: archiveExpanded))
                 .foregroundStyle(palette.captionText)
                 .frame(width: 16, height: 16)
                 .contentShape(Rectangle())
@@ -1079,15 +1174,56 @@ private struct DisplayControlGroup: View {
     @State private var archiveHeight: CGFloat = 0
 
     var body: some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
-                .font(.subheadline.weight(.semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
-                .frame(width: 14)
-                .padding(.top, 2)
+        Group {
+            if PanelMotionExperiment.enabled {
+                PanelCardStack(measurementKey: measurementKey) {
+                    HStack(alignment: .top, spacing: 8) {
+                        displayIcon
+                        title
+                    }
+                    .panelMeasure("row:" + archiveKey)
+                    SingleHostReplacement(id: archiveKey, isExpanded: archiveExpanded,
+                        measurementKey: measurementKey,
+                        presentation: expansion.motion.presentation(for: archiveKey),
+                        collapsed: controlsContent.padding(.leading, 22).padding(.top, 7),
+                        expanded: replacementArchive.padding(.leading, 22).padding(.top, 7))
+                }
+            } else {
+                legacyContent
+            }
+        }
+        .onReceive(expansion.motion.hiddenPanelReset) {
+            guard PanelMotionExperiment.enabled else { return }
+            archiveExpanded = false
+            animate(archiveKey, false, false)
+        }
+        .onChange(of: isSectionExpanded) { _, newValue in
+            if !newValue && archiveExpanded {
+                archiveExpanded = false
+                animate(archiveKey, false, PanelMotionExperiment.enabled)
+            }
+        }
+        .onChange(of: displayInfo?.id) { _, _ in
+            updateDelta()
+        }
+        // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
+        .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
+            guard archiveKey == "display-arc-\(controller.displays.first?.id ?? 0)" else { return }
+            NSLog("[autotest] group archive toggle key=%@", archiveKey)
+            toggleArchive()
+        }
+    }
 
-            VStack(alignment: .leading, spacing: 7) {
+    private var measurementKey: String {
+        "\(display.name)|\(String(describing: displayInfo))|\(display.isBuiltIn)|\(settings.displayBrightnessControlEnabled)|\(settings.displayVolumeControlEnabled)|\(settings.displayContrastControlEnabled)|\(showsUnsupportedNotice)"
+    }
+
+    @ViewBuilder private var replacementArchive: some View {
+        if let info = displayInfo { archiveContent(for: info) }
+        else { controlsContent }
+    }
+
+    private var title: some View {
                 HStack(spacing: 8) {
                     Text(display.name)
                         .monitorPanelCaptionFont(.footnote, weight: .semibold)
@@ -1114,10 +1250,27 @@ private struct DisplayControlGroup: View {
                         DisplayArchiveToggle(
                             palette: palette,
                             archiveExpanded: archiveExpanded,
-                            onToggle: toggleArchive
+                            onToggle: toggleArchive, expansionID: archiveKey
                         )
                     }
                 }
+    }
+
+    private var displayIcon: some View {
+            Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
+                .font(.subheadline.weight(.semibold))
+                .symbolRenderingMode(.monochrome)
+                .foregroundStyle(tint)
+                .frame(width: 14)
+                .padding(.top, 2)
+    }
+
+    private var legacyContent: some View {
+        HStack(alignment: .top, spacing: 8) {
+            displayIcon
+
+            VStack(alignment: .leading, spacing: 7) {
+                title
 
                 toggledContent
             }
@@ -1149,21 +1302,6 @@ private struct DisplayControlGroup: View {
                         }
                     )
             }
-        }
-        .onChange(of: isSectionExpanded) { _, newValue in
-            if !newValue && archiveExpanded {
-                archiveExpanded = false
-                animate(archiveKey, false, false)
-            }
-        }
-        .onChange(of: displayInfo?.id) { _, _ in
-            updateDelta()
-        }
-        // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
-        .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
-            guard archiveKey == "display-arc-\(controller.displays.first?.id ?? 0)" else { return }
-            NSLog("[autotest] group archive toggle key=%@", archiveKey)
-            toggleArchive()
         }
     }
 
@@ -1281,6 +1419,7 @@ private struct DisplayControlGroup: View {
     /// 控制卡在收起态具备滑杆高度(controlsHeight),展开档案后切换到档案高度(archiveHeight),
     /// 净高度差为 archiveHeight - controlsHeight。
     private func updateDelta() {
+        guard !PanelMotionExperiment.enabled else { return }
         guard controlsHeight > 0, archiveHeight > 0 else { return }
         let delta = max(archiveHeight - controlsHeight, 0)
         expansion.reportNaturalHeight(archiveKey, delta)
@@ -1289,8 +1428,7 @@ private struct DisplayControlGroup: View {
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
     /// 并把本档案相位交驱动器补间(0↔1)。
     private func toggleArchive() {
-        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+        withPanelExpansionState {
             archiveExpanded.toggle()
         }
         animate(archiveKey, archiveExpanded, true)

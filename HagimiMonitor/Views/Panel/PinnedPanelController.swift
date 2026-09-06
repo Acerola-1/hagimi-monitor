@@ -5,6 +5,8 @@ import SwiftUI
 /// 快捷键面板控制器。默认是失焦即收的临时面板，钉住后才变为常驻窗口。
 @MainActor
 final class PinnedPanelController: NSObject, NSWindowDelegate {
+    private weak var panelMotion: SingleHostMotionCoordinator?
+    private var awaitingGeometry = false
     private let store: MonitorStore
     private let openSettingsAction: () -> Void
 
@@ -96,6 +98,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
                 self?.hide(resetPin: true)
                 self?.openSettingsAction()
             })
+            .environment(\.panelMotionAdapter, self)
             .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
                 self?.applyWindowHeight(height, animated: animated)
             }
@@ -175,12 +178,18 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         // 开闸补发:隐藏期冻结的视图树先追平 store 当前值,
         // 随后的强制布局/测量才带最新数据。
         panelRefreshGate.open()
+        panelMotion?.resume()
         // 隐藏时未收敛的窗口弹簧在此清场,本次呼出由重定位接管。
         windowSpring.cancel()
         presentation.resetPin()
         updatePresentationMode()
 
         hostingView?.layoutSubtreeIfNeeded()
+        if PanelMotionExperiment.enabled && panelMotion?.currentFrame == nil {
+            awaitingGeometry = true
+            return
+        }
+        awaitingGeometry = false
         let intrinsic = hostingView?.intrinsicContentSize ?? .zero
         let size = (intrinsic.width > 1 && intrinsic.height > 1) ? intrinsic : panel.frame.size
 
@@ -211,8 +220,16 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
     /// 隐藏快捷键面板；关闭后重置为普通状态。
     func hide(resetPin: Bool = true) {
+        if awaitingGeometry {
+            awaitingGeometry = false
+            panelMotion?.suspend()
+            panelRefreshGate.close()
+            return
+        }
         guard panel.isVisible else { return }
+        panelMotion?.suspend()
         panel.orderOut(nil)
+        panelMotion?.resetForHiddenPanel?()
         store.panelDidDisappear(.pinned)
         if resetPin {
             presentation.resetPin()
@@ -225,7 +242,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
     /// 切换快捷键面板显隐。
     func toggle() {
-        if panel.isVisible {
+        if panel.isVisible || awaitingGeometry {
             hide(resetPin: true)
         } else {
             show()
@@ -395,6 +412,11 @@ private struct PinnedPanelSizeReader: ViewModifier {
     let onChange: (CGSize) -> Void
 
     func body(content: Content) -> some View {
+        if PanelMotionExperiment.enabled {
+            content
+                .ignoresSafeArea()
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        } else {
         content
             .edgesIgnoringSafeArea(.all)
             .background(
@@ -408,5 +430,30 @@ private struct PinnedPanelSizeReader: ViewModifier {
             )
             .fixedSize()
             .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
+        }
     }
+}
+
+extension PinnedPanelController: PanelWindowSubmissionAdapter {
+    var isWindowUnoccluded: Bool { panel.isVisible && panel.occlusionState.contains(.visible) }
+    func bindMotion(_ motion: SingleHostMotionCoordinator) {
+        panelMotion = motion
+        if motion.currentFrame != nil { geometryDidPrepare() }
+    }
+    func geometryDidPrepare() {
+        guard awaitingGeometry else { return }
+        awaitingGeometry = false
+        show()
+    }
+    func submitWindowFrame(size: CGSize, frameID: UInt) {
+        lastReportedContentSize = size
+        var frame = panel.frame
+        let top = frame.maxY
+        // fullSizeContentView 的宿主覆盖整个 frame，内容高度已包含标题栏区域。
+        frame.size = size
+        frame.origin.y = top - frame.height
+        panel.setFrame(frame, display: false, animate: false)
+    }
+    func currentScreen() -> NSScreen? { panel.screen }
+    func completePresentationLayout() { hostingView?.layoutSubtreeIfNeeded() }
 }
