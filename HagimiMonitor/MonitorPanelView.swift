@@ -1874,6 +1874,7 @@ private struct BatteryGlassRow: View, Equatable {
     /// 功率流流光启用:false 时回落到纯静态绘制,用于展开动画窗口期停更 GPU 流光。
     var powerFlowActive = true
     var toggleExpansion: (() -> Void)?
+    @State private var selectedTab: BatteryPageTab = .flow
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
         guard lhs.isExpanded == rhs.isExpanded else { return false }
@@ -1891,7 +1892,8 @@ private struct BatteryGlassRow: View, Equatable {
 
     private var detailMeasurementKey: String {
         [detailMetrics.map(\.name).joined(separator: ","),
-         "\(showPowerFlow)"].joined(separator: "|")
+         "\(showPowerFlow)",
+         selectedTab.rawValue].joined(separator: "|")
     }
 
     private var tint: Color {
@@ -1966,16 +1968,33 @@ private struct BatteryGlassRow: View, Equatable {
                     // 功率流无 power 数据(老款 Mac 读不到 PowerTelemetryData.SystemPower)时整体隐藏,
                     // 避免只显标题不出图的视觉断裂。canExpand 已用同一条件门控展开动作,渲染侧保持联动。
                     if showPowerFlow && numericValue("power") != nil {
-                        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
-                            .padding(.top, 3)
-                            // 与明细网格同 28pt 缩进,分区标题与下方图内容左缘对齐(原型基准)。
-                            .padding(.leading, 28)
-                        PowerFlowDiagram(
-                            module: module,
-                            theme: theme,
-                            tint: tint,
-                            animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
-                        )
+                        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme) {
+                            PanelCapsulePicker(
+                                selection: $selectedTab,
+                                items: BatteryPageTab.allCases,
+                                title: { $0.title },
+                                tint: tint,
+                                theme: theme
+                            )
+                        }
+                        .padding(.top, 3)
+                        .padding(.leading, 28)
+
+                        switch selectedTab {
+                        case .flow:
+                            PowerFlowDiagram(
+                                module: module,
+                                theme: theme,
+                                tint: tint,
+                                animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
+                            )
+                        case .supply:
+                            PowerSupplyDiagnosticsView(
+                                module: module,
+                                theme: theme,
+                                tint: tint
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, 10)
@@ -2085,11 +2104,18 @@ func localizedBatteryState(_ id: String) -> String {
 
 // MARK: - Power Flow
 
-/// 展开区分区标题:一段小标题 + 贯穿分隔线,用来把上方的电池指标网格
+/// 展开区分区标题:一段小标题 + 贯穿分隔线,可选尾部胶囊切换器,用来把上方的电池指标网格
 /// (健康度/温度/循环/损耗)与下方的功率流图、耗电排行明确切分成独立区块。
-struct PowerSectionHeader: View {
+struct PowerSectionHeader<Trailing: View>: View {
     let title: String
     let theme: MonitorPanelTheme
+    let trailing: Trailing
+
+    init(title: String, theme: MonitorPanelTheme, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.theme = theme
+        self.trailing = trailing()
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -2100,7 +2126,16 @@ struct PowerSectionHeader: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .battery))
                 .frame(height: 1)
+            trailing
         }
+    }
+}
+
+extension PowerSectionHeader where Trailing == EmptyView {
+    init(title: String, theme: MonitorPanelTheme) {
+        self.title = title
+        self.theme = theme
+        self.trailing = EmptyView()
     }
 }
 

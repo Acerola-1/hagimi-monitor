@@ -1,0 +1,160 @@
+import SwiftUI
+
+/// 电源展开区分区多页切换标签（拓扑 / 供电）。
+enum BatteryPageTab: String, CaseIterable, Identifiable {
+    case flow = "flow"
+    case supply = "supply"
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .flow:
+            return String(localized: "panel.battery.tab.flow")
+        case .supply:
+            return String(localized: "panel.battery.tab.supply")
+        }
+    }
+}
+
+// MARK: - 供电协议与输入诊断视图
+
+/// 供电端专属诊断视图（双卡片整行排版，28pt 缩进与功率流图左缘完全对齐，杜绝文本截断）。
+struct PowerSupplyDiagnosticsView: View {
+    let module: MonitorModule
+    let theme: MonitorPanelTheme
+    let tint: Color
+
+    var body: some View {
+        VStack(spacing: 8) {
+            // 卡片 1: 充电源硬件与握手协议
+            adapterCard
+
+            // 卡片 2: 适配器输入实测（单行卡片）
+            inputCard
+        }
+        // 与明细网格、分区标题及 PowerFlowDiagram 保持完全一致的 28pt 缩进
+        .padding(.leading, 28)
+    }
+
+    // MARK: - 子卡片
+
+    private var adapterCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "powerplug.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(connected ? tint : theme.captionText)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                        .fill(connected ? theme.badgeFill(for: .battery) : theme.palette.trackFill)
+                )
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    Text(String(localized: "panel.battery.diag.adapter"))
+                        .font(.system(size: 10, weight: .medium))
+                        .foregroundStyle(theme.captionText)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(adapterValue)
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundStyle(theme.valueText)
+                        .lineLimit(1)
+                }
+
+                HStack {
+                    Text(String(localized: "panel.battery.diag.pd-contract"))
+                        .font(.system(size: 9.5))
+                        .foregroundStyle(theme.captionText.opacity(0.85))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Text(pdContractValue)
+                        .font(.system(size: 10, weight: .medium, design: .monospaced))
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(height: 46)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(theme.trackFill)
+        )
+    }
+
+    private var inputCard: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "bolt.badge.clock.fill")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(connected ? tint : theme.captionText)
+                .frame(width: 26, height: 26)
+                .background(
+                    RoundedRectangle(cornerRadius: 6.5, style: .continuous)
+                        .fill(connected ? theme.badgeFill(for: .battery) : theme.palette.trackFill)
+                )
+
+            Text(String(localized: "panel.battery.diag.input-bus"))
+                .font(.system(size: 10, weight: .medium))
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            Text(telemetryValue)
+                .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                .foregroundStyle(theme.valueText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .frame(height: 38)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(theme.trackFill)
+        )
+    }
+
+    // MARK: - 数据读取与格式化
+
+    private var connected: Bool {
+        let s = metric("status")
+        return s == "charging" || s == "ac-power" || s == "maintain"
+    }
+
+    private var adapterValue: String {
+        guard connected else {
+            return String(localized: "panel.battery.diag.disconnected")
+        }
+        let watts = metric("adapter")
+        return watts != "--" ? watts : "--"
+    }
+
+    /// PD 协议握手档位：移除末尾冗余的功率括号（如 "(65W)"），因为上方第一行已展示该瓦数。
+    private var pdContractValue: String {
+        guard connected else { return "--" }
+        let contract = metric("pd-contract")
+        guard contract != "--" else { return "--" }
+        if let parenIdx = contract.firstIndex(of: "(") {
+            return String(contract[..<parenIdx]).trimmingCharacters(in: .whitespaces)
+        }
+        return contract
+    }
+
+    private var telemetryValue: String {
+        guard connected else { return "--" }
+        let telem = metric("input-telemetry")
+        if telem != "--" { return telem }
+        let v = metric("input-voltage")
+        let c = metric("input-current")
+        if v != "--" && c != "--" { return "\(v) · \(c)" }
+        return "--"
+    }
+
+    private func metric(_ name: String) -> String {
+        module.metrics.first { $0.name == name }?.value ?? "--"
+    }
+}
