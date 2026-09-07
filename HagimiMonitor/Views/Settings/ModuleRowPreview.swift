@@ -50,16 +50,13 @@ struct ModuleRowPreview: View {
 
             if hasDetail {
                 VStack(spacing: 9) {
-                    // 展开区骨架与面板 MetricDetailGrid 同构:贯穿分隔线 +
-                    // 28pt 缩进,明细内容与功率流分区块共用同一左缘。
+                    // 展开区骨架与面板 MetricDetailGrid 同构:贯穿分隔线与全宽顶格排版。
                     VStack(spacing: 7) {
                         Rectangle()
                             .fill(theme.rowSeparator(for: kind))
                             .frame(height: 1)
-                            .padding(.leading, 28)
 
                         detailGrid
-                            .padding(.leading, 28)
                     }
 
                     if kind == .battery && showPowerFlow {
@@ -228,7 +225,6 @@ struct ModuleRowPreview: View {
     private var powerFlowSection: some View {
         PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
             .padding(.top, 3)
-            .padding(.leading, 28)
 
         PowerFlowDiagram(
             module: MetricSampleCatalog.powerFlowModule,

@@ -28,7 +28,7 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
 
 // MARK: - 供电协议与输入诊断视图
 
-/// 供电端专属诊断视图（双卡片整行排版，28pt 缩进与功率流图左缘完全对齐，杜绝文本截断）。
+/// 供电端专属诊断视图（双卡片整行排版，全宽对称对齐，杜绝文本截断）。
 struct PowerSupplyDiagnosticsView: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
@@ -42,8 +42,6 @@ struct PowerSupplyDiagnosticsView: View {
             // 卡片 2: 适配器输入实测（单行卡片）
             inputCard
         }
-        // 与明细网格、分区标题及 PowerFlowDiagram 保持完全一致的 28pt 缩进
-        .padding(.leading, 28)
     }
 
     // MARK: - 子卡片

@@ -154,7 +154,7 @@ struct DisplaySection: View {
             if PanelMotionExperiment.enabled {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
                     group: PanelChildGroup(ids: displays.map { "display-arc-\($0.id)" },
-                        leading: 38, trailing: 10, bottom: 9, spacing: 9),
+                        leading: 10, trailing: 10, bottom: 9, spacing: 9),
                     motion: expansion.motion, content:
                         ForEach(displays) { display in
                             displaySection(display).sectionLayoutID("display-arc-\(display.id)")
@@ -251,7 +251,7 @@ struct DisplaySection: View {
             if PanelMotionExperiment.enabled && hasControls && !visibleDisplays.isEmpty {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
                     group: PanelChildGroup(ids: visibleDisplays.map { "display-arc-\($0.id)" },
-                        leading: 38, trailing: 10, top: 9, bottom: 9, spacing: 17),
+                        leading: 10, trailing: 10, top: 9, bottom: 9, spacing: 17),
                     motion: expansion.motion, content:
                         ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
                             DisplayControlGroup(display: display, displayInfo: displayInfoByID[display.id],
@@ -369,14 +369,12 @@ struct DisplaySection: View {
                 Rectangle()
                     .fill(palette.displaySeparator)
                     .frame(height: 1)
-                    .padding(.leading, 28)
 
                 ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
                     if index > 0 {
                         Rectangle()
                             .fill(palette.displaySeparator.opacity(0.72))
                             .frame(height: 1)
-                            .padding(.leading, 28)
                     }
 
                     DisplayControlGroup(
@@ -671,7 +669,6 @@ private struct DisplayInfoCard: View {
     private var legacyContent: some View {
         VStack(alignment: .leading, spacing: 7) {
             title
-                .padding(.leading, 28)
 
             VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
                 DisplayInfoBaseGrid(display: display, palette: palette)
@@ -680,7 +677,6 @@ private struct DisplayInfoCard: View {
                     archiveContent
                 }
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -1275,7 +1271,6 @@ private struct DisplayControlGroup: View {
                 toggledContent
             }
         }
-        .padding(.leading, 28)
         .background {
             // 在背景层挂载不可见的真实档案区进行无约束自然高度测量,
             // 确保在档案收起态(frame 被限制为 controlsHeight)时,仍然可以
@@ -1505,13 +1500,11 @@ private struct DisplayEmptyState: View {
             Rectangle()
                 .fill(palette.displaySeparator)
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             Text(text)
                 .monitorPanelCaptionFont(.caption2)
                 .foregroundStyle(palette.captionText)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.leading, 28)
         }
     }
 }

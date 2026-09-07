@@ -5,9 +5,9 @@ import SwiftUI
 /// (填充=电量,旗标=充电限制),短竖导管垂直连到汇流点;导管粗细 ∝ 瓦数。
 /// 节点走正常流式布局,连线按容器几何计算绘制,构造上不会重叠。
 /// 数据全部来自 BatterySampler 的遥测指标(power-in / power / battery-flow / status),
-/// 沙盒版同样可用。活跃导管走辉光 + 相位联动的能量脉冲(充电绿 / 放电黄 /
-/// 不足红,颜色语义不受低电量模式影响)。仅展开且面板可见时挂载
-/// TimelineView 30fps 驱动,收起/隐藏即回到纯静态绘制。
+/// 沙盒版同样可用。活跃导管走硬件加速虚线流光管线(CAShapeLayer lineDashPhase 独立合成,
+/// 充电绿 / 放电黄 / 不足红,颜色语义不受低电量模式影响),充放电物理反向流动。
+/// 仅展开且面板可见时启动 Core Animation,主线程 0 负载,收起/隐藏即暂停。
 struct PowerFlowDiagram: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
@@ -32,27 +32,27 @@ struct PowerFlowDiagram: View {
                         .lineLimit(2)
                 }
             }
-            // 与明细网格同 28pt 缩进,分区标题与图内容左缘对齐。
-            .padding(.leading, 28)
         }
     }
 
-    // MARK: 流图区域(边在底层 Canvas,节点与电池条走正常流式布局)
+    // MARK: 流图区域(底层硬件加速流光导轨,节点与电池条走正常流式布局)
 
     private var flowArea: some View {
         ZStack(alignment: .top) {
-            // 流光动画仅在门控通过时挂载 TimelineView;收起/隐藏后回到纯静态 Canvas。
-            if animate {
-                TimelineView(.animation(minimumInterval: 1 / 30)) { timeline in
-                    Canvas { context, size in
-                        drawEdges(&context, size: size, time: timeline.date.timeIntervalSinceReferenceDate)
-                    }
-                }
-            } else {
-                Canvas { context, size in
-                    drawEdges(&context, size: size, time: nil)
-                }
-            }
+            PowerFlowHardwareTracksView(
+                hasBattery: hasBattery,
+                connected: connected,
+                flowDirection: flowDirection,
+                powerInWatts: powerInWatts,
+                systemWatts: systemWatts,
+                batteryMagnitude: batteryMagnitude,
+                activeTint: activeTint,
+                chargeTint: chargeTint,
+                dischargeTint: dischargeTint,
+                neutralEdge: neutralEdge,
+                edgeShimmer: edgeShimmer,
+                animate: animate
+            )
 
             VStack(spacing: Self.stubHeight) {
                 HStack(spacing: 0) {
@@ -67,261 +67,6 @@ struct PowerFlowDiagram: View {
             }
         }
         .frame(height: hasBattery ? Self.nodeHeight + Self.stubHeight + Self.barHeight : Self.nodeHeight)
-    }
-
-    // MARK: 连线
-
-    /// 连线宽度 ∝ 瓦数(苹果风细线:1.8 + √W × 0.14,封顶 3.2;无值 1.8)。
-    private func edgeWidth(_ watts: Double?) -> CGFloat {
-        guard let watts, watts >= 0.05 else { return 1.8 }
-        return min(3.2, 1.8 + sqrt(watts) * 0.14)
-    }
-
-    /// 辉光细线:底层同色宽线过 blur 形成柔和光晕,顶层细实线定形。
-    private func glowSegment(
-        _ context: inout GraphicsContext,
-        from: CGPoint,
-        to: CGPoint,
-        color: Color,
-        width: CGFloat,
-        glowAlpha: Double = 0.35
-    ) {
-        var line = Path()
-        line.move(to: from)
-        line.addLine(to: to)
-        context.drawLayer { layer in
-            layer.addFilter(.blur(radius: max(3, width * 2.6)))
-            layer.stroke(line, with: .color(color.opacity(glowAlpha)),
-                         style: StrokeStyle(lineWidth: width * 2.4, lineCap: .round))
-        }
-        context.stroke(line, with: .color(color.opacity(0.92)),
-                       style: StrokeStyle(lineWidth: width, lineCap: .round))
-    }
-
-    private func drawEdges(_ context: inout GraphicsContext, size: CGSize, time: TimeInterval?) {
-        let topY = Self.nodeHeight / 2
-        let junction = CGPoint(x: size.width / 2, y: topY)
-        let adapterRight = CGPoint(x: Self.nodeWidth, y: topY)
-        let systemLeft = CGPoint(x: size.width - Self.nodeWidth, y: topY)
-
-        // 无电池台式机:适配器 → 系统一条直通细线辉光,不渲染汇流点与导管。
-        if !hasBattery {
-            glowSegment(&context, from: adapterRight, to: systemLeft,
-                        color: connected ? activeTint : neutralEdge, width: edgeWidth(systemWatts))
-            if let time {
-                let cycle = max(1.6, min(3.6, 5.2 / (1 + (systemWatts ?? 0) / 30)))
-                let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
-                drawPulse(&context, from: adapterRight, to: systemLeft,
-                          progress: easeInOutCubic(u), color: connected ? activeTint : edgeShimmer,
-                          head: neutralBeamHead,
-                          width: edgeWidth(systemWatts))
-            }
-            return
-        }
-
-        // S1/S2 水平线静态本体:状态色辉光细线(左段插电才有,右段恒有)。
-        glowSegment(&context, from: adapterRight, to: junction,
-                    color: connected ? activeTint : neutralEdge, width: edgeWidth(powerInWatts),
-                    glowAlpha: connected ? 0.35 : 0.22)
-        glowSegment(&context, from: junction, to: systemLeft,
-                    color: activeTint, width: edgeWidth(systemWatts))
-
-        // 相位联动光轨:单一相位沿 适配器→汇流点→系统 全路径行进,
-        // 段内缓动,汇流点交接辉光;未插电时左段自动停摆。右段系统恒耗电恒活跃。
-        drawLinkedBeams(&context, adapterRight: adapterRight, junction: junction,
-                        systemLeft: systemLeft, time: time)
-
-        // 汇流点 ↕ 电池导管:充电绿 / 放电能量色(正常模块绿,低电琥珀,不足红)/ 无流动淡线,
-        // 与水平线同一辉光语言;脉冲按流向行进(充电注入电池、放电汇入节点)。
-        let stubEnd = CGPoint(x: junction.x, y: Self.nodeHeight + Self.stubHeight)
-        switch flowDirection {
-        case .charging:
-            glowSegment(&context, from: junction, to: stubEnd,
-                        color: chargeTint, width: edgeWidth(batteryMagnitude))
-            if let time {
-                let cycle = max(1.4, min(2.6, 4.0 / (1 + batteryMagnitude / 15)))
-                let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
-                drawPulse(&context, from: junction, to: stubEnd,
-                          progress: easeInOutCubic(u), color: chargeTint, head: .white.opacity(0.96),
-                          width: edgeWidth(batteryMagnitude), tailFraction: 0.3)
-            }
-        case .discharging:
-            let color = dischargeTint
-            glowSegment(&context, from: stubEnd, to: junction,
-                        color: color, width: edgeWidth(batteryMagnitude), glowAlpha: 0.3)
-            if let time {
-                let cycle = max(1.4, min(2.6, 4.0 / (1 + batteryMagnitude / 15)))
-                let u = CGFloat((time / cycle).truncatingRemainder(dividingBy: 1))
-                drawPulse(&context, from: stubEnd, to: junction,
-                          progress: easeInOutCubic(u), color: color, head: .white.opacity(0.96),
-                          width: edgeWidth(batteryMagnitude), tailFraction: 0.3)
-            }
-        case .idle:
-            glowSegment(&context, from: junction, to: stubEnd,
-                        color: neutralEdge, width: 1.8, glowAlpha: 0.22)
-        }
-
-        // 汇流点:白色小圆 + 状态色呼吸辉光。
-        drawJunctionDot(&context, at: junction, time: time)
-    }
-
-    /// 汇流点:底层状态色径向辉光(呼吸放大),顶层白色小圆 + 状态色光晕。
-    private func drawJunctionDot(
-        _ context: inout GraphicsContext,
-        at junction: CGPoint,
-        time: TimeInterval?
-    ) {
-        let breath = time.map { 0.5 + 0.5 * sin($0 * .pi / 1.4) } ?? 0.5
-        let color = connected ? activeTint : neutralEdge
-        let r = 3.8 * (1 + 0.25 * breath)
-        context.fill(
-            Path(ellipseIn: CGRect(x: junction.x - r * 2.6, y: junction.y - r * 2.6,
-                                   width: r * 5.2, height: r * 5.2)),
-            with: .radialGradient(
-                Gradient(colors: [color.opacity(0.35 * breath + 0.08), color.opacity(0)]),
-                center: junction,
-                startRadius: 0,
-                endRadius: r * 2.6
-            )
-        )
-        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.0, y: junction.y - 2.0, width: 4.0, height: 4.0))
-        context.fill(dot, with: .color(.white.opacity(0.9 + 0.1 * breath)))
-    }
-
-    // MARK: 能量光轨(相位联动脉冲)
-
-    /// 段内加减速缓动:彗星在汇流点前后“减速停靠→加速接棒”,形成交接脉动。
-    private func easeInOutCubic(_ t: CGFloat) -> CGFloat {
-        t < 0.5 ? 4 * t * t * t : 1 - pow(-2 * t + 2, 3) / 2
-    }
-
-    /// 相位联动光轨:单一相位沿 适配器→汇流点→系统 全路径行进,两段共享时钟,
-    /// 能量在汇流点连续交接不断裂;周期/数量 ∝ 总传输瓦数。time 为 nil
-    /// (门控关闭)时不绘制。
-    private func drawLinkedBeams(
-        _ context: inout GraphicsContext,
-        adapterRight: CGPoint,
-        junction: CGPoint,
-        systemLeft: CGPoint,
-        time: TimeInterval?
-    ) {
-        guard let time else { return }
-        let lenLeft = junction.x - adapterRight.x
-        let lenRight = systemLeft.x - junction.x
-        let lenTotal = lenLeft + lenRight
-        guard lenTotal > 0 else { return }
-        let fJ = lenLeft / lenTotal
-
-        let wattsLeft = connected ? powerInWatts : nil
-        let wattsRight = systemWatts ?? 0
-        let totalW = (wattsLeft ?? 0) + wattsRight
-        guard totalW >= 0.05 else { return }
-
-        let cycle = max(1.6, min(3.6, 5.2 / (1 + totalW / 30)))
-        let beams = totalW > 60 ? 2 : 1
-        // 脉冲走状态色:充电绿 / 放电黄 / 不足红;头部白点如火花。
-        let pulseColor = connected ? activeTint : edgeShimmer
-        for k in 0..<beams {
-            let u = CGFloat(((time / cycle) + Double(k) / Double(beams)).truncatingRemainder(dividingBy: 1))
-            drawJunctionGlow(&context, at: junction, u: u, fJ: fJ, color: pulseColor)
-            if u <= fJ {
-                guard let wattsLeft, wattsLeft >= 0.05 else { continue }
-                drawPulse(&context, from: adapterRight, to: junction,
-                          progress: easeInOutCubic(u / fJ),
-                          color: pulseColor, head: neutralBeamHead,
-                          width: edgeWidth(wattsLeft))
-            } else {
-                drawPulse(&context, from: junction, to: systemLeft,
-                          progress: easeInOutCubic((u - fJ) / (1 - fJ)),
-                          color: pulseColor, head: neutralBeamHead,
-                          width: edgeWidth(wattsRight))
-            }
-        }
-    }
-
-    /// 汇流点交接辉光:脉冲行经汇流点前后短暂点亮放大,强化能量在此交接分发。
-    private func drawJunctionGlow(
-        _ context: inout GraphicsContext,
-        at junction: CGPoint,
-        u: CGFloat,
-        fJ: CGFloat,
-        color: Color
-    ) {
-        let d = abs(u - fJ)
-        guard d < 0.10 else { return }
-        let a = 1 - d / 0.10
-        let r = (3.2 + 2.8 * a) * 2.2
-        context.fill(
-            Path(ellipseIn: CGRect(x: junction.x - r, y: junction.y - r, width: r * 2, height: r * 2)),
-            with: .radialGradient(
-                Gradient(colors: [color.opacity(0.85 * a), color.opacity(0)]),
-                center: junction,
-                startRadius: 0,
-                endRadius: r
-            )
-        )
-    }
-
-    /// 能量脉冲:拖短尾、辉光收敛、渐变陡峭,读感是离散的“能量脉冲包”而非
-    /// 连续流带。细导管(<3pt)降级纯色脉冲,不叠加发光层。
-    private func drawPulse(
-        _ context: inout GraphicsContext,
-        from: CGPoint,
-        to: CGPoint,
-        progress: CGFloat,
-        color: Color,
-        head: Color,
-        width: CGFloat,
-        tailFraction: CGFloat = 0.20
-    ) {
-        guard progress > 0.004 else { return }
-        let p0 = lerp(from, to, max(0, progress - tailFraction))
-        let p1 = lerp(from, to, progress)
-        var beam = Path()
-        beam.move(to: p0)
-        beam.addLine(to: p1)
-
-        if width < 3 {
-            context.stroke(beam, with: .color(color.opacity(0.85)),
-                           style: StrokeStyle(lineWidth: max(1.4, width), lineCap: .round))
-            let r = max(1.3, width * 0.5)
-            context.fill(
-                Path(ellipseIn: CGRect(x: p1.x - r, y: p1.y - r, width: r * 2, height: r * 2)),
-                with: .color(head.opacity(0.94))
-            )
-            return
-        }
-
-        context.drawLayer { layer in
-            layer.addFilter(.blur(radius: 1.2))
-            layer.stroke(
-                beam,
-                with: .linearGradient(
-                    Gradient(colors: [color.opacity(0), color.opacity(0.35), color.opacity(0.85)]),
-                    startPoint: p0,
-                    endPoint: p1
-                ),
-                style: StrokeStyle(lineWidth: width + 1.6, lineCap: .round)
-            )
-        }
-        context.stroke(
-            beam,
-            with: .linearGradient(
-                Gradient(colors: [color.opacity(0), color.opacity(0.55), head.opacity(0.96)]),
-                startPoint: p0,
-                endPoint: p1
-            ),
-            style: StrokeStyle(lineWidth: max(1.4, width * 0.6), lineCap: .round)
-        )
-        let r = max(1.6, width * 0.5)
-        context.fill(
-            Path(ellipseIn: CGRect(x: p1.x - r, y: p1.y - r, width: r * 2, height: r * 2)),
-            with: .color(head.opacity(0.96))
-        )
-    }
-
-    private func lerp(_ a: CGPoint, _ b: CGPoint, _ t: CGFloat) -> CGPoint {
-        CGPoint(x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t)
     }
 
     // MARK: 节点
@@ -579,7 +324,7 @@ struct PowerFlowDiagram: View {
     /// 电池流向方向,只依据 IOPS 的充电/连接状态判定(status 由 BatterySampler
     /// 依据 kIOPSIsChargingKey / kIOPSPowerSourceStateKey 产出):BatteryPower 的
     /// 符号约定随机型/系统版本不同,不作为方向依据。
-    private enum FlowDirection { case charging, discharging, idle }
+    enum FlowDirection { case charging, discharging, idle }
 
     private var flowDirection: FlowDirection {
         switch status {
@@ -733,3 +478,421 @@ private struct LimitFlagShape: Shape {
         return path
     }
 }
+
+// MARK: - 硬件加速功率流导轨与虚线流光
+
+private extension Color {
+    func toCGColor() -> CGColor {
+        if let cgColor = self.cgColor {
+            return cgColor
+        }
+        if #available(macOS 14.0, *) {
+            return resolve(in: EnvironmentValues()).cgColor
+        }
+        return NSColor.white.cgColor
+    }
+}
+
+/// 功率流导轨与硬件加速虚线流光视图。
+/// 采用 NSViewRepresentable 承载 CAShapeLayer 与 Core Animation（lineDashPhase），
+/// 在 Render Server 独立硬件加速呈现能量脉冲流动，主线程 CPU 占用降为 0%。
+private struct PowerFlowHardwareTracksView: NSViewRepresentable {
+    let hasBattery: Bool
+    let connected: Bool
+    let flowDirection: PowerFlowDiagram.FlowDirection
+    let powerInWatts: Double?
+    let systemWatts: Double?
+    let batteryMagnitude: Double
+    let activeTint: Color
+    let chargeTint: Color
+    let dischargeTint: Color
+    let neutralEdge: Color
+    let edgeShimmer: Color
+    let animate: Bool
+
+    func makeNSView(context: Context) -> PowerFlowTracksNSView {
+        PowerFlowTracksNSView()
+    }
+
+    func updateNSView(_ nsView: PowerFlowTracksNSView, context: Context) {
+        nsView.update(
+            hasBattery: hasBattery,
+            connected: connected,
+            flowDirection: flowDirection,
+            powerInWatts: powerInWatts,
+            systemWatts: systemWatts,
+            batteryMagnitude: batteryMagnitude,
+            activeTint: activeTint.toCGColor(),
+            chargeTint: chargeTint.toCGColor(),
+            dischargeTint: dischargeTint.toCGColor(),
+            neutralEdge: neutralEdge.toCGColor(),
+            edgeShimmer: edgeShimmer.toCGColor(),
+            animate: animate
+        )
+    }
+}
+
+private final class PowerFlowTracksNSView: NSView {
+    override var isFlipped: Bool { true }
+
+    private static let nodeWidth: CGFloat = 90
+    private static let nodeHeight: CGFloat = 46
+    private static let stubHeight: CGFloat = 16
+    private static let dashLength: CGFloat = 8
+    private static let gapLength: CGFloat = 12
+    private static let dashPeriod: CGFloat = 20
+    private static let flowLineWidth: CGFloat = 2.2
+    private static let flowAnimationDuration: CFTimeInterval = 1.8
+    private static let powerThreshold: Double = 0.3
+
+    // 静态底层导轨（辉光 + 实体）
+    private let baseGlowLeft = CAShapeLayer()
+    private let baseTrackLeft = CAShapeLayer()
+    private let baseGlowRight = CAShapeLayer()
+    private let baseTrackRight = CAShapeLayer()
+    private let baseGlowVertical = CAShapeLayer()
+    private let baseTrackVertical = CAShapeLayer()
+
+    // 硬件加速流光层（虚线平移）
+    private let dashLayerLeft = CAShapeLayer()
+    private let dashLayerRight = CAShapeLayer()
+    private let dashLayerVertical = CAShapeLayer()
+
+    // 汇流点层（呼吸辉光 + 中心点）
+    private let junctionContainer = CALayer()
+    private let junctionGlowLayer = CAGradientLayer()
+    private let junctionDotLayer = CALayer()
+
+    // 状态缓存
+    private var hasBattery = true
+    private var connected = false
+    private var flowDirection: PowerFlowDiagram.FlowDirection = .idle
+    private var powerInWatts: Double?
+    private var systemWatts: Double?
+    private var batteryMagnitude: Double = 0
+    private var activeTint: CGColor = NSColor.white.cgColor
+    private var chargeTint: CGColor = NSColor.white.cgColor
+    private var dischargeTint: CGColor = NSColor.white.cgColor
+    private var neutralEdge: CGColor = NSColor.gray.cgColor
+    private var edgeShimmer: CGColor = NSColor.white.cgColor
+    private var animate = false
+
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        setupLayers()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setupLayers() {
+        guard let layer = self.layer else { return }
+
+        // 底轨辉光与实体线
+        for glow in [baseGlowLeft, baseGlowRight, baseGlowVertical] {
+            glow.fillColor = nil
+            glow.lineCap = .round
+            layer.addSublayer(glow)
+        }
+        for track in [baseTrackLeft, baseTrackRight, baseTrackVertical] {
+            track.fillColor = nil
+            track.lineCap = .round
+            layer.addSublayer(track)
+        }
+
+        // 硬件合成虚线流光
+        for dash in [dashLayerLeft, dashLayerRight, dashLayerVertical] {
+            dash.fillColor = nil
+            dash.lineCap = .round
+            dash.lineWidth = Self.flowLineWidth
+            dash.lineDashPattern = [NSNumber(value: Double(Self.dashLength)), NSNumber(value: Double(Self.gapLength))]
+            dash.shadowOffset = .zero
+            dash.shadowRadius = 2.0
+            dash.shadowOpacity = 0.5
+            layer.addSublayer(dash)
+        }
+
+        // 汇流点呼吸辉光与中心白点
+        junctionGlowLayer.type = .radial
+        junctionGlowLayer.startPoint = CGPoint(x: 0.5, y: 0.5)
+        junctionGlowLayer.endPoint = CGPoint(x: 1.0, y: 1.0)
+        junctionContainer.addSublayer(junctionGlowLayer)
+
+        junctionDotLayer.backgroundColor = NSColor.white.withAlphaComponent(0.95).cgColor
+        junctionContainer.addSublayer(junctionDotLayer)
+
+        layer.addSublayer(junctionContainer)
+    }
+
+    func update(
+        hasBattery: Bool,
+        connected: Bool,
+        flowDirection: PowerFlowDiagram.FlowDirection,
+        powerInWatts: Double?,
+        systemWatts: Double?,
+        batteryMagnitude: Double,
+        activeTint: CGColor,
+        chargeTint: CGColor,
+        dischargeTint: CGColor,
+        neutralEdge: CGColor,
+        edgeShimmer: CGColor,
+        animate: Bool
+    ) {
+        self.hasBattery = hasBattery
+        self.connected = connected
+        self.flowDirection = flowDirection
+        self.powerInWatts = powerInWatts
+        self.systemWatts = systemWatts
+        self.batteryMagnitude = batteryMagnitude
+        self.activeTint = activeTint
+        self.chargeTint = chargeTint
+        self.dischargeTint = dischargeTint
+        self.neutralEdge = neutralEdge
+        self.edgeShimmer = edgeShimmer
+        self.animate = animate
+
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        updatePathsAndGeometry()
+        updateLayerStyling()
+        updateAnimations()
+        CATransaction.commit()
+    }
+
+    override func layout() {
+        super.layout()
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        updatePathsAndGeometry()
+        updateLayerStyling()
+        updateAnimations()
+        CATransaction.commit()
+    }
+
+    private static func edgeWidth(_ watts: Double?) -> CGFloat {
+        guard let watts, watts >= 0.05 else { return 1.8 }
+        return min(3.2, 1.8 + sqrt(watts) * 0.14)
+    }
+
+    private func updatePathsAndGeometry() {
+        let w = bounds.width
+        let h = bounds.height
+        guard w > 0, h > 0 else { return }
+
+        let topY = Self.nodeHeight / 2
+        let junction = CGPoint(x: w / 2, y: topY)
+        let adapterRight = CGPoint(x: Self.nodeWidth, y: topY)
+        let systemLeft = CGPoint(x: w - Self.nodeWidth, y: topY)
+        let stubEnd = CGPoint(x: w / 2, y: Self.nodeHeight + Self.stubHeight)
+
+        if !hasBattery {
+            // 无电池台式机:适配器 → 系统一条直通导轨
+            let desktopPath = CGMutablePath()
+            desktopPath.move(to: adapterRight)
+            desktopPath.addLine(to: systemLeft)
+
+            baseTrackLeft.path = desktopPath
+            baseGlowLeft.path = desktopPath
+            dashLayerLeft.path = desktopPath
+
+            baseTrackRight.isHidden = true
+            baseGlowRight.isHidden = true
+            dashLayerRight.isHidden = true
+
+            baseTrackVertical.isHidden = true
+            baseGlowVertical.isHidden = true
+            dashLayerVertical.isHidden = true
+
+            junctionContainer.isHidden = true
+            return
+        }
+
+        // 有电池笔记本:左段(适配器→汇流点)
+        let leftPath = CGMutablePath()
+        leftPath.move(to: adapterRight)
+        leftPath.addLine(to: junction)
+
+        baseTrackLeft.path = leftPath
+        baseGlowLeft.path = leftPath
+        dashLayerLeft.path = leftPath
+        baseTrackLeft.isHidden = false
+        baseGlowLeft.isHidden = false
+
+        // 右段(汇流点→系统)
+        let rightPath = CGMutablePath()
+        rightPath.move(to: junction)
+        rightPath.addLine(to: systemLeft)
+
+        baseTrackRight.path = rightPath
+        baseGlowRight.path = rightPath
+        dashLayerRight.path = rightPath
+        baseTrackRight.isHidden = false
+        baseGlowRight.isHidden = false
+
+        // 垂直段(汇流点 ↕ 电池)
+        let vertBasePath = CGMutablePath()
+        vertBasePath.move(to: junction)
+        vertBasePath.addLine(to: stubEnd)
+
+        baseTrackVertical.path = vertBasePath
+        baseGlowVertical.path = vertBasePath
+        baseTrackVertical.isHidden = false
+        baseGlowVertical.isHidden = false
+
+        // 硬件物理流向:充电时汇流点下探入电池;放电时电池上涌入汇流点
+        let vertDashPath = CGMutablePath()
+        switch flowDirection {
+        case .charging:
+            vertDashPath.move(to: junction)
+            vertDashPath.addLine(to: stubEnd)
+            dashLayerVertical.path = vertDashPath
+        case .discharging:
+            vertDashPath.move(to: stubEnd)
+            vertDashPath.addLine(to: junction)
+            dashLayerVertical.path = vertDashPath
+        case .idle:
+            dashLayerVertical.path = nil
+        }
+
+        // 汇流点
+        junctionContainer.isHidden = false
+        junctionContainer.position = junction
+
+        let glowSize: CGFloat = 28
+        junctionGlowLayer.bounds = CGRect(x: 0, y: 0, width: glowSize, height: glowSize)
+        junctionGlowLayer.position = .zero
+        junctionGlowLayer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        junctionGlowLayer.cornerRadius = glowSize / 2
+
+        let dotSize: CGFloat = 4
+        junctionDotLayer.bounds = CGRect(x: 0, y: 0, width: dotSize, height: dotSize)
+        junctionDotLayer.position = .zero
+        junctionDotLayer.anchorPoint = CGPoint(x: 0.5, y: 0.5)
+        junctionDotLayer.cornerRadius = dotSize / 2
+    }
+
+    private func updateLayerStyling() {
+        // 左段样式
+        let leftColor = connected ? activeTint : neutralEdge
+        let leftGlowAlpha: CGFloat = connected ? 0.35 : 0.22
+        let effectiveWatts = hasBattery ? (connected ? powerInWatts : nil) : (systemWatts ?? powerInWatts)
+        let wLeft = Self.edgeWidth(effectiveWatts)
+        baseTrackLeft.lineWidth = wLeft
+        baseGlowLeft.lineWidth = wLeft * 2.4
+        baseTrackLeft.strokeColor = leftColor.copy(alpha: 0.92) ?? leftColor
+        baseGlowLeft.strokeColor = leftColor.copy(alpha: leftGlowAlpha) ?? leftColor
+
+        let leftDashColor = connected ? activeTint : edgeShimmer
+        dashLayerLeft.strokeColor = leftDashColor
+        dashLayerLeft.shadowColor = leftDashColor
+
+        // 右段样式
+        let wRight = Self.edgeWidth(systemWatts)
+        baseTrackRight.lineWidth = wRight
+        baseGlowRight.lineWidth = wRight * 2.4
+        baseTrackRight.strokeColor = activeTint.copy(alpha: 0.92) ?? activeTint
+        baseGlowRight.strokeColor = activeTint.copy(alpha: 0.35) ?? activeTint
+        dashLayerRight.strokeColor = activeTint
+        dashLayerRight.shadowColor = activeTint
+
+        // 垂直段样式
+        let vColor: CGColor
+        let vGlowAlpha: CGFloat
+        switch flowDirection {
+        case .charging:
+            vColor = chargeTint
+            vGlowAlpha = 0.35
+        case .discharging:
+            vColor = dischargeTint
+            vGlowAlpha = 0.30
+        case .idle:
+            vColor = neutralEdge
+            vGlowAlpha = 0.22
+        }
+        let wVert = (flowDirection == .idle) ? 1.8 : Self.edgeWidth(batteryMagnitude)
+        baseTrackVertical.lineWidth = wVert
+        baseGlowVertical.lineWidth = wVert * 2.4
+        baseTrackVertical.strokeColor = vColor.copy(alpha: 0.92) ?? vColor
+        baseGlowVertical.strokeColor = vColor.copy(alpha: vGlowAlpha) ?? vColor
+
+        let vertDashColor = (flowDirection == .charging) ? chargeTint : dischargeTint
+        dashLayerVertical.strokeColor = vertDashColor
+        dashLayerVertical.shadowColor = vertDashColor
+    }
+
+    private func updateAnimations() {
+        let isLeftActive: Bool
+        if !hasBattery {
+            isLeftActive = animate && (systemWatts ?? 0) >= Self.powerThreshold
+        } else {
+            isLeftActive = animate && connected && (powerInWatts ?? 0) >= Self.powerThreshold
+        }
+
+        let isRightActive = hasBattery && animate && (systemWatts ?? 0) >= Self.powerThreshold
+        let isVerticalActive = hasBattery && animate && (flowDirection != .idle) && (batteryMagnitude >= Self.powerThreshold)
+        let isJunctionBreathing = hasBattery && animate && (connected || (systemWatts ?? 0) >= Self.powerThreshold)
+
+        updateDashAnimation(layer: dashLayerLeft, active: isLeftActive)
+        updateDashAnimation(layer: dashLayerRight, active: isRightActive)
+        updateDashAnimation(layer: dashLayerVertical, active: isVerticalActive)
+        updateJunctionBreathing(active: isJunctionBreathing)
+    }
+
+    private func updateDashAnimation(layer: CAShapeLayer, active: Bool) {
+        let animKey = "dashFlowAnimation"
+        if active {
+            layer.isHidden = false
+            if layer.animation(forKey: animKey) == nil {
+                let anim = CABasicAnimation(keyPath: "lineDashPhase")
+                anim.fromValue = 0.0
+                anim.toValue = -Double(Self.dashPeriod)
+                anim.duration = Self.flowAnimationDuration
+                anim.repeatCount = .infinity
+                anim.timingFunction = CAMediaTimingFunction(name: .linear)
+                anim.isRemovedOnCompletion = false
+                layer.add(anim, forKey: animKey)
+            }
+        } else {
+            layer.isHidden = true
+            layer.removeAnimation(forKey: animKey)
+        }
+    }
+
+    private func updateJunctionBreathing(active: Bool) {
+        let breatheAnimKey = "junctionBreathe"
+        let baseColor = connected ? activeTint : neutralEdge
+        junctionGlowLayer.colors = [
+            baseColor.copy(alpha: 0.65) ?? baseColor,
+            baseColor.copy(alpha: 0.0) ?? baseColor
+        ]
+
+        if active {
+            if junctionGlowLayer.animation(forKey: breatheAnimKey) == nil {
+                let group = CAAnimationGroup()
+                group.duration = 1.4
+                group.autoreverses = true
+                group.repeatCount = .infinity
+                group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                group.isRemovedOnCompletion = false
+
+                let scaleAnim = CABasicAnimation(keyPath: "transform.scale")
+                scaleAnim.fromValue = 0.85
+                scaleAnim.toValue = 1.25
+
+                let opacityAnim = CABasicAnimation(keyPath: "opacity")
+                opacityAnim.fromValue = 0.35
+                opacityAnim.toValue = 0.85
+
+                group.animations = [scaleAnim, opacityAnim]
+                junctionGlowLayer.add(group, forKey: breatheAnimKey)
+            }
+        } else {
+            junctionGlowLayer.removeAnimation(forKey: breatheAnimKey)
+            junctionGlowLayer.transform = CATransform3DIdentity
+            junctionGlowLayer.opacity = 0.4
+        }
+    }
+}
+

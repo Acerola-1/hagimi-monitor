@@ -127,4 +127,37 @@ struct MetricWidthAuditTests {
             }
         }
     }
+
+    /// 定宽胶囊最坏值契约审计:网络速率与电源功率在定宽胶囊衬底内，
+    /// 在 0.82 紧凑缩放限度内必须能够完整容纳最坏情况读数，杜绝横向推挤与折行。
+    @Test func pillsFitHeaderPillBudget() {
+        let pillWidth: CGFloat = RowHeaderPillMetrics.width
+        let horizontalPadding: CGFloat = 10 // 5 * 2
+        let iconWidth: CGFloat = 10
+        let spacing: CGFloat = 3
+        let availableTextWidth = pillWidth - horizontalPadding - iconWidth - spacing
+        let minScaleFactor: CGFloat = 0.82
+        let maxAllowedTextWidth = availableTextWidth / minScaleFactor
+
+        let pillFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+
+        let worstTexts = [
+            "1024 KB/s",
+            "1024 MB/s",
+            "999 MB/s",
+            "999 KB/s",
+            "9.9 MB/s",
+            "1.2 GB/s",
+            "188.0 W",
+            "188 W",
+            "88.8 W",
+            "--",
+            "0 W"
+        ]
+
+        for text in worstTexts {
+            let textWidth = width(text, font: pillFont)
+            #expect(textWidth <= maxAllowedTextWidth, "胶囊文本 \(text) 宽度 \(textWidth) 超过最坏缩放预算 \(maxAllowedTextWidth)")
+        }
+    }
 }

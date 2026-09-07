@@ -101,7 +101,7 @@ struct MonitorPanelView: View {
             scheme: colorScheme
         )
 
-        CompatibleGlassContainer(spacing: 8) {
+        CompatibleGlassContainer(spacing: 8, isLiquidGlassEnabled: store.settings.liquidGlassEnabled) {
             if PanelMotionExperiment.enabled {
                 SingleHostPrototypeView(motion: panelExpansion.motion,
                     ids: panelModules.map { $0.kind.id } + (store.settings.displayModuleVisible && !isPanelBenchmark ? ["display"] : []), cap: maxContentHeight) {
@@ -432,9 +432,8 @@ struct MonitorPanelView: View {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
-                    // 仅面板可见时脉冲:面板视图树常驻(NSPanel 不销毁),隐藏期间
-                    // 持续动画会白白驱动渲染。
-                    .compatiblePulseEffect(isActive: store.isPanelVisible)
+                    // 面板呼出时单次脉冲提示；避免常驻循环动画持续占用刷新时钟。
+                    .compatiblePulseEffect(trigger: store.isPanelVisible)
 
                 Text(String(localized: "SYSTEM · LIVE"))
                     .monitorPanelLabelFont(tracking: 1.1)
@@ -1126,7 +1125,7 @@ private struct MetricGlassRow: View, Equatable {
 /// CPU 展开区 P/E 核两行展示:第一行逐核负载环形图(逐行铺满、多核
 /// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
 /// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
-/// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
+/// 继承全宽对称内衬与分隔线;占用展示取代 core-split 格子避免重复。
 struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
@@ -1286,7 +1285,6 @@ private struct MetricDetailGrid: View {
     /// 并剔除 core-split 格子(同源数值不重复展示)。
     var cpuCoreDetail: CPUCoreDetail? = nil
 
-    private var leadingInset: CGFloat { 28 }
     private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
@@ -1321,10 +1319,8 @@ private struct MetricDetailGrid: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, leadingInset)
 
             content
-                .padding(.leading, leadingInset)
         }
     }
 
@@ -1628,7 +1624,6 @@ private struct StorageVolumeDetailList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 8) {
                 ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
@@ -1642,7 +1637,6 @@ private struct StorageVolumeDetailList: View {
                     StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 }
@@ -1799,18 +1793,18 @@ private struct NetworkGlassRow: View, Equatable {
                             .monitorPanelMonoFont(weight: .semibold)
                             .foregroundStyle(theme.valueText)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.82)
+                            .truncationMode(.tail)
                     }
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(2)
+                    .layoutPriority(1)
 
-                    Spacer(minLength: 2)
+                    Spacer(minLength: 4)
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: RowHeaderPillMetrics.spacing) {
                         NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
                         NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
                     }
-                    .layoutPriority(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
                 }
             }
             .padding(.horizontal, 10)
@@ -1920,29 +1914,32 @@ private struct BatteryGlassRow: View, Equatable {
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
-                    .layoutPriority(2)
+                    .layoutPriority(1)
 
                 Text(summaryText)
                     .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                    .layoutPriority(3)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
 
                 Spacer(minLength: 4)
 
                 // 双 pill 常驻:⚡(充电功率)+ 仪表(整机功耗)。成对出现互相注解——
                 // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
                 // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
-                // 台式机无电池无充电概念,只显功耗 pill。
-                if hasBattery {
-                    PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
-                        .layoutPriority(0)
+                // 采用与网络行严格统一的定宽与间距(RowHeaderPillMetrics),保证两行上下完美对齐。
+                HStack(spacing: RowHeaderPillMetrics.spacing) {
+                    if hasBattery {
+                        PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
+                    }
+                    if hasBattery || numericValue("power") != nil {
+                        PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
+                    }
                 }
-                if hasBattery || numericValue("power") != nil {
-                    PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                        .layoutPriority(0)
-                }
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
@@ -1978,7 +1975,6 @@ private struct BatteryGlassRow: View, Equatable {
                             )
                         }
                         .padding(.top, 3)
-                        .padding(.leading, 28)
 
                         switch selectedTab {
                         case .flow:
@@ -2062,7 +2058,14 @@ private struct BatteryGlassRow: View, Equatable {
         // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
         // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
         // 斜杠长值,由静态登记整行排到模块末尾。
-        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "cell-balance", "capacity"]
+        #if DIRECT_DISTRIBUTION
+        let powerMetrics = ["power", "display-power", "cpu-power", "gpu-power"]
+        #else
+        let powerMetrics: [String] = []
+        #endif
+        let names = ["health", "cycle-count", "temperature", "power-loss"]
+            + powerMetrics
+            + ["voltage", "current", "cell-balance", "capacity"]
 
         let enabledNames = Set(details.map(\.name))
 
@@ -2276,70 +2279,67 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
     }
 }
 
-/// 电源行专用的定宽 pill:符号标识(⚡充电 / 仪表功耗)+ 数值。
-/// 定宽保证数值位数变化/充电状态切换时行内元素不抖动。
+/// 行头定宽胶囊度量:网络行（上传/下载）与电源行（充电/整机功耗）统一使用同款定宽胶囊与间距，
+/// 确保两行在右侧垂直对齐，彻底消除不同位数跳动带来的推挤。
+enum RowHeaderPillMetrics {
+    static let width: CGFloat = 70
+    static let height: CGFloat = 20
+    static let spacing: CGFloat = 6
+}
+
+/// 电源行专用的定宽胶囊:符号标识(⚡充电 / 仪表功耗)+ 数值。
+/// 定宽与 Capsule(theme.trackFill) 衬底保证数值位数变化/充电状态切换时行内元素不抖动。
 private struct PowerLabelPill: View {
     let symbol: String
     let value: String
     let theme: MonitorPanelTheme
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             Image(systemName: symbol)
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(theme.secondaryText.opacity(0.72))
+                .frame(width: 10)
             Text(value)
+                .font(.system(size: 10, weight: .medium))
+                .monospacedDigit()
                 .foregroundStyle(theme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .font(.system(.footnote, design: .monospaced).weight(.medium))
-        .monospacedDigit()
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .frame(width: 74, alignment: .trailing)
+        .padding(.horizontal, 5)
+        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
+        .background(Capsule().fill(theme.trackFill))
     }
 }
 
+/// 网络行专用的定宽胶囊:箭头符号(↑上传 / ↓下载)+ 速率数值。
+/// 定宽与 Capsule(theme.trackFill) 衬底保证高频跳动时布局零抖动。
 private struct NetworkRatePill: View {
     let systemImage: String
     let text: String
     let theme: MonitorPanelTheme
 
-    private var parts: (value: String, unit: String) {
-        guard let split = text.lastIndex(of: " ") else {
-            return (text, "")
-        }
-
-        return (
-            String(text[..<split]),
-            String(text[text.index(after: split)...])
-        )
-    }
-
     var body: some View {
-        let parts = parts
-
         HStack(spacing: 3) {
             Image(systemName: systemImage)
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(theme.secondaryText.opacity(0.72))
                 .frame(width: 10)
 
-            Text(parts.value)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
+            Text(text)
+                .font(.system(size: 10, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.68)
-                .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
-
-            Text(parts.unit)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .frame(width: 26, alignment: .leading)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .foregroundStyle(theme.secondaryText)
-        .fixedSize(horizontal: true, vertical: false)
-        // Compact network rate pill: bounded width preserves room for both upload and download rates.
-        .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
+        .padding(.horizontal, 5)
+        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
+        .background(Capsule().fill(theme.trackFill))
     }
 }
 
@@ -2485,7 +2485,6 @@ private struct TopProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
@@ -2531,13 +2530,11 @@ private struct TopProcessList: View {
                     }
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
 
             // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
             if showRosettaBanner, translatedCount > 0 {
                 RosettaBanner(count: translatedCount, theme: theme)
-                    .padding(.leading, 28)
             }
         }
     }
@@ -2713,14 +2710,12 @@ private struct InlineDiskProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .storage))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2750,14 +2745,12 @@ private struct InlineNetworkProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .network))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2775,14 +2768,12 @@ private struct FanList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .fan))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(fans) { fan in
                     fanRow(fan)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -2937,14 +2928,12 @@ private struct BluetoothDeviceList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .bluetooth))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 8) {
                 ForEach(devices) { device in
                     deviceRow(device)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 

@@ -29,6 +29,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private let statusItem: NSStatusItem
     private let panel: NSPanel
     private var hostingView: NSHostingView<AnyView>?
+    private var glassHost: CompatiblePanelGlassHost?
 
     /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
     private let panelRefreshGate: PanelRefreshGate
@@ -181,18 +182,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        // contentView 用 popover 毛玻璃:提供圆角遮罩 + 通透底(对齐 FluidMenuBarExtra),
-        // 是系统 popover 般外观的关键——直接以透明 hosting 作 contentView 会丢圆角与
-        // 毛玻璃底,面板退化成方盒子。
-        let visualEffect = NSVisualEffectView()
-        visualEffect.material = .popover
-        visualEffect.blendingMode = .behindWindow
-        visualEffect.state = .active
-        visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = Self.panelCornerRadius
-        visualEffect.layer?.cornerCurve = .continuous
-        visualEffect.layer?.masksToBounds = true
-        panel.contentView = visualEffect
+        // 窗口底座宿主：由 CompatiblePanelGlassHost 提供跨版本兼容背景（Liquid Glass / popover 毛玻璃），
+        // 内部行卡片严格保持 withinWindow 材质。
+        let glassHost = CompatiblePanelGlassHost(cornerRadius: Self.panelCornerRadius)
+        glassHost.updateMaterial(liquidGlassEnabled: store.settings.liquidGlassEnabled)
+        panel.contentView = glassHost
+        self.glassHost = glassHost
 
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
         let root = FluidPanelRootView(store: store, refreshGate: panelRefreshGate, metrics: layoutMetrics)
@@ -213,14 +208,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         hosting.layer?.cornerRadius = Self.panelCornerRadius
         hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
-        visualEffect.addSubview(hosting)
-
-        NSLayoutConstraint.activate([
-            hosting.topAnchor.constraint(equalTo: visualEffect.topAnchor),
-            hosting.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
-            hosting.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor)
-        ])
+        glassHost.setHostingView(hosting)
 
         hostingView = hosting
 
@@ -284,6 +272,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 主题切换:重新快照(SwiftUI 内部不感知 NSStatusItem 的 appearance)。
         store.settings.$themePreference
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .store(in: &cancellables)
+
+        // 液态玻璃开关切换：更新面板底座材质
+        store.settings.$liquidGlassEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                self?.glassHost?.updateMaterial(liquidGlassEnabled: enabled)
+            }
             .store(in: &cancellables)
 
         // 关键:直接监听 button 自身的 effectiveAppearance。焦点切换 / 壁纸变化 /

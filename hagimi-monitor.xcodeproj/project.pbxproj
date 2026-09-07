@@ -639,6 +639,7 @@
 				);
 				MARKETING_VERSION = 1.5.4;
 				OTHER_LDFLAGS = (
+					"-lIOReport",
 					"-framework",
 					CoreDisplay,
 					"-framework",
@@ -689,6 +690,7 @@
 				);
 				MARKETING_VERSION = 1.5.4;
 				OTHER_LDFLAGS = (
+					"-lIOReport",
 					"-framework",
 					CoreDisplay,
 					"-framework",
