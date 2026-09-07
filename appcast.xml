@@ -3,24 +3,73 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.5.3</title>
-            <pubDate>Fri, 28 Aug 2026 16:32:06 +0000</pubDate>
-            <sparkle:version>80</sparkle:version>
-            <sparkle:shortVersionString>1.5.3</sparkle:shortVersionString>
+            <title>1.6.0</title>
+            <pubDate>Mon, 07 Sep 2026 09:02:50 +0000</pubDate>
+            <sparkle:version>81</sparkle:version>
+            <sparkle:shortVersionString>1.6.0</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 优化与体验
 
-- 面板展开/收起动画整体优化:窗口边框改与内容同参数的弹簧跟随,消除展开收起时边框的分段跳变,快速连点平滑重定向
-- 进程 TOP 列表显示语义修正:磁盘 TOP 由窗口累计字节改为实时速率显示,数值不再随采样窗口跨量级跳变;展开时重建基线,首帧不再出现长时段均值;面板隐藏即清空旧榜单,陈旧数据不再闪现
-- 功率流图颜色语义修正:充电流向恒以绿色呈现(低电量模式下充电连线不再变黄),电池导管统一辉光效果,能量流向全程可读
+HagimiMonitor 迎来 1.6.0 重大里程碑更新！本次版本对面板展开动画与底层运动管线进行了彻底重构，彻底告别了过去快速展开时的掉帧、窗口卡顿与内容抖动，并带来高达 85% 的后台能耗削减。同时，电源模块迎来重磅升级，支持全新的拓扑/供电双页切换与硬件级电源诊断。
+
+HagimiMonitor 1.6.0 is a major milestone release! This version features a complete overhaul of the panel expansion animation and underlying motion pipeline, completely eliminating dropped frames, window stuttering, and content jitter, while reducing background idle resource usage by up to 85%. In addition, the battery and power module receives a substantial upgrade with new dual-page topology/supply diagnostics.
+
+### 🇨🇳 中文更新内容
+
+#### 🚀 核心架构与动画性能革命 (重大突破)
+- **单宿主物理弹簧动效管线**：彻底重构展开与折叠运动协调机制，由单一显示时钟的物理解析弹簧驱动窗口与内容同步伸缩。彻底消除旧版在连续点击、嵌套展开时的尺寸跳变与掉帧，带来如原生系统般丝滑的交互体验。
+- **后台能耗大幅削减（降低约 85%）**：面板在收起后全面冻结视图计算与隐式重绘，空载静默功耗降至近乎忽略不计，让菜单栏守护更轻盈、更省电。
+- **瞬时速度保真与零死区保护**：连击展开/收起时严格继承物理瞬时速度，到达收起边界后从容重置，杜绝负向位移死区与手势顿挫。
+
+#### 🔋 电源模块全新进化
+- **拓扑 / 供电双页切换**：电源展开区分区新增由精致 SF Symbol 图标驱动的胶囊切换器，跨语言零截断，鼠标悬停即显完整语义。
+- **真实输入诊断（供电页）**：新增适配器实测输入电压与输入电流（验证充电器是否足额或出现跌落），支持解析 PD 充电协议握手档位（如 20V / 3.25A），并细化充电限制与维持原因。
+- **电芯健康与设计寿命**：新增多电芯电压平衡度指标（展示电芯间极小电压偏差 ΔmV），电池循环次数升级为「当前循环 / 设计寿命」（如 130 / 1000 次），直观掌握电池真实健康状态。
+- **功率流图视觉升级**：重构拓扑流向图的几何留白，充电流向恒以健康绿呈现，优化接驳端子与充电限制旗标。
+- **台式机机型修复**：修复 Mac mini、Mac Studio 等台式 Mac 功耗显示为空的问题，台式机场景下正确呈现系统供电瓦数。
+
+#### 🖥️ 外接显示器与界面体验优化
+- **显示器控制卡片重构**：默认采用纯净优雅的「状态摘要 + 顺滑滑杆」，高级内嵌档案（分辨率、色深、色彩空间等）按需一键展开，展开高度与底部按钮丝滑跟随。
+- **蓝牙监控防闪断**：重构蓝牙启动状态门控机制，彻底解决应用启动瞬间蓝牙行的闪断与跳变。
+- **同心圆角与留白呼吸感**：重构面板内外同心圆角节奏（外框与内卡同心对齐），视觉通透感与液态玻璃质感显著提升。
+
+#### ⚙️ 设置面板与监控报表
+- **实时卡片预览**：设置中的监控项目列表支持所见即所得的动态行卡片预览，开启或隐藏模块时效果一目了然。
+- **硬件报表与统计升级**：重构设置窗口布局与存储管理，支持一键导出系统监控与硬件诊断报表。
+- **CPU 详情指标增强**：CPU 展开网格新增「进程数」实时统计，系统负载全貌一览无遗。
+
+---
+
+### 🇺🇸 English Release Notes
+
+#### 🚀 Architecture & Animation Overhaul (Major Highlight)
+- **Single-Host Physical Motion Pipeline**: Completely rebuilt the panel expansion and collapse mechanics with an analytic physical spring driving the window frame and content reveals in lockstep. Eliminates dropped frames, content jitter, and height lagging during rapid clicks or nested reveals.
+- **Up to 85% Background CPU Reduction**: The panel view tree is now deeply frozen when hidden, stopping redundant layout passes and measurement in the background for near-zero idle resource usage.
+- **Continuous Momentum & Boundary Safety**: Preserves physical velocity during direction reversals and smoothly settles at boundary limits with zero stutter.
+
+#### 🔋 Battery & Power Flow Redesign
+- **Topology & Supply Dual-Page Views**: Introduced an ultra-compact SF Symbol capsule picker in the battery section, perfectly symmetrical across all languages with native hover tooltips.
+- **Hardware-Level Power Diagnostics**: Added real-time adapter input voltage and current metrics (detect charger voltage drops and under-wattage), USB-PD handshake contract profile detection (e.g. 20V / 3.25A), and granular charging hold status explanations.
+- **Cell Balance & Design Life**: Added multi-cell voltage balance metrics (ΔmV difference) to gauge battery wear, and enhanced cycle count to show against design cycle limits (e.g. 130 / 1000).
+- **Power Flow Visual Polish**: Refined diagram spacing, aligned charging flow color semantics (calm green for charging), and improved connector sockets and limit indicators.
+- **Desktop Mac Power Fix**: Resolved an issue where desktop Macs (Mac mini, Mac Studio, Mac Pro) showed empty power values; AC system wattage is now accurately displayed.
+
+#### 🖥️ Displays & System Experience
+- **Streamlined Display Controls**: Display cards now default to a clean "Summary + Smooth Slider" layout, with detailed hardware profiles collapsible on demand.
+- **Bluetooth Startup Stabilization**: Implemented three-state gating for the Bluetooth sampler, completely eliminating initial row flickering upon launch.
+- **Concentric Corner Radii & Spacing**: Mathematically aligned outer panel radii with inner row cards for an authentic macOS liquid-glass aesthetic.
+
+#### ⚙️ Settings & System Diagnostics
+- **Live Card Previews**: Monitoring items in Settings now feature live row previews, making layout adjustments intuitive.
+- **Diagnostic Reports & Storage Management**: Overhauled Settings architecture with support for exporting comprehensive hardware and monitoring reports.
+- **Active Process Count**: Added real-time process count metric to the CPU expansion grid.
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.5.3/HagimiMonitor-v1.5.3.zip" length="4561867" type="application/octet-stream" sparkle:edSignature="cpSDktxfL/3ATTMJdOc8lbz9+cg0CBmaLTDKMvtmBa+ADtEOkFMw9AGC/aUjQYeJVsFy13zqiGfhI0b4h5uyAA=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.6.0/HagimiMonitor-v1.6.0.zip" length="4824344" type="application/octet-stream" sparkle:edSignature="qSHZxaDi4tU9RMrQuS9wtplr9YKpxy9mSsCBzl6pKqf6ZHJVNpf5tbgH+7FC79LA5zsMCTIEvZet/R0hcb2vCA=="/>
         </item>
     </channel>
 </rss>
