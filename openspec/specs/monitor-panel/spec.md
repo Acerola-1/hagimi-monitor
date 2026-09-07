@@ -2,7 +2,9 @@
 
 ## Purpose
 Defines the monitor panel's localization, layout, and content behavior: how metrics are displayed, localized, and configured across languages.
+
 ## Requirements
+
 ### Requirement: App 根据系统语言自动切换中英文
 应用 SHALL 检测系统首选语言，当系统语言为英文时所有 UI 文案显示英文，为中文时显示中文。
 
@@ -123,7 +125,7 @@ The panel SHALL keep fixed dimensions only for stable non-text visual geometry a
 - **AND** text containers do not use fixed width unless they are part of an explicit compact control contract
 
 ### Requirement: Long Panel Content Handling
-The panel SHALL handle long metric values, localized labels, display names, network identifiers, and storage volume names without overlapping adjacent UI.
+The panel SHALL handle long metric values, localized labels, display names, network identifiers, and storage volume names without overlapping adjacent UI. Metric grid 的整行/半行布局 SHALL 是静态登记与格式化契约的纯函数,不依赖运行时对当前值的文本测量。
 
 #### Scenario: Network details contain long values
 - **WHEN** network details include long IP addresses, interface names, upload values, or download values
@@ -138,6 +140,11 @@ The panel SHALL handle long metric values, localized labels, display names, netw
 #### Scenario: Localized text is longer than the current language baseline
 - **WHEN** localized labels or button titles are longer than their Chinese baseline text
 - **THEN** the panel keeps readable spacing and avoids text overlap in collapsed and expanded states
+
+#### Scenario: 布局不随当前值与面板宽度重排
+- **WHEN** 面板宽度在支持区间内调整,或指标值在会话期间发生长度变化
+- **THEN** 每个指标格的整行/半行归属与排列保持稳定
+- **AND** 判定基准取最窄支持面板宽度推导的半格内容宽,使全区间判定一致成立
 
 ### Requirement: Localizable.xcstrings 包含完整中英日翻译
 `Localizable.xcstrings` SHALL 包含所有 UI 文案、指标名称、错误提示、状态文本的中英日翻译。
@@ -243,3 +250,46 @@ Each module's expanded metrics SHALL be configurable through settings.
 - **AND** "取消钉住" 显示为 "Unpin Panel" / "ピン留めを解除"
 - **AND** "关闭面板" 显示为 "Close Panel" / "パネルを閉じる"
 
+### Requirement: 展开区指标行序
+模块展开区指标网格 SHALL 将半行两列网格排在前面,热压力合并行与整行指标沉底;半行数量为奇数时,空缺格 SHALL 落在模块末尾。
+
+#### Scenario: 整行与半行混合
+- **WHEN** 某模块展开区同时含整行与半行指标
+- **THEN** 半行两列网格先渲染,热压力合并行与整行格随其后
+- **AND** 半行数量为奇数时,模块末尾最后一格留空而非中部出现空洞
+
+#### Scenario: 语义配对的整行指标
+- **WHEN** 两个整行指标存在语义配对关系(如 Wi-Fi 信号与网关延迟)
+- **THEN** 二者在整行区内保持相邻与既定先后顺序
+
+### Requirement: core-split 指标格的 P/E 瓦片取代
+CPU 展开区 SHALL 以 P/E 占用瓦片展示分组占用;core-split 指标被瓦片取代后 SHALL 不再进入指标网格,避免同源数据双重渲染。
+
+#### Scenario: 逐核数据可用时 P/E 瓦片取代 core-split 格
+- **WHEN** CPU 采样侧产出逐核数据且 core-split 指标处于开启态
+- **THEN** CPU 展开区以 P/E 占用瓦片展示分组占用(与 core-split 同源同口径)
+- **AND** core-split 指标格不再进入指标网格,同源数值不重复渲染
+
+#### Scenario: core-split 关闭或无逐核数据
+- **WHEN** 用户关闭 core-split 指标,或采样侧未产出逐核数据
+- **THEN** P/E 占用瓦片与逐核环形图一并隐藏,不发生取代
+
+### Requirement: 网络 TOP 列表按负责进程归并
+网络进程列表与其他进程列表（CPU/内存/GPU/磁盘）口径一致：子进程与助手进程（浏览器渲染进程、各类 Helper）的流量 SHALL 归并进其宿主应用，按宿主应用的聚合流量排序。
+
+#### Scenario: 多进程浏览器的流量归并
+- **WHEN** 浏览器以多个子进程同时产生网络流量
+- **THEN** 网络 TOP 列表显示一条宿主应用条目，流量为所有子进程之和
+- **AND** 归并后的总量参与排序与截断，不被拆散到截断线以下
+
+### Requirement: 模块指标关闭选择跨重启保留
+用户在设置中关闭某模块的指标后，该选择 SHALL 在应用重启后保持；关闭全部指标的选择同样保持，SHALL NOT 被启动时的兼容性迁移静默还原为默认指标集。
+
+#### Scenario: 关闭部分指标后重启
+- **WHEN** 用户关闭内存模块的部分指标并重启应用
+- **THEN** 面板与菜单栏只显示未被关闭的指标
+
+#### Scenario: 关闭模块全部指标后重启
+- **WHEN** 用户关闭某模块的全部指标并重启应用
+- **THEN** 该模块保持无指标状态，不复活默认指标
+- **AND** 用户可随时在设置中重新启用

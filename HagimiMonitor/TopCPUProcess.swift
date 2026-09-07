@@ -27,31 +27,23 @@ struct RawCPUProcess {
     let cpuUsage: Double
 }
 
-/// ps 输出行的解析正则,提取行首 pid、紧跟的 cpu%。整个采样周期只编译一次,
-/// 避免在 enumerateLines 逐行闭包里为每个进程重新编译同一个 pattern。
-#if DIRECT_DISTRIBUTION
-private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]+)\\s+(.+)$")
-
-/// ps 子进程采样的超时阈值。ps 在极端系统状态下可能挂起不退出,若无防护会永久
-/// 堵死 procSampleQueue,连带内存/CPU/GPU/磁盘四类 TOP 列表全部停摆。
-private let psSampleTimeout: TimeInterval = 8
-#endif
-
-/// 后台采样 CPU 占用最高的 N 个进程。
-/// 直连版使用 `ps -Aceo pid,pcpu,comm -r` 获取每个进程的 CPU%(ps 为平台二进制,
-/// 能读到 root 进程的衰减 CPU 值);沙盒版 spawn ps 被拒绝,改用
-/// `proc_pidinfo(PROC_PIDTASKINFO)` 累计 CPU 时间在两次采样间的差分。两者均按
-/// 宿主 App 合并子进程。
+/// 后台采样 CPU 占用最高的 N 个进程,按宿主 App 合并子进程。
+/// 直连版用 `ps -Aceo pid,pcpu,comm -r`:读 root/跨用户进程的 CPU 只有带 Apple
+/// 签名权利的平台二进制办得到——实测内核对普通用户进程在 TASKINFO、
+/// proc_pid_rusage、sysctl kinfo(p_pctcpu/p_rtime/ticks,含 KERN_PROC_PID 单查)
+/// 各条进程内路径上对 root 进程一律返回零值或失败,ps 是直连版让 WindowServer
+/// 等进榜的唯一数据源。
+/// 沙盒版 spawn ps 被拒,改用进程内 sysctl 枚举 + TASKINFO 累计时间差分,
+/// 仅同用户进程进榜(能力边界与沙盒内一切第三方工具一致)。
 func sampleTopCPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawCPUProcess] {
     #if DIRECT_DISTRIBUTION
     return sampleTopCPUViaPS(limit: limit, includeSystemProcesses: includeSystemProcesses)
     #else
-    return sampleTopCPUViaTaskInfoDelta(limit: limit, includeSystemProcesses: includeSystemProcesses)
+    return panelCPUCursor.sample(limit: limit, includeSystemProcesses: includeSystemProcesses)
     #endif
 }
 
 /// 把逐进程 CPU% 按宿主 App 合并、过滤系统进程、排序截断为 TOP N。
-/// 两条数据源(ps / TASKINFO 差分)共用这段归并逻辑,保证两渠道榜单口径一致。
 private func assembleTopCPU(perProcessCPU: [pid_t: Double], limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
     // 按 responsible pid 合并,首次遇到分组时立即捕获宿主路径
     var groups: [pid_t: (path: String, totalCPU: Double)] = [:]
@@ -93,6 +85,14 @@ private func assembleTopCPU(perProcessCPU: [pid_t: Double], limit: Int, includeS
 }
 
 #if DIRECT_DISTRIBUTION
+/// ps 输出行的解析正则,提取行首 pid、紧跟的 cpu%。整个采样周期只编译一次,
+/// 避免在 enumerateLines 逐行闭包里为每个进程重新编译同一个 pattern。
+private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]+)\\s+(.+)$")
+
+/// ps 子进程采样的超时阈值。ps 在极端系统状态下可能挂起不退出,若无防护会永久
+/// 堵死 procSampleQueue,连带内存/CPU/GPU/磁盘四类 TOP 列表全部停摆。
+private let psSampleTimeout: TimeInterval = 8
+
 /// 直连版 CPU 采样:解析 ps 输出,得到逐进程 CPU% 后交给共享归并逻辑。
 private func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
     let task = Process()
@@ -155,19 +155,6 @@ private func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [Raw
     return assembleTopCPU(perProcessCPU: perProcess, limit: limit, includeSystemProcesses: includeSystemProcesses)
 }
 #else
-/// TASKINFO 累计值快照:pid -> (user 时间, system 时间),单位 mach ticks。
-/// 跨采样周期持久,与磁盘/网络快照同为文件级全局状态,线程安全依赖
-/// 只被 procSampleQueue 一条串行队列读写。
-private var previousCPUSnapshot: [pid_t: (user: UInt64, system: UInt64)] = [:]
-private var previousCPUSnapshotTime: Date?
-
-/// 弃掉基线:下次采样重建,首拍返空。展开时调用,避免首帧拿到
-/// 「开面板至今」的长窗口均值。
-func resetCPUProcessBaseline() {
-    previousCPUSnapshot = [:]
-    previousCPUSnapshotTime = nil
-}
-
 /// mach ticks -> 纳秒的换算系数(Apple Silicon 上为 125/3,Intel 上为 1)。
 private let machTimeToNanos: Double = {
     var timebase = mach_timebase_info_data_t()
@@ -175,41 +162,49 @@ private let machTimeToNanos: Double = {
     return Double(timebase.numer) / Double(timebase.denom)
 }()
 
-/// 沙盒版 CPU 采样:枚举全部进程并读 TASKINFO 累计 CPU 时间,与上一周期快照差分
-/// 得到窗口内占用率。TASKINFO 受内核权限检查只放行同用户进程,root 守护进程
-/// 不进入榜单(与沙盒内任何第三方工具的能力边界一致)。首采无基线时返回空,
-/// 由面板预热/补采链路在下一拍补上数据。
-private func sampleTopCPUViaTaskInfoDelta(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
-    let snapshot = taskInfoCPUSnapshot()
-    let now = Date()
-    defer {
-        previousCPUSnapshot = snapshot
-        previousCPUSnapshotTime = now
+/// CPU 差分游标:自持上拍 TASKINFO 快照,各使用方(面板 2s、统计 60s)各用
+/// 独立游标,互不截断对方的差分窗口。线程安全依赖每个游标只被 procSampleQueue
+/// 一条串行队列读写。
+final class CPUDeltaCursor {
+    private var previousSnapshot: [pid_t: (user: UInt64, system: UInt64)] = [:]
+    private var previousTime: Date?
+
+    /// 枚举全部进程并读 TASKINFO 累计 CPU 时间,与上拍快照差分得到窗口内
+    /// 占用率;首拍无基线返回空。枚举走 sysctl(KERN_PROC_ALL),沙盒内亦放行。
+    func sample(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
+        let snapshot = taskInfoCPUSnapshot()
+        let now = Date()
+        defer {
+            previousSnapshot = snapshot
+            previousTime = now
+        }
+
+        guard let previousTime else { return [] }
+        let wall = now.timeIntervalSince(previousTime)
+        // 窗口过短差分噪声过大,延后一拍再出数。
+        guard wall > 0.1 else { return [] }
+
+        var perProcess: [pid_t: Double] = [:]
+        perProcess.reserveCapacity(snapshot.count)
+
+        for (pid, current) in snapshot {
+            guard let previous = previousSnapshot[pid],
+                  current.user >= previous.user, current.system >= previous.system else { continue }
+            // pid 复用时新进程累计值可能小于旧快照,饱和相减归零即可。
+            let ticks = (current.user - previous.user) + (current.system - previous.system)
+            let cpuPercent = Double(ticks) * machTimeToNanos / (wall * 1_000_000_000) * 100
+            guard cpuPercent > 0 else { continue }
+            perProcess[pid] = cpuPercent
+        }
+
+        return assembleTopCPU(perProcessCPU: perProcess, limit: limit, includeSystemProcesses: includeSystemProcesses)
     }
-
-    guard let previousTime = previousCPUSnapshotTime else { return [] }
-    let wall = now.timeIntervalSince(previousTime)
-    // 窗口过短(如预热与展开几乎同时发生)差分噪声过大,延后一拍再出数。
-    guard wall > 0.1 else { return [] }
-
-    var perProcess: [pid_t: Double] = [:]
-    perProcess.reserveCapacity(snapshot.count)
-
-    for (pid, current) in snapshot {
-        guard let previous = previousCPUSnapshot[pid],
-              current.user >= previous.user, current.system >= previous.system else { continue }
-        // pid 复用时新进程累计值可能小于旧快照,饱和相减归零即可。
-        let ticks = (current.user - previous.user) + (current.system - previous.system)
-        let cpuPercent = Double(ticks) * machTimeToNanos / (wall * 1_000_000_000) * 100
-        guard cpuPercent > 0 else { continue }
-        perProcess[pid] = cpuPercent
-    }
-
-    return assembleTopCPU(perProcessCPU: perProcess, limit: limit, includeSystemProcesses: includeSystemProcesses)
 }
 
+/// 面板 TOP 榜专用差分游标。
+private let panelCPUCursor = CPUDeltaCursor()
+
 /// 枚举全部进程并读取各自的 TASKINFO 累计 CPU 时间。
-/// 枚举走 sysctl(KERN_PROC_ALL):双渠道均放行,且一次调用即得全部 pid。
 private func taskInfoCPUSnapshot() -> [pid_t: (user: UInt64, system: UInt64)] {
     var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
     var size = 0

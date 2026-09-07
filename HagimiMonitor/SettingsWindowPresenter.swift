@@ -73,18 +73,21 @@ enum SettingsWindowPresenter {
         return window
     }
 
-    /// 固定窗口宽度。设置布局不需要更宽,且在所有受支持机型的屏幕上都放得下。
-    private static let fixedWidth: CGFloat = 600
+    /// 固定窗口宽度。660pt 让右侧内容卡片(扣除侧栏与水平边距后)留足净宽,
+    /// 数据统计页的 3 列指标格得以横向铺开标签与数值、不必压缩折行;
+    /// 该宽度在所有受支持机型的屏幕上都放得下。
+    private static let fixedWidth: CGFloat = 660
 
     /// 窗口最小高度:恰好完整展示全部侧栏条目,底边留白约一个行高。
-    /// 实测基准:侧栏行高 31.5,无风扇形态(11 行)末行底边 420;
-    /// 有风扇形态多一行风扇入口,底边相应下移一个行高。
+    /// 实测基准:侧栏行高 31.5;侧栏分 4 个语义分组(含两个分组标题)后,
+    /// 列表内容总高(documentView)无风扇形态约 500.5、有风扇形态约 532,
+    /// 各加一个行高的底边留白即得两个形态的最小高度。
     /// 侧栏行数在启动后即确定——唯一变量是机型有无风扇(风扇入口按 `fanAvailable`
     /// 显隐),因此高度按两个形态各定一个实测值。默认高度等于最小高度,
     /// 用户可向上拉长、不可短于该值(保证侧栏永不裁切)。
     /// App Store 沙盒版无法读 SMC,`fanAvailable` 恒为 false,恒取无风扇值。
-    private static let minHeightWithFan: CGFloat = 483
-    private static let minHeightWithoutFan: CGFloat = 452
+    private static let minHeightWithFan: CGFloat = 564
+    private static let minHeightWithoutFan: CGFloat = 533
 
     @MainActor
     private static func minHeight() -> CGFloat {

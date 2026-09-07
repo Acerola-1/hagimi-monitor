@@ -28,14 +28,78 @@ struct RawGPUProcess {
     let api: String
 }
 
-/// 每进程累计 GPU 时间(纳秒)快照,用于计算窗口增量。
-/// 文件级全局快照,线程安全依赖 procSampleQueue 的串行性。
-private var previousGPUSnapshot: (perPid: [pid_t: UInt64], timestamp: TimeInterval)?
+/// GPU 差分游标:自持上拍累计 GPU 时间快照,各使用方(面板 2s、统计 60s)各用
+/// 独立游标,互不截断对方的差分窗口。线程安全依赖每个游标只被 procSampleQueue
+/// 一条串行队列读写。
+final class GPUDeltaCursor {
+    private var previous: (perPid: [pid_t: UInt64], timestamp: TimeInterval)?
 
-/// 弃掉基线:下次采样重建,首拍返空。展开时调用,避免首帧拿到
-/// 「开面板至今」的长窗口均值。
-func resetGPUProcessBaseline() {
-    previousGPUSnapshot = nil
+    /// 后台采样 GPU 占用最高的 N 个进程。
+    /// 数据源是 AGX user client 的 accumulatedGPUTime(纳秒累计值),两次采样差分
+    /// 除以窗口时长即占用率;首拍只建立基线返回空。按宿主 App 合并子进程。
+    func sample(limit: Int, includeSystemProcesses: Bool) -> [RawGPUProcess] {
+        let current = gpuTimePerClientPid()
+        let now = ProcessInfo.processInfo.systemUptime
+        defer { previous = (current.mapValues { $0.gpuTime }, now) }
+
+        guard let previous else { return [] }
+        let elapsed = now - previous.timestamp
+        guard elapsed > 0.5 else { return [] }
+
+        // responsiblePid -> (path, usageDelta, api)
+        var groups: [pid_t: (path: String, gpuTime: UInt64, api: String)] = [:]
+
+        for (pid, entry) in current {
+            guard let before = previous.perPid[pid], entry.gpuTime >= before else { continue }
+            let delta = entry.gpuTime - before
+            guard delta > 0 else { continue }
+
+            let responsiblePid = responsiblePidResolver(pid)
+            let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
+
+            if groups[groupKey] == nil {
+                groups[groupKey] = (path: executablePath(for: groupKey), gpuTime: 0, api: entry.api)
+            }
+            groups[groupKey]?.gpuTime += delta
+            if groups[groupKey]?.api.isEmpty == true {
+                groups[groupKey]?.api = entry.api
+            }
+        }
+
+        var result: [RawGPUProcess] = []
+        result.reserveCapacity(groups.count)
+
+        for (groupKey, group) in groups {
+            let usage = Double(group.gpuTime) / (elapsed * 1_000_000_000) * 100
+            guard usage > 0.1 else { continue }
+
+            let hostPath = group.path
+            if isSystemProcessPath(hostPath, includeSystemProcesses: includeSystemProcesses) {
+                continue
+            }
+
+            let fallbackName = hostPath.isEmpty ? "pid \(groupKey)" : (hostPath as NSString).lastPathComponent
+            guard !fallbackName.isEmpty else { continue }
+
+            result.append(RawGPUProcess(
+                pid: groupKey,
+                path: hostPath,
+                fallbackName: fallbackName,
+                gpuUsage: usage,
+                api: group.api
+            ))
+        }
+
+        return Array(result.sorted { $0.gpuUsage > $1.gpuUsage }.prefix(limit))
+    }
+}
+
+/// 面板 TOP 榜专用差分游标。
+private let panelGPUCursor = GPUDeltaCursor()
+
+/// 面板采样入口:委托面板专用游标。
+func sampleTopGPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawGPUProcess] {
+    panelGPUCursor.sample(limit: limit, includeSystemProcesses: includeSystemProcesses)
 }
 
 /// AGX 驱动的每进程累计 GPU 时间:IOAccelerator 服务的 user client 子节点
@@ -94,65 +158,6 @@ private func gpuTimePerClientPid() -> [pid_t: (gpuTime: UInt64, api: String)] {
         }
     }
     return result
-}
-
-/// 后台采样 GPU 占用最高的 N 个进程。
-/// 数据源是 AGX user client 的 accumulatedGPUTime(纳秒累计值),两次采样差分
-/// 除以窗口时长即占用率;首次调用只建立基线返回空。按宿主 App 合并子进程。
-func sampleTopGPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawGPUProcess] {
-    let current = gpuTimePerClientPid()
-    let now = ProcessInfo.processInfo.systemUptime
-    defer { previousGPUSnapshot = (current.mapValues { $0.gpuTime }, now) }
-
-    guard let previous = previousGPUSnapshot else { return [] }
-    let elapsed = now - previous.timestamp
-    guard elapsed > 0.5 else { return [] }
-
-    // responsiblePid -> (path, usageDelta, api)
-    var groups: [pid_t: (path: String, gpuTime: UInt64, api: String)] = [:]
-
-    for (pid, entry) in current {
-        guard let before = previous.perPid[pid], entry.gpuTime >= before else { continue }
-        let delta = entry.gpuTime - before
-        guard delta > 0 else { continue }
-
-        let responsiblePid = responsiblePidResolver(pid)
-        let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
-
-        if groups[groupKey] == nil {
-            groups[groupKey] = (path: executablePath(for: groupKey), gpuTime: 0, api: entry.api)
-        }
-        groups[groupKey]?.gpuTime += delta
-        if groups[groupKey]?.api.isEmpty == true {
-            groups[groupKey]?.api = entry.api
-        }
-    }
-
-    var result: [RawGPUProcess] = []
-    result.reserveCapacity(groups.count)
-
-    for (groupKey, group) in groups {
-        let usage = Double(group.gpuTime) / (elapsed * 1_000_000_000) * 100
-        guard usage > 0.1 else { continue }
-
-        let hostPath = group.path
-        if isSystemProcessPath(hostPath, includeSystemProcesses: includeSystemProcesses) {
-            continue
-        }
-
-        let fallbackName = hostPath.isEmpty ? "pid \(groupKey)" : (hostPath as NSString).lastPathComponent
-        guard !fallbackName.isEmpty else { continue }
-
-        result.append(RawGPUProcess(
-            pid: groupKey,
-            path: hostPath,
-            fallbackName: fallbackName,
-            gpuUsage: usage,
-            api: group.api
-        ))
-    }
-
-    return Array(result.sorted { $0.gpuUsage > $1.gpuUsage }.prefix(limit))
 }
 
 /// 用 NSRunningApplication(pid:) 为 GPU 采样结果补齐本地化名与 App 图标。

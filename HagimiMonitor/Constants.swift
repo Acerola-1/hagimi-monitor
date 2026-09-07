@@ -24,6 +24,8 @@ enum MonitorConstants {
     static let panelIdealWidth: Double = 340
     static let panelMaxWidth: Double = 460
     static let rowCornerRadius = 14.0
+    /// 面板外框圆角:与行卡片/底部按钮(rowCornerRadius=14)及留白(6pt)同心,满足 R_outer = R_inner + padding。
+    static let panelCornerRadius = 20.0
 
     // MARK: - Row Glass Tint Fade
     // 活力配色行 tint 的垂直衰减参数:行头 plateau 高度内保持满浓度承载模块辨识度,

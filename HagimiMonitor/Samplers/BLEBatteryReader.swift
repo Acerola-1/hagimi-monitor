@@ -27,13 +27,20 @@ struct BLEDeviceSnapshot: Equatable {
 ///
 /// 常驻连接 + 订阅模式:
 /// 1. 电量变化经 2A19 特征 Notify 实时推送,不等轮询;
-/// 2. 设备断开经 didDisconnectPeripheral 秒级感知——系统对蓝牙连/断
+/// 2. 仅支持 Read 的设备按 45s 低频主动补读,首次读取失败时 2/6/15s 退避重试;
+/// 3. 设备断开经 didDisconnectPeripheral 秒级感知——系统对蓝牙连/断
 ///    不发任何公开通知(Apple 开发者论坛确认),应用自持连接是唯一事件钩子;
-/// 3. 单次读取失败(如鼠标休眠)由周期性重连兜底。
+/// 4. 单次读取失败(如鼠标休眠)由周期性重连兜底。
+///
+/// 多 Battery Service 实例支持:
+/// 部分耳机分别暴露左耳、右耳、充电仓三个独立的 180F 服务。
+/// 内部按 characteristic instanceID 分别保存读数,发布时聚合取最低值
+/// (确定规则,不受回调顺序影响)。用户看到的是「最弱单元」的电量。
 ///
 /// 设备发现走双路召回:常见标准服务(180F/180A/1812)过滤 retrieve 为主,
 /// 身份绑定表已知设备按 identifier 直接召回兜底(覆盖无标准服务缓存的设备);
 /// 由本读取器主动连接后 discoverServices 强制完成 GATT 发现并读电量。
+/// 不通过长期无过滤扫描提高覆盖率(避免把附近未连接设备误认为已连接)。
 final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
     private static let batteryServiceUUID = CBUUID(string: "180F")
     private static let batteryLevelCharacteristicUUID = CBUUID(string: "2A19")
@@ -54,6 +61,11 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private static let refreshInterval: TimeInterval = 10
     /// 单次连接安全网:超时未连上则放弃,等下个周期重挂。
     private static let connectTimeout: TimeInterval = 10
+    /// 仅支持 Read(无 Notify/Indicate)的外设低频补读间隔:
+    /// 模块启用期间约 45s 一次,与系统侧刷新频率匹配,不抽风。
+    private static let pollOnlyInterval: TimeInterval = 45
+    /// 首次读取失败的退避重试延迟序列(秒):与 IO 侧 渐进重试同模式。
+    private static let readRetryDelays: [TimeInterval] = [2, 6, 15]
 
     /// 所有状态流转都在此队列上,天然串行。
     private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.ble-battery", qos: .utility)
@@ -63,9 +75,22 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private var connectTimeouts: [CBPeripheral: DispatchWorkItem] = [:]
     private var refreshTimer: DispatchSourceTimer?
     /// 电量读数按外设标识存取:设备改名后仍指向同一条目。
+    /// 多 Battery Service 实例(如左耳/右耳/充电仓)按 characteristic 对象标识
+    /// 分别保存,发布时聚合取最低值(确定规则,不受回调顺序影响)。
     private var batteryByIdentifier: [UUID: Int] = [:]
+    /// 按外设 + characteristic 对象标识保存原始电量读数。
+    /// 外层 key: 外设 identifier;内层 key: ObjectIdentifier(characteristic)。
+    private var batteryReadingsByIdentifier: [UUID: [ObjectIdentifier: Int]] = [:]
     /// Appearance 类别值按外设标识存取,生命周期与电量读数一致。
     private var appearanceByIdentifier: [UUID: UInt16] = [:]
+    /// 仅支持 Read 的外设标识集合:无 Notify 推送,需低频主动补读。
+    private var pollOnlyIdentifiers: Set<UUID> = []
+    /// 外设的 2A19 特征列表:支持多 Battery Service 实例,供低频补读与退避重读使用。
+    private var batteryCharacteristicsByIdentifier: [UUID: [CBCharacteristic]] = [:]
+    /// 首次读取失败的退避重试链,读到即取消。
+    private var batteryReadRetries: [UUID: [DispatchWorkItem]] = [:]
+    /// 低频补读定时器:仅在存在 pollOnly 外设时挂载。
+    private var pollTimer: DispatchSourceTimer?
     /// 身份绑定表已知的外设标识:服务召回覆盖不到的设备(无标准服务缓存)
     /// 按 identifier 直接召回的兜底名单,由 sampler 在绑定更新时注入。
     private var knownIdentifiers: [UUID] = []
@@ -102,17 +127,24 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         }
     }
 
-    /// 全部关停:取消周期刷新与自持连接、清空读数,并把快照/开关状态
-    /// 归零回主线程(订阅方据此摘除面板行)。stop 后 ensureWatching 幂等重建。
+    /// 全部关停:取消周期刷新与自持连接、清空读数,并把快照清空回主线程。
+    /// 控制器状态不在此发布——停用模块不是「蓝牙关闭」的权威证据,
+    /// sampler 侧清理后自行发布。stop 后 ensureWatching 幂等重建。
     func stop() {
         queue.async { [weak self] in
             guard let self else { return }
             self.refreshTimer?.cancel()
             self.refreshTimer = nil
+            self.pollTimer?.cancel()
+            self.pollTimer = nil
             for work in self.connectTimeouts.values {
                 work.cancel()
             }
             self.connectTimeouts.removeAll()
+            for works in self.batteryReadRetries.values {
+                works.forEach { $0.cancel() }
+            }
+            self.batteryReadRetries.removeAll()
             for peripheral in self.tracked.keys {
                 self.central?.cancelPeripheralConnection(peripheral)
             }
@@ -121,12 +153,14 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
             self.central = nil
             self.tracked.removeAll()
             self.batteryByIdentifier.removeAll()
+            self.batteryReadingsByIdentifier.removeAll()
             self.appearanceByIdentifier.removeAll()
+            self.pollOnlyIdentifiers.removeAll()
+            self.batteryCharacteristicsByIdentifier.removeAll()
             self.lastPublishedSnapshots = []
             self.lastPublishedControllerState = nil
             DispatchQueue.main.async { [weak self] in
                 self?.onSnapshotsUpdate?([])
-                self?.onControllerStateUpdate?(false)
             }
         }
     }
@@ -155,7 +189,11 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
             tracked.removeValue(forKey: peripheral)
             connectTimeouts.removeValue(forKey: peripheral)?.cancel()
             batteryByIdentifier.removeValue(forKey: peripheral.identifier)
+            batteryReadingsByIdentifier.removeValue(forKey: peripheral.identifier)
             appearanceByIdentifier.removeValue(forKey: peripheral.identifier)
+            pollOnlyIdentifiers.remove(peripheral.identifier)
+            batteryCharacteristicsByIdentifier.removeValue(forKey: peripheral.identifier)
+            batteryReadRetries.removeValue(forKey: peripheral.identifier)?.forEach { $0.cancel() }
         }
 
         // 已跟踪的外设同步最新空中名(设备端改名在此反映);新出现的挂常驻连接。
@@ -254,10 +292,25 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                 self.startRefreshTimer()
             case .poweredOff:
                 // 蓝牙被用户关闭:清空全部状态,面板行立即消失。
+                // 读数按 characteristic 对象标识分键,重开后 GATT 重新发现产生的
+                // 新实例与旧键不匹配,残留读数会参与 min() 聚合,须一并清空。
                 self.publishControllerState(false)
+                for work in self.connectTimeouts.values {
+                    work.cancel()
+                }
+                self.connectTimeouts.removeAll()
+                for works in self.batteryReadRetries.values {
+                    works.forEach { $0.cancel() }
+                }
+                self.batteryReadRetries.removeAll()
                 self.tracked.removeAll()
                 self.batteryByIdentifier = [:]
+                self.batteryReadingsByIdentifier = [:]
                 self.appearanceByIdentifier = [:]
+                self.pollOnlyIdentifiers.removeAll()
+                self.batteryCharacteristicsByIdentifier.removeAll()
+                self.pollTimer?.cancel()
+                self.pollTimer = nil
                 self.publishSnapshots()
             case .unauthorized, .unsupported:
                 // 用户拒绝授权 / 无硬件:静默禁用,system_profiler 路径不受影响。
@@ -288,6 +341,10 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
             guard let self else { return }
             // 自持连接断开即设备离场信号:立即重新同步清单,秒级反映断连。
             self.connectTimeouts.removeValue(forKey: peripheral)?.cancel()
+            self.batteryReadRetries.removeValue(forKey: peripheral.identifier)?.forEach { $0.cancel() }
+            self.pollOnlyIdentifiers.remove(peripheral.identifier)
+            self.batteryCharacteristicsByIdentifier.removeValue(forKey: peripheral.identifier)
+            self.batteryReadingsByIdentifier.removeValue(forKey: peripheral.identifier)
             self.tracked.removeValue(forKey: peripheral)
             self.refreshNow()
         }
@@ -314,13 +371,25 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     }
 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
-        queue.async {
+        queue.async { [weak self] in
+            guard let self else { return }
             let characteristics = service.characteristics ?? []
-            if let characteristic = characteristics.first(where: { $0.uuid == BLEBatteryReader.batteryLevelCharacteristicUUID }) {
+            let batteryChars = characteristics.filter { $0.uuid == BLEBatteryReader.batteryLevelCharacteristicUUID }
+            for characteristic in batteryChars {
+                var list = self.batteryCharacteristicsByIdentifier[peripheral.identifier] ?? []
+                if !list.contains(where: { $0 === characteristic }) {
+                    list.append(characteristic)
+                    self.batteryCharacteristicsByIdentifier[peripheral.identifier] = list
+                }
                 peripheral.readValue(for: characteristic)
-                // 2A19 标准属性含 Notify:订阅后电量变化实时推送,不等轮询。
                 if characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) {
+                    // 2A19 标准属性含 Notify:订阅后电量变化实时推送,不等轮询。
                     peripheral.setNotifyValue(true, for: characteristic)
+                } else if characteristic.properties.contains(.read) {
+                    // 仅支持 Read 的设备:挂低频补读定时器,并为首次读取安排退避重试。
+                    self.pollOnlyIdentifiers.insert(peripheral.identifier)
+                    self.scheduleReadRetries(for: peripheral, characteristic: characteristic)
+                    self.startPollTimer()
                 }
             }
             if let characteristic = characteristics.first(where: { $0.uuid == BLEBatteryReader.appearanceCharacteristicUUID }) {
@@ -334,9 +403,19 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
             guard let self, self.tracked[peripheral] != nil else { return }
             switch characteristic.uuid {
             case Self.batteryLevelCharacteristicUUID:
-                guard let level = characteristic.value?.first else { return }
-                self.batteryByIdentifier[peripheral.identifier] = Int(level)
-                AppLogger.sampler.info("BLE battery update: \(peripheral.name ?? "?", privacy: .public) = \(level)%")
+                // GATT 2A19 规范:0-100 合法,101-255 保留值拒绝,不污染缓存。
+                guard let level = characteristic.value?.first, (0...100).contains(level) else { return }
+                // 按 characteristic 对象标识保存原始读数(支持多 Battery Service 实例,
+                // 如左耳/右耳/充电仓分别暴露独立的 180F 服务)。
+                var readings = self.batteryReadingsByIdentifier[peripheral.identifier] ?? [:]
+                readings[ObjectIdentifier(characteristic)] = Int(level)
+                self.batteryReadingsByIdentifier[peripheral.identifier] = readings
+                // 聚合:取最低电量(确定规则,不受回调顺序影响)。
+                // 用户看到的是「最弱单元」的电量,符合直觉(如左耳 20%、右耳 80% 显示 20%)。
+                self.batteryByIdentifier[peripheral.identifier] = readings.values.min()
+                // 读到即取消本外设剩余退避重试。
+                self.batteryReadRetries.removeValue(forKey: peripheral.identifier)?.forEach { $0.cancel() }
+                AppLogger.sampler.info("BLE battery update: \(peripheral.name ?? "?", privacy: .private) = \(level)%")
                 self.publishSnapshots()
             case Self.appearanceCharacteristicUUID:
                 // Appearance 是 uint16,GATT 特征值统一小端。
@@ -346,6 +425,59 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
                 self.publishSnapshots()
             default:
                 break
+            }
+        }
+    }
+
+    // MARK: - 低频补读与退避重试
+
+    /// 首次发现 2A19 后的退避重试链:针对仅支持 Read 且首读失败(如外设
+    /// 刚建链尚未就绪)的场景,按 2/6/15s 递进重读;读到即取消。
+    private func scheduleReadRetries(for peripheral: CBPeripheral, characteristic: CBCharacteristic) {
+        let identifier = peripheral.identifier
+        let charID = ObjectIdentifier(characteristic)
+        let retries = Self.readRetryDelays.map { delay in
+            DispatchWorkItem { [weak self, weak peripheral] in
+                guard let self, let peripheral,
+                      self.tracked[peripheral] != nil,
+                      // 该特征已成功读到则不再重试,避免重复读取。
+                      self.batteryReadingsByIdentifier[identifier]?[charID] == nil else { return }
+                peripheral.readValue(for: characteristic)
+            }
+        }
+        var existing = batteryReadRetries[identifier] ?? []
+        existing.append(contentsOf: retries)
+        batteryReadRetries[identifier] = existing
+        for (index, work) in retries.enumerated() {
+            queue.asyncAfter(deadline: .now() + Self.readRetryDelays[index], execute: work)
+        }
+    }
+
+    /// 低频补读定时器:仅当存在仅支持 Read 的外设时挂载,幂等。
+    private func startPollTimer() {
+        guard pollTimer == nil else { return }
+        let timer = DispatchSource.makeTimerSource(queue: queue)
+        timer.schedule(deadline: .now() + Self.pollOnlyInterval, repeating: Self.pollOnlyInterval)
+        timer.setEventHandler { [weak self] in
+            self?.pollOnlyReadNow()
+        }
+        timer.resume()
+        pollTimer = timer
+    }
+
+    /// 对仅支持 Read 的外设主动重读 2A19,不重做服务发现。
+    private func pollOnlyReadNow() {
+        guard !pollOnlyIdentifiers.isEmpty else {
+            // 所有 pollOnly 外设已离场,关掉定时器。
+            pollTimer?.cancel()
+            pollTimer = nil
+            return
+        }
+        for (peripheral, _) in tracked where pollOnlyIdentifiers.contains(peripheral.identifier) {
+            if let characteristics = batteryCharacteristicsByIdentifier[peripheral.identifier] {
+                for characteristic in characteristics {
+                    peripheral.readValue(for: characteristic)
+                }
             }
         }
     }

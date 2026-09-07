@@ -84,6 +84,23 @@ final class AppLogStore {
         return [currentLogURL, rotatedLogURL].filter { FileManager.default.fileExists(atPath: $0.path) }
     }
 
+    /// 运行日志与轮转日志的总物理字节数。
+    static func totalLogsBytes() -> Int64 {
+        let dir = DiagnosticsDirectories.applicationSupport.appendingPathComponent("Logs", isDirectory: true)
+        guard let enumerator = FileManager.default.enumerator(
+            at: dir,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        var total: Int64 = 0
+        for case let url as URL in enumerator {
+            if let size = (try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                total += Int64(size)
+            }
+        }
+        return total
+    }
+
     private func write(level: Level, category: String, message: String) {
         let timestamp = formatter.string(from: dateProvider())
         let normalizedMessage = message

@@ -25,6 +25,11 @@ import SwiftUI
 /// 贴合)都会在中途或收尾暴露可见的分段跳变。
 @MainActor
 final class PanelExpansionDriver: ObservableObject {
+    let motion = SingleHostMotionCoordinator(registry: PanelDimensionRegistry(initialEnvironment:
+        GeometryEnvironmentToken(width: MonitorConstants.panelIdealWidth,
+            localeIdentifier: Locale.current.identifier, dynamicTypeSize: "default",
+            backingScale: 2, structureSignature: "")))
+
     /// 各展开区当前目标相位(0=收起,1=展开)。非动画期间等于 0 或 1。
     /// 仅用于增量计算,不再驱动布局——布局由 SwiftUI 动画系统接管。
     private(set) var phase: [String: CGFloat] = [:]
@@ -60,6 +65,10 @@ final class PanelExpansionDriver: ObservableObject {
     /// 相位瞬时设到目标(布局动画由 SwiftUI withAnimation 处理),
     /// 窗口目标高度一次性下发给窗口层:窗口以与内容同参数的弹簧跟随。
     func animate(targets: [String: CGFloat]) {
+        if PanelMotionExperiment.enabled {
+            motion.retarget(targets: targets)
+            return
+        }
         guard !targets.isEmpty else { return }
         if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
             for (key, target) in targets {
@@ -88,6 +97,10 @@ final class PanelExpansionDriver: ObservableObject {
 
     /// 瞬时把相位设到目标(无动画)。用于面板隐藏期/初始化阶段同步最终布局状态。
     func setInstantly(targets: [String: CGFloat]) {
+        if PanelMotionExperiment.enabled {
+            motion.setInstantly(targets: targets)
+            return
+        }
         guard !targets.isEmpty else { return }
         applyPhaseDelta(targets)
         animationDeadline = .distantPast
@@ -106,6 +119,7 @@ final class PanelExpansionDriver: ObservableObject {
 
     /// CollapsibleDetail 上报其展开内容的自然高度(内容常驻,首次挂载即测量)。
     func reportNaturalHeight(_ key: String, _ height: CGFloat) {
+        guard !PanelMotionExperiment.enabled else { return }
         if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil,
            naturalHeights[key] != height {
             NSLog("[autotest] driver.natural key=%@ old=%.1f new=%.1f",
@@ -117,6 +131,7 @@ final class PanelExpansionDriver: ObservableObject {
 
     /// 面板内容 GeometryReader 上报实测总高度(稳态校准用)。
     func reportMeasuredContentHeight(_ height: CGFloat) {
+        guard !PanelMotionExperiment.enabled else { return }
         lastMeasuredContentHeight = height
         calibrateToMeasured()
     }
@@ -124,6 +139,7 @@ final class PanelExpansionDriver: ObservableObject {
     /// 视图上报内容总高度上限(菜单栏下沿到屏幕底部的可用空间)。
     /// 上限变化(换屏/面板锚点移动)时随测高校报一起刷新即可。
     func reportContentHeightCap(_ cap: CGFloat) {
+        guard !PanelMotionExperiment.enabled else { return }
         contentHeightCap = cap
     }
 
@@ -186,7 +202,7 @@ final class PanelWindowSpring: NSObject {
 
     private var displayLink: CADisplayLink?
     private(set) var isAnimating = false
-    private var target: CGFloat = 0
+    private(set) var target: CGFloat = 0
     private var startPos: CGFloat = 0
     private var startVel: CGFloat = 0
     private var startTime: CFTimeInterval = 0

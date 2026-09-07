@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 /// 主体 ScrollView 两端是否还有被裁内容,驱动上下渐隐遮罩。
@@ -10,16 +11,20 @@ private struct BodyScrollEdges: Equatable {
 }
 
 struct MonitorPanelView: View {
-    @ObservedObject var store: MonitorStore
+    /// 只读引用:面板树的失效信号统一经 refreshGate 门控(隐藏期冻结),
+    /// 直接观察 store 会让隐藏态面板随每次采样发布重算。
+    let store: MonitorStore
+    @ObservedObject private var refreshGate: PanelRefreshGate
     @ObservedObject private var quickPanelPresentation: QuickPanelPresentation
     private let showsQuickPanelControls: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
     /// 内容总高度上限(由 FluidPanelController 注入,钉住面板等其他宿主为 .infinity)。
     /// 据此封顶主体 ScrollView,使 header 固定、仅主体滚动。
-    @Environment(\.panelMaxContentHeight) private var maxContentHeight
+    @Environment(\.panelMaxContentHeight) private var hostMaxContentHeight
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
+    @State private var benchmarkInputs: PanelBenchmarkInputs?
     /// header 实测高度,用于从内容总高上限换算主体 ScrollView 的 maxHeight。
     @State private var headerHeight: CGFloat = 0
     /// 主体是否已向上滚动:控制顶部渐隐遮罩。仅滚动后启用,避免未滚动时
@@ -34,15 +39,25 @@ struct MonitorPanelView: View {
     /// 经 environmentObject 注入子树;每个面板(菜单栏/钉住)各自持有,
     /// 展开动画互不牵动。
     @StateObject private var panelExpansion = PanelExpansionDriver()
+    /// 显示器模块(包含内嵌档案)动画状态凭据:供 MonitorPanelView 在子区块动画时将整体布局并入 withAnimation 事务
+    @State private var displaySectionMotionTicket: Int = 0
     /// 窗口层注入的贴合回调:driver 在 toggle 时把目标高度与是否动画下发给窗口层。
     /// 预览/无窗口宿主为 nil。
     @Environment(\.panelWindowResizeHandler) private var windowResizeHandler
+    @Environment(\.panelMotionAdapter) private var motionAdapter
 
-    init(store: MonitorStore, quickPanelPresentation: QuickPanelPresentation? = nil) {
+    init(store: MonitorStore, refreshGate: PanelRefreshGate, quickPanelPresentation: QuickPanelPresentation? = nil) {
         self.store = store
+        _refreshGate = ObservedObject(wrappedValue: refreshGate)
         let presentation = quickPanelPresentation ?? QuickPanelPresentation()
         _quickPanelPresentation = ObservedObject(wrappedValue: presentation)
         showsQuickPanelControls = quickPanelPresentation != nil
+    }
+
+    private var maxContentHeight: CGFloat {
+        guard let value = ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH_CAP"],
+              let height = Double(value), height >= 160 else { return hostMaxContentHeight }
+        return min(hostMaxContentHeight, height)
     }
 
     /// 主体 ScrollView 的高度上限:内容总高上限减去 header、顶/底内边距(8/6)
@@ -61,7 +76,24 @@ struct MonitorPanelView: View {
         return scrollBodyMaxHeight + headerHeight + 22
     }
 
+    private func displaySection(theme: MonitorPanelTheme) -> some View {
+        DisplaySection(theme: theme, settings: store.settings, isPanelVisible: store.isPanelVisible,
+            animate: { key, toFull, animated in
+                store.beginExpansionAnimation()
+                if animated {
+                    withPanelExpansionState {
+                        displaySectionMotionTicket &+= 1
+                        panelExpansion.animate(key, toFull ? 1 : 0)
+                    }
+                } else {
+                    displaySectionMotionTicket &+= 1
+                    panelExpansion.setInstantly(key, toFull ? 1 : 0)
+                }
+            })
+    }
+
     var body: some View {
+        let _ = displaySectionMotionTicket
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
         // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
         let theme = ThemeCache.theme(
@@ -70,6 +102,26 @@ struct MonitorPanelView: View {
         )
 
         CompatibleGlassContainer(spacing: 8) {
+            if PanelMotionExperiment.enabled {
+                SingleHostPrototypeView(motion: panelExpansion.motion,
+                    ids: panelModules.map { $0.kind.id } + (store.settings.displayModuleVisible && !isPanelBenchmark ? ["display"] : []), cap: maxContentHeight) {
+                    header(theme: theme)
+                } cards: {
+                    ForEach(panelModules) { module in
+                        compactRow(for: module, theme: theme)
+                            .sectionLayoutID(module.kind.id)
+                            .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
+                    }
+                    if store.settings.displayModuleVisible && !isPanelBenchmark {
+                        displaySection(theme: theme).sectionLayoutID("display")
+                            .compatibleGlassEffectID("display", in: glassNamespace)
+                    }
+                    prototypeFooter(theme: theme)
+                        .panelMeasure("__footer__")
+                        .sectionLayoutID("__footer__")
+                }
+                .background(panelBackgroundColor)
+            } else {
             VStack(spacing: 4) {
                 header(theme: theme)
                     .transaction { $0.animation = nil }
@@ -89,49 +141,18 @@ struct MonitorPanelView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
                         VStack(spacing: 6) {
-                            ForEach(store.modules) { module in
+                            ForEach(panelModules) { module in
                                 compactRow(for: module, theme: theme)
                                     .id(module.kind)
                                     .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
                             }
 
-                            // 显示器信息区(B4):沙盒版没有控制区,独立成行展示;
-                            // Direct 版信息并入 DisplayControlsSection 展开区,
-                            // 避免出现两行「显示器」重复。
-                            #if !DISPLAY_CONTROL
-                            if store.settings.displayModuleVisible {
-                                DisplayInfoSection(
-                                    theme: theme,
-                                    animate: { key, toFull, animated in
-                                        store.beginExpansionAnimation()
-                                        if animated {
-                                            panelExpansion.animate(key, toFull ? 1 : 0)
-                                        } else {
-                                            panelExpansion.setInstantly(key, toFull ? 1 : 0)
-                                        }
-                                    }
-                                )
-                                .compatibleGlassEffectID("display-info", in: glassNamespace)
+                            // 显示器区块:两渠道单一实现(DisplaySection),
+                            // 沙盒渠道为只读信息行,直连渠道展开区并入 DDC 控制。
+                            if store.settings.displayModuleVisible && !isPanelBenchmark {
+                                displaySection(theme: theme)
+                                .compatibleGlassEffectID("display", in: glassNamespace)
                             }
-                            #endif
-
-                            #if DISPLAY_CONTROL
-                            if store.settings.displayModuleVisible {
-                                DisplayControlsSection(
-                                    settings: store.settings,
-                                    isPanelVisible: store.isPanelVisible,
-                                    animate: { key, toFull, animated in
-                                        store.beginExpansionAnimation()
-                                        if animated {
-                                            panelExpansion.animate(key, toFull ? 1 : 0)
-                                        } else {
-                                            panelExpansion.setInstantly(key, toFull ? 1 : 0)
-                                        }
-                                    }
-                                )
-                                .compatibleGlassEffectID("display-controls", in: glassNamespace)
-                            }
-                            #endif
 
                             // 底部三按钮与行卡片同规格:同内边距/同字体/同间距,
                             // 高度与行间留白都与模块行一致;文案用短形式避免折行。
@@ -214,9 +235,9 @@ struct MonitorPanelView: View {
                 }
             }
             // 顶部留白收紧至 8pt 与 header—主体间距 4pt 配合压缩首屏空白;
-            // 底边留白与行间节奏(6pt)对齐,侧边保持 10pt。
+            // 侧边与底边留白均与行间节奏(6pt)对齐，与卡片/按钮圆角(14pt)共同构成 20pt 同心外框圆角。
             .padding(.top, 8)
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 6)
             .padding(.bottom, 6)
             .frame(
                 minWidth: MonitorConstants.panelMinWidth,
@@ -225,6 +246,7 @@ struct MonitorPanelView: View {
             )
             .fixedSize(horizontal: false, vertical: true)
             .background(panelBackgroundColor)
+            }
         }
         .compatibleContainerBackground()
         .overlay {
@@ -248,10 +270,14 @@ struct MonitorPanelView: View {
                 cameoModel.panelDidAppear()
                 // 调试自动测试:可见后 0.8s 自动全量展开(走真实 setExpansion 动画路径),
                 // 供 sizeDidChange 日志观察展开期间的尺寸上报行为。
-                if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+                if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil && !isPanelBenchmark {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
                         guard store.isPanelVisible else { return }
-                        setExpansion { expandedKinds = Set(visibleKinds) }
+                        if ProcessInfo.processInfo.environment["HAGIMI_AUTOTEST_SINGLE"] != nil {
+                            setExpansion { expandedKinds = [.cpu] }
+                        } else {
+                            setExpansion { expandedKinds = Set(visibleKinds) }
+                        }
                     }
                 }
             } else {
@@ -267,14 +293,24 @@ struct MonitorPanelView: View {
             // 桥接窗口层注入的贴合回调:动画路径下发预测终高,窗口以与内容
             // 同参数的弹簧跟随;同步路径(初始化/隐藏重置)直接贴合。
             panelExpansion.onWindowResize = windowResizeHandler
+            let motion = panelExpansion.motion
+            let monitorStore = store
+            motion.submissionAdapter = motionAdapter
+            motion.onMotionFrame = { [weak monitorStore] in monitorStore?.beginExpansionAnimation() }
+            if PanelMotionExperiment.enabled {
+                motionAdapter?.bindMotion(motion)
+                let expansion = $expandedKinds
+                motion.resetForHiddenPanel = { [weak monitorStore, weak motion] in
+                    guard let monitorStore else { return }
+                    let target = monitorStore.settings.defaultExpandedKinds.intersection(monitorStore.modules.map(\.kind))
+                    expansion.wrappedValue = target
+                    motion?.hiddenPanelReset.send()
+                    motion?.setInstantly(targets: Dictionary(uniqueKeysWithValues:
+                        MonitorKind.allCases.map { ($0.id, target.contains($0) ? CGFloat(1) : 0) }))
+                }
+            }
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             applyDefaultExpansion()
-            // 上报当前需进程采样的集合(展开的行):面板重开时 @State 可能保留上次选项,
-            // 而 store 已在上次关闭时清空该来源,此处重新同步以触发对应采样。
-            reportActiveProcessKinds()
-        }
-        .onChange(of: expandedKinds) { _, _ in
-            reportActiveProcessKinds()
         }
         // 实测内容总高度上报驱动器:非动画期间据此反推收起态基线高度,
         // 动画开始时由 targetContentHeight 叠加目标相位高度预测窗口目标尺寸。
@@ -301,16 +337,84 @@ struct MonitorPanelView: View {
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
         .environmentObject(panelExpansion)
+        .task {
+            guard isPanelBenchmark, !showsQuickPanelControls else { return }
+            try? await Task.sleep(for: .seconds(3))
+            let mode = ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] ?? "single"
+            if let path = ProcessInfo.processInfo.environment["HAGIMI_PANEL_FIXTURE"] {
+                do {
+                    benchmarkInputs = try PanelBenchmarkInputs.loadOrCapture(store: store, path: path)
+                    refreshGate.close()
+                    NSLog("[panel-bench] fixture=%@", path)
+                } catch {
+                    NSLog("[panel-bench] fixture-error=%@", String(describing: error))
+                    return
+                }
+            }
+            try? await Task.sleep(for: .seconds(1))
+            for index in 0..<50 {
+                guard !Task.isCancelled else { return }
+                guard motionAdapter?.isWindowUnoccluded == true else {
+                    NSLog("[panel-bench] aborted=window-occluded operation=%d", index)
+                    return
+                }
+                PanelLayoutCounters.shared.checkpoint()
+                NSLog("[panel-bench] operation=%d mode=%@ unoccluded=1", index, mode)
+                if mode == "all" {
+                    setExpansion {
+                        expandedKinds = expandedKinds.isEmpty ? Set(prototypeModules.map(\.kind)) : []
+                    }
+                } else {
+                    toggleExpansion(for: .cpu)
+                }
+                try? await Task.sleep(for: .milliseconds(mode == "reverse" ? 100 : 700))
+            }
+            NSLog("[panel-bench] complete")
+        }
     }
 
-    /// 需进程采样的类目集 = 行内展开的模块。
-    private func reportActiveProcessKinds() {
-        store.updateExpandedKinds(expandedKinds, for: panelSource)
+    private var isPanelBenchmark: Bool {
+        ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] != nil
     }
 
-    /// 本面板对应的进程采样来源。带快捷面板控件的是钉住面板,否则是菜单栏面板。
-    private var panelSource: PanelKind {
-        showsQuickPanelControls ? .pinned : .menuBar
+    private var panelModules: [MonitorModule] {
+        isPanelBenchmark ? prototypeModules : store.modules
+    }
+
+    private var prototypeModules: [MonitorModule] {
+        (benchmarkInputs?.modules ?? store.modules).filter { [.cpu, .gpu, .memory].contains($0.kind) }
+    }
+
+    private func prototypeFooter(theme: MonitorPanelTheme) -> some View {
+                            HStack(spacing: 6) {
+                                Button {
+                                    openActivityMonitor()
+                                } label: {
+                                    Label(String(localized: "panel.monitor"), systemImage: "waveform.path.ecg")
+                                        .lineLimit(1)
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .compatibleButtonStyle()
+
+                                // 快捷功能入口:激活角标与浮层打开态高亮由子视图
+                                // 自行观察 store,开关变化不牵动整块面板重绘。
+                                // 设置「小工具」关闭入口时不渲染(全部工具隐藏时
+                                // 该开关会被联动关闭,见 MonitorSettings)。
+                                if store.settings.quickToolsVisible {
+                                    QuickToolsEntryButton(settings: store.settings, theme: theme)
+                                }
+
+                                Button {
+                                    fluidOpenSettings()
+                                } label: {
+                                    Label(String(localized: "panel.settings"), systemImage: "gearshape")
+                                        .lineLimit(1)
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .compatibleButtonStyle()
+                            }
+                            .font(.callout.weight(.medium))
+                            .foregroundStyle(theme.primaryText)
     }
 
     private var panelBackgroundColor: Color {
@@ -383,7 +487,9 @@ struct MonitorPanelView: View {
                 }
             }
         }
-        .padding(.horizontal, 2)
+        // 顶栏前导内缩 8pt(距外框 14pt)避开 20pt 外框圆角切线压迫，并与下方卡片内容纵列对齐;尾部保持 4pt 留白。
+        .padding(.leading, 8)
+        .padding(.trailing, 4)
     }
 
     /// 钉住面板的钉住/关闭按钮组。
@@ -435,7 +541,7 @@ struct MonitorPanelView: View {
                 samples: module.samples,
                 details: cpuDetails(for: module),
                 isExpanded: isExpanded,
-                topCPUProcesses: store.topCPUProcesses,
+                topCPUProcesses: benchmarkInputs?.cpu ?? store.topCPUProcesses,
                 showCPUProcesses: store.settings.showCPUProcesses
             ) {
                 toggleExpansion(for: module.kind)
@@ -449,7 +555,7 @@ struct MonitorPanelView: View {
                 samples: module.samples,
                 details: enabledMetrics(for: module),
                 isExpanded: isExpanded,
-                topGPUProcesses: store.topGPUProcesses,
+                topGPUProcesses: benchmarkInputs?.gpu ?? store.topGPUProcesses,
                 showGPUProcesses: store.settings.showGPUProcesses
             ) {
                 toggleExpansion(for: module.kind)
@@ -468,7 +574,7 @@ struct MonitorPanelView: View {
                 samples: pressureMode ? module.pressureSamples : [],
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
                 isExpanded: isExpanded,
-                topMemoryProcesses: store.topMemoryProcesses,
+                topMemoryProcesses: benchmarkInputs?.memory ?? store.topMemoryProcesses,
                 showMemoryProcesses: store.settings.showMemoryProcesses
             ) {
                 toggleExpansion(for: module.kind)
@@ -591,7 +697,7 @@ struct MonitorPanelView: View {
 
     /// 当前可见 row 的 kind 集合,顺序与渲染顺序一致。
     /// `store.modules` 已由 settings 过滤过,所以只取它即可。
-    /// `DisplayControlsSection` 不是 module,天然不在内。
+    /// `DisplaySection` 不是 module,天然不在内。
     private var visibleKinds: [MonitorKind] {
         store.modules.map(\.kind)
     }
@@ -646,9 +752,16 @@ struct MonitorPanelView: View {
         // 置位一次性动画截止标记:动画窗口内的采样结果推迟应用,避免 1-3s 节奏的
         // 模块刷新恰好撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
         store.beginExpansionAnimation()
-        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
-            mutate()
+
+        if PanelMotionExperiment.enabled {
+            var transaction = Transaction(animation: nil)
+            transaction.disablesAnimations = true
+            withTransaction(transaction) { mutate() }
+        } else {
+            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
+                mutate()
+            }
         }
         let current = expandedKinds
         guard current != previous else { return }
@@ -798,14 +911,18 @@ private struct MetricGlassRow: View, Equatable {
     // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
     // 闭包不参与相等判定。未变化的行 == 成立时 SwiftUI 跳过整行重绘。
     static func == (lhs: MetricGlassRow, rhs: MetricGlassRow) -> Bool {
-        lhs.module == rhs.module
+        guard lhs.isExpanded == rhs.isExpanded else { return false }
+        guard lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.detail == rhs.detail
             && lhs.detailColor == rhs.detailColor
-            && lhs.samples == rhs.samples
-            && lhs.details == rhs.details
-            && lhs.isExpanded == rhs.isExpanded
+            && lhs.samples == rhs.samples else { return false }
+        // 收起态下明细网格与进程列表均不可见，跳过对未展开内容的深度比对，阻断无关重绘。
+        if !lhs.isExpanded && !PanelMotionExperiment.enabled {
+            return true
+        }
+        return lhs.details == rhs.details
             && lhs.topMemoryProcesses == rhs.topMemoryProcesses
             && lhs.showMemoryProcesses == rhs.showMemoryProcesses
             && lhs.topCPUProcesses == rhs.topCPUProcesses
@@ -834,8 +951,19 @@ private struct MetricGlassRow: View, Equatable {
         return !details.isEmpty || (fans?.isEmpty == false)
     }
 
+    private var detailMeasurementKey: String {
+        [details.map(\.name).joined(separator: ","),
+         "\(module.cpuCoreDetail?.cores.count ?? 0)",
+         "\(showCPUProcesses):\(min(5, topCPUProcesses.count))",
+         "\(showGPUProcesses):\(min(5, topGPUProcesses.count))",
+         "\(showMemoryProcesses):\(min(5, topMemoryProcesses.count))",
+         "\(showDiskProcesses):\(min(5, topDiskProcesses.count))",
+         storageVolumes?.map(\.id).joined(separator: ",") ?? "",
+         fans?.map { String($0.id) }.joined(separator: ",") ?? ""].joined(separator: "|")
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        PanelCardStack(measurementKey: "\(module.kind.id)|\(samples.isEmpty)") {
             HStack(spacing: 10) {
                 Image(systemName: module.kind.symbol)
                     .font(.callout.weight(.semibold))
@@ -859,7 +987,7 @@ private struct MetricGlassRow: View, Equatable {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            // 手势只挂行头(与 DisplayControlsSection 同款):macOS 上覆盖整个
+            // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
             .onTapGesture {
@@ -868,7 +996,9 @@ private struct MetricGlassRow: View, Equatable {
                 toggleExpansion?()
             }
 
-            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: detailAvailable) {
+            .panelMeasure("row:" + module.kind.id)
+
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: detailAvailable, measurementKey: detailMeasurementKey) {
                 Group {
                     if module.kind == .fan, let fans, !fans.isEmpty {
                         FanList(fans: fans, theme: theme)
@@ -997,7 +1127,7 @@ private struct MetricGlassRow: View, Equatable {
 /// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
 /// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
 /// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
-private struct CPUCoresDetail: View {
+struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
 
@@ -1209,11 +1339,7 @@ private struct MetricDetailGrid: View {
             }
 
             if !shortMetrics.isEmpty {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),
-                              GridItem(.flexible())],
-                    spacing: MetricGridMetrics.gridRowGap
-                ) {
+                PanelMetricColumns(measurementKey: shortMetrics.map(\.name).joined(separator: "|")) {
                     ForEach(shortMetrics) { metric in
                         metricCell(metric)
                     }
@@ -1402,7 +1528,7 @@ private struct MetricDetailGrid: View {
 }
 
 /// Wi-Fi 信号格:四根升序小柱,点亮数 = 信号等级,网络模块色;未点亮暗灰。
-private struct WifiSignalBars: View {
+struct WifiSignalBars: View {
     let level: Int
     @Environment(\.colorScheme) private var colorScheme
 
@@ -1420,6 +1546,10 @@ private struct WifiSignalBars: View {
         }
     }
 }
+
+/// 网络明细网格固定渲染顺序:(信号, 延迟) 同排,SSID 长值整行,地址类殿后
+/// (对齐冻结原型网格配对);设置页预览卡复用同一顺序,两处网格排序同源。
+let networkDetailMetricOrder = ["wifi-rssi", "gateway-latency", "wifi-ssid", "ipv4", "ipv6", "public-ip"]
 
 /// 网络明细指标门控(与用户设置无关,纯当前网络条件):条件不符的指标不渲染,
 /// 避免面板挂 "--" 噪音行;条件恢复后自动出现。
@@ -1623,11 +1753,14 @@ private struct NetworkGlassRow: View, Equatable {
     var toggleExpansion: (() -> Void)?
 
     static func == (lhs: NetworkGlassRow, rhs: NetworkGlassRow) -> Bool {
-        lhs.module == rhs.module
+        guard lhs.isExpanded == rhs.isExpanded else { return false }
+        guard lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
-            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.details == rhs.details
-            && lhs.isExpanded == rhs.isExpanded
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme else { return false }
+        if !lhs.isExpanded {
+            return true
+        }
+        return lhs.details == rhs.details
             && lhs.topNetworkProcesses == rhs.topNetworkProcesses
             && lhs.showNetworkProcesses == rhs.showNetworkProcesses
     }
@@ -1646,7 +1779,7 @@ private struct NetworkGlassRow: View, Equatable {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        PanelCardStack {
             HStack(spacing: 10) {
                 Image(systemName: "wifi")
                     .font(.callout.weight(.semibold))
@@ -1683,6 +1816,8 @@ private struct NetworkGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
+            .panelMeasure("row:" + module.kind.id)
+
             CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: hasExpandableContent) {
                 VStack(spacing: 9) {
                     if !detailMetrics.isEmpty {
@@ -1711,11 +1846,9 @@ private struct NetworkGlassRow: View, Equatable {
     }
 
     private var detailMetrics: [MonitorMetric] {
-        // 顺序对齐冻结原型网格配对:(信号, 延迟),SSID 长值整行,地址类殿后。
         // 门控规则见 filteredNetworkMetrics:断网/有线/无 Wi-Fi 时不挂 "--" 行。
-        let names = ["wifi-rssi", "gateway-latency", "wifi-ssid", "ipv4", "ipv6", "public-ip"]
         let enabledNames = Set(details.map(\.name))
-        let selected = names.compactMap { name -> MonitorMetric? in
+        let selected = networkDetailMetricOrder.compactMap { name -> MonitorMetric? in
             guard enabledNames.contains(name) else { return nil }
             return module.metrics.first(where: { $0.name == name })
         }
@@ -1741,16 +1874,26 @@ private struct BatteryGlassRow: View, Equatable {
     /// 功率流流光启用:false 时回落到纯静态绘制,用于展开动画窗口期停更 GPU 流光。
     var powerFlowActive = true
     var toggleExpansion: (() -> Void)?
+    @State private var selectedTab: BatteryPageTab = .flow
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
-        lhs.module == rhs.module
+        guard lhs.isExpanded == rhs.isExpanded else { return false }
+        guard lhs.module == rhs.module
             && lhs.theme.palette.preference == rhs.theme.palette.preference
-            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
-            && lhs.details == rhs.details
-            && lhs.isExpanded == rhs.isExpanded
+            && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme else { return false }
+        if !lhs.isExpanded {
+            return true
+        }
+        return lhs.details == rhs.details
             && lhs.showPowerFlow == rhs.showPowerFlow
             && lhs.panelVisible == rhs.panelVisible
             && lhs.powerFlowActive == rhs.powerFlowActive
+    }
+
+    private var detailMeasurementKey: String {
+        [detailMetrics.map(\.name).joined(separator: ","),
+         "\(showPowerFlow)",
+         selectedTab.rawValue].joined(separator: "|")
     }
 
     private var tint: Color {
@@ -1758,7 +1901,7 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
+        PanelCardStack(measurementKey: "\(module.kind.id)|\(canExpand)") {
             HStack(spacing: 10) {
                 // 充电时用 `battery.100percent.bolt`(电池中间带闪电)静态图标表示充电状态,
                 // 不再叠加 `.variableColor.iterative` 持续动画——该动画会让 SwiftUI 视图图每帧
@@ -1796,12 +1939,14 @@ private struct BatteryGlassRow: View, Equatable {
                     PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
                         .layoutPriority(0)
                 }
-                PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                    .layoutPriority(0)
+                if hasBattery || numericValue("power") != nil {
+                    PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
+                        .layoutPriority(0)
+                }
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplayControlsSection
+            // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplaySection
             // 同款纪律:整行 onTapGesture 会抢占深层控件的点击)。
             .contentShape(Rectangle())
             .onTapGesture {
@@ -1810,7 +1955,9 @@ private struct BatteryGlassRow: View, Equatable {
                 }
             }
 
-            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand) {
+            .panelMeasure("row:" + module.kind.id)
+
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand, measurementKey: detailMeasurementKey) {
                 VStack(spacing: 9) {
                     MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
                     // 指标网格(健康度/温度/循环/损耗)与功率流图之间用带标题的分区分隔线
@@ -1821,16 +1968,33 @@ private struct BatteryGlassRow: View, Equatable {
                     // 功率流无 power 数据(老款 Mac 读不到 PowerTelemetryData.SystemPower)时整体隐藏,
                     // 避免只显标题不出图的视觉断裂。canExpand 已用同一条件门控展开动作,渲染侧保持联动。
                     if showPowerFlow && numericValue("power") != nil {
-                        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
-                            .padding(.top, 3)
-                            // 与明细网格同 28pt 缩进,分区标题与下方图内容左缘对齐(原型基准)。
-                            .padding(.leading, 28)
-                        PowerFlowDiagram(
-                            module: module,
-                            theme: theme,
-                            tint: tint,
-                            animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
-                        )
+                        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme) {
+                            PanelCapsulePicker(
+                                selection: $selectedTab,
+                                icon: { $0.icon },
+                                tooltip: { $0.title },
+                                tint: tint,
+                                theme: theme
+                            )
+                        }
+                        .padding(.top, 3)
+                        .padding(.leading, 28)
+
+                        switch selectedTab {
+                        case .flow:
+                            PowerFlowDiagram(
+                                module: module,
+                                theme: theme,
+                                tint: tint,
+                                animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
+                            )
+                        case .supply:
+                            PowerSupplyDiagnosticsView(
+                                module: module,
+                                theme: theme,
+                                tint: tint
+                            )
+                        }
                     }
                 }
                 .padding(.horizontal, 10)
@@ -1886,8 +2050,10 @@ private struct BatteryGlassRow: View, Equatable {
     private var summaryText: String {
         if hasBattery {
             localizedBatteryState(module.summary)
+        } else if let adapter = numericValue("adapter") {
+            wattString(adapter, rounded: true)
         } else {
-            value("adapter")
+            localizedBatteryState("ac-power")
         }
     }
 
@@ -1896,7 +2062,7 @@ private struct BatteryGlassRow: View, Equatable {
         // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
         // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
         // 斜杠长值,由静态登记整行排到模块末尾。
-        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "capacity"]
+        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "cell-balance", "capacity"]
 
         let enabledNames = Set(details.map(\.name))
 
@@ -1938,11 +2104,18 @@ func localizedBatteryState(_ id: String) -> String {
 
 // MARK: - Power Flow
 
-/// 展开区分区标题:一段小标题 + 贯穿分隔线,用来把上方的电池指标网格
+/// 展开区分区标题:一段小标题 + 贯穿分隔线,可选尾部胶囊切换器,用来把上方的电池指标网格
 /// (健康度/温度/循环/损耗)与下方的功率流图、耗电排行明确切分成独立区块。
-private struct PowerSectionHeader: View {
+struct PowerSectionHeader<Trailing: View>: View {
     let title: String
     let theme: MonitorPanelTheme
+    let trailing: Trailing
+
+    init(title: String, theme: MonitorPanelTheme, @ViewBuilder trailing: () -> Trailing) {
+        self.title = title
+        self.theme = theme
+        self.trailing = trailing()
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -1953,27 +2126,16 @@ private struct PowerSectionHeader: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .battery))
                 .frame(height: 1)
+            trailing
         }
     }
 }
 
-/// 充电上限旗标形状:顶端倒三角旗头(底边在上、尖朝下) + 自旗头尖端下探的
-/// 细圆头竖线,单一填充色整形绘制。
-struct LimitFlagShape: Shape {
-    func path(in rect: CGRect) -> Path {
-        var path = Path()
-        let headHeight: CGFloat = 5
-        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY + headHeight))
-        path.closeSubpath()
-        let lineWidth: CGFloat = 1.5
-        path.addRoundedRect(
-            in: CGRect(x: rect.midX - lineWidth / 2, y: rect.minY + headHeight,
-                       width: lineWidth, height: rect.height - headHeight),
-            cornerSize: CGSize(width: lineWidth / 2, height: lineWidth / 2)
-        )
-        return path
+extension PowerSectionHeader where Trailing == EmptyView {
+    init(title: String, theme: MonitorPanelTheme) {
+        self.title = title
+        self.theme = theme
+        self.trailing = EmptyView()
     }
 }
 
@@ -1985,7 +2147,7 @@ private func localizedNetworkInterface(_ summary: String) -> String {
 
 // MARK: - Transparent Window Background
 
-private struct TransparentWindowBackground: NSViewRepresentable {
+struct TransparentWindowBackground: NSViewRepresentable {
     let colorSchemeOverride: ColorScheme?
 
     func makeNSView(context: Context) -> NSView {
@@ -2680,8 +2842,28 @@ private struct BluetoothGlassRow: View, Equatable {
         module.bluetoothDevices ?? []
     }
 
+    /// 行头的无障碍值:设备数 + 摘要(如「3 个设备, 最低 45%」)。
+    private var accessibilityValueForRow: String {
+        if devices.isEmpty {
+            return module.summary
+        }
+        let count = devices.count
+        let minLevel = devices.compactMap(\.batteryLevel).min()
+        if let minLevel {
+            return String(format: String(localized: "bluetooth.row.devices-with-min"), count, minLevel)
+        }
+        return String(format: String(localized: "bluetooth.row.devices-count"), count)
+    }
+
+    /// 行头的无障碍提示:展开/收起操作。
+    private var accessibilityHintForRow: String {
+        isExpanded
+            ? String(localized: "bluetooth.row.collapse-hint")
+            : String(localized: "bluetooth.row.expand-hint")
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        PanelCardStack {
             HStack(spacing: 10) {
                 module.kind.symbolImage
                     .resizable()
@@ -2723,6 +2905,14 @@ private struct BluetoothGlassRow: View, Equatable {
                 guard !devices.isEmpty else { return }
                 toggleExpansion?()
             }
+            // 无障碍:行头提供模块名 + 设备数 + 展开/收起状态 + 操作提示。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(module.kind.title)
+            .accessibilityValue(accessibilityValueForRow)
+            .accessibilityHint(devices.isEmpty ? "" : accessibilityHintForRow)
+            .accessibilityAddTraits(devices.isEmpty ? [] : .isButton)
+
+            .panelMeasure("row:" + module.kind.id)
 
             CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty) {
                 BluetoothDeviceList(devices: devices, theme: theme)
@@ -2770,6 +2960,7 @@ private struct BluetoothDeviceList: View {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(theme.badgeFill(for: .bluetooth))
                 }
+                .accessibilityHidden(true)  // 图标由组合标签统一描述
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(device.name)
@@ -2781,6 +2972,7 @@ private struct BluetoothDeviceList: View {
                     .foregroundStyle(theme.captionText)
                     .lineLimit(1)
             }
+            .accessibilityHidden(true)  // 名称/类型由组合标签统一描述
 
             Spacer(minLength: 8)
 
@@ -2792,14 +2984,30 @@ private struct BluetoothDeviceList: View {
                     .foregroundStyle(levelTextColor(level))
                     .lineLimit(1)
                     .frame(width: 38, alignment: .trailing)
+                    .accessibilityHidden(true)  // 电量由组合标签统一描述
             } else {
                 // 无电量设备右侧占位与 TOP 进程空位行同规;列表本身即「已连接」清单。
                 Text("—")
                     .monitorPanelCaptionFont(.footnote)
                     .foregroundStyle(theme.captionText)
                     .frame(width: 38, alignment: .trailing)
+                    .accessibilityHidden(true)  // 占位符由组合标签统一描述
             }
         }
+        // 组合无障碍标签:设备名 + 类型 + 电量(或「电量不可用」),
+        // VoiceOver 一次读出完整信息,不分散到子视图。
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(device.name)
+        .accessibilityValue(accessibilityValueForDevice(device))
+    }
+
+    /// 设备行的无障碍值:类型 + 电量(或本地化「电量不可用」)。
+    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
+        let type = typeLabel(for: device.type)
+        if let level = device.batteryLevel {
+            return "\(type), \(level)%"
+        }
+        return "\(type), " + String(localized: "bluetooth.battery-unavailable")
     }
 
     /// 电量条颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
@@ -2841,6 +3049,8 @@ private struct BluetoothDeviceList: View {
 }
 
 /// 设备电量条:trackFill 底槽 + 按百分比填充,只用调色板令牌。
+/// 无障碍:隐藏本视图,电量数值由父行的 accessibilityValue 统一朗读,
+/// 避免 VoiceOver 重复读出「电量条」+「百分比」两次。
 private struct BluetoothBatteryBar: View {
     let level: Int
     let tint: Color
@@ -2856,6 +3066,7 @@ private struct BluetoothBatteryBar: View {
                     .frame(width: geometry.size.width * CGFloat(max(0, min(100, level))) / 100)
             }
         }
+        .accessibilityHidden(true)
     }
 }
 
@@ -2941,7 +3152,7 @@ private struct ProcessIcon: View {
 /// 内容可用性消失(如蓝牙设备全部断开)时高度直接钳 0,瞬时归零、不参与动画--
 /// 数据驱动的收起没有用户手势,不需要过渡动画。
 ///
-/// 供各 metric 行与 `DisplayControlsSection`(Direct 目标)共用,故非 private。
+/// 供各 metric 行与 `DisplaySection` 共用,故非 private。
 struct CollapsibleDetail<Content: View>: View {
     /// 面板根注入的展开驱动器:仅用于上报自然高度供窗口高度预测。
     @EnvironmentObject private var expansion: PanelExpansionDriver
@@ -2952,56 +3163,58 @@ struct CollapsibleDetail<Content: View>: View {
     /// 是否有可展开的内容。false 时无论展开态如何,高度恒为 0。
     private let contentAvailable: Bool
     private let content: Content
+    private let measurementKey: String
 
     /// 内容的自然高度。内容始终挂载并被 GeometryReader 测量,故在首次展开前就已就绪,
     /// 保证展开时高度从 0 平滑增长,而不是等测量回填后「跳」到终点。
     @State private var contentHeight: CGFloat = 0
+    @State private var hasAppeared = false
 
     init(
         expansionKey: String,
         isExpanded: Bool,
         contentAvailable: Bool = true,
+        measurementKey: String = "",
         @ViewBuilder content: () -> Content
     ) {
         self.expansionKey = expansionKey
         self.isExpanded = isExpanded
         self.contentAvailable = contentAvailable
+        self.measurementKey = measurementKey
         self.content = content()
     }
 
     var body: some View {
         let expanded = contentAvailable && isExpanded
-        content
-            .opacity(expanded ? 1 : 0)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear {
-                            contentHeight = geometry.size.height
-                            expansion.reportNaturalHeight(expansionKey, geometry.size.height)
-                        }
-                        .onChange(of: geometry.size.height) { _, newValue in
-                            // 内容自然高度变化(内层档案开合、风扇模式插入滑杆等)时,
-                            // onChange 回调无动画上下文,裸更新会让容器高度与下方内容
-                            // 的位移瞬跳;显式包一次补间,让它平滑并入既有展开节奏。
-                            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
-                                contentHeight = newValue
+
+        if PanelMotionExperiment.enabled {
+            SingleHostDetail(id: expansionKey, isExpanded: expanded, available: contentAvailable,
+                content: content, presentation: expansion.motion.presentation(for: expansionKey), measurementKey: measurementKey)
+        } else {
+            content
+                .opacity(expanded ? 1 : 0)
+                .background(
+                    GeometryReader { geometry in
+                        Color.clear
+                            .onAppear {
+                                contentHeight = geometry.size.height
+                                expansion.reportNaturalHeight(expansionKey, geometry.size.height)
+                                DispatchQueue.main.async { hasAppeared = true }
                             }
-                            expansion.reportNaturalHeight(expansionKey, newValue)
-                        }
-                }
-            )
-            // 展开时高度 = 自然高度,收起时 = 0;由 .animation(value: isExpanded)
-            // 在 CoreAnimation 层插值,不在主线程逐帧重算。顶部对齐 + 裁剪,
-            // 使内容随高度增长自上而下「卷出」。
-            .frame(height: expanded ? contentHeight : 0, alignment: .top)
-            .clipped()
-            // 收起(高度 0、不可见)不参与点击,避免拦截行的展开手势。
-            .allowsHitTesting(isExpanded)
-            // toggle 时 SwiftUI 动画系统补间高度与透明度;contentAvailable 变化
-            // (数据驱动)不触发此动画,瞬时切换。
-            .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                               dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
+                            .onChange(of: geometry.size.height) { _, height in
+                                contentHeight = height
+                                expansion.reportNaturalHeight(expansionKey, height)
+                            }
+                    }
+                )
+                .frame(height: expanded ? contentHeight : 0, alignment: .top)
+                .clipped()
+                .contentShape(Rectangle())
+                .allowsHitTesting(expanded)
+                .accessibilityHidden(!expanded)
+                .animation(hasAppeared ? .spring(response: MonitorConstants.panelExpansionSpringResponse,
+                    dampingFraction: MonitorConstants.panelExpansionSpringDamping) : nil,
+                    value: expanded ? contentHeight : 0)
+        }
     }
 }

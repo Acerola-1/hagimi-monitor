@@ -18,6 +18,11 @@ final class BatterySampler: MonitorSampler {
     // 系统设置显示的是 powerd 低通滤波后的值,这里用 EMA + 整数迟滞复刻其稳定性。
     private var smoothedHealthRatio: Double?   // 平滑后的 maxCapacity/designCapacity
     private var displayedHealthPercent: Double? // 当前对外显示的整数百分比
+    // SMC 功率链读取器: App Store 沙盒版因 IOServiceOpen(AppleSMC) 受限无法使用,
+    // 仅在 DISPLAY_CONTROL(Direct 版)下启用,为无电池机型或遥测缺报提供第二数据链。
+    #if DISPLAY_CONTROL
+    private let smcReader: SMCReader? = SMCReader()
+    #endif
 
     deinit {
         if powerTelemetryService != IO_OBJECT_NULL {
@@ -58,7 +63,14 @@ final class BatterySampler: MonitorSampler {
         let chargingPower = connected
             ? (smart.telemetryChargingWatts ?? smart.chargingPowerWatts)
             : nil
+        #if DISPLAY_CONTROL
+        let systemPower = smart.systemPowerWatts
+            ?? powerTelemetryWatts()
+            ?? smcReader?.systemPower()
+            ?? smcReader?.dcInputPower()
+        #else
         let systemPower = smart.systemPowerWatts ?? powerTelemetryWatts()
+        #endif
 
         // 功率流:适配器实际输入、电池流向(正=充电/负=放电)。
         let powerIn = connected ? smart.powerInWatts : nil
@@ -111,6 +123,8 @@ final class BatterySampler: MonitorSampler {
             return loss >= 0 ? loss : nil
         }()
 
+        let cellBalance = cellBalanceMetric(smart.cellVoltages)
+
         return MonitorModule(
             kind: .battery,
             value: percentage,
@@ -122,10 +136,11 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", unit: connected ? " W" : nil),
                 MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower, unit: " W"),
                 MonitorMetric(name: "health", value: stableHealth.map(percent) ?? "--", numericValue: stableHealth, unit: "%"),
-                MonitorMetric(name: "cycle-count", value: smart.cycleCount.map { "\($0)" } ?? "--", numericValue: smart.cycleCount.map(Double.init)),
+                MonitorMetric(name: "cycle-count", value: cycleCountString(smart.cycleCount, design: smart.designCycleCount), numericValue: smart.cycleCount.map(Double.init)),
                 MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius, unit: "°C"),
                 MonitorMetric(name: "voltage", value: voltageString(smart.voltageVolts), numericValue: smart.voltageVolts, unit: " V"),
                 MonitorMetric(name: "current", value: currentString(smart.amperageMilliamps), numericValue: smart.amperageMilliamps.map(abs), unit: " mA"),
+                MonitorMetric(name: "cell-balance", value: cellBalance?.text ?? "--", numericValue: cellBalance.map { Double($0.delta) }),
                 // 剩余/满充容量合并为一格斜杠式展示;满充口径取电池芯片实测的
                 // FullChargeCapacity(与「健康度」用的 NominalChargeCapacity 分工不同,
                 // 后者负责相对设计容量的衰减叙事)。
@@ -134,6 +149,12 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn, unit: " W"),
                 MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow, unit: " W"),
                 MonitorMetric(name: "time-remaining", value: timeRemaining.map { "\($0)" } ?? "--", numericValue: timeRemaining.map(Double.init)),
+                MonitorMetric(name: "pd-contract", value: smart.pdContract ?? "--"),
+                MonitorMetric(name: "input-telemetry", value: smart.inputTelemetry ?? "--"),
+                MonitorMetric(name: "input-voltage", value: smart.inputVoltageVolts.map { String(format: "%.2f V", $0) } ?? "--", numericValue: smart.inputVoltageVolts, unit: " V"),
+                MonitorMetric(name: "input-current", value: smart.inputCurrentAmps.map { String(format: "%.2f A", $0) } ?? "--", numericValue: smart.inputCurrentAmps, unit: " A"),
+                MonitorMetric(name: "not-charging-reason", value: smart.notChargingReason.map(String.init) ?? "--", numericValue: smart.notChargingReason.map(Double.init)),
+                MonitorMetric(name: "charging-allowed", value: smart.chargingAllowed.map(String.init) ?? "--", numericValue: smart.chargingAllowed.map(Double.init)),
                 // 展开区明细网格新增项:转换损耗/充电限制/低电量模式。
                 // charge-limit 为尽力读取(IORegistry 无该键的机型显示"--");
                 // low-power-mode 存 on/off 原值,由视图层 localizedMetricValue 本地化。
@@ -150,7 +171,19 @@ final class BatterySampler: MonitorSampler {
     /// IOPS 失败时电源状态不可信(统计过滤,避免电池供电被误记成 AC)。
     private func externalPowerModule(isPlaceholder: Bool) -> MonitorModule {
         let adapterWatts = externalAdapterWatts()
+        // 桌面机型无 AppleSmartBattery, PowerTelemetry 恒为 nil;
+        // Direct 版由 SMC 补充:优先取 PSTR(整机负载),缺失时以 PDTR(DC 输入)作为负载的近似兜底。
+        // 输入轨 powerInWatts 仅由 PDTR 实测填充,无真实读数时保持 nil,绝不用负载反向伪造输入。
+        #if DISPLAY_CONTROL
         let powerWatts = powerTelemetryWatts()
+            ?? smcReader?.systemPower()
+            ?? smcReader?.dcInputPower()
+        let powerInWatts = smcReader?.dcInputPower()
+        #else
+        let powerWatts = powerTelemetryWatts()
+        let powerInWatts: Double? = nil
+        #endif
+        let pdContract = externalPDContract()
         return MonitorModule(
             kind: .battery,
             value: 100,
@@ -159,7 +192,9 @@ final class BatterySampler: MonitorSampler {
                 MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.acPower),
                 MonitorMetric(name: "status", value: "ac-power"),
                 MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
-                MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W")
+                MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W"),
+                MonitorMetric(name: "power-in", value: wattString(powerInWatts), numericValue: powerInWatts, unit: " W"),
+                MonitorMetric(name: "pd-contract", value: pdContract ?? "--")
             ],
             samples: seedSamples(100),
             isPlaceholder: isPlaceholder
@@ -215,7 +250,8 @@ final class BatterySampler: MonitorSampler {
         // 根节点能读到时走 26 原路径；读不到时回退到合并后的 BatteryData，覆盖 27。
         // 参考 docs/stats 的 Modules/Battery/readers.swift —— Stats 在 27 下仍能正常显示，
         // 因为它的容差更大并直接读 BatteryData 字典。
-        let batteryData = collectBatteryData(service)
+        let batteryScan = collectBatteryDataAndCellVoltages(service)
+        let batteryData = batteryScan.merged
         let lookupDouble: (String) -> Double? = { [self] key in
             doubleRegistryValue(service, key) ?? doubleValue(batteryData[key])
         }
@@ -259,8 +295,16 @@ final class BatterySampler: MonitorSampler {
             nil as Double?
         }
 
+        let designCycles = lookupInt("DesignCycleCount9C")
+        let pdContract = adapterPDContract(service)
+        let telemetry = adapterInputTelemetry(service)
+        let notChargingReason = notChargingReason(service)
+        let chargingAllowed = ipdChargingAllowed(service)
+        let cellVoltages = batteryScan.cellVoltages
+
         return SmartBatteryInfo(
             cycleCount: cycleCount,
+            designCycleCount: designCycles,
             healthPercent: health,
             batteryPowerWatts: batteryWatts,
             adapterWatts: adapterWatts,
@@ -274,8 +318,131 @@ final class BatterySampler: MonitorSampler {
             voltageVolts: voltage.map { $0 / 1_000 },
             amperageMilliamps: amperage,
             remainingCapacitymAh: remainingCapacity,
-            fullChargeCapacitymAh: fullChargeCapacity
+            fullChargeCapacitymAh: fullChargeCapacity,
+            pdContract: pdContract,
+            inputTelemetry: telemetry?.text,
+            inputVoltageVolts: telemetry?.volts,
+            inputCurrentAmps: telemetry?.amps,
+            notChargingReason: notChargingReason,
+            chargingAllowed: chargingAllowed,
+            cellVoltages: cellVoltages
         )
+    }
+
+    /// 循环数展示:格式化为当前循环次数。
+    func cycleCountString(_ current: Int?, design: Int? = nil) -> String {
+        guard let current else { return "--" }
+        return "\(current)"
+    }
+
+    /// 多电芯电压平衡度度量:遍历子节点 CellVoltage,计算各电芯极差并给出健康评估。
+    func cellBalanceMetric(_ cellVoltages: [Int]) -> (text: String, delta: Int)? {
+        guard cellVoltages.count >= 2,
+              let minV = cellVoltages.min(),
+              let maxV = cellVoltages.max() else {
+            return nil
+        }
+        let delta = maxV - minV
+        let ratingKey: String = {
+            switch delta {
+            case 0...10: return "cell-balance.rating.excellent"
+            case 11...30: return "cell-balance.rating.good"
+            case 31...60: return "cell-balance.rating.fair"
+            default: return "cell-balance.rating.unbalanced"
+            }
+        }()
+        let rating = String(localized: String.LocalizationValue(ratingKey))
+        return (text: "Δ\(delta) mV (\(rating))", delta: delta)
+    }
+
+    /// 适配器握手档位(PD Contract):优先读取当前选中的 UsbHvcMenu 档位,回退至当前电压电流。
+    private func adapterPDContract(_ service: io_service_t) -> String? {
+        if let details = IORegistryEntryCreateCFProperty(service, "AdapterDetails" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any],
+           let contract = parsePDContract(details) {
+            return contract
+        }
+        return externalPDContract()
+    }
+
+    private func externalPDContract() -> String? {
+        guard let details = IOPSCopyExternalPowerAdapterDetails()?.takeRetainedValue() as? [String: Any] else {
+            return nil
+        }
+        return parsePDContract(details)
+    }
+
+    func parsePDContract(_ details: [String: Any]) -> String? {
+        if let hvcIndex = details["UsbHvcHvcIndex"] as? Int,
+           let menu = details["UsbHvcMenu"] as? [[String: Any]] {
+            let selected = menu.first(where: { ($0["Index"] as? Int) == hvcIndex })
+                ?? (hvcIndex >= 0 && hvcIndex < menu.count ? menu[hvcIndex] : nil)
+            if let selected,
+               let maxMv = doubleValue(selected["MaxVoltage"]), maxMv > 0,
+               let maxMa = doubleValue(selected["MaxCurrent"]), maxMa > 0 {
+                let v = maxMv / 1_000.0
+                let a = maxMa / 1_000.0
+                let w = doubleValue(details["Watts"]) ?? (v * a)
+                return formatPDContract(volts: v, amps: a, watts: w)
+            }
+        }
+
+        if let voltMv = doubleValue(details["AdapterVoltage"]), voltMv > 0,
+           let currMa = doubleValue(details["Current"]), currMa > 0 {
+            let v = voltMv / 1_000.0
+            let a = currMa / 1_000.0
+            let w = doubleValue(details["Watts"]) ?? (v * a)
+            return formatPDContract(volts: v, amps: a, watts: w)
+        }
+
+        return nil
+    }
+
+    func formatPDContract(volts: Double, amps: Double, watts: Double?) -> String {
+        let vStr = (volts.truncatingRemainder(dividingBy: 1) == 0)
+            ? String(format: "%.0fV", volts)
+            : String(format: "%.1fV", volts)
+        let aStr = (amps.truncatingRemainder(dividingBy: 1) == 0)
+            ? String(format: "%.0fA", amps)
+            : ((amps * 10).truncatingRemainder(dividingBy: 1) == 0
+                ? String(format: "%.1fA", amps)
+                : String(format: "%.2fA", amps))
+        if let watts, watts > 0 {
+            return "\(vStr) / \(aStr) (\(Int(watts.rounded()))W)"
+        }
+        return "\(vStr) / \(aStr)"
+    }
+
+    /// 适配器实测输入遥测:PowerTelemetryData.SystemVoltageIn / SystemCurrentIn。
+    private func adapterInputTelemetry(_ service: io_service_t) -> (volts: Double, amps: Double, text: String)? {
+        guard let pt = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any],
+              let vMv = doubleValue(pt["SystemVoltageIn"]), vMv > 0,
+              let aMa = doubleValue(pt["SystemCurrentIn"]) else {
+            return nil
+        }
+        let v = vMv / 1_000.0
+        let a = abs(aMa) / 1_000.0
+        let text = String(format: "%.2f V · %.2f A", v, a)
+        return (volts: v, amps: a, text: text)
+    }
+
+    /// 停充原因代码:ChargerData.NotChargingReason。
+    private func notChargingReason(_ service: io_service_t) -> Int? {
+        guard let cd = IORegistryEntryCreateCFProperty(service, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any] else {
+            return nil
+        }
+        return intValue(cd["NotChargingReason"])
+    }
+
+    /// 固件充电使能状态:PowerDistribution.IPDChargingAllowed (0 = 固件掐断充电)。
+    private func ipdChargingAllowed(_ service: io_service_t) -> Int? {
+        guard let pd = IORegistryEntryCreateCFProperty(service, "PowerDistribution" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any] else {
+            return nil
+        }
+        return intValue(pd["IPDChargingAllowed"])
     }
 
     /// 电池端电压(V):IORegistry Voltage 为 mV。
@@ -463,14 +630,27 @@ final class BatterySampler: MonitorSampler {
 ///
 /// 合并策略：先序遍历，遇到先来的键不覆盖（即根节点优先）。这样 26 上等价于原行为，
 /// 27 上则能用子节点的值补全根节点缺失的字段。
-private func collectBatteryData(_ root: io_registry_entry_t) -> [String: Any] {
+private struct BatteryDataScan {
     var merged: [String: Any] = [:]
+    var cellVoltages: [Int] = []
+}
+
+/// 递归收集整棵 AppleSmartBattery 子树中的 BatteryData 并集与独立电芯读数。
+///
+/// 单次先序遍历完成两项工作：
+/// 1. 跨节点合并字段（macOS 27 子节点补全根节点）；
+/// 2. 收集各 AppleSmartBatteryBank 子节点的 CellVoltage (mV)，避免每秒重复遍历 IORegistry。
+private func collectBatteryDataAndCellVoltages(_ root: io_registry_entry_t) -> BatteryDataScan {
+    var scan = BatteryDataScan()
 
     func walk(_ entry: io_registry_entry_t) {
         if let dict = IORegistryEntryCreateCFProperty(entry, "BatteryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any] {
-            for (key, value) in dict where merged[key] == nil {
-                merged[key] = value
+            for (key, value) in dict where scan.merged[key] == nil {
+                scan.merged[key] = value
+            }
+            if let cv = intValue(dict["CellVoltage"]), cv > 0 {
+                scan.cellVoltages.append(cv)
             }
         }
         var iterator: io_iterator_t = 0
@@ -485,11 +665,12 @@ private func collectBatteryData(_ root: io_registry_entry_t) -> [String: Any] {
     }
 
     walk(root)
-    return merged
+    return scan
 }
 
 private struct SmartBatteryInfo {
     var cycleCount: Int?
+    var designCycleCount: Int?
     var healthPercent: Double?
     var batteryPowerWatts: Double?
     var adapterWatts: Double?
@@ -504,4 +685,11 @@ private struct SmartBatteryInfo {
     var amperageMilliamps: Double?
     var remainingCapacitymAh: Int?
     var fullChargeCapacitymAh: Int?
+    var pdContract: String?
+    var inputTelemetry: String?
+    var inputVoltageVolts: Double?
+    var inputCurrentAmps: Double?
+    var notChargingReason: Int?
+    var chargingAllowed: Int?
+    var cellVoltages: [Int] = []
 }

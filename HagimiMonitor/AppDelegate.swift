@@ -42,6 +42,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 反馈,这里优先呈现设置窗口。返回 false:reopen 意图已由设置窗口承接,
     /// 无需系统再走"恢复隐藏窗口"的默认路径。
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        if PanelMotionExperiment.enabled {
+            fluidPanelController.presentAnimationPrototype()
+            return false
+        }
         SettingsWindowPresenter.open()
         return false
     }

@@ -139,6 +139,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "system", title: String(localized: "metric.cpu.system"), isDefault: true),
                 MetricSwitch(id: "user", title: String(localized: "metric.cpu.user"), isDefault: true),
                 MetricSwitch(id: "idle", title: String(localized: "metric.cpu.idle"), isDefault: true),
+                MetricSwitch(id: "process-count", title: String(localized: "metric.cpu.process-count"), isDefault: true),
                 MetricSwitch(id: "uptime", title: String(localized: "metric.cpu.uptime"), isDefault: true),
                 MetricSwitch(id: "thermal-pressure", title: String(localized: "metric.cpu.thermal-pressure"), isDefault: true),
                 MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),
@@ -185,6 +186,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true),
                 MetricSwitch(id: "voltage", title: String(localized: "metric.battery.voltage"), isDefault: true),
                 MetricSwitch(id: "current", title: String(localized: "metric.battery.current"), isDefault: true),
+                MetricSwitch(id: "cell-balance", title: String(localized: "metric.battery.cell-balance"), isDefault: true),
                 // 剩余/满充容量合并为单一开关(展示为「剩余 / 满充 mAh」整行格)。
                 MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true),
             ]
@@ -432,13 +434,6 @@ final class MonitorStore: ObservableObject {
     /// 由 `beginExpansionAnimation` 在每次展开/收起起点置位。
     private var expansionAnimationDeadline = Date.distantPast
 
-    /// 各来源面板当前展开的模块集合。进程列表只在对应模块行展开时才渲染,故仅对
-    /// 展开的类目采样;面板打开时默认全部折叠,可避免「一开面板就构建大量进程
-    /// 图标」造成的内存/CPU 峰值。例外:网络会在面板打开时预热一次基线快照
-    /// (见 prewarmProcessBaselines);其余增量型在展开时重建基线(见
-    /// updateExpandedKinds),首帧从占位符起步、短窗口出数。
-    private var expandedKindsBySource: [PanelKind: Set<MonitorKind>] = [:]
-
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
     private var timerCancellable: AnyCancellable?
@@ -449,8 +444,8 @@ final class MonitorStore: ObservableObject {
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
-    /// nettop 单次耗时 1~2s,单独一条串行队列,避免阻塞磁盘/GPU 等毫秒级快照的
-    /// 出数。无锁前提不变:每一类的全局快照仍只被固定的一条队列读写。
+    /// nettop 单次实测数十~数百毫秒,单独一条串行队列,避免阻塞磁盘/GPU 等
+    /// 毫秒级快照的出数。无锁前提:队列上的每个游标快照只被这一条队列读写。
     private let nettopQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.nettop-sample", qos: .utility)
     private var cancellables: Set<AnyCancellable> = []
     private var isSampling = false
@@ -471,8 +466,9 @@ final class MonitorStore: ObservableObject {
     private let bluetoothSampler = BluetoothBatterySampler()
     /// 当前已连接蓝牙设备。由 bluetoothSampler.$devices Combine sink 同步更新。
     @Published private(set) var bluetoothDevices: [BluetoothDeviceInfo] = []
-    /// 蓝牙控制器是否开启。由 bluetoothSampler.$controllerOn sink 同步更新。
-    @Published private(set) var bluetoothControllerOn = false
+    /// 蓝牙控制器三态。由 bluetoothSampler.$controllerOn sink 同步更新;
+    /// unknown(数据源尚未确认)时面板保留蓝牙占位行,只有 off 才移除行。
+    @Published private(set) var bluetoothControllerState: BluetoothControllerState = .unknown
 
     init() {
         let settings = MonitorSettings()
@@ -499,9 +495,12 @@ final class MonitorStore: ObservableObject {
 
         startPowerSourceMonitoring()
 
-        // 进程采样定时器:面板可见时启动,不可见时暂停。
-        // 统一为单个定时器串行驱动 4 类采样,避免多个独立定时器导致的密集触发。
-        // init 时不采样,首次采样在 panelDidAppear() 中触发。
+        // 进程采样定时器自 init 常驻:TOP 列表在打开面板/展开行之前即绑好,
+        // 展开即刻落真实数据,无需等基线建立。统一为单个定时器串行驱动
+        // 各类目采样,避免多个独立定时器导致的密集触发;采样在后台串行队列,
+        // 沙盒版全程进程内读,直连版每周期另 spawn 一轮 ps/nettop。
+        startProcSampleTimer()
+        refreshProcesses(for: enabledProcessKinds(), allowClear: false)
 
         settings.$memoryShowSystemProcesses
             .dropFirst()
@@ -571,9 +570,9 @@ final class MonitorStore: ObservableObject {
 
         bluetoothSampler.$controllerOn
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] isOn in
+            .sink { [weak self] state in
                 guard let self else { return }
-                settleAfterExpansion { self.bluetoothControllerOn = isOn }
+                settleAfterExpansion { self.bluetoothControllerState = state }
             }
             .store(in: &cancellables)
 
@@ -609,10 +608,16 @@ final class MonitorStore: ObservableObject {
 
     /// 统计专用 TOP 应用采样定时器(面板无关常驻):60s 一次、始终包含系统进程,
     /// 结果交 StatisticsRecorder 聚合落 SwiftData。与面板进程采样共用同一条串行队列;
-    /// 磁盘增量走独立游标,保证 60s 统计窗口不被面板 5s 采样截断。
+    /// 增量类目(磁盘/网络/GPU 与沙盒 CPU)各走独立游标,保证 60s 统计窗口不被面板 2s 采样截断。
     /// 随「数据统计」开关启停:关闭时不做进程采样,也不积累分钟累加器。
     private var statsProcTimer: AnyCancellable?
     private let statsDiskCursor = DiskSnapshotCursor()
+    private let statsGPUCursor = GPUDeltaCursor()
+    #if DIRECT_DISTRIBUTION
+    private let statsNetworkCursor = NetworkDeltaCursor()
+    #else
+    private let statsCPUCursor = CPUDeltaCursor()
+    #endif
 
     private var statisticsSamplingActive = false
 
@@ -663,13 +668,22 @@ final class MonitorStore: ObservableObject {
 
     private func sampleProcessesForStatistics() {
         let recorder = statisticsRecorder
+        let gpuCursor = statsGPUCursor
         #if DIRECT_DISTRIBUTION
         let diskCursor = statsDiskCursor
+        let networkCursor = statsNetworkCursor
+        #else
+        let cpuCursor = statsCPUCursor
         #endif
         let sampleFast: () -> Void = {
+            #if DIRECT_DISTRIBUTION
+            // 直连版 CPU 来自 ps,无基线,与面板不存在共享问题。
             let cpu = enrichCPU(sampleTopCPUProcesses(limit: 12, includeSystemProcesses: true))
+            #else
+            let cpu = enrichCPU(cpuCursor.sample(limit: 12, includeSystemProcesses: true))
+            #endif
             let memory = enrich(sampleTopMemoryProcesses(includeSystemProcesses: true))
-            let gpu = enrichGPU(sampleTopGPUProcesses(limit: 12, includeSystemProcesses: true))
+            let gpu = enrichGPU(gpuCursor.sample(limit: 12, includeSystemProcesses: true))
             #if DIRECT_DISTRIBUTION
             let disk = enrichDisk(diskCursor.sampleTopDiskProcesses(includeSystemProcesses: true))
             #else
@@ -681,9 +695,9 @@ final class MonitorStore: ObservableObject {
         }
         procSampleQueue.async(execute: sampleFast)
         #if DIRECT_DISTRIBUTION
-        // nettop 单次 1-2s,独占 nettopQueue;速率为窗口均值,×60s 近似为分钟字节量
+        // nettop 独占 nettopQueue,单次实测数十~数百毫秒;速率为窗口均值,×60s 近似为分钟字节量
         let sampleNetwork: () -> Void = {
-            let network = enrichNetwork(sampleTopNetworkProcesses(includeSystemProcesses: true))
+            let network = enrichNetwork(networkCursor.sample(limit: 5, includeSystemProcesses: true))
             DispatchQueue.main.async {
                 recorder.recordProcesses(cpu: [], memory: [], gpu: [], network: network, disk: [], at: Date())
             }
@@ -702,7 +716,7 @@ final class MonitorStore: ObservableObject {
         panelDidDisappear(.menuBar)
     }
 
-    /// 面板出现时调用:记录来源,仅在集合「空→非空」时启动进程采样。
+    /// 面板出现时调用:记录来源。进程采样自 init 常驻,不随面板可见性启停。
     func panelDidAppear(_ kind: PanelKind) {
         let wasEmpty = visiblePanelKinds.isEmpty
         visiblePanelKinds.insert(kind)
@@ -711,59 +725,15 @@ final class MonitorStore: ObservableObject {
         bluetoothSampler.activateBLE()
         if wasEmpty {
             isPanelVisible = true
-            // 列表已在隐藏时清空;此处首刷仅在配置了「默认展开」时非空
-            // (视图在隐藏期重建 expandedKindsBySource),同样弃掉陈旧基线,
-            // 防长窗口均值落上首帧。
-            resetIncrementalBaselines(for: expandedProcessKinds)
-            refreshProcesses(for: expandedProcessKinds, allowClear: false)
-            prewarmProcessBaselines()
-            startProcSampleTimer()
-            // FanSampler 已在 init 中常驻启动(支持后台告警),此处无需再 start。
         }
     }
 
-    /// 面板消失时调用:移除来源,仅在集合「非空→空」时停止进程采样。
+    /// 面板消失时调用:移除来源。TOP 列表与采样常驻,隐藏期不清空、不停表,
+    /// 下次打开/展开即刻有数据。
     func panelDidDisappear(_ kind: PanelKind) {
         visiblePanelKinds.remove(kind)
-        expandedKindsBySource[kind] = nil
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
-            stopProcSampleTimer()
-            // 清空 TOP 列表:上次会话的陈旧榜单不残留,下次展开从占位符起步,
-            // 避免旧数据闪现后被新采样整表替换。
-            topMemoryProcesses = []
-            topCPUProcesses = []
-            topGPUProcesses = []
-            topDiskProcesses = []
-            topNetworkProcesses = []
-            // FanSampler 常驻运行(后台告警),面板关闭时不停止。
-        }
-    }
-
-    /// 所有可见面板展开模块的并集。进程采样只覆盖这个集合。
-    private var expandedProcessKinds: Set<MonitorKind> {
-        expandedKindsBySource.values.reduce(into: Set<MonitorKind>()) { $0.formUnion($1) }
-    }
-
-    /// 重置指定类目的增量型 TOP 基线:采样前的陈旧基线(来源可能是上次
-    /// 面板可见期、统计采样或网络预热)弃掉重建,重置后首拍只建基线返空,
-    /// 首帧不再出现长窗口均值。基线快照只被固定采样队列读写,重置同队列投递。
-    /// 磁盘/GPU/沙盒 CPU 采样毫秒级,无条件重置;nettop 单次 1~2s,基线年龄
-    /// < 5s 时复用以保出数速度,更陈旧则弃掉走链式补采重建。
-    private func resetIncrementalBaselines(for kinds: Set<MonitorKind>) {
-        if !kinds.intersection([.storage, .gpu, .cpu]).isEmpty {
-            procSampleQueue.async {
-                if kinds.contains(.storage) { resetDiskProcessBaseline() }
-                if kinds.contains(.gpu) { resetGPUProcessBaseline() }
-                #if !DIRECT_DISTRIBUTION
-                if kinds.contains(.cpu) { resetCPUProcessBaseline() }
-                #endif
-            }
-        }
-        if kinds.contains(.network) {
-            nettopQueue.async {
-                if networkProcessBaselineAge() >= 5 { resetNetworkProcessBaseline() }
-            }
         }
     }
 
@@ -808,49 +778,6 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    /// 面板上报其当前展开的模块集合。新增展开项会立即触发一次针对性采样,
-    /// 结果命中动画窗口时推迟到收尾应用(见 deferUntilExpansionSettles);
-    /// 集合收缩时对应类目自然停采(下一轮定时器不再覆盖它)。
-    func updateExpandedKinds(_ kinds: Set<MonitorKind>, for source: PanelKind) {
-        let previous = expandedProcessKinds
-        expandedKindsBySource[source] = kinds
-        let newlyExpanded = expandedProcessKinds.subtracting(previous)
-        guard isPanelVisible, !newlyExpanded.isEmpty else { return }
-        resetIncrementalBaselines(for: newlyExpanded)
-        // 展开触发的采样不允许用空结果清空列表(allowClear=false):增量型首采
-        // (网络建基线/磁盘窗口过短)常返空,若直接覆盖,用户会看到旧数据一闪
-        // 后被清成空白、再硬等补采。旧数据保留到真实新数据或定时周期替换。
-        refreshProcesses(for: newlyExpanded, allowClear: false) { [weak self] emptyKinds in
-            guard let self else { return }
-            // 网络:首采的 nettop 仅建立基线(因无前一快照,增量为空),完成后立即
-            // 链式再采一次即可算出增量,避免干等下一个 5s 定时。不用固定延时是
-            // 因为 nettop 单次耗时 1-2s 不确定,按完成回调链式接力最稳。
-            // 链式条件看「首采是否返空」而非已发布列表:列表里可能留着上次的旧数据。
-            guard newlyExpanded.contains(.network),
-                  emptyKinds.contains(.network),
-                  self.isPanelVisible,
-                  self.expandedProcessKinds.contains(.network) else { return }
-            self.refreshProcesses(for: [.network], allowClear: false)
-        }
-        // 磁盘/GPU 读写量是两次快照的增量:首采只建基线、窗口过短时返空。两者
-        // 采样本身极快,故用 0.6s 定时补采(凑出一个测量窗口),把 TOP 从「干等 5s
-        // 定时」缩短到 ~0.6s 出数。沙盒版 CPU 列表同为差分型,一并补采。
-        var incrementalKinds: [MonitorKind] = [.storage, .gpu]
-        #if !DIRECT_DISTRIBUTION
-        incrementalKinds.append(.cpu)
-        #endif
-        if !Set(incrementalKinds).isDisjoint(with: newlyExpanded) {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in
-                guard let self, self.isPanelVisible else { return }
-                let followUp = Set(incrementalKinds.filter {
-                    newlyExpanded.contains($0) && self.expandedProcessKinds.contains($0)
-                })
-                guard !followUp.isEmpty else { return }
-                self.refreshProcesses(for: followUp, allowClear: false)
-            }
-        }
-    }
-
     /// 当前设置里已开启进程列表的类目集合。
     /// GPU 列表的数据源是 IORegistry 只读属性(AGX user client 的 AppUsage);
     /// CPU/内存列表走 sysctl + proc_pidinfo(TASKINFO),均被沙盒放行,
@@ -874,65 +801,36 @@ final class MonitorStore: ObservableObject {
         expanded.intersection(enabled)
     }
 
-    /// 启动进程采样定时器(5 秒间隔)。
+    /// 启动进程采样定时器(2 秒间隔)。
     private func startProcSampleTimer() {
         guard procSampleTimer == nil else { return }
-        procSampleTimer = Timer.publish(every: 5, on: .main, in: .common)
+        procSampleTimer = Timer.publish(every: 2, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 self?.refreshAllProcesses()
             }
     }
 
-    /// 暂停进程采样定时器。
-    private func stopProcSampleTimer() {
-        procSampleTimer?.cancel()
-        procSampleTimer = nil
-    }
-
-    /// 刷新当前展开且开启的进程列表。由 5 秒定时器驱动;未展开任何模块时为空转。
+    /// 刷新设置里开启的进程列表(不论是否展开)。由 2 秒定时器驱动。
     /// 定时周期拥有完整测量窗口,结果权威,允许用空结果清列表(真实空闲时列表
-    /// 应诚实变空);展开/开面板触发的一次性采样则另行禁用清空(见调用处)。
+    /// 应诚实变空);init 首采一次性禁用清空(见调用处)。
     private func refreshAllProcesses() {
-        refreshProcesses(for: expandedProcessKinds)
-    }
-
-    /// 面板打开时为增量型 TOP 采样预热基线快照。仅剩网络:磁盘/GPU/沙盒 CPU
-    /// 展开时会重建基线(见 updateExpandedKinds),预热对它们已无意义。
-    /// 基线是跨调用持久的全局快照:提前建好后,用户展开时首次采样即可
-    /// 算出增量——网络从「基线+链式补采 2~4s」缩短到单次 nettop(1~2s);
-    /// 基线窗口=打开面板以来的时长,速率也更准。
-    /// 这是对「按需采样」原则的有限放宽:仅面板可见时触发一次、只覆盖设置里
-    /// 开启了 TOP 列表的类目、丢弃返回值(不 enrich、不建图标),后台常驻仍零开销。
-    private func prewarmProcessBaselines() {
-        let enabled = enabledProcessKinds()
-        // 已展开的类目走 updateExpandedKinds 的正常采样链路(含链式补采),无需预热。
-        let expanded = expandedProcessKinds
-        guard enabled.contains(.network), !expanded.contains(.network) else { return }
-        nettopQueue.async {
-            _ = sampleTopNetworkProcesses()
-        }
+        refreshProcesses(for: enabledProcessKinds())
     }
 
     /// 对指定类目采样(仅限其中设置已开启的列表)。快速采样(磁盘/GPU/CPU/内存)
-    /// 在 procSampleQueue、nettop 在 nettopQueue 各自串行执行(串行是每类全局
+    /// 在 procSampleQueue、nettop 在 nettopQueue 各自串行执行(串行是各游标
     /// 快照无锁安全的前提),全部完成后回主线程更新 @Published 属性——命中
     /// 展开/收起动画窗口时推迟到弹簧收尾(见 deferUntilExpansionSettles)。
-    /// 只采「展开 ∩ 设置开启」的类目,避免为不可见的列表 spawn ps/nettop 子进程、构建图标。
-    /// allowClear=false 时空结果不覆盖已有列表(见 updateExpandedKinds);
-    /// completion 回传本次采样返空的类目,供链式补采判断。
+    /// allowClear=false 时空结果不覆盖已有列表(init 首采用)。
     private func refreshProcesses(
         for kinds: Set<MonitorKind>,
-        allowClear: Bool = true,
-        completion: ((_ emptyKinds: Set<MonitorKind>) -> Void)? = nil
+        allowClear: Bool = true
     ) {
         let enabled = enabledProcessKinds()
 
         let active = Self.activeProcessKinds(expanded: kinds, enabled: enabled)
-        guard !active.isEmpty else {
-            completion?([])
-            return
-        }
+        guard !active.isEmpty else { return }
 
         let memoryIncludeSystem = settings.memoryShowSystemProcesses
         let cpuIncludeSystem = settings.cpuShowSystemProcesses
@@ -947,12 +845,12 @@ final class MonitorStore: ObservableObject {
         var diskProcesses: [TopDiskProcess]?
         var networkProcesses: [TopNetworkProcess]?
 
-        // 只采样当前可见(展开)且已开启的列表。注意:磁盘/网络/GPU 的 TOP 采样各自
-        // 维护一份差分快照以计算增量(磁盘按消费方各持一个 DiskSnapshotCursor:
-        // 面板 panelDiskCursor / 统计 statsDiskCursor;网络/GPU 为文件级全局快照
-        // previousNetworkSnapshot / previousGPUSnapshot,无锁),其线程安全依赖
-        // 「每份快照只被固定一条串行队列读写」——磁盘/GPU 在 procSampleQueue、
-        // 网络在 nettopQueue,并发化任一条会引入难复现的数据竞争。
+        // 采样设置里已开启的列表(不论是否展开)。注意:增量类目(磁盘/网络/GPU
+        // 与沙盒 CPU)的 TOP 采样各自维护差分快照计算增量,快照按消费方分离为游标、每消费方各持
+        // 一个实例(面板 panel*Cursor / 统计 stats*Cursor,磁盘为 DiskSnapshotCursor;
+        // 沙盒 CPU 为 CPUDeltaCursor;网络/GPU 为 NetworkDeltaCursor/GPUDeltaCursor),
+        // 其线程安全依赖「每份快照只被固定一条串行队列读写」——CPU/磁盘/GPU 在
+        // procSampleQueue、网络在 nettopQueue,并发化任一条会引入难复现的数据竞争。
         if active.contains(.memory) {
             group.enter()
             procSampleQueue.async {
@@ -1004,13 +902,10 @@ final class MonitorStore: ObservableObject {
         group.notify(queue: .main) { [weak self] in
             guard let self else { return }
             self.deferUntilExpansionSettles {
-                // 面板已隐藏:列表在隐藏时清空,在途或推迟落地的陈旧结果
-                // 不得复活榜单(推迟最长可达一个动画窗口)。
-                guard self.isPanelVisible else { return }
-                var emptyKinds = Set<MonitorKind>()
+                // 采样常驻:结果不论面板可见与否都发布,隐藏期列表也保持
+                // 鲜活,展开即刻渲染最近一期常驻结果。
                 func publish<T>(_ kind: MonitorKind, _ result: [T]?, assign: ([T]) -> Void) {
                     guard let result else { return }
-                    if result.isEmpty { emptyKinds.insert(kind) }
                     if !result.isEmpty || allowClear { assign(result) }
                 }
                 publish(.memory, memoryProcesses) { self.topMemoryProcesses = $0 }
@@ -1018,14 +913,12 @@ final class MonitorStore: ObservableObject {
                 publish(.gpu, gpuProcesses) { self.topGPUProcesses = $0 }
                 publish(.storage, diskProcesses) { self.topDiskProcesses = $0 }
                 publish(.network, networkProcesses) { self.topNetworkProcesses = $0 }
-                completion?(emptyKinds)
             }
         }
     }
 
-    /// 设置变化时刷新(仅面板可见时)。
+    /// 设置变化时立即重采一期;采样常驻,不受面板可见性限制。
     private func refreshAllProcessesIfNeeded() {
-        guard isPanelVisible else { return }
         refreshAllProcesses()
     }
 
@@ -1301,26 +1194,32 @@ final class MonitorStore: ObservableObject {
 
     /// 把 BluetoothBatterySampler 的输出合成成 .bluetooth MonitorModule,插入到
     /// allModules 的电池之后(面板中落在电源行与显示器区之间):
-    /// - 蓝牙关闭:不插入模块,面板行消失
+    /// - 蓝牙确认关闭:不插入模块,面板行消失
     /// - 蓝牙开启即常驻(无连接设备时显示 0 台,与风扇「无硬件才隐藏」的
     ///   门控不同:蓝牙开关是瞬态,隐藏会让用户误以为功能消失)
+    /// - 数据源尚未确认(unknown):保留占位行,与其他模块启动期占位一致;
+    ///   「尚未确认」不是「已关闭」,按关闭处理会让行在启动竞态下消失又出现
     /// - summary = 设备数,value = 上报电量设备中的最低值(均未上报时为 0,
     ///   severity 已对无电量情形判 calm 不误报)
     private func applyBluetoothModule() {
         allModules.removeAll { $0.kind == .bluetooth }
-        guard bluetoothControllerOn else { return }
+        guard bluetoothControllerState != .off else { return }
 
+        let isConfirmed = bluetoothControllerState == .on
         let lowestLevel = bluetoothDevices.compactMap(\.batteryLevel).min()
-        let summary = String(localized: "bluetooth.summary.count \(bluetoothDevices.count)")
 
         var bluetoothModule = MonitorModule(
             kind: .bluetooth,
-            value: Double(lowestLevel ?? 0),
-            summary: summary,
+            value: isConfirmed ? Double(lowestLevel ?? 0) : 0,
+            summary: isConfirmed
+                ? String(localized: "bluetooth.summary.count \(bluetoothDevices.count)")
+                : "--",
             metrics: [],
             samples: []
         )
-        bluetoothModule.bluetoothDevices = bluetoothDevices
+        if isConfirmed {
+            bluetoothModule.bluetoothDevices = bluetoothDevices
+        }
 
         if let batteryIdx = allModules.firstIndex(where: { $0.kind == .battery }) {
             allModules.insert(bluetoothModule, at: batteryIdx + 1)

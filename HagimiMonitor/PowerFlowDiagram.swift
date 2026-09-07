@@ -15,7 +15,7 @@ struct PowerFlowDiagram: View {
     /// 流光动画门控:仅当行展开且面板可见时为 true。
     let animate: Bool
 
-    private static let nodeWidth: CGFloat = 104
+    private static let nodeWidth: CGFloat = 90
     private static let nodeHeight: CGFloat = 46
     private static let stubHeight: CGFloat = 16
     private static let barHeight: CGFloat = 38
@@ -55,7 +55,7 @@ struct PowerFlowDiagram: View {
             }
 
             VStack(spacing: Self.stubHeight) {
-                HStack(spacing: 36) {
+                HStack(spacing: 0) {
                     adapterNode
                     Spacer(minLength: 0)
                     systemNode
@@ -131,7 +131,7 @@ struct PowerFlowDiagram: View {
         drawLinkedBeams(&context, adapterRight: adapterRight, junction: junction,
                         systemLeft: systemLeft, time: time)
 
-        // 汇流点 ↕ 电池导管:充电绿 / 放电琥珀(适配器不足转红)/ 无流动淡线,
+        // 汇流点 ↕ 电池导管:充电绿 / 放电能量色(正常模块绿,低电琥珀,不足红)/ 无流动淡线,
         // 与水平线同一辉光语言;脉冲按流向行进(充电注入电池、放电汇入节点)。
         let stubEnd = CGPoint(x: junction.x, y: Self.nodeHeight + Self.stubHeight)
         switch flowDirection {
@@ -146,9 +146,7 @@ struct PowerFlowDiagram: View {
                           width: edgeWidth(batteryMagnitude), tailFraction: 0.3)
             }
         case .discharging:
-            let color = isInsufficient
-                ? theme.palette.severityTint(for: .critical).opacity(0.85)
-                : theme.palette.severityTint(for: .warning).opacity(0.8)
+            let color = dischargeTint
             glowSegment(&context, from: stubEnd, to: junction,
                         color: color, width: edgeWidth(batteryMagnitude), glowAlpha: 0.3)
             if let time {
@@ -175,18 +173,18 @@ struct PowerFlowDiagram: View {
     ) {
         let breath = time.map { 0.5 + 0.5 * sin($0 * .pi / 1.4) } ?? 0.5
         let color = connected ? activeTint : neutralEdge
-        let r = 5 * (1 + 0.25 * breath)
+        let r = 3.8 * (1 + 0.25 * breath)
         context.fill(
-            Path(ellipseIn: CGRect(x: junction.x - r * 3.2, y: junction.y - r * 3.2,
-                                   width: r * 6.4, height: r * 6.4)),
+            Path(ellipseIn: CGRect(x: junction.x - r * 2.6, y: junction.y - r * 2.6,
+                                   width: r * 5.2, height: r * 5.2)),
             with: .radialGradient(
-                Gradient(colors: [color.opacity(0.4 * breath + 0.1), color.opacity(0)]),
+                Gradient(colors: [color.opacity(0.35 * breath + 0.08), color.opacity(0)]),
                 center: junction,
                 startRadius: 0,
-                endRadius: r * 3.2
+                endRadius: r * 2.6
             )
         )
-        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.5, y: junction.y - 2.5, width: 5, height: 5))
+        let dot = Path(ellipseIn: CGRect(x: junction.x - 2.0, y: junction.y - 2.0, width: 4.0, height: 4.0))
         context.fill(dot, with: .color(.white.opacity(0.9 + 0.1 * breath)))
     }
 
@@ -252,11 +250,11 @@ struct PowerFlowDiagram: View {
         let d = abs(u - fJ)
         guard d < 0.10 else { return }
         let a = 1 - d / 0.10
-        let r = (4.5 + 4 * a) * 2.4
+        let r = (3.2 + 2.8 * a) * 2.2
         context.fill(
             Path(ellipseIn: CGRect(x: junction.x - r, y: junction.y - r, width: r * 2, height: r * 2)),
             with: .radialGradient(
-                Gradient(colors: [color.opacity(0.9 * a), color.opacity(0)]),
+                Gradient(colors: [color.opacity(0.85 * a), color.opacity(0)]),
                 center: junction,
                 startRadius: 0,
                 endRadius: r
@@ -339,39 +337,31 @@ struct PowerFlowDiagram: View {
                 .monitorPanelMonoFont(.footnote, weight: .semibold)
                 .foregroundStyle(theme.valueText)
                 .lineLimit(1)
-            adapterLoadBar
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 4)
         .frame(width: Self.nodeWidth, height: Self.nodeHeight)
         .background(RoundedRectangle(cornerRadius: 9).fill(theme.trackFill))
         .opacity(connected ? 1 : 0.4)
+        .help(adapterHelpText)
     }
 
-    /// 适配器额定负载率细条:实际输入 / 额定瓦数。逼近上限逐级告警色,
-    /// 直观预警「适配器不足」场景;未插电时隐藏。
-    private var adapterLoadBar: some View {
-        let load: Double = {
-            guard let powerInWatts, let rated = numericValue("adapter"), rated > 0 else { return 0 }
-            return min(1, powerInWatts / rated)
-        }()
-        let fillColor: Color = if load > 0.92 {
-            theme.palette.severityTint(for: .critical)
-        } else if load > 0.75 {
-            theme.palette.severityTint(for: .warning)
-        } else {
-            isDark ? Color.white.opacity(0.55) : Color.black.opacity(0.45)
+    /// 悬浮提示:展示 PD 握手档位与实测电压电流。
+    private var adapterHelpText: String {
+        guard connected else { return adapterLabel }
+        var parts: [String] = []
+        let contract = rawValue("pd-contract")
+        if contract != "--" {
+            parts.append(String(format: String(localized: "panel.power-flow.tooltip.pd-contract"), contract))
         }
-        return ZStack(alignment: .leading) {
-            RoundedRectangle(cornerRadius: 2)
-                .fill(Color.white.opacity(isDark ? 0.10 : 0.08))
-            RoundedRectangle(cornerRadius: 2)
-                .fill(fillColor)
-                .frame(width: load * (Self.nodeWidth - 28))
+        let telemetry = rawValue("input-telemetry")
+        if telemetry != "--" {
+            parts.append(String(format: String(localized: "panel.power-flow.tooltip.input-telemetry"), telemetry))
         }
-        .frame(height: 2.5)
-        .padding(.horizontal, 10)
-        .opacity(connected ? 1 : 0)
+        if parts.isEmpty {
+            return adapterLabel
+        }
+        return parts.joined(separator: "\n")
     }
 
     private var systemNode: some View {
@@ -402,7 +392,7 @@ struct PowerFlowDiagram: View {
             ZStack(alignment: .leading) {
                 RoundedRectangle(cornerRadius: 8)
                     .fill(barFillGradient)
-                    .frame(width: max(0, CGFloat(module.value) / 100 * geo.size.width - 4),
+                    .frame(width: max(0, CGFloat(module.value) / 100 * (geo.size.width - 4)),
                            height: geo.size.height - 4)
                     .offset(x: 2)
 
@@ -431,8 +421,29 @@ struct PowerFlowDiagram: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(theme.trackFill))
         .overlay(RoundedRectangle(cornerRadius: 10).stroke(barBorder, lineWidth: 1))
         .clipShape(RoundedRectangle(cornerRadius: 10))
+        // 顶部正中接驳端子:垂直导管由此落入电池条
+        .overlay(alignment: .top) {
+            socketTab
+        }
         // 卡标挂在裁剪层之外,顶端探出条外的部分不被裁掉。
         .overlay(limitTick)
+    }
+
+    /// 电池顶部接驳端子(Socket Tab):微型凹槽与接触片,垂直导管在此插接。
+    private var socketTab: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 1.5)
+                .fill(theme.trackFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 1.5)
+                        .stroke(barBorder, lineWidth: 1)
+                )
+            RoundedRectangle(cornerRadius: 1)
+                .fill(activeTint.opacity(flowDirection == .idle ? 0.30 : 0.70))
+                .frame(width: 8, height: 1.5)
+        }
+        .frame(width: 16, height: 4)
+        .offset(y: -2.5)
     }
 
     /// 充电上限卡标(冻结原型「方案 B 旗标」):条外上缘倒三角旗头 + 细线下探
@@ -444,7 +455,7 @@ struct PowerFlowDiagram: View {
                 LimitFlagShape()
                     .fill(isDark ? Color.white.opacity(0.68) : Color.black.opacity(0.42))
                     .frame(width: 8, height: 19)
-                    .offset(x: geo.size.width * CGFloat(limit) / 100 - 4, y: -6)
+                    .offset(x: 2 + (geo.size.width - 4) * CGFloat(limit) / 100 - 4, y: -6)
             }
         }
     }
@@ -497,11 +508,35 @@ struct PowerFlowDiagram: View {
 
     private var barEtaText: String? {
         if let eta = etaText { return eta }
-        // 真直供且无 ETA(已充满/达充电限制):展示「直供」状态语,条内信息不断档。
-        if status == "ac-power" {
-            return String(localized: "panel.power-flow.direct-supply")
+        // 仅当插电且未在充电（交流直供、达限维持或优化充电保护）时展示硬件停充原因细化说明
+        if connected && !isCharging {
+            return notChargingExplanation
         }
         return nil
+    }
+
+    /// 停充硬件原因解释:插电但未充电时的状态文案细化。
+    /// 区分「已充满直供」、「已达上限维持」、「优化电池充电保护中」与常规「直供中」。
+    private var notChargingExplanation: String {
+        let reason = numericValue("not-charging-reason").map(Int.init) ?? 0
+        let chargingAllowed = numericValue("charging-allowed").map(Int.init)
+        let limit = numericValue("charge-limit").map(Int.init)
+        let pct = Int(module.value.rounded())
+
+        // 满电直供
+        if pct >= 100 {
+            return String(localized: "panel.power-flow.fully-charged")
+        }
+        // 0x01000000 (16777216): 达限维持 (NotChargingReason bit 24 或固件不允许充电且达到电量上限)
+        if (reason & 0x01000000) != 0 || (chargingAllowed == 0 && (limit != nil && pct >= (limit! - 1))) {
+            return String(localized: "panel.power-flow.hold-limit")
+        }
+        // 其它非零停充原因: 优化电池充电或温控保护
+        if reason != 0 {
+            return String(localized: "panel.power-flow.optimized-protection")
+        }
+        // 默认交流直供
+        return String(localized: "panel.power-flow.direct-supply")
     }
 
     // MARK: 说明与迷你曲线
@@ -579,16 +614,22 @@ struct PowerFlowDiagram: View {
     }
 
     private var adapterLabel: String {
-        let base = String(localized: "panel.power-flow.adapter")
+        let base = hasBattery
+            ? String(localized: "panel.power-flow.adapter")
+            : String(localized: "battery-state.ac-power")
         let rated = rawValue("adapter")
         return rated == "--" ? base : "\(base) · \(rated)"
     }
 
     /// 适配器节点数值:未插电显「—」;插电但 SystemPowerIn 尚未由固件填出(USB-C PD
     /// 协商/遥测预热窗口)显「采集中」,而非空白或 0——如实表达「已连接、读数在路上」。
+    /// 桌面无电池机型若无遥测瓦数，回退显示交流供电状态而非停留在采集中。
     private var adapterValueText: String {
         guard connected else { return "—" }
         if let powerInWatts { return wattString(powerInWatts) }
+        if !hasBattery {
+            return String(localized: "battery-state.ac-power")
+        }
         return String(localized: "panel.power-flow.collecting")
     }
 
@@ -631,11 +672,21 @@ struct PowerFlowDiagram: View {
     /// 低电量模式染黄,低电量琥珀由电池条独立承载。
     private var chargeTint: Color { tint }
 
-    /// 连线状态色:充电用模块绿;放电用警示黄,适配器不足优先转警示红。
-    /// 「充电绿 / 放电黄 / 不足红」整条路径共享同一状态色。
+    /// 放电流向底色:电池供电是正常工况，不应默认呈现警示黄；
+    /// 仅在开启低电量模式或电量偏低(<=20%)时呈现琥珀警示色，平时保持通透健康的模块主色。
+    private var dischargeTint: Color {
+        if isInsufficient { return theme.palette.severityTint(for: .critical) }
+        if isLowPowerMode || module.value <= 20 {
+            return theme.palette.severityTint(for: .warning)
+        }
+        return tint
+    }
+
+    /// 连线状态色:整条能量流动路径的状态色。
+    /// 充电用模块绿;适配器不足转红;放电时仅低电量/低电模式转警示黄,平时保持模块绿。
     private var activeTint: Color {
         if isInsufficient { return theme.palette.severityTint(for: .critical) }
-        if flowDirection == .discharging { return theme.palette.severityTint(for: .warning) }
+        if flowDirection == .discharging { return dischargeTint }
         return tint
     }
 
@@ -660,5 +711,25 @@ struct PowerFlowDiagram: View {
 
     private func numericValue(_ name: String) -> Double? {
         module.metrics.first { $0.name == name }?.numericValue
+    }
+}
+
+/// 充电上限旗标形状:顶端倒三角旗头(底边在上、尖朝下) + 自旗头尖端下探的
+/// 细圆头竖线,单一填充色整形绘制。
+private struct LimitFlagShape: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        let headHeight: CGFloat = 5
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY + headHeight))
+        path.closeSubpath()
+        let lineWidth: CGFloat = 1.5
+        path.addRoundedRect(
+            in: CGRect(x: rect.midX - lineWidth / 2, y: rect.minY + headHeight,
+                       width: lineWidth, height: rect.height - headHeight),
+            cornerSize: CGSize(width: lineWidth / 2, height: lineWidth / 2)
+        )
+        return path
     }
 }

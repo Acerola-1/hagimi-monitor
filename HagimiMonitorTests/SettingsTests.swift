@@ -164,4 +164,20 @@ struct SettingsTests {
         #expect(MenuBarMetricFormatter.capacity(128_000_000_000) == "128G")
         #expect(MenuBarMetricFormatter.capacity(nil) == "  --")
     }
+
+    @Test func batteryCellBalanceMigratesForExistingUsers() {
+        let suiteName = "batteryCellBalanceMigratesForExistingUsers"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        // 模拟已存在老配置：存量中无 cell-balance
+        let legacyMetrics = ["health", "cycle-count", "capacity", "temperature", "voltage", "current"]
+        defaults.set(legacyMetrics, forKey: "settings.enabledMetrics.battery")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(settings.isMetricEnabled("cell-balance", for: .battery))
+        #expect(settings.isMetricEnabled("health", for: .battery))
+        #expect(defaults.bool(forKey: "settings.batteryCellBalanceMigrated"))
+    }
 }

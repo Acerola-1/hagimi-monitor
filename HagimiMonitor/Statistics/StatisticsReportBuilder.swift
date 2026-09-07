@@ -151,7 +151,7 @@ enum StatisticsReportBuilder {
     /// 模板 JS 以短键读文案;此处短键 → xcstrings 键(stats.r.*)一一映射,
     /// 两语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
     private static let stringKeys = [
-        "reportTitle", "reportSub", "metaDays", "metaGenerated",
+        "reportTitle", "reportSub", "print", "metaDays", "metaGenerated",
         "rToday", "rWeek", "rMonth", "rYear", "rAll", "selectRange",
         "kCpu", "kGpu", "kMem", "kMemPressure", "kNetDown", "kNetUp", "kDisk", "kPower",
         "kPeak", "kPeakRate", "kDiskW",
@@ -321,7 +321,7 @@ enum StatisticsReportFlow {
             do {
                 let url = try StatisticsReportBuilder.write(snapshot: snapshot, meta: meta, process: process)
                 await MainActor.run {
-                    _ = NSWorkspace.shared.open(url)
+                    ReportWindowPresenter.open(url: url)
                 }
             } catch {
                 AppLogger.settings.error("Statistics report generation failed: \(String(describing: error), privacy: .public)")

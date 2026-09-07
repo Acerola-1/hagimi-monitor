@@ -3,6 +3,17 @@ import SwiftUI
 struct ModuleSettingsView: View {
     let kind: MonitorKind
     @ObservedObject var settings: MonitorSettings
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// 与面板同源的调色板,供实时预览卡取令牌。
+    private var palette: MonitorPalette {
+        MonitorPalette(preference: settings.colorSchemePreference, colorScheme: colorScheme)
+    }
+
+    /// 内存压力主指标模式:预览行头与「压力」槽位示例随模式切换。
+    private var memoryPressureMode: Bool {
+        kind == .memory && settings.memoryPrimaryMetric == .pressure
+    }
 
     var body: some View {
         SettingsPage {
@@ -42,7 +53,22 @@ struct ModuleSettingsView: View {
                     .labelsHidden()
                 }
 
-                SettingsDivider()
+                // 实时预览卡:复刻面板行卡片,勾选变化即时反映到明细网格。
+                // 仅对有可选指标的模块展示——风扇/蓝牙无监测项目可勾,
+                // 单独行头示例没有信息量。
+                if !availableMetrics.isEmpty {
+                    SettingsDivider()
+
+                    ModuleRowPreview(
+                        kind: kind,
+                        metrics: enabledMetrics,
+                        memoryPressureMode: memoryPressureMode,
+                        showPowerFlow: kind == .battery && settings.batteryShowPowerFlow,
+                        palette: palette
+                    )
+                    .padding(.horizontal, 10)
+                    .padding(.top, 6)
+                }
 
                 LazyVGrid(columns: [
                     GridItem(.flexible(), spacing: 8),
@@ -207,6 +233,11 @@ struct ModuleSettingsView: View {
                 .padding(.vertical, 10)
                 .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
             }
+    }
+
+    /// 预览卡数据源:当前勾选的指标(顺序与面板渲染一致)。
+    private var enabledMetrics: [MetricSwitch] {
+        availableMetrics.filter { settings.isMetricEnabled($0.id, for: kind) }
     }
 
     /// 监测项目列表与面板实际显示保持一致:压力模式下面板里「压力」槽位

@@ -4,174 +4,31 @@ import CoreBluetooth
 import Combine
 import OSLog
 
-/// 蓝牙设备类别,用于面板图标映射。来源优先级:CoD(IOBluetooth)>
-/// device_minorType(system_profiler)>GAP Appearance(GATT 自报)>
-/// 名称关键词推断;均未知归 other,不猜测设备形态。
-enum BluetoothDeviceType: Equatable {
-    case mouse
-    case keyboard
-    case headphones
-    case headset
-    case gamepad
-    case trackpad
-    case speaker
-    case other
-
-    init(minorType: String?) {
-        switch minorType?.lowercased() {
-        case "mouse": self = .mouse
-        case "keyboard": self = .keyboard
-        case "headphones", "earbuds": self = .headphones
-        case "headset": self = .headset
-        case "gamepad", "joystick": self = .gamepad
-        case "trackpad": self = .trackpad
-        case "speaker": self = .speaker
-        default: self = .other
-        }
-    }
-
-    /// 蓝牙 CoD(Class of Device)映射,取 IOBluetoothDevice 的
-    /// deviceClassMajor/deviceClassMinor 字段:
-    /// - Audio/Video(major 0x04):耳机类统一归 headphones,0x08 loudspeaker
-    ///   归 speaker;
-    /// - Peripheral(major 0x05):高 2 位是键盘/指向设备格式位,低 6 位是
-    ///   子类型(0x01 joystick / 0x02 gamepad);
-    /// - 其余 major(misc/computer 等)无稳定形态信息,返回 nil。
-    static func fromClassOfDevice(major: Int, minor: Int) -> BluetoothDeviceType? {
-        switch major {
-        case 0x04:
-            return minor == 0x08 ? .speaker : .headphones
-        case 0x05:
-            switch minor & 0xC0 {
-            case 0x40: return .keyboard
-            case 0x80, 0xC0: return .mouse
-            default:
-                switch minor & 0x3F {
-                case 0x01, 0x02: return .gamepad
-                default: return nil
-                }
-            }
-        default:
-            return nil
-        }
-    }
-
-    /// GAP Appearance(GATT 0x2A01,uint16:高 10 位类别、低 6 位子类)映射,
-    /// 值表出自 SIG Assigned Numbers(appearance_values.yaml)。仅映射本应用
-    /// 有图标语言的形态,其余返回 nil 由调用方沿名称推断兜底。
-    static func fromAppearance(_ appearance: UInt16) -> BluetoothDeviceType? {
-        switch appearance {
-        case 0x03C1: return .keyboard            // HID:Keyboard
-        case 0x03C2: return .mouse               // HID:Mouse
-        case 0x03C3, 0x03C4: return .gamepad     // HID:Joystick/Gamepad
-        case 0x03C5: return .trackpad            // HID:Digitizer Tablet
-        case 0x0841, 0x0842, 0x0843, 0x0844, 0x0845:
-            return .speaker                      // Audio Sink:各类扬声器/Speakerphone
-        case 0x0941, 0x0943, 0x0944, 0x0945, 0x0946:
-            return .headphones                   // Wearable Audio:Earbud/Headphones/Neck Band/L/R
-        case 0x0942: return .headset             // Wearable Audio:Headset
-        default: return nil
-        }
-    }
-
-    /// 无 CoD/设备类型元数据时,按名称关键词推断图标;推不出保持 other。
-    static func inferred(fromName name: String) -> BluetoothDeviceType {
-        let lowered = name.lowercased()
-        func containsAny(_ keywords: [String]) -> Bool {
-            keywords.contains { lowered.contains($0) }
-        }
-        if containsAny(["mouse", "鼠标"]) { return .mouse }
-        if containsAny(["keyboard", "键盘"]) { return .keyboard }
-        if containsAny(["trackpad", "触控板"]) { return .trackpad }
-        if containsAny(["gamepad", "controller", "手柄"]) { return .gamepad }
-        if containsAny(["headphone", "earbud", "buds", "headset", "airpods", "耳机", "耳夹", "耳麦"]) { return .headphones }
-        if containsAny(["speaker", "音箱", "音响"]) { return .speaker }
-        return .other
-    }
-
-    /// SF Symbols 无蓝牙通用符号,按设备形态取图标。
-    var symbol: String {
-        switch self {
-        case .mouse: return "computermouse"
-        case .keyboard: return "keyboard"
-        case .headphones, .headset: return "headphones"
-        case .gamepad: return "gamecontroller"
-        case .trackpad: return "rectangle.and.hand.point.up.left"
-        case .speaker: return "hifispeaker"
-        case .other: return "questionmark.circle"
-        }
-    }
-}
-
-/// 单台已连接蓝牙设备。batteryLevel 为 nil 表示设备未上报电量
-/// (走厂商私有协议,macOS 蓝牙栈收不到),不伪造读数。
-struct BluetoothDeviceInfo: Identifiable, Equatable {
-    /// 归一化 MAC(去分隔符小写)或 "ble-UUID"。跨数据源身份关联的锚点。
-    let address: String
-    let name: String
-    let type: BluetoothDeviceType
-    /// 0-100;nil = 未上报。
-    let batteryLevel: Int?
-    /// system_profiler 的 device_services(如 "HID BLE" / "HFP AVRCP A2DP GATT ACL")。
-    var services: String? = nil
-
-    var id: String { address }
-}
-
-/// device_batteryLevel* 解析:
-/// - 单值形态("63%" / "63")直接取该值;
-/// - 多分量形态("Left: 67%, Right: 65%, Case: 89%")取最小值代表设备电量;
-/// - macOS 26 起 JSON 键为 device_batteryLevelMain,旧版为 device_batteryLevel,
-///   多单体耳机另有 Left/Right/Case 分量——调用方把全部变体拼接后交本解析器。
-/// 优先取带 % 后缀的数字(排除固件号等无关数字);无法解析返回 nil。
-enum BluetoothBatteryParser {
-    static func batteryLevel(from raw: String?) -> Int? {
-        guard let raw, !raw.isEmpty else { return nil }
-        let tokens = numericTokens(in: raw)
-        let percent = tokens.filter { $0.hasPercent }.map(\.value)
-        if !percent.isEmpty {
-            return percent.filter { (0...100).contains($0) }.min()
-        }
-        return tokens.map(\.value).filter { (0...100).contains($0) }.min()
-    }
-
-    /// 扫描字符串中的数字段,记录其后是否紧跟 %。
-    private static func numericTokens(in raw: String) -> [(value: Int, hasPercent: Bool)] {
-        var tokens: [(value: Int, hasPercent: Bool)] = []
-        var current = ""
-        for character in raw {
-            if character.isNumber {
-                current.append(character)
-                continue
-            }
-            if let value = Int(current) {
-                tokens.append((value, character == "%"))
-            }
-            current = ""
-        }
-        if let value = Int(current) {
-            tokens.append((value, false))
-        }
-        return tokens
-    }
-}
-
 /// 蓝牙设备电量探针。
 ///
 /// 三数据源合并(按归一化 MAC / 持久化绑定表关联同一台设备):
 /// 1. IOBluetooth(公开 framework,两渠道一致可用)——已配对已连接设备的
 ///    MAC、系统名(设备端改名实时反映)、CoD 类型,以及系统侧电量
-///    (未公开 getter,AVRCP/HFP 上报;沙盒内可用)。BLE 鼠标等设备的
+///    (未公开 getter,AVRCP/HFP 上报;仅 Direct 版可用)。BLE 鼠标等设备的
 ///    isConnected() 可能报 false,由其余数据源补齐;
 /// 2. `system_profiler SPBluetoothDataType -json`——设备电量
 ///    (device_batteryLevel* 键;控制中心读数同源)。
 ///    沙盒内 bluetoothd 拒绝向沙盒客户端提供数据(实测返回空骨架),
 ///    直连版与 IOBluetooth 读数互为冗余;
 /// 3. CoreBluetooth 直读 GATT(BLEBatteryReader)——BLE 设备实时电量与清单补充
-///    (2A19 Notify 推送),以及形态类别(2A01 GAP Appearance)。
+///    (2A19 Notify 推送或低频主动读取),以及形态类别(2A01 GAP Appearance)。
+///    支持多 Battery Service 实例(如左耳/右耳/充电仓),聚合取最低电量。
 ///
 /// 电量优先级:GATT(设备自报精确值,实时推送)> 系统侧读数
 /// (IOBluetooth/profiler 同源,粗粒度分档)。
+///
+/// 支持边界:
+/// - 可覆盖:经典蓝牙耳机/音箱/键鼠(设备清单可见);标准 GATT 180F/2A19
+///   BLE 设备(可读取电量);macOS 自身能提供电量的设备(Direct 版兜底)。
+/// - 不可覆盖:只使用厂商私有电量协议的设备;不公开标准服务且系统也不提供
+///   电量的设备;完全无法被公开 API 召回的 BLE 外设。
+/// - 原则:不通过长期无过滤扫描提高覆盖率(避免把附近未连接设备误认为已连接,
+///   并增加功耗);对私有协议设备明确降级,不伪造数据。
 ///
 /// 身份关联:数据源间无公开地址互换接口,用持久化绑定表(归一化 MAC ↔
 /// BLE identifier)关联。绑定在无歧义窗口(同名匹配/名称相似度唯一配对)
@@ -185,6 +42,16 @@ enum BluetoothBatteryParser {
 /// 全局连接通知(per-class)+ 每设备断开通知(per-device,随清单动态注册),
 /// 0.5s 防抖合并后立即跑快速路径。新连接设备的 AVRCP/HFP 电量上报
 /// 滞后于链路建立,防抖窗口后再做渐进重试(2s/6s/15s/30s)。
+/// 蓝牙控制器三态。unknown 表示数据源尚未给出任何确认(启动期 IOBluetooth /
+/// CoreBluetooth / system_profiler 都未返回);on / off 是数据源的权威结论。
+/// 面板行据此门控:unknown 保留占位行(与其他模块启动期占位一致),只有
+/// off 才移除——否则启动竞态会让行消失又出现(表现为面板高度闪断)。
+enum BluetoothControllerState {
+    case unknown
+    case on
+    case off
+}
+
 final class BluetoothBatterySampler: NSObject {
     /// 兜底轮询周期:连断变化由 IOBluetooth 通知即时驱动,此周期仅覆盖
     /// 通知遗漏场景(如设备休眠导致的静默链路变化)。
@@ -192,8 +59,12 @@ final class BluetoothBatterySampler: NSObject {
     /// system_profiler 正常数百毫秒返回,个别蓝牙控制器无响应时可能挂起,
     /// 超过此时长终止进程并放弃本次结果。
     private static let probeTimeout: DispatchTimeInterval = .seconds(8)
-    /// 身份绑定表的持久化键:归一化 MAC -> BLE identifier(UUID)。
+    /// 身份绑定表的持久化键:归一化 MAC -> BindingRecord(JSON 编码)。
     private static let bindingsDefaultsKey = "bluetooth.identityBindings"
+    /// 绑定失效阈值:超过此时长未在 BLE 快照中召回则移除绑定。
+    /// 7 天足够覆盖设备临时离线(出差、充电盒存放、周末不用),
+    /// 又不会让废弃绑定永久残留。
+    private static let bindingStalenessThreshold: TimeInterval = 7 * 24 * 60 * 60
 
     private var timer: AnyCancellable?
     private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.bluetooth-probe", qos: .utility)
@@ -201,15 +72,23 @@ final class BluetoothBatterySampler: NSObject {
 
     /// IOBluetooth 最新快照(主线程镜像,已连接设备,归一化地址)。
     private var ioDevices: [BluetoothDeviceInfo] = []
-    /// system_profiler 最新结果的主线程镜像。
-    private var profilerControllerOn = false
+    /// system_profiler 最新结果的主线程镜像:控制器状态仅在探针成功解析出
+    /// controller_state 字段后才有值(进程失败/超时/沙盒空骨架保持 nil,
+    /// 不构成关闭证据);设备清单同理,失败时维持上次结果。
+    private var profilerControllerOn: Bool?
+    /// profiler 控制器状态更新时间,用于与 CB 状态比较新旧。
+    private var profilerControllerUpdatedAt: Date?
     private var profilerDevices: [BluetoothDeviceInfo] = []
     /// BLE 侧已连接外设快照,由读取器在主线程发布。
     private var bleSnapshots: [BLEDeviceSnapshot] = []
-    /// CoreBluetooth 视角的控制器开关;未授权时保持 false。
-    private var cbControllerOn = false
-    /// 已学身份绑定(归一化 MAC -> BLE UUID),跨启动持久。
-    private var identityBindings: [String: String] = [:]
+    /// CoreBluetooth 视角的控制器开关:central 状态回调到达后才有值
+    /// (poweredOn/poweredOff),授权未决或未回调时保持 nil。
+    private var cbControllerOn: Bool?
+    /// CB 控制器状态更新时间:CB 回调实时到达,与 profiler 周期快照
+    /// 比较新旧,避免旧快照覆盖最新状态。
+    private var cbControllerUpdatedAt: Date?
+    /// 已学身份绑定(归一化 MAC -> BindingRecord),跨启动持久。
+    private var identityBindings: [String: BindingRecord] = [:]
     /// 全局连接通知持有体;unregister 后置 nil,避免重复注销。
     private var connectObserver: IOBluetoothUserNotification?
     /// 每台已连接设备的断开通知(归一化地址 -> 通知对象),随清单动态注册/注销。
@@ -223,6 +102,15 @@ final class BluetoothBatterySampler: NSObject {
     private var batteryRetryWorksByAddress: [String: [DispatchWorkItem]] = [:]
     /// 最近一轮 IOBluetooth 清单的地址集,用于识别「新连接」的设备。
     private var previouslySeenAddresses: Set<String> = []
+    /// 探针在飞标记:避免同一时间多个 system_profiler 进程堆积。
+    private var probeInFlight = false
+    /// 探针纪元:CB 报告蓝牙关闭时递增,在飞探针捕获启动时的纪元,
+    /// 完成回调纪元不匹配即丢弃——防止关机前启动的探针把陈旧 attrib_on
+    /// 以更新的时间戳写回,翻转已确定的关闭状态。
+    private var probeEpoch = 0
+    /// 生命周期 generation token:start/stop 递增,在飞异步回调捕获旧值后
+    /// 到达即丢弃,防止停止后旧探针/BLE/重试回调重新发布状态。
+    private var sessionGeneration: Int = 0
     /// 电量粘性缓存(归一化地址 -> 最近读到的系统侧电量):
     /// IOBluetooth 的 AVRCP 电量属性会间歇性回空,设备保持连接期间
     /// 沿用最近读数保证显示连续;设备离场(清单消失)时清除,
@@ -231,29 +119,83 @@ final class BluetoothBatterySampler: NSObject {
 
     /// 已连接蓝牙设备(按「有电量优先、再按名称」排序)。
     @Published private(set) var devices: [BluetoothDeviceInfo] = []
-    /// 蓝牙控制器是否开启;关闭时面板不渲染蓝牙行。
-    @Published private(set) var controllerOn = false
+    /// 蓝牙控制器三态;off 时面板移除蓝牙行,unknown 保留占位行。
+    @Published private(set) var controllerOn: BluetoothControllerState = .unknown
 
     override init() {
-        // 迁移历史绑定键(原始 MAC 格式)为归一化格式。
-        let stored = UserDefaults.standard
-            .dictionary(forKey: Self.bindingsDefaultsKey) as? [String: String] ?? [:]
-        identityBindings = stored.reduce(into: [:]) { result, pair in
-            result[Self.normalizeMAC(pair.key)] = pair.value
+        // 迁移历史绑定数据:优先尝试新格式(JSON 编码的 [String: BindingRecord]),
+        // 失败则回退到旧格式([String: String],MAC -> UUID)并升级为 BindingRecord。
+        if let data = UserDefaults.standard.data(forKey: Self.bindingsDefaultsKey),
+           let decoded = try? JSONDecoder().decode([String: BindingRecord].self, from: data) {
+            identityBindings = decoded.reduce(into: [:]) { result, pair in
+                result[Self.normalizeMAC(pair.key)] = pair.value
+            }
+        } else if let stored = UserDefaults.standard
+            .dictionary(forKey: Self.bindingsDefaultsKey) as? [String: String] {
+            // 旧格式兼容迁移:UUID 字符串升级为 BindingRecord,version=1,lastSeenAt=now。
+            let now = Date()
+            identityBindings = stored.reduce(into: [:]) { result, pair in
+                result[Self.normalizeMAC(pair.key)] = BindingRecord(uuid: pair.value, version: 1, lastSeenAt: now)
+            }
+            // 升级后写回新格式。
+            if let encoded = try? JSONEncoder().encode(identityBindings) {
+                UserDefaults.standard.set(encoded, forKey: Self.bindingsDefaultsKey)
+            }
         }
     }
 
     func start() {
         guard timer == nil else { return }
+        // 单元测试运行期间跳过蓝牙采样的常驻启动,避免系统授权弹窗阻塞测试 runner。
+        guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil,
+              NSClassFromString("XCTestCase") == nil else {
+            return
+        }
+        sessionGeneration += 1
+        let capturedGeneration = sessionGeneration
         bleReader.updateKnownIdentifiers(boundIdentifiers())
         bleReader.onSnapshotsUpdate = { [weak self] snapshots in
-            guard let self else { return }
+            // generation 不匹配:stop() 已发生,丢弃迟到回调。
+            guard let self, self.sessionGeneration == capturedGeneration else { return }
             self.bleSnapshots = snapshots
             self.publishMerged()
         }
         bleReader.onControllerStateUpdate = { [weak self] isOn in
-            guard let self else { return }
+            guard let self, self.sessionGeneration == capturedGeneration else { return }
             self.cbControllerOn = isOn
+            self.cbControllerUpdatedAt = Date()
+            if !isOn {
+                // 蓝牙关闭:立即清空所有设备状态,避免重新打开后显示已断开的设备。
+                // IOBluetooth 的 isConnected() 在蓝牙刚重新打开时可能返回缓存值,
+                // 导致已断开设备被错误保留;清空后重新枚举可确保状态准确。
+                self.probeEpoch += 1
+                self.ioDevices = []
+                self.profilerDevices = []
+                self.profilerControllerOn = nil
+                self.profilerControllerUpdatedAt = nil
+                self.bleSnapshots = []
+                self.lastKnownBattery.removeAll()
+                self.previouslySeenAddresses.removeAll()
+                // 取消所有在飞重试与防抖任务。
+                self.batteryRetryWorksByAddress.values.forEach { works in
+                    works.forEach { $0.cancel() }
+                }
+                self.batteryRetryWorksByAddress.removeAll()
+                self.eventRefreshWork?.cancel()
+                self.eventRefreshWork = nil
+                self.pendingConnectEvent = false
+            } else {
+                // 蓝牙重新打开:延迟刷新,给系统时间更新 isConnected() 状态。
+                // IOBluetooth 的连接状态在蓝牙刚重新打开时可能不准确(缓存),
+                // 延迟 1.5 秒后重新枚举可确保只保留真正连接的设备。
+                // 如果设备真的重新连接了,系统会发送连接通知触发即时刷新,
+                // 此延迟是兜底,不会遗漏真正连接的设备。
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
+                    guard let self, self.sessionGeneration == capturedGeneration else { return }
+                    self.refreshIO()
+                    self.probeProfiler()
+                }
+            }
             self.publishMerged()
         }
         // 已授权用户启动即常驻监视(BLE 电量经 2A19 Notify 实时推送,
@@ -294,6 +236,8 @@ final class BluetoothBatterySampler: NSObject {
     }
 
     func stop() {
+        // 递增 generation,使所有在飞异步回调失效(探针/BLE/防抖/重试)。
+        sessionGeneration += 1
         timer?.cancel()
         timer = nil
         connectObserver?.unregister()
@@ -312,10 +256,14 @@ final class BluetoothBatterySampler: NSObject {
         previouslySeenAddresses.removeAll()
         lastKnownBattery.removeAll()
         ioDevices = []
-        profilerControllerOn = false
+        profilerControllerOn = nil
+        profilerControllerUpdatedAt = nil
         profilerDevices = []
         bleSnapshots = []
-        cbControllerOn = false
+        cbControllerOn = nil
+        cbControllerUpdatedAt = nil
+        probeInFlight = false
+        probeEpoch += 1
         bleReader.stop()
         publishMerged()
     }
@@ -328,15 +276,40 @@ final class BluetoothBatterySampler: NSObject {
     }
 
     /// 慢速路径:system_profiler 探针(数百毫秒~8s)后台执行,结果回主线程
-    /// 补充合并。沙盒内返回空骨架,不影响快速路径。
+    /// 补充合并。失败时保留最近一次成功快照,不清空 profiler 设备。
+    /// 同一时间只允许一个探针在飞,避免进程堆积。
     private func probeProfiler() {
+        guard !probeInFlight else { return }
+        probeInFlight = true
+        let capturedGeneration = sessionGeneration
+        let capturedEpoch = probeEpoch
         queue.async { [weak self] in
             guard let self else { return }
-            let snapshot = Self.probe()
+            let outcome = Self.probe()
             DispatchQueue.main.async {
-                self.profilerControllerOn = snapshot.controllerOn
-                self.profilerDevices = snapshot.devices
-                AppLogger.sampler.info("Bluetooth probe: profiler=\(snapshot.devices.count), io=\(self.ioDevices.count)")
+                // generation 不匹配:stop() 已发生,丢弃迟到探针结果。
+                guard self.sessionGeneration == capturedGeneration else { return }
+                // 纪元不匹配:探针启动后蓝牙被关闭,关机前的 attrib_on 不是
+                // 有效证据,丢弃;探针在飞期已由新一轮探针接管。
+                guard self.probeEpoch == capturedEpoch else {
+                    self.probeInFlight = false
+                    return
+                }
+                self.probeInFlight = false
+                switch outcome {
+                case .success(let controllerOn, let devices):
+                    self.profilerControllerOn = controllerOn
+                    // 仅在探针给出权威结论时更新时间戳;controllerOn 为 nil
+                    // (无 controller_state 字段)不构成新证据。
+                    if controllerOn != nil {
+                        self.profilerControllerUpdatedAt = Date()
+                    }
+                    self.profilerDevices = devices
+                    AppLogger.sampler.info("Bluetooth probe success: profiler=\(devices.count), io=\(self.ioDevices.count)")
+                case .failure:
+                    // 启动失败 / 超时 / 异常 JSON / 沙盒空骨架:保留上次成功快照。
+                    AppLogger.sampler.info("Bluetooth probe failure: keeping last known snapshot")
+                }
                 self.publishMerged()
             }
         }
@@ -366,8 +339,10 @@ final class BluetoothBatterySampler: NSObject {
         eventRefreshWork?.cancel()
         pendingConnectEvent = pendingConnectEvent || retries
         let shouldRetry = pendingConnectEvent
+        let capturedGeneration = sessionGeneration
         let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
+            // generation 不匹配:stop() 已发生,丢弃迟到防抖回调。
+            guard let self, self.sessionGeneration == capturedGeneration else { return }
             self.pendingConnectEvent = false
             self.refreshIO()
             self.bleReader.refreshImmediately()
@@ -386,10 +361,12 @@ final class BluetoothBatterySampler: NSObject {
     private func scheduleBatteryRetriesForNewDevices() {
         let newAddresses = Set(ioDevices.map(\.address)).subtracting(previouslySeenAddresses)
         previouslySeenAddresses = Set(ioDevices.map(\.address))
+        let capturedGeneration = sessionGeneration
         for address in newAddresses where batteryRetryWorksByAddress[address] == nil {
             batteryRetryWorksByAddress[address] = [2, 6, 15, 30].map { delay in
                 let work = DispatchWorkItem { [weak self] in
-                    guard let self else { return }
+                    // generation 不匹配:stop() 已发生,丢弃迟到重试回调。
+                    guard let self, self.sessionGeneration == capturedGeneration else { return }
                     if lastKnownBattery[address] == nil {
                         refreshIO()
                     }
@@ -405,30 +382,120 @@ final class BluetoothBatterySampler: NSObject {
         }
     }
 
+    /// 控制器状态合并(纯函数,便于单测):取最新的权威证据。
+    /// CB 状态是实时回调(poweredOn/poweredOff 秒级到达),profiler 是周期快照(10s 一次)。
+    /// 两者均有证据时按时间戳取新,避免旧 profiler 快照覆盖最新 CB 状态。
+    /// hasIODevices 视为开启的弱证据(有已连接设备说明蓝牙在工作),仅在两源均无权威状态时使用。
+    static func resolveControllerState(
+        cbEvidence: (isOn: Bool, at: Date)?,
+        profilerEvidence: (isOn: Bool, at: Date)?,
+        hasIODevices: Bool
+    ) -> BluetoothControllerState {
+        switch (cbEvidence, profilerEvidence) {
+        case let (cb?, profiler?):
+            return (cb.at >= profiler.at ? cb.isOn : profiler.isOn) ? .on : .off
+        case let (cb?, nil):
+            return cb.isOn ? .on : .off
+        case let (nil, profiler?):
+            return profiler.isOn ? .on : .off
+        case (nil, nil):
+            return hasIODevices ? .on : .unknown
+        }
+    }
+
     /// 合并三数据源并发布:新学到的身份绑定持久化;排序后发布。
     private func publishMerged() {
-        controllerOn = profilerControllerOn || cbControllerOn || !ioDevices.isEmpty
+        let cbEvidence: (isOn: Bool, at: Date)? = cbControllerOn.flatMap { isOn in
+            cbControllerUpdatedAt.map { (isOn, $0) }
+        }
+        let profilerEvidence: (isOn: Bool, at: Date)? = profilerControllerOn.flatMap { isOn in
+            profilerControllerUpdatedAt.map { (isOn, $0) }
+        }
+        controllerOn = Self.resolveControllerState(
+            cbEvidence: cbEvidence,
+            profilerEvidence: profilerEvidence,
+            hasIODevices: !ioDevices.isEmpty
+        )
+
+        // 将绑定记录映射为 UUID 供三源合并。
+        let bindingsForMerge = identityBindings.mapValues { $0.uuid }
         let result = Self.merge(
             ioDevices: ioDevices,
             profilerDevices: profilerDevices,
             bleSnapshots: bleSnapshots,
-            bindings: identityBindings
+            bindings: bindingsForMerge
         )
         if !result.learnedBindings.isEmpty {
-            identityBindings.merge(result.learnedBindings) { _, new in new }
-            UserDefaults.standard.set(identityBindings, forKey: Self.bindingsDefaultsKey)
+            let now = Date()
+            for (address, uuid) in result.learnedBindings {
+                // 新学习绑定:version=1,lastSeenAt=now。
+                identityBindings[address] = BindingRecord(uuid: uuid, version: 1, lastSeenAt: now)
+            }
+            persistBindings()
             bleReader.updateKnownIdentifiers(boundIdentifiers())
         }
+        // 维护绑定:更新已召回的 lastSeenAt,清理长期未召回的过期绑定。
+        maintainBindings(recalledUUIDs: Set(bleSnapshots.map { $0.identifier.uuidString }))
         devices = Self.displayOrder(result.devices)
-        let summary = devices
+        // 日常日志只记录设备数量;详细设备名/电量用 .private 隐私级别,
+        // 调试构建可见但不暴露在系统日志中。
+        AppLogger.sampler.info("Bluetooth merged: \(self.devices.count) devices")
+        #if DEBUG
+        let summary = self.devices
             .map { "\($0.name)=\($0.batteryLevel.map { "\($0)%" } ?? "-")" }
             .joined(separator: ", ")
-        AppLogger.sampler.info("Bluetooth merged: \(summary, privacy: .public)")
+        AppLogger.sampler.debug("Bluetooth devices: \(summary, privacy: .private)")
+        #endif
     }
 
     /// 绑定表当前已知的外设标识(identifier 兜底召回名单)。
     private func boundIdentifiers() -> [UUID] {
-        identityBindings.values.compactMap(UUID.init(uuidString:))
+        identityBindings.values.compactMap { UUID(uuidString: $0.uuid) }
+    }
+
+    /// 持久化绑定表:JSON 编码后写入 UserDefaults。
+    private func persistBindings() {
+        if let data = try? JSONEncoder().encode(identityBindings) {
+            UserDefaults.standard.set(data, forKey: Self.bindingsDefaultsKey)
+        }
+    }
+
+    /// 维护绑定表(纯函数,便于单测):更新已召回绑定的 lastSeenAt,清理长期未召回的过期绑定。
+    static func maintainBindings(
+        _ bindings: [String: BindingRecord],
+        recalledUUIDs: Set<String>,
+        now: Date = Date(),
+        stalenessThreshold: TimeInterval = bindingStalenessThreshold
+    ) -> (bindings: [String: BindingRecord], changed: Bool) {
+        var updated = bindings
+        var changed = false
+
+        // 更新已召回绑定的 lastSeenAt(节流:距上次更新超过 1 小时才刷新)。
+        for (address, record) in updated where recalledUUIDs.contains(record.uuid) {
+            if now.timeIntervalSince(record.lastSeenAt) > 3600 {
+                updated[address]?.lastSeenAt = now
+                changed = true
+            }
+        }
+
+        // 清理过期绑定:超过阈值未召回。临时离线(如设备存放、出差)不触发移除。
+        for (address, record) in updated
+        where now.timeIntervalSince(record.lastSeenAt) > stalenessThreshold {
+            updated.removeValue(forKey: address)
+            changed = true
+        }
+
+        return (updated, changed)
+    }
+
+    /// 维护绑定表:更新已召回绑定的 lastSeenAt,清理长期未召回的过期绑定。
+    private func maintainBindings(recalledUUIDs: Set<String>) {
+        let outcome = Self.maintainBindings(identityBindings, recalledUUIDs: recalledUUIDs)
+        if outcome.changed {
+            identityBindings = outcome.bindings
+            persistBindings()
+            bleReader.updateKnownIdentifiers(boundIdentifiers())
+        }
     }
 
     /// MAC 归一化:去冒号/横线、转小写。IOBluetooth 报横线小写格式,
@@ -453,11 +520,18 @@ final class BluetoothBatterySampler: NSObject {
             guard !address.isEmpty, byAddress[address] == nil else { continue }
             registerDisconnectObserver(for: device, address: address)
             let name = device.nameOrAddress ?? address
-            // 读到新值更新粘性缓存;回空时沿用缓存,电量显示不断流。
+#if DIRECT_DISTRIBUTION
+            // Direct 版:读取 IOBluetooth 未公开的电池 getter(bluetoothd 随 AVRCP/HFP 会话填充);
+            // 读到新值更新粘性缓存,回空时沿用缓存,电量显示不断流。
             let fresh = Self.ioBatteryPercent(of: device)
             if let fresh {
                 lastKnownBattery[address] = fresh
             }
+#else
+            // App Store 版:不使用私有 getter,电量由 profiler 或 BLE GATT 补齐;
+            // 部分只通过该接口提供电量的经典蓝牙设备会显示"电量不可用"。
+            let fresh: Int? = nil
+#endif
             byAddress[address] = BluetoothDeviceInfo(
                 address: address,
                 name: name,
@@ -486,6 +560,7 @@ final class BluetoothBatterySampler: NSObject {
         )
     }
 
+#if DIRECT_DISTRIBUTION
     /// 读取 IOBluetoothDevice 未公开的电池 getter(batteryPercentSingle 等)。
     /// bluetoothd 随 AVRCP/HFP 会话填充——经典蓝牙耳机的电量走此通道,
     /// 是沙盒内该类设备电量的唯一来源(实测 macOS 26)。
@@ -498,7 +573,7 @@ final class BluetoothBatterySampler: NSObject {
         func number(for key: String) -> Int? {
             guard device.responds(to: Selector((key))),
                   let boxed = device.value(forKey: key) as? NSNumber,
-                  (1...100).contains(boxed.intValue) else {
+                  (0...100).contains(boxed.intValue) else {
                 return nil
             }
             return boxed.intValue
@@ -513,6 +588,7 @@ final class BluetoothBatterySampler: NSObject {
             ?? number(for: "headsetBattery")
             ?? number(for: "batteryPercent")
     }
+#endif
 
     /// 三数据源合并(纯函数,可单测):
     /// 1. IOBluetooth 条目为骨架(归一化 MAC + CoD 类型 + 系统名 + 系统侧电量);
@@ -601,23 +677,51 @@ final class BluetoothBatterySampler: NSObject {
             mergeEntry(at: mergedIndex, with: remainingSnapshots.remove(at: snapshotIndex))
         }
 
-        // 3b) 同名匹配 + 学习绑定。
+        // 3b) 同名匹配 + 学习绑定:仅当两侧名称均唯一时才允许,避免同名设备错误绑定。
+        // 统计两侧名称出现次数
+        var mergedNameCount: [String: Int] = [:]
         for index in merged.indices where !consumedIndices.contains(index) {
-            guard let snapshotIndex = remainingSnapshots.firstIndex(where: { $0.name == merged[index].name }) else {
+            mergedNameCount[merged[index].name, default: 0] += 1
+        }
+        var snapshotNameCount: [String: Int] = [:]
+        for snapshot in remainingSnapshots {
+            if let name = snapshot.name {
+                snapshotNameCount[name, default: 0] += 1
+            }
+        }
+
+        for index in merged.indices where !consumedIndices.contains(index) {
+            let name = merged[index].name
+            // 两侧均唯一才允许学习绑定:两台同名设备不得任选一台永久绑定
+            guard mergedNameCount[name] == 1, snapshotNameCount[name] == 1,
+                  let snapshotIndex = remainingSnapshots.firstIndex(where: { $0.name == name }) else {
                 continue
             }
             let snapshot = remainingSnapshots.remove(at: snapshotIndex)
             mergeEntry(at: index, with: snapshot)
             learned[merged[index].address] = snapshot.identifier.uuidString
+            // 更新计数,避免后续重复处理
+            mergedNameCount[name] = 0
+            snapshotNameCount[name] = 0
         }
 
         // 3c) 相似度配对 + 学习绑定:设备端改名后名字对不上,按归一化编辑
         //     距离找最相似的未绑定条目;最优唯一且足够近时认定同一设备
         //     (歧义或不够近时不猜,留作 CB 独有条目),学习绑定后不再依赖。
+        //     BLE 侧名称不唯一时同样禁止学习绑定(同名设备不得任选一台)。
         if !remainingSnapshots.isEmpty {
+            // 统计 BLE 侧名称出现次数
+            var snapshotNameCount3c: [String: Int] = [:]
+            for snapshot in remainingSnapshots {
+                if let name = snapshot.name {
+                    snapshotNameCount3c[name, default: 0] += 1
+                }
+            }
             var consumedSnapshotIndices = Set<Int>()
             for (snapshotIndex, snapshot) in remainingSnapshots.enumerated() {
                 guard let cbName = snapshot.name else { continue }
+                // BLE 侧名称不唯一时不允许学习绑定
+                guard snapshotNameCount3c[cbName] == 1 else { continue }
                 var scored: [(index: Int, distance: Double)] = []
                 for index in merged.indices where !consumedIndices.contains(index) {
                     guard bindings[merged[index].address] == nil else { continue }
@@ -683,7 +787,7 @@ final class BluetoothBatterySampler: NSObject {
         }
     }
 
-    private static func probe() -> (controllerOn: Bool, devices: [BluetoothDeviceInfo]) {
+    private static func probe() -> ProbeOutcome {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
         task.arguments = ["SPBluetoothDataType", "-json"]
@@ -695,7 +799,7 @@ final class BluetoothBatterySampler: NSObject {
         do {
             try task.run()
         } catch {
-            return (false, [])
+            return .failure
         }
 
         // readDataToEndOfFile 会阻塞到进程退出,若 system_profiler 挂起则永久不返。
@@ -709,26 +813,35 @@ final class BluetoothBatterySampler: NSObject {
 
         if done.wait(timeout: .now() + probeTimeout) == .timedOut {
             task.terminate()
-            return (false, [])
+            return .failure
         }
         task.waitUntilExit()
 
         guard task.terminationStatus == 0, let output else {
-            return (false, [])
+            return .failure
         }
         return parse(profilerJSON: output)
     }
 
     /// 解析 system_profiler SPBluetoothDataType -json 输出。拆成纯函数便于单测。
-    static func parse(profilerJSON data: Data) -> (controllerOn: Bool, devices: [BluetoothDeviceInfo]) {
+    /// controllerOn 仅在输出携带 controller_state 字段时给出权威结论
+    /// (attrib_on 为开,其余值为关);JSON 失效、根字段缺失或沙盒空骨架
+    /// (无 controller_state 且无 device_connected)返回 .failure,调用方保留
+    /// 最近一次成功快照,不构成「蓝牙关闭」证据。
+    static func parse(profilerJSON data: Data) -> ProbeOutcome {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let entries = root["SPBluetoothDataType"] as? [[String: Any]],
               let entry = entries.first else {
-            return (false, [])
+            return .failure
         }
 
-        let controller = entry["controller_properties"] as? [String: Any]
-        let controllerOn = (controller?["controller_state"] as? String) == "attrib_on"
+        let controllerState = (entry["controller_properties"] as? [String: Any])?["controller_state"] as? String
+        let controllerOn = controllerState.map { $0 == "attrib_on" }
+        let hasConnectedField = entry["device_connected"] != nil
+        // 沙盒空骨架:无 controller_state 且无 device_connected 字段,不构成权威结论。
+        if controllerState == nil && !hasConnectedField {
+            return .failure
+        }
 
         var devices: [BluetoothDeviceInfo] = []
         // device_connected 是「单键字典」数组:每个元素形如 { "设备名": { 属性... } }。
@@ -755,6 +868,6 @@ final class BluetoothBatterySampler: NSObject {
             }
         }
 
-        return (controllerOn, displayOrder(devices))
+        return .success(controllerOn: controllerOn, devices: displayOrder(devices))
     }
 }

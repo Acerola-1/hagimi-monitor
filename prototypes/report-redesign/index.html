@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor 报告设计原型矩阵 (5 种设计语言探索)</title>
+<style>
+  :root {
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC", "Hiragino Sans GB", sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  /* ══════════════════════════════════════════════════════════════════
+     风格变量体系 (动态挂载在 body[data-style] 上，全面打通深浅色)
+     ══════════════════════════════════════════════════════════════════ */
+
+  /* 1. Cupertino Specimen (苹果原厂工业规格) */
+  body[data-style="cupertino"] {
+    --bg-page: #0a0b0e;
+    --bg-card: rgba(22, 24, 30, 0.75);
+    --border-card: rgba(255, 255, 255, 0.08);
+    --border-hairline: rgba(255, 255, 255, 0.05);
+    --text-main: #f5f5f7;
+    --text-muted: #86868b;
+    --accent: #2997ff;
+    --chip-bg: rgba(255, 255, 255, 0.04);
+    --card-radius: 12px;
+    --card-shadow: 0 2px 10px rgba(0,0,0,0.25);
+  }
+  body[data-style="cupertino"].light {
+    --bg-page: #f5f5f7;
+    --bg-card: #ffffff;
+    --border-card: rgba(0, 0, 0, 0.08);
+    --border-hairline: rgba(0, 0, 0, 0.05);
+    --text-main: #1d1d1f;
+    --text-muted: #6e6e73;
+    --accent: #0071e3;
+    --chip-bg: rgba(0, 0, 0, 0.04);
+    --card-radius: 12px;
+    --card-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.03);
+  }
+
+  /* 2. Liquid Cyberpunk (液态赛博玻璃) */
+  body[data-style="cyberpunk"] {
+    --bg-page: #06070b;
+    --bg-card: rgba(14, 17, 28, 0.75);
+    --border-card: rgba(0, 242, 254, 0.18);
+    --border-hairline: rgba(157, 78, 221, 0.15);
+    --text-main: #ffffff;
+    --text-muted: #8ca0ba;
+    --accent: #00f2fe;
+    --chip-bg: rgba(0, 242, 254, 0.06);
+    --card-radius: 18px;
+    --card-shadow: 0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.1);
+  }
+  body[data-style="cyberpunk"].light {
+    --bg-page: #e8ecf4;
+    --bg-card: rgba(255, 255, 255, 0.88);
+    --border-card: rgba(37, 99, 235, 0.18);
+    --border-hairline: rgba(124, 58, 237, 0.12);
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --accent: #0284c7;
+    --chip-bg: rgba(37, 99, 235, 0.06);
+    --card-radius: 18px;
+    --card-shadow: 0 8px 24px rgba(37, 99, 235, 0.08), inset 0 1px 0 rgba(255,255,255,0.8);
+  }
+
+  /* 3. Swiss Telemetry (瑞士国际主义) */
+  body[data-style="swiss"] {
+    --bg-page: #0f0f10;
+    --bg-card: #171718;
+    --border-card: #27272a;
+    --border-hairline: #222224;
+    --text-main: #fafafa;
+    --text-muted: #a1a1aa;
+    --accent: #ff3b00;
+    --chip-bg: #222224;
+    --card-radius: 0px;
+    --card-shadow: none;
+  }
+  body[data-style="swiss"].light {
+    --bg-page: #f2f2f2;
+    --bg-card: #ffffff;
+    --border-card: #d4d4d8;
+    --border-hairline: #e4e4e7;
+    --text-main: #09090b;
+    --text-muted: #52525b;
+    --accent: #ff3300;
+    --chip-bg: #f4f4f5;
+    --card-radius: 0px;
+    --card-shadow: none;
+  }
+
+  /* 4. Aerospace HUD (航天深空战术) */
+  body[data-style="aerospace"] {
+    --bg-page: #05080c;
+    --bg-card: rgba(8, 14, 22, 0.9);
+    --border-card: rgba(0, 255, 163, 0.22);
+    --border-hairline: rgba(0, 255, 163, 0.1);
+    --text-main: #e2f1ec;
+    --text-muted: #648278;
+    --accent: #00ffa3;
+    --chip-bg: rgba(0, 255, 163, 0.06);
+    --card-radius: 4px;
+    --card-shadow: 0 4px 16px rgba(0,0,0,0.4);
+  }
+  body[data-style="aerospace"].light {
+    --bg-page: #edf4f1;
+    --bg-card: #ffffff;
+    --border-card: rgba(13, 148, 136, 0.28);
+    --border-hairline: rgba(13, 148, 136, 0.12);
+    --text-main: #0f2922;
+    --text-muted: #3d665b;
+    --accent: #0f766e;
+    --chip-bg: rgba(15, 118, 110, 0.06);
+    --card-radius: 4px;
+    --card-shadow: 0 2px 8px rgba(13, 148, 136, 0.08);
+  }
+
+  /* 5. Bento Chronicle (日式便当盒 / 现代手记) */
+  body[data-style="bento"] {
+    --bg-page: #0d1117;
+    --bg-card: rgba(22, 27, 38, 0.85);
+    --border-card: rgba(255, 255, 255, 0.08);
+    --border-hairline: rgba(255, 255, 255, 0.04);
+    --text-main: #f1f5f9;
+    --text-muted: #94a3b8;
+    --accent: #6366f1;
+    --chip-bg: rgba(255, 255, 255, 0.05);
+    --card-radius: 22px;
+    --card-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  }
+  body[data-style="bento"].light {
+    --bg-page: #f8fafc;
+    --bg-card: #ffffff;
+    --border-card: rgba(0, 0, 0, 0.07);
+    --border-hairline: rgba(0, 0, 0, 0.04);
+    --text-main: #1e293b;
+    --text-muted: #64748b;
+    --accent: #4f46e5;
+    --chip-bg: #f1f5f9;
+    --card-radius: 22px;
+    --card-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+  }
+
+  /* ══════════════════════════════════════════════════════════════════
+     全局基底
+     ══════════════════════════════════════════════════════════════════ */
+  body {
+    font-family: var(--font-sans);
+    background: var(--bg-page);
+    color: var(--text-main);
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    transition: background 0.22s ease, color 0.22s ease;
+  }
+
+  /* ── 顶部交互控制台 ── */
+  .studio-bar {
+    position: sticky; top: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 10px 24px;
+    background: rgba(10, 12, 18, 0.85);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    transition: background 0.22s ease, border-color 0.22s ease;
+  }
+  body.light .studio-bar {
+    background: rgba(255, 255, 255, 0.88);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+  }
+  .studio-left { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .studio-logo {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; color: #fff; letter-spacing: -0.2px;
+  }
+  body.light .studio-logo { color: #0f172a; }
+  .studio-logo .badge {
+    padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 700;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6); color: #fff;
+  }
+  .proto-tabs {
+    display: flex; align-items: center; gap: 4px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 3px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+  body.light .proto-tabs {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.06);
+  }
+  .proto-tab {
+    appearance: none; border: 0; background: transparent; color: #94a3b8;
+    font-family: var(--font-sans); font-size: 12px; font-weight: 600;
+    padding: 6px 12px; border-radius: 7px; cursor: pointer;
+    transition: all 0.18s ease; display: flex; align-items: center; gap: 6px;
+  }
+  body.light .proto-tab { color: #475569; }
+  .proto-tab:hover { color: #fff; background: rgba(255, 255, 255, 0.05); }
+  body.light .proto-tab:hover { color: #0f172a; background: rgba(0, 0, 0, 0.05); }
+  .proto-tab.active {
+    color: #fff; background: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+  }
+  body.light .proto-tab.active {
+    color: #0f172a; background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  }
+  .proto-tab .num {
+    display: inline-block; width: 16px; height: 16px; line-height: 16px; text-align: center;
+    border-radius: 4px; font-size: 10px; background: rgba(255,255,255,0.1);
+  }
+  body.light .proto-tab .num { background: rgba(0,0,0,0.08); }
+  .proto-tab.active .num { background: #3b82f6; color: #fff; }
+  body.light .proto-tab.active .num { background: #2563eb; color: #fff; }
+
+  .studio-right { display: flex; align-items: center; gap: 10px; }
+  .theme-toggle {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.04); color: #cbd5e1;
+    font-size: 11.5px; font-weight: 600; cursor: pointer; transition: all 0.15s ease;
+  }
+  body.light .theme-toggle {
+    background: #ffffff; border-color: rgba(0, 0, 0, 0.12); color: #334155;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .theme-toggle:hover { color: #fff; border-color: rgba(255, 255, 255, 0.2); }
+  body.light .theme-toggle:hover { color: #0f172a; border-color: rgba(0, 0, 0, 0.2); }
+
+  /* ── 风格理念介绍横幅 ── */
+  .concept-banner {
+    padding: 14px 28px; background: rgba(255, 255, 255, 0.02);
+    border-bottom: 1px solid var(--border-hairline);
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+    transition: all 0.22s ease;
+  }
+  body.light .concept-banner {
+    background: rgba(0, 0, 0, 0.02);
+  }
+  .concept-info h2 { font-size: 14.5px; font-weight: 700; color: var(--text-main); margin-bottom: 2px; }
+  .concept-info p { font-size: 12px; color: var(--text-muted); }
+  .concept-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .c-tag {
+    font-size: 10.5px; font-weight: 600; padding: 3px 8px; border-radius: 5px;
+    background: var(--chip-bg); color: var(--text-muted); border: 1px solid var(--border-card);
+  }
+
+  /* ── 主画布 ── */
+  .viewport {
+    max-width: 1240px; margin: 0 auto; padding: 32px 24px 80px;
+  }
+
+  /* ── 通用卡片规范 ── */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-card);
+    border-radius: var(--card-radius);
+    box-shadow: var(--card-shadow);
+    padding: 22px;
+    color: var(--text-main);
+    transition: all 0.22s ease;
+  }
+
+  /* 风格特异修饰: Aerospace 切角 */
+  body[data-style="aerospace"] .card {
+    clip-path: polygon(0 0, calc(100% - 12px) 0, 100% 12px, 100% 100%, 12px 100%, 0 calc(100% - 12px));
+    font-family: var(--font-mono);
+  }
+
+  /* 风格特异修饰: Cyberpunk 顶部霓虹微高光 */
+  body[data-style="cyberpunk"] .card {
+    position: relative;
+  }
+  body[data-style="cyberpunk"] .card::before {
+    content: ""; position: absolute; top: -1px; left: 24px; right: 24px; height: 1px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0.6;
+  }
+
+  /* 风格特异修饰: Swiss 刻度尺 */
+  .swiss-ruler {
+    display: none; height: 6px; border-bottom: 1px solid var(--border-card);
+    background-image: repeating-linear-gradient(90deg, var(--text-muted) 0, var(--text-muted) 1px, transparent 1px, transparent 8px);
+    opacity: 0.25; margin-bottom: 16px;
+  }
+  body[data-style="swiss"] .swiss-ruler { display: block; }
+
+  /* ── 顶栏 Masthead / 机器元数据 ── */
+  .spec-hero {
+    border-bottom: 1px solid var(--border-card);
+    padding-bottom: 24px; margin-bottom: 28px;
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 16px;
+  }
+  .spec-title { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--accent); font-weight: 700; margin-bottom: 6px; }
+  .spec-machine { font-size: 28px; font-weight: 700; letter-spacing: -0.8px; color: var(--text-main); }
+  .spec-table {
+    display: flex; gap: 20px; font-family: var(--font-mono); font-size: 11.5px; color: var(--text-muted); flex-wrap: wrap;
+  }
+  .spec-item strong { color: var(--text-main); font-weight: 600; }
+
+  /* ── 仪表网格 ── */
+  .dash-grid {
+    display: grid; grid-template-columns: 340px 1fr; gap: 18px; margin-bottom: 20px;
+  }
+  .kpi-row {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;
+  }
+  .kpi-card {
+    padding: 16px 18px;
+  }
+  .kpi-title { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+  .kpi-num {
+    font-size: 24px; font-weight: 800; font-family: var(--font-mono); margin: 6px 0 2px;
+    color: var(--text-main);
+  }
+  .kpi-sub { font-size: 11px; color: var(--text-muted); }
+  .spark-svg { width: 100%; height: 46px; overflow: visible; margin-top: 6px; }
+
+  .charts-duo {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 20px;
+  }
+
+  .stat-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  }
+
+  .insight-card {
+    padding: 14px 16px; border-radius: 10px; background: var(--chip-bg); border: 1px solid var(--border-card);
+  }
+
+  /* Bento 专属跨栏 */
+  body[data-style="bento"] .dash-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  body[data-style="bento"] .health-card {
+    grid-column: span 2;
+  }
+  body[data-style="bento"] .kpi-row {
+    grid-column: span 4;
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (max-width: 980px) {
+    .dash-grid, .charts-duo, .kpi-row { grid-template-columns: 1fr; }
+    body[data-style="bento"] .health-card { grid-column: span 1; }
+  }
+</style>
+</head>
+<body data-style="cupertino">
+
+<!-- 顶部交互控制台 -->
+<div class="studio-bar">
+  <div class="studio-left">
+    <div class="studio-logo">
+      <span>HAGIMI REPORT</span>
+      <span class="badge">DESIGN MATRIX</span>
+    </div>
+    <div class="proto-tabs" id="proto-tabs">
+      <button class="proto-tab active" data-style="cupertino"><span class="num">1</span> Cupertino Specimen (原厂规格)</button>
+      <button class="proto-tab" data-style="cyberpunk"><span class="num">2</span> Liquid Cyberpunk (极客赛博)</button>
+      <button class="proto-tab" data-style="swiss"><span class="num">3</span> Swiss Telemetry (瑞士包豪斯)</button>
+      <button class="proto-tab" data-style="aerospace"><span class="num">4</span> Aerospace HUD (深空战术)</button>
+      <button class="proto-tab" data-style="bento"><span class="num">5</span> Bento Chronicle (现代手记)</button>
+    </div>
+  </div>
+  <div class="studio-right">
+    <button class="theme-toggle" id="theme-btn">
+      <span id="theme-icon">☀️</span>
+      <span id="theme-label">切换浅色模式</span>
+    </button>
+  </div>
+</div>
+
+<!-- 风格理念介绍横幅 -->
+<div class="concept-banner" id="concept-banner">
+  <div class="concept-info">
+    <h2 id="concept-title">Cupertino Specimen · 苹果原厂硬件规格档案</h2>
+    <p id="concept-desc">汲取 Apple 芯片发布会与工业白皮书的排版哲学，极简黑白灰基调，超高精度数据排版，严谨的毫米级工程美学。</p>
+  </div>
+  <div class="concept-tags" id="concept-tags">
+    <span class="c-tag">SF Pro & Mono</span>
+    <span class="c-tag">Hairline Grid</span>
+    <span class="c-tag">Apple Silicon 白皮书</span>
+    <span class="c-tag">工业档案感</span>
+  </div>
+</div>
+
+<!-- 主画布 -->
+<div class="viewport">
+  <div class="swiss-ruler"></div>
+
+  <!-- 顶栏 Masthead / 机器元数据 -->
+  <div class="spec-hero">
+    <div>
+      <div class="spec-title">DIAGNOSTIC TELEMETRY DOSSIER</div>
+      <div class="spec-machine">MacBook Pro · Apple M3 Max</div>
+      <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">
+        16-Core (12 Performance + 4 Efficiency) · 64 GB Unified Memory · macOS 14.6
+      </div>
+    </div>
+    <div class="spec-table">
+      <div class="spec-item">SERIAL: <strong>HG-8841-M3M</strong></div>
+      <div class="spec-item">RANGE: <strong>LAST 24 HOURS</strong></div>
+      <div class="spec-item">RESOLUTION: <strong>1 MINUTE</strong></div>
+    </div>
+  </div>
+
+  <!-- 首屏总览带:健康评分大环 + 核心 6 维 KPI 矩阵 -->
+  <div class="dash-grid">
+    <!-- 健康评分卡 -->
+    <div class="card health-card">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+        <span style="font-size: 12px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--text-muted);">HEALTH INDEX</span>
+        <span class="stat-badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981;">NOMINAL 96%</span>
+      </div>
+      <div style="display: flex; align-items: center; gap: 20px;">
+        <svg width="100" height="100" viewBox="0 0 100 100">
+          <circle cx="50" cy="50" r="42" stroke="var(--border-card)" stroke-width="8" fill="none"/>
+          <circle cx="50" cy="50" r="42" stroke="#10b981" stroke-width="8" stroke-dasharray="264" stroke-dashoffset="14" stroke-linecap="round" fill="none" transform="rotate(-90 50 50)"/>
+          <text x="50" y="47" text-anchor="middle" fill="var(--text-main)" font-size="24" font-weight="800" font-family="var(--font-mono)">96</text>
+          <text x="50" y="65" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-weight="600">EXCELLENT</text>
+        </svg>
+        <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; font-size: 11.5px;">
+          <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-muted);">CPU 压力均值</span><strong>4.2%</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-muted);">内存压力评级</span><strong style="color:#10b981;">正常 (Normal)</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-muted);">过热降频事件</span><strong>0 次</strong></div>
+          <div style="display: flex; justify-content: space-between;"><span style="color:var(--text-muted);">电池衰减斜率</span><strong>-0.01%/周</strong></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- KPI 6 格平铺 -->
+    <div class="kpi-row">
+      <div class="card kpi-card">
+        <div class="kpi-title">CPU 综合负载</div>
+        <div class="kpi-num">14.8<span style="font-size:13px; color:var(--text-muted);">%</span></div>
+        <div class="kpi-sub" style="color:#10b981;">峰值 92.4% · 12P / 4E</div>
+        <svg class="spark-svg" viewBox="0 0 120 40">
+          <path d="M0,35 Q20,32 40,28 T80,12 T120,24" fill="none" stroke="#3b82f6" stroke-width="2"/>
+        </svg>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-title">统一内存已用</div>
+        <div class="kpi-num">38.4<span style="font-size:13px; color:var(--text-muted);"> GB</span></div>
+        <div class="kpi-sub">压缩 1.2 GB · Swap 0 B</div>
+        <svg class="spark-svg" viewBox="0 0 120 40">
+          <path d="M0,20 Q30,22 60,18 T120,16" fill="none" stroke="#8b5cf6" stroke-width="2"/>
+        </svg>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-title">整机瞬时功耗</div>
+        <div class="kpi-num">18.2<span style="font-size:13px; color:var(--text-muted);"> W</span></div>
+        <div class="kpi-sub" style="color:#10b981;">峰值 64.5 W · 适配器供电</div>
+        <svg class="spark-svg" viewBox="0 0 120 40">
+          <path d="M0,32 Q25,30 50,15 T90,34 T120,26" fill="none" stroke="#f59e0b" stroke-width="2"/>
+        </svg>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-title">网络下行 (24h)</div>
+        <div class="kpi-num">18.6<span style="font-size:13px; color:var(--text-muted);"> GB</span></div>
+        <div class="kpi-sub">瞬时 4.2 MB/s · 上行 3.1 GB</div>
+        <svg class="spark-svg" viewBox="0 0 120 40">
+          <path d="M0,36 Q30,35 60,5 T90,32 T120,38" fill="none" stroke="#06b6d4" stroke-width="2"/>
+        </svg>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-title">电池健康 / 循环</div>
+        <div class="kpi-num">98<span style="font-size:13px; color:var(--text-muted);">%</span></div>
+        <div class="kpi-sub" style="color:#10b981;">循环 42 次 · 设计 72.4 Wh</div>
+        <svg class="spark-svg" viewBox="0 0 120 40">
+          <path d="M0,15 L40,15 L80,16 L120,16" fill="none" stroke="#10b981" stroke-width="2"/>
+        </svg>
+      </div>
+
+      <div class="card kpi-card">
+        <div class="kpi-title">磁盘写入总量</div>
+        <div class="kpi-num">42.8<span style="font-size:13px; color:var(--text-muted);"> GB</span></div>
+        <div class="kpi-sub">读写均速 18 MB/s · SSD 良好</div>
+        <svg class="spark-svg" viewBox="0 0 120 40">
+          <path d="M0,38 Q40,36 70,12 T120,30" fill="none" stroke="#ec4899" stroke-width="2"/>
+        </svg>
+      </div>
+    </div>
+  </div>
+
+  <!-- 双图表专项:Apple Silicon P/E 能效核利用率 + 24小时活跃热力图 -->
+  <div class="charts-duo">
+    <!-- P/E 核专项分析 -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div>
+          <h3 style="font-size:14px; font-weight:700; color:var(--text-main);">Apple Silicon P/E 能效核调度比</h3>
+          <p style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">实时追踪 12 性能核 (P-Cores) 与 4 能效核 (E-Cores) 的算力分工</p>
+        </div>
+        <span style="font-family:var(--font-mono); font-size:11px; color:var(--accent); font-weight:600;">P/E Ratio: 2.8x</span>
+      </div>
+      <div style="position:relative; height:180px; display:flex; align-items:flex-end; gap:8px; padding-top:20px;">
+        <!-- 刻度参考线 -->
+        <div style="position:absolute; inset:0; display:flex; flex-direction:column; justify-content:space-between; pointer-events:none; opacity:0.18;">
+          <div style="border-bottom:1px dashed var(--text-muted); width:100%;"></div>
+          <div style="border-bottom:1px dashed var(--text-muted); width:100%;"></div>
+          <div style="border-bottom:1px dashed var(--text-muted); width:100%;"></div>
+        </div>
+        <!-- 模拟 P/E 柱状图 -->
+        <div style="flex:1; height:45%; background:rgba(59,130,246,0.75); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:32%; background:rgba(59,130,246,0.75); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:85%; background:rgba(59,130,246,0.85); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:92%; background:rgba(59,130,246,0.95); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:60%; background:rgba(59,130,246,0.75); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:40%; background:rgba(59,130,246,0.65); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:25%; background:rgba(59,130,246,0.55); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:70%; background:rgba(168,85,247,0.85); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:65%; background:rgba(168,85,247,0.85); border-radius:4px 4px 0 0;"></div>
+        <div style="flex:1; height:50%; background:rgba(168,85,247,0.75); border-radius:4px 4px 0 0;"></div>
+      </div>
+      <div style="display:flex; gap:16px; margin-top:14px; font-size:11px; color:var(--text-muted);">
+        <span style="display:flex; align-items:center; gap:6px;"><span style="width:8px; height:8px; border-radius:2px; background:#3b82f6;"></span>12P 性能核心均值 (24.8%)</span>
+        <span style="display:flex; align-items:center; gap:6px;"><span style="width:8px; height:8px; border-radius:2px; background:#a855f7;"></span>4E 能效核心均值 (62.1%)</span>
+      </div>
+    </div>
+
+    <!-- 24小时活跃热力矩阵 -->
+    <div class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <div>
+          <h3 style="font-size:14px; font-weight:700; color:var(--text-main);">24 小时活跃与负载热力图</h3>
+          <p style="font-size:11.5px; color:var(--text-muted); margin-top:2px;">星期 × 小时矩阵，量化您的数字工作作息习惯</p>
+        </div>
+        <span style="font-family:var(--font-mono); font-size:11px; color:#10b981; font-weight:600;">最忙时段: 14:00-16:00</span>
+      </div>
+      <!-- 7 天 x 12 双时段热力网格 -->
+      <div style="display:grid; grid-template-columns: repeat(12, 1fr); gap: 4px; padding: 10px 0;">
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.12);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.12);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.25);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.45);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.7);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.9);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.85);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.6);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.5);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.2);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.1);"></div>
+
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.12);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.35);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.55);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.95);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,1.0);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.9);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.7);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.4);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.15);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.18);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.45);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.8);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.85);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.75);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.5);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.3);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.12);"></div>
+        <div style="height:14px; border-radius:3px; background:rgba(59,130,246,0.08);"></div>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:8px; font-family:var(--font-mono); font-size:10px; color:var(--text-muted);">
+        <span>00:00 (休眠)</span>
+        <span>08:00</span>
+        <span>14:00 (负载高峰)</span>
+        <span>20:00</span>
+        <span>24:00</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部:智能洞察与异常排障事件录像机 -->
+  <div class="card" style="margin-top:20px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+      <h3 style="font-size:14px; font-weight:700; color:var(--text-main);">智能洞察与关键事件流 (Insight & Heuristic Events)</h3>
+      <span style="font-size:11.5px; color:var(--text-muted);">过去 24 小时捕获 3 起事件</span>
+    </div>
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:14px;">
+      <div class="insight-card">
+        <div style="font-size:11px; color:#10b981; font-weight:700; margin-bottom:4px;">🟢 负载定性：轻中度工况</div>
+        <p style="font-size:12px; color:var(--text-muted);">全天 86% 时长处于低功耗能效区间，无热降频（Thermal Throttling）发生。</p>
+      </div>
+      <div class="insight-card">
+        <div style="font-size:11px; color:#f59e0b; font-weight:700; margin-bottom:4px;">🟡 突发峰值：Xcode 构建任务</div>
+        <p style="font-size:12px; color:var(--text-muted);">15:42 瞬时 CPU 飙升至 92%，整机功耗冲至 64.5W，持续 45 秒后平稳回落。</p>
+      </div>
+      <div class="insight-card">
+        <div style="font-size:11px; color:#3b82f6; font-weight:700; margin-bottom:4px;">🔵 供电事件：电源切换</div>
+        <p style="font-size:12px; color:var(--text-muted);">18:10 拔出 MagSafe 适配器转为电池供电，放电速率均值 9.2W，预估续航 7.8h。</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  // 原型风格配置矩阵
+  const CONCEPTS = {
+    cupertino: {
+      title: "Cupertino Specimen · 苹果原厂硬件规格档案",
+      desc: "汲取 Apple 芯片发布会与工业白皮书的排版哲学，极简黑白灰基调，超高精度数据排版，严谨的毫米级工程美学。",
+      tags: ["SF Pro & Mono", "Hairline Grid", "Apple Silicon 白皮书", "工业档案感"]
+    },
+    cyberpunk: {
+      title: "Liquid Cyberpunk · 液态赛博玻璃 / 极客机能风",
+      desc: "深邃黑底融入电光青与量子紫流体光晕，微倒角发光边框，多层高斯毛玻璃与悬浮动效，极具视觉冲击力与未来感。",
+      tags: ["Dynamic Aurora Mesh", "Neon Glows", "Conic Borders", "极客科技张力"]
+    },
+    swiss: {
+      title: "Swiss Telemetry · 瑞士国际主义信息图表 / 极简数据艺术",
+      desc: "遵从国际主义设计规范与粗黑字体网格，严苛锐角切分，高对比国际橙提示点，剥离一切虚浮装饰，回归纯粹数字美感。",
+      tags: ["Josef Müller-Brockmann", "Modular Grid", "Huge Numerics", "无光晕纯平面"]
+    },
+    aerospace: {
+      title: "Aerospace HUD · 航天测控台 / 深空战术仪表板",
+      desc: "灵感源自 SpaceX 飞船触控与深空测控台，战术切角卡片、瞄准十字线、荧光绿荧光屏与状态轨，掌控整机每一刻心跳。",
+      tags: ["Chamfered Cut-corner", "Crosshair Brackets", "CRT Phosphor Green", "战术态势感知"]
+    },
+    bento: {
+      title: "Bento Chronicle · 日式便当盒 / 现代数字生活手记",
+      desc: "当代 Apple 风格非对称 Bento Box 网格，柔和的大圆角与低饱和莫兰迪色，将冷冰冰的硬件指标转变为一份温暖的 Mac 机器手记。",
+      tags: ["Asymmetric Bento Box", "Modern Editorial", "Soft Radii 22px", "适合社交长图分享"]
+    }
+  };
+
+  const tabs = document.querySelectorAll(".proto-tab");
+  const conceptTitle = document.getElementById("concept-title");
+  const conceptDesc = document.getElementById("concept-desc");
+  const conceptTags = document.getElementById("concept-tags");
+
+  tabs.forEach(tab => {
+    tab.addEventListener("click", () => {
+      tabs.forEach(t => t.classList.remove("active"));
+      tab.classList.add("active");
+      const style = tab.dataset.style;
+      document.body.setAttribute("data-style", style);
+
+      const meta = CONCEPTS[style];
+      conceptTitle.textContent = meta.title;
+      conceptDesc.textContent = meta.desc;
+      conceptTags.innerHTML = meta.tags.map(t => `<span class="c-tag">${t}</span>`).join("");
+    });
+  });
+
+  // 主题切换 (浅色/深色)
+  const themeBtn = document.getElementById("theme-btn");
+  const themeIcon = document.getElementById("theme-icon");
+  const themeLabel = document.getElementById("theme-label");
+
+  themeBtn.addEventListener("click", () => {
+    const isLight = document.body.classList.toggle("light");
+    themeIcon.textContent = isLight ? "🌙" : "☀️";
+    themeLabel.textContent = isLight ? "切换深色模式" : "切换浅色模式";
+  });
+</script>
+</body>
+</html>

@@ -7,26 +7,26 @@
 <style>
   /*__FLATPICKR_CSS__*/
   :root {
-    --bg: #080b12;
-    --bg-grad-1: rgba(122, 162, 247, 0.12);
-    --bg-grad-2: rgba(168, 85, 247, 0.08);
-    --bg-grad-3: rgba(52, 199, 89, 0.04);
-    --card: rgba(255, 255, 255, 0.045);
-    --card-border: rgba(255, 255, 255, 0.09);
-    --card-hover: rgba(255, 255, 255, 0.065);
-    --card-glow: rgba(255, 255, 255, 0.025);
-    --inset: rgba(255, 255, 255, 0.07);
-    --text: rgba(255, 255, 255, 0.96);
-    --text-2: rgba(255, 255, 255, 0.72);
-    --text-3: rgba(255, 255, 255, 0.50);
-    --tooltip-bg: rgba(14, 19, 30, 0.95);
+    --bg: #0a0b0e;
+    --bg-grad-1: rgba(41, 151, 255, 0.07);
+    --bg-grad-2: rgba(255, 255, 255, 0.02);
+    --bg-grad-3: transparent;
+    --card: rgba(20, 23, 29, 0.78);
+    --card-border: rgba(255, 255, 255, 0.08);
+    --card-hover: rgba(255, 255, 255, 0.04);
+    --card-glow: rgba(255, 255, 255, 0.03);
+    --inset: rgba(255, 255, 255, 0.04);
+    --text: #f5f5f7;
+    --text-2: #a1a1a6;
+    --text-3: #86868b;
+    --tooltip-bg: rgba(18, 20, 26, 0.96);
     --tooltip-border: rgba(255, 255, 255, 0.12);
-    --accent: #7aa2f7;
-    --radius: 16px;
-    --nav-bg: rgba(8, 11, 18, 0.75);
-    --shadow: 0 12px 32px rgba(0, 0, 0, 0.30);
-    --shadow-sm: 0 4px 14px rgba(0, 0, 0, 0.20);
-    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC",
+    --accent: #2997ff;
+    --radius: 12px;
+    --nav-bg: rgba(10, 11, 14, 0.82);
+    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.20);
+    --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC",
             "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
     --font-mono: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", monospace;
     /* 应用图标扁平渲染:报告为单文件产物,图标以 data URI 随模板内嵌 */
@@ -35,24 +35,24 @@
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #eef0f6;
-      --bg-grad-1: rgba(122, 162, 247, 0.15);
-      --bg-grad-2: rgba(168, 85, 247, 0.07);
-      --bg-grad-3: rgba(52, 199, 89, 0.05);
-      --card: rgba(255, 255, 255, 0.75);
-      --card-border: rgba(23, 34, 58, 0.09);
-      --card-hover: rgba(255, 255, 255, 0.92);
-      --card-glow: rgba(255, 255, 255, 0.5);
-      --inset: rgba(23, 34, 58, 0.06);
-      --text: #1b2433;
-      --text-2: #46536b;
-      --text-3: #71809a;
-      --tooltip-bg: rgba(255, 255, 255, 0.97);
-      --tooltip-border: rgba(23, 34, 58, 0.12);
-      --accent: #2563eb;
-      --nav-bg: rgba(238, 240, 246, 0.80);
-      --shadow: 0 12px 32px rgba(23, 34, 58, 0.10);
-      --shadow-sm: 0 4px 14px rgba(23, 34, 58, 0.07);
+      --bg: #f5f5f7;
+      --bg-grad-1: rgba(0, 113, 227, 0.05);
+      --bg-grad-2: rgba(0, 0, 0, 0.02);
+      --bg-grad-3: transparent;
+      --card: #ffffff;
+      --card-border: rgba(0, 0, 0, 0.08);
+      --card-hover: #ffffff;
+      --card-glow: rgba(0, 0, 0, 0.02);
+      --inset: #f5f5f7;
+      --text: #1d1d1f;
+      --text-2: #515154;
+      --text-3: #86868b;
+      --tooltip-bg: rgba(255, 255, 255, 0.98);
+      --tooltip-border: rgba(0, 0, 0, 0.10);
+      --accent: #0071e3;
+      --nav-bg: rgba(245, 245, 247, 0.85);
+      --shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
       color-scheme: light;
     }
   }
@@ -92,23 +92,28 @@
   }
   .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 28px 60px; }
 
-  /* ── 报告 masthead:品牌位唯一归属顶栏,此处只承载报表标题与设备元信息 ── */
+  /* ── 报告 masthead:苹果原厂硬件规格档案 (Cupertino Specimen) ── */
   .hero {
     display: flex; flex-wrap: wrap; gap: 12px 24px;
     align-items: flex-end; justify-content: space-between;
-    padding: 2px 0 18px; margin-bottom: 18px;
-    border-bottom: 1px solid transparent;
-    border-image: linear-gradient(90deg, var(--card-border), transparent 85%) 1;
+    padding: 4px 0 20px; margin-bottom: 20px;
+    border-bottom: 1px solid var(--card-border);
   }
-  .brand h1 { margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
-  .brand .sub { margin-top: 6px; font-size: 12.5px; color: var(--text-3); letter-spacing: 0.1px; }
+  .brand .kicker {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 1.5px; color: var(--accent); margin-bottom: 5px;
+    font-family: var(--font-mono);
+  }
+  .brand h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.6px; color: var(--text); }
+  .brand .sub { margin-top: 5px; font-size: 12.5px; color: var(--text-3); letter-spacing: 0.1px; }
   .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
   .chip {
     display: inline-flex; align-items: center; gap: 6px;
-    font-size: 12px; color: var(--text-2);
-    padding: 6px 12px; border-radius: 999px;
+    font-size: 11.5px; color: var(--text-2); font-family: var(--font-mono);
+    padding: 5px 11px; border-radius: 8px;
     background: var(--card); border: 1px solid var(--card-border);
     box-shadow: 0 1px 0 var(--card-glow) inset;
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   }
   .chip .icon { width: 13px; height: 13px; color: var(--text-3); }
 
@@ -190,13 +195,14 @@
       var(--card);
     border: 1px solid var(--card-border);
     border-radius: var(--radius); padding: 18px 20px 14px;
-    box-shadow: 0 1px 0 var(--card-glow) inset;
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   }
   section { margin-bottom: 18px; }
-  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 6px; padding-bottom: 11px; border-bottom: 1px solid var(--card-border); }
-  .sec-head .icon { width: 17px; height: 17px; color: var(--text-3); flex: none; }
-  .sec-head h2 { margin: 0; font-size: 14.5px; font-weight: 700; letter-spacing: -0.1px; }
-  .sec-head .hint { margin-left: auto; font-size: 11.5px; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--card-border); }
+  .sec-head .icon { width: 16px; height: 16px; color: var(--text-3); flex: none; }
+  .sec-head h2 { margin: 0; font-size: 13.5px; font-weight: 700; letter-spacing: -0.1px; text-transform: uppercase; }
+  .sec-head .hint { margin-left: auto; font-size: 11px; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
   .chart { width: 100%; height: 300px; }
   .chart.tall { height: 340px; }
   .chart.short { height: 260px; }
@@ -218,10 +224,10 @@
     display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
     gap: 10px; align-content: start;
   }
-  .summary-kpis .kpi { padding: 11px 13px 9px; border-radius: 13px; }
-  .summary-kpis .kpi-chip { width: 27px; height: 27px; border-radius: 8px; }
-  .summary-kpis .kpi-chip .icon { width: 14px; height: 14px; }
-  .summary-kpis .kpi .value { font-size: 19px; margin-top: 7px; }
+  .summary-kpis .kpi { padding: 12px 14px 10px; border-radius: var(--radius); }
+  .summary-kpis .kpi-chip { width: 26px; height: 26px; border-radius: 6px; }
+  .summary-kpis .kpi-chip .icon { width: 13px; height: 13px; }
+  .summary-kpis .kpi .value { font-size: 20px; margin-top: 6px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; }
   .summary-kpis .kpi .sub { margin-top: 2px; }
   .summary-kpis .spark { height: 22px; }
   .summary-kpis .spark-wrap { padding-top: 7px; }
@@ -253,9 +259,10 @@
   /* ── KPI(直接填充 .summary-kpis 栅格) ─── */
   .kpi {
     background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card);
-    border: 1px solid var(--card-border); border-radius: 15px;
-    padding: 15px 16px 12px; display: flex; flex-direction: column;
+    border: 1px solid var(--card-border); border-radius: var(--radius);
+    padding: 14px 16px 12px; display: flex; flex-direction: column;
     box-shadow: 0 1px 0 var(--card-glow) inset;
+    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
     transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
   }
   .kpi:hover { background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card-hover); transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 20%, var(--card-border)); }
@@ -267,13 +274,13 @@
   .spark { width: 100%; height: 30px; display: block; overflow: visible; }
   .spark polyline { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .spark .spark-area { fill: currentColor; opacity: 0.13; }
-  .c-cpu { color: #f97316; } .c-gpu { color: #a855f7; } .c-mem { color: #38bdf8; }
-  .c-net { color: #14b8a6; } .c-disk { color: #d9a94a; } .c-batt { color: #10b981; }
-  .c-thermal { color: #ef4444; } .c-muted { color: var(--text-3); } .c-accent { color: var(--accent); }
+  .c-cpu { color: #2997ff; } .c-gpu { color: #bf5af2; } .c-mem { color: #64d2ff; }
+  .c-net { color: #70d7c7; } .c-disk { color: #ffd60a; } .c-batt { color: #30d158; }
+  .c-thermal { color: #ff453a; } .c-muted { color: var(--text-3); } .c-accent { color: var(--accent); }
   @media (prefers-color-scheme: light) {
-    .c-cpu { color: #ea580c; } .c-gpu { color: #9333ea; } .c-mem { color: #0284c7; }
-    .c-net { color: #0d9488; } .c-disk { color: #b45309; } .c-batt { color: #059669; }
-    .c-thermal { color: #dc2626; }
+    .c-cpu { color: #0071e3; } .c-gpu { color: #8944ab; } .c-mem { color: #0284c7; }
+    .c-net { color: #00c7be; } .c-disk { color: #b45309; } .c-batt { color: #34c759; }
+    .c-thermal { color: #ff3b30; }
   }
 
   /* ── 热力图 ────────────────────────────── */
@@ -439,12 +446,18 @@
 
   /* ── 分区标题图标芯片化 ────────────────── */
   .sec-head .icon-chip {
-    display: grid; place-items: center; width: 27px; height: 27px;
-    border-radius: 8.5px; flex: none;
-    background: color-mix(in srgb, currentColor 13%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 15%, transparent);
+    display: grid; place-items: center; width: 26px; height: 26px;
+    border-radius: 7.5px; flex: none;
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .sec-head .icon-chip .icon { width: 14px; height: 14px; margin: 0; }
+  .sec-head .icon-chip .icon { width: 14px; height: 14px; margin: 0; color: currentColor; }
+  .card:hover .sec-head .icon-chip {
+    transform: scale(1.06);
+    box-shadow: 0 0 14px color-mix(in srgb, currentColor 22%, transparent);
+  }
 
   /* 粘性导航下的锚点滚动留白 */
   #content > section { scroll-margin-top: 68px; }
@@ -466,84 +479,309 @@
   .to-top.show { opacity: 1; transform: none; pointer-events: auto; }
   .to-top:hover { color: var(--accent); }
   .to-top .icon { width: 18px; height: 18px; }
+
+  /* ── 顶栏「打印 / 导出 PDF」按钮:与时间选择器同处导航右端 ── */
+  .nav-print {
+    display: inline-flex; align-items: center; gap: 6px; flex: none;
+    padding: 5px 11px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--card-border); background: var(--card);
+    color: var(--text-2); font: inherit; font-size: 12px; font-weight: 600;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+  .nav-print:hover {
+    color: var(--accent);
+    border-color: color-mix(in srgb, var(--accent) 42%, var(--card-border));
+  }
+  .nav-print .icon { width: 14px; height: 14px; }
+
+  /* ── 打印 / 导出 PDF:强制浅色纸张排版,移除屏幕专属的氛围层与交互件 ── */
+  @media print {
+    :root {
+      --bg: #ffffff;
+      --bg-grad-1: transparent; --bg-grad-2: transparent; --bg-grad-3: transparent;
+      --card: #ffffff; --card-border: #e5e5e7; --card-hover: #ffffff;
+      --card-glow: transparent; --inset: #f5f5f7;
+      --text: #1d1d1f; --text-2: #424245; --text-3: #6e6e73;
+      --tooltip-bg: #ffffff; --tooltip-border: #e5e5e7;
+      --accent: #2563eb; --nav-bg: #ffffff;
+      --shadow: none; --shadow-sm: none;
+      color-scheme: light;
+    }
+    /* 氛围光晕、粘性导航、返回顶部、打印按钮均为屏幕交互层,纸上不需要 */
+    body::before, body::after,
+    .sec-nav, .to-top, .nav-print { display: none !important; }
+    body.has-sec-nav { padding-top: 0 !important; }
+    body { background: #ffffff !important; }
+    /* 滚动进场的隐藏态必须全部显形,否则未滚到的分区在纸上空白 */
+    .reveal { opacity: 1 !important; transform: none !important; }
+    /* 去除发光与投影;卡片、图表、指标卡避免跨页截断,表格允许分页但整行不拆 */
+    * { box-shadow: none !important; text-shadow: none !important; }
+    .card, .kpi, .insight, .chart, .health-main { break-inside: avoid; page-break-inside: avoid; }
+    tr, .app-row, .event { break-inside: avoid; page-break-inside: avoid; }
+    thead { display: table-header-group; }
+    .chart canvas { max-width: 100% !important; height: auto !important; }
+    .wrap { max-width: none; padding: 0; }
+    a { color: inherit; text-decoration: none; }
+    @page { margin: 14mm; }
+  }
 </style>
 </head>
 <body>
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
-<symbol id="i-activity" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2" /></symbol>
-<symbol id="i-arrow-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14" />
-  <path d="m19 12-7 7-7-7" /></symbol>
-<symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 7-7 7 7" />
-  <path d="M12 19V5" /></symbol>
-<symbol id="i-battery-charging" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m11 7-3 5h4l-3 5" />
-  <path d="M14.856 6H16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.935" />
-  <path d="M22 14v-4" />
-  <path d="M5.14 18H4a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2.936" /></symbol>
-<symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v4" />
-  <path d="M16 2v4" />
-  <rect width="18" height="18" x="3" y="4" rx="2" />
-  <path d="M3 10h18" /></symbol>
-<symbol id="i-chart-column" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16" />
-  <path d="M18 17V9" />
-  <path d="M13 17V5" />
-  <path d="M8 17v-3" /></symbol>
-<symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 6v6l4 2" />
-  <circle cx="12" cy="12" r="10" /></symbol>
-<symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20v2" />
-  <path d="M12 2v2" />
-  <path d="M17 20v2" />
-  <path d="M17 2v2" />
-  <path d="M2 12h2" />
-  <path d="M2 17h2" />
-  <path d="M2 7h2" />
-  <path d="M20 12h2" />
-  <path d="M20 17h2" />
-  <path d="M20 7h2" />
-  <path d="M7 20v2" />
-  <path d="M7 2v2" />
-  <rect x="4" y="4" width="16" height="16" rx="2" />
-  <rect x="8" y="8" width="8" height="8" rx="1" /></symbol>
-<symbol id="i-fan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.827 16.379a6.082 6.082 0 0 1-8.618-7.002l5.412 1.45a6.082 6.082 0 0 1 7.002-8.618l-1.45 5.412a6.082 6.082 0 0 1 8.618 7.002l-5.412-1.45a6.082 6.082 0 0 1-7.002 8.618l1.45-5.412Z" />
-  <path d="M12 12v.01" /></symbol>
-<symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" /></symbol>
-<symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 14 4-4" />
-  <path d="M3.34 19a10 10 0 1 1 17.32 0" /></symbol>
-<symbol id="i-hard-drive" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" x2="2" y1="12" y2="12" />
-  <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-  <line x1="6" x2="6.01" y1="16" y2="16" />
-  <line x1="10" x2="10.01" y1="16" y2="16" /></symbol>
-<symbol id="i-memory-stick" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 19v-3" />
-  <path d="M10 19v-3" />
-  <path d="M14 19v-3" />
-  <path d="M18 19v-3" />
-  <path d="M8 11V9" />
-  <path d="M16 11V9" />
-  <path d="M12 11V9" />
-  <path d="M2 15h20" />
-  <path d="M2 7a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v1.1a2 2 0 0 0 0 3.837V17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-5.1a2 2 0 0 0 0-3.837Z" /></symbol>
-<symbol id="i-monitor" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2" />
-  <line x1="8" x2="16" y1="21" y2="21" />
-  <line x1="12" x2="12" y1="17" y2="21" /></symbol>
-<symbol id="i-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1" />
-  <rect x="2" y="16" width="6" height="6" rx="1" />
-  <rect x="9" y="2" width="6" height="6" rx="1" />
-  <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-  <path d="M12 12V8" /></symbol>
-<symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
-  <path d="M20 3v4" />
-  <path d="M22 5h-4" />
-  <path d="M4 17v2" />
-  <path d="M5 18H3" /></symbol>
-<symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18" />
-  <rect width="18" height="18" x="3" y="3" rx="2" />
-  <path d="M3 9h18" />
-  <path d="M3 15h18" /></symbol>
-<symbol id="i-thermometer" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z" /></symbol>
+  <!-- 设备与平台 (Header Chips) -->
+  <symbol id="i-device-mac" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9Z" />
+    <path d="M2 19.5h20" stroke-width="2" />
+    <circle cx="12" cy="17.5" r="0.8" fill="currentColor" />
+  </symbol>
+  <symbol id="i-os-apple" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+    <path d="M8 9.5a2 2 0 1 1 2.5 1.94v2.12A2 2 0 1 1 8 15.5" stroke-width="1.6" />
+    <circle cx="9.5" cy="8.5" r="0.8" fill="currentColor" />
+    <circle cx="9.5" cy="15.5" r="0.8" fill="currentColor" />
+    <path d="M14.5 9.5a2 2 0 1 0-2.5 1.94v2.12a2 2 0 1 0 2.5 1.94" stroke-width="1.6" />
+    <circle cx="14.5" cy="8.5" r="0.8" fill="currentColor" />
+    <circle cx="14.5" cy="15.5" r="0.8" fill="currentColor" />
+  </symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3.5 2" stroke-width="2" />
+  </symbol>
+  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.5" y="4.5" width="17" height="16" rx="3" />
+    <path d="M3.5 9.5h17" stroke-width="1.5" />
+    <path d="M8 2.5v3.5M16 2.5v3.5" stroke-width="2" />
+    <circle cx="8" cy="14" r="1" fill="currentColor" />
+    <circle cx="12" cy="14" r="1" fill="currentColor" />
+    <circle cx="16" cy="14" r="1" fill="currentColor" />
+  </symbol>
+
+  <!-- 总体健康与趋势 -->
+  <symbol id="i-health" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.2L19.5 6.5V12.2C19.5 16.8 16.3 20.8 12 21.8C7.7 20.8 4.5 16.8 4.5 12.2V6.5L12 3.2Z" fill="currentColor" fill-opacity="0.16" />
+    <path d="M8.8 12.2L11 14.5L15.5 9.8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+  </symbol>
+  <symbol id="i-trend" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="3" y1="20" x2="21" y2="20" stroke-dasharray="2 3" opacity="0.4" />
+    <path d="M3.5 16.5L8 12.5L13 14.5L20.5 5.5" stroke-width="2" />
+    <circle cx="20.5" cy="5.5" r="2" fill="currentColor" />
+  </symbol>
+  <symbol id="i-overview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
+    <path d="M3 13.5L7 9.5L11 14.5L15 8L19 13.5L21 11" stroke-width="1.8" />
+  </symbol>
+  <symbol id="i-heatmap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="4" />
+    <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" fill-opacity="0.3" />
+    <circle cx="12" cy="7.5" r="1.8" fill="currentColor" fill-opacity="0.6" />
+    <circle cx="16.5" cy="7.5" r="2.2" fill="currentColor" />
+    <circle cx="7.5" cy="12" r="1.8" fill="currentColor" fill-opacity="0.6" />
+    <circle cx="12" cy="12" r="2.4" fill="currentColor" />
+    <circle cx="16.5" cy="12" r="1.8" fill="currentColor" fill-opacity="0.7" />
+    <circle cx="7.5" cy="16.5" r="1.3" fill="currentColor" fill-opacity="0.25" />
+    <circle cx="12" cy="16.5" r="1.6" fill="currentColor" fill-opacity="0.5" />
+    <circle cx="16.5" cy="16.5" r="2" fill="currentColor" fill-opacity="0.85" />
+  </symbol>
+
+  <!-- CPU 家族 -->
+  <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
+    <rect x="8.5" y="8.5" width="7" height="7" rx="1.5" fill="currentColor" fill-opacity="0.22" />
+    <path d="M8.5 2v2.5M12 2v2.5M15.5 2v2.5M8.5 19.5V22M12 19.5V22M15.5 19.5V22" />
+    <path d="M2 8.5h2.5M2 12h2.5M2 15.5h2.5M19.5 8.5H22M19.5 12H22M19.5 15.5H22" />
+  </symbol>
+  <symbol id="i-cpu-clusters" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="3.5" />
+    <rect x="5.5" y="5.5" width="6" height="13" rx="1.5" fill="currentColor" fill-opacity="0.25" />
+    <rect x="13.5" y="5.5" width="5" height="5.5" rx="1.2" fill="currentColor" fill-opacity="0.15" />
+    <rect x="13.5" y="13" width="5" height="5.5" rx="1.2" fill="currentColor" fill-opacity="0.15" />
+    <line x1="12.5" y1="5.5" x2="12.5" y2="18.5" stroke-dasharray="1 2" stroke-width="1.2" opacity="0.6" />
+  </symbol>
+  <symbol id="i-distribution" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="3" y1="20" x2="21" y2="20" />
+    <rect x="4.5" y="15" width="2.5" height="5" rx="0.8" fill="currentColor" fill-opacity="0.15" />
+    <rect x="8.5" y="10" width="2.5" height="10" rx="0.8" fill="currentColor" fill-opacity="0.25" />
+    <rect x="12.5" y="6" width="2.5" height="14" rx="0.8" fill="currentColor" fill-opacity="0.35" />
+    <rect x="16.5" y="12" width="2.5" height="8" rx="0.8" fill="currentColor" fill-opacity="0.2" />
+    <path d="M3.5 19C6 18 7.5 12 10.5 7.5C12.5 4.5 14.5 7 17 13C18.5 16.5 19.5 18.5 21 19" stroke-width="1.8" />
+  </symbol>
+
+  <!-- GPU 家族 (彻底替换旧的 i-monitor 桌面显示器) -->
+  <symbol id="i-gpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2.5L20.5 7.5V16.5L12 21.5L3.5 16.5V7.5L12 2.5Z" />
+    <path d="M12 2.5V12L20.5 7.5" fill="currentColor" fill-opacity="0.24" />
+    <path d="M12 12V21.5L20.5 16.5" fill="currentColor" fill-opacity="0.12" />
+    <path d="M3.5 7.5L12 12L3.5 16.5" fill="currentColor" fill-opacity="0.28" />
+  </symbol>
+  <symbol id="i-gpu-mem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="7" y="5.5" width="10" height="13" rx="2" fill="currentColor" fill-opacity="0.2" />
+    <rect x="2.5" y="7" width="2.5" height="4.5" rx="0.8" />
+    <rect x="2.5" y="12.5" width="2.5" height="4.5" rx="0.8" />
+    <rect x="19" y="7" width="2.5" height="4.5" rx="0.8" />
+    <rect x="19" y="12.5" width="2.5" height="4.5" rx="0.8" />
+    <line x1="5" y1="9.2" x2="7" y2="9.2" stroke-width="1.4" />
+    <line x1="5" y1="14.8" x2="7" y2="14.8" stroke-width="1.4" />
+    <line x1="17" y1="9.2" x2="19" y2="9.2" stroke-width="1.4" />
+    <line x1="17" y1="14.8" x2="19" y2="14.8" stroke-width="1.4" />
+  </symbol>
+
+  <!-- 内存家族 -->
+  <symbol id="i-mem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="6.5" width="19" height="11" rx="2" />
+    <rect x="5" y="9" width="3" height="4" rx="0.8" fill="currentColor" fill-opacity="0.25" />
+    <rect x="9.5" y="9" width="3" height="4" rx="0.8" fill="currentColor" fill-opacity="0.25" />
+    <rect x="14" y="9" width="3" height="4" rx="0.8" fill="currentColor" fill-opacity="0.25" />
+    <path d="M2.5 17.5h6v-1.5h1.5v1.5h11" />
+  </symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4.5 17.5A8.5 8.5 0 1 1 19.5 17.5" />
+    <line x1="12" y1="13" x2="16.5" y2="8.5" stroke-width="2" />
+    <circle cx="12" cy="13" r="2" fill="currentColor" />
+    <line x1="12" y1="4.5" x2="12" y2="6.5" opacity="0.6" />
+  </symbol>
+
+  <!-- 存储与磁盘 (彻底替换旧的 i-hard-drive 机械硬盘) -->
+  <symbol id="i-disk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="4" y="3.5" width="16" height="17" rx="2.5" />
+    <rect x="7" y="6" width="10" height="4.5" rx="1" fill="currentColor" fill-opacity="0.25" />
+    <rect x="7" y="12" width="4.5" height="4.5" rx="0.8" fill="currentColor" fill-opacity="0.18" />
+    <rect x="12.5" y="12" width="4.5" height="4.5" rx="0.8" fill="currentColor" fill-opacity="0.18" />
+    <path d="M7 20.5v1.5M10 20.5v1.5M14 20.5v1.5M17 20.5v1.5" stroke-width="1.5" />
+  </symbol>
+  <symbol id="i-disk-daily" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="3" y1="20.5" x2="21" y2="20.5" />
+    <rect x="5" y="9.5" width="5.5" height="11" rx="1.5" fill="currentColor" fill-opacity="0.25" />
+    <rect x="13.5" y="5" width="5.5" height="15.5" rx="1.5" fill="currentColor" fill-opacity="0.15" />
+    <path d="M7.75 7V4M6.25 5.5l1.5-1.5 1.5 1.5" stroke-width="1.5" />
+    <path d="M16.25 2v3M14.75 3.5l1.5 1.5 1.5-1.5" stroke-width="1.5" />
+  </symbol>
+
+  <!-- 网络家族 -->
+  <symbol id="i-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M3.6 9h16.8M3.6 15h16.8" opacity="0.5" />
+    <ellipse cx="12" cy="12" rx="4.5" ry="9" />
+  </symbol>
+  <symbol id="i-net-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.5v12.5M6 10.5l6 6 6-6" />
+    <path d="M4 19.5h16" stroke-width="1.8" />
+  </symbol>
+  <symbol id="i-net-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 16.5V4M6 9.5l6-6 6 6" />
+    <path d="M4 20h16" stroke-width="1.8" />
+  </symbol>
+  <symbol id="i-net-daily" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="3" y1="20.5" x2="21" y2="20.5" />
+    <rect x="4.5" y="11" width="4" height="9.5" rx="1.2" fill="currentColor" fill-opacity="0.18" />
+    <rect x="10" y="5.5" width="4" height="15" rx="1.2" fill="currentColor" fill-opacity="0.28" />
+    <rect x="15.5" y="8" width="4" height="12.5" rx="1.2" fill="currentColor" fill-opacity="0.22" />
+    <path d="M8 3.5C10 2.5 14 2.5 16 3.5" stroke-width="1.5" opacity="0.6" />
+  </symbol>
+
+  <!-- 功耗与电池 (彻底替换旧的 i-battery-charging) -->
+  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9.2" stroke-dasharray="2 3" opacity="0.45" />
+    <path d="M13 2.8L6.5 13H12L11 21.2L17.5 11H12L13 2.8Z" fill="currentColor" fill-opacity="0.22" stroke-width="1.8" />
+  </symbol>
+  <symbol id="i-batt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="6.5" width="16.5" height="11" rx="3" />
+    <path d="M21 10v4" stroke-width="2" stroke-linecap="round" />
+    <rect x="5" y="9" width="3" height="6" rx="1" fill="currentColor" />
+    <rect x="9.5" y="9" width="3" height="6" rx="1" fill="currentColor" />
+    <rect x="14" y="9" width="3" height="6" rx="1" fill="currentColor" fill-opacity="0.35" />
+  </symbol>
+  <symbol id="i-battery-health" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="6.5" width="16.5" height="11" rx="3" />
+    <path d="M21 10v4" stroke-width="2" stroke-linecap="round" />
+    <path d="M5.5 12h2.2l1.3-2.5 2 5 1.5-3 1 1.5h2" stroke-width="1.7" />
+  </symbol>
+
+  <!-- 热与异常时间线 -->
+  <symbol id="i-thermal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M14 4.5A2 2 0 0 0 10 4.5V14.2A4 4 0 1 0 14 14.2V4.5Z" />
+    <circle cx="12" cy="16.5" r="2" fill="currentColor" />
+    <line x1="12" y1="9" x2="12" y2="14.5" stroke-width="2" />
+    <path d="M17 7.5c1 .8 1 2.2 0 3M19 5.5c2 1.5 2 4.5 0 6" stroke-width="1.4" opacity="0.7" />
+  </symbol>
+  <symbol id="i-fan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="9.2" />
+    <circle cx="12" cy="12" r="2.5" fill="currentColor" fill-opacity="0.3" />
+    <path d="M12 9.5c0-3.5 3-4.5 3-4.5s0 3.5-3 4.5ZM14.5 12c3.5 0 4.5 3 4.5 3s-3.5 0-4.5-3ZM12 14.5c0 3.5-3 4.5-3 4.5s0-3.5 3-4.5ZM9.5 12c-3.5 0-4.5-3-4.5-3s3.5 0 4.5 3Z" fill="currentColor" fill-opacity="0.25" />
+  </symbol>
+  <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
+  </symbol>
+  <symbol id="i-events" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="5" y1="3" x2="5" y2="21" stroke-width="2" />
+    <path d="M5 5.5H18.5L15.5 10.5L18.5 15.5H5" fill="currentColor" fill-opacity="0.2" stroke-width="1.8" />
+    <circle cx="5" cy="5.5" r="2" fill="currentColor" />
+  </symbol>
+
+  <!-- 表格与智能洞察 -->
+  <symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3.5" width="18" height="17" rx="3" />
+    <line x1="3" y1="9.5" x2="21" y2="9.5" stroke-width="1.8" />
+    <line x1="3" y1="15" x2="21" y2="15" stroke-width="1.2" opacity="0.6" />
+    <line x1="9" y1="3.5" x2="9" y2="20.5" stroke-width="1.5" />
+    <line x1="15" y1="3.5" x2="15" y2="20.5" stroke-width="1.2" opacity="0.6" />
+    <rect x="3" y="3.5" width="18" height="6" rx="3" fill="currentColor" fill-opacity="0.15" />
+  </symbol>
+  <symbol id="i-insights" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="currentColor" fill-opacity="0.2" />
+    <circle cx="18.5" cy="5.5" r="1.2" fill="currentColor" />
+    <circle cx="6" cy="18.5" r="1" fill="currentColor" opacity="0.7" />
+  </symbol>
+  <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="currentColor" fill-opacity="0.2" />
+    <circle cx="18.5" cy="5.5" r="1.2" fill="currentColor" />
+    <circle cx="6" cy="18.5" r="1" fill="currentColor" opacity="0.7" />
+  </symbol>
+  <symbol id="i-chart-column" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="3" y1="20" x2="21" y2="20" />
+    <rect x="5" y="10" width="3" height="10" rx="1" fill="currentColor" fill-opacity="0.2" />
+    <rect x="10.5" y="5" width="3" height="15" rx="1" fill="currentColor" fill-opacity="0.3" />
+    <rect x="16" y="12" width="3" height="8" rx="1" fill="currentColor" fill-opacity="0.2" />
+  </symbol>
+  <symbol id="i-print" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="6 9 6 3 18 3 18 9" />
+    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
+    <rect x="6" y="14" width="12" height="7" rx="1" />
+  </symbol>
+  <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 19V5M5 12l7-7 7 7" />
+  </symbol>
+
+  <!-- Top 应用分类专属角标 -->
+  <symbol id="i-app-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
+    <rect x="8" y="8.5" width="8" height="7" rx="1.5" fill="currentColor" fill-opacity="0.25" />
+    <path d="M10 2v1.5M14 2v1.5M10 20.5V22M14 20.5V22" />
+  </symbol>
+  <symbol id="i-app-mem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
+    <rect x="6.5" y="9" width="3.2" height="6" rx="0.8" fill="currentColor" fill-opacity="0.25" />
+    <rect x="11" y="9" width="3.2" height="6" rx="0.8" fill="currentColor" fill-opacity="0.25" />
+    <rect x="15.5" y="9" width="2" height="6" rx="0.8" fill="currentColor" fill-opacity="0.25" />
+  </symbol>
+  <symbol id="i-app-gpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
+    <path d="M12 7L16.5 10V15L12 18L7.5 15V10L12 7Z" fill="currentColor" fill-opacity="0.25" />
+  </symbol>
+  <symbol id="i-app-net" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
+    <circle cx="12" cy="12" r="5" fill="currentColor" fill-opacity="0.2" />
+    <path d="M12 7c2 1.5 2 3.5 0 5s-2 3.5 0 5" opacity="0.6" />
+  </symbol>
+  <symbol id="i-app-generic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
+    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" fill-opacity="0.2" stroke-dasharray="1 2" stroke-width="1.2" />
+  </symbol>
 </svg>
 
 <div class="wrap" id="app">
   <header class="hero">
     <div class="brand">
+      <div class="kicker">DIAGNOSTIC TELEMETRY DOSSIER</div>
       <h1 id="report-title"></h1>
       <div class="sub" id="report-sub"></div>
     </div>
@@ -563,6 +801,10 @@
           <input type="text" id="cal-range" class="cal-field" readonly autocomplete="off">
         </div>
       </div>
+      <button class="nav-print" id="nav-print" type="button">
+        <svg class="icon"><use href="#i-print"/></svg>
+        <span id="nav-print-label"></span>
+      </button>
     </div>
     <div class="nav-progress" id="nav-progress"></div>
   </nav>
@@ -577,7 +819,7 @@
     <section class="summary">
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-accent"><use href="#i-gauge"/></svg><h2 id="t-health"></h2>
+          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-health"/></svg></span><h2 id="t-health"></h2>
         </div>
         <div class="health-main" id="health-main"></div>
       </div>
@@ -587,7 +829,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-accent"><use href="#i-chart-column"/></svg><h2 id="t-health-trend"></h2>
+          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-trend"/></svg></span><h2 id="t-health-trend"></h2>
         </div>
         <div class="chart short" id="ch-health-trend"></div>
         <div class="empty" id="e-health-trend"></div>
@@ -597,7 +839,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon"><use href="#i-activity"/></svg><h2 id="t-overview"></h2>
+          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-overview"/></svg></span><h2 id="t-overview"></h2>
           <span class="hint" id="h-overview"></span>
         </div>
         <div class="chart" id="ch-overview"></div>
@@ -608,7 +850,7 @@
     <section id="sec-heatmap" data-keep-nav>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon"><use href="#i-flame"/></svg><h2 id="t-heatmap"></h2>
+          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-heatmap"/></svg></span><h2 id="t-heatmap"></h2>
           <span class="hint" style="display:flex;align-items:center;gap:14px">
             <span id="h-heatmap"></span>
             <span class="heat-legend"><span id="lbl-low"></span><span class="heat-scale" id="heat-scale"></span><span id="lbl-high"></span></span>
@@ -621,7 +863,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-cpu"></h2>
+          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-cpu"/></svg></span><h2 id="t-cpu"></h2>
           <span class="hint" id="h-cpu"></span>
         </div>
         <div class="chart" id="ch-cpu"></div>
@@ -632,14 +874,14 @@
     <section class="inner-grid">
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-cpu-pe" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-cpu-clusters"/></svg></span><h2 id="t-cpu-pe" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-cpu-pe"></div>
         <div class="empty" id="e-cpu-pe"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-cpu-dist" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-distribution"/></svg></span><h2 id="t-cpu-dist" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-cpu-dist"></div>
         <div class="empty" id="e-cpu-dist"></div>
@@ -649,7 +891,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-gpu"></h2>
+          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-gpu"/></svg></span><h2 id="t-gpu"></h2>
           <span class="hint" id="h-gpu"></span>
         </div>
         <div class="chart" id="ch-gpu"></div>
@@ -660,14 +902,14 @@
     <section class="inner-grid">
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-gpu-dist" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-distribution"/></svg></span><h2 id="t-gpu-dist" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-gpu-dist"></div>
         <div class="empty" id="e-gpu-dist"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-gpu-mem" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-gpu-mem"/></svg></span><h2 id="t-gpu-mem" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-gpu-mem"></div>
         <div class="empty" id="e-gpu-mem"></div>
@@ -677,7 +919,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-mem"><use href="#i-memory-stick"/></svg><h2 id="t-mem"></h2>
+          <span class="icon-chip c-mem"><svg class="icon"><use href="#i-mem"/></svg></span><h2 id="t-mem"></h2>
           <span class="hint" id="h-mem"></span>
         </div>
         <div class="chart" id="ch-mem"></div>
@@ -688,7 +930,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-net"><use href="#i-network"/></svg><h2 id="t-net"></h2>
+          <span class="icon-chip c-net"><svg class="icon"><use href="#i-network"/></svg></span><h2 id="t-net"></h2>
           <span class="hint" id="h-net"></span>
         </div>
         <div class="chart" id="ch-net"></div>
@@ -699,7 +941,7 @@
     <section id="sec-net-daily" data-keep-nav>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-net"><use href="#i-chart-column"/></svg><h2 id="t-net-daily" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-net"><svg class="icon"><use href="#i-net-daily"/></svg></span><h2 id="t-net-daily" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-net-daily"></div>
         <div class="empty" id="e-net-daily"></div>
@@ -709,7 +951,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-disk"><use href="#i-hard-drive"/></svg><h2 id="t-disk"></h2>
+          <span class="icon-chip c-disk"><svg class="icon"><use href="#i-disk"/></svg></span><h2 id="t-disk"></h2>
           <span class="hint" id="h-disk"></span>
         </div>
         <div class="chart" id="ch-disk"></div>
@@ -720,7 +962,7 @@
     <section id="sec-disk-daily" data-keep-nav>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-disk"><use href="#i-chart-column"/></svg><h2 id="t-disk-daily" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-disk"><svg class="icon"><use href="#i-disk-daily"/></svg></span><h2 id="t-disk-daily" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-disk-daily"></div>
         <div class="empty" id="e-disk-daily"></div>
@@ -730,7 +972,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-batt"><use href="#i-battery-charging"/></svg><h2 id="t-power"></h2>
+          <span class="icon-chip c-batt"><svg class="icon"><use href="#i-power"/></svg></span><h2 id="t-power"></h2>
           <span class="hint" id="h-power"></span>
         </div>
         <div class="chart" id="ch-power"></div>
@@ -741,14 +983,14 @@
     <section class="inner-grid" id="sec-batt">
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-batt"><use href="#i-battery-charging"/></svg><h2 id="t-batt" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-batt"><svg class="icon"><use href="#i-batt"/></svg></span><h2 id="t-batt" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-batt"></div>
         <div class="empty" id="e-batt"></div>
       </div>
       <div class="card" id="sec-battery-health">
         <div class="sec-head">
-          <svg class="icon c-batt"><use href="#i-battery-charging"/></svg><h2 id="t-battery-health" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-batt"><svg class="icon"><use href="#i-battery-health"/></svg></span><h2 id="t-battery-health" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-battery-health"></div>
         <div class="empty" id="e-battery-health"></div>
@@ -758,25 +1000,25 @@
     <section class="apps-section" id="sec-apps">
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-cpu"><use href="#i-cpu"/></svg><h2 id="t-apps-cpu" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-app-cpu"/></svg></span><h2 id="t-apps-cpu" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-cpu"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-mem"><use href="#i-memory-stick"/></svg><h2 id="t-apps-mem" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-mem"><svg class="icon"><use href="#i-app-mem"/></svg></span><h2 id="t-apps-mem" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-mem"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-gpu"><use href="#i-monitor"/></svg><h2 id="t-apps-gpu" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-app-gpu"/></svg></span><h2 id="t-apps-gpu" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-gpu"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-net"><use href="#i-network"/></svg><h2 id="t-apps-net" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-net"><svg class="icon"><use href="#i-app-net"/></svg></span><h2 id="t-apps-net" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-net"></div>
       </div>
@@ -786,7 +1028,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-thermal"><use href="#i-thermometer"/></svg><h2 id="t-thermal"></h2>
+          <span class="icon-chip c-thermal"><svg class="icon"><use href="#i-thermal"/></svg></span><h2 id="t-thermal"></h2>
           <span class="hint" id="h-thermal"></span>
         </div>
         <div class="chart" id="ch-thermal"></div>
@@ -797,7 +1039,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-thermal"><use href="#i-activity"/></svg><h2 id="t-events"></h2>
+          <span class="icon-chip c-thermal"><svg class="icon"><use href="#i-events"/></svg></span><h2 id="t-events"></h2>
           <span class="hint" id="h-events"></span>
         </div>
         <div class="events" id="events"></div>
@@ -807,7 +1049,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <svg class="icon c-muted"><use href="#i-table"/></svg><h2 id="t-table"></h2>
+          <span class="icon-chip c-muted"><svg class="icon"><use href="#i-table"/></svg></span><h2 id="t-table"></h2>
         </div>
         <div class="tbl-wrap" id="tbl"></div>
         <div class="empty" id="e-table"></div>
@@ -816,7 +1058,7 @@
 
     <section>
       <div class="sec-head" style="margin:0 0 14px">
-        <svg class="icon" style="color:var(--accent)"><use href="#i-sparkles"/></svg><h2 id="t-insights"></h2>
+        <span class="icon-chip c-accent"><svg class="icon"><use href="#i-insights"/></svg></span><h2 id="t-insights"></h2>
       </div>
       <div class="insights" id="insights"></div>
     </section>
@@ -852,30 +1094,32 @@
   // ── 主题调色板(跟随系统明暗,变更时全量重绘) ───────────────────
   const themeQuery = matchMedia("(prefers-color-scheme: light)");
   let C = null;
+  // 打印 / 导出 PDF 期间为真:关图表动画与数字滚动,强制浅色重绘。
+  let PRINTING = false;
   function makePalette(isLight) {
     if (isLight) {
       return {
-        cpu: "#ea580c", gpu: "#9333ea", mem: "#0284c7", net: "#0d9488",
-        netUp: "#6366f1", disk: "#b45309", diskW: "#c2410c", batt: "#059669",
-        thermal: "#dc2626", battTemp: "#b45309", fan: "#64748b", accent: "#2563eb",
-        good: "#2f9e64", scoreGood: "#3bafda", fair: "#d4a843", poor: "#e08e45", critical: "#d94848",
-        grid: "rgba(20,32,58,0.07)", axis: "rgba(20,32,58,0.20)",
-        label: "rgba(27,36,51,0.55)", ring: "rgba(20,32,58,0.10)",
-        tooltipBg: "rgba(255,255,255,0.96)", tooltipBorder: "rgba(23,34,58,0.12)", tooltipText: "#1b2433",
+        cpu: "#0071e3", gpu: "#8944ab", mem: "#0284c7", net: "#00c7be",
+        netUp: "#5856d6", disk: "#b45309", diskW: "#d97706", batt: "#34c759",
+        thermal: "#ff3b30", battTemp: "#ff9500", fan: "#8e8e93", accent: "#0071e3",
+        good: "#34c759", scoreGood: "#0071e3", fair: "#ff9500", poor: "#ff9500", critical: "#ff3b30",
+        grid: "rgba(0,0,0,0.05)", axis: "rgba(0,0,0,0.16)",
+        label: "rgba(0,0,0,0.55)", ring: "rgba(0,0,0,0.08)",
+        tooltipBg: "rgba(255,255,255,0.98)", tooltipBorder: "rgba(0,0,0,0.10)", tooltipText: "#1d1d1f",
         heat: ["#e8edf4", "#c3d4ee", "#7fa8e0", "#f0a34c", "#e2543c"],
         heatBorder: "rgba(242,244,248,0.9)", pieBorder: "rgba(242,244,248,0.95)",
       };
     }
     return {
-      cpu: "#f97316", gpu: "#a855f7", mem: "#38bdf8", net: "#2dd4bf",
-      netUp: "#818cf8", disk: "#d9a94a", diskW: "#e07a5f", batt: "#34d399",
-      thermal: "#f87171", battTemp: "#fbbe2e", fan: "#94a3b8", accent: "#7aa2f7",
-      good: "#34c759", scoreGood: "#64d2ff", fair: "#ffd60a", poor: "#ff9f0a", critical: "#ff6961",
-      grid: "rgba(255,255,255,0.06)", axis: "rgba(255,255,255,0.14)",
-      label: "rgba(255,255,255,0.55)", ring: "rgba(255,255,255,0.09)",
-      tooltipBg: "rgba(18,24,38,0.94)", tooltipBorder: "rgba(255,255,255,0.12)", tooltipText: "#e8ecf4",
-      heat: ["#1c2534", "#274068", "#4c7fd0", "#f0a34c", "#f4643c"],
-      heatBorder: "rgba(10,14,22,0.85)", pieBorder: "rgba(10,14,22,0.9)",
+      cpu: "#2997ff", gpu: "#bf5af2", mem: "#64d2ff", net: "#70d7c7",
+      netUp: "#7d7aff", disk: "#ffd60a", diskW: "#ff9f0a", batt: "#30d158",
+      thermal: "#ff453a", battTemp: "#ff9f0a", fan: "#98989d", accent: "#2997ff",
+      good: "#30d158", scoreGood: "#2997ff", fair: "#ffd60a", poor: "#ff9f0a", critical: "#ff453a",
+      grid: "rgba(255,255,255,0.05)", axis: "rgba(255,255,255,0.12)",
+      label: "rgba(255,255,255,0.50)", ring: "rgba(255,255,255,0.08)",
+      tooltipBg: "rgba(18,20,26,0.96)", tooltipBorder: "rgba(255,255,255,0.12)", tooltipText: "#f5f5f7",
+      heat: ["#151922", "#203452", "#3a6bb5", "#d9822b", "#e05328"],
+      heatBorder: "rgba(10,11,14,0.85)", pieBorder: "rgba(10,11,14,0.9)",
     };
   }
   function applyTheme() {
@@ -889,6 +1133,27 @@
       applyTheme();
       applyRange();
     });
+  }
+
+  // 打印 / 导出 PDF 期间强制浅色图表:系统深色下画布轴标签为浅色,印到白纸上不可见,
+  // 打印前切浅色调色板重绘并同步刷新画布,打印后还原系统主题配色。
+  function enterPrintMode() {
+    if (PRINTING) return;
+    PRINTING = true;
+    if (!themeQuery.matches) {
+      C = makePalette(true);
+      $("heat-scale").className = "heat-scale theme-light";
+      applyRange();
+      Object.values(charts).forEach((c) => { try { c.getZr().refreshImmediately(); } catch (e) {} });
+    }
+  }
+  function exitPrintMode() {
+    if (!PRINTING) return;
+    PRINTING = false;
+    if (!themeQuery.matches) {
+      applyTheme();
+      applyRange();
+    }
   }
 
   const FONT = getComputedStyle(document.documentElement).getPropertyValue("--font");
@@ -935,7 +1200,7 @@
     const m = /^(-?[\d.]+)(.*)$/.exec(text);
     const target = m ? parseFloat(m[1]) : NaN;
     if (!m || isNaN(target)) { node.textContent = text; return; }
-    if (reduceMotion) { node.textContent = text; return; }
+    if (reduceMotion || PRINTING) { node.textContent = text; return; }
     const suffix = m[2];
     const decimals = (m[1].split(".")[1] || "").length;
     const dur = 650;
@@ -966,9 +1231,9 @@
   $("report-title").textContent = I.reportTitle;
   $("report-sub").textContent = I.reportSub;
   const chips = [
-    ["i-monitor", DATA.meta.device],
+    ["i-device-mac", DATA.meta.device],
     ["i-cpu", DATA.meta.model],
-    ["i-hard-drive", DATA.meta.os],
+    ["i-os-apple", DATA.meta.os],
     ["i-clock", t("metaDays", { v: DATA.meta.days })],
     ["i-calendar", t("metaGenerated", { v: fmtDate(generatedMs) + " " + fmtClock(generatedMs) })],
   ];
@@ -1010,6 +1275,21 @@
   // 日期范围字段的占位文案(选择后实时写入所选范围)
   $("cal-range").placeholder = I.selectRange;
   $("footer").innerHTML = I.footer + "<br>" + I.footerLocal;
+  // ── 打印 / 导出 PDF ─────────────────────────────
+  $("nav-print-label").textContent = t("print");
+  $("nav-print").title = t("print");
+  $("nav-print").addEventListener("click", () => {
+    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.hagimiPrint) {
+      window.webkit.messageHandlers.hagimiPrint.postMessage("print");
+    } else {
+      enterPrintMode();
+      // 双 rAF:待画布刷新为浅色后再唤起打印,避免预览捕获深色旧帧
+      requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
+    }
+  });
+  // Cmd+P 等浏览器原生打印路径同样在打印前后切换图表配色
+  window.addEventListener("beforeprint", enterPrintMode);
+  window.addEventListener("afterprint", exitPrintMode);
   ["overview", "cpu", "cpu-pe", "cpu-dist", "gpu", "gpu-dist", "gpu-mem", "mem",
    "net", "net-daily", "disk", "disk-daily", "power", "batt",
    "thermal", "table", "health-trend"].forEach((k) => {
@@ -1262,7 +1542,7 @@
         const iconData = apps.icons[entry.idx];
         const iconHTML = iconData
           ? '<img src="data:image/png;base64,' + iconData + '" alt="">'
-          : '<span class="app-icon-fallback">' + icon("i-monitor") + "</span>";
+          : '<span class="app-icon-fallback">' + icon("i-app-generic") + "</span>";
         row.innerHTML = iconHTML +
           '<span class="app-name"></span>' +
           '<span class="app-bar"><span class="app-bar-fill" style="width:' +
@@ -1316,7 +1596,7 @@
           lineSeries(I.sHealth, health, C.accent, { yAxisIndex: 1, step: "end" }),
         ],
       };
-      chart("ch-battery-health").setOption(option, { notMerge: true });
+      paintChart("ch-battery-health", option);
     }
   }
 
@@ -1550,6 +1830,11 @@
     if (!charts[id]) charts[id] = echarts.init($(id), null, { renderer: "canvas" });
     return charts[id];
   }
+  // 统一写图入口:打印重绘时关动画,保证 setOption 后能同步刷新到终态画布。
+  function paintChart(id, option) {
+    option.animation = !PRINTING;
+    chart(id).setOption(option, { notMerge: true });
+  }
   function setChart(id, option, rows, col) {
     const empty = $(id.replace("ch-", "e-"));
     const hasData = !col || hasAny(rows, col);
@@ -1561,7 +1846,7 @@
     }
     $(id).hidden = false;
     if (empty) empty.style.display = "none";
-    chart(id).setOption(option, { notMerge: true });
+    paintChart(id, option);
   }
   window.addEventListener("resize", () => {
     Object.values(charts).forEach((c) => c.resize());
@@ -1627,20 +1912,20 @@
     const defs = [
       ["cpu", "i-cpu", "c-cpu", I.kCpu, fmtPct(avgOf(rows, "cpu_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "cpu_max")) }), "cpu_avg"],
-      ["gpu", "i-monitor", "c-gpu", I.kGpu, fmtPct(avgOf(rows, "gpu_avg")),
+      ["gpu", "i-gpu", "c-gpu", I.kGpu, fmtPct(avgOf(rows, "gpu_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "gpu_max")) }), "gpu_avg"],
-      ["mem", "i-memory-stick", "c-mem", I.kMem, fmtPct(avgOf(rows, "mem_pct_avg")),
+      ["mem", "i-mem", "c-mem", I.kMem, fmtPct(avgOf(rows, "mem_pct_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "mem_pct_max")) }), "mem_pct_avg"],
       ["mem-pressure", "i-gauge", "c-mem", I.kMemPressure,
         fmtPct(avgOf(rows, "mem_pressure_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "mem_pressure_avg")) }), "mem_pressure_avg"],
-      ["net-down", "i-arrow-down", "c-net", I.kNetDown, fmtBytes(sumOf(rows, "net_down")),
+      ["net-down", "i-net-down", "c-net", I.kNetDown, fmtBytes(sumOf(rows, "net_down")),
         t("kPeakRate", { v: fmtRate(maxOf(rows, "net_down_peak")) }), "net_down"],
-      ["net-up", "i-arrow-up", "c-net", I.kNetUp, fmtBytes(sumOf(rows, "net_up")),
+      ["net-up", "i-net-up", "c-net", I.kNetUp, fmtBytes(sumOf(rows, "net_up")),
         t("kPeakRate", { v: fmtRate(maxOf(rows, "net_up_peak")) }), "net_up"],
-      ["disk", "i-hard-drive", "c-disk", I.kDisk, fmtBytes(sumOf(rows, "disk_read")),
+      ["disk", "i-disk", "c-disk", I.kDisk, fmtBytes(sumOf(rows, "disk_read")),
         t("kDiskW", { v: fmtBytes(sumOf(rows, "disk_write")) }), "disk_read"],
-      ["power", "i-battery-charging", "c-batt", I.kPower, fmtW(avgOf(rows, "power_avg")),
+      ["power", "i-power", "c-batt", I.kPower, fmtW(avgOf(rows, "power_avg")),
         t("kPeak", { v: fmtW(maxOf(rows, "power_max")) }), "power_avg"],
     ];
     defs.forEach(([key, ic, cls, label, value, sub, sparkCol]) => {
@@ -1740,7 +2025,7 @@
       }],
     };
     $("ch-heatmap").hidden = false;
-    chart("ch-heatmap").setOption(option, { notMerge: true });
+    paintChart("ch-heatmap", option);
   }
 
   function distribution(rows, col) {
