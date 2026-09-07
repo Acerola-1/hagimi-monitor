@@ -11226,6 +11226,86 @@
           }
         }
       }
+    },
+    "bluetooth.battery-unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电量不可用"
+          }
+        }
+      }
+    },
+    "bluetooth.row.expand-hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to expand device list"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击展开设备列表"
+          }
+        }
+      }
+    },
+    "bluetooth.row.collapse-hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to collapse device list"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击收起设备列表"
+          }
+        }
+      }
+    },
+    "bluetooth.row.devices-with-min": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d devices, min %2$d%%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d 个设备，最低 %2$d%%"
+          }
+        }
+      }
+    },
+    "bluetooth.row.devices-count": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d devices"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d 个设备"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

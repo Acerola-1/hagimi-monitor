@@ -2807,6 +2807,26 @@ private struct BluetoothGlassRow: View, Equatable {
         module.bluetoothDevices ?? []
     }
 
+    /// 行头的无障碍值:设备数 + 摘要(如「3 个设备, 最低 45%」)。
+    private var accessibilityValueForRow: String {
+        if devices.isEmpty {
+            return module.summary
+        }
+        let count = devices.count
+        let minLevel = devices.compactMap(\.batteryLevel).min()
+        if let minLevel {
+            return String(format: String(localized: "bluetooth.row.devices-with-min"), count, minLevel)
+        }
+        return String(format: String(localized: "bluetooth.row.devices-count"), count)
+    }
+
+    /// 行头的无障碍提示:展开/收起操作。
+    private var accessibilityHintForRow: String {
+        isExpanded
+            ? String(localized: "bluetooth.row.collapse-hint")
+            : String(localized: "bluetooth.row.expand-hint")
+    }
+
     var body: some View {
         PanelCardStack {
             HStack(spacing: 10) {
@@ -2850,6 +2870,12 @@ private struct BluetoothGlassRow: View, Equatable {
                 guard !devices.isEmpty else { return }
                 toggleExpansion?()
             }
+            // 无障碍:行头提供模块名 + 设备数 + 展开/收起状态 + 操作提示。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(module.kind.title)
+            .accessibilityValue(accessibilityValueForRow)
+            .accessibilityHint(devices.isEmpty ? "" : accessibilityHintForRow)
+            .accessibilityAddTraits(devices.isEmpty ? [] : .isButton)
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -2899,6 +2925,7 @@ private struct BluetoothDeviceList: View {
                     RoundedRectangle(cornerRadius: 7, style: .continuous)
                         .fill(theme.badgeFill(for: .bluetooth))
                 }
+                .accessibilityHidden(true)  // 图标由组合标签统一描述
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(device.name)
@@ -2910,6 +2937,7 @@ private struct BluetoothDeviceList: View {
                     .foregroundStyle(theme.captionText)
                     .lineLimit(1)
             }
+            .accessibilityHidden(true)  // 名称/类型由组合标签统一描述
 
             Spacer(minLength: 8)
 
@@ -2921,14 +2949,30 @@ private struct BluetoothDeviceList: View {
                     .foregroundStyle(levelTextColor(level))
                     .lineLimit(1)
                     .frame(width: 38, alignment: .trailing)
+                    .accessibilityHidden(true)  // 电量由组合标签统一描述
             } else {
                 // 无电量设备右侧占位与 TOP 进程空位行同规;列表本身即「已连接」清单。
                 Text("—")
                     .monitorPanelCaptionFont(.footnote)
                     .foregroundStyle(theme.captionText)
                     .frame(width: 38, alignment: .trailing)
+                    .accessibilityHidden(true)  // 占位符由组合标签统一描述
             }
         }
+        // 组合无障碍标签:设备名 + 类型 + 电量(或「电量不可用」),
+        // VoiceOver 一次读出完整信息,不分散到子视图。
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(device.name)
+        .accessibilityValue(accessibilityValueForDevice(device))
+    }
+
+    /// 设备行的无障碍值:类型 + 电量(或本地化「电量不可用」)。
+    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
+        let type = typeLabel(for: device.type)
+        if let level = device.batteryLevel {
+            return "\(type), \(level)%"
+        }
+        return "\(type), " + String(localized: "bluetooth.battery-unavailable")
     }
 
     /// 电量条颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
@@ -2970,6 +3014,8 @@ private struct BluetoothDeviceList: View {
 }
 
 /// 设备电量条:trackFill 底槽 + 按百分比填充,只用调色板令牌。
+/// 无障碍:隐藏本视图,电量数值由父行的 accessibilityValue 统一朗读,
+/// 避免 VoiceOver 重复读出「电量条」+「百分比」两次。
 private struct BluetoothBatteryBar: View {
     let level: Int
     let tint: Color
@@ -2985,6 +3031,7 @@ private struct BluetoothBatteryBar: View {
                     .frame(width: geometry.size.width * CGFloat(max(0, min(100, level))) / 100)
             }
         }
+        .accessibilityHidden(true)
     }
 }
 
