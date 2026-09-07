@@ -158,7 +158,7 @@ struct ModuleRowPreview: View {
 
     /// 整行查表用面板侧的有效指标名:压力模式下面板在进网格前把「压力」槽
     /// 改名为 usage(memoryMetrics(for:pressureMode:)),登记表按改名后的
-    /// key 判定(memory.usage 恒半行;memory.pressure 仅 en 整行)。
+    /// key 判定(memory.usage 与 memory.pressure 均走半行)。
     private func lookupName(_ metric: MetricSwitch) -> String {
         memoryPressureMode && metric.id == "pressure" ? "usage" : metric.id
     }

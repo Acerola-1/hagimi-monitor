@@ -50,8 +50,9 @@ enum StaticMetricSizing {
     ]
 
     /// 各语言整行登记:键 "kind.name"。时长/地址/容量类长值两语一致
-    /// 升整行;pressure/compressed 是 en 专属——en 标签加最坏值超半格
-    /// 预算,zh 短标签半行放得下,各语言取各自最优布局。
+    /// 升整行;compressed 是 en 专属——en 标签加最坏值超半格预算,
+    /// zh 短标签半行放得下;pressure 在顶格 120pt 预算下两语均可收纳
+    /// 进半行,凑齐 2x2 对称方阵。
     static let fullRowMetricIDsByLanguage: [String: Set<String>] = [
         "zh-Hans": [
             // 「888天88小时」级时长值约 86pt,标签再无压缩空间
@@ -78,8 +79,6 @@ enum StaticMetricSizing {
             "network.ip-address",
             "battery.capacity",
             "battery.cell-balance",
-            // 「Pressure」+「Critical」= 111pt 超预算
-            "memory.pressure",
             // 「Compressed」标签 78pt,GB 级两位小数值放不下
             "memory.compressed"
         ]
