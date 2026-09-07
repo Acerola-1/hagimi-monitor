@@ -1971,8 +1971,8 @@ private struct BatteryGlassRow: View, Equatable {
                         PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme) {
                             PanelCapsulePicker(
                                 selection: $selectedTab,
-                                items: BatteryPageTab.allCases,
-                                title: { $0.title },
+                                icon: { $0.icon },
+                                tooltip: { $0.title },
                                 tint: tint,
                                 theme: theme
                             )

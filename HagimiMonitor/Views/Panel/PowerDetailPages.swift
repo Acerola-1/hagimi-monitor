@@ -15,6 +15,15 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
             return String(localized: "panel.battery.tab.supply")
         }
     }
+
+    var icon: String {
+        switch self {
+        case .flow:
+            return "point.3.connected.trianglepath.dotted"
+        case .supply:
+            return "powerplug.fill"
+        }
+    }
 }
 
 // MARK: - 供电协议与输入诊断视图
