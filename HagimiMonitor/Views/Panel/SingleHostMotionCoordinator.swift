@@ -396,7 +396,6 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
         guard !isSuspended, displayLink == nil,
               scrollTrack != nil || tracks.values.contains(where: { !$0.isSettled }) else { return }
         guard let screen = submissionAdapter?.currentScreen() ?? NSScreen.main else {
-            settleAll(at: max(CACurrentMediaTime(), lastSampleTime))
             return
         }
         let link = screen.displayLink(target: self, selector: #selector(handleDisplayFrame(_:)))
@@ -417,7 +416,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
 
     /// 显式时间入口供中断与不等帧间隔回归复用实际生产采样路径。
     func advance(to time: CFTimeInterval) {
-        guard !isSuspended, displayLink != nil, time > lastSampleTime else { return }
+        guard !isSuspended, time > lastSampleTime else { return }
         if let screen = submissionAdapter?.currentScreen(), screen != displayScreen {
             stopDisplayLink()
             ensureDisplayLink()
