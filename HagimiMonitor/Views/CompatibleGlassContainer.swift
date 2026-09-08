@@ -202,8 +202,9 @@ extension View {
     /// 面板整体(含各行)已是 `.menu` 毛玻璃基调,底部按钮若用 26 原生
     /// `.buttonStyle(.glass)` 液态玻璃,深色模式下会偏亮偏透、与周围格格不入,
     /// 故所有版本都统一为与行同款的毛玻璃圆角卡片。
-    func compatibleButtonStyle() -> some View {
-        self.buttonStyle(PanelMaterialButtonStyle())
+    /// 传入最小高度时用于需要与模块行头对齐的按钮组。
+    func compatibleButtonStyle(minimumHeight: CGFloat? = nil) -> some View {
+        self.buttonStyle(PanelMaterialButtonStyle(minimumHeight: minimumHeight))
     }
 }
 
@@ -213,6 +214,12 @@ extension View {
 /// `.withinWindow` 毛玻璃与 `rowCornerRadius` 圆角,融为一体、
 /// 深浅模式下基调一致。
 private struct PanelMaterialButtonStyle: ButtonStyle {
+    let minimumHeight: CGFloat?
+
+    init(minimumHeight: CGFloat? = nil) {
+        self.minimumHeight = minimumHeight
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
         return configuration.label
@@ -220,7 +227,7 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
             // rowCornerRadius 在矮按钮上会被夹到 height/2 退化成胶囊。
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: minimumHeight ?? 0)
             .background {
                 VisualEffectView(material: .menu, blendingMode: .withinWindow)
                     .clipShape(shape)

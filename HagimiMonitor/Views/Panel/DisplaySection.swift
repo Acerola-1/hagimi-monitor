@@ -138,6 +138,7 @@ struct DisplaySection: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelRowHeaderHeight()
             .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onTapGesture {
@@ -242,6 +243,7 @@ struct DisplaySection: View {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelRowHeaderHeight()
             .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onTapGesture {

@@ -164,14 +164,15 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
 
                                 // 快捷功能入口:激活角标与浮层打开态高亮由子视图
                                 // 自行观察 store,开关变化不牵动整块面板重绘。
                                 // 设置「小工具」关闭入口时不渲染(全部工具隐藏时
                                 // 该开关会被联动关闭,见 MonitorSettings)。
                                 if store.settings.quickToolsVisible {
-                                    QuickToolsEntryButton(settings: store.settings, theme: theme)
+                                    QuickToolsEntryButton(settings: store.settings, theme: theme,
+                                        minimumHeight: MonitorConstants.panelRowHeaderHeight)
                                 }
 
                                 Button {
@@ -181,10 +182,11 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
                             }
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
+                            .panelRowHeaderHeight()
                         }
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -394,14 +396,15 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
 
                                 // 快捷功能入口:激活角标与浮层打开态高亮由子视图
                                 // 自行观察 store,开关变化不牵动整块面板重绘。
                                 // 设置「小工具」关闭入口时不渲染(全部工具隐藏时
                                 // 该开关会被联动关闭,见 MonitorSettings)。
                                 if store.settings.quickToolsVisible {
-                                    QuickToolsEntryButton(settings: store.settings, theme: theme)
+                                    QuickToolsEntryButton(settings: store.settings, theme: theme,
+                                        minimumHeight: MonitorConstants.panelRowHeaderHeight)
                                 }
 
                                 Button {
@@ -411,10 +414,11 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
                             }
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
+                            .panelRowHeaderHeight()
     }
 
     private var panelBackgroundColor: Color {
@@ -986,6 +990,7 @@ private struct MetricGlassRow: View, Equatable {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelRowHeaderHeight()
             // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
@@ -1817,7 +1822,8 @@ private struct NetworkGlassRow: View, Equatable {
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
+            .panelRowHeaderHeight()
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -1951,7 +1957,8 @@ private struct BatteryGlassRow: View, Equatable {
                 .layoutPriority(2)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
+            .panelRowHeaderHeight()
             // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplaySection
             // 同款纪律:整行 onTapGesture 会抢占深层控件的点击)。
             .contentShape(Rectangle())
@@ -2312,6 +2319,8 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
 enum RowHeaderPillMetrics {
     static let width: CGFloat = 70
     static let height: CGFloat = 20
+    /// 胶囊行上下留白由统一行头高度反推，保持胶囊尺寸与其他行头基线一致。
+    static let verticalPadding = (MonitorConstants.panelRowHeaderHeight - height) / 2
     static let spacing: CGFloat = 6
 }
 
@@ -2918,6 +2927,7 @@ private struct BluetoothGlassRow: View, Equatable {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelRowHeaderHeight()
             .contentShape(Rectangle())
             .onTapGesture {
                 // 无设备时展开区无内容,点击不切换状态。

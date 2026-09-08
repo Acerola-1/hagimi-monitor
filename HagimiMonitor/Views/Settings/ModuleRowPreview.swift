@@ -102,6 +102,7 @@ struct ModuleRowPreview: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
+        .panelRowHeaderHeight()
     }
 
     private var headerSummary: some View {

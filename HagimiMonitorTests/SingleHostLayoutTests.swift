@@ -10,6 +10,10 @@ struct SingleHostLayoutTests {
         var measuredHeight: CGFloat = 0
     }
 
+    @MainActor private final class MeasuredHeightState: ObservableObject {
+        var measuredHeight: CGFloat = 0
+    }
+
     private struct HeaderFixture: View {
         @ObservedObject var state: HeaderFixtureState
         var body: some View {
@@ -23,6 +27,83 @@ struct SingleHostLayoutTests {
                     .onChange(of: geometry.size.height) { _, height in state.measuredHeight = height }
             })
         }
+    }
+
+    private struct RowHeaderFixture: View {
+        let contentHeight: CGFloat
+        let verticalPadding: CGFloat
+        @ObservedObject var state: MeasuredHeightState
+
+        var body: some View {
+            Color.clear
+                .frame(height: contentHeight)
+                .padding(.vertical, verticalPadding)
+                .panelRowHeaderHeight()
+                .background(GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { state.measuredHeight = geometry.size.height }
+                        .onChange(of: geometry.size.height) { _, height in state.measuredHeight = height }
+                })
+        }
+    }
+
+    private struct FooterButtonFixture: View {
+        @ObservedObject var state: MeasuredHeightState
+
+        var body: some View {
+            Button("Settings") {}
+                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
+                .background(GeometryReader { geometry in
+                    Color.clear
+                        .onAppear { state.measuredHeight = geometry.size.height }
+                        .onChange(of: geometry.size.height) { _, height in state.measuredHeight = height }
+                })
+        }
+    }
+
+    @Test func panelRowHeaderContractIsDerived() {
+        #expect(RowHeaderPillMetrics.height <= MonitorConstants.panelRowHeaderHeight)
+        #expect(abs(
+            RowHeaderPillMetrics.height
+                + RowHeaderPillMetrics.verticalPadding * 2
+                - MonitorConstants.panelRowHeaderHeight
+        ) < 0.001)
+    }
+
+    @Test @MainActor func moduleRowHeaderKindsMeasureToTheSharedHeight() async throws {
+        let fixtures: [(name: String, contentHeight: CGFloat, verticalPadding: CGFloat)] = [
+            ("progress", 15, 8),
+            ("sparkline", 18, 8),
+            ("network-pill", RowHeaderPillMetrics.height, RowHeaderPillMetrics.verticalPadding),
+            ("battery-pill", RowHeaderPillMetrics.height, RowHeaderPillMetrics.verticalPadding)
+        ]
+
+        for fixture in fixtures {
+            let state = MeasuredHeightState()
+            let hosting = NSHostingView(rootView: RowHeaderFixture(
+                contentHeight: fixture.contentHeight,
+                verticalPadding: fixture.verticalPadding,
+                state: state
+            ))
+            hosting.sizingOptions = []
+            hosting.frame = CGRect(x: 0, y: 0, width: 328, height: 100)
+            hosting.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(30))
+
+            #expect(abs(state.measuredHeight - MonitorConstants.panelRowHeaderHeight) < 0.01,
+                    "\(fixture.name) 行头高度为 \(state.measuredHeight)，应为 \(MonitorConstants.panelRowHeaderHeight)")
+        }
+    }
+
+    @Test @MainActor func footerButtonBackgroundMeasuresToTheSharedHeight() async throws {
+        let state = MeasuredHeightState()
+        let hosting = NSHostingView(rootView: FooterButtonFixture(state: state))
+        hosting.sizingOptions = []
+        hosting.frame = CGRect(x: 0, y: 0, width: 160, height: 100)
+        hosting.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(30))
+
+        #expect(abs(state.measuredHeight - MonitorConstants.panelRowHeaderHeight) < 0.01)
     }
 
     @Test @MainActor func headerStructureChangeInvalidatesCachedHeight() async throws {

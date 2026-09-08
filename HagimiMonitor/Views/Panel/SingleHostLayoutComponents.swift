@@ -1,5 +1,18 @@
 import SwiftUI
 
+/// 顶层模块行头共享的最小高度，统一自然内容不同的卡片基线。
+struct PanelRowHeaderHeightModifier: ViewModifier {
+    func body(content: Content) -> some View {
+        content.frame(minHeight: MonitorConstants.panelRowHeaderHeight)
+    }
+}
+
+extension View {
+    func panelRowHeaderHeight() -> some View {
+        modifier(PanelRowHeaderHeightModifier())
+    }
+}
+
 // MARK: - Layout Value Keys
 
 struct SectionIDLayoutKey: LayoutValueKey {
