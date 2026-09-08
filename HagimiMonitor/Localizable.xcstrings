@@ -2562,6 +2562,102 @@
         }
       }
     },
+    "mediaKey.permission.guide-subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add the app to Accessibility once, then turn it on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将应用添加到辅助功能后，打开旁边的开关即可。"
+          }
+        }
+      }
+    },
+    "mediaKey.permission.guide-title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Media Key Takeover"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许接管媒体键"
+          }
+        }
+      }
+    },
+    "mediaKey.permission.drag-app": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag this app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动此应用"
+          }
+        }
+      }
+    },
+    "mediaKey.permission.drag-instruction": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag the icon into the Accessibility app list."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将图标拖入辅助功能的应用列表。"
+          }
+        }
+      }
+    },
+    "mediaKey.permission.drag-target": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Privacy & Security → Accessibility"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "隐私与安全性 → 辅助功能"
+          }
+        }
+      }
+    },
+    "mediaKey.permission.close-guide": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close permission guide"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭权限引导"
+          }
+        }
+      }
+    },
     "mediaKey.permission-title": {
       "localizations": {
         "en": {
