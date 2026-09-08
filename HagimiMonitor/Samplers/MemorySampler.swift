@@ -45,7 +45,12 @@ final class MemorySampler: MonitorSampler {
 
         var metrics = [
             MonitorMetric(name: "used", value: memoryBytes(used), numericValue: used),
-            MonitorMetric(name: "pressure", value: pressure.title),
+            // 压力行自身携带离散等级,展开区过滤掉内部 pressure-level 后仍能正确着色。
+            MonitorMetric(
+                name: "pressure",
+                value: pressure.title,
+                numericValue: Double(pressure.level.rawValue)
+            ),
             MonitorMetric(name: "swap-used", value: swapUsedText(swap), numericValue: swap?.used),
             MonitorMetric(name: "total", value: memoryBytes(total)),
             // 压缩内存(compressor_page_count):内存紧张时系统压缩页的占用,

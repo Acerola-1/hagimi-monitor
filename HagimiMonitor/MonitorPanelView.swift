@@ -1527,10 +1527,9 @@ private struct MetricDetailGrid: View {
                 ? theme.palette.severityTint(for: .critical)
                 : theme.palette.severityTint(for: .calm)
         }
-        // 内存压力档位着色:取 pressure-level 指标原始值判级,与热压力/SMART 同口径。
+        // 内存压力档位着色:使用压力行携带的原始等级,与热压力/SMART 同口径。
         if kind == .memory, metric.name == "pressure" {
-            let level = Int(metrics.first { $0.name == "pressure-level" }?.numericValue
-                ?? Double(MemoryPressureLevel.unknown.rawValue))
+            let level = Int(metric.numericValue ?? Double(MemoryPressureLevel.unknown.rawValue))
             return memoryPressureColor(level: level, theme: theme)
         }
         return theme.valueText
