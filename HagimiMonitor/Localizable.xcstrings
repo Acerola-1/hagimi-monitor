@@ -2610,38 +2610,6 @@
         }
       }
     },
-    "mediaKey.permission.drag-instruction": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drag the icon into the Accessibility app list."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "将图标拖入辅助功能的应用列表。"
-          }
-        }
-      }
-    },
-    "mediaKey.permission.drag-target": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Privacy & Security → Accessibility"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "隐私与安全性 → 辅助功能"
-          }
-        }
-      }
-    },
     "mediaKey.permission.close-guide": {
       "localizations": {
         "en": {

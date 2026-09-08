@@ -6,7 +6,7 @@ final class AccessibilityPermissionGuide {
     static let shared = AccessibilityPermissionGuide()
 
     private var panel: NSPanel?
-    private let panelSize = CGSize(width: 340, height: 204)
+    private let panelSize = CGSize(width: 320, height: 166)
 
     func present() {
         if let panel {
@@ -67,7 +67,7 @@ private struct AccessibilityPermissionGuideView: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(String(localized: "mediaKey.permission.guide-title"))
@@ -89,39 +89,39 @@ private struct AccessibilityPermissionGuideView: View {
                 .accessibilityLabel(String(localized: "mediaKey.permission.close-guide"))
             }
 
-            HStack(spacing: 12) {
-                Image(nsImage: appIcon)
-                    .resizable()
-                    .interpolation(.high)
-                    .frame(width: 52, height: 52)
-                    .onDrag {
-                        NSItemProvider(object: appURL as NSURL)
-                    } preview: {
-                        Image(nsImage: appIcon)
-                            .resizable()
-                            .frame(width: 52, height: 52)
-                    }
+            HStack(spacing: 14) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .fill(.quaternary.opacity(0.5))
+
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .interpolation(.high)
+                        .frame(width: 62, height: 62)
+                }
+                .frame(width: 76, height: 76)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 15, style: .continuous)
+                        .strokeBorder(.tint.opacity(0.7), lineWidth: 2)
+                }
+                .shadow(color: Color.accentColor.opacity(0.2), radius: 5, y: 2)
+                .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+                .onDrag {
+                    NSItemProvider(object: appURL as NSURL)
+                } preview: {
+                    Image(nsImage: appIcon)
+                        .resizable()
+                        .frame(width: 62, height: 62)
+                }
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text(String(localized: "mediaKey.permission.drag-app"))
                         .font(.callout.weight(.medium))
-                    Text(String(localized: "mediaKey.permission.drag-instruction"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-
-            HStack(spacing: 8) {
-                Image(systemName: "arrow.right.circle.fill")
-                    .foregroundStyle(.tint)
-                Text(String(localized: "mediaKey.permission.drag-target"))
-                    .font(.caption.weight(.medium))
-                    .lineLimit(1)
-            }
         }
-        .padding(16)
-        .frame(width: 340, height: 204, alignment: .topLeading)
+        .padding(14)
+        .frame(width: 320, height: 166, alignment: .topLeading)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
