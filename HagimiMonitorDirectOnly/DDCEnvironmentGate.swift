@@ -7,30 +7,24 @@ import Foundation
 #endif
 
 /// DDC 系统状态门禁:睡眠/唤醒/显示器重配置窗口内,IOAVService 内核调用极易长时间
-/// 阻塞或返回垃圾数据。与其在事后用全局熔断补救级联失败,不如在这些危险窗口内**直接
-/// 不发任何 DDC 报文**,从源头掐掉 hang。这是本模块可靠性的第一道也是最重要的一道防线。
+/// 阻塞或返回垃圾数据。危险窗口内直接不发 DDC 报文,从源头隔离这类调用风险。
 ///
 /// 同时作为显示器/电源事件的**唯一信号源**:统一注册 CG 重配置回调与睡眠/唤醒通知,
 /// 既维护 `isSuppressed`,又在合适时机(抑制窗口结束后)通知订阅者刷新,
 /// 避免多处重复注册两套 CG 回调。
 ///
+/// 内部状态由 `GateStateModel` 承载:独立维护系统睡眠、屏幕睡眠、唤醒期限与重配置
+/// 期限,重配置完成只缩短自身期限,绝不缩短唤醒抑制;任一期限到期后重读当前状态,
+/// 后续睡眠状态不会被过期的定时任务解除。
+///
 /// 线程安全:状态由 NSLock 保护,`isSuppressed` 可在任意 DDC 后台队列安全读取。
 nonisolated final class DDCEnvironmentGate {
     static let shared = DDCEnvironmentGate()
 
-    /// 唤醒后继续抑制的时长。部分显示器唤醒后需要数秒才恢复 DDC 响应。
-    private let wakeSuppressSeconds: TimeInterval
-    /// 重配置完成后的额外沉降时长,等待 DCP 稳定。
-    private let reconfigureSettleSeconds: TimeInterval
-    /// begin 之后若迟迟收不到完成回调的安全兜底抑制上限,避免永久卡在抑制态。
-    private let reconfigureSafetySeconds: TimeInterval
-
     private let lock = NSLock()
-    private var asleep = false
-    private var suppressedUntil: Date?
+    private let runtime: DDCGateRuntime
 
     private var changeHandlers: [UUID: () -> Void] = [:]
-    private var changeFireWorkItem: DispatchWorkItem?
 
     /// 生产环境用默认时长并注册系统观察者。测试可注入更短时长并跳过系统注册,
     /// 通过 `handleWillSleep()`/`handleDidWake()`/`handleReconfigure(flags:)` 手动触发。
@@ -38,22 +32,44 @@ nonisolated final class DDCEnvironmentGate {
         wakeSuppressSeconds: TimeInterval = 3,
         reconfigureSettleSeconds: TimeInterval = 1,
         reconfigureSafetySeconds: TimeInterval = 5,
-        registerSystemObservers: Bool = true
+        registerSystemObservers: Bool = true,
+        clock: MonotonicClock = DispatchMonotonicClock()
     ) {
-        self.wakeSuppressSeconds = wakeSuppressSeconds
-        self.reconfigureSettleSeconds = reconfigureSettleSeconds
-        self.reconfigureSafetySeconds = reconfigureSafetySeconds
+        self.runtime = DDCGateRuntime(
+            clock: clock,
+            wakeSettle: wakeSuppressSeconds,
+            reconfigureSettle: reconfigureSettleSeconds,
+            reconfigureSafety: reconfigureSafetySeconds
+        )
+        _ = runtime.addRecoveryHandler { [weak self] in
+            DispatchQueue.main.async {
+                self?.fireChangeHandlers()
+            }
+        }
         guard registerSystemObservers else { return }
-        NSWorkspace.shared.notificationCenter.addObserver(
+        let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(
             self,
             selector: #selector(handleWillSleep),
             name: NSWorkspace.willSleepNotification,
             object: nil
         )
-        NSWorkspace.shared.notificationCenter.addObserver(
+        center.addObserver(
             self,
             selector: #selector(handleDidWake),
             name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleDisplayWillSleep),
+            name: NSWorkspace.screensDidSleepNotification,
+            object: nil
+        )
+        center.addObserver(
+            self,
+            selector: #selector(handleDisplayDidWake),
+            name: NSWorkspace.screensDidWakeNotification,
             object: nil
         )
         CGDisplayRegisterReconfigurationCallback(Self.cgCallback, nil)
@@ -62,20 +78,11 @@ nonisolated final class DDCEnvironmentGate {
     // MARK: - Suppression state
 
     /// 当前是否应抑制所有 DDC I/O。DDC 读写/探测入口据此直接跳过。
-    /// 睡眠是持续状态(直到 didWake 清除);唤醒/重配置一律折算为**有时限**的
-    /// `suppressedUntil`——即使某个完成回调丢失,也只会抑制到该时刻为止,
-    /// 绝不永久卡死(重配置 begin 用 safety 时长兜底,收到完成回调再收敛到 settle)。
+    /// 任一原因生效即抑制:系统睡眠/屏幕睡眠为持续态(直到对应唤醒清除);
+    /// 唤醒/重配置折算为有时限的期限——即使某个完成回调丢失,也只会抑制到该
+    /// 时刻为止,绝不永久卡死。
     var isSuppressed: Bool {
-        lock.lock(); defer { lock.unlock() }
-        if asleep {
-            return true
-        }
-        if let until = suppressedUntil {
-            if Date() < until {
-                return true
-            }
-        }
-        return false
+        runtime.isSuppressed
     }
 
     // MARK: - Change subscription
@@ -99,61 +106,34 @@ nonisolated final class DDCEnvironmentGate {
     // MARK: - Event handlers
 
     @objc func handleWillSleep() {
-        lock.lock()
-        asleep = true
-        lock.unlock()
+        runtime.systemSleepStarted()
     }
 
     @objc func handleDidWake() {
-        lock.lock()
-        asleep = false
-        suppressedUntil = Date().addingTimeInterval(wakeSuppressSeconds)
-        lock.unlock()
-        // 抑制窗口结束后再刷新,确保探测读发生在总线就绪之后。
-        scheduleChangeFire(after: wakeSuppressSeconds + 0.3)
+        runtime.systemWakeStarted()
+    }
+
+    @objc func handleDisplayWillSleep() {
+        runtime.displaySleepStarted()
+    }
+
+    @objc func handleDisplayDidWake() {
+        runtime.displayWakeStarted()
     }
 
     func handleReconfigure(flags: CGDisplayChangeSummaryFlags) {
         if flags.contains(.beginConfigurationFlag) {
-            // begin:抑制到 safety 时刻为止。这是纯时限抑制——即使完成回调始终不来,
-            // 最长也只抑制 reconfigureSafetySeconds,绝不永久卡死。
-            lock.lock()
-            suppressedUntil = Date().addingTimeInterval(reconfigureSafetySeconds)
-            lock.unlock()
-            return
-        }
-
-        // 某台显示器的重配置完成回调:收敛到较短的 settle 沉降窗口,等待 DCP 稳定。
-        lock.lock()
-        suppressedUntil = Date().addingTimeInterval(reconfigureSettleSeconds)
-        lock.unlock()
-
-        let structural = flags.contains(.addFlag)
-            || flags.contains(.removeFlag)
-            || flags.contains(.enabledFlag)
-            || flags.contains(.disabledFlag)
-        if structural {
-            scheduleChangeFire(after: reconfigureSettleSeconds + 0.2)
+            runtime.reconfigureStarted()
+        } else {
+            runtime.reconfigureCompleted()
         }
     }
 
-    // MARK: - Debounced change firing
-
-    private func scheduleChangeFire(after delay: TimeInterval) {
-        lock.lock()
-        changeFireWorkItem?.cancel()
-        let item = DispatchWorkItem { [weak self] in
-            self?.fireChangeHandlers()
-        }
-        changeFireWorkItem = item
-        lock.unlock()
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
-    }
+    // MARK: - Change firing
 
     private func fireChangeHandlers() {
         lock.lock()
         let handlers = Array(changeHandlers.values)
-        changeFireWorkItem = nil
         lock.unlock()
         for handler in handlers {
             handler()

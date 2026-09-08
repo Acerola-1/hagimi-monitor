@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 显示器控制兼容页原型</title>
+<style>
+  /* ====== 设计令牌:对齐真实面板 MonitorPalette (dark) ====== */
+  :root {
+    --primary: rgba(255,255,255,0.96);
+    --value:   rgba(255,255,255,0.90);
+    --secondary: rgba(255,255,255,0.82);
+    --caption: rgba(255,255,255,0.68);
+    --track: rgba(255,255,255,0.08);
+    --glass: rgba(122,145,180,0.12);
+    --glass-hover: rgba(122,145,180,0.17);
+    --sep: rgba(122,145,180,0.22);
+    --tint-display:#5D8CF0;
+    --calm:#2F9E64; --warn:#B8872E; --crit:#D94848;
+    --good:#7BC98F; --warn-txt:#E0B45E; --crit-txt:#F08A8A;
+    --radius:14px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC",sans-serif;
+    min-height:100vh;
+    background:linear-gradient(160deg,#1c2128,#14171c);
+    display:flex; justify-content:center; align-items:flex-start;
+    padding:40px 24px; gap:20px;
+  }
+  .lang-toggle{ position:fixed; top:16px; right:24px; display:flex; gap:8px; z-index:10;}
+  .lang-toggle button{
+    background:var(--glass); color:var(--secondary); border:1px solid var(--sep);
+    border-radius:8px; padding:6px 14px; font-size:12px; cursor:pointer;
+  }
+  .lang-toggle button.active{ background:var(--tint-display); color:#fff; border-color:transparent; }
+  .panel{
+    width:384px; background:rgba(20,24,30,0.92); border-radius:var(--radius);
+    border:1px solid var(--sep); overflow:hidden;
+  }
+  .panel-head{
+    display:flex; align-items:center; gap:10px; padding:12px 14px;
+    border-bottom:1px solid var(--sep);
+  }
+  .panel-head .icon{ font-size:15px; color:var(--tint-display); width:18px; text-align:center;}
+  .panel-head .title{ font-size:13px; font-weight:600; color:var(--primary); flex:1;}
+  .panel-head .count{ font-size:11px; color:var(--caption);}
+
+  .display-card{ padding:12px 14px; border-bottom:1px solid var(--sep);}
+  .card-head{ display:flex; align-items:center; gap:8px; margin-bottom:10px;}
+  .card-head .d-icon{ color:var(--tint-display); font-size:14px; width:16px; text-align:center;}
+  .card-head .d-name{ font-size:12.5px; font-weight:600; color:var(--primary); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .badge{ font-size:10px; font-weight:600; padding:2px 8px; border-radius:10px; white-space:nowrap;}
+  .badge.ext{ background:var(--glass); color:var(--secondary);}
+  .badge.soft{ background:rgba(95,140,240,0.2); color:var(--tint-display);}
+  .badge.binding{ background:rgba(184,135,46,0.18); color:var(--warn-txt);}
+  .badge.writeonly{ background:var(--glass); color:var(--secondary);}
+  .badge.error{ background:rgba(217,72,72,0.16); color:var(--crit-txt);}
+
+  .summary{ font-size:11px; color:var(--caption); margin-bottom:10px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+
+  .slider-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px;}
+  .slider-row .s-icon{ font-size:12px; color:var(--tint-display); width:14px; text-align:center;}
+  .slider-row .s-name{ font-size:11.5px; color:var(--secondary); width:32px;}
+  .slider-row .s-track{ flex:1; height:4px; border-radius:2px; background:var(--track); position:relative;}
+  .slider-row .s-fill{ position:absolute; left:0; top:0; height:100%; border-radius:2px; background:var(--tint-display);}
+  .slider-row .s-value{ font-size:11px; font-weight:600; color:var(--value); width:38px; text-align:right; font-variant-numeric:tabular-nums;}
+  .slider-row .s-state{ font-size:10px; width:60px; text-align:right;}
+  .state-txt{ color:var(--caption);}
+  .state-txt.target{ color:var(--warn-txt);}
+  .state-txt.unknown{ color:var(--caption);}
+  .state-txt.soft{ color:var(--tint-display);}
+  .state-txt.err{ color:var(--crit-txt);}
+
+  .note{ display:flex; gap:5px; align-items:flex-start; font-size:10.5px; color:var(--caption); margin-top:8px; line-height:1.4;}
+  .note.warn{ color:var(--warn-txt);}
+  .note.err{ color:var(--crit-txt);}
+
+  .btn{ display:inline-block; font-size:11px; padding:5px 12px; border-radius:8px; cursor:pointer;
+    background:var(--glass); color:var(--secondary); border:1px solid var(--sep);}
+  .btn.primary{ background:var(--tint-display); color:#fff; border-color:transparent;}
+
+  .foot-note{ padding:10px 14px; font-size:10px; color:var(--caption); text-align:center;}
+  [lang="en"]{ display:none;}
+  body.en [lang="en"]{ display:inline;}
+  body.en [lang="zh"]{ display:none;}
+  body.en .slider-row .s-value{ width:44px;}
+</style>
+</head>
+<body>
+<div class="lang-toggle">
+  <button onclick="document.body.classList.remove('en')" class="active" id="btn-zh">中文</button>
+  <button onclick="document.body.classList.add('en')" id="btn-en">English</button>
+</div>
+
+<!-- 兼容页:一台正常屏 + 各异常状态展示 -->
+<div class="panel">
+  <div class="panel-head">
+    <span class="icon">🖥</span>
+    <span class="title" lang="zh">显示器</span>
+    <span class="title" lang="en">Displays</span>
+    <span class="count" lang="zh">3 台</span>
+    <span class="count" lang="en">3</span>
+  </div>
+
+  <!-- 正常屏 -->
+  <div class="display-card">
+    <div class="card-head">
+      <span class="d-icon">🖥</span>
+      <span class="d-name">Dell U2723QE</span>
+      <span class="badge ext" lang="zh">外接</span>
+      <span class="badge ext" lang="en">External</span>
+    </div>
+    <div class="summary" lang="zh">3840 × 2160 · 60Hz · HDR · 10-bit</div>
+    <div class="summary" lang="en">3840 × 2160 · 60Hz · HDR · 10-bit</div>
+    <div class="slider-row">
+      <span class="s-icon">☀</span><span class="s-name" lang="zh">亮度</span><span class="s-name" lang="en">Bright</span>
+      <div class="s-track"><div class="s-fill" style="width:60%"></div></div>
+      <span class="s-value">60%</span><span class="s-state state-txt">·</span>
+    </div>
+    <div class="slider-row">
+      <span class="s-icon">🔊</span><span class="s-name" lang="zh">音量</span><span class="s-name" lang="en">Volume</span>
+      <div class="s-track"><div class="s-fill" style="width:25%"></div></div>
+      <span class="s-value">25%</span><span class="s-state state-txt">·</span>
+    </div>
+  </div>
+
+  <!-- 软件模式屏 -->
+  <div class="display-card">
+    <div class="card-head">
+      <span class="d-icon">🖥</span>
+      <span class="d-name">LG 27GN950</span>
+      <span class="badge ext" lang="zh">外接</span><span class="badge ext" lang="en">External</span>
+      <span class="badge soft" lang="zh">软件调光</span><span class="badge soft" lang="en">Software</span>
+    </div>
+    <div class="summary" lang="zh">软件调光改变画面亮度,不改变背光</div>
+    <div class="summary" lang="en">Software dimming adjusts pixels, not backlight</div>
+    <div class="slider-row">
+      <span class="s-icon">☀</span><span class="s-name" lang="zh">亮度</span><span class="s-name" lang="en">Bright</span>
+      <div class="s-track"><div class="s-fill" style="width:40%"></div></div>
+      <span class="s-value">40%</span><span class="s-state state-txt soft" lang="zh">软件</span><span class="s-state state-txt soft" lang="en">SW</span>
+    </div>
+  </div>
+
+  <!-- 未知值屏(通信异常/无读数) -->
+  <div class="display-card">
+    <div class="card-head">
+      <span class="d-icon">🖥</span>
+      <span class="d-name">ASUS PA279CV</span>
+      <span class="badge ext" lang="zh">外接</span><span class="badge ext" lang="en">External</span>
+      <span class="badge error" lang="zh">通信异常</span><span class="badge error" lang="en">Error</span>
+    </div>
+    <div class="slider-row">
+      <span class="s-icon">☀</span><span class="s-name" lang="zh">亮度</span><span class="s-name" lang="en">Bright</span>
+      <div class="s-track"><div class="s-fill" style="width:0%"></div></div>
+      <span class="s-value">--</span><span class="s-state state-txt unknown" lang="zh">未知</span><span class="s-state state-txt unknown" lang="en">N/A</span>
+    </div>
+    <div class="note err" lang="zh">⚠ 无法读取当前值。可尝试重新检测或调整兼容设置。</div>
+    <div class="note err" lang="en">⚠ Can't read current value. Try re-detect or adjust compatibility.</div>
+    <div style="margin-top:8px;">
+      <span class="btn primary" lang="zh">重新检测</span><span class="btn primary" lang="en">Re-detect</span>
+    </div>
+  </div>
+
+  <!-- 只写模式屏 -->
+  <div class="display-card">
+    <div class="card-head">
+      <span class="d-icon">🖥</span>
+      <span class="d-name">BenQ PD2700U</span>
+      <span class="badge ext" lang="zh">外接</span><span class="badge ext" lang="en">External</span>
+      <span class="badge writeonly" lang="zh">只写</span><span class="badge writeonly" lang="en">Write-only</span>
+    </div>
+    <div class="slider-row">
+      <span class="s-icon">☀</span><span class="s-name" lang="zh">亮度</span><span class="s-name" lang="en">Bright</span>
+      <div class="s-track"><div class="s-fill" style="width:70%"></div></div>
+      <span class="s-value">70%</span>
+      <span class="s-state state-txt target" lang="zh">上次设置</span><span class="s-state state-txt target" lang="en">Last set</span>
+    </div>
+    <div class="note" lang="zh">此显示器不支持读取,显示上次设置值。</div>
+    <div class="note" lang="en">This display can't be read; showing last set value.</div>
+  </div>
+
+  <!-- 待绑定屏(歧义) -->
+  <div class="display-card">
+    <div class="card-head">
+      <span class="d-icon">🖥</span>
+      <span class="d-name" lang="zh">显示器 4(待绑定)</span><span class="d-name" lang="en">Display 4 (bind)</span>
+      <span class="badge binding" lang="zh">待绑定</span><span class="badge binding" lang="en">Unbound</span>
+    </div>
+    <div class="note warn" lang="zh">⚠ 检测到多台相同型号的显示器,无法确认是哪一台。请在设置中绑定连接。</div>
+    <div class="note warn" lang="en">⚠ Multiple identical displays detected. Bind the connection in Settings.</div>
+    <div style="margin-top:8px;">
+      <span class="btn" lang="zh">打开兼容设置</span><span class="btn" lang="en">Open Settings</span>
+    </div>
+  </div>
+
+  <div class="foot-note" lang="zh">面板显示的值区分「设备读数 / 你的目标 / 上次设置」,不显示内部技术信息。</div>
+  <div class="foot-note" lang="en">Values distinguish device reading / your target / last set. No internal jargon shown.</div>
+</div>
+</body>
+</html>

@@ -644,8 +644,6 @@
 					CoreDisplay,
 					"-framework",
 					DisplayServices,
-					"-framework",
-					OSD,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
 				PRODUCT_NAME = HagimiMonitorDirect;
@@ -695,8 +693,6 @@
 					CoreDisplay,
 					"-framework",
 					DisplayServices,
-					"-framework",
-					OSD,
 				);
 				PRODUCT_BUNDLE_IDENTIFIER = "com.acerola.hagimi-monitor.direct";
 				PRODUCT_NAME = HagimiMonitorDirect;

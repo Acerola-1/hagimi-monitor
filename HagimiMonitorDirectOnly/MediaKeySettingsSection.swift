@@ -4,10 +4,6 @@ struct MediaKeySettingsSection: View {
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var permission: AccessibilityPermissionService
 
-    private var anyTakeoverEnabled: Bool {
-        settings.mediaKeyBrightnessEnabled || settings.mediaKeyVolumeEnabled
-    }
-
     var body: some View {
         SettingsGroup(String(localized: "mediaKey.section-title")) {
             SettingsRow(title: String(localized: "mediaKey.brightness-toggle")) {
@@ -24,17 +20,8 @@ struct MediaKeySettingsSection: View {
                     .labelsHidden()
             }
 
-            if anyTakeoverEnabled {
-                SettingsDivider()
-
-                SettingsRow(title: String(localized: "mediaKey.show-osd")) {
-                    Toggle("", isOn: $settings.mediaKeyShowOSD)
-                        .toggleStyle(.switch)
-                        .labelsHidden()
-                }
-            }
         }
-        // 未授权时整组置灰不可操作:接管开关开了也不生效,先灰掉避免「开了没反应」
+        // 未授权时整组置灰不可操作,明确这些功能需要辅助功能权限。
         // 的困惑;授权入口由下方常驻提示卡提供。
         .disabled(!permission.isTrusted)
 

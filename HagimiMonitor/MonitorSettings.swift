@@ -133,7 +133,6 @@ final class MonitorSettings: ObservableObject {
     @Published var displayContrastControlEnabled: Bool = false
     @Published var mediaKeyBrightnessEnabled: Bool = false
     @Published var mediaKeyVolumeEnabled: Bool = false
-    @Published var mediaKeyShowOSD: Bool = true
     @Published var showMemoryProcesses: Bool = true
     /// 各类 TOP 列表默认包含系统进程:WindowServer 等系统进程常是占用大头,
     /// 隐藏后列表常显得空。
@@ -247,7 +246,6 @@ final class MonitorSettings: ObservableObject {
         pinnedPanelOriginY = defaults.object(forKey: Keys.pinnedPanelOriginY) as? Double
         mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
         mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
-        mediaKeyShowOSD = defaults.object(forKey: Keys.mediaKeyShowOSD) as? Bool ?? true
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
             var kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
@@ -705,13 +703,6 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $mediaKeyShowOSD
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.mediaKeyShowOSD)
-            }
-            .store(in: &cancellables)
-
         $showMemoryProcesses
             .dropFirst()
             .sink { [weak self] newValue in
@@ -914,7 +905,6 @@ private enum Keys {
     static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"
     static let mediaKeyBrightnessEnabled = "settings.mediaKey.brightnessEnabled"
     static let mediaKeyVolumeEnabled = "settings.mediaKey.volumeEnabled"
-    static let mediaKeyShowOSD = "settings.mediaKey.showOSD"
     static let showMemoryProcesses = "settings.memory.showProcesses"
     static let memoryShowSystemProcesses = "settings.memory.showSystemProcesses"
     static let memoryPrimaryMetric = "settings.memory.primaryMetric"
