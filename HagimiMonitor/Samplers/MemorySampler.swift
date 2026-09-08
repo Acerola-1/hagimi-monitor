@@ -48,7 +48,7 @@ final class MemorySampler: MonitorSampler {
             // 压力行自身携带离散等级,展开区过滤掉内部 pressure-level 后仍能正确着色。
             MonitorMetric(
                 name: "pressure",
-                value: pressure.title,
+                value: pressure.level.identifier,
                 numericValue: Double(pressure.level.rawValue)
             ),
             MonitorMetric(name: "swap-used", value: swapUsedText(swap), numericValue: swap?.used),
@@ -56,7 +56,7 @@ final class MemorySampler: MonitorSampler {
             // 压缩内存(compressor_page_count):内存紧张时系统压缩页的占用,
             // 与活动监视器「被压缩」同口径。
             MonitorMetric(name: "compressed", value: memoryBytes(compressed), numericValue: compressed),
-            MonitorMetric(name: "pressure-level", value: pressure.title, numericValue: Double(pressure.level.rawValue)),
+            MonitorMetric(name: "pressure-level", value: pressure.level.identifier, numericValue: Double(pressure.level.rawValue)),
             MonitorMetric(name: "swapins", value: String(swapins), numericValue: Double(swapins)),
             MonitorMetric(name: "swapouts", value: String(swapouts), numericValue: Double(swapouts))
         ]
@@ -154,19 +154,6 @@ private enum MemoryPressureState {
     case warning
     case critical
     case unknown
-
-    var title: String {
-        switch self {
-        case .normal:
-            "normal"
-        case .warning:
-            "warning"
-        case .critical:
-            "critical"
-        case .unknown:
-            "--"
-        }
-    }
 
     var level: MemoryPressureLevel {
         switch self {

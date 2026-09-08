@@ -661,26 +661,44 @@ struct MonitorPanelView: View {
         return enabled + [temperature]
     }
 
+    /// 内存模块统一压力状态:显式模块状态优先,兼容仅携带 pressure 指标的占位/夹具。
+    private func memoryPressureLevel(for module: MonitorModule) -> MemoryPressureLevel {
+        if let level = module.pressure {
+            return level
+        }
+        guard let raw = module.metrics.first(where: { $0.name == "pressure" })?.numericValue,
+              let level = MemoryPressureLevel(rawValue: Int(raw)) else {
+            return .unknown
+        }
+        return level
+    }
+
     /// 内存头部主值的压力等级文案(已本地化)。
     private func memoryPressureText(for module: MonitorModule) -> String {
-        let raw = module.metrics.first { $0.name == "pressure" }?.value ?? "--"
-        return localizedMemoryPressure(raw)
+        localizedMemoryPressure(memoryPressureLevel(for: module).identifier)
     }
 
     /// 内存模块当前压力等级原始值;模块未携带压力时按未知处理。
     private func pressureRawLevel(_ module: MonitorModule) -> Int {
-        module.pressure?.rawValue ?? MemoryPressureLevel.unknown.rawValue
+        memoryPressureLevel(for: module).rawValue
     }
 
     /// 压力模式下头部已显示压力等级,展开列表里的「压力」行原位换成「使用率」行,
     /// 两个指标仅交换显示位置,设置里的「压力」开关继续控制该槽位。
     private func memoryMetrics(for module: MonitorModule, pressureMode: Bool) -> [MonitorMetric] {
         let metrics = enabledMetrics(for: module)
-        guard pressureMode else { return metrics }
+        let pressureLevel = memoryPressureLevel(for: module)
         return metrics.map { metric in
-            metric.name == "pressure"
-                ? MonitorMetric(name: "usage", value: module.summary, numericValue: module.value)
-                : metric
+            guard metric.name == "pressure" else { return metric }
+            if pressureMode {
+                return MonitorMetric(name: "usage", value: module.summary, numericValue: module.value)
+            }
+            return MonitorMetric(
+                name: metric.name,
+                value: pressureLevel.identifier,
+                numericValue: Double(pressureLevel.rawValue),
+                unit: metric.unit
+            )
         }
     }
 
@@ -1527,7 +1545,7 @@ private struct MetricDetailGrid: View {
                 ? theme.palette.severityTint(for: .critical)
                 : theme.palette.severityTint(for: .calm)
         }
-        // 内存压力档位着色:使用压力行携带的原始等级,与热压力/SMART 同口径。
+        // 内存压力档位着色:使用规范化压力等级,与热压力/SMART 同口径。
         if kind == .memory, metric.name == "pressure" {
             let level = Int(metric.numericValue ?? Double(MemoryPressureLevel.unknown.rawValue))
             return memoryPressureColor(level: level, theme: theme)

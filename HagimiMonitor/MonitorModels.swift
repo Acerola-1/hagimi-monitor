@@ -27,6 +27,19 @@ enum MemoryPressureLevel: Int, Equatable {
     case warning = 1
     case critical = 2
     case unknown = 3
+
+    var identifier: String {
+        switch self {
+        case .normal:
+            "normal"
+        case .warning:
+            "warning"
+        case .critical:
+            "critical"
+        case .unknown:
+            "--"
+        }
+    }
 }
 
 enum MonitorSeverity {

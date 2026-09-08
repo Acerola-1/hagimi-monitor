@@ -16,6 +16,13 @@ struct HagimiMonitorTests {
         #expect(MonitorKind.memory.id == "memory")
     }
 
+    @Test func memoryPressureIdentifiersMatchTheirLevels() {
+        #expect(MemoryPressureLevel.normal.identifier == "normal")
+        #expect(MemoryPressureLevel.warning.identifier == "warning")
+        #expect(MemoryPressureLevel.critical.identifier == "critical")
+        #expect(MemoryPressureLevel.unknown.identifier == "--")
+    }
+
     @Test func monitorModuleSeverityForCPU() {
         let module = MonitorModule(
             kind: .cpu,
