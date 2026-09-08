@@ -12,6 +12,8 @@ struct ModuleRowPreview: View {
     /// 功率流开关(仅电池模块消费,与面板 batteryShowPowerFlow 门控同源)。
     let showPowerFlow: Bool
     let palette: MonitorPalette
+    /// 电池模块分页选择(拓扑/健康/供电):由设置页持有,驱动预览分页与下方指标选项联动。
+    @Binding var batteryTab: BatteryPageTab
 
     private var theme: MonitorPanelTheme {
         MonitorPanelTheme(palette: palette)
@@ -40,8 +42,10 @@ struct ModuleRowPreview: View {
 
     /// 与面板 canExpand / 功率流挂载条件对齐:任一区块有内容才渲染展开区。
     private var hasDetail: Bool {
-        !shortMetrics.isEmpty || thermalMetric != nil || !fullRowMetrics.isEmpty
-            || showsCoreDetail || (kind == .battery && showPowerFlow)
+        // 电池分页预览恒展示(供电页始终有诊断内容),其余模块按明细是否有内容判定。
+        guard kind != .battery else { return true }
+        return !shortMetrics.isEmpty || thermalMetric != nil || !fullRowMetrics.isEmpty
+            || showsCoreDetail
     }
 
     var body: some View {
@@ -49,7 +53,13 @@ struct ModuleRowPreview: View {
             header
 
             if hasDetail {
-                VStack(spacing: 9) {
+                if kind == .battery {
+                    // 电池展开区与面板 BatteryGlassRow 同构:贯穿分隔线由
+                    // PowerSectionHeader 自带,不再外挂。
+                    batteryTabbedDetail
+                        .padding(.horizontal, 10)
+                        .padding(.bottom, 9)
+                } else {
                     // 展开区骨架与面板 MetricDetailGrid 同构:贯穿分隔线与全宽顶格排版。
                     VStack(spacing: 7) {
                         Rectangle()
@@ -58,13 +68,9 @@ struct ModuleRowPreview: View {
 
                         detailGrid
                     }
-
-                    if kind == .battery && showPowerFlow {
-                        powerFlowSection
-                    }
+                    .padding(.horizontal, 10)
+                    .padding(.bottom, 9)
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 9)
             }
         }
         .background(
@@ -152,8 +158,18 @@ struct ModuleRowPreview: View {
     }
 
     private var thermalMetric: MetricSwitch? {
-        guard kind == .cpu else { return nil }
+        guard kind == .cpu, mergesThermalRow else { return nil }
         return renderMetrics.first { $0.id == "thermal-pressure" }
+    }
+
+    /// 温度读数仅直连版产出(SMC 在沙盒下不可读);沙盒版预览里热压力同样
+    /// 回落为普通半行档位格,与面板 MetricDetailGrid 同源。
+    private var mergesThermalRow: Bool {
+        #if DISPLAY_CONTROL
+        true
+        #else
+        false
+        #endif
     }
 
     /// 整行查表用面板侧的有效指标名:压力模式下面板在进网格前把「压力」槽
@@ -168,7 +184,7 @@ struct ModuleRowPreview: View {
     }
 
     private func isMergedThermalRow(_ metric: MetricSwitch) -> Bool {
-        kind == .cpu && metric.id == "thermal-pressure"
+        mergesThermalRow && kind == .cpu && metric.id == "thermal-pressure"
     }
 
     private var detailGrid: some View {
@@ -217,20 +233,97 @@ struct ModuleRowPreview: View {
         }
     }
 
-    // MARK: 功率流
+    // MARK: 电池分页预览
 
-    /// 与面板展开区同构的功率流区块:分区分隔标题 + 真实 PowerFlowDiagram。
-    /// 静态形态展示(animate 关闭),不向设置页引入常驻 TimelineView 驱动。
+    /// 与面板 BatteryGlassRow 同构的分页展开区:动态小标题 + 胶囊切换器,
+    /// 三页各自渲染示例内容(拓扑=分项功耗网格+功率流图,健康=指标网格,
+    /// 供电=固定诊断视图)。静态示例数据渲染,不向设置页引入常驻动画驱动。
     @ViewBuilder
-    private var powerFlowSection: some View {
-        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
-            .padding(.top, 3)
+    private var batteryTabbedDetail: some View {
+        VStack(spacing: 8) {
+            PowerSectionHeader(title: batteryTab.title, theme: theme) {
+                PanelCapsulePicker(
+                    selection: $batteryTab,
+                    items: BatteryPageTab.allCases,
+                    icon: { $0.icon },
+                    tooltip: { $0.title },
+                    tint: tint,
+                    theme: theme
+                )
+            }
 
-        PowerFlowDiagram(
-            module: MetricSampleCatalog.powerFlowModule,
-            theme: theme,
-            tint: tint,
-            animate: false
-        )
+            switch batteryTab {
+            case .flow:
+                if !flowMetrics.isEmpty {
+                    previewGrid(flowMetrics)
+                }
+                if showPowerFlow {
+                    PowerFlowDiagram(
+                        module: MetricSampleCatalog.powerFlowModule,
+                        theme: theme,
+                        tint: tint,
+                        animate: false
+                    )
+                }
+            case .health:
+                if !healthMetrics.isEmpty {
+                    previewGrid(healthMetrics)
+                }
+            case .supply:
+                PowerSupplyDiagnosticsView(
+                    module: MetricSampleCatalog.powerFlowModule,
+                    theme: theme,
+                    tint: tint
+                )
+            }
+        }
+    }
+
+    /// 拓扑页已勾分项功耗(整机/屏幕/GPU),随分页联动。
+    private var flowMetrics: [MetricSwitch] {
+        let names = BatteryPageTab.flow.metricNames
+        return renderMetrics.filter { names.contains($0.id) }
+    }
+
+    /// 健康页已勾指标(健康度/循环/温度/电芯等),随分页联动。
+    private var healthMetrics: [MetricSwitch] {
+        let names = BatteryPageTab.health.metricNames
+        return renderMetrics.filter { names.contains($0.id) }
+    }
+
+    /// 半行两列 + 整行沉底的示例网格(电池分页用;不含 CPU 逐核/热压力等网格外特殊形态)。
+    @ViewBuilder
+    private func previewGrid(_ gridMetrics: [MetricSwitch]) -> some View {
+        let short = gridMetrics.filter { !isFullRow($0) }
+        let full = gridMetrics.filter { isFullRow($0) }
+        VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
+            if !short.isEmpty {
+                LazyVGrid(
+                    columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),
+                              GridItem(.flexible())],
+                    spacing: MetricGridMetrics.gridRowGap
+                ) {
+                    ForEach(short) { metric in
+                        MetricPreviewTile(
+                            kind: kind,
+                            id: metric.id,
+                            title: metric.title,
+                            memoryPressureMode: memoryPressureMode,
+                            palette: palette
+                        )
+                    }
+                }
+            }
+
+            ForEach(full) { metric in
+                MetricPreviewTile(
+                    kind: kind,
+                    id: metric.id,
+                    title: metric.title,
+                    memoryPressureMode: memoryPressureMode,
+                    palette: palette
+                )
+            }
+        }
     }
 }

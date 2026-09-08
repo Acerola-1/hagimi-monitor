@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// 电源展开区分区多页切换标签（拓扑 / 供电）。
+/// 电源展开区分区多页切换标签（拓扑 / 健康 / 供电）。
 enum BatteryPageTab: String, CaseIterable, Identifiable {
     case flow = "flow"
+    case health = "health"
     case supply = "supply"
 
     var id: String { rawValue }
@@ -11,6 +12,8 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
         switch self {
         case .flow:
             return String(localized: "panel.battery.tab.flow")
+        case .health:
+            return String(localized: "panel.battery.tab.health")
         case .supply:
             return String(localized: "panel.battery.tab.supply")
         }
@@ -20,8 +23,31 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
         switch self {
         case .flow:
             return "point.3.connected.trianglepath.dotted"
+        case .health:
+            return "heart.fill"
         case .supply:
             return "powerplug.fill"
+        }
+    }
+
+    /// 各分页归属的可勾指标名:面板展开区分栏渲染与设置页选项过滤同源。
+    /// 供电页为固定诊断视图,不含可勾指标,返回空。
+    var metricNames: [String] {
+        switch self {
+        case .flow:
+            #if DIRECT_DISTRIBUTION
+            return ["power", "display-power", "gpu-power"]
+            #else
+            return ["power"]
+            #endif
+        case .health:
+            return [
+                "health", "cycle-count", "temperature", "power-loss",
+                "voltage", "current", "cell-balance", "capacity",
+                "cell-qmax", "cell-resistance", "thermal-limit-seconds", "time-at-high-soc"
+            ]
+        case .supply:
+            return []
         }
     }
 }

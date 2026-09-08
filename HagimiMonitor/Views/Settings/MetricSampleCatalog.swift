@@ -69,6 +69,8 @@ enum MetricSampleCatalog {
             return MetricSample(parts: [MetricSamplePart(text: "32 GB")])
         case (.memory, "compressed"):
             return MetricSample(parts: [MetricSamplePart(text: "2.1 GB")])
+        case (.memory, "memory-bandwidth"):
+            return MetricSample(parts: [MetricSamplePart(text: "12.4", unit: "GB/s")])
         case (.storage, "used"):
             return MetricSample(parts: [MetricSamplePart(text: "380 GB")])
         case (.storage, "free"):
@@ -106,6 +108,14 @@ enum MetricSampleCatalog {
             return MetricSample(parts: [MetricSamplePart(text: "1240", unit: "mA")])
         case (.battery, "capacity"):
             return MetricSample(parts: [MetricSamplePart(text: "5210 / 5683", unit: "mAh")])
+        case (.battery, "cell-qmax"):
+            return MetricSample(parts: [MetricSamplePart(text: "5212 / 5208 / 5215", unit: "mAh")])
+        case (.battery, "cell-resistance"):
+            return MetricSample(parts: [MetricSamplePart(text: "34 / 35 / 33", unit: "mΩ")])
+        case (.battery, "thermal-limit-seconds"):
+            return MetricSample(parts: [MetricSamplePart(text: "12600", unit: "s")])
+        case (.battery, "time-at-high-soc"):
+            return MetricSample(parts: [MetricSamplePart(text: "156", unit: "h")])
         default:
             return MetricSample(parts: [MetricSamplePart(text: "--")])
         }

@@ -152,13 +152,17 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "tiler", title: String(localized: "metric.gpu.tiler"), isDefault: true),
             ]
         case .memory:
-            return [
+            var metrics = [
                 MetricSwitch(id: "used", title: String(localized: "metric.memory.used"), isDefault: true),
                 MetricSwitch(id: "pressure", title: String(localized: "metric.memory.pressure"), isDefault: true),
                 MetricSwitch(id: "swap-used", title: String(localized: "metric.memory.swap-used"), isDefault: true),
                 MetricSwitch(id: "total", title: String(localized: "metric.memory.total"), isDefault: true),
                 MetricSwitch(id: "compressed", title: String(localized: "metric.memory.compressed"), isDefault: true),
             ]
+            #if DIRECT_DISTRIBUTION
+            metrics.append(MetricSwitch(id: "memory-bandwidth", title: String(localized: "metric.memory.memory-bandwidth"), isDefault: true))
+            #endif
+            return metrics
         case .storage:
             return [
                 MetricSwitch(id: "used", title: String(localized: "metric.storage.used"), isDefault: true),
@@ -190,7 +194,6 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             metrics.append(contentsOf: [
                 MetricSwitch(id: "power", title: String(localized: "metric.battery.power"), isDefault: true),
                 MetricSwitch(id: "display-power", title: String(localized: "metric.battery.display-power"), isDefault: true),
-                MetricSwitch(id: "cpu-power", title: String(localized: "metric.battery.cpu-power"), isDefault: true),
                 MetricSwitch(id: "gpu-power", title: String(localized: "metric.battery.gpu-power"), isDefault: true)
             ])
             #endif
@@ -199,7 +202,12 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "current", title: String(localized: "metric.battery.current"), isDefault: true),
                 MetricSwitch(id: "cell-balance", title: String(localized: "metric.battery.cell-balance"), isDefault: true),
                 // 剩余/满充容量合并为单一开关(展示为「剩余 / 满充 mAh」整行格)。
-                MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true)
+                MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true),
+                // 深度诊断指标（默认关闭，按需在设置中勾选开启）
+                MetricSwitch(id: "cell-qmax", title: String(localized: "metric.battery.cell-qmax"), isDefault: false),
+                MetricSwitch(id: "cell-resistance", title: String(localized: "metric.battery.cell-resistance"), isDefault: false),
+                MetricSwitch(id: "thermal-limit-seconds", title: String(localized: "metric.battery.thermal-limit-seconds"), isDefault: false),
+                MetricSwitch(id: "time-at-high-soc", title: String(localized: "metric.battery.time-at-high-soc"), isDefault: false)
             ])
             return metrics
         case .fan:
@@ -1026,6 +1034,29 @@ final class MonitorStore: ObservableObject {
         case .fanSpeed:
             // 取多风扇的 max RPM;fans 为空(无风扇 / 未采样)走 unavailable 占位。
             return MenuBarMetricFormatter.fanRPM(fans.map { $0.currentRPM }.max())
+        // 分项功耗/总线带宽由采样串行队列推进并发布到模块指标，菜单栏只读
+        // 已发布数值：不在主线程触发 IOReport 采样，也消除跨线程共享状态。
+        case .gpuPower:
+            #if DIRECT_DISTRIBUTION
+            return MenuBarMetricFormatter.power(metricValue("gpu-power", in: .battery))
+            #else
+            return MenuBarMetricFormatter.unavailable
+            #endif
+        case .memoryBandwidth:
+            #if DIRECT_DISTRIBUTION
+            return MenuBarMetricFormatter.bandwidth(metricValue("memory-bandwidth", in: .memory))
+            #else
+            return MenuBarMetricFormatter.unavailable
+            #endif
+        case .displayRefreshRate:
+            // 公开 CG API,沙盒可用,双渠道同源。
+            return MenuBarMetricFormatter.refreshRate(DisplayTelemetryReader.readBuiltInRefreshRate())
+        case .displayPower:
+            #if DIRECT_DISTRIBUTION
+            return MenuBarMetricFormatter.displayPower(metricValue("display-power", in: .battery))
+            #else
+            return MenuBarMetricFormatter.unavailable
+            #endif
         }
     }
 
@@ -1035,10 +1066,14 @@ final class MonitorStore: ObservableObject {
             "35%"
         case .gpuUsage:
             "34%"
+        case .gpuPower:
+            "  5W"
         case .memoryUsage:
             "61%"
         case .memoryPressure:
             "23%"
+        case .memoryBandwidth:
+            "9.4G"
         case .batteryLevel:
             "76%"
         case .networkDownload:
@@ -1049,6 +1084,10 @@ final class MonitorStore: ObservableObject {
             " 88°"
         case .storageFree:
             "128G"
+        case .displayRefreshRate:
+            "120Hz"
+        case .displayPower:
+            " 1.5W"
         case .systemPower:
             " 12W"
         case .fanSpeed:

@@ -621,14 +621,17 @@ private struct DisplayInfoCard: View {
         Group {
             if PanelMotionExperiment.enabled {
                 PanelCardStack(measurementKey: String(describing: display)) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        title
-                        DisplayInfoBaseGrid(display: display, palette: palette)
+                    HStack(alignment: .top, spacing: 10) {
+                        displayIcon
+                        VStack(alignment: .leading, spacing: 7) {
+                            title
+                            DisplayInfoBaseGrid(display: display, palette: palette)
+                        }
                     }
                     .padding(.bottom, MetricGridMetrics.gridRowGap)
                     .panelMeasure("row:" + archiveKey)
                     SingleHostDetail(id: archiveKey, isExpanded: archiveExpanded, available: true,
-                        content: archiveContent, presentation: expansion.motion.presentation(for: archiveKey),
+                        content: archiveContent.padding(.leading, 28), presentation: expansion.motion.presentation(for: archiveKey),
                         measurementKey: String(describing: display))
                 }
             } else {
@@ -666,15 +669,28 @@ private struct DisplayInfoCard: View {
 
     }
 
+    private var displayIcon: some View {
+        Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
+            .font(.subheadline.weight(.semibold))
+            .symbolRenderingMode(.monochrome)
+            .foregroundStyle(palette.displayTint)
+            .frame(width: 18)
+            .padding(.top, 2)
+    }
+
     private var legacyContent: some View {
-        VStack(alignment: .leading, spacing: 7) {
-            title
+        HStack(alignment: .top, spacing: 10) {
+            displayIcon
 
-            VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
-                DisplayInfoBaseGrid(display: display, palette: palette)
+            VStack(alignment: .leading, spacing: 7) {
+                title
 
-                CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
-                    archiveContent
+                VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
+                    DisplayInfoBaseGrid(display: display, palette: palette)
+
+                    CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
+                        archiveContent
+                    }
                 }
             }
         }
@@ -1173,7 +1189,7 @@ private struct DisplayControlGroup: View {
         Group {
             if PanelMotionExperiment.enabled {
                 PanelCardStack(measurementKey: measurementKey) {
-                    HStack(alignment: .top, spacing: 8) {
+                    HStack(alignment: .top, spacing: 10) {
                         displayIcon
                         title
                     }
@@ -1181,8 +1197,8 @@ private struct DisplayControlGroup: View {
                     SingleHostReplacement(id: archiveKey, isExpanded: archiveExpanded,
                         measurementKey: measurementKey,
                         presentation: expansion.motion.presentation(for: archiveKey),
-                        collapsed: controlsContent.padding(.leading, 22).padding(.top, 7),
-                        expanded: replacementArchive.padding(.leading, 22).padding(.top, 7))
+                        collapsed: controlsContent.padding(.leading, 28).padding(.top, 7),
+                        expanded: replacementArchive.padding(.leading, 28).padding(.top, 7))
                 }
             } else {
                 legacyContent
@@ -1257,12 +1273,12 @@ private struct DisplayControlGroup: View {
                 .font(.subheadline.weight(.semibold))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(tint)
-                .frame(width: 14)
+                .frame(width: 18)
                 .padding(.top, 2)
     }
 
     private var legacyContent: some View {
-        HStack(alignment: .top, spacing: 8) {
+        HStack(alignment: .top, spacing: 10) {
             displayIcon
 
             VStack(alignment: .leading, spacing: 7) {
@@ -1397,6 +1413,9 @@ private struct DisplayControlGroup: View {
                 }
             }
         }
+        // 原生 Slider 的旋钮绘制会超出其布局盒下缘;控制区在 toggledContent 里按
+        // 测量高度裁剪,留此底部余量避免最末一条滑轨的旋钮下半被削。
+        .padding(.bottom, 6)
     }
 
     private func archiveContent(for info: DisplayInfo) -> some View {

@@ -1284,6 +1284,8 @@ private struct MetricDetailGrid: View {
     /// CPU 逐核数据:非 nil 时在网格顶部渲染 P/E 两行展示,
     /// 并剔除 core-split 格子(同源数值不重复展示)。
     var cpuCoreDetail: CPUCoreDetail? = nil
+    /// 是否在顶部绘制贯穿分隔线。电源等已有专属分区头组件的场景可关闭。
+    var showsSeparator: Bool = true
 
     private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
@@ -1310,16 +1312,25 @@ private struct MetricDetailGrid: View {
     }
 
     /// 热压力与温度合并为整行渲染(温度并入热压力行;菜单栏温度选项独立)。
+    /// 温度指标仅直连版产出(SMC 在沙盒下不可读);无温度时不合并,
+    /// 热压力回落为普通半行档位格。
     private func isMergedThermalRow(_ metric: MonitorMetric) -> Bool {
-        kind == .cpu && (metric.name == "thermal-pressure" || metric.name == "temperature")
+        guard kind == .cpu, metrics.contains(where: { $0.name == "temperature" }) else {
+            return false
+        }
+        return metric.name == "thermal-pressure" || metric.name == "temperature"
     }
 
     var body: some View {
-        VStack(spacing: 7) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: kind))
-                .frame(height: 1)
+        if showsSeparator {
+            VStack(spacing: 7) {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: kind))
+                    .frame(height: 1)
 
+                content
+            }
+        } else {
             content
         }
     }
@@ -1342,8 +1353,8 @@ private struct MetricDetailGrid: View {
                 }
             }
 
-            if let thermal = metrics.first(where: { $0.name == "thermal-pressure" }) {
-                let temperature = metrics.first { $0.name == "temperature" }
+            if let thermal = metrics.first(where: { $0.name == "thermal-pressure" }),
+               let temperature = metrics.first(where: { $0.name == "temperature" }) {
                 thermalPressureCell(thermal: thermal, temperature: temperature)
             }
 
@@ -1363,10 +1374,10 @@ private struct MetricDetailGrid: View {
             .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
     }
 
-    /// 热压力整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
-    /// 直连版温度可用时双值并排;沙盒版无温度只显示档位。档位按 severity 着色,
+    /// 热压力合并整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
+    /// 仅在温度可用(直连版)时渲染此行;档位按 severity 着色,
     /// 温度保持 valueText 与其余数值同层级。
-    private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric?) -> some View {
+    private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric) -> some View {
         insetCell(
             HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
                 Text(localizedMetricName(kind: kind, id: thermal.name))
@@ -1377,14 +1388,12 @@ private struct MetricDetailGrid: View {
 
                 Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
-                if let temperature {
-                    splitValue(temperature, text: localizedMetricValue(kind: kind, metric: temperature))
-                        .help(localizedMetricValue(kind: kind, metric: temperature))
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            copyToPasteboard(temperature.value)
-                        }
-                }
+                splitValue(temperature, text: localizedMetricValue(kind: kind, metric: temperature))
+                    .help(localizedMetricValue(kind: kind, metric: temperature))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        copyToPasteboard(temperature.value)
+                    }
                 splitValue(thermal, text: localizedMetricValue(kind: kind, metric: thermal))
                     .help(localizedMetricValue(kind: kind, metric: thermal))
                     .contentShape(Rectangle())
@@ -1885,9 +1894,9 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var detailMeasurementKey: String {
-        [detailMetrics.map(\.name).joined(separator: ","),
+        [tabMetrics(for: activeTab).map(\.name).joined(separator: ","),
          "\(showPowerFlow)",
-         selectedTab.rawValue].joined(separator: "|")
+         activeTab.rawValue].joined(separator: "|")
     }
 
     private var tint: Color {
@@ -1955,42 +1964,51 @@ private struct BatteryGlassRow: View, Equatable {
             .panelMeasure("row:" + module.kind.id)
 
             CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand, measurementKey: detailMeasurementKey) {
-                VStack(spacing: 9) {
-                    MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
-                    // 指标网格(健康度/温度/循环/损耗)与功率流图之间用带标题的分区分隔线
-                    // 明确隔开。功率流是电源模块的展开区亮点,双渠道(含沙盒)均可用——
-                    // 数据全部来自 BatterySampler 读 AppleSmartBattery/PowerTelemetryData 的
-                    // IORegistry 只读属性,不涉及他进程采样或私有 API,沙盒允许。
-                    // 由设置项 batteryShowPowerFlow(Beta)门控,关闭后展开区仅剩指标网格。
-                    // 功率流无 power 数据(老款 Mac 读不到 PowerTelemetryData.SystemPower)时整体隐藏,
-                    // 避免只显标题不出图的视觉断裂。canExpand 已用同一条件门控展开动作,渲染侧保持联动。
-                    if showPowerFlow && numericValue("power") != nil {
-                        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme) {
+                VStack(spacing: 8) {
+                    // 顶部导航:动态小标题 + 贯穿分隔线 + 右侧多页切换胶囊
+                    // selection 锚定 activeTab:selectedTab 指向已被设置裁掉的
+                    // 分页时,胶囊仍高亮当前生效页而非陷入无高亮态。
+                    PowerSectionHeader(title: activeTab.title, theme: theme) {
+                        if availableTabs.count > 1 {
                             PanelCapsulePicker(
-                                selection: $selectedTab,
+                                selection: Binding(
+                                    get: { activeTab },
+                                    set: { selectedTab = $0 }
+                                ),
+                                items: availableTabs,
                                 icon: { $0.icon },
                                 tooltip: { $0.title },
                                 tint: tint,
                                 theme: theme
                             )
                         }
-                        .padding(.top, 3)
+                    }
 
-                        switch selectedTab {
-                        case .flow:
+                    switch activeTab {
+                    case .flow:
+                        let flowMetrics = tabMetrics(for: .flow)
+                        if !flowMetrics.isEmpty {
+                            MetricDetailGrid(metrics: flowMetrics, kind: module.kind, theme: theme, showsSeparator: false)
+                        }
+                        if showPowerFlow && numericValue("power") != nil {
                             PowerFlowDiagram(
                                 module: module,
                                 theme: theme,
                                 tint: tint,
                                 animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
                             )
-                        case .supply:
-                            PowerSupplyDiagnosticsView(
-                                module: module,
-                                theme: theme,
-                                tint: tint
-                            )
                         }
+                    case .health:
+                        let healthMetrics = tabMetrics(for: .health)
+                        if !healthMetrics.isEmpty {
+                            MetricDetailGrid(metrics: healthMetrics, kind: module.kind, theme: theme, showsSeparator: false)
+                        }
+                    case .supply:
+                        PowerSupplyDiagnosticsView(
+                            module: module,
+                            theme: theme,
+                            tint: tint
+                        )
                     }
                 }
                 .padding(.horizontal, 10)
@@ -2053,31 +2071,41 @@ private struct BatteryGlassRow: View, Equatable {
         }
     }
 
-    private var detailMetrics: [MonitorMetric] {
-        // 充电功率已上移到行首常驻 CHG pill,明细不再重复展示。
-        // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
-        // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
-        // 斜杠长值,由静态登记整行排到模块末尾。
-        #if DIRECT_DISTRIBUTION
-        let powerMetrics = ["power", "display-power", "cpu-power", "gpu-power"]
-        #else
-        let powerMetrics: [String] = []
-        #endif
-        let names = ["health", "cycle-count", "temperature", "power-loss"]
-            + powerMetrics
-            + ["voltage", "current", "cell-balance", "capacity"]
+    /// 当前硬件与设置条件下可用的分页集合。
+    /// - 拓扑（.flow）：开启 showPowerFlow 且有 power 数据，或存在分项功耗指标时可用；
+    /// - 健康（.health）：仅带电池设备可用；
+    /// - 供电（.supply）：始终可用（未插电时优雅提示未连接）。
+    private var availableTabs: [BatteryPageTab] {
+        var tabs: [BatteryPageTab] = []
+        let hasFlowData = (showPowerFlow && numericValue("power") != nil) || !tabMetrics(for: .flow).isEmpty
+        if hasFlowData {
+            tabs.append(.flow)
+        }
+        if hasBattery {
+            tabs.append(.health)
+        }
+        tabs.append(.supply)
+        return tabs
+    }
 
+    private var activeTab: BatteryPageTab {
+        availableTabs.contains(selectedTab) ? selectedTab : (availableTabs.first ?? .flow)
+    }
+
+    private func tabMetrics(for tab: BatteryPageTab) -> [MonitorMetric] {
         let enabledNames = Set(details.map(\.name))
-
-        return names.compactMap { name in
+        return tab.metricNames.compactMap { name in
             guard enabledNames.contains(name) else { return nil }
             return module.metrics.first(where: { $0.name == name })
         }
     }
 
+    private var detailMetrics: [MonitorMetric] {
+        tabMetrics(for: activeTab)
+    }
+
     private var canExpand: Bool {
-        // 指标全关时,只有功率流开启且有功耗值,展开区才仍有内容可显示。
-        !detailMetrics.isEmpty || (showPowerFlow && numericValue("power") != nil)
+        !availableTabs.isEmpty
     }
 
     private func numericValue(_ name: String) -> Double? {

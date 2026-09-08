@@ -25,7 +25,6 @@ final class BatterySampler: MonitorSampler {
     #endif
 
     #if DIRECT_DISTRIBUTION
-    private let componentPowerSampler = IOReportPowerSampler()
     private var componentPower = IOReportPowerSample()
     #endif
 
@@ -39,7 +38,7 @@ final class BatterySampler: MonitorSampler {
         #if DIRECT_DISTRIBUTION
         // IOReport 是累计能量计数，必须在每个既有采样帧持续推进基线；即使本帧
         // IOPS 读取失败或机器无电池，也照常更新 CPU/GPU/内建屏功耗。
-        componentPower = componentPowerSampler.sample()
+        componentPower = IOReportPowerSampler.shared.sample()
         #endif
 
         // IOPS 接口本身失败(info/列表读不出):电源状态不可信,兜底模块标记为占位,
@@ -172,7 +171,12 @@ final class BatterySampler: MonitorSampler {
             // low-power-mode 存 on/off 原值,由视图层 localizedMetricValue 本地化。
             MonitorMetric(name: "power-loss", value: wattString(powerLoss), numericValue: powerLoss, unit: " W"),
             MonitorMetric(name: "charge-limit", value: smart.chargeLimit.map { "\($0)%" } ?? "--", numericValue: smart.chargeLimit.map(Double.init), unit: "%"),
-            MonitorMetric(name: "low-power-mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "on" : "off")
+            MonitorMetric(name: "low-power-mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "on" : "off"),
+            // 深度电芯与终身诊断指标
+            MonitorMetric(name: "cell-qmax", value: smart.cellQmax.isEmpty ? "--" : smart.cellQmax.map(String.init).joined(separator: " / ") + " mAh", unit: " mAh"),
+            MonitorMetric(name: "cell-resistance", value: smart.cellWeightedRa.isEmpty ? "--" : smart.cellWeightedRa.map(String.init).joined(separator: " / ") + " mΩ", unit: " mΩ"),
+            MonitorMetric(name: "thermal-limit-seconds", value: smart.thermalLimitSeconds.map { "\($0)s" } ?? "--", unit: "s"),
+            MonitorMetric(name: "time-at-high-soc", value: smart.timeAtHighSocMinutes.map { "\($0 / 60) h" } ?? "--", numericValue: smart.timeAtHighSocMinutes.map { Double($0 / 60) }, unit: " h")
         ])
 
         return MonitorModule(
@@ -357,7 +361,11 @@ final class BatterySampler: MonitorSampler {
             inputCurrentAmps: telemetry?.amps,
             notChargingReason: notChargingReason,
             chargingAllowed: chargingAllowed,
-            cellVoltages: cellVoltages
+            cellVoltages: cellVoltages,
+            cellQmax: batteryScan.cellQmax,
+            cellWeightedRa: batteryScan.cellWeightedRa,
+            thermalLimitSeconds: batteryScan.thermalLimitSeconds,
+            timeAtHighSocMinutes: batteryScan.timeAtHighSocMinutes
         )
     }
 
@@ -662,33 +670,23 @@ final class BatterySampler: MonitorSampler {
     private func componentPowerMetrics() -> [MonitorMetric] {
         [
             MonitorMetric(name: "display-power", value: wattString(componentPower.displayWatts), numericValue: componentPower.displayWatts, unit: " W"),
-            MonitorMetric(name: "cpu-power", value: wattString(componentPower.cpuWatts), numericValue: componentPower.cpuWatts, unit: " W"),
             MonitorMetric(name: "gpu-power", value: wattString(componentPower.gpuWatts), numericValue: componentPower.gpuWatts, unit: " W")
         ]
     }
     #endif
 }
 
-/// 递归收集 AppleSmartBattery 子树中所有 BatteryData 字典的并集。
-///
-/// 系统差异：
-///   - macOS 26 及以前：BatteryData 主要存在于根节点 AppleSmartBattery，子节点信息有限。
-///   - macOS 27 起：根节点的 BatteryData 被精简，DesignCapacity / AppleRawMaxCapacity /
-///     AppleRawCurrentCapacity / Temperature / InstantAmperage 等键被搬到子节点
-///     AppleSmartBatteryPack 的 BatteryData 中。
-///
-/// 合并策略：先序遍历，遇到先来的键不覆盖（即根节点优先）。这样 26 上等价于原行为，
-/// 27 上则能用子节点的值补全根节点缺失的字段。
+/// 递归收集 AppleSmartBattery 子树中所有 BatteryData 字典的并集与电芯诊断数据。
 private struct BatteryDataScan {
     var merged: [String: Any] = [:]
     var cellVoltages: [Int] = []
+    var cellQmax: [Int] = []
+    var cellWeightedRa: [Int] = []
+    var thermalLimitSeconds: Int?
+    var timeAtHighSocMinutes: Int?
 }
 
-/// 递归收集整棵 AppleSmartBattery 子树中的 BatteryData 并集与独立电芯读数。
-///
-/// 单次先序遍历完成两项工作：
-/// 1. 跨节点合并字段（macOS 27 子节点补全根节点）；
-/// 2. 收集各 AppleSmartBatteryBank 子节点的 CellVoltage (mV)，避免每秒重复遍历 IORegistry。
+/// 递归收集整棵 AppleSmartBattery 子树中的 BatteryData 并集、独立电芯读数与底层健康诊断。
 private func collectBatteryDataAndCellVoltages(_ root: io_registry_entry_t) -> BatteryDataScan {
     var scan = BatteryDataScan()
 
@@ -700,6 +698,27 @@ private func collectBatteryDataAndCellVoltages(_ root: io_registry_entry_t) -> B
             }
             if let cv = intValue(dict["CellVoltage"]), cv > 0 {
                 scan.cellVoltages.append(cv)
+            }
+            if let qm = intValue(dict["Qmax"]), qm > 0 {
+                scan.cellQmax.append(qm)
+            }
+            if let ra = intValue(dict["WeightedRa"]), ra > 0 {
+                scan.cellWeightedRa.append(ra)
+            }
+            if scan.timeAtHighSocMinutes == nil,
+               let lt = dict["LifetimeData"] as? [String: Any],
+               let data = lt["TimeAtHighSoc"] as? Data {
+                let bins = data.withUnsafeBytes { Array($0.bindMemory(to: UInt32.self)) }
+                let total = bins.reduce(0) { $0 + Int($1) }
+                if total > 0 {
+                    scan.timeAtHighSocMinutes = total
+                }
+            }
+        }
+        if let charger = IORegistryEntryCreateCFProperty(entry, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any] {
+            if let tls = intValue(charger["TimeChargingThermallyLimited"]) {
+                scan.thermalLimitSeconds = tls
             }
         }
         var iterator: io_iterator_t = 0
@@ -741,4 +760,8 @@ private struct SmartBatteryInfo {
     var notChargingReason: Int?
     var chargingAllowed: Int?
     var cellVoltages: [Int] = []
+    var cellQmax: [Int] = []
+    var cellWeightedRa: [Int] = []
+    var thermalLimitSeconds: Int?
+    var timeAtHighSocMinutes: Int?
 }

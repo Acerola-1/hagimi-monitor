@@ -3708,7 +3708,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Thermal Pressure"
+            "value": "Thermal"
           }
         },
         "zh-Hans": {
@@ -4772,22 +4772,6 @@
         }
       }
     },
-    "panel.power-flow.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "POWER FLOW"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "功率流"
-          }
-        }
-      }
-    },
     "panel.processes.rosetta-banner": {
       "localizations": {
         "en": {
@@ -5567,6 +5551,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "适配器 · 电池 · 系统实时功率流向图"
+          }
+        }
+      }
+    },
+    "settings.battery.tab-no-metrics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No selectable metrics on this tab"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此分页无可勾选指标"
           }
         }
       }
@@ -11642,22 +11642,6 @@
         }
       }
     },
-    "metric.battery.cpu-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        }
-      }
-    },
     "metric.battery.gpu-power": {
       "localizations": {
         "en": {
@@ -11670,6 +11654,230 @@
           "stringUnit": {
             "state": "translated",
             "value": "GPU"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.health": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康"
+          }
+        }
+      }
+    },
+    "metric.battery.cell-qmax": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cell Qmax"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电芯化学容量"
+          }
+        }
+      }
+    },
+    "metric.battery.cell-resistance": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cell Resistance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电芯内阻"
+          }
+        }
+      }
+    },
+    "metric.battery.thermal-limit-seconds": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thermal Throttling"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温控限充"
+          }
+        }
+      }
+    },
+    "metric.battery.time-at-high-soc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High SoC Time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "满电驻留"
+          }
+        }
+      }
+    },
+    "metric.memory.memory-bandwidth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BW"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带宽"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.gpu-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU Power"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU 功耗"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-prefix.gpu-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPWR"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU功耗"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.memory-bandwidth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory Bandwidth"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存总线带宽"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-prefix.memory-bandwidth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BW"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带宽"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.display-refresh-rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Refresh Rate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕刷新率"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-prefix.display-refresh-rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ""
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.display-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Power"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕功耗"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-prefix.display-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSP"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕"
           }
         }
       }

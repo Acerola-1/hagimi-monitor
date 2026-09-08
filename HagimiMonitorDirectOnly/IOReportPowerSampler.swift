@@ -1,30 +1,34 @@
 import CoreFoundation
 import Foundation
 
-/// Direct 版专用的分项功耗读数。所有字段均为最近两个应用采样帧之间的平均功率(W)。
+/// Direct 版专用的分项硬件遥测读数。所有功率字段为平均功率(W)，内存带宽为字节率(Bytes/s)。
 struct IOReportPowerSample {
     var displayWatts: Double? = nil
-    var cpuWatts: Double? = nil
     var gpuWatts: Double? = nil
+    var memoryBandwidthBytesPerSec: Double? = nil
 }
 
-/// 复用电池模块既有刷新节奏读取 IOReport 累计能量，不创建定时器，也不在采样线程 sleep。
+/// 复用统一刷新节奏读取 IOReport 累计能量与总线吞吐，不创建独立轮询定时器，也不在采样线程 sleep。
 ///
 /// 数据口径：
 /// - 内建屏：DCP / display stats / power，实测为累计微焦耳；
-/// - CPU/GPU：Energy Model 下各自的 Energy channel，按 channel 自带 unit 解码。
+/// - GPU：Energy Model 下的 GPU Energy channel，按 channel 自带 unit 解码；
+/// - 内存总线：PMP / DSID Stats 下的各组 Misses 计数，计数单位即字节（多线程流式读负载实测：
+///   本计数净增速率与负载实际字节速率之比 ≈1.05，每次 Miss 对应 64B 的假设已被否定）。
 ///
 /// IOReport 为私有 API，因此本文件只属于未沙盒化的 Direct target。
 final class IOReportPowerSampler {
+    static let shared = IOReportPowerSampler()
+
     private enum ChannelID: Hashable {
         case display
-        case cpu
         case gpu
+        case memory
     }
 
     private struct Counter {
         let value: Int64
-        let joulesPerCount: Double
+        let scale: Double
     }
 
     private struct Baseline {
@@ -40,38 +44,58 @@ final class IOReportPowerSampler {
     private let energySubscription = Subscription(
         group: "Energy Model",
         subgroup: nil,
-        channelNames: ["CPU Energy", "GPU Energy"]
+        channelNames: ["GPU Energy"]
     )
+    private let memorySubscription = Subscription(
+        group: "PMP",
+        subgroup: "DSID Stats",
+        filter: { $0.hasSuffix("Misses") }
+    )
+
     private var baselines: [ChannelID: Baseline] = [:]
+    private var lastSample = IOReportPowerSample()
+    private var lastSampleUptime: TimeInterval = 0
+    /// 互斥保护 baselines/lastSample，使 sample() 可安全跨线程调用。
+    private let sampleLock = NSLock()
 
     func sample() -> IOReportPowerSample {
+        sampleLock.lock()
+        defer { sampleLock.unlock() }
         let uptime = ProcessInfo.processInfo.systemUptime
+        if uptime - lastSampleUptime < 0.25 {
+            return lastSample
+        }
+
         var counters: [ChannelID: Counter] = [:]
 
         if let channel = displaySubscription?.sampleChannels()["power"] {
             // DCP 的 power channel unit 标记为 dimensionless，但实测计数是累计 µJ。
-            counters[.display] = Counter(value: channel.value, joulesPerCount: 1e-6)
+            counters[.display] = Counter(value: channel.value, scale: 1e-6)
         }
 
         if let energyChannels = energySubscription?.sampleChannels() {
-            if let channel = energyChannels["CPU Energy"],
-               let scale = Self.energyJoulesPerCount(unit: channel.unit) {
-                counters[.cpu] = Counter(value: channel.value, joulesPerCount: scale)
-            }
             if let channel = energyChannels["GPU Energy"],
                let scale = Self.energyJoulesPerCount(unit: channel.unit) {
-                counters[.gpu] = Counter(value: channel.value, joulesPerCount: scale)
+                counters[.gpu] = Counter(value: channel.value, scale: scale)
             }
         }
 
-        return IOReportPowerSample(
-            displayWatts: watts(for: .display, counter: counters[.display], uptime: uptime),
-            cpuWatts: watts(for: .cpu, counter: counters[.cpu], uptime: uptime),
-            gpuWatts: watts(for: .gpu, counter: counters[.gpu], uptime: uptime)
+        if let memChannels = memorySubscription?.sampleChannels(), !memChannels.isEmpty {
+            let totalMisses = memChannels.values.reduce(Int64(0)) { $0 + $1.value }
+            counters[.memory] = Counter(value: totalMisses, scale: 1.0)
+        }
+
+        let sample = IOReportPowerSample(
+            displayWatts: rate(for: .display, counter: counters[.display], uptime: uptime, maxRate: 1_000),
+            gpuWatts: rate(for: .gpu, counter: counters[.gpu], uptime: uptime, maxRate: 1_000),
+            memoryBandwidthBytesPerSec: rate(for: .memory, counter: counters[.memory], uptime: uptime, maxRate: 2_000_000_000_000)
         )
+        lastSample = sample
+        lastSampleUptime = uptime
+        return sample
     }
 
-    private func watts(for id: ChannelID, counter: Counter?, uptime: TimeInterval) -> Double? {
+    private func rate(for id: ChannelID, counter: Counter?, uptime: TimeInterval, maxRate: Double) -> Double? {
         guard let counter else { return nil }
         defer { baselines[id] = Baseline(value: counter.value, uptime: uptime) }
 
@@ -81,8 +105,8 @@ final class IOReportPowerSampler {
 
         // 首帧无基线；睡眠/长暂停后的跨窗口均值没有实时展示意义。
         guard !overflow, elapsed > 0, elapsed <= 30, delta >= 0 else { return nil }
-        let result = Double(delta) * counter.joulesPerCount / elapsed
-        guard result.isFinite, result >= 0, result <= 1_000 else { return nil }
+        let result = Double(delta) * counter.scale / elapsed
+        guard result.isFinite, result >= 0, result <= maxRate else { return nil }
         return result
     }
 
@@ -105,7 +129,7 @@ private final class Subscription {
     private let subscription: CFTypeRef
     private let subscribedChannels: CFMutableDictionary
 
-    init?(group: String, subgroup: String?, channelNames: Set<String>) {
+    init?(group: String, subgroup: String?, channelNames: Set<String>? = nil, filter: ((String) -> Bool)? = nil) {
         guard let copiedChannels = IOReportCopyChannelsInGroup(
             group as CFString,
             subgroup as CFString?,
@@ -122,9 +146,15 @@ private final class Subscription {
                 return false
             }
             let stringName = name as String
-            return channelNames.contains(stringName) && foundNames.insert(stringName).inserted
+            if let channelNames, !channelNames.contains(stringName) {
+                return false
+            }
+            if let filter, !filter(stringName) {
+                return false
+            }
+            return foundNames.insert(stringName).inserted
         }
-        guard !foundNames.isEmpty,
+        guard !filteredChannels.isEmpty,
               let mutableChannels = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0, copiedChannels) else {
             return nil
         }

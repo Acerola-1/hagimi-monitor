@@ -152,8 +152,14 @@ struct MenuBarMetricLabel: View {
             "888°"
         case .storageFree:
             "888G"
-        case .systemPower:
+        case .systemPower, .gpuPower:
             "888W"
+        case .memoryBandwidth:
+            "888G"
+        case .displayRefreshRate:
+            "120Hz"
+        case .displayPower:
+            "99.9W"
         case .fanSpeed:
             "9999"
         }

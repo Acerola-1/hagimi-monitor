@@ -68,7 +68,9 @@ enum StaticMetricSizing {
             "network.ip-address",
             // 「8888 / 8888 mAh」单值即超出半格
             "battery.capacity",
-            "battery.cell-balance"
+            "battery.cell-balance",
+            "battery.cell-qmax",
+            "battery.cell-resistance"
         ],
         "en": [
             "cpu.uptime",
@@ -79,6 +81,10 @@ enum StaticMetricSizing {
             "network.ip-address",
             "battery.capacity",
             "battery.cell-balance",
+            "battery.cell-qmax",
+            "battery.cell-resistance",
+            "battery.thermal-limit-seconds",
+            "battery.time-at-high-soc",
             // 「Compressed」标签 78pt,GB 级两位小数值放不下
             "memory.compressed"
         ]
@@ -136,7 +142,9 @@ extension StaticMetricSizing {
         AuditEntry(kind: .cpu, name: "uptime", layout: .measured(WorstValue(number: "888天88小时", unit: nil))),
         // 整数计数,按五位封顶
         AuditEntry(kind: .cpu, name: "process-count", layout: .measured(WorstValue(number: "99999", unit: nil))),
-        AuditEntry(kind: .cpu, name: "thermal-pressure", layout: .specialForm),
+        AuditEntry(kind: .cpu, name: "thermal-pressure", layout: .enumMeasured(valueKeys: [
+            "thermal-pressure.normal", "thermal-pressure.fair", "thermal-pressure.serious", "thermal-pressure.critical"
+        ])),
         AuditEntry(kind: .cpu, name: "core-split", layout: .specialForm),
         // GPU(bytes() 千进制两位小数,最宽形态在百 GB 内)
         AuditEntry(kind: .gpu, name: "gpu-memory", layout: .measured(WorstValue(number: "99.99 GB", unit: nil))),
@@ -153,6 +161,7 @@ extension StaticMetricSizing {
         AuditEntry(kind: .memory, name: "swap-used", layout: .measured(WorstValue(number: "99.99 GB", unit: nil))),
         AuditEntry(kind: .memory, name: "total", layout: .measured(WorstValue(number: "512 GB", unit: nil))),
         AuditEntry(kind: .memory, name: "compressed", layout: .measured(WorstValue(number: "99.99 GB", unit: nil))),
+        AuditEntry(kind: .memory, name: "memory-bandwidth", layout: .measured(WorstValue(number: "888.8", unit: "GB/s"))),
         AuditEntry(kind: .memory, name: "usage", layout: .specialForm),
         // 存储(bytes() 千进制,内置磁盘上界 8TB 输出 "8,000 GB")
         AuditEntry(kind: .storage, name: "used", layout: .measured(WorstValue(number: "8,000 GB", unit: nil))),
@@ -176,15 +185,18 @@ extension StaticMetricSizing {
         AuditEntry(kind: .battery, name: "cell-balance", layout: .measured(WorstValue(number: "Δ888 mV (极佳)", unit: nil))),
         AuditEntry(kind: .battery, name: "temperature", layout: .measured(WorstValue(number: "100", unit: "°C"))),
         AuditEntry(kind: .battery, name: "power-loss", layout: .measured(WorstValue(number: "888.8", unit: "W"))),
-        // Apple Silicon 便携式设备的整机/CPU/GPU 按三位瓦数、内建屏按
+        // Apple Silicon 便携式设备的整机/GPU 按三位瓦数、内建屏按
         // 两位瓦数上界登记；覆盖硬件范围并保持最窄半格可读。
         AuditEntry(kind: .battery, name: "power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "display-power", layout: .measured(WorstValue(number: "88.8", unit: "W"))),
-        AuditEntry(kind: .battery, name: "cpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "gpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "voltage", layout: .measured(WorstValue(number: "88.88", unit: "V"))),
         AuditEntry(kind: .battery, name: "current", layout: .measured(WorstValue(number: "8888", unit: "mA"))),
         AuditEntry(kind: .battery, name: "capacity", layout: .measured(WorstValue(number: "8888 / 8888 mAh", unit: nil))),
+        AuditEntry(kind: .battery, name: "cell-qmax", layout: .measured(WorstValue(number: "8888 / 8888 / 8888", unit: " mAh"))),
+        AuditEntry(kind: .battery, name: "cell-resistance", layout: .measured(WorstValue(number: "888 / 888 / 888", unit: " mΩ"))),
+        AuditEntry(kind: .battery, name: "thermal-limit-seconds", layout: .measured(WorstValue(number: "88888", unit: "s"))),
+        AuditEntry(kind: .battery, name: "time-at-high-soc", layout: .measured(WorstValue(number: "88888", unit: " h"))),
         AuditEntry(kind: .battery, name: "status", layout: .specialForm),
         AuditEntry(kind: .battery, name: "adapter", layout: .specialForm),
         AuditEntry(kind: .battery, name: "charging-power", layout: .specialForm),
