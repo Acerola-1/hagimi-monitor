@@ -15,11 +15,11 @@ struct DDCProbeResult {
     let value: Double?
 }
 
-final class DisplayDDCBridge {
+final class DisplayDDCBridge: @unchecked Sendable {
     private var servicesByDisplayID: [CGDirectDisplayID: DDCService] = [:]
     private var maxValues: [ControlKey: UInt16] = [:]
-    /// 每个控制"生效"过的 VCP 码缓存。检测阶段一旦确定,运行期只用它单码读写,
-    /// 不再遍历多候选 × 满重试去占用总线(保持总线安静)。
+    /// 每个控制"生效"过的 VCP 码缓存。检测阶段一旦确定,运行期只用该码读写,
+    /// 保持总线请求有界。
     private var controlCodes: [ControlKey: DDCVCPCode] = [:]
     private let capabilities = DDCCapabilityStore()
     private let gate = DDCEnvironmentGate.shared
@@ -34,6 +34,37 @@ final class DisplayDDCBridge {
 
     func hasService(for displayID: CGDirectDisplayID) -> Bool {
         servicesByDisplayID[displayID] != nil
+    }
+
+    func serviceHandle(displayID: CGDirectDisplayID, identity: String) -> DDCServiceHandle? {
+        guard let service = servicesByDisplayID[displayID] else { return nil }
+        return DDCServiceHandle(
+            identity: identity,
+            chipAddress: service.chipAddress,
+            displayID: displayID
+        )
+    }
+
+    func transportRead(service handle: DDCServiceHandle, vcpCode: UInt8) -> DDCTransportReply? {
+        guard let service = servicesByDisplayID[CGDirectDisplayID(handle.displayID)] else { return nil }
+        guard let reply = LegacyDDCPacketTransport.read(
+            service: service.service,
+            chipAddress: service.chipAddress,
+            vcpCode: vcpCode,
+            retries: 1
+        ) else { return nil }
+        return DDCTransportReply(resultCode: reply.resultCode, current: reply.current, max: reply.max)
+    }
+
+    func transportWrite(service handle: DDCServiceHandle, vcpCode: UInt8, value: UInt16) -> Bool {
+        guard let service = servicesByDisplayID[CGDirectDisplayID(handle.displayID)] else { return false }
+        return LegacyDDCPacketTransport.write(
+            service: service.service,
+            chipAddress: service.chipAddress,
+            vcpCode: vcpCode,
+            value: value,
+            retries: 1
+        )
     }
 
     func capability(_ control: DisplayControlKind, displayID: CGDirectDisplayID) -> DDCCapability {
@@ -57,23 +88,24 @@ final class DisplayDDCBridge {
 
         var sawUnsupported = false
         for vcp in orderedCandidates(for: key) {
-            guard let reply = DDCTransport.read(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, retries: 3) else {
+            guard let reply = LegacyDDCPacketTransport.read(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, retries: 3) else {
                 continue
             }
             if reply.resultCode == 0x01 {
                 sawUnsupported = true
                 continue
             }
-            guard reply.resultCode == 0x00, reply.max > 0 else {
+            guard reply.resultCode == 0x00, DDCRawConversion.isValidRange(max: reply.max) else {
                 continue
             }
 
-            let safeMax = DDCRawConversion.sanitize(max: reply.max)
+            // 完整 UInt16 范围可表示,无 32767 截断;current 超 max 按饱和处理。
+            let safeMax = reply.max
             let safeCurrent = min(reply.current, safeMax)
             maxValues[key] = safeMax
             controlCodes[key] = vcp
             capabilities.set(.supported, for: key)
-            let percentage = DDCRawConversion.percent(raw: safeCurrent, max: safeMax)
+            let percentage = DDCRawConversion.percent(raw: safeCurrent, max: safeMax) ?? 0
             displayDDCLog.notice(
                 "Probe DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) -> supported \(percentage, privacy: .public)%"
             )
@@ -107,13 +139,15 @@ final class DisplayDDCBridge {
         }
 
         let maxValue = maxValues[key] ?? 100
-        var ddcValue = DDCRawConversion.ddcRaw(percent: value, max: maxValue)
+        guard var ddcValue = DDCRawConversion.ddcRaw(percent: value, max: maxValue) else {
+            return .busError
+        }
         if control == .volume, value > 0 {
             ddcValue = Swift.max(1, ddcValue)
         }
 
         for vcp in orderedCandidates(for: key) {
-            let success = DDCTransport.write(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, value: ddcValue)
+            let success = LegacyDDCPacketTransport.write(service: service.service, chipAddress: service.chipAddress, vcpCode: vcp.rawValue, value: ddcValue)
             displayDDCLog.notice(
                 "Write DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) value \(ddcValue, privacy: .public) success \(success, privacy: .public)"
             )
@@ -134,6 +168,37 @@ final class DisplayDDCBridge {
     }
 }
 
+/// 将稳定编排引擎接到现有 IOAVService 桥。底层调用始终在独立线程执行,
+/// 引擎只接收结构化回调,不直接接触 IOKit 对象。
+final class DisplayDDCTransport: DDCTransport, @unchecked Sendable {
+    private let bridge: DisplayDDCBridge
+
+    init(bridge: DisplayDDCBridge) {
+        self.bridge = bridge
+    }
+
+    func read(
+        service: DDCServiceHandle,
+        vcpCode: UInt8,
+        completion: @escaping @Sendable (DDCTransportReply?) -> Void
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async { [bridge, service] in
+            completion(bridge.transportRead(service: service, vcpCode: vcpCode))
+        }
+    }
+
+    func write(
+        service: DDCServiceHandle,
+        vcpCode: UInt8,
+        value: UInt16,
+        completion: @escaping @Sendable (Bool) -> Void
+    ) {
+        DispatchQueue.global(qos: .userInitiated).async { [bridge, service] in
+            completion(bridge.transportWrite(service: service, vcpCode: vcpCode, value: value))
+        }
+    }
+}
+
 private enum DDCVCPCode: UInt8 {
     case luminance = 0x10
     case contrast = 0x12
@@ -141,19 +206,26 @@ private enum DDCVCPCode: UInt8 {
     case audioSpeakerVolume = 0x62
     case audioMuteScreenBlank = 0x8D
 
+    /// 默认候选:亮度只用 0x10(MCCS 标准背光码)。0x13 为兼容候选,
+    /// 仅在显式配置或已验证适配 profile 下加入,默认路径不试写。
     static func candidates(for control: DisplayControlKind) -> [DDCVCPCode] {
         switch control {
         case .brightness:
-            [.luminance, .backlightControlLegacy]
+            [.luminance]
         case .contrast:
             [.contrast]
         case .volume:
             [.audioSpeakerVolume]
         }
     }
+
+    /// 显式启用 0x13 候选(仅用户在兼容设置里选择已定义编码时)。
+    static func candidatesForBrightnessIncludingLegacy() -> [DDCVCPCode] {
+        [.luminance, .backlightControlLegacy]
+    }
 }
 
-private enum DDCTransport {
+private enum LegacyDDCPacketTransport {
     /// 结构上有效的「Get VCP Feature Reply」帧解析结果。resultCode 交给调用方判定:
     /// 0x00 = 支持, 0x01 = 不支持。current/max 仅在 resultCode==0x00 时有意义。
     struct Reply {
@@ -169,7 +241,7 @@ private enum DDCTransport {
     private static let dataAddress: UInt8 = 0x51
 
     /// per-call 看门狗超时。仅让**当前这一次**调用放弃等待并返回失败,
-    /// **不设置任何全局/跨调用状态**——因此绝不会像旧熔断那样把后续调用一并锁死。
+    /// 不设置任何全局或跨调用状态,单次调用失败不会阻断后续调用。
     /// 睡眠/唤醒/重配置这些真正会 hang 的窗口已由 DDCEnvironmentGate 从源头拦截,
     /// 这里只是极少数窗口外 hang 的兜底,保证单条串行队列不被无限期占死。
     private static let callTimeout: DispatchTimeInterval = .seconds(2)

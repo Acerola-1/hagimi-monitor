@@ -328,8 +328,7 @@ struct DisplaySection: View {
             resampleDisplayInfo()
         }
         // 屏幕参数变化(HDR 开关/分辨率调整/插拔):摘要行的 HDR 是状态量,
-        // 不能等下一次插拔才刷新。通知本身低频(仅真实重配置时发出),不挂
-        // 5s 轮询——那会把缓存刻意规避的 IORegistry 枚举开销加回常态。
+        // 通知本身低频,不挂 5s 轮询,避免把 IORegistry 枚举开销加回常态。
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
             resampleDisplayInfo()
         }
@@ -394,8 +393,7 @@ struct DisplaySection: View {
     }
 
     /// 布局补间统一由 `PanelExpansionDriver` 驱动,窗口层逐帧被动跟随。
-    /// 不能做「一次性到位」的瞬间 toggle:会与 chevron 旋转、内容 transition 的
-    /// 时间线打架,造成「收一半停顿再补完」的卡顿。
+    /// toggle 与 chevron 旋转、内容 transition 共用同一动画时间线,保持几何连续。
     private func toggleExpansion() {
         withPanelExpansionState {
             isExpanded.toggle()
@@ -1375,6 +1373,9 @@ private struct DisplayControlGroup: View {
                     systemImage: "sun.max",
                     value: binding(for: .brightness),
                     isEnabled: display.supports(.brightness),
+                    valueSource: valueSource(for: .brightness),
+                    displayName: controlDisplayName,
+                    controlName: String(localized: "display.control.brightness"),
                     palette: palette,
                     tint: tint
                 )
@@ -1385,6 +1386,9 @@ private struct DisplayControlGroup: View {
                     systemImage: "speaker.wave.2",
                     value: binding(for: .volume),
                     isEnabled: display.supports(.volume),
+                    valueSource: valueSource(for: .volume),
+                    displayName: controlDisplayName,
+                    controlName: String(localized: "display.control.volume"),
                     palette: palette,
                     tint: tint
                 )
@@ -1395,6 +1399,9 @@ private struct DisplayControlGroup: View {
                     systemImage: "circle.lefthalf.filled",
                     value: binding(for: .contrast),
                     isEnabled: display.supports(.contrast),
+                    valueSource: valueSource(for: .contrast),
+                    displayName: controlDisplayName,
+                    controlName: String(localized: "display.control.contrast"),
                     palette: palette,
                     tint: tint
                 )
@@ -1448,16 +1455,34 @@ private struct DisplayControlGroup: View {
         animate(archiveKey, archiveExpanded, true)
     }
 
-    private func binding(for control: DisplayControlKind) -> Binding<Double> {
-        Binding(
-            get: { controller.value(for: control, displayID: display.id) },
-            set: { controller.setValueAsync($0, for: control, displayID: display.id) }
+    private func binding(for control: DisplayControlKind) -> Binding<Double?> {
+        Binding<Double?>(
+            get: { controller.optionalValue(for: control, displayID: display.id) },
+            set: { newValue in
+                guard let newValue else { return }
+                controller.setValueAsync(newValue, for: control, displayID: display.id)
+            }
         )
     }
 
+    /// 简短来源状态(10.2):软件调光标识或值来源;无则不显示。
+    private func valueSource(for control: DisplayControlKind) -> String? {
+        if control == .brightness, display.dimmingMode == .gamma {
+            return String(localized: "display.software-dimming")
+        }
+        // 只写模式标识"上次设置"(无读数,值来自目标/历史)。
+        if !display.isBuiltIn, !display.canRead(control),
+           controller.optionalValue(for: control, displayID: display.id) != nil {
+            return String(localized: "display.last-set")
+        }
+        return nil
+    }
+
+    private var controlDisplayName: String { display.name }
+
     /// 是否展示"此显示器不支持该项控制"的诚实静态提示。仅当某条**已启用且正在显示**的
     /// 控制被显示器明确判定为不支持(supports == false,由 capability .unsupported 驱动)
-    /// 时才出现——不再对瞬时写入失败报警。
+    /// 时才出现;瞬时写入失败不会改变能力状态。
     private var showsUnsupportedNotice: Bool {
         (settings.displayBrightnessControlEnabled && !display.supports(.brightness))
             || (settings.displayVolumeControlEnabled && !display.isBuiltIn && !display.supports(.volume))
@@ -1479,10 +1504,16 @@ private struct DisplayControlGroup: View {
 }
 
 /// 控制滑杆行:图标 + Slider + 百分比值;不支持项整行降透明。
+/// `value` 为 nil 表示值未知(显示 `--`),不以下拉默认值冒充设备读数。
+/// `valueSource` 提供简短来源状态(读数/目标/上次设置/软件)。
 private struct DisplayControlSlider: View {
     let systemImage: String
-    @Binding var value: Double
+    @Binding var value: Double?
     let isEnabled: Bool
+    /// 来源状态文案(nil 不显示)。
+    let valueSource: String?
+    let displayName: String
+    let controlName: String
     let palette: MonitorPalette
     let tint: Color
 
@@ -1494,18 +1525,44 @@ private struct DisplayControlSlider: View {
                 .foregroundStyle(isEnabled ? tint : palette.captionText)
                 .frame(width: 14)
 
-            Slider(value: $value, in: 0...100, step: 1)
+            Slider(value: binding(), in: 0...100, step: 1)
                 .tint(tint)
                 .controlSize(.small)
                 .disabled(!isEnabled)
+                .accessibilityLabel("\(displayName), \(controlName)")
+                .accessibilityValue(value.map { "\(Int($0.rounded()))%" } ?? String(localized: "display.value-unknown"))
+                .accessibilityHint(valueSource ?? "")
 
-            Text("\(Int(value.rounded()))%")
-                .monitorPanelRoundedFont(.caption2, weight: .semibold)
-                .monospacedDigit()
-                .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
-                .frame(width: 34, alignment: .trailing)
+            if let value {
+                Text("\(Int(value.rounded()))%")
+                    .monitorPanelRoundedFont(.caption2, weight: .semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(isEnabled ? palette.secondaryText : palette.captionText)
+                    .frame(width: 34, alignment: .trailing)
+            } else {
+                Text("--")
+                    .monitorPanelRoundedFont(.caption2, weight: .semibold)
+                    .monospacedDigit()
+                    .foregroundStyle(palette.captionText)
+                    .frame(width: 34, alignment: .trailing)
+            }
+
+            if let valueSource {
+                Text(valueSource)
+                    .monitorPanelRoundedFont(.caption2)
+                    .foregroundStyle(palette.captionText)
+                    .lineLimit(1)
+                    .frame(width: 52, alignment: .trailing)
+            }
         }
         .opacity(isEnabled ? 1 : 0.48)
+    }
+
+    private func binding() -> Binding<Double> {
+        Binding(
+            get: { value ?? 50 },
+            set: { newValue in self.value = newValue }
+        )
     }
 }
 

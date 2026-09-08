@@ -36,14 +36,3 @@ extern CFDictionaryRef _Nullable IOReportCreateSamples(
 extern CFStringRef _Nullable IOReportChannelGetChannelName(CFDictionaryRef _Nonnull channel);
 extern uint64_t IOReportChannelGetUnit(CFDictionaryRef _Nonnull channel);
 extern int64_t IOReportSimpleGetIntegerValue(CFDictionaryRef _Nonnull channel, int32_t index);
-
-@interface OSDManager : NSObject
-+ (id _Nullable)sharedManager;
-- (void)showImage:(long long)image
-        onDisplayID:(unsigned int)displayID
-        priority:(unsigned int)priority
-        msecUntilFade:(unsigned int)msec
-        filledChiclets:(unsigned int)filled
-        totalChiclets:(unsigned int)total
-        locked:(BOOL)locked;
-@end
