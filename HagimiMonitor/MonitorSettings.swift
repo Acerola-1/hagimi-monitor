@@ -120,6 +120,7 @@ final class MonitorSettings: ObservableObject {
     @Published var languagePreference: AppLanguagePreference = .system
     @Published var themePreference: AppThemePreference = .system
     @Published var colorSchemePreference: MonitorColorSchemePreference = .vibrant
+    @Published var liquidGlassEnabled: Bool = false
     @Published var ringSource: HaloRingSource = .combined
     @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
     @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
@@ -132,7 +133,6 @@ final class MonitorSettings: ObservableObject {
     @Published var displayContrastControlEnabled: Bool = false
     @Published var mediaKeyBrightnessEnabled: Bool = false
     @Published var mediaKeyVolumeEnabled: Bool = false
-    @Published var mediaKeyShowOSD: Bool = true
     @Published var showMemoryProcesses: Bool = true
     /// 各类 TOP 列表默认包含系统进程:WindowServer 等系统进程常是占用大头,
     /// 隐藏后列表常显得空。
@@ -179,6 +179,7 @@ final class MonitorSettings: ObservableObject {
 
         let colorSchemeRawValue = defaults.string(forKey: Keys.colorSchemePreference) ?? MonitorColorSchemePreference.vibrant.rawValue
         colorSchemePreference = MonitorColorSchemePreference(rawValue: colorSchemeRawValue) ?? .vibrant
+        liquidGlassEnabled = defaults.bool(forKey: Keys.liquidGlassEnabled)
 
         ringSource = .combined
 
@@ -245,7 +246,6 @@ final class MonitorSettings: ObservableObject {
         pinnedPanelOriginY = defaults.object(forKey: Keys.pinnedPanelOriginY) as? Double
         mediaKeyBrightnessEnabled = defaults.object(forKey: Keys.mediaKeyBrightnessEnabled) as? Bool ?? false
         mediaKeyVolumeEnabled = defaults.object(forKey: Keys.mediaKeyVolumeEnabled) as? Bool ?? false
-        mediaKeyShowOSD = defaults.object(forKey: Keys.mediaKeyShowOSD) as? Bool ?? true
 
         if let storedKinds = defaults.array(forKey: Keys.visibleKinds) as? [String] {
             var kinds = storedKinds.compactMap(MonitorKind.init(rawValue:))
@@ -341,6 +341,38 @@ final class MonitorSettings: ObservableObject {
             }
             defaults.set(true, forKey: Keys.batteryCellBalanceMigrated)
         }
+        // 清理已废弃的 cpu-power：幂等清理，残留键随启动静默移除；电芯平衡的
+        // 存量并入由上方 batteryCellBalanceMigrated 单次迁移完成，不在此重复插入。
+        if var batterySet = loadedMetrics[.battery], !batterySet.isEmpty, batterySet.contains("cpu-power") {
+            batterySet.remove("cpu-power")
+            loadedMetrics[.battery] = batterySet
+            defaults.set(Array(batterySet), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
+        }
+        #if DIRECT_DISTRIBUTION
+        // Direct 版新增 IOReport 分项功耗时，只并入非空的电池存量；用户明确
+        // 全关的集合保持为空，且不复活此前手动关闭的其他指标。
+        if !defaults.bool(forKey: Keys.batteryComponentPowerMetricsMigrated) {
+            if var merged = loadedMetrics[.battery], !merged.isEmpty {
+                merged.formUnion(["power", "display-power", "gpu-power"])
+                merged.remove("cpu-power")
+                if merged != loadedMetrics[.battery] {
+                    loadedMetrics[.battery] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.batteryComponentPowerMetricsMigrated)
+        }
+        if !defaults.bool(forKey: Keys.memoryBandwidthMigrated) {
+            if var merged = loadedMetrics[.memory], !merged.isEmpty {
+                merged.insert("memory-bandwidth")
+                if merged != loadedMetrics[.memory] {
+                    loadedMetrics[.memory] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.memory.rawValue)
+                }
+            }
+            defaults.set(true, forKey: "settings.memoryBandwidthMigrated")
+        }
+        #endif
         enabledMetrics = loadedMetrics
 
         launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -509,7 +541,9 @@ final class MonitorSettings: ObservableObject {
             case .battery:
                 return [
                     "充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power",
+                    "整机功耗": "power", "屏幕功耗": "display-power", "GPU 功耗": "gpu-power",
                     "Charging Power": "charging-power", "Health": "health", "Cycle Count": "cycle-count", "Temperature": "temperature", "Adapter": "adapter", "Power": "power",
+                    "System Power": "power", "Display Power": "display-power", "GPU Power": "gpu-power",
                 ]
             case .fan:
                 // 风扇行无子指标,展开区由 FanList 直接渲染;此处无需迁移映射。
@@ -575,6 +609,13 @@ final class MonitorSettings: ObservableObject {
             .dropFirst()
             .sink { [weak self] newValue in
                 self?.persist(newValue.rawValue, forKey: Keys.colorSchemePreference)
+            }
+            .store(in: &cancellables)
+
+        $liquidGlassEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.liquidGlassEnabled)
             }
             .store(in: &cancellables)
 
@@ -659,13 +700,6 @@ final class MonitorSettings: ObservableObject {
             .dropFirst()
             .sink { [weak self] newValue in
                 self?.persist(newValue, forKey: Keys.mediaKeyVolumeEnabled)
-            }
-            .store(in: &cancellables)
-
-        $mediaKeyShowOSD
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.mediaKeyShowOSD)
             }
             .store(in: &cancellables)
 
@@ -855,6 +889,7 @@ private enum Keys {
     static let themePreference = "settings.themePreference"
     static let languagePreference = "settings.languagePreference"
     static let colorSchemePreference = "settings.colorSchemePreference"
+    static let liquidGlassEnabled = "settings.liquidGlassEnabled"
     static let ringSource = "settings.ringSource"
     static let menuBarDisplayMode = "settings.menuBar.displayMode"
     static let menuBarMetricKinds = "settings.menuBar.metricKinds"
@@ -870,7 +905,6 @@ private enum Keys {
     static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"
     static let mediaKeyBrightnessEnabled = "settings.mediaKey.brightnessEnabled"
     static let mediaKeyVolumeEnabled = "settings.mediaKey.volumeEnabled"
-    static let mediaKeyShowOSD = "settings.mediaKey.showOSD"
     static let showMemoryProcesses = "settings.memory.showProcesses"
     static let memoryShowSystemProcesses = "settings.memory.showSystemProcesses"
     static let memoryPrimaryMetric = "settings.memory.primaryMetric"
@@ -896,6 +930,9 @@ private enum Keys {
     /// 一次性迁移标记:蓝牙模块新增时,给老用户的已存储可见列表补上 bluetooth,
     /// 语义同 fanVisibilityMigrated。
     static let bluetoothVisibilityMigrated = "settings.bluetoothVisibilityMigrated"
+    /// 一次性迁移标记:内存模块新增总线带宽默认开指标时,给存量用户的内存
+    /// 指标列表补上该项(语义同 metricsDefaultOnMigrated,只限带宽一项)。
+    static let memoryBandwidthMigrated = "settings.memoryBandwidthMigrated"
     static let metricsDefaultOnMigrated = "settings.metricsDefaultOnMigrated"
     /// 一次性迁移标记:电池模块新增电压/电流/容量默认开指标时,给存量用户
     /// 的电池指标列表补上这三项(语义同 metricsDefaultOnMigrated,但只限电池三项)。
@@ -906,6 +943,8 @@ private enum Keys {
     /// 一次性迁移标记:电池模块新增电芯平衡默认开指标时,给存量用户的
     /// 电池指标列表补上该项(语义同 batteryElectricalMetricsMigrated)。
     static let batteryCellBalanceMigrated = "settings.batteryCellBalanceMigrated"
+    /// Direct 版新增整机/屏幕/CPU/GPU 功耗明细时，给非空的电池存量补齐一次。
+    static let batteryComponentPowerMetricsMigrated = "settings.batteryComponentPowerMetricsMigrated"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"

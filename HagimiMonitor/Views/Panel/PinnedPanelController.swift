@@ -13,6 +13,8 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private let panel: NSPanel
     private let presentation = QuickPanelPresentation()
     private var hostingView: NSHostingView<AnyView>?
+    private var glassHost: CompatiblePanelGlassHost?
+    private var cancellables = Set<AnyCancellable>()
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
 
@@ -47,6 +49,13 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
             close: { [weak self] in self?.hide(resetPin: true) }
         )
         installEventMonitor()
+
+        store.settings.$liquidGlassEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                self?.glassHost?.updateMaterial(liquidGlassEnabled: enabled)
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -82,16 +91,12 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panel.standardWindowButton(.miniaturizeButton)?.isHidden = true
         panel.standardWindowButton(.zoomButton)?.isHidden = true
 
-        // 毛玻璃背景,与 FluidPanelController 一致。
-        let visualEffect = NSVisualEffectView()
-        visualEffect.material = .popover
-        visualEffect.blendingMode = .behindWindow
-        visualEffect.state = .active
-        visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = Self.panelCornerRadius
-        visualEffect.layer?.cornerCurve = .continuous
-        visualEffect.layer?.masksToBounds = true
-        panel.contentView = visualEffect
+        // 窗口底座宿主：由 CompatiblePanelGlassHost 提供跨版本兼容背景（Liquid Glass / popover 毛玻璃），
+        // 内部行卡片严格保持 withinWindow 材质。
+        let glassHost = CompatiblePanelGlassHost(cornerRadius: Self.panelCornerRadius)
+        glassHost.updateMaterial(liquidGlassEnabled: store.settings.liquidGlassEnabled)
+        panel.contentView = glassHost
+        self.glassHost = glassHost
 
         let root = MonitorPanelView(store: store, refreshGate: panelRefreshGate, quickPanelPresentation: presentation)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action { [weak self] in
@@ -113,14 +118,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         hosting.layer?.cornerRadius = Self.panelCornerRadius
         hosting.layer?.cornerCurve = .continuous
         hosting.layer?.masksToBounds = true
-        visualEffect.addSubview(hosting)
-
-        NSLayoutConstraint.activate([
-            hosting.topAnchor.constraint(equalTo: visualEffect.topAnchor),
-            hosting.leadingAnchor.constraint(equalTo: visualEffect.leadingAnchor),
-            hosting.trailingAnchor.constraint(equalTo: visualEffect.trailingAnchor),
-            hosting.bottomAnchor.constraint(equalTo: visualEffect.bottomAnchor)
-        ])
+        glassHost.setHostingView(hosting)
 
         hostingView = hosting
 

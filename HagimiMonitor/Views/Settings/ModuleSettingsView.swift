@@ -4,6 +4,8 @@ struct ModuleSettingsView: View {
     let kind: MonitorKind
     @ObservedObject var settings: MonitorSettings
     @Environment(\.colorScheme) private var colorScheme
+    /// 电池分页预览的当前页:驱动预览胶囊与下方指标选项联动过滤。
+    @State private var batteryTab: BatteryPageTab = .flow
 
     /// 与面板同源的调色板,供实时预览卡取令牌。
     private var palette: MonitorPalette {
@@ -64,24 +66,35 @@ struct ModuleSettingsView: View {
                         metrics: enabledMetrics,
                         memoryPressureMode: memoryPressureMode,
                         showPowerFlow: kind == .battery && settings.batteryShowPowerFlow,
-                        palette: palette
+                        palette: palette,
+                        batteryTab: $batteryTab
                     )
                     .padding(.horizontal, 10)
                     .padding(.top, 6)
                 }
 
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 8),
-                    GridItem(.flexible(), spacing: 8)
-                ], spacing: 0) {
-                    ForEach(availableMetrics) { metric in
-                        let isSelected = settings.isMetricEnabled(metric.id, for: kind)
-                        MetricSelectionRow(
-                            title: metric.title,
-                            isSelected: isSelected,
-                            isEnabled: settings.canEnableMetric(metric.id, for: kind)
-                        ) {
-                            settings.setMetric(metric.id, enabled: !isSelected, for: kind)
+                if kind == .battery && selectionMetrics.isEmpty {
+                    // 供电页(及沙盒版拓扑页)无归属可勾指标,给出说明而非空白。
+                    Text(String(localized: "settings.battery.tab-no-metrics"))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                } else {
+                    LazyVGrid(columns: [
+                        GridItem(.flexible(), spacing: 8),
+                        GridItem(.flexible(), spacing: 8)
+                    ], spacing: 0) {
+                        ForEach(selectionMetrics) { metric in
+                            let isSelected = settings.isMetricEnabled(metric.id, for: kind)
+                            MetricSelectionRow(
+                                title: metric.title,
+                                isSelected: isSelected,
+                                isEnabled: settings.canEnableMetric(metric.id, for: kind)
+                            ) {
+                                settings.setMetric(metric.id, enabled: !isSelected, for: kind)
+                            }
                         }
                     }
                 }
@@ -238,6 +251,13 @@ struct ModuleSettingsView: View {
     /// 预览卡数据源:当前勾选的指标(顺序与面板渲染一致)。
     private var enabledMetrics: [MetricSwitch] {
         availableMetrics.filter { settings.isMetricEnabled($0.id, for: kind) }
+    }
+
+    /// 监测项目列表随电池分页联动:电池模块按当前分页归属过滤,其余模块为全部可勾指标。
+    private var selectionMetrics: [MetricSwitch] {
+        guard kind == .battery else { return availableMetrics }
+        let names = batteryTab.metricNames
+        return availableMetrics.filter { names.contains($0.id) }
     }
 
     /// 监测项目列表与面板实际显示保持一致:压力模式下面板里「压力」槽位

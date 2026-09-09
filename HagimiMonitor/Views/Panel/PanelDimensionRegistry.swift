@@ -121,7 +121,9 @@ final class PanelDimensionRegistry {
     }
 
     /// 生成安全收起态快照（用于初始化尚未全部测齐时，防止零高度启动）。
-    func makeRestingFallbackSnapshot(safeHeaderHeight: CGFloat = 34) -> GeometrySnapshot {
+    func makeRestingFallbackSnapshot(
+        safeHeaderHeight: CGFloat = MonitorConstants.panelRowHeaderHeight
+    ) -> GeometrySnapshot {
         var safeSections: [String: SectionNaturalSize] = [:]
         for id in orderedTopLevelIDs {
             safeSections[id] = SectionNaturalSize(

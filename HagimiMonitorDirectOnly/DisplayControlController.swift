@@ -17,6 +17,21 @@ final class DisplayControlController: ObservableObject {
     private let worker = DisplayControlWorker.shared
     private let changeObserver = DisplayChangeObserver()
     private let audioOutputObserver = AudioOutputChangeObserver()
+    private let diagnostics = DisplayDiagnosticsLog()
+    private lazy var engine: DisplayControlEngine = {
+        let engine = DisplayControlEngine(transport: service.makeEngineTransport())
+        let gate = DDCEnvironmentGate.shared
+        engine.setGateProvider { gate.isSuppressed }
+        _ = gate.addChangeHandler { [weak engine] in
+            engine?.handleGateRecovery()
+        }
+        engine.setSnapshotHandler { [weak self] snapshot in
+            Task { @MainActor [weak self] in
+                self?.applyEngineSnapshot(snapshot)
+            }
+        }
+        return engine
+    }()
     private lazy var mediaKeyController = MediaKeyController()
     private var settingsObservation: AnyCancellable?
     private var keyboardLockObservation: AnyCancellable?
@@ -28,8 +43,7 @@ final class DisplayControlController: ObservableObject {
     private static let gripWindow: TimeInterval = 4
 
     /// 门禁抑制窗口内被跳过的写入(最近一次目标值)。窗口结束后由
-    /// `replaySuppressedWrites` 补发,否则用户设定值只停留在 UI 层,
-    /// 显示器永远停在旧值。
+    /// `replaySuppressedWrites` 补发,使用户目标值最终落到显示器。
     private var suppressedWrites: [ControlKey: Double] = [:]
 
     /// 面板打开且详情展开期间的轮询定时器。系统设置/其他 app 改亮度音量不会
@@ -55,9 +69,8 @@ final class DisplayControlController: ObservableObject {
         let merged = Publishers.Merge3(
             settings.$mediaKeyBrightnessEnabled.map { _ in () },
             settings.$mediaKeyVolumeEnabled.map { _ in () },
-            settings.$mediaKeyShowOSD.map { _ in () }
+            mediaKeyController.permission.$isTrusted.map { _ in () }
         )
-        .merge(with: mediaKeyController.permission.$isTrusted.map { _ in () })
 
         settingsObservation = merged
             .receive(on: DispatchQueue.main)
@@ -90,6 +103,17 @@ final class DisplayControlController: ObservableObject {
             }
     }
 
+    func displayDiagnosticsExport() -> String {
+        DisplayDiagnosticsExporter.export(
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
+            osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            architecture: "arm64",
+            schemaVersion: 1,
+            displaySummary: "\(displays.count) display(s)",
+            events: diagnostics.recent()
+        )
+    }
+
     func refreshAsync() {
         let previousIDs = Set(displays.map { $0.id })
         worker.refresh(service: service) { detectedDisplays in
@@ -108,6 +132,14 @@ final class DisplayControlController: ObservableObject {
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
                     self.seedFallbackValues(for: display)
+                }
+                let connections = self.service.engineConnections(for: detectedDisplays)
+                self.engine.replaceConnections(connections)
+                for connection in connections {
+                    self.engine.enqueueRead(
+                        token: connection.token,
+                        controls: [.brightness, .volume, .contrast]
+                    )
                 }
                 // 抑制窗口已结束(change handler 在窗口结束后触发):补发被跳过的写入。
                 self.replaySuppressedWrites()
@@ -131,7 +163,25 @@ final class DisplayControlController: ObservableObject {
             return display.value(for: control)
         }
 
-        return fallbackValues[displayID]?[control] ?? control.defaultValue
+        // 未知值使用本地回退值;可选值查询继续返回模型中的真实可用状态。
+        let fallbackDefault: Double
+        switch control {
+        case .brightness: fallbackDefault = 50
+        case .volume: fallbackDefault = 40
+        case .contrast: fallbackDefault = 75
+        }
+        return fallbackValues[displayID]?[control] ?? fallbackDefault
+    }
+
+    func optionalValue(for control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
+        if let pendingValue = pendingValues[displayID]?[control] {
+            return pendingValue
+        }
+        if let recent = recentlySetValues[displayID]?[control],
+           Date().timeIntervalSince(recent.at) < Self.gripWindow {
+            return recent.value
+        }
+        return displays.first(where: { $0.id == displayID })?.knownValue(for: control)
     }
 
     func setValueAsync(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) {
@@ -148,6 +198,14 @@ final class DisplayControlController: ObservableObject {
         let key = ControlKey(displayID: displayID, control: control)
         pendingValues[displayID, default: [:]][control] = clampedValue
         recentlySetValues[displayID, default: [:]][control] = (clampedValue, Date())
+
+        if display.kind == .externalDDC,
+           display.dimmingMode == .hardware,
+           let connection = service.engineConnections(for: [display]).first {
+            engine.enqueueWrite(token: connection.token, control: control, value: clampedValue, final: true)
+            return
+        }
+
         worker.setValue(clampedValue, for: key, display: display, service: service) { [weak self] result in
             Task { @MainActor in
                 self?.handleWriteResult(result)
@@ -156,11 +214,13 @@ final class DisplayControlController: ObservableObject {
     }
 
     private func seedFallbackValues(for display: ControlledDisplay) {
-        fallbackValues[display.id] = [
-            .brightness: display.brightness,
-            .volume: display.volume,
-            .contrast: display.contrast
-        ]
+        var values: [DisplayControlKind: Double] = [:]
+        for control in [DisplayControlKind.brightness, .volume, .contrast] {
+            if let value = display.knownValue(for: control) {
+                values[control] = value
+            }
+        }
+        fallbackValues[display.id] = values
     }
 
     private func updateLocalValue(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) {
@@ -169,6 +229,42 @@ final class DisplayControlController: ObservableObject {
         }
 
         displays[index].setValue(value, for: control)
+    }
+
+    private func applyEngineSnapshot(_ snapshot: DisplayControlEngine.Snapshot) {
+        for connection in snapshot.connections {
+            guard let display = displays.first(where: { $0.id == connection.displayID }) else { continue }
+            guard let states = snapshot.states[connection.token] else { continue }
+            for (control, state) in states {
+                if let value = state.displayValue {
+                    updateLocalValue(value, for: control, displayID: display.id)
+                    fallbackValues[display.id, default: [:]][control] = value
+                }
+                if state.writeStatus == .failed || state.writeStatus == .sentUnverified {
+                    diagnostics.append(DisplayDiagnosticEvent(
+                        requestID: state.activeRequestID ?? 0,
+                        generation: 0,
+                        timestamp: Date(),
+                        duration: 0,
+                        operation: "engine.state",
+                        backend: "ddc",
+                        source: String(describing: state.source),
+                        percent: state.displayValue,
+                        range: nil,
+                        errorCode: state.writeStatus == .failed ? 1 : nil,
+                        errorMessage: state.writeStatus == .failed ? "write failed" : nil,
+                        gateReason: nil,
+                        timedOut: state.writeStatus == .sentUnverified
+                    ))
+                }
+                if state.writeStatus == .verified || state.writeStatus == .failed {
+                    pendingValues[display.id]?[control] = nil
+                }
+            }
+            if pendingValues[display.id]?.isEmpty == true {
+                pendingValues[display.id] = nil
+            }
+        }
     }
 
     private func handleWriteResult(_ result: DisplayWriteResult) {
@@ -227,7 +323,6 @@ private final class DisplayControlWorker {
 
     private let queue = DispatchQueue(label: "hagimi.ddc.global", qos: .userInitiated)
     private var pendingWrites: [ControlKey: Double] = [:]
-    private var lastWrittenValues: [ControlKey: Double] = [:]
     private var debounceTimers: [ControlKey: DispatchWorkItem] = [:]
     private let debounceInterval: DispatchTimeInterval = .milliseconds(150)
 
@@ -254,15 +349,7 @@ private final class DisplayControlWorker {
                 }
                 self.debounceTimers.removeValue(forKey: key)
 
-                if let last = self.lastWrittenValues[key], abs(last - latestValue) < 0.001 {
-                    completion(DisplayWriteResult(key: key, value: latestValue, outcome: .written))
-                    return
-                }
-
                 let outcome = service.setValue(latestValue, for: key.control, display: display)
-                if outcome.didWrite {
-                    self.lastWrittenValues[key] = latestValue
-                }
                 completion(DisplayWriteResult(key: key, value: latestValue, outcome: outcome))
             }
             self.debounceTimers[key] = timer
@@ -272,9 +359,6 @@ private final class DisplayControlWorker {
 
     func clearLastValues(displayID: CGDirectDisplayID) {
         queue.async {
-            for key in self.lastWrittenValues.keys where key.displayID == displayID {
-                self.lastWrittenValues.removeValue(forKey: key)
-            }
             for key in self.pendingWrites.keys where key.displayID == displayID {
                 self.pendingWrites.removeValue(forKey: key)
             }
@@ -294,8 +378,7 @@ private nonisolated struct DisplayWriteResult {
     let outcome: DisplayWriteOutcome
 }
 
-/// 乐观盲写的三态语义,取代裸 Bool。核心是**不再做写后回读校验**,因此不存在
-/// "写成功但没执行"的 verified/unverified 区分——那本身就是徒增总线负担的旧模型。
+/// 乐观盲写的三态语义。写入结果只表示报文是否成功上总线,设备值由后续读取确认;
 /// - written:报文已成功上总线(ACK)。乐观视为生效,对齐本地真值并持久化。
 /// - skipped:门禁抑制(睡眠/唤醒/重配置窗口)跳过本次写入。UI 仍显示用户设定值,
 ///   但**不**写入去重缓存/持久化,待窗口结束后的下一次写入真正落地。
@@ -325,6 +408,13 @@ struct ControlledDisplay: Identifiable {
     var supportsBrightness: Bool
     var supportsVolume: Bool
     var supportsContrast: Bool
+    /// 各控制是否可读(只写/不可读设备为 false)。检测期依据"是否收到有效读应答"判定。
+    var brightnessIsReadable: Bool
+    var volumeIsReadable: Bool
+    var contrastIsReadable: Bool
+    var brightnessValueKnown: Bool
+    var volumeValueKnown: Bool
+    var contrastValueKnown: Bool
     var brightness: Double
     var volume: Double
     var contrast: Double
@@ -340,6 +430,18 @@ struct ControlledDisplay: Identifiable {
         }
     }
 
+    /// 该控制是否能可靠读取(只写/不可读设备为 false,UI 据此显示"上次设置")。
+    func canRead(_ control: DisplayControlKind) -> Bool {
+        switch control {
+        case .brightness:
+            brightnessIsReadable
+        case .volume:
+            volumeIsReadable
+        case .contrast:
+            contrastIsReadable
+        }
+    }
+
     func value(for control: DisplayControlKind) -> Double {
         switch control {
         case .brightness:
@@ -351,51 +453,69 @@ struct ControlledDisplay: Identifiable {
         }
     }
 
+    func knownValue(for control: DisplayControlKind) -> Double? {
+        switch control {
+        case .brightness:
+            brightnessValueKnown ? brightness : nil
+        case .volume:
+            volumeValueKnown ? volume : nil
+        case .contrast:
+            contrastValueKnown ? contrast : nil
+        }
+    }
+
     mutating func setValue(_ value: Double, for control: DisplayControlKind) {
         switch control {
         case .brightness:
             brightness = value
+            brightnessValueKnown = true
         case .volume:
             volume = value
+            volumeValueKnown = true
         case .contrast:
             contrast = value
+            contrastValueKnown = true
         }
     }
 }
 
-nonisolated enum DisplayControlKind: Hashable {
-    case brightness
-    case volume
-    case contrast
-
-    var defaultValue: Double {
-        switch self {
-        case .brightness:
-            50
-        case .volume:
-            40
-        case .contrast:
-            75
-        }
-    }
-
-    var storageKey: String {
-        switch self {
-        case .brightness:
-            "brightness"
-        case .volume:
-            "volume"
-        case .contrast:
-            "contrast"
-        }
-    }
-}
-
-private final class DisplayControlService {
-    private let displayServices = DisplayServicesBridge()
+private final class DisplayControlService {    private let displayServices = DisplayServicesBridge()
     private let ddc = DisplayDDCBridge()
     private let classifier = DisplayClassifier()
     private let defaults = UserDefaults.standard
+    private let persistence = DisplayPersistence.shared
+    private var engineTokens: [String: UUID] = [:]
+
+    func makeEngineTransport() -> DDCTransport {
+        DisplayDDCTransport(bridge: ddc)
+    }
+
+    func engineConnections(for displays: [ControlledDisplay]) -> [DisplayConnection] {
+        displays.compactMap { display in
+            guard display.kind == .externalDDC,
+                  let handle = ddc.serviceHandle(displayID: display.id, identity: display.storageID) else {
+                return nil
+            }
+            let serial = CGDisplaySerialNumber(display.id)
+            let identity = DisplayIdentity(
+                vendorID: UInt16(truncatingIfNeeded: CGDisplayVendorNumber(display.id)),
+                productID: UInt16(truncatingIfNeeded: CGDisplayModelNumber(display.id)),
+                serialNumber: serial == 0 ? nil : String(serial),
+                edidUUID: nil,
+                isBuiltIn: display.isBuiltIn
+            )
+            let key = "(display.id).(handle.identity).(handle.chipAddress)"
+            let token = engineTokens[key] ?? UUID()
+            engineTokens[key] = token
+            return DisplayConnection(
+                token: token,
+                displayID: display.id,
+                identity: identity,
+                service: handle,
+                isUserBound: false
+            )
+        }
+    }
 
     func displays() -> [ControlledDisplay] {
         var ids = [CGDirectDisplayID](repeating: 0, count: 16)
@@ -429,14 +549,16 @@ private final class DisplayControlService {
             let volumeProbe = isDDC ? ddc.probe(.volume, displayID: id) : nil
             let contrastProbe = isDDC ? ddc.probe(.contrast, displayID: id) : nil
 
-            let storedBrightness = storedValue(for: .brightness, displayStorageID: storageID)
-            let storedVolume = storedValue(for: .volume, displayStorageID: storageID)
-            let storedContrast = storedValue(for: .contrast, displayStorageID: storageID)
-
             // 调光模式判定:DDC 有服务且未明确不支持 → hardware(乐观);
             // DDC 无服务或明确不支持 → gamma 软件调光兜底,确保用户始终有亮度控制。
             let useGammaDimming = isDDC && (!ddc.hasService(for: id) || brightnessProbe?.capability == .unsupported)
             let dimmingMode: DimmingMode = useGammaDimming ? .gamma : .hardware
+
+            let storedBrightness = useGammaDimming
+                ? (persistence.softwareFactor(stableKey: storageID) ?? storedValue(for: .brightness, displayStorageID: storageID))
+                : storedValue(for: .brightness, displayStorageID: storageID)
+            let storedVolume = storedValue(for: .volume, displayStorageID: storageID)
+            let storedContrast = storedValue(for: .contrast, displayStorageID: storageID)
 
             return ControlledDisplay(
                 id: id,
@@ -451,21 +573,32 @@ private final class DisplayControlService {
                     : (useDisplayServices
                         ? (nativeBrightness != nil)
                         : (brightnessProbe?.capability != .unsupported)),
-                // gamma 模式只支持亮度,不支持音量/对比度。
-                supportsVolume: useGammaDimming ? false : (isDDC && (volumeProbe?.capability != .unsupported)),
-                supportsContrast: useGammaDimming ? false : (isDDC && (contrastProbe?.capability != .unsupported)),
+                // gamma 只替代亮度后端,不影响同一显示器仍可用的音量/对比度 VCP。
+                supportsVolume: isDDC && (volumeProbe?.capability != .unsupported),
+                supportsContrast: isDDC && (contrastProbe?.capability != .unsupported),
+                // 可读性:检测期是否收到有效读应答(probe.value != nil)。gamma/原生亮度视为可读。
+                brightnessIsReadable: useGammaDimming
+                    ? true
+                    : (useDisplayServices ? (nativeBrightness != nil) : (brightnessProbe?.value != nil)),
+                volumeIsReadable: isDDC && (volumeProbe?.value != nil),
+                contrastIsReadable: isDDC && (contrastProbe?.value != nil),
+                brightnessValueKnown: useGammaDimming
+                    ? (storedBrightness != nil || GammaDimmingController.shared.dimmingPercent(for: id) != 100)
+                    : (useDisplayServices ? nativeBrightness != nil : (brightnessProbe?.value != nil || storedBrightness != nil)),
+                volumeValueKnown: volumeProbe?.value != nil || storedVolume != nil,
+                contrastValueKnown: contrastProbe?.value != nil || storedContrast != nil,
                 brightness: useGammaDimming
                     ? (storedBrightness ?? 100)
                     : (nativeBrightness.map { Double($0 * 100) }
                         ?? brightnessProbe?.value
                         ?? storedBrightness
-                        ?? DisplayControlKind.brightness.defaultValue),
+                        ?? 50),
                 volume: volumeProbe?.value
                     ?? storedVolume
-                    ?? DisplayControlKind.volume.defaultValue,
+                    ?? 40,
                 contrast: contrastProbe?.value
                     ?? storedContrast
-                    ?? DisplayControlKind.contrast.defaultValue
+                    ?? 75
             )
         }
 
@@ -478,9 +611,6 @@ private final class DisplayControlService {
         // 先丢弃已断开显示器的调光残留,避免 reapplyAll 对离线显示器做无谓施加。
         GammaDimmingController.shared.resetDisconnected(onlineIDs: Set(result.map { $0.id }))
 
-        // 睡眠/唤醒/显示器重配置后系统会重置 gamma 表,在每次检测结束时重新施加。
-        GammaDimmingController.shared.reapplyAll()
-
         return result
     }
 
@@ -488,14 +618,15 @@ private final class DisplayControlService {
         guard display.supports(control) else { return .busError }
 
         // Gamma 软件调光降级路径:DDC 不可用的显示器仍可调亮度(但仅亮度)。
-        if display.dimmingMode == .gamma {
-            guard control == .brightness else { return .busError }
-            GammaDimmingController.shared.setDimming(percent: value, for: display.id)
+        if display.dimmingMode == .gamma, control == .brightness {
+            let result = GammaDimmingController.shared.setDimming(percent: value, for: display.id)
+            guard result == .success else { return .busError }
+            persistence.saveSoftwareFactor(value, stableKey: display.storageID)
             saveStoredValue(value, for: control, displayStorageID: display.storageID)
             return .written
         }
 
-        // 使用检测阶段缓存的 kind,不再每次写入都重新分类(重复触发系统探测)。
+        // 使用检测阶段缓存的 kind,避免写入时重复触发系统探测。
         let useDisplayServices = (display.kind == .builtIn || display.kind == .appleNative)
 
         if useDisplayServices {
@@ -548,6 +679,9 @@ private final class DisplayControlService {
     }
 
     private func storedValue(for control: DisplayControlKind, displayStorageID: String) -> Double? {
+        if let value = persistence.hardwareValue(attribute: control.storageKey, stableKey: displayStorageID) {
+            return value
+        }
         let key = storedValueKey(for: control, displayStorageID: displayStorageID)
         guard defaults.object(forKey: key) != nil else {
             return nil
@@ -559,6 +693,7 @@ private final class DisplayControlService {
         // 静音(0)不覆盖持久化音量:跨会话解除静音需恢复到上次非零值,
         // 而非退化到兜底。亮度等 0 值是合法持久态,照常写入。
         if control == .volume, value <= 0 { return }
+        persistence.saveHardwareValue(value, attribute: control.storageKey, stableKey: displayStorageID)
         defaults.set(min(100, max(0, value)), forKey: storedValueKey(for: control, displayStorageID: displayStorageID))
     }
 

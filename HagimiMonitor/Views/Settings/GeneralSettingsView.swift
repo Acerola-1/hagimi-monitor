@@ -68,6 +68,23 @@ struct GeneralSettingsView: View {
                     .pickerStyle(.segmented)
                     .frame(width: Self.segmentedPickerWidth)
                 }
+
+                if #available(macOS 26, *) {
+                    SettingsDivider()
+
+                    // 功能仍在测试:整行锁定为不可用态,已保存的偏好原值
+                    // 保留、不被改写,放开时移除 disabled 即恢复。
+                    SettingsRow(
+                        title: String(localized: "settings.liquid-glass"),
+                        subtitle: String(localized: "settings.liquid-glass.subtitle")
+                    ) {
+                        Toggle("", isOn: $settings.liquidGlassEnabled)
+                            .toggleStyle(.switch)
+                            .labelsHidden()
+                            .disabled(true)
+                    }
+                    .opacity(0.45)
+                }
             }
 
             MenuBarDisplaySettingsSection(settings: settings, store: store)

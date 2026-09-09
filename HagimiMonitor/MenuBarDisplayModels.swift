@@ -45,14 +45,19 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     case cpuTemperature
     // GPU 组
     case gpuUsage
+    case gpuPower
     // 内存组
     case memoryUsage
     case memoryPressure
+    case memoryBandwidth
     // 网络组
     case networkDownload
     case networkUpload
     // 存储组
     case storageFree
+    // 显示器组
+    case displayRefreshRate
+    case displayPower
     // 电源组
     case batteryLevel
     case systemPower
@@ -81,6 +86,9 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
         #if !DISPLAY_CONTROL
         cases.removeAll { $0 == .cpuTemperature }
         cases.removeAll { $0 == .fanSpeed }
+        cases.removeAll { $0 == .gpuPower }
+        cases.removeAll { $0 == .memoryBandwidth }
+        cases.removeAll { $0 == .displayPower }
         #else
         if !hasFan {
             cases.removeAll { $0 == .fanSpeed }
@@ -99,16 +107,24 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             String(localized: "menu-bar-metric.cpu-temperature")
         case .gpuUsage:
             String(localized: "menu-bar-metric.gpu-usage")
+        case .gpuPower:
+            String(localized: "menu-bar-metric.gpu-power")
         case .memoryUsage:
             String(localized: "menu-bar-metric.memory-usage")
         case .memoryPressure:
             String(localized: "menu-bar-metric.memory-pressure")
+        case .memoryBandwidth:
+            String(localized: "menu-bar-metric.memory-bandwidth")
         case .networkDownload:
             String(localized: "menu-bar-metric.network-download")
         case .networkUpload:
             String(localized: "menu-bar-metric.network-upload")
         case .storageFree:
             String(localized: "menu-bar-metric.storage-free")
+        case .displayRefreshRate:
+            String(localized: "menu-bar-metric.display-refresh-rate")
+        case .displayPower:
+            String(localized: "menu-bar-metric.display-power")
         case .batteryLevel:
             String(localized: "menu-bar-metric.battery-level")
         case .systemPower:
@@ -126,16 +142,24 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             "thermometer.medium"
         case .gpuUsage:
             "display"
+        case .gpuPower:
+            "bolt.fill"
         case .memoryUsage:
             "memorychip"
         case .memoryPressure:
             "gauge.medium"
+        case .memoryBandwidth:
+            "memorychip"
         case .networkDownload:
             "arrow.down"
         case .networkUpload:
             "arrow.up"
         case .storageFree:
             "externaldrive"
+        case .displayRefreshRate:
+            "arrow.clockwise"
+        case .displayPower:
+            "sun.max.fill"
         case .batteryLevel:
             "battery.75percent"
         case .systemPower:
@@ -153,16 +177,24 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
             String(localized: "menu-bar-metric-prefix.cpu-temperature")
         case .gpuUsage:
             String(localized: "menu-bar-metric-prefix.gpu-usage")
+        case .gpuPower:
+            String(localized: "menu-bar-metric-prefix.gpu-power")
         case .memoryUsage:
             String(localized: "menu-bar-metric-prefix.memory-usage")
         case .memoryPressure:
             String(localized: "menu-bar-metric-prefix.memory-pressure")
+        case .memoryBandwidth:
+            String(localized: "menu-bar-metric-prefix.memory-bandwidth")
         case .networkDownload:
             ""
         case .networkUpload:
             ""
         case .storageFree:
             String(localized: "menu-bar-metric-prefix.storage-free")
+        case .displayRefreshRate:
+            String(localized: "menu-bar-metric-prefix.display-refresh-rate")
+        case .displayPower:
+            String(localized: "menu-bar-metric-prefix.display-power")
         case .batteryLevel:
             String(localized: "menu-bar-metric-prefix.battery-level")
         case .systemPower:
@@ -219,6 +251,24 @@ enum MenuBarMetricFormatter {
     static func fanRPM(_ rpm: Int?) -> String {
         guard let rpm else { return unavailable }
         return "\(min(rpm, 9999))"
+    }
+
+    static func refreshRate(_ value: Double?) -> String {
+        guard let value else { return leftPad(unavailable, to: 3) + "Hz" }
+        return leftPad("\(Int(value.rounded()))", to: 3) + "Hz"
+    }
+
+    static func displayPower(_ value: Double?) -> String {
+        guard let value else { return leftPad(unavailable, to: 3) + "W" }
+        return String(format: "%3.1fW", max(0, value))
+    }
+
+    static func bandwidth(_ value: Double?) -> String {
+        guard let value else { return leftPad(unavailable, to: 3) + "G" }
+        if value >= 10 {
+            return leftPad("\(Int(value.rounded()))", to: 3) + "G"
+        }
+        return String(format: "%3.1fG", max(0, value))
     }
 
     private static func compactCapacity(_ value: Double) -> String {

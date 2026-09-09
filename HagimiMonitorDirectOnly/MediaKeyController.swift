@@ -6,7 +6,6 @@ import OSLog
 @MainActor
 final class MediaKeyController {
     private let tap = MediaKeyTapBridge()
-    private let osd = OSDBridge()
     let permission = AccessibilityPermissionService.shared
     private weak var controller: DisplayControlController?
     private var settings: MonitorSettings?
@@ -86,7 +85,7 @@ final class MediaKeyController {
         // 定向控制:只作用于鼠标当前所在的外接屏(对齐 MonitorControl
         // getAffectedDisplays + getCurrentDisplay 的默认行为)。
         // 鼠标在内建屏 → 不吞事件,让 macOS 原生处理 MacBook 亮度/音量。
-        guard let targetDisplayID = targetDisplayIDForCurrentMouseLocation() else {
+        guard let targetDisplayID = targetDisplayID(for: event.key) else {
             return false
         }
 
@@ -117,40 +116,71 @@ final class MediaKeyController {
         }
     }
 
-    /// 返回鼠标当前所在的外接屏 displayID。
-    /// 鼠标在内建屏或无法判定时,若只有一台外接屏可控则直接兜底作用于它
-    /// (鼠标习惯留在内建屏、用快捷键调外接屏是常见场景);多台外接屏时
-    /// 无法判断意图,仍返回 nil 交给系统原生处理。
+    /// 根据鼠标当前所在屏幕选择亮度键目标。鼠标在内建屏时交还系统,
+    /// 让 macOS 继续控制内建屏亮度;无法取得屏幕位置时才使用单外接屏兜底。
     /// 参考 MonitorControl DisplayManager.getCurrentDisplay:用 NSEvent.mouseLocation
     /// 与 NSScreen.screens 做 hit-test,再映射回 CGDirectDisplayID。
     private func targetDisplayIDForCurrentMouseLocation() -> CGDirectDisplayID? {
-        if let displayID = externalDisplayIDUnderMouse() {
-            return displayID
+        let mouseDisplayID = currentDisplayIDUnderMouse()
+        guard let controller else { return nil }
+        let displays = controller.displays.map {
+            (
+                displayID: $0.id,
+                isBuiltIn: $0.isBuiltIn,
+                supportsBrightness: $0.supportsBrightness
+            )
         }
-        return singleExternalDisplayIDFallback()
+        return MediaKeyTargetSelector.brightnessTarget(
+            mouseDisplayID: mouseDisplayID,
+            displays: displays
+        )
     }
 
-    private func externalDisplayIDUnderMouse() -> CGDirectDisplayID? {
+    private func targetDisplayID(for key: MediaKey) -> CGDirectDisplayID? {
+        switch key {
+        case .volumeUp, .volumeDown, .mute:
+            guard let controller else { return nil }
+            let displays = controller.displays.filter { !$0.isBuiltIn }.map {
+                (
+                    identity: displayIdentity(for: $0),
+                    displayID: $0.id,
+                    supportsVolume: $0.supportsVolume
+                )
+            }
+            let output = AudioOutputDescription(
+                deviceUID: "system-default",
+                name: "",
+                transportType: nil,
+                isControllable: AudioOutputDetector.defaultOutputDeviceIsControllable()
+            )
+            return MediaKeyTargetSelector.volumeTarget(
+                audioOutput: output,
+                boundIdentity: nil,
+                boundDisplayID: nil,
+                displays: displays
+            )
+        case .brightnessUp, .brightnessDown:
+            return targetDisplayIDForCurrentMouseLocation()
+        }
+    }
+
+    private func displayIdentity(for display: ControlledDisplay) -> DisplayIdentity {
+        let serial = CGDisplaySerialNumber(display.id)
+        return DisplayIdentity(
+            vendorID: UInt16(truncatingIfNeeded: CGDisplayVendorNumber(display.id)),
+            productID: UInt16(truncatingIfNeeded: CGDisplayModelNumber(display.id)),
+            serialNumber: serial == 0 ? nil : String(serial),
+            edidUUID: nil,
+            isBuiltIn: display.isBuiltIn
+        )
+    }
+
+    private func currentDisplayIDUnderMouse() -> CGDirectDisplayID? {
         let mouseLocation = NSEvent.mouseLocation
         guard let screenWithMouse = NSScreen.screens.first(where: { NSMouseInRect(mouseLocation, $0.frame, false) }) else {
             return nil
         }
-        let displayID = screenWithMouse.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
-        guard let displayID,
-              let controller,
-              let display = controller.displays.first(where: { $0.id == displayID }),
-              !display.isBuiltIn
-        else {
-            return nil
-        }
-        return displayID
-    }
-
-    private func singleExternalDisplayIDFallback() -> CGDirectDisplayID? {
-        guard let controller else { return nil }
-        let externalDisplays = controller.displays.filter { !$0.isBuiltIn }
-        guard externalDisplays.count == 1 else { return nil }
-        return externalDisplays.first?.id
+        return screenWithMouse.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
     }
 
     private func isOptionOnly(modifiers: NSEvent.ModifierFlags) -> Bool {
@@ -182,9 +212,6 @@ final class MediaKeyController {
         let current = controller.value(for: .brightness, displayID: displayID)
         let next = min(100, max(0, current + delta)).rounded()
         controller.setValueAsync(next, for: .brightness, displayID: displayID)
-        if settings?.mediaKeyShowOSD == true {
-            osd.show(.brightness, displayID: displayID, percent: next)
-        }
     }
 
     private func adjustVolume(by delta: Double, on displayID: CGDirectDisplayID) {
@@ -196,10 +223,6 @@ final class MediaKeyController {
         let next = min(100, max(0, current + delta)).rounded()
         controller.setValueAsync(next, for: .volume, displayID: displayID)
         rememberVolume(next, for: displayID)
-        if settings?.mediaKeyShowOSD == true {
-            let image: OSDImage = next <= 0 ? .speakerMuted : .speaker
-            osd.show(image, displayID: displayID, percent: next)
-        }
     }
 
     private func toggleMute(on displayID: CGDirectDisplayID) {
@@ -219,10 +242,6 @@ final class MediaKeyController {
         }
         controller.setValueAsync(next, for: .volume, displayID: displayID)
         rememberVolume(next, for: displayID)
-        if settings?.mediaKeyShowOSD == true {
-            let image: OSDImage = next <= 0 ? .speakerMuted : .speaker
-            osd.show(image, displayID: displayID, percent: next)
-        }
     }
 
     private func rememberVolume(_ value: Double, for displayID: CGDirectDisplayID) {

@@ -3,6 +3,33 @@ import Testing
 @testable import HagimiMonitorDirect
 
 struct SettingsTests {
+    @Test func batteryComponentPowerMetricsMigrateIntoNonEmptySelection() {
+        let suite = "batteryComponentPowerMetricsMigrateIntoNonEmptySelection"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set(["health"], forKey: "settings.enabledMetrics.battery")
+        defaults.set(true, forKey: "settings.batteryElectricalMetricsMigrated")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        for id in ["power", "display-power", "gpu-power"] {
+            #expect(settings.isMetricEnabled(id, for: .battery))
+        }
+        #expect(defaults.bool(forKey: "settings.batteryComponentPowerMetricsMigrated"))
+    }
+
+    @Test func batteryComponentPowerMigrationPreservesExplicitAllOffSelection() {
+        let suite = "batteryComponentPowerMigrationPreservesExplicitAllOffSelection"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        defaults.set([String](), forKey: "settings.enabledMetrics.battery")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(!settings.isMetricEnabled("power", for: .battery))
+        #expect(!settings.isMetricEnabled("display-power", for: .battery))
+    }
+
     @Test func defaultThemePreference() {
         let settings = MonitorSettings()
         #expect(settings.themePreference == .system)
@@ -163,6 +190,13 @@ struct SettingsTests {
         #expect(MenuBarMetricFormatter.throughput(512, direction: "↑") == "↑512B")
         #expect(MenuBarMetricFormatter.capacity(128_000_000_000) == "128G")
         #expect(MenuBarMetricFormatter.capacity(nil) == "  --")
+        #expect(MenuBarMetricFormatter.refreshRate(120.0) == "120Hz")
+        #expect(MenuBarMetricFormatter.refreshRate(nil) == " --Hz")
+        #expect(MenuBarMetricFormatter.displayPower(1.5) == "1.5W")
+        #expect(MenuBarMetricFormatter.displayPower(nil) == " --W")
+        #expect(MenuBarMetricFormatter.bandwidth(9.4) == "9.4G")
+        #expect(MenuBarMetricFormatter.bandwidth(128.0) == "128G")
+        #expect(MenuBarMetricFormatter.bandwidth(nil) == " --G")
     }
 
     @Test func batteryCellBalanceMigratesForExistingUsers() {

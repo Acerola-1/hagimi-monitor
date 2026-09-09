@@ -43,22 +43,36 @@ final class MemorySampler: MonitorSampler {
         let swapins = Int64(stats.swapins)
         let swapouts = Int64(stats.swapouts)
 
+        var metrics = [
+            MonitorMetric(name: "used", value: memoryBytes(used), numericValue: used),
+            // 压力行自身携带离散等级,展开区过滤掉内部 pressure-level 后仍能正确着色。
+            MonitorMetric(
+                name: "pressure",
+                value: pressure.level.identifier,
+                numericValue: Double(pressure.level.rawValue)
+            ),
+            MonitorMetric(name: "swap-used", value: swapUsedText(swap), numericValue: swap?.used),
+            MonitorMetric(name: "total", value: memoryBytes(total)),
+            // 压缩内存(compressor_page_count):内存紧张时系统压缩页的占用,
+            // 与活动监视器「被压缩」同口径。
+            MonitorMetric(name: "compressed", value: memoryBytes(compressed), numericValue: compressed),
+            MonitorMetric(name: "pressure-level", value: pressure.level.identifier, numericValue: Double(pressure.level.rawValue)),
+            MonitorMetric(name: "swapins", value: String(swapins), numericValue: Double(swapins)),
+            MonitorMetric(name: "swapouts", value: String(swapouts), numericValue: Double(swapouts))
+        ]
+
+        #if DIRECT_DISTRIBUTION
+        let bwBytes = IOReportPowerSampler.shared.sample().memoryBandwidthBytesPerSec
+        let gbPerSec = bwBytes.map { $0 / 1e9 }
+        let bwText = gbPerSec.map { String(format: "%.1f GB/s", $0) } ?? "--"
+        metrics.append(MonitorMetric(name: "memory-bandwidth", value: bwText, numericValue: gbPerSec, unit: " GB/s"))
+        #endif
+
         return MonitorModule(
             kind: .memory,
             value: percentage,
             summary: percent(percentage),
-            metrics: [
-                MonitorMetric(name: "used", value: memoryBytes(used), numericValue: used),
-                MonitorMetric(name: "pressure", value: pressure.title),
-                MonitorMetric(name: "swap-used", value: swapUsedText(swap), numericValue: swap?.used),
-                MonitorMetric(name: "total", value: memoryBytes(total)),
-                // 压缩内存(compressor_page_count):内存紧张时系统压缩页的占用,
-                // 与活动监视器「被压缩」同口径。
-                MonitorMetric(name: "compressed", value: memoryBytes(compressed), numericValue: compressed),
-                MonitorMetric(name: "pressure-level", value: pressure.title, numericValue: Double(pressure.level.rawValue)),
-                MonitorMetric(name: "swapins", value: String(swapins), numericValue: Double(swapins)),
-                MonitorMetric(name: "swapouts", value: String(swapouts), numericValue: Double(swapouts))
-            ],
+            metrics: metrics,
             samples: seedSamples(percentage),
             pressure: pressure.level,
             pressureValue: pressurePercent,
@@ -140,19 +154,6 @@ private enum MemoryPressureState {
     case warning
     case critical
     case unknown
-
-    var title: String {
-        switch self {
-        case .normal:
-            "normal"
-        case .warning:
-            "warning"
-        case .critical:
-            "critical"
-        case .unknown:
-            "--"
-        }
-    }
 
     var level: MemoryPressureLevel {
         switch self {

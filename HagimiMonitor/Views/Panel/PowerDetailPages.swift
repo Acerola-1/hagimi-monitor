@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// 电源展开区分区多页切换标签（拓扑 / 供电）。
+/// 电源展开区分区多页切换标签（拓扑 / 健康 / 供电）。
 enum BatteryPageTab: String, CaseIterable, Identifiable {
     case flow = "flow"
+    case health = "health"
     case supply = "supply"
 
     var id: String { rawValue }
@@ -11,6 +12,8 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
         switch self {
         case .flow:
             return String(localized: "panel.battery.tab.flow")
+        case .health:
+            return String(localized: "panel.battery.tab.health")
         case .supply:
             return String(localized: "panel.battery.tab.supply")
         }
@@ -20,15 +23,38 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
         switch self {
         case .flow:
             return "point.3.connected.trianglepath.dotted"
+        case .health:
+            return "heart.fill"
         case .supply:
             return "powerplug.fill"
+        }
+    }
+
+    /// 各分页归属的可勾指标名:面板展开区分栏渲染与设置页选项过滤同源。
+    /// 供电页为固定诊断视图,不含可勾指标,返回空。
+    var metricNames: [String] {
+        switch self {
+        case .flow:
+            #if DIRECT_DISTRIBUTION
+            return ["power", "display-power", "gpu-power"]
+            #else
+            return ["power"]
+            #endif
+        case .health:
+            return [
+                "health", "cycle-count", "temperature", "power-loss",
+                "voltage", "current", "cell-balance", "capacity",
+                "cell-qmax", "cell-resistance", "thermal-limit-seconds", "time-at-high-soc"
+            ]
+        case .supply:
+            return []
         }
     }
 }
 
 // MARK: - 供电协议与输入诊断视图
 
-/// 供电端专属诊断视图（双卡片整行排版，28pt 缩进与功率流图左缘完全对齐，杜绝文本截断）。
+/// 供电端专属诊断视图（双卡片整行排版，全宽对称对齐，杜绝文本截断）。
 struct PowerSupplyDiagnosticsView: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
@@ -42,8 +68,6 @@ struct PowerSupplyDiagnosticsView: View {
             // 卡片 2: 适配器输入实测（单行卡片）
             inputCard
         }
-        // 与明细网格、分区标题及 PowerFlowDiagram 保持完全一致的 28pt 缩进
-        .padding(.leading, 28)
     }
 
     // MARK: - 子卡片

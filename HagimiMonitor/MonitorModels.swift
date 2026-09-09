@@ -27,6 +27,19 @@ enum MemoryPressureLevel: Int, Equatable {
     case warning = 1
     case critical = 2
     case unknown = 3
+
+    var identifier: String {
+        switch self {
+        case .normal:
+            "normal"
+        case .warning:
+            "warning"
+        case .critical:
+            "critical"
+        case .unknown:
+            "--"
+        }
+    }
 }
 
 enum MonitorSeverity {
@@ -152,13 +165,17 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "tiler", title: String(localized: "metric.gpu.tiler"), isDefault: true),
             ]
         case .memory:
-            return [
+            var metrics = [
                 MetricSwitch(id: "used", title: String(localized: "metric.memory.used"), isDefault: true),
                 MetricSwitch(id: "pressure", title: String(localized: "metric.memory.pressure"), isDefault: true),
                 MetricSwitch(id: "swap-used", title: String(localized: "metric.memory.swap-used"), isDefault: true),
                 MetricSwitch(id: "total", title: String(localized: "metric.memory.total"), isDefault: true),
                 MetricSwitch(id: "compressed", title: String(localized: "metric.memory.compressed"), isDefault: true),
             ]
+            #if DIRECT_DISTRIBUTION
+            metrics.append(MetricSwitch(id: "memory-bandwidth", title: String(localized: "metric.memory.memory-bandwidth"), isDefault: true))
+            #endif
+            return metrics
         case .storage:
             return [
                 MetricSwitch(id: "used", title: String(localized: "metric.storage.used"), isDefault: true),
@@ -176,20 +193,36 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "wifi-ssid", title: String(localized: "metric.network.wifi-ssid"), isDefault: true),
             ]
         case .battery:
-            return [
+            var metrics = [
                 // 充电功率在电源行以常驻 CHG pill 展示,不作为可开关的明细项。
                 // 充电限制/低电量模式不进明细网格:前者只保留在功率流电池条的
                 // 刻度线上,后者只保留行头图标着色(纯状态文本行信息量低)。
                 MetricSwitch(id: "health", title: String(localized: "metric.battery.health"), isDefault: true),
                 MetricSwitch(id: "cycle-count", title: String(localized: "metric.battery.cycle-count"), isDefault: true),
                 MetricSwitch(id: "temperature", title: String(localized: "metric.battery.temperature"), isDefault: true),
-                MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true),
+                MetricSwitch(id: "power-loss", title: String(localized: "metric.battery.power-loss"), isDefault: true)
+            ]
+            #if DIRECT_DISTRIBUTION
+            // IOReport 是私有 API，整机与分项功耗只在 Direct 版开放为明细开关。
+            metrics.append(contentsOf: [
+                MetricSwitch(id: "power", title: String(localized: "metric.battery.power"), isDefault: true),
+                MetricSwitch(id: "display-power", title: String(localized: "metric.battery.display-power"), isDefault: true),
+                MetricSwitch(id: "gpu-power", title: String(localized: "metric.battery.gpu-power"), isDefault: true)
+            ])
+            #endif
+            metrics.append(contentsOf: [
                 MetricSwitch(id: "voltage", title: String(localized: "metric.battery.voltage"), isDefault: true),
                 MetricSwitch(id: "current", title: String(localized: "metric.battery.current"), isDefault: true),
                 MetricSwitch(id: "cell-balance", title: String(localized: "metric.battery.cell-balance"), isDefault: true),
                 // 剩余/满充容量合并为单一开关(展示为「剩余 / 满充 mAh」整行格)。
                 MetricSwitch(id: "capacity", title: String(localized: "metric.battery.capacity"), isDefault: true),
-            ]
+                // 深度诊断指标（默认关闭，按需在设置中勾选开启）
+                MetricSwitch(id: "cell-qmax", title: String(localized: "metric.battery.cell-qmax"), isDefault: false),
+                MetricSwitch(id: "cell-resistance", title: String(localized: "metric.battery.cell-resistance"), isDefault: false),
+                MetricSwitch(id: "thermal-limit-seconds", title: String(localized: "metric.battery.thermal-limit-seconds"), isDefault: false),
+                MetricSwitch(id: "time-at-high-soc", title: String(localized: "metric.battery.time-at-high-soc"), isDefault: false)
+            ])
+            return metrics
         case .fan:
             // 风扇行无子指标开关,展开区直接显示所有风扇(由 FanList 渲染)。
             return []
@@ -724,6 +757,7 @@ final class MonitorStore: ObservableObject {
         // 启动;已授权则幂等补挂监视(覆盖运行期授权变化)。
         bluetoothSampler.activateBLE()
         if wasEmpty {
+            loadAnimator.setPanelVisible(true)
             isPanelVisible = true
         }
     }
@@ -734,6 +768,7 @@ final class MonitorStore: ObservableObject {
         visiblePanelKinds.remove(kind)
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
+            loadAnimator.setPanelVisible(false)
         }
     }
 
@@ -1012,6 +1047,29 @@ final class MonitorStore: ObservableObject {
         case .fanSpeed:
             // 取多风扇的 max RPM;fans 为空(无风扇 / 未采样)走 unavailable 占位。
             return MenuBarMetricFormatter.fanRPM(fans.map { $0.currentRPM }.max())
+        // 分项功耗/总线带宽由采样串行队列推进并发布到模块指标，菜单栏只读
+        // 已发布数值：不在主线程触发 IOReport 采样，也消除跨线程共享状态。
+        case .gpuPower:
+            #if DIRECT_DISTRIBUTION
+            return MenuBarMetricFormatter.power(metricValue("gpu-power", in: .battery))
+            #else
+            return MenuBarMetricFormatter.unavailable
+            #endif
+        case .memoryBandwidth:
+            #if DIRECT_DISTRIBUTION
+            return MenuBarMetricFormatter.bandwidth(metricValue("memory-bandwidth", in: .memory))
+            #else
+            return MenuBarMetricFormatter.unavailable
+            #endif
+        case .displayRefreshRate:
+            // 公开 CG API,沙盒可用,双渠道同源。
+            return MenuBarMetricFormatter.refreshRate(DisplayTelemetryReader.readBuiltInRefreshRate())
+        case .displayPower:
+            #if DIRECT_DISTRIBUTION
+            return MenuBarMetricFormatter.displayPower(metricValue("display-power", in: .battery))
+            #else
+            return MenuBarMetricFormatter.unavailable
+            #endif
         }
     }
 
@@ -1021,10 +1079,14 @@ final class MonitorStore: ObservableObject {
             "35%"
         case .gpuUsage:
             "34%"
+        case .gpuPower:
+            "  5W"
         case .memoryUsage:
             "61%"
         case .memoryPressure:
             "23%"
+        case .memoryBandwidth:
+            "9.4G"
         case .batteryLevel:
             "76%"
         case .networkDownload:
@@ -1035,6 +1097,10 @@ final class MonitorStore: ObservableObject {
             " 88°"
         case .storageFree:
             "128G"
+        case .displayRefreshRate:
+            "120Hz"
+        case .displayPower:
+            " 1.5W"
         case .systemPower:
             " 12W"
         case .fanSpeed:
@@ -1242,6 +1308,9 @@ final class MenuBarLoadAnimator: ObservableObject {
 
     private var targetComputeLoad = 0.0
     private var smoothingTimerCancellable: AnyCancellable?
+    /// 任一监控面板可见时，菜单栏环只随采样低频更新；避免 30fps 状态项
+    /// 重绘持续触发透明毛玻璃窗口与桌面的屏幕合成。
+    private var panelVisible = false
     /// 展开动画窗口截止时刻:窗口内暂停 30fps 推进,动画结束后恢复平滑。
     private var suspensionDeadline = Date.distantPast
 
@@ -1253,7 +1322,25 @@ final class MenuBarLoadAnimator: ObservableObject {
             return
         }
         targetComputeLoad = target
+        if panelVisible {
+            publishTargetImmediately()
+            return
+        }
         ensureSmoothingTimer()
+    }
+
+    /// 可见期保留准确读数，但把菜单栏动画从 30fps 降为采样驱动（通常 1fps）。
+    /// 面板收起后恢复原平滑策略；若可见期已追上目标则不会额外启动计时器。
+    func setPanelVisible(_ visible: Bool) {
+        guard panelVisible != visible else { return }
+        panelVisible = visible
+        if visible {
+            smoothingTimerCancellable?.cancel()
+            smoothingTimerCancellable = nil
+            publishTargetImmediately()
+        } else if Self.quantizeLoad(targetComputeLoad) != displayedComputeLoad {
+            ensureSmoothingTimer()
+        }
     }
 
     /// 暂停平滑推进至指定时刻(用于展开动画窗口),动画结束后自然恢复。
@@ -1286,12 +1373,19 @@ final class MenuBarLoadAnimator: ObservableObject {
     }
 
     private func ensureSmoothingTimer() {
-        guard smoothingTimerCancellable == nil else { return }
+        guard !panelVisible, smoothingTimerCancellable == nil else { return }
         smoothingTimerCancellable = Timer.publish(every: MonitorConstants.menuBarLoadSmoothFrameInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
                 self?.advanceSmoothing()
             }
+    }
+
+    private func publishTargetImmediately() {
+        let target = Self.quantizeLoad(targetComputeLoad)
+        if displayedComputeLoad != target {
+            displayedComputeLoad = target
+        }
     }
 
     deinit {

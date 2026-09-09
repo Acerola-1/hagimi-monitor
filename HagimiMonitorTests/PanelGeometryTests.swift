@@ -336,8 +336,8 @@ struct PanelGeometryTests {
         #expect(registry.makeSnapshot() == nil)
 
         // 获取安全收起态快照，防止零尺寸启动
-        let safe = registry.makeRestingFallbackSnapshot(safeHeaderHeight: 34)
-        #expect(safe.sections["cpu"]?.headerHeight == 34)
+        let safe = registry.makeRestingFallbackSnapshot()
+        #expect(safe.sections["cpu"]?.headerHeight == MonitorConstants.panelRowHeaderHeight)
         #expect(safe.sections["cpu"]?.detailHeight == 0)
 
         let safeFrame = PanelGeometrySolver.solve(snapshot: safe, phases: [:])

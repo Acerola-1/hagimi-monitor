@@ -3,14 +3,16 @@ import SwiftUI
 
 // MARK: - Compatible Glass Container
 
-/// 跨版本兼容的毛玻璃容器。macOS 26+ 使用原生 `GlassEffectContainer`，
-/// macOS 15 使用 `NSVisualEffectView` 实现近似毛玻璃效果。
+/// 跨版本兼容的毛玻璃容器。
+/// 开启 Liquid Glass 且 macOS 26+ 时使用系统 `GlassEffectContainer`；
+/// 关闭或旧系统时直接透传 content，消除容器冗余计算。
 struct CompatibleGlassContainer<Content: View>: View {
     var spacing: CGFloat? = nil
+    var isLiquidGlassEnabled: Bool = false
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        if #available(macOS 26, *) {
+        if #available(macOS 26, *), isLiquidGlassEnabled {
             if let spacing {
                 GlassEffectContainer(spacing: spacing) {
                     content()
@@ -21,9 +23,105 @@ struct CompatibleGlassContainer<Content: View>: View {
                 }
             }
         } else {
-            VStack(spacing: spacing ?? 0) {
-                content()
+            content()
+        }
+    }
+}
+
+// MARK: - Compatible Panel Glass Host
+
+/// 面板窗口的跨版本底座宿主视图。
+/// 严格遵守材质分层纪律：
+/// 1. 窗口底座宿主（Window Backdrop）：
+///    - 开启 Liquid Glass 且 macOS 26+ 时，使用 `NSGlassEffectView` 提供现代液态通透质感；
+///    - 关闭或 macOS 15 时，使用 `NSVisualEffectView(material: .popover, blendingMode: .behindWindow)` 模糊桌面。
+/// 2. 内部行卡片（Row Cards）：
+///    - 严格保持 `.withinWindow` 毛玻璃，绝不回退或绑定为 `.behindWindow`，杜绝展开 resize 闪烁。
+final class CompatiblePanelGlassHost: NSView {
+    private var visualEffectView: NSVisualEffectView?
+    private var glassEffectView: NSView?
+    private let cornerRadius: CGFloat
+    private(set) var isLiquidGlassEnabled: Bool = false
+    private var hostingView: NSView?
+
+    init(cornerRadius: CGFloat) {
+        self.cornerRadius = cornerRadius
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = cornerRadius
+        layer?.cornerCurve = .continuous
+        layer?.masksToBounds = true
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    func setHostingView(_ hosting: NSView) {
+        self.hostingView = hosting
+        addSubview(hosting)
+        hosting.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            hosting.leadingAnchor.constraint(equalTo: leadingAnchor),
+            hosting.trailingAnchor.constraint(equalTo: trailingAnchor),
+            hosting.topAnchor.constraint(equalTo: topAnchor),
+            hosting.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+    }
+
+    func updateMaterial(liquidGlassEnabled: Bool) {
+        if visualEffectView != nil || glassEffectView != nil {
+            guard isLiquidGlassEnabled != liquidGlassEnabled else { return }
+        }
+        isLiquidGlassEnabled = liquidGlassEnabled
+
+        visualEffectView?.removeFromSuperview()
+        visualEffectView = nil
+        glassEffectView?.removeFromSuperview()
+        glassEffectView = nil
+
+        if #available(macOS 26, *), liquidGlassEnabled {
+            let glass = NSGlassEffectView()
+            glass.style = .regular
+            glass.wantsLayer = true
+            glass.layer?.cornerRadius = cornerRadius
+            glass.layer?.cornerCurve = .continuous
+            glass.layer?.masksToBounds = true
+            glass.translatesAutoresizingMaskIntoConstraints = false
+            if let hostingView {
+                addSubview(glass, positioned: .below, relativeTo: hostingView)
+            } else {
+                addSubview(glass)
             }
+            NSLayoutConstraint.activate([
+                glass.leadingAnchor.constraint(equalTo: leadingAnchor),
+                glass.trailingAnchor.constraint(equalTo: trailingAnchor),
+                glass.topAnchor.constraint(equalTo: topAnchor),
+                glass.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+            self.glassEffectView = glass
+        } else {
+            let visualEffect = NSVisualEffectView()
+            visualEffect.material = .popover
+            visualEffect.blendingMode = .behindWindow
+            visualEffect.state = .active
+            visualEffect.wantsLayer = true
+            visualEffect.layer?.cornerRadius = cornerRadius
+            visualEffect.layer?.cornerCurve = .continuous
+            visualEffect.layer?.masksToBounds = true
+            visualEffect.translatesAutoresizingMaskIntoConstraints = false
+            if let hostingView {
+                addSubview(visualEffect, positioned: .below, relativeTo: hostingView)
+            } else {
+                addSubview(visualEffect)
+            }
+            NSLayoutConstraint.activate([
+                visualEffect.leadingAnchor.constraint(equalTo: leadingAnchor),
+                visualEffect.trailingAnchor.constraint(equalTo: trailingAnchor),
+                visualEffect.topAnchor.constraint(equalTo: topAnchor),
+                visualEffect.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+            self.visualEffectView = visualEffect
         }
     }
 }
@@ -104,8 +202,9 @@ extension View {
     /// 面板整体(含各行)已是 `.menu` 毛玻璃基调,底部按钮若用 26 原生
     /// `.buttonStyle(.glass)` 液态玻璃,深色模式下会偏亮偏透、与周围格格不入,
     /// 故所有版本都统一为与行同款的毛玻璃圆角卡片。
-    func compatibleButtonStyle() -> some View {
-        self.buttonStyle(PanelMaterialButtonStyle())
+    /// 传入最小高度时用于需要与模块行头对齐的按钮组。
+    func compatibleButtonStyle(minimumHeight: CGFloat? = nil) -> some View {
+        self.buttonStyle(PanelMaterialButtonStyle(minimumHeight: minimumHeight))
     }
 }
 
@@ -115,6 +214,12 @@ extension View {
 /// `.withinWindow` 毛玻璃与 `rowCornerRadius` 圆角,融为一体、
 /// 深浅模式下基调一致。
 private struct PanelMaterialButtonStyle: ButtonStyle {
+    let minimumHeight: CGFloat?
+
+    init(minimumHeight: CGFloat? = nil) {
+        self.minimumHeight = minimumHeight
+    }
+
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
         return configuration.label
@@ -122,7 +227,7 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
             // rowCornerRadius 在矮按钮上会被夹到 height/2 退化成胶囊。
             .padding(.vertical, 8)
             .padding(.horizontal, 10)
-            .frame(maxWidth: .infinity)
+            .frame(maxWidth: .infinity, minHeight: minimumHeight ?? 0)
             .background {
                 VisualEffectView(material: .menu, blendingMode: .withinWindow)
                     .clipShape(shape)

@@ -310,6 +310,7 @@ struct QuickToolsEntryButton: View {
     @ObservedObject private var store = QuickToolsStore.shared
     @ObservedObject var settings: MonitorSettings
     let theme: MonitorPanelTheme
+    var minimumHeight: CGFloat? = nil
     @State private var anchor = QuickToolsAnchorBox()
 
     var body: some View {
@@ -320,7 +321,7 @@ struct QuickToolsEntryButton: View {
                 .lineLimit(1)
                 .frame(maxWidth: .infinity)
         }
-        .compatibleButtonStyle()
+        .compatibleButtonStyle(minimumHeight: minimumHeight)
         .background(QuickToolsAnchorView(box: anchor))
         .overlay(
             RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)

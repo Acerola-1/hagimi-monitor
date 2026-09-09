@@ -101,7 +101,7 @@ struct MonitorPanelView: View {
             scheme: colorScheme
         )
 
-        CompatibleGlassContainer(spacing: 8) {
+        CompatibleGlassContainer(spacing: 8, isLiquidGlassEnabled: store.settings.liquidGlassEnabled) {
             if PanelMotionExperiment.enabled {
                 SingleHostPrototypeView(motion: panelExpansion.motion,
                     ids: panelModules.map { $0.kind.id } + (store.settings.displayModuleVisible && !isPanelBenchmark ? ["display"] : []), cap: maxContentHeight) {
@@ -164,14 +164,15 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
 
                                 // 快捷功能入口:激活角标与浮层打开态高亮由子视图
                                 // 自行观察 store,开关变化不牵动整块面板重绘。
                                 // 设置「小工具」关闭入口时不渲染(全部工具隐藏时
                                 // 该开关会被联动关闭,见 MonitorSettings)。
                                 if store.settings.quickToolsVisible {
-                                    QuickToolsEntryButton(settings: store.settings, theme: theme)
+                                    QuickToolsEntryButton(settings: store.settings, theme: theme,
+                                        minimumHeight: MonitorConstants.panelRowHeaderHeight)
                                 }
 
                                 Button {
@@ -181,10 +182,11 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
                             }
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
+                            .panelRowHeaderHeight()
                         }
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -394,14 +396,15 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
 
                                 // 快捷功能入口:激活角标与浮层打开态高亮由子视图
                                 // 自行观察 store,开关变化不牵动整块面板重绘。
                                 // 设置「小工具」关闭入口时不渲染(全部工具隐藏时
                                 // 该开关会被联动关闭,见 MonitorSettings)。
                                 if store.settings.quickToolsVisible {
-                                    QuickToolsEntryButton(settings: store.settings, theme: theme)
+                                    QuickToolsEntryButton(settings: store.settings, theme: theme,
+                                        minimumHeight: MonitorConstants.panelRowHeaderHeight)
                                 }
 
                                 Button {
@@ -411,10 +414,11 @@ struct MonitorPanelView: View {
                                         .lineLimit(1)
                                         .frame(maxWidth: .infinity)
                                 }
-                                .compatibleButtonStyle()
+                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
                             }
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
+                            .panelRowHeaderHeight()
     }
 
     private var panelBackgroundColor: Color {
@@ -432,9 +436,8 @@ struct MonitorPanelView: View {
                 Circle()
                     .fill(theme.liveDot(for: store.haloRingLoadLevel))
                     .frame(width: 5, height: 5)
-                    // 仅面板可见时脉冲:面板视图树常驻(NSPanel 不销毁),隐藏期间
-                    // 持续动画会白白驱动渲染。
-                    .compatiblePulseEffect(isActive: store.isPanelVisible)
+                    // 面板呼出时单次脉冲提示；避免常驻循环动画持续占用刷新时钟。
+                    .compatiblePulseEffect(trigger: store.isPanelVisible)
 
                 Text(String(localized: "SYSTEM · LIVE"))
                     .monitorPanelLabelFont(tracking: 1.1)
@@ -658,26 +661,44 @@ struct MonitorPanelView: View {
         return enabled + [temperature]
     }
 
+    /// 内存模块统一压力状态:显式模块状态优先,兼容仅携带 pressure 指标的占位/夹具。
+    private func memoryPressureLevel(for module: MonitorModule) -> MemoryPressureLevel {
+        if let level = module.pressure {
+            return level
+        }
+        guard let raw = module.metrics.first(where: { $0.name == "pressure" })?.numericValue,
+              let level = MemoryPressureLevel(rawValue: Int(raw)) else {
+            return .unknown
+        }
+        return level
+    }
+
     /// 内存头部主值的压力等级文案(已本地化)。
     private func memoryPressureText(for module: MonitorModule) -> String {
-        let raw = module.metrics.first { $0.name == "pressure" }?.value ?? "--"
-        return localizedMemoryPressure(raw)
+        localizedMemoryPressure(memoryPressureLevel(for: module).identifier)
     }
 
     /// 内存模块当前压力等级原始值;模块未携带压力时按未知处理。
     private func pressureRawLevel(_ module: MonitorModule) -> Int {
-        module.pressure?.rawValue ?? MemoryPressureLevel.unknown.rawValue
+        memoryPressureLevel(for: module).rawValue
     }
 
     /// 压力模式下头部已显示压力等级,展开列表里的「压力」行原位换成「使用率」行,
     /// 两个指标仅交换显示位置,设置里的「压力」开关继续控制该槽位。
     private func memoryMetrics(for module: MonitorModule, pressureMode: Bool) -> [MonitorMetric] {
         let metrics = enabledMetrics(for: module)
-        guard pressureMode else { return metrics }
+        let pressureLevel = memoryPressureLevel(for: module)
         return metrics.map { metric in
-            metric.name == "pressure"
-                ? MonitorMetric(name: "usage", value: module.summary, numericValue: module.value)
-                : metric
+            guard metric.name == "pressure" else { return metric }
+            if pressureMode {
+                return MonitorMetric(name: "usage", value: module.summary, numericValue: module.value)
+            }
+            return MonitorMetric(
+                name: metric.name,
+                value: pressureLevel.identifier,
+                numericValue: Double(pressureLevel.rawValue),
+                unit: metric.unit
+            )
         }
     }
 
@@ -987,6 +1008,7 @@ private struct MetricGlassRow: View, Equatable {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelRowHeaderHeight()
             // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
@@ -1126,7 +1148,7 @@ private struct MetricGlassRow: View, Equatable {
 /// CPU 展开区 P/E 核两行展示:第一行逐核负载环形图(逐行铺满、多核
 /// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
 /// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
-/// 继承分隔线与 28pt 缩进;占用展示取代 core-split 格子避免重复。
+/// 继承全宽对称内衬与分隔线;占用展示取代 core-split 格子避免重复。
 struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
@@ -1285,8 +1307,9 @@ private struct MetricDetailGrid: View {
     /// CPU 逐核数据:非 nil 时在网格顶部渲染 P/E 两行展示,
     /// 并剔除 core-split 格子(同源数值不重复展示)。
     var cpuCoreDetail: CPUCoreDetail? = nil
+    /// 是否在顶部绘制贯穿分隔线。电源等已有专属分区头组件的场景可关闭。
+    var showsSeparator: Bool = true
 
-    private var leadingInset: CGFloat { 28 }
     private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
@@ -1312,19 +1335,26 @@ private struct MetricDetailGrid: View {
     }
 
     /// 热压力与温度合并为整行渲染(温度并入热压力行;菜单栏温度选项独立)。
+    /// 温度指标仅直连版产出(SMC 在沙盒下不可读);无温度时不合并,
+    /// 热压力回落为普通半行档位格。
     private func isMergedThermalRow(_ metric: MonitorMetric) -> Bool {
-        kind == .cpu && (metric.name == "thermal-pressure" || metric.name == "temperature")
+        guard kind == .cpu, metrics.contains(where: { $0.name == "temperature" }) else {
+            return false
+        }
+        return metric.name == "thermal-pressure" || metric.name == "temperature"
     }
 
     var body: some View {
-        VStack(spacing: 7) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: kind))
-                .frame(height: 1)
-                .padding(.leading, leadingInset)
+        if showsSeparator {
+            VStack(spacing: 7) {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: kind))
+                    .frame(height: 1)
 
+                content
+            }
+        } else {
             content
-                .padding(.leading, leadingInset)
         }
     }
 
@@ -1346,8 +1376,8 @@ private struct MetricDetailGrid: View {
                 }
             }
 
-            if let thermal = metrics.first(where: { $0.name == "thermal-pressure" }) {
-                let temperature = metrics.first { $0.name == "temperature" }
+            if let thermal = metrics.first(where: { $0.name == "thermal-pressure" }),
+               let temperature = metrics.first(where: { $0.name == "temperature" }) {
                 thermalPressureCell(thermal: thermal, temperature: temperature)
             }
 
@@ -1367,10 +1397,10 @@ private struct MetricDetailGrid: View {
             .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
     }
 
-    /// 热压力整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
-    /// 直连版温度可用时双值并排;沙盒版无温度只显示档位。档位按 severity 着色,
+    /// 热压力合并整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
+    /// 仅在温度可用(直连版)时渲染此行;档位按 severity 着色,
     /// 温度保持 valueText 与其余数值同层级。
-    private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric?) -> some View {
+    private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric) -> some View {
         insetCell(
             HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
                 Text(localizedMetricName(kind: kind, id: thermal.name))
@@ -1381,14 +1411,12 @@ private struct MetricDetailGrid: View {
 
                 Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
-                if let temperature {
-                    splitValue(temperature, text: localizedMetricValue(kind: kind, metric: temperature))
-                        .help(localizedMetricValue(kind: kind, metric: temperature))
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            copyToPasteboard(temperature.value)
-                        }
-                }
+                splitValue(temperature, text: localizedMetricValue(kind: kind, metric: temperature))
+                    .help(localizedMetricValue(kind: kind, metric: temperature))
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        copyToPasteboard(temperature.value)
+                    }
                 splitValue(thermal, text: localizedMetricValue(kind: kind, metric: thermal))
                     .help(localizedMetricValue(kind: kind, metric: thermal))
                     .contentShape(Rectangle())
@@ -1517,10 +1545,9 @@ private struct MetricDetailGrid: View {
                 ? theme.palette.severityTint(for: .critical)
                 : theme.palette.severityTint(for: .calm)
         }
-        // 内存压力档位着色:取 pressure-level 指标原始值判级,与热压力/SMART 同口径。
+        // 内存压力档位着色:使用规范化压力等级,与热压力/SMART 同口径。
         if kind == .memory, metric.name == "pressure" {
-            let level = Int(metrics.first { $0.name == "pressure-level" }?.numericValue
-                ?? Double(MemoryPressureLevel.unknown.rawValue))
+            let level = Int(metric.numericValue ?? Double(MemoryPressureLevel.unknown.rawValue))
             return memoryPressureColor(level: level, theme: theme)
         }
         return theme.valueText
@@ -1628,7 +1655,6 @@ private struct StorageVolumeDetailList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 8) {
                 ForEach(Array(volumes.enumerated()), id: \.element.id) { index, volume in
@@ -1642,7 +1668,6 @@ private struct StorageVolumeDetailList: View {
                     StorageVolumeRow(volume: volume, kind: kind, tint: tint, theme: theme)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 }
@@ -1799,22 +1824,23 @@ private struct NetworkGlassRow: View, Equatable {
                             .monitorPanelMonoFont(weight: .semibold)
                             .foregroundStyle(theme.valueText)
                             .lineLimit(1)
-                            .minimumScaleFactor(0.82)
+                            .truncationMode(.tail)
                     }
-                    .fixedSize(horizontal: true, vertical: false)
-                    .layoutPriority(2)
+                    .layoutPriority(1)
 
-                    Spacer(minLength: 2)
+                    Spacer(minLength: 4)
 
-                    HStack(spacing: 6) {
+                    HStack(spacing: RowHeaderPillMetrics.spacing) {
                         NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
                         NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
                     }
-                    .layoutPriority(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .layoutPriority(2)
                 }
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
+            .panelRowHeaderHeight()
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -1891,9 +1917,9 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var detailMeasurementKey: String {
-        [detailMetrics.map(\.name).joined(separator: ","),
+        [tabMetrics(for: activeTab).map(\.name).joined(separator: ","),
          "\(showPowerFlow)",
-         selectedTab.rawValue].joined(separator: "|")
+         activeTab.rawValue].joined(separator: "|")
     }
 
     private var tint: Color {
@@ -1920,32 +1946,36 @@ private struct BatteryGlassRow: View, Equatable {
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
-                    .layoutPriority(2)
+                    .layoutPriority(1)
 
                 Text(summaryText)
                     .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
-                    .layoutPriority(3)
+                    .truncationMode(.tail)
+                    .layoutPriority(1)
 
                 Spacer(minLength: 4)
 
                 // 双 pill 常驻:⚡(充电功率)+ 仪表(整机功耗)。成对出现互相注解——
                 // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
                 // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
-                // 台式机无电池无充电概念,只显功耗 pill。
-                if hasBattery {
-                    PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
-                        .layoutPriority(0)
+                // 采用与网络行严格统一的定宽与间距(RowHeaderPillMetrics),保证两行上下完美对齐。
+                HStack(spacing: RowHeaderPillMetrics.spacing) {
+                    if hasBattery {
+                        PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
+                    }
+                    if hasBattery || numericValue("power") != nil {
+                        PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
+                    }
                 }
-                if hasBattery || numericValue("power") != nil {
-                    PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                        .layoutPriority(0)
-                }
+                .fixedSize(horizontal: true, vertical: false)
+                .layoutPriority(2)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
+            .panelRowHeaderHeight()
             // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplaySection
             // 同款纪律:整行 onTapGesture 会抢占深层控件的点击)。
             .contentShape(Rectangle())
@@ -1958,43 +1988,51 @@ private struct BatteryGlassRow: View, Equatable {
             .panelMeasure("row:" + module.kind.id)
 
             CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand, measurementKey: detailMeasurementKey) {
-                VStack(spacing: 9) {
-                    MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
-                    // 指标网格(健康度/温度/循环/损耗)与功率流图之间用带标题的分区分隔线
-                    // 明确隔开。功率流是电源模块的展开区亮点,双渠道(含沙盒)均可用——
-                    // 数据全部来自 BatterySampler 读 AppleSmartBattery/PowerTelemetryData 的
-                    // IORegistry 只读属性,不涉及他进程采样或私有 API,沙盒允许。
-                    // 由设置项 batteryShowPowerFlow(Beta)门控,关闭后展开区仅剩指标网格。
-                    // 功率流无 power 数据(老款 Mac 读不到 PowerTelemetryData.SystemPower)时整体隐藏,
-                    // 避免只显标题不出图的视觉断裂。canExpand 已用同一条件门控展开动作,渲染侧保持联动。
-                    if showPowerFlow && numericValue("power") != nil {
-                        PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme) {
+                VStack(spacing: 8) {
+                    // 顶部导航:动态小标题 + 贯穿分隔线 + 右侧多页切换胶囊
+                    // selection 锚定 activeTab:selectedTab 指向已被设置裁掉的
+                    // 分页时,胶囊仍高亮当前生效页而非陷入无高亮态。
+                    PowerSectionHeader(title: activeTab.title, theme: theme) {
+                        if availableTabs.count > 1 {
                             PanelCapsulePicker(
-                                selection: $selectedTab,
+                                selection: Binding(
+                                    get: { activeTab },
+                                    set: { selectedTab = $0 }
+                                ),
+                                items: availableTabs,
                                 icon: { $0.icon },
                                 tooltip: { $0.title },
                                 tint: tint,
                                 theme: theme
                             )
                         }
-                        .padding(.top, 3)
-                        .padding(.leading, 28)
+                    }
 
-                        switch selectedTab {
-                        case .flow:
+                    switch activeTab {
+                    case .flow:
+                        let flowMetrics = tabMetrics(for: .flow)
+                        if !flowMetrics.isEmpty {
+                            MetricDetailGrid(metrics: flowMetrics, kind: module.kind, theme: theme, showsSeparator: false)
+                        }
+                        if showPowerFlow && numericValue("power") != nil {
                             PowerFlowDiagram(
                                 module: module,
                                 theme: theme,
                                 tint: tint,
                                 animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
                             )
-                        case .supply:
-                            PowerSupplyDiagnosticsView(
-                                module: module,
-                                theme: theme,
-                                tint: tint
-                            )
                         }
+                    case .health:
+                        let healthMetrics = tabMetrics(for: .health)
+                        if !healthMetrics.isEmpty {
+                            MetricDetailGrid(metrics: healthMetrics, kind: module.kind, theme: theme, showsSeparator: false)
+                        }
+                    case .supply:
+                        PowerSupplyDiagnosticsView(
+                            module: module,
+                            theme: theme,
+                            tint: tint
+                        )
                     }
                 }
                 .padding(.horizontal, 10)
@@ -2057,24 +2095,41 @@ private struct BatteryGlassRow: View, Equatable {
         }
     }
 
-    private var detailMetrics: [MonitorMetric] {
-        // 充电功率已上移到行首常驻 CHG pill,明细不再重复展示。
-        // 充电限制只保留在功率流电池条的旗标上,低电量模式只保留行头图标
-        // 着色与功率流配色。电压/电流为常规半格;容量是「剩余 / 满充 mAh」
-        // 斜杠长值,由静态登记整行排到模块末尾。
-        let names = ["health", "cycle-count", "temperature", "power-loss", "voltage", "current", "cell-balance", "capacity"]
+    /// 当前硬件与设置条件下可用的分页集合。
+    /// - 拓扑（.flow）：开启 showPowerFlow 且有 power 数据，或存在分项功耗指标时可用；
+    /// - 健康（.health）：仅带电池设备可用；
+    /// - 供电（.supply）：始终可用（未插电时优雅提示未连接）。
+    private var availableTabs: [BatteryPageTab] {
+        var tabs: [BatteryPageTab] = []
+        let hasFlowData = (showPowerFlow && numericValue("power") != nil) || !tabMetrics(for: .flow).isEmpty
+        if hasFlowData {
+            tabs.append(.flow)
+        }
+        if hasBattery {
+            tabs.append(.health)
+        }
+        tabs.append(.supply)
+        return tabs
+    }
 
+    private var activeTab: BatteryPageTab {
+        availableTabs.contains(selectedTab) ? selectedTab : (availableTabs.first ?? .flow)
+    }
+
+    private func tabMetrics(for tab: BatteryPageTab) -> [MonitorMetric] {
         let enabledNames = Set(details.map(\.name))
-
-        return names.compactMap { name in
+        return tab.metricNames.compactMap { name in
             guard enabledNames.contains(name) else { return nil }
             return module.metrics.first(where: { $0.name == name })
         }
     }
 
+    private var detailMetrics: [MonitorMetric] {
+        tabMetrics(for: activeTab)
+    }
+
     private var canExpand: Bool {
-        // 指标全关时,只有功率流开启且有功耗值,展开区才仍有内容可显示。
-        !detailMetrics.isEmpty || (showPowerFlow && numericValue("power") != nil)
+        !availableTabs.isEmpty
     }
 
     private func numericValue(_ name: String) -> Double? {
@@ -2276,70 +2331,69 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
     }
 }
 
-/// 电源行专用的定宽 pill:符号标识(⚡充电 / 仪表功耗)+ 数值。
-/// 定宽保证数值位数变化/充电状态切换时行内元素不抖动。
+/// 行头定宽胶囊度量:网络行（上传/下载）与电源行（充电/整机功耗）统一使用同款定宽胶囊与间距，
+/// 确保两行在右侧垂直对齐，彻底消除不同位数跳动带来的推挤。
+enum RowHeaderPillMetrics {
+    static let width: CGFloat = 70
+    static let height: CGFloat = 20
+    /// 胶囊行上下留白由统一行头高度反推，保持胶囊尺寸与其他行头基线一致。
+    static let verticalPadding = (MonitorConstants.panelRowHeaderHeight - height) / 2
+    static let spacing: CGFloat = 6
+}
+
+/// 电源行专用的定宽胶囊:符号标识(⚡充电 / 仪表功耗)+ 数值。
+/// 定宽与 Capsule(theme.trackFill) 衬底保证数值位数变化/充电状态切换时行内元素不抖动。
 private struct PowerLabelPill: View {
     let symbol: String
     let value: String
     let theme: MonitorPanelTheme
 
     var body: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 3) {
             Image(systemName: symbol)
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 10, weight: .semibold))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(theme.secondaryText.opacity(0.72))
+                .frame(width: 10)
             Text(value)
+                .font(.system(size: 10, weight: .medium))
+                .monospacedDigit()
                 .foregroundStyle(theme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .font(.system(.footnote, design: .monospaced).weight(.medium))
-        .monospacedDigit()
-        .lineLimit(1)
-        .minimumScaleFactor(0.75)
-        .frame(width: 74, alignment: .trailing)
+        .padding(.horizontal, 5)
+        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
+        .background(Capsule().fill(theme.trackFill))
     }
 }
 
+/// 网络行专用的定宽胶囊:箭头符号(↑上传 / ↓下载)+ 速率数值。
+/// 定宽与 Capsule(theme.trackFill) 衬底保证高频跳动时布局零抖动。
 private struct NetworkRatePill: View {
     let systemImage: String
     let text: String
     let theme: MonitorPanelTheme
 
-    private var parts: (value: String, unit: String) {
-        guard let split = text.lastIndex(of: " ") else {
-            return (text, "")
-        }
-
-        return (
-            String(text[..<split]),
-            String(text[text.index(after: split)...])
-        )
-    }
-
     var body: some View {
-        let parts = parts
-
         HStack(spacing: 3) {
             Image(systemName: systemImage)
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(theme.secondaryText.opacity(0.72))
                 .frame(width: 10)
 
-            Text(parts.value)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
+            Text(text)
+                .font(.system(size: 10, weight: .medium))
+                .monospacedDigit()
+                .foregroundStyle(theme.secondaryText)
                 .lineLimit(1)
-                .minimumScaleFactor(0.68)
-                .frame(minWidth: 8, maxWidth: 30, alignment: .trailing)
-
-            Text(parts.unit)
-                .monitorPanelMonoFont(.caption2, weight: .medium)
-                .lineLimit(1)
-                .minimumScaleFactor(0.85)
-                .frame(width: 26, alignment: .leading)
+                .minimumScaleFactor(0.82)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .foregroundStyle(theme.secondaryText)
-        .fixedSize(horizontal: true, vertical: false)
-        // Compact network rate pill: bounded width preserves room for both upload and download rates.
-        .frame(minWidth: 48, maxWidth: 68, alignment: .trailing)
+        .padding(.horizontal, 5)
+        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
+        .background(Capsule().fill(theme.trackFill))
     }
 }
 
@@ -2485,7 +2539,6 @@ private struct TopProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: kind))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
@@ -2531,13 +2584,11 @@ private struct TopProcessList: View {
                     }
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
 
             // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
             if showRosettaBanner, translatedCount > 0 {
                 RosettaBanner(count: translatedCount, theme: theme)
-                    .padding(.leading, 28)
             }
         }
     }
@@ -2713,14 +2764,12 @@ private struct InlineDiskProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .storage))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2750,14 +2799,12 @@ private struct InlineNetworkProcessList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .network))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
                     ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
                 }
             }
-            .padding(.leading, 28)
             .animation(.easeInOut(duration: 0.2), value: rows.count)
         }
     }
@@ -2775,14 +2822,12 @@ private struct FanList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .fan))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 4) {
                 ForEach(fans) { fan in
                     fanRow(fan)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 
@@ -2899,6 +2944,7 @@ private struct BluetoothGlassRow: View, Equatable {
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
+            .panelRowHeaderHeight()
             .contentShape(Rectangle())
             .onTapGesture {
                 // 无设备时展开区无内容,点击不切换状态。
@@ -2937,14 +2983,12 @@ private struct BluetoothDeviceList: View {
             Rectangle()
                 .fill(theme.rowSeparator(for: .bluetooth))
                 .frame(height: 1)
-                .padding(.leading, 28)
 
             VStack(spacing: 8) {
                 ForEach(devices) { device in
                     deviceRow(device)
                 }
             }
-            .padding(.leading, 28)
         }
     }
 

@@ -23,6 +23,8 @@ enum MonitorConstants {
     static let panelMinWidth: Double = 300
     static let panelIdealWidth: Double = 340
     static let panelMaxWidth: Double = 460
+    /// 顶层模块行头的统一高度，保证不同尾部控件不会改变卡片基线。
+    static let panelRowHeaderHeight: CGFloat = 34
     static let rowCornerRadius = 14.0
     /// 面板外框圆角:与行卡片/底部按钮(rowCornerRadius=14)及留白(6pt)同心,满足 R_outer = R_inner + padding。
     static let panelCornerRadius = 20.0
