@@ -11663,13 +11663,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Use Liquid Glass for panels and interface surfaces"
+            "value": "Use Liquid Glass for panels and interface surfaces (in testing)"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "为监控面板与界面表面使用液态玻璃效果"
+            "value": "为监控面板与界面表面使用液态玻璃效果（开发测试中）"
           }
         }
       }
