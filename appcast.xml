@@ -3,79 +3,66 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.5.4</title>
-            <pubDate>Mon, 07 Sep 2026 09:25:26 +0000</pubDate>
-            <sparkle:version>82</sparkle:version>
-            <sparkle:shortVersionString>1.5.4</sparkle:shortVersionString>
+            <title>1.5.5</title>
+            <pubDate>Wed, 09 Sep 2026 13:04:27 +0000</pubDate>
+            <sparkle:version>83</sparkle:version>
+            <sparkle:shortVersionString>1.5.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
+HagimiMonitor 1.5.5 带来电源模块三页式深度诊断、外接显示器控制可靠性重构、内存带宽与分项功耗遥测，以及功率流向图的渲染架构升级。感谢 @zhaojiseng 在 #105 中贡献的面板性能优化与分项功耗方案（已整合进本版本）。
 
-HagimiMonitor 1.5.4 带来电源流向与供电诊断重构、外接显示器控制精简、电芯健康与寿命评估等多项功能增强与细节打磨。
+> 🙏 Thanks to @zhaojiseng for the panel performance optimization and split power telemetry work in #105 (integrated into this release).
 
-> 💡 **关于展开动画在极高系统负载下的帧率说明**：
-> 目前团队正在对极端高负载下（如 CPU 满载渲染）展开动画偶发的掉帧与窗口边缘移动进行深度专项攻坚，探索在不改变任何现有灵动动效与原生阴影的前提下，进一步卸载主线程瞬态计算负荷。该项极致流畅度优化正在持续迭代中。
+HagimiMonitor 1.5.5 brings three-page in-depth power diagnostics, a reliability rework for external display control, memory bandwidth and split power telemetry, and a render-architecture upgrade for the power flow diagram.
 
-HagimiMonitor 1.5.4 brings a major upgrade to power flow and supply diagnostics, streamlined display controls, battery cell health metrics, and various UX refinements.
+## 🇨🇳 更新内容
 
-> 💡 **Note on Animation Performance Under Heavy System Load**:
-> We are actively optimizing panel expansion smoothness under extreme system load scenarios. Work is underway to further eliminate main-thread transient overhead during spring animations without altering the fluid visual aesthetics or native shadow rendering. Stay tuned for ongoing performance updates!
+### ✨ 新功能
+- **电源展开区升级为「拓扑 / 健康 / 供电」三页**：电池健康类指标独立成页，设置页实时预览同构联动，指标开关随分页自动过滤。
+- **电芯深度健康指标**：新增电芯化学容量（Qmax）、电芯内阻、温控限充时长、满电驻留时间四项诊断指标（默认关闭，可在设置 → 电源明细中开启）。
+- **内存总线带宽**：内存模块新增实时带宽指标，支持面板明细与菜单栏展示。
+- **分项功耗遥测**：电源明细与菜单栏新增屏幕功耗、GPU 功耗。
+- **菜单栏新增屏幕刷新率指标**。
+- **媒体键目标选择**：可直接指定媒体键控制哪一台外接显示器。
+- **辅助功能授权引导**：新增拖拽授权引导卡片，辅助功能权限授予流程更直观。
 
-### 🇨🇳 中文更新内容
+### ⚡ 优化与体验
+- **外接显示器 DDC 控制可靠性重构**：逐属性能力探测（控制项与显示器实际能力匹配）、写入后确认读取、连接身份绑定与中断后自动恢复；新增诊断日志，硬件兼容问题有据可查；DDC 不支持的显示器自动回退 Gamma 软件调光。
+- **功率流向图渲染服务驱动**：流向动画迁移至 Render Server，主线程动画占用降至 0；流向随充/放电方向自动反转，汇聚点呼吸光晕。
+- **全宽对称排版**：明细区移除额外缩进，统一 10pt 对称全宽；网络与电源行头药丸像素级对齐，消除数值位数变化导致的推挤。
+- **菜单栏动画按需降频**：面板展开期间菜单栏图标动画降至 30fps 并消除常驻循环动画；菜单栏指标改读采样管线已发布数据，不再于主线程触发采样。
 
-#### 🔋 电源模块升级与诊断
-- **拓扑 / 供电双页切换**：电源展开区分区新增由精致 SF Symbol 图标驱动的胶囊切换器，跨语言零截断，鼠标悬停即显完整语义。
-- **真实输入诊断（供电页）**：新增适配器实测输入电压与输入电流（验证充电器是否足额或出现跌落），支持解析 PD 充电协议握手档位（如 20V / 3.25A），并细化充电限制与维持原因。
-- **电芯健康与设计寿命**：新增多电芯电压平衡度指标（展示电芯间极小电压偏差 ΔmV），电池循环次数升级为「当前循环 / 设计寿命」（如 130 / 1000 次），直观掌握电池真实健康状态。
-- **功率流图视觉升级**：重构拓扑流向图的几何留白，充电流向恒以健康绿呈现，优化接驳端子与充电限制旗标。
-- **台式机机型修复**：修复 Mac mini、Mac Studio 等台式 Mac 功耗显示为空的问题，台式机场景下正确呈现系统供电瓦数。
+### 🛠 问题修复
+- 修复内存压力格不按压力等级着色的问题。
+- 修复显示器控制滑杆旋钮下半部分被裁剪的问题。
 
-#### 🚀 核心架构与动画性能优化
-- **单宿主物理弹簧动效管线**：重构展开与折叠运动协调机制，由单一显示时钟的物理解析弹簧驱动窗口与内容同步伸缩。
-- **后台能耗大幅削减（降低约 85%）**：面板在收起后全面冻结视图计算与隐式重绘，空载静默功耗降至近乎忽略不计。
-- **瞬时速度保真与零死区保护**：连击展开/收起时严格继承物理瞬时速度，到达收起边界后从容重置，杜绝负向位移死区与手势顿挫。
+## 🇺🇸 English Release Notes
 
-#### 🖥️ 外接显示器与界面体验优化
-- **显示器控制卡片重构**：默认采用纯净优雅的「状态摘要 + 顺滑滑杆」，高级内嵌档案（分辨率、色深、色彩空间等）按需一键展开，展开高度与底部按钮丝滑跟随。
-- **蓝牙监控防闪断**：重构蓝牙启动状态门控机制，彻底解决应用启动瞬间蓝牙行的闪断与跳变。
-- **同心圆角与留白呼吸感**：重构面板内外同心圆角节奏（外框与内卡同心对齐），视觉通透感与液态玻璃质感显著提升。
+### ✨ New
+- **Power panel now spans three pages — Topology / Health / Supply**: battery health metrics live on their own page; the settings preview mirrors the same structure with per-page metric toggles.
+- **Deep cell health metrics**: four new diagnostics — cell chemical capacity (Qmax), cell internal resistance, thermal-throttling duration, and time at high state-of-charge (off by default; enable them in Settings → Power details).
+- **Memory bus bandwidth**: the memory module gains a live bandwidth metric, available in the detail grid and the menu bar.
+- **Split power telemetry**: Display and GPU power are now available in the power details and the menu bar.
+- **Display refresh rate**: new menu bar metric.
+- **Media key target selector**: choose exactly which external display your media keys control.
+- **Accessibility permission guide**: a new drag-and-drop guide card makes granting the Accessibility permission more straightforward.
 
-#### ⚙️ 设置面板与监控报表
-- **实时卡片预览**：设置中的监控项目列表支持所见即所得的动态行卡片预览，开启或隐藏模块时效果一目了然。
-- **硬件报表与统计升级**：重构设置窗口布局与存储管理，支持一键导出系统监控与硬件诊断报表。
-- **CPU 详情指标增强**：CPU 展开网格新增「进程数」实时统计，系统负载全貌一览无遗。
+### ⚡ Improved
+- **DDC control reliability rework**: per-attribute capability probing (controls match what each display actually supports), write-then-read-back confirmation, connection identity binding, and automatic recovery after interruptions. A new diagnostics log makes hardware compatibility issues traceable; displays without DDC support automatically fall back to Gamma software dimming.
+- **Power flow diagram driven by the render server**: flow animations now run on the Render Server, bringing main-thread animation cost to zero; flow direction reverses with charge/discharge, with a breathing glow at the junction.
+- **Full-width symmetric layout**: detail grids drop extra indentation in favor of 10pt symmetric full-width alignment; network and power row-header pills are pixel-aligned, eliminating jitter from digit-width changes.
+- **On-demand menu bar throttling**: menu bar icon animations drop to 30fps while the panel is open, and permanently repeating animations were removed; menu bar metrics now read published sampler data instead of triggering sampling on the main thread.
 
----
-
-### 🇺🇸 English Release Notes
-
-#### 🔋 Battery & Power Flow Redesign
-- **Topology & Supply Dual-Page Views**: Introduced an ultra-compact SF Symbol capsule picker in the battery section, perfectly symmetrical across all languages with native hover tooltips.
-- **Hardware-Level Power Diagnostics**: Added real-time adapter input voltage and current metrics (detect charger voltage drops and under-wattage), USB-PD handshake contract profile detection (e.g. 20V / 3.25A), and granular charging hold status explanations.
-- **Cell Balance & Design Life**: Added multi-cell voltage balance metrics (ΔmV difference) to gauge battery wear, and enhanced cycle count to show against design cycle limits (e.g. 130 / 1000).
-- **Power Flow Visual Polish**: Refined diagram spacing, aligned charging flow color semantics (calm green for charging), and improved connector sockets and limit indicators.
-- **Desktop Mac Power Fix**: Resolved an issue where desktop Macs (Mac mini, Mac Studio, Mac Pro) showed empty power values; AC system wattage is now accurately displayed.
-
-#### 🚀 Architecture & Animation Improvements
-- **Single-Host Physical Motion Pipeline**: Rebuilt panel expansion and collapse mechanics with an analytic physical spring driving the window frame and content reveals in lockstep.
-- **Up to 85% Background CPU Reduction**: The panel view tree is now deeply frozen when hidden, stopping redundant layout passes and measurement in the background for near-zero idle resource usage.
-- **Continuous Momentum & Boundary Safety**: Preserves physical velocity during direction reversals and smoothly settles at boundary limits with zero stutter.
-
-#### 🖥️ Displays & System Experience
-- **Streamlined Display Controls**: Display cards now default to a clean "Summary + Smooth Slider" layout, with detailed hardware profiles collapsible on demand.
-- **Bluetooth Startup Stabilization**: Implemented three-state gating for the Bluetooth sampler, completely eliminating initial row flickering upon launch.
-- **Concentric Corner Radii & Spacing**: Mathematically aligned outer panel radii with inner row cards for an authentic macOS liquid-glass aesthetic.
-
-#### ⚙️ Settings & System Diagnostics
-- **Live Card Previews**: Monitoring items in Settings now feature live row previews, making layout adjustments intuitive.
-- **Diagnostic Reports & Storage Management**: Overhauled Settings architecture with support for exporting comprehensive hardware and monitoring reports.
-- **Active Process Count**: Added real-time process count metric to the CPU expansion grid.
+### 🛠 Fixed
+- Fixed memory pressure cells not being colored by pressure level.
+- Fixed the lower half of external display slider knobs being clipped.
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.5.4/HagimiMonitor-v1.5.4.zip" length="4824200" type="application/octet-stream" sparkle:edSignature="UCTUa9KkGCSFuoUmF2lPxfuZ8lHhxqLhXj6+o51UnQK56p3DOu9mafW4hW88KeuDdkG3eI0mxhGEI/LMYH/MDw=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.5.5/HagimiMonitor-v1.5.5.zip" length="4924489" type="application/octet-stream" sparkle:edSignature="n3MxGuRkkN8zVYy8VtHYpbMRRPm4MXEG+oGBQFOtTr3eQcjwlde/MTqDOePqM/6930a09BFb3t6arPKKoUHTAg=="/>
         </item>
     </channel>
 </rss>
