@@ -41,23 +41,22 @@ final class BatterySampler: MonitorSampler {
         componentPower = IOReportPowerSampler.shared.sample()
         #endif
 
-        // IOPS 接口本身失败(info/列表读不出):电源状态不可信,兜底模块标记为占位,
-        // 统计不得把它按「交流供电」计入,否则电池供电会被误记成 AC。
+        // IOPS 接口本身失败(info/列表读不出):电源状态不可信,返回缺失态模块,
+        // 面板/菜单栏/统计均不把它当真实读数消费(尤其不得伪装成交流供电)。
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else {
             AppLogger.sampler.error("BatterySampler failed to read power source info")
-            return externalPowerModule(isPlaceholder: true)
+            return unavailableModule(previous: previous)
         }
-        // 空列表 = 无电池电源(桌面机型):AC 直供是真实稳态而非失败兜底。
+        // 空列表 = 无电池电源(桌面机型):AC 直供是真实稳态,按真实读数展示。
         if sources.isEmpty {
-            return externalPowerModule(isPlaceholder: false)
+            return externalPowerModule()
         }
-        // 有电源硬件但描述读不出:与 info/列表失败同属接口不可信,标记占位,
-        // 避免这几帧被统计按「交流供电」计入。
+        // 有电源硬件但描述读不出:与 info/列表失败同属接口不可信,返回缺失态。
         guard let source = sources.first,
               let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
             AppLogger.sampler.error("BatterySampler failed to read power source description")
-            return externalPowerModule(isPlaceholder: true)
+            return unavailableModule(previous: previous)
         }
 
         let current = doubleValue(description[kIOPSCurrentCapacityKey]) ?? 0
@@ -188,10 +187,9 @@ final class BatterySampler: MonitorSampler {
         )
     }
 
-    /// 无电池机型的 AC 直供展示模块(桌面机型稳态与 IOPS 失败兜底共用)。
-    /// `isPlaceholder` 区分两种语义:桌面稳态是真实读数(统计计入电源构成),
-    /// IOPS 失败时电源状态不可信(统计过滤,避免电池供电被误记成 AC)。
-    private func externalPowerModule(isPlaceholder: Bool) -> MonitorModule {
+    /// 无电池机型的 AC 直供展示模块:桌面机型稳态,是真实读数(统计计入电源构成)。
+    /// IOPS 接口失败不共用本模块,走 `unavailableModule`,避免伪装成交流供电。
+    private func externalPowerModule() -> MonitorModule {
         let adapterWatts = externalAdapterWatts()
         // 桌面机型无 AppleSmartBattery, PowerTelemetry 恒为 nil;
         // Direct 版由 SMC 补充:优先取 PSTR(整机负载),缺失时以 PDTR(DC 输入)作为负载的近似兜底。
@@ -224,8 +222,23 @@ final class BatterySampler: MonitorSampler {
             value: 100,
             summary: "ac-power",
             metrics: metrics,
-            samples: seedSamples(100),
-            isPlaceholder: isPlaceholder
+            samples: seedSamples(100)
+        )
+    }
+
+    /// IOPS 接口不可信时的缺失态模块:不声称任何电源状态、不产出数值,
+    /// 只携带不可用标记。UI 按 `isPlaceholder` 显示缺失态,统计据此过滤。
+    /// 数值沿用上一帧仅为让曲线不出假跳变(UI 不消费该值)。
+    private func unavailableModule(previous: MonitorModule?) -> MonitorModule {
+        MonitorModule(
+            kind: .battery,
+            value: previous?.value ?? 0,
+            summary: "--",
+            metrics: [
+                MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.batteryUnavailable)
+            ],
+            samples: previous?.samples ?? seedSamples(0),
+            isPlaceholder: true
         )
     }
 

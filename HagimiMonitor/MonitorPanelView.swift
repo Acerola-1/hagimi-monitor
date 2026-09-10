@@ -2058,6 +2058,10 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var powerSymbol: String {
+        // 缺失帧:电源状态未知,用同族空壳图标示意无读数,不冒充插头/电量。
+        if module.isPlaceholder {
+            return "battery.0percent"
+        }
         guard hasBattery else {
             return "powerplug"
         }
@@ -2086,13 +2090,17 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var summaryText: String {
-        if hasBattery {
-            localizedBatteryState(module.summary)
-        } else if let adapter = numericValue("adapter") {
-            wattString(adapter, rounded: true)
-        } else {
-            localizedBatteryState("ac-power")
+        // 缺失帧直接显示模块自带的缺失摘要("--"),不落进 AC 兜底分支。
+        if module.isPlaceholder {
+            return module.summary
         }
+        if hasBattery {
+            return localizedBatteryState(module.summary)
+        }
+        if let adapter = numericValue("adapter") {
+            return wattString(adapter, rounded: true)
+        }
+        return localizedBatteryState("ac-power")
     }
 
     /// 当前硬件与设置条件下可用的分页集合。

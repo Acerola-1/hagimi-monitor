@@ -389,6 +389,8 @@ struct MonitorModule: Identifiable, Equatable {
             if value >= MonitorConstants.networkWarningThreshold { return .warning }
             return .calm
         case .battery:
+            // 缺失帧(isPlaceholder)不参与阈值判定:value 沿用上一帧,不得据此报红。
+            if isPlaceholder { return .calm }
             if metrics.first(where: { $0.name == MonitorMetricKey.type })?.value == MonitorMetricKey.acPower {
                 return .calm
             }
@@ -431,6 +433,8 @@ struct MonitorModule: Identifiable, Equatable {
 enum MonitorMetricKey {
     static let type = "type"
     static let acPower = "ac-power"
+    /// 电池模块 type 的缺失态取值:IOPS 接口不可信,读数不参与 UI/统计消费。
+    static let batteryUnavailable = "battery-unavailable"
 }
 
 final class MonitorStore: ObservableObject {
@@ -1033,7 +1037,11 @@ final class MonitorStore: ObservableObject {
             // 连续压力百分比,口径同面板压力曲线(活动监视器压力图)。
             return MenuBarMetricFormatter.fixedPercentage(allModules.first { $0.kind == .memory }?.pressureValue)
         case .batteryLevel:
-            return MenuBarMetricFormatter.fixedPercentage(moduleValue(.battery))
+            // IOPS 缺失帧显示 " --%"(与数值缺失的既有格式一致),不消费沿用值。
+            guard let battery = allModules.first(where: { $0.kind == .battery }), !battery.isPlaceholder else {
+                return MenuBarMetricFormatter.fixedPercentage(nil)
+            }
+            return MenuBarMetricFormatter.fixedPercentage(battery.value)
         case .networkDownload:
             return MenuBarMetricFormatter.throughput(metricValue("download", in: .network), direction: "↓")
         case .networkUpload:

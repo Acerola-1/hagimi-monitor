@@ -158,9 +158,12 @@ struct PowerSupplyDiagnosticsView: View {
         return s == "charging" || s == "ac-power" || s == "maintain"
     }
 
+    /// 缺失帧(IOPS 接口不可信):供电状态未知,不宣称"未连接",状态相关字段显示 "--"。
+    private var isUnavailable: Bool { module.isPlaceholder }
+
     private var adapterValue: String {
         guard connected else {
-            return String(localized: "panel.battery.diag.disconnected")
+            return isUnavailable ? "--" : String(localized: "panel.battery.diag.disconnected")
         }
         let watts = metric("adapter")
         return watts != "--" ? watts : "--"

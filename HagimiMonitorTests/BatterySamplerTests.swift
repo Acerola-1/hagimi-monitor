@@ -61,6 +61,8 @@ struct BatterySamplerTests {
         let sampler = BatterySampler()
         let module = sampler.sample(previous: nil)
         #expect(module.kind == .battery)
+        // IOPS 瞬断帧返回缺失态模块(无 power/power-in 指标),本机读数断言不适用。
+        guard !module.isPlaceholder else { return }
 
         let powerMetric = module.metrics.first(where: { $0.name == "power" })
         let powerInMetric = module.metrics.first(where: { $0.name == "power-in" })
