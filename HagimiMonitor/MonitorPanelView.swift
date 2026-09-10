@@ -237,7 +237,7 @@ struct MonitorPanelView: View {
                 }
             }
             // 顶部留白收紧至 8pt 与 header—主体间距 4pt 配合压缩首屏空白;
-            // 侧边与底边留白均与行间节奏(6pt)对齐，与卡片/按钮圆角(14pt)共同构成 20pt 同心外框圆角。
+            // 侧边与底边留白与行间节奏(6pt)对齐;外框圆角与卡片/按钮同为 14pt,取舍见 MonitorConstants.panelCornerRadius。
             .padding(.top, 8)
             .padding(.horizontal, 6)
             .padding(.bottom, 6)

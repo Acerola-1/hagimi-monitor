@@ -26,8 +26,9 @@ enum MonitorConstants {
     /// 顶层模块行头的统一高度，保证不同尾部控件不会改变卡片基线。
     static let panelRowHeaderHeight: CGFloat = 34
     static let rowCornerRadius = 14.0
-    /// 面板外框圆角:与行卡片/底部按钮(rowCornerRadius=14)及留白(6pt)同心,满足 R_outer = R_inner + padding。
-    static let panelCornerRadius = 20.0
+    /// 面板外框圆角:与行卡片/底部按钮同值,外轮廓弧度统一、观感更利落。
+    /// 留白 6pt 下转角间隙略宽于直边(约 8.5pt),为有意取舍,不遵循同心圆角 R_outer = R_inner + padding。
+    static let panelCornerRadius = 14.0
 
     // MARK: - Row Glass Tint Fade
     // 活力配色行 tint 的垂直衰减参数:行头 plateau 高度内保持满浓度承载模块辨识度,
