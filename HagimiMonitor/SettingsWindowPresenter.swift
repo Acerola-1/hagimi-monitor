@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import OSLog
 
@@ -16,6 +17,9 @@ enum SettingsWindowPresenter {
     /// 窗口强持有:关闭仅 orderOut,实例常驻,重开复用同一窗口与其中的 SwiftUI 状态。
     @MainActor
     private static var settingsWindow: NSWindow?
+    /// 主题订阅:窗口长驻,用户切换深浅色后设置窗口立即跟随。
+    @MainActor
+    private static var themeCancellable: AnyCancellable?
     @MainActor
     private static var pendingTab: SettingsTab?
 
@@ -144,6 +148,14 @@ enum SettingsWindowPresenter {
         // windowWillResize 裁定。
         window.minSize = NSSize(width: fixedWidth, height: 1)
         window.maxSize = NSSize(width: fixedWidth, height: .greatestFiniteMagnitude)
+
+        // 主题:窗口按偏好设置外观,并在偏好变化时立即跟随(状态栏图标不受此影响)。
+        window.appearance = store.settings.themePreference.appearance
+        themeCancellable = store.settings.$themePreference
+            .receive(on: DispatchQueue.main)
+            .sink { [weak window] preference in
+                window?.appearance = preference.appearance
+            }
 
         // 帧持久化:记住用户拉伸后的高度与位置,跨启动恢复。
         if setFrameAutosaveNameSafely(window, name: "SettingsWindow") {

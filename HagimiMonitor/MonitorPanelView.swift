@@ -16,6 +16,9 @@ struct MonitorPanelView: View {
     let store: MonitorStore
     @ObservedObject private var refreshGate: PanelRefreshGate
     @ObservedObject private var quickPanelPresentation: QuickPanelPresentation
+    /// 压力告警只在 episode 起止/读取时发布(不是每秒),这里直接观察,
+    /// 让统计入口的红点即时起灭。
+    @ObservedObject private var alerts = PressureAlertCenter.shared
     private let showsQuickPanelControls: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
@@ -528,6 +531,14 @@ struct MonitorPanelView: View {
                 tint: theme.secondaryText
             ) {
                 SettingsWindowPresenter.open(tab: .statistics)
+            }
+            .overlay(alignment: .topTrailing) {
+                if alerts.statisticsEntryUnread {
+                    Circle()
+                        .fill(theme.palette.severityTint(for: .critical))
+                        .frame(width: 5, height: 5)
+                        .allowsHitTesting(false)
+                }
             }
         }
     }

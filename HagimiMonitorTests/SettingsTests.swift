@@ -34,7 +34,12 @@ struct SettingsTests {
     }
 
     @Test func defaultThemePreference() {
-        let settings = MonitorSettings()
+        // 用隔离域读取默认值:宿主 App 的真实偏好(用户选过的主题)不该左右默认值断言。
+        let suite = "defaultThemePreference"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+
+        let settings = MonitorSettings(defaults: defaults)
         #expect(settings.themePreference == .system)
     }
 

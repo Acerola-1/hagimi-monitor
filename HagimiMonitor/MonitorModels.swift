@@ -1175,7 +1175,7 @@ final class MonitorStore: ObservableObject {
         let previousModules = allModules
         sampler.sampleAsync(kinds: kinds, previousModules: previousModules, on: samplingQueue) { [weak self] result in
             guard let self else { return }
-            self.applySamplingResult(result)
+            self.applySamplingResult(result, freshKinds: kinds)
         }
     }
 
@@ -1200,13 +1200,13 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
+    private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>, freshKinds: Set<MonitorKind>) {
         switch result {
         case .success(let snapshot):
             // 展开/收起动画窗口期内推迟应用,与 TOP 列表发布同规则
             // (见 deferUntilExpansionSettles)。
             deferUntilExpansionSettles { [weak self] in
-                self?.applySamplingSuccess(snapshot)
+                self?.applySamplingSuccess(snapshot, freshKinds: freshKinds)
             }
 
         case .failure(let error):
@@ -1225,7 +1225,7 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 应用一次成功采样的结果到发布属性。
-    private func applySamplingSuccess(_ snapshot: SystemMonitorSnapshot) {
+    private func applySamplingSuccess(_ snapshot: SystemMonitorSnapshot, freshKinds: Set<MonitorKind>) {
         // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
         // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
         if allModules != snapshot.modules {
@@ -1243,7 +1243,7 @@ final class MonitorStore: ObservableObject {
         }
         updateMenuBarTargetComputeLoad()
         if statisticsSamplingActive {
-            statisticsRecorder.record(modules: allModules, fans: fans, at: Date())
+            statisticsRecorder.record(modules: allModules, fans: fans, freshKinds: freshKinds, at: Date())
         }
     }
 

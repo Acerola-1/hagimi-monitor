@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import WebKit
 import UniformTypeIdentifiers
 
@@ -13,13 +14,43 @@ enum ReportWindowPresenter {
     private static var webView: WKWebView?
     private static var currentURL: URL?
     private static let toolbarDelegate = ReportToolbarDelegate()
+    /// 加载完成后要定位的板块;每次打开只定位一次,用户随后自行滚动不再干预。
+    private static var pendingAnchor: StatisticsReportAnchor?
+    private static let navigationDelegate = ReportNavigationDelegate()
+    /// 主题订阅:窗口长驻,用户切换深浅色后报表窗口立即跟随(与设置窗口同规则)。
+    private static var themeCancellable: AnyCancellable?
 
-    /// 打开或刷新硬件报表窗口。
-    static func open(url: URL) {
+    /// 打开或刷新硬件报表窗口;带 anchor 时加载完成后滚到对应板块。
+    static func open(url: URL, anchor: StatisticsReportAnchor? = nil) {
         currentURL = url
+        pendingAnchor = anchor
         let win = ensureWindow()
+        win.appearance = AppDelegate.shared?.store.settings.themePreference.appearance
         webView?.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         focus(win)
+    }
+
+    /// 页面加载完成后定位板块;板块被当前范围隐藏或标题对不上时停在页首。
+    static func scrollToPendingAnchor(in webView: WKWebView) {
+        guard let anchor = pendingAnchor else { return }
+        pendingAnchor = nil
+        webView.evaluateJavaScript(anchorScrollScript(title: anchor.sectionTitle), completionHandler: nil)
+    }
+
+    /// 按板块标题匹配,与模板粘性导航同一依据,不依赖具体元素 id。
+    private static func anchorScrollScript(title: String) -> String {
+        let literal = (try? JSONEncoder().encode(title))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
+        return """
+        (function () {
+          const title = \(literal);
+          const sections = Array.from(document.querySelectorAll('#content > section'));
+          const match = sections.find((sec) => ((sec.querySelector('h2') || {}).textContent || '').trim() === title);
+          if (!match || match.hidden) return false;
+          match.scrollIntoView({ block: 'start' });
+          return true;
+        })();
+        """
     }
 
     /// 聚焦窗口并激活应用。
@@ -111,6 +142,7 @@ enum ReportWindowPresenter {
 
         let view = WKWebView(frame: .zero, configuration: config)
         view.underPageBackgroundColor = .clear
+        view.navigationDelegate = navigationDelegate
         self.webView = view
 
         let win = NSWindow(
@@ -132,7 +164,24 @@ enum ReportWindowPresenter {
         win.toolbarStyle = .unified
 
         self.window = win
+
+        // 建窗即订阅:窗口常驻复用,不订阅的话改主题后只有重开才能跟上。
+        themeCancellable = AppDelegate.shared?.store.settings.$themePreference
+            .receive(on: DispatchQueue.main)
+            .sink { [weak win] preference in
+                win?.appearance = preference.appearance
+            }
+
         return win
+    }
+}
+
+/// 报表加载完成回调:应用打开时携带的板块锚点。
+final class ReportNavigationDelegate: NSObject, WKNavigationDelegate {
+    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        Task { @MainActor in
+            ReportWindowPresenter.scrollToPendingAnchor(in: webView)
+        }
     }
 }
 

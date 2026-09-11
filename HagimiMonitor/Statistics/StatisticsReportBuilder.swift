@@ -294,13 +294,27 @@ enum StatisticsReportError: LocalizedError {
     }
 }
 
+/// 报表内要定位的板块。板块标题与报表模板同源(模板的粘性导航也按标题组织),
+/// 报表改版只要标题还在,跳转就继续有效。
+enum StatisticsReportAnchor: Sendable {
+    case memory
+    case thermal
+
+    var sectionTitle: String {
+        switch self {
+        case .memory: String(localized: "stats.r.secMem")
+        case .thermal: String(localized: "stats.r.secThermal")
+        }
+    }
+}
+
 /// 报表打开流程:设置页按钮与 App 菜单共用。生成在后台执行,
 /// 完成后唤起默认浏览器打开本地文件。
 @MainActor
 enum StatisticsReportFlow {
     private static var isGenerating = false
 
-    static func open(recorder: StatisticsRecorder) {
+    static func open(recorder: StatisticsRecorder, anchor: StatisticsReportAnchor? = nil) {
         guard !isGenerating else { return }
         isGenerating = true
         let snapshotProvider: () -> (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow])? = {
@@ -321,7 +335,7 @@ enum StatisticsReportFlow {
             do {
                 let url = try StatisticsReportBuilder.write(snapshot: snapshot, meta: meta, process: process)
                 await MainActor.run {
-                    ReportWindowPresenter.open(url: url)
+                    ReportWindowPresenter.open(url: url, anchor: anchor)
                 }
             } catch {
                 AppLogger.settings.error("Statistics report generation failed: \(String(describing: error), privacy: .public)")

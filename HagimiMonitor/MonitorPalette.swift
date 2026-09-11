@@ -50,6 +50,10 @@ struct MonitorPalette {
         }
     }
 
+    /// 严重档红:SwiftUI 侧经 `severityTint` 取色,AppKit 绘制路径(菜单栏红点)
+    /// 数值同源,避免两套绘制各写一个红。
+    static let criticalTintHex: UInt32 = 0xD94848
+
     func severityTint(for severity: MonitorSeverity) -> Color {
         switch severity {
         case .calm:
@@ -57,7 +61,7 @@ struct MonitorPalette {
         case .warning:
             Color(hex: 0xB8872E)
         case .critical:
-            Color(hex: 0xD94848)
+            Color(hex: Self.criticalTintHex)
         }
     }
 

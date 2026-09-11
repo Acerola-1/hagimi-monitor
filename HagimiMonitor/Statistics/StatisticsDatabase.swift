@@ -74,6 +74,34 @@ struct StatisticsRow: Equatable {
     /// 帧数 n 只是应用批次计数,采样节奏/失败/推迟都会让它偏离真实时间。
     var coverS: Double?
 
+    /// 秒数口径(运行状态评估模型 v0.1):各维度有效观测秒数、原生档位秒数
+    /// 与工作强度高负载秒数。分母用 valid*S,不用帧数 n——采样节奏与缺失
+    /// 都不该改变「占比」的含义。全部按求和聚合,分钟→小时→日可直接相加。
+    var validCpuS: Double?
+    var validGpuS: Double?
+    var validMemS: Double?
+    var validThermalS: Double?
+    var cpuHighS: Double?
+    var gpuHighS: Double?
+    var memNormalS: Double?
+    var memWarnS: Double?
+    var memCritS: Double?
+    var thNominalS: Double?
+    var thFairS: Double?
+    var thSeriousS: Double?
+    var thCritS: Double?
+    /// 内存与热状态的交集(模型 §6 的 J):两边都在源契约内已知时才累计。
+    /// 评分两项负担共用 validMemThermalS 作分母;`*JS` 是交集上的档位秒数,
+    /// 存原始秒数而非应力积分,权重留给评分侧,便于后续校准演进。
+    var validMemThermalS: Double?
+    var memNormalJS: Double?
+    var memWarnJS: Double?
+    var memCritJS: Double?
+    var thNominalJS: Double?
+    var thFairJS: Double?
+    var thSeriousJS: Double?
+    var thCritJS: Double?
+
     /// (列名, 聚合方式, 字段读写)。顺序即表列序/JSON 列序。
     static let columns: [(name: String, aggregation: StatisticsAggregation)] = [
         ("cpu_avg", .weightedAverage),
@@ -118,6 +146,29 @@ struct StatisticsRow: Equatable {
         ("stress_gpu_avg", .weightedAverage),
         // 采样覆盖秒数(总量):旧库 ALTER 迁移补 NULL,读取侧回退帧数口径。
         ("cover_s", .total),
+        // 秒数口径列追加末尾:旧库经 ALTER 补 NULL,升级前历史没有档位时长,
+        // 读取侧按「数据不足」处理,不伪造回溯精度。
+        ("valid_cpu_s", .total),
+        ("valid_gpu_s", .total),
+        ("valid_mem_s", .total),
+        ("valid_thermal_s", .total),
+        ("cpu_high_s", .total),
+        ("gpu_high_s", .total),
+        ("mem_normal_s", .total),
+        ("mem_warn_s", .total),
+        ("mem_crit_s", .total),
+        ("th_nominal_s", .total),
+        ("th_fair_s", .total),
+        ("th_serious_s", .total),
+        ("th_crit_s", .total),
+        ("valid_mem_thermal_s", .total),
+        ("mem_normal_j_s", .total),
+        ("mem_warn_j_s", .total),
+        ("mem_crit_j_s", .total),
+        ("th_nominal_j_s", .total),
+        ("th_fair_j_s", .total),
+        ("th_serious_j_s", .total),
+        ("th_crit_j_s", .total),
     ]
 
     /// 按 columns 顺序输出数值(nil 列保持 nil),供 SQL 绑定与 JSON 编码复用。
@@ -134,6 +185,13 @@ struct StatisticsRow: Equatable {
             fanAvg, fanMax, uptimeAvg,
             stressMemAvg, stressThermalAvg, stressCpuAvg, stressGpuAvg,
             coverS,
+            validCpuS, validGpuS, validMemS, validThermalS,
+            cpuHighS, gpuHighS,
+            memNormalS, memWarnS, memCritS,
+            thNominalS, thFairS, thSeriousS, thCritS,
+            validMemThermalS,
+            memNormalJS, memWarnJS, memCritJS,
+            thNominalJS, thFairJS, thSeriousJS, thCritJS,
         ]
     }
 
@@ -156,29 +214,31 @@ struct StatisticsRow: Equatable {
         self.stressMemAvg = v[35]; self.stressThermalAvg = v[36]
         self.stressCpuAvg = v[37]; self.stressGpuAvg = v[38]
         self.coverS = v[39]
+        self.validCpuS = v[40]; self.validGpuS = v[41]; self.validMemS = v[42]; self.validThermalS = v[43]
+        self.cpuHighS = v[44]; self.gpuHighS = v[45]
+        self.memNormalS = v[46]; self.memWarnS = v[47]; self.memCritS = v[48]
+        self.thNominalS = v[49]; self.thFairS = v[50]; self.thSeriousS = v[51]; self.thCritS = v[52]
+        self.validMemThermalS = v[53]
+        self.memNormalJS = v[54]; self.memWarnJS = v[55]; self.memCritJS = v[56]
+        self.thNominalJS = v[57]; self.thFairJS = v[58]; self.thSeriousJS = v[59]; self.thCritJS = v[60]
     }
 
-    /// stress 列缺值时,用该行已有的指标列走 fallback 重算近似应力。
-    /// 无 stress 值的历史行离散档位不可得,只能用连续值近似。
-    func stressFallback(index: Int) -> Double? {
-        switch index {
-        case Self.index("stress_mem_avg"):
+    /// 旧口径 stress 列缺值时,用该行已有的指标列走 fallback 重算近似应力
+    /// (升级前历史:离散档位不可得,只能用连续值近似)。
+    func stressFallback(column name: String) -> Double? {
+        switch name {
+        case "stress_mem_avg":
             return memPressureAvg.map { StatisticsHealthScore.stressMem(percent: $0, level: nil) }
-        case Self.index("stress_thermal_avg"):
+        case "stress_thermal_avg":
             guard cpuThermalAvg != nil || cpuTempAvg != nil else { return nil }
             return StatisticsHealthScore.stressThermal(state: cpuThermalAvg, temp: cpuTempAvg)
-        case Self.index("stress_cpu_avg"):
+        case "stress_cpu_avg":
             return cpuAvg.map { StatisticsHealthScore.stressCPU($0) }
-        case Self.index("stress_gpu_avg"):
+        case "stress_gpu_avg":
             return gpuAvg.map { StatisticsHealthScore.stressGPU($0) }
         default:
             return nil
         }
-    }
-
-    /// 列名 → 列序号,列不存在时返回 -1。
-    private static func index(_ name: String) -> Int {
-        columns.firstIndex { $0.name == name } ?? -1
     }
 
     /// 把多行聚合成一个上层桶。均值按 n 加权,峰值取最大,总量求和;
@@ -199,7 +259,7 @@ struct StatisticsRow: Equatable {
                 for row in rows {
                     var value = row.values[index]
                     // stress 列 null 时按该行已有指标列走 fallback,避免分母缩小
-                    if value == nil, let fallback = row.stressFallback(index: index) {
+                    if value == nil, let fallback = row.stressFallback(column: column.name) {
                         value = fallback
                     }
                     guard let value, row.n > 0 else { continue }

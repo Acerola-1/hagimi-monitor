@@ -31,6 +31,16 @@ enum AppThemePreference: String, CaseIterable, Identifiable {
             .dark
         }
     }
+
+    /// 窗口外观:设置窗口与报表窗口按偏好设置 `NSWindow.appearance`。
+    /// 跟随系统用 nil(交给系统外观);状态栏图标不走这里,它必须跟随菜单栏实际明暗。
+    var appearance: NSAppearance? {
+        switch self {
+        case .system: nil
+        case .light: NSAppearance(named: .aqua)
+        case .dark: NSAppearance(named: .darkAqua)
+        }
+    }
 }
 
 enum MonitorColorSchemePreference: String, CaseIterable, Identifiable {
