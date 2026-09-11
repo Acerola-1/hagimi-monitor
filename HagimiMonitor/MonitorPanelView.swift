@@ -1300,7 +1300,9 @@ private struct CoreLoadRing: View {
     }
 }
 
-private struct MetricDetailGrid: View {
+/// 明细指标网格:供电页与健康页共用同一套逐格内衬排版(供电页在
+/// PowerDetailPages 中直接引用,故不设为 private)。
+struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
     let kind: MonitorKind
     let theme: MonitorPanelTheme
@@ -1310,7 +1312,6 @@ private struct MetricDetailGrid: View {
     /// 是否在顶部绘制贯穿分隔线。电源等已有专属分区头组件的场景可关闭。
     var showsSeparator: Bool = true
 
-    private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
 
@@ -2015,6 +2016,8 @@ private struct BatteryGlassRow: View, Equatable {
                             MetricDetailGrid(metrics: flowMetrics, kind: module.kind, theme: theme, showsSeparator: false)
                         }
                         if showPowerFlow && numericValue("power") != nil {
+                            // 与顶部同款小标题 + 贯穿分隔线：把监控参数与流向图明确分成两段
+                            PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
                             PowerFlowDiagram(
                                 module: module,
                                 theme: theme,
@@ -2027,11 +2030,17 @@ private struct BatteryGlassRow: View, Equatable {
                         if !healthMetrics.isEmpty {
                             MetricDetailGrid(metrics: healthMetrics, kind: module.kind, theme: theme, showsSeparator: false)
                         }
+                    case .ranking:
+                        // 逐进程能耗实测的前 5 名应用。视觉沿用 CPU/内存/GPU 共用的
+                        // TopProcessList，不自造样式；无数据时该页本身不会出现在分页里。
+                        PowerAppRankingList(
+                            shares: module.processEnergy?.shares ?? [],
+                            theme: theme
+                        )
                     case .supply:
                         PowerSupplyDiagnosticsView(
                             module: module,
-                            theme: theme,
-                            tint: tint
+                            theme: theme
                         )
                     }
                 }
@@ -2106,6 +2115,7 @@ private struct BatteryGlassRow: View, Equatable {
     /// 当前硬件与设置条件下可用的分页集合。
     /// - 拓扑（.flow）：开启 showPowerFlow 且有 power 数据，或存在分项功耗指标时可用；
     /// - 健康（.health）：仅带电池设备可用；
+    /// - 排名（.ranking）：需要逐进程能耗实测（仅直连版产得出），无数据时整页不出现；
     /// - 供电（.supply）：始终可用（未插电时优雅提示未连接）。
     private var availableTabs: [BatteryPageTab] {
         var tabs: [BatteryPageTab] = []
@@ -2115,6 +2125,9 @@ private struct BatteryGlassRow: View, Equatable {
         }
         if hasBattery {
             tabs.append(.health)
+        }
+        if module.processEnergy != nil {
+            tabs.append(.ranking)
         }
         tabs.append(.supply)
         return tabs
@@ -2614,6 +2627,35 @@ private struct MemoryProcessList: View {
                     name: $0.name,
                     icon: $0.icon,
                     valueText: byteCountString(Int64($0.memoryUsage), countStyle: .memory),
+                    apiText: nil,
+                    translated: false
+                )
+            },
+            theme: theme,
+            showRosettaBanner: false
+        )
+    }
+}
+
+// MARK: - 电源排名列表
+
+/// 电源排名页（拓扑 / 健康 / 排名 / 供电 的第三页）：逐进程能耗实测的前 5 名应用。
+/// 视觉沿用 CPU/内存/GPU 共用的 `TopProcessList`——分隔线、5 行、图标 + 名称 + 右对齐数值。
+/// 数值为该应用的实测平均功率（瓦），保留两位小数以免轻载应用被四舍五入成 0.0 W。
+/// 口径仍是同用户可读进程（系统进程读不到，不在榜单内）。
+/// 设置页预览也复用本视图，故不加 private。
+struct PowerAppRankingList: View {
+    let shares: [ProcessEnergyShare]
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        TopProcessList(
+            kind: .battery,
+            rows: shares.map {
+                TopProcessRowData(
+                    name: $0.name,
+                    icon: $0.icon,
+                    valueText: String(format: "%.2f W", $0.watts),
                     apiText: nil,
                     translated: false
                 )

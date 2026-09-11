@@ -12,10 +12,11 @@ struct SettingsTests {
 
         let settings = MonitorSettings(defaults: defaults)
 
-        for id in ["power", "display-power", "gpu-power"] {
+        for id in ["power", "display-power", "cpu-power", "gpu-power", "ane-power"] {
             #expect(settings.isMetricEnabled(id, for: .battery))
         }
         #expect(defaults.bool(forKey: "settings.batteryComponentPowerMetricsMigrated"))
+        #expect(defaults.bool(forKey: "settings.batteryEnergyRailsMigrated"))
     }
 
     @Test func batteryComponentPowerMigrationPreservesExplicitAllOffSelection() {
@@ -28,6 +29,8 @@ struct SettingsTests {
 
         #expect(!settings.isMetricEnabled("power", for: .battery))
         #expect(!settings.isMetricEnabled("display-power", for: .battery))
+        #expect(!settings.isMetricEnabled("cpu-power", for: .battery))
+        #expect(!settings.isMetricEnabled("ane-power", for: .battery))
     }
 
     @Test func defaultThemePreference() {

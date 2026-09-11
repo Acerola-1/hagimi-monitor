@@ -61,13 +61,8 @@ struct SettingsSidebar: View {
                     .tag(SettingsRoute.module(kind))
                 }
 
-                HStack(spacing: 6) {
-                    Label(String(localized: "settings.sidebar.display"), systemImage: "slider.horizontal.below.rectangle")
-                    #if DISPLAY_CONTROL
-                    BetaBadge()
-                    #endif
-                }
-                .tag(SettingsRoute.displayModule)
+                Label(String(localized: "settings.sidebar.display"), systemImage: "slider.horizontal.below.rectangle")
+                    .tag(SettingsRoute.displayModule)
             } header: {
                 Text(String(localized: "settings.sidebar.modules"))
             }
@@ -108,19 +103,6 @@ struct SettingsSidebar: View {
         .font(.callout)
     }
 }
-
-#if DISPLAY_CONTROL
-private struct BetaBadge: View {
-    var body: some View {
-        Text(String(localized: "settings.sidebar.beta-badge"))
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(.secondary.opacity(0.15), in: Capsule())
-    }
-}
-#endif
 
 #if DIRECT_DISTRIBUTION
 private struct UpdateAvailableBadge: View {

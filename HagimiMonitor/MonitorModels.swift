@@ -158,12 +158,19 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),
             ]
         case .gpu:
-            return [
+            var metrics = [
                 MetricSwitch(id: "gpu-memory", title: String(localized: "metric.gpu.gpu-memory"), isDefault: true),
                 MetricSwitch(id: "allocated", title: String(localized: "metric.gpu.allocated"), isDefault: true),
                 MetricSwitch(id: "render", title: String(localized: "metric.gpu.render"), isDefault: true),
                 MetricSwitch(id: "tiler", title: String(localized: "metric.gpu.tiler"), isDefault: true),
             ]
+            #if DIRECT_DISTRIBUTION
+            // 时钟态常驻;限频与功耗上限只在偏离常态时占格,故默认开也不扰布局。
+            metrics.append(MetricSwitch(id: "clock-state", title: String(localized: "metric.gpu.clock-state"), isDefault: true))
+            metrics.append(MetricSwitch(id: "throttle", title: String(localized: "metric.gpu.throttle"), isDefault: true))
+            metrics.append(MetricSwitch(id: "power-cap", title: String(localized: "metric.gpu.power-cap"), isDefault: true))
+            #endif
+            return metrics
         case .memory:
             var metrics = [
                 MetricSwitch(id: "used", title: String(localized: "metric.memory.used"), isDefault: true),
@@ -207,7 +214,19 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             metrics.append(contentsOf: [
                 MetricSwitch(id: "power", title: String(localized: "metric.battery.power"), isDefault: true),
                 MetricSwitch(id: "display-power", title: String(localized: "metric.battery.display-power"), isDefault: true),
-                MetricSwitch(id: "gpu-power", title: String(localized: "metric.battery.gpu-power"), isDefault: true)
+                MetricSwitch(
+                    id: "cpu-power",
+                    title: String(localized: "metric.battery.cpu-power"),
+                    isDefault: true,
+                    tip: String(localized: "settings.battery.cpu-power.tip")
+                ),
+                MetricSwitch(id: "gpu-power", title: String(localized: "metric.battery.gpu-power"), isDefault: true),
+                MetricSwitch(
+                    id: "ane-power",
+                    title: String(localized: "metric.battery.ane-power"),
+                    isDefault: true,
+                    tip: String(localized: "settings.battery.ane-power.tip")
+                )
             ])
             #endif
             metrics.append(contentsOf: [
@@ -237,6 +256,8 @@ struct MetricSwitch: Identifiable, Hashable {
     let id: String
     let title: String
     let isDefault: Bool
+    /// 设置页监测项目行的悬浮提示（如「部分机型尚不可用」）；nil 不渲染角标。
+    var tip: String? = nil
 }
 
 /// 面板来源类型,用于引用计数式可见性判定。
@@ -373,6 +394,9 @@ struct MonitorModule: Identifiable, Equatable {
     /// 逐核负载与 P/E 分组占用(仅 CPU 模块且拓扑可识别时有值)。
     /// 面板展开区据此渲染逐核环形图,独立于 metrics 字段。
     var cpuCoreDetail: CPUCoreDetail? = nil
+    /// 分应用能耗排名(仅 Direct 版且能读到同用户进程时有值)。
+    /// 电源展开区的「排名」分页按此渲染前 5 名列表,独立于 metrics 字段。
+    var processEnergy: ProcessEnergyBreakdown? = nil
     /// 采样失败/未产出时的占位模块标记:数值无真实数据源,
     /// 统计入库据此过滤,避免把兜底值当作真实读数写入历史。
     var isPlaceholder: Bool = false

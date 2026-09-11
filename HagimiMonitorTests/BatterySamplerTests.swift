@@ -162,7 +162,7 @@ struct BatterySamplerTests {
         ]
 
         let contract = sampler.parsePDContract(details)
-        #expect(contract == "20V / 3.25A (65W)")
+        #expect(contract == "20V/3.25A/65W")
     }
 
     @Test func pdContractFallbackToAdapterVoltageAndCurrent() {
@@ -175,6 +175,6 @@ struct BatterySamplerTests {
         ]
 
         let contract = sampler.parsePDContract(details)
-        #expect(contract == "5V / 1A (5W)")
+        #expect(contract == "5V/1A/5W")
     }
 }

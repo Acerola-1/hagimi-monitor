@@ -36,3 +36,19 @@ extern CFDictionaryRef _Nullable IOReportCreateSamples(
 extern CFStringRef _Nullable IOReportChannelGetChannelName(CFDictionaryRef _Nonnull channel);
 extern uint64_t IOReportChannelGetUnit(CFDictionaryRef _Nonnull channel);
 extern int64_t IOReportSimpleGetIntegerValue(CFDictionaryRef _Nonnull channel, int32_t index);
+
+// GPU 时钟态驻留走「状态通道」：给出的是区间内各状态各占多少 tick，而非计数器。
+// 状态值只在两份样本的 delta 上有区间含义，故一并声明 delta 接口。
+extern CFStringRef _Nullable IOReportChannelGetSubGroup(CFDictionaryRef _Nonnull channel);
+extern int32_t IOReportChannelGetFormat(CFDictionaryRef _Nonnull channel);
+extern CFDictionaryRef _Nullable IOReportCreateSamplesDelta(
+    CFDictionaryRef _Nonnull previous,
+    CFDictionaryRef _Nonnull current,
+    CFTypeRef _Nullable context
+);
+extern int32_t IOReportStateGetCount(CFDictionaryRef _Nonnull channel);
+extern CFStringRef _Nullable IOReportStateGetNameForIndex(
+    CFDictionaryRef _Nonnull channel,
+    int32_t index
+);
+extern int64_t IOReportStateGetResidency(CFDictionaryRef _Nonnull channel, int32_t index);

@@ -4024,6 +4024,22 @@
         }
       }
     },
+    "metric.gpu.clock-state": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clock"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "频率档"
+          }
+        }
+      }
+    },
     "metric.gpu.gpu-memory": {
       "localizations": {
         "en": {
@@ -4036,6 +4052,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "显存"
+          }
+        }
+      }
+    },
+    "metric.gpu.power-cap": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cap"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功耗上限"
           }
         }
       }
@@ -4069,6 +4101,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "温度"
+          }
+        }
+      }
+    },
+    "metric.gpu.throttle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Limit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "降频"
           }
         }
       }
@@ -5567,6 +5615,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "外观"
+          }
+        }
+      }
+    },
+    "settings.battery.ane-power.tip": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not yet available on some Macs running macOS 27"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该功能在 macOS 27 的部分机型上尚不可用"
+          }
+        }
+      }
+    },
+    "settings.battery.cpu-power.tip": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not yet available on some Macs running macOS 27"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该功能在 macOS 27 的部分机型上尚不可用"
           }
         }
       }
@@ -11274,6 +11354,22 @@
         }
       }
     },
+    "panel.power-flow.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flow Diagram"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流向图"
+          }
+        }
+      }
+    },
     "bluetooth.battery-unavailable": {
       "localizations": {
         "en": {
@@ -11434,150 +11530,6 @@
         }
       }
     },
-    "panel.battery.diag.adapter": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adapter"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "适配器"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.pd-contract": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PD Protocol"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PD 协议"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.input-bus": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adapter Input"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "适配器输入"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.policy": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supply Policy"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "供电策略"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.cell-balance": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cell Balance"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电芯平衡"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.capacity": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Capacity"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "容量规格"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.bus": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Terminal Bus"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "端子电气"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.no-devices": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No Connected Bluetooth Devices"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无已连接蓝牙设备"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.devices-hint": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mouse, Keyboard, Headphones & Trackpad"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "支持鼠标、键盘、耳机与触控板"
-          }
-        }
-      }
-    },
     "panel.battery.diag.disconnected": {
       "localizations": {
         "en": {
@@ -11590,54 +11542,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "未连接"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.on-battery": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "On Battery"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电池供电"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.charging": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Charging"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "充电中"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.input-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Input Power"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "输入功率"
           }
         }
       }
@@ -11670,6 +11574,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "为监控面板与界面表面使用液态玻璃效果（开发测试中）"
+          }
+        }
+      }
+    },
+    "metric.battery.ane-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANE"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANE"
+          }
+        }
+      }
+    },
+    "metric.battery.cpu-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
           }
         }
       }
@@ -11718,6 +11654,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "健康"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.ranking": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "User Process Ranking"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户进程排名"
           }
         }
       }
@@ -12022,6 +11974,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "对比度"
+          }
+        }
+      }
+    },
+    "metric.battery.adapter-port": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Port"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端口"
+          }
+        }
+      }
+    },
+    "metric.battery.pd-contract": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PD Contract"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PD 协议"
+          }
+        }
+      }
+    },
+    "metric.battery.pd-tiers": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supported Tiers"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可协商档位"
+          }
+        }
+      }
+    },
+    "metric.battery.adapter-transports": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared Lanes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同口通道"
+          }
+        }
+      }
+    },
+    "metric.battery.input-telemetry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adapter Input"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适配器输入"
           }
         }
       }

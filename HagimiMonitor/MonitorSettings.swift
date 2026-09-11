@@ -341,26 +341,31 @@ final class MonitorSettings: ObservableObject {
             }
             defaults.set(true, forKey: Keys.batteryCellBalanceMigrated)
         }
-        // 清理已废弃的 cpu-power：幂等清理，残留键随启动静默移除；电芯平衡的
-        // 存量并入由上方 batteryCellBalanceMigrated 单次迁移完成，不在此重复插入。
-        if var batterySet = loadedMetrics[.battery], !batterySet.isEmpty, batterySet.contains("cpu-power") {
-            batterySet.remove("cpu-power")
-            loadedMetrics[.battery] = batterySet
-            defaults.set(Array(batterySet), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
-        }
         #if DIRECT_DISTRIBUTION
         // Direct 版新增 IOReport 分项功耗时，只并入非空的电池存量；用户明确
         // 全关的集合保持为空，且不复活此前手动关闭的其他指标。
         if !defaults.bool(forKey: Keys.batteryComponentPowerMetricsMigrated) {
             if var merged = loadedMetrics[.battery], !merged.isEmpty {
                 merged.formUnion(["power", "display-power", "gpu-power"])
-                merged.remove("cpu-power")
                 if merged != loadedMetrics[.battery] {
                     loadedMetrics[.battery] = merged
                     defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
                 }
             }
             defaults.set(true, forKey: Keys.batteryComponentPowerMetricsMigrated)
+        }
+        // Direct 版重新引入 CPU 功耗并新增 ANE 功耗（Energy Model 的 CPU Energy 与
+        // ANE* 通道）：CPU 一项旧版曾按「读不到真值」废弃并做过一次静默清理，故用
+        // 独立标记再补一次。语义同上：只并入非空存量，已全关的集合保持为空。
+        if !defaults.bool(forKey: Keys.batteryEnergyRailsMigrated) {
+            if var merged = loadedMetrics[.battery], !merged.isEmpty {
+                merged.formUnion(["cpu-power", "ane-power"])
+                if merged != loadedMetrics[.battery] {
+                    loadedMetrics[.battery] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.batteryEnergyRailsMigrated)
         }
         if !defaults.bool(forKey: Keys.memoryBandwidthMigrated) {
             if var merged = loadedMetrics[.memory], !merged.isEmpty {
@@ -371,6 +376,19 @@ final class MonitorSettings: ObservableObject {
                 }
             }
             defaults.set(true, forKey: "settings.memoryBandwidthMigrated")
+        }
+        // Direct 版新增 GPU 时钟态/限频/功耗上限三项默认开指标,给非空的 GPU
+        // 存量补齐一次,语义同 memoryBandwidthMigrated:不动全关状态,也不复活
+        // 用户手动关过的其他指标。
+        if !defaults.bool(forKey: Keys.gpuClockStateMetricsMigrated) {
+            if var merged = loadedMetrics[.gpu], !merged.isEmpty {
+                merged.formUnion(["clock-state", "throttle", "power-cap"])
+                if merged != loadedMetrics[.gpu] {
+                    loadedMetrics[.gpu] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.gpu.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.gpuClockStateMetricsMigrated)
         }
         #endif
         enabledMetrics = loadedMetrics
@@ -541,9 +559,9 @@ final class MonitorSettings: ObservableObject {
             case .battery:
                 return [
                     "充电功率": "charging-power", "健康度": "health", "循环数": "cycle-count", "温度": "temperature", "适配器": "adapter", "功耗": "power",
-                    "整机功耗": "power", "屏幕功耗": "display-power", "GPU 功耗": "gpu-power",
+                    "整机功耗": "power", "屏幕功耗": "display-power", "CPU 功耗": "cpu-power", "GPU 功耗": "gpu-power", "ANE 功耗": "ane-power",
                     "Charging Power": "charging-power", "Health": "health", "Cycle Count": "cycle-count", "Temperature": "temperature", "Adapter": "adapter", "Power": "power",
-                    "System Power": "power", "Display Power": "display-power", "GPU Power": "gpu-power",
+                    "System Power": "power", "Display Power": "display-power", "CPU Power": "cpu-power", "GPU Power": "gpu-power", "ANE Power": "ane-power",
                 ]
             case .fan:
                 // 风扇行无子指标,展开区由 FanList 直接渲染;此处无需迁移映射。
@@ -943,8 +961,12 @@ private enum Keys {
     /// 一次性迁移标记:电池模块新增电芯平衡默认开指标时,给存量用户的
     /// 电池指标列表补上该项(语义同 batteryElectricalMetricsMigrated)。
     static let batteryCellBalanceMigrated = "settings.batteryCellBalanceMigrated"
-    /// Direct 版新增整机/屏幕/CPU/GPU 功耗明细时，给非空的电池存量补齐一次。
+    /// Direct 版新增整机/屏幕/GPU 功耗明细时，给非空的电池存量补齐一次。
     static let batteryComponentPowerMetricsMigrated = "settings.batteryComponentPowerMetricsMigrated"
+    /// Direct 版重新引入 CPU 功耗并新增 ANE 功耗明细时，给非空的电池存量补齐一次。
+    static let batteryEnergyRailsMigrated = "settings.batteryEnergyRailsMigrated"
+    /// Direct 版新增 GPU 时钟态/限频/功耗上限时，给非空的 GPU 存量补齐一次。
+    static let gpuClockStateMetricsMigrated = "settings.gpuClockStateMetricsMigrated"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"

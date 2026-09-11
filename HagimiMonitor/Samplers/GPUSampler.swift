@@ -26,6 +26,30 @@ final class GPUSampler: MonitorSampler {
             metrics.append(MonitorMetric(name: "tiler", value: percent(tilerUtilization), numericValue: tilerUtilization))
         }
 
+        #if DIRECT_DISTRIBUTION
+        // 频率档/限频/功耗上限来自 IOReport 私有 API，仅 Direct 版可读。
+        // 三格都常驻：限频与功耗上限虽然长期停在 0% / 100%，但它们是会变的实测值
+        // （Apple 的 PPM 上限会随电源策略移动），隐藏会让「正常」与「功能不可用」
+        // 无法区分。
+        if let clock = IOReportPowerSampler.shared.sample().gpuClock {
+            if let state = clock.dominantState, let residency = clock.dominantResidencyPercent {
+                metrics.append(MonitorMetric(
+                    name: "clock-state",
+                    value: "\(state) \(percent(residency))",
+                    numericValue: residency
+                ))
+            }
+            metrics.append(MonitorMetric(
+                name: "throttle",
+                value: percent(clock.throttlePercent),
+                numericValue: clock.throttlePercent
+            ))
+            if let cap = clock.powerCapPercent {
+                metrics.append(MonitorMetric(name: "power-cap", value: percent(cap), numericValue: cap))
+            }
+        }
+        #endif
+
         return MonitorModule(
             kind: .gpu,
             value: utilization,

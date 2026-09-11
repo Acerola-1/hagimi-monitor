@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8" />
+<title>HagimiMonitor · 扇面布局候选（含完整连线）</title>
+<style>
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A;
+    --tint-gpu: #5D8CF0;
+    --tint-mem: #42A39A;
+    --tint-sto: #9A865E;
+    --tint-net: #43A6A0;
+    --tint-bat: #65AF52;
+    --sev-warn: #B8872E;
+    --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh; color: var(--text-primary);
+    background:
+      radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+      radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%),
+      #191c24;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 30px 16px 60px; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .ctl { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .ctl .grp { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); padding: 5px 8px; border-radius: 9px; }
+  .ctl .grp > span { font-size: 11px; color: var(--text-caption); }
+  .ctl button { font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent;
+                border: 1px solid rgba(255,255,255,0.14); border-radius: 7px; padding: 3px 10px; cursor: pointer; }
+  .ctl button.active { background: rgba(101,175,82,0.22); border-color: rgba(101,175,82,0.55); color: #fff; }
+
+  .panel { width: 340px; background: var(--panel-bg); border-radius: 18px; padding: 10px;
+           backdrop-filter: blur(28px) saturate(1.2); -webkit-backdrop-filter: blur(28px) saturate(1.2);
+           box-shadow: 0 22px 60px rgba(0,0,0,0.45); display: flex; flex-direction: column; gap: 8px; }
+  .row-glass { background: var(--row-glass); border-radius: var(--row-radius); padding: 8px 10px; }
+  .row-head { display: flex; align-items: center; gap: 6px; height: 26px; }
+  .row-head .label { font-size: 13px; color: var(--text-secondary); }
+  .row-head .value { font-size: 14px; font-weight: 600; }
+  .row-head .spacer { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--text-secondary);
+          background: rgba(255,255,255,0.08); border-radius: 999px; padding: 2px 7px; }
+  .sep { height: 1px; background: var(--row-separator); opacity: 0.7; margin: 7px 0; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; }
+  .gcell { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+           background: var(--track-fill); border-radius: 7px; padding: 4px 8px; height: 24px; }
+  .gcell .gl { font-size: 12px; color: var(--text-caption); }
+  .gcell .gv { font-size: 12px; font-weight: 600; }
+  .sec-title { display: flex; align-items: center; gap: 8px; margin: 5px 0 4px; }
+  .sec-title .t { font-size: 10.5px; letter-spacing: 0.08em; color: var(--text-caption); white-space: nowrap; }
+  .sec-title .line { flex: 1; height: 1px; background: var(--row-separator); opacity: 0.7; }
+  .sec-title .hint { font-size: 10px; color: var(--text-caption); white-space: nowrap; }
+
+  .flow { position: relative; }
+  .flow svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  .fnode { border-radius: 9px; background: var(--track-fill); display: flex; flex-direction: column;
+           align-items: center; justify-content: center; gap: 1px; }
+  .fnode .fl { font-size: 10.5px; color: var(--text-caption); }
+  .fnode .fv { font-size: 12.5px; font-weight: 600; }
+  .fnode .fv .u { font-size: 9.5px; color: var(--text-caption); margin-left: 2px; }
+  .fnode.adapt { width: 90px; height: 46px; }
+  .fnode.sys { width: 90px; height: 46px; }
+  .fnode.sys.narrow { width: 78px; }
+  .chip { display: flex; align-items: center; gap: 4px; height: 30px; padding: 0 8px; border-radius: 8px;
+          background: var(--track-fill); font-size: 11.5px; }
+  .chip .sym { font-size: 9.5px; color: var(--text-caption); }
+
+  .app-rows { display: flex; flex-direction: column; }
+  .arow { display: flex; align-items: center; gap: 6px; }
+  .aicon { width: 15px; height: 15px; border-radius: 4px; background: rgba(255,255,255,0.10);
+           display: flex; align-items: center; justify-content: center; font-size: 9px; flex-shrink: 0; }
+  .aicon.agg { background: var(--track-fill); color: var(--text-caption); }
+  .aname { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text-secondary);
+           white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .apct { font-size: 11.5px; font-weight: 500; color: var(--text-secondary); flex-shrink: 0; width: 30px; text-align: right; }
+  .arow.agg .aname, .arow.agg .apct { color: var(--text-caption); }
+
+  .fbar { position: relative; height: 38px; border-radius: 8px; background: var(--track-fill); overflow: hidden; }
+  .fbar .fill { position: absolute; top: 2px; bottom: 2px; left: 2px; border-radius: 6px;
+                background: linear-gradient(90deg, rgba(101,175,82,0.55), rgba(101,175,82,0.9)); }
+  .fbar .label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between;
+                 padding: 0 10px; font-size: 11.5px; }
+  .flow-note { margin-top: 4px; font-size: 10px; color: var(--text-caption); }
+  .fan-hint { margin-top: 3px; font-size: 9.5px; color: var(--text-caption); text-align: right; }
+
+  .budget { max-width: 900px; font-size: 12px; line-height: 1.8; color: var(--text-caption); }
+  .budget b { color: var(--text-secondary); font-weight: 600; }
+  .budget code { font-family: "SF Mono", ui-monospace, monospace; font-size: 11.5px; }
+  .budget .ok { color: #7DC48B; }
+  .budget .bad { color: var(--sev-warn); }
+</style>
+</head>
+<body>
+
+<div class="ctl">
+  <div class="grp"><span>布局</span>
+    <button data-l="stack" class="active">① 纵向堆叠（推荐）</button>
+    <button data-l="chip">② 横向胶囊</button>
+    <button data-l="tree">③ 双列树（保留中心竖管）</button>
+  </div>
+  <div class="grp"><span>面板宽</span>
+    <button data-w="300">300</button>
+    <button data-w="340" class="active">340</button>
+    <button data-w="460">460</button>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="row-head">
+    <span class="label">电源:</span><span class="value mono">82%</span>
+    <span class="spacer"></span>
+    <span class="pill mono">⚡︎ 30.4W</span>
+    <span class="pill mono">◔ 24.6W</span>
+  </div>
+
+  <div class="row-glass">
+    <div class="sep" style="margin-top:0"></div>
+    <div class="grid">
+      <div class="gcell"><span class="gl">健康度</span><span class="gv mono">92%</span></div>
+      <div class="gcell"><span class="gl">循环次数</span><span class="gv mono">118</span></div>
+      <div class="gcell"><span class="gl">温度</span><span class="gv mono">31°C</span></div>
+      <div class="gcell"><span class="gl">转换损耗</span><span class="gv mono">3.2 W</span></div>
+    </div>
+
+    <div class="sec-title">
+      <span class="t">功率流</span><span class="line"></span>
+      <span class="hint">进程为实测 · 未含系统进程</span>
+    </div>
+
+    <div class="flow" id="flow">
+      <svg class="edges" id="edges"></svg>
+
+      <!-- ① 纵向堆叠：适配器在上、系统在下，扇面在系统右侧 -->
+      <div id="layout-stack">
+        <div style="display:flex; align-items:center; gap:34px;">
+          <div style="display:flex; flex-direction:column; gap:8px; flex-shrink:0;">
+            <div class="fnode adapt" id="stack-adapt">
+              <div class="fl">适配器 · 96W</div>
+              <div class="fv mono">58.2<span class="u">W</span></div>
+            </div>
+            <div class="fnode sys" id="stack-sys">
+              <div class="fl">系统负载</div>
+              <div class="fv mono">24.6<span class="u">W</span></div>
+            </div>
+          </div>
+          <div class="app-rows" id="stack-rows"></div>
+        </div>
+      </div>
+
+      <!-- ② 横向胶囊：胶囊 → 系统 → 扇面 -->
+      <div id="layout-chip" style="display:none">
+        <div style="display:flex; align-items:center; gap:6px;">
+          <div class="chip" id="chip-adapt">
+            <span class="sym">⚡︎</span><span class="mono">58.2<span class="u">W</span></span>
+          </div>
+          <div class="fnode sys narrow" id="chip-sys">
+            <div class="fl">系统负载</div>
+            <div class="fv mono">24.6<span class="u">W</span></div>
+          </div>
+          <div class="app-rows" id="chip-rows" style="flex:1; margin-left:22px;"></div>
+        </div>
+      </div>
+
+      <!-- ③ 双列树：节点行原样 + 中心竖管下探，应用行分列两侧 -->
+      <div id="layout-tree" style="display:none">
+        <div style="display:flex; align-items:center; justify-content:space-between;">
+          <div class="fnode adapt" id="tree-adapt">
+            <div class="fl">适配器 · 96W</div>
+            <div class="fv mono">58.2<span class="u">W</span></div>
+          </div>
+          <div class="fnode sys" id="tree-sys">
+            <div class="fl">系统负载</div>
+            <div class="fv mono">24.6<span class="u">W</span></div>
+          </div>
+        </div>
+        <div style="display:flex; gap:26px; margin-top:10px;">
+          <div class="app-rows" id="tree-left" style="flex:1;"></div>
+          <div class="app-rows" id="tree-right" style="flex:1;"></div>
+        </div>
+      </div>
+
+      <div class="fbar" id="fbar" style="margin-top:10px;">
+        <div class="fill" id="bar-fill"></div>
+        <div class="label"><span>82% 交流电源</span><span class="mono">已达上限</span></div>
+      </div>
+    </div>
+    <div class="flow-note">约 52 分钟充满</div>
+    <div class="fan-hint" id="fan-hint">进程为实测 · 未含系统进程</div>
+  </div>
+</div>
+
+<div class="budget" id="budget"></div>
+
+<script>
+/* ====== 本机实测示例（按宿主 App 合并，单位 W）====== */
+const BASE = [
+  { name: 'ZCode',        emoji: '🧩', w: 1.60, color: 'var(--tint-cpu)' },
+  { name: 'Qoder CN',     emoji: '🧠', w: 1.30, color: 'var(--tint-gpu)' },
+  { name: 'Safari',       emoji: '🧭', w: 0.40, color: 'var(--tint-net)' },
+  { name: 'contactsd',    emoji: '👥', w: 0.22, color: 'var(--tint-mem)' },
+  { name: 'coreaudiod',   emoji: '🔊', w: 0.17, color: 'var(--tint-sto)' },
+];
+const OTHER_W = 0.90;
+const OTHER_COLOR = 'rgba(255,255,255,0.34)';
+const ROW_H = 18, ROW_GAP = 5;
+
+let layout = 'stack', width = 340;
+
+function compute() {
+  const rows = BASE.map(b => ({ ...b })).sort((a, b) => b.w - a.w);
+  const total = rows.reduce((s, r) => s + r.w, 0) + OTHER_W;
+  const top = rows.slice(0, 5).map(r => ({ ...r, share: r.w / total }));
+  const otherShare = Math.max(0, 1 - top.reduce((s, r) => s + r.share, 0));
+  const pcts = top.map(r => Math.max(1, Math.round(r.share * 100)));
+  const otherPct = Math.max(0, 100 - pcts.reduce((s, v) => s + v, 0));
+  return { top, otherShare, pcts, otherPct };
+}
+
+function rowHTML(r, pct, isAgg) {
+  const icon = isAgg ? '<span class="aicon agg">⋯</span>' : `<span class="aicon">${r.emoji}</span>`;
+  return `<div class="arow" style="height:${ROW_H}px">
+    ${icon}<span class="aname">${isAgg ? '其他' : r.name}</span>
+    <span class="apct mono">${pct}%</span></div>`;
+}
+
+function renderRows(targetId, d, indices) {
+  document.getElementById(targetId).innerHTML = indices.map(i => {
+    if (i < 5) return rowHTML(d.top[i], d.pcts[i], false);
+    return rowHTML({}, d.otherPct, true);
+  }).join('');
+  document.getElementById(targetId).style.gap = `${ROW_GAP}px`;
+}
+
+/** 扇面的 6 个分支（前 5 名 + 其他）：占比与配色同源，避免两处各写一份。 */
+function branchSpecs(d) {
+  return [...d.top.map((r, i) => ({ share: r.share, color: r.color })),
+          { share: d.otherShare, color: OTHER_COLOR }];
+}
+
+/* ====== 连线绘制：全部按容器真实像素解算 ====== */
+function draw() {
+  const flow = document.getElementById('flow');
+  const svg = document.getElementById('edges');
+  const box = flow.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${flow.clientWidth} ${flow.clientHeight}`);
+  const rel = el => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left - box.left, top: r.top - box.top, right: r.right - box.left,
+             bottom: r.bottom - box.top, cx: r.left - box.left + r.width / 2, cy: r.top - box.top + r.height / 2,
+             w: r.width, h: r.height };
+  };
+  const d = compute();
+  const bar = rel(document.getElementById('fbar'));
+  const socketX = bar.left + bar.w / 2;
+  let s = '';
+  const trackStroke = 'rgba(93,140,240,0.85)';
+
+  if (layout === 'stack') {
+    const adapt = rel(document.getElementById('stack-adapt'));
+    const sys = rel(document.getElementById('stack-sys'));
+    // 适配器 → 系统：纵向导管（原设计横管的等价物）
+    s += `<path d="M${adapt.cx} ${adapt.bottom} V${sys.top}" stroke="${trackStroke}" stroke-width="2" fill="none"/>`;
+    s += `<circle cx="${adapt.cx}" cy="${(adapt.bottom + sys.top) / 2}" r="4.5" fill="#4F8FF7"/>`;
+    // 系统 → 电池条：纵向导管（保留原「落入电池条」语义，随节点列左移）
+    s += `<path d="M${sys.cx} ${sys.bottom} V${bar.top}" stroke="rgba(255,255,255,0.35)" stroke-width="1.6" fill="none"/>`;
+    // 扇面：系统右缘中点 → 6 行中心
+    s += fanFrom(rel(document.getElementById('stack-sys')), 'stack-rows', d);
+  }
+
+  if (layout === 'chip') {
+    const chip = rel(document.getElementById('chip-adapt'));
+    const sys = rel(document.getElementById('chip-sys'));
+    s += `<path d="M${chip.right} ${chip.cy} H${sys.left}" stroke="${trackStroke}" stroke-width="2" fill="none"/>`;
+    s += `<circle cx="${(chip.right + sys.left) / 2}" cy="${chip.cy}" r="4.5" fill="#4F8FF7"/>`;
+    s += `<path d="M${sys.cx} ${sys.bottom} V${bar.top}" stroke="rgba(255,255,255,0.35)" stroke-width="1.6" fill="none"/>`;
+    s += fanFrom(sys, 'chip-rows', d);
+  }
+
+  if (layout === 'tree') {
+    const adapt = rel(document.getElementById('tree-adapt'));
+    const sys = rel(document.getElementById('tree-sys'));
+    const junctionX = bar.left + bar.w / 2;
+    const junctionY = adapt.cy;
+    // 原设计横管：适配器 → 汇流点 → 系统
+    s += `<path d="M${adapt.right} ${junctionY} H${sys.left}" stroke="${trackStroke}" stroke-width="2" fill="none"/>`;
+    s += `<circle cx="${junctionX}" cy="${junctionY}" r="4.5" fill="#4F8FF7"/>`;
+    // 原设计中心竖管：汇流点 → 电池条
+    s += `<path d="M${junctionX} ${adapt.bottom} V${bar.top}" stroke="rgba(255,255,255,0.35)" stroke-width="1.6" fill="none"/>`;
+    // 扇面：汇流点向左右两列轻扇（共 6 行，含「其他」）
+    const leftRows = [...document.querySelectorAll('#tree-left .arow')].map(rel);
+    const rightRows = [...document.querySelectorAll('#tree-right .arow')].map(rel);
+    const specs = branchSpecs(d);
+    const max = Math.max(...specs.map(x => x.share), 0.0001);
+    const draws = [...leftRows.map((r, i) => ({ r, spec: specs[i], side: -1 })),
+                   ...rightRows.map((r, i) => ({ r, spec: specs[i + 3], side: 1 }))];
+    draws.forEach(({ r, spec, side }) => {
+      if (!spec) return;
+      const endX = side < 0 ? r.right : r.left;
+      const startY = adapt.bottom;
+      const w = (1 + (spec.share / max) * 2.2).toFixed(2);
+      s += `<path d="M${junctionX} ${startY} C${junctionX} ${startY + 14}, ${endX} ${r.cy - 14}, ${endX} ${r.cy}"
+              stroke="${spec.color}" stroke-width="${w}" fill="none" opacity="0.92"/>`;
+      s += `<circle cx="${endX}" cy="${r.cy}" r="3.2" fill="${spec.color}"/>`;
+    });
+  }
+
+  svg.innerHTML = s;
+}
+
+/* 扇面：系统节点右缘中点 → 6 行中心（前 5 名 + 其他）。
+   注意：JS 字符串按值传递，必须把拼好的片段返回给调用方拼接。 */
+function fanFrom(sys, rowsId, d) {
+  let s = '';
+  const flow = document.getElementById('flow').getBoundingClientRect();
+  const rows = [...document.querySelectorAll(`#${rowsId} .arow`)].map(el => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left - flow.left, cy: r.top - flow.top + r.height / 2 };
+  });
+  const specs = branchSpecs(d);
+  const max = Math.max(...specs.map(x => x.share), 0.0001);
+  rows.forEach((row, i) => {
+    if (!specs[i]) return;
+    const startX = sys.right, startY = sys.cy;
+    const endX = row.left - 6;
+    const w = (1 + (specs[i].share / max) * 2.2).toFixed(2);
+    s += `<path d="M${startX} ${startY} C${startX + (endX - startX) * 0.55} ${startY}, ${startX + (endX - startX) * 0.45} ${row.cy}, ${endX} ${row.cy}"
+            stroke="${specs[i].color}" stroke-width="${w}" fill="none" opacity="0.92"/>`;
+    s += `<circle cx="${endX}" cy="${row.cy}" r="3.2" fill="${specs[i].color}"/>`;
+  });
+  return s;
+}
+
+/* ====== 行数据 & 预算文案 ====== */
+function renderAll() {
+  document.getElementById('panel').style.width = width + 'px';
+  document.getElementById('bar-fill').style.width = 'calc(82% - 4px)';
+  const d = compute();
+
+  document.getElementById('layout-stack').style.display = layout === 'stack' ? 'block' : 'none';
+  document.getElementById('layout-chip').style.display = layout === 'chip' ? 'block' : 'none';
+  document.getElementById('layout-tree').style.display = layout === 'tree' ? 'block' : 'none';
+
+  if (layout === 'stack') renderRows('stack-rows', d, [0, 1, 2, 3, 4, 5]);
+  if (layout === 'chip') renderRows('chip-rows', d, [0, 1, 2, 3, 4, 5]);
+  if (layout === 'tree') {
+    renderRows('tree-left', d, [0, 1, 2]);
+    renderRows('tree-right', d, [3, 4, 5]);
+  }
+
+  const content = width - 20 - 20;           // 面板内边距 + 卡片内边距
+  const rows = [];
+  if (layout === 'stack') rows.push(content - 90 - 34);
+  if (layout === 'chip') rows.push(content - 62 - 6 - 78 - 6 - 22);
+  if (layout === 'tree') rows.push((content - 26) / 2 - 26);
+  const rowWidth = Math.round(rows[0]);
+  const nameWidth = Math.round(rowWidth - 15 - 12 - 30);
+  const fit = nameWidth >= 80 ? '<span class="ok">名称完整</span>' : (nameWidth >= 60 ? '<span class="ok">常见名称可容</span>' : '<span class="bad">长名会截断</span>');
+
+  document.getElementById('fan-hint').style.display = 'block';
+  document.getElementById('budget').innerHTML = `
+    <p><b>当前布局</b>：${layout === 'stack' ? '① 纵向堆叠' : layout === 'chip' ? '② 横向胶囊' : '③ 双列树'} · 面板宽 ${width}pt（内容宽 ${content}pt）</p>
+    <p><b>应用行可用宽度</b> ≈ <code>${rowWidth}pt</code> → 名称列 ≈ <code>${nameWidth}pt</code>：${fit}</p>
+    <p><b>连线保留情况</b>：${layout === 'stack'
+      ? '适配器 → 系统（纵向导管，原横管的等价物）、系统 → 电池条（纵向落管，随节点列左移，原设计在正中）、扇面 6 条曲线。'
+      : layout === 'chip'
+      ? '胶囊 → 系统（横向导管，原样）、系统 → 电池条（纵向落管，位于节点下方）、扇面 6 条曲线。'
+      : '原设计三条线全部保留：适配器 → 汇流点 → 系统（横管）、汇流点 → 电池条（中心竖管）、并从汇流点向左右两列轻扇。'}</p>
+    <p><b>代价</b>：① 适配器从「左」移到「上」（流向变 L 形），高度 +约 130pt；② 适配器压成胶囊、系统节点收窄到 78pt（原节点文案进悬浮提示），两条都动了原节点形态；③ 原图保持不动，代价是名称列只有 ${nameWidth}pt 且曲线很短（视觉上像短枝而非长扇）。</p>
+  `;
+}
+
+document.querySelectorAll('.ctl button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (btn.dataset.l) layout = btn.dataset.l;
+    if (btn.dataset.w) width = Number(btn.dataset.w);
+    renderAll();
+  });
+});
+
+window.addEventListener('resize', renderAll);
+renderAll();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

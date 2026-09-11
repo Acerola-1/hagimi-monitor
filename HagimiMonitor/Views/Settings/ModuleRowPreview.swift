@@ -12,7 +12,7 @@ struct ModuleRowPreview: View {
     /// 功率流开关(仅电池模块消费,与面板 batteryShowPowerFlow 门控同源)。
     let showPowerFlow: Bool
     let palette: MonitorPalette
-    /// 电池模块分页选择(拓扑/健康/供电):由设置页持有,驱动预览分页与下方指标选项联动。
+    /// 电池模块分页选择(拓扑/健康/排名/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
 
     private var theme: MonitorPanelTheme {
@@ -245,7 +245,7 @@ struct ModuleRowPreview: View {
             PowerSectionHeader(title: batteryTab.title, theme: theme) {
                 PanelCapsulePicker(
                     selection: $batteryTab,
-                    items: BatteryPageTab.allCases,
+                    items: BatteryPageTab.previewCases,
                     icon: { $0.icon },
                     tooltip: { $0.title },
                     tint: tint,
@@ -270,11 +270,15 @@ struct ModuleRowPreview: View {
                 if !healthMetrics.isEmpty {
                     previewGrid(healthMetrics)
                 }
+            case .ranking:
+                PowerAppRankingList(
+                    shares: MetricSampleCatalog.appEnergyRankingShares,
+                    theme: theme
+                )
             case .supply:
                 PowerSupplyDiagnosticsView(
                     module: MetricSampleCatalog.powerFlowModule,
-                    theme: theme,
-                    tint: tint
+                    theme: theme
                 )
             }
         }

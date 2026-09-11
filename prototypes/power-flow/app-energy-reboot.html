@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8" />
+<title>HagimiMonitor · 适配器双出口 · 扇面回归版</title>
+<style>
+  :root {
+    --canvas: #0c0e12;
+    --panel-bg: rgba(22, 25, 32, 0.90);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --track-fill-subtle: rgba(255, 255, 255, 0.045);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.55);
+    --bus: #2F9E64;
+    --bus-glow: rgba(47, 158, 100, 0.30);
+    --dash: #ffffff;
+    --halo: #10131a;
+    --c1: #D27A4A;   /* 沿用现有映射：cpu / gpu / network / memory / storage */
+    --c2: #5D8CF0;
+    --c3: #43A6A0;
+    --c4: #42A39A;
+    --c5: #9A865E;
+    --agg: rgba(255, 255, 255, 0.55);
+  }
+  html.light {
+    --canvas: #e8ecf2;
+    --panel-bg: rgba(248, 250, 252, 0.94);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.26);
+    --track-fill: rgba(60, 72, 90, 0.09);
+    --track-fill-subtle: rgba(60, 72, 90, 0.05);
+    --text-primary: #171D2A;
+    --text-secondary: #465164;
+    --text-caption: #4E5868;
+    --bus: #248a54;
+    --bus-glow: rgba(36, 138, 84, 0.22);
+    --dash: #ffffff;
+    --halo: #ffffff;
+    --agg: rgba(60, 72, 90, 0.55);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    background: var(--canvas);
+    color: var(--text-primary);
+    padding: 28px 16px 90px;
+    display: flex; flex-direction: column; align-items: center; gap: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+
+  .hero { text-align: center; max-width: 940px; }
+  .hero .tag {
+    display: inline-block; font-size: 11px; font-weight: 600; letter-spacing: 1.4px;
+    text-transform: uppercase; color: var(--bus); background: var(--bus-glow);
+    padding: 3px 10px; border-radius: 999px; margin-bottom: 10px;
+  }
+  .hero h1 { font-size: 23px; font-weight: 700; letter-spacing: -0.4px; margin-bottom: 7px; line-height: 1.35; }
+  .hero p { font-size: 13.5px; color: var(--text-secondary); line-height: 1.65; }
+
+  .toolbar {
+    display: flex; gap: 12px; flex-wrap: wrap; justify-content: center;
+    background: var(--panel-bg); border: 1px solid var(--row-separator);
+    padding: 7px 14px; border-radius: 12px; box-shadow: 0 6px 22px rgba(0,0,0,0.22);
+  }
+  .grp { display: flex; align-items: center; gap: 5px; }
+  .grp > span { font-size: 11px; color: var(--text-caption); margin-right: 3px; }
+  button {
+    font: inherit; font-size: 12px; color: var(--text-secondary);
+    background: transparent; border: 1px solid transparent;
+    padding: 4px 11px; border-radius: 8px; cursor: pointer; transition: all .14s;
+  }
+  button:hover { background: var(--track-fill); color: var(--text-primary); }
+  button.active {
+    background: var(--track-fill); border-color: var(--row-separator);
+    color: var(--text-primary); font-weight: 600;
+  }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 486px), 1fr));
+    gap: 26px; max-width: 1560px; width: 100%; justify-items: center; align-items: start;
+  }
+  .wrap { display: flex; flex-direction: column; gap: 9px; align-items: center; width: 100%; }
+  .wrap > .cap { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; flex-wrap: wrap; justify-content: center; }
+  .badge { font-size: 10.5px; font-weight: 600; padding: 2px 8px; border-radius: 6px; white-space: nowrap; }
+  .badge.bad { background: rgba(217,72,72,.18); color: #ff7a7a; border: 1px solid rgba(217,72,72,.38); }
+  .badge.good { background: rgba(47,158,100,.18); color: #4ade80; border: 1px solid rgba(47,158,100,.38); }
+  .badge.blue { background: rgba(93,140,240,.18); color: #7db0ff; border: 1px solid rgba(93,140,240,.38); }
+  .sub { font-size: 11.5px; color: var(--text-caption); text-align: center; line-height: 1.55; max-width: 430px; }
+
+  .panel {
+    background: var(--panel-bg); border: 1px solid var(--row-separator);
+    border-radius: 14px; padding: 6px; box-shadow: 0 16px 40px rgba(0,0,0,0.30);
+  }
+  .row { background: var(--row-glass); border-radius: 14px; padding: 8px 10px; }
+  .row-head { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--text-caption); }
+  .row-head .tab { color: var(--text-secondary); font-weight: 600; font-size: 11.5px; }
+  .row-head .right { margin-left: auto; }
+  .sep { height: 1px; background: var(--row-separator); margin: 7px 0; opacity: .8; }
+
+  .flow { position: relative; border-radius: 8px; }
+  svg.tracks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1; }
+
+  @keyframes flowDashDown { from { stroke-dashoffset: 0; } to { stroke-dashoffset: -20; } }
+  @keyframes flowDashUp   { from { stroke-dashoffset: 0; } to { stroke-dashoffset: 20; } }
+  .animated-flow { stroke-dasharray: 8 12; animation: flowDashDown 1.8s linear infinite; }
+  .animated-flow.flow-up { animation-name: flowDashUp; }
+  body.no-anim .animated-flow { animation: none; opacity: 0.55; }
+
+  .fnode {
+    position: absolute; top: 0; height: 46px; width: 90px; border-radius: 9px;
+    background: var(--track-fill); display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 1px; z-index: 2;
+  }
+  .fnode.adapter { left: 0; }
+  .fnode.system { }
+  .fnode .lbl { font-size: 10px; color: var(--text-caption); line-height: 1; }
+  .fnode .val { font-size: 13px; font-weight: 600; line-height: 1.25; }
+  .fnode.adapter.off { opacity: .4; }
+
+  .fbar {
+    position: absolute; left: 0; right: 0; height: 38px; border-radius: 10px;
+    background: var(--track-fill); overflow: hidden; z-index: 2;
+  }
+  .fbar .fill {
+    position: absolute; left: 2px; top: 2px; bottom: 2px; border-radius: 8px;
+    background: linear-gradient(90deg, color-mix(in srgb, var(--bus) 40%, transparent), color-mix(in srgb, var(--bus) 62%, transparent));
+  }
+  .fbar .txt {
+    position: absolute; inset: 0; display: flex; align-items: center; gap: 6px;
+    padding: 0 11px; font-size: 11.5px; font-weight: 600;
+  }
+  .fbar .txt .sub2 { font-size: 10px; font-weight: 400; color: var(--text-caption); }
+  .fbar .txt .right { margin-left: auto; font-size: 10px; font-weight: 400; color: var(--text-caption); }
+  .socket {
+    position: absolute; width: 16px; height: 4px; border-radius: 1.5px;
+    background: var(--track-fill); border: 1px solid var(--row-separator);
+    transform: translateX(-50%); z-index: 3;
+  }
+  .port {
+    position: absolute; width: 14px; height: 3.5px; border-radius: 1.5px;
+    background: var(--track-fill); border: 1px solid var(--row-separator);
+    transform: translate(-50%, -50%); z-index: 5;
+  }
+  .port::after {
+    content: ''; position: absolute; left: 50%; top: 50%; width: 6px; height: 1.5px;
+    border-radius: 1px; background: var(--bus); opacity: .7; transform: translate(-50%, -50%);
+  }
+
+  .rail { position: absolute; z-index: 3; }
+  .chip {
+    position: absolute; top: 0; height: 32px; border-radius: 7px;
+    background: var(--track-fill); overflow: hidden;
+  }
+  .chip .fill { position: absolute; left: 2px; top: 2px; bottom: 2px; border-radius: 5.5px; opacity: .42; }
+  .chip .body {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+  }
+  .chip .ico { font-size: 14px; line-height: 1; }
+  .chip .pct { font-size: 9px; font-weight: 600; color: var(--text-secondary); line-height: 1.2; }
+  .chip.agg .pct { color: var(--text-caption); }
+
+  .ribbon {
+    position: absolute; border-radius: 8px;
+    background: var(--track-fill-subtle); overflow: hidden; z-index: 3;
+    display: flex; align-items: center; padding: 2px; gap: 1px;
+  }
+  .seg {
+    height: 22px; border-radius: 5px; display: flex; align-items: center;
+    justify-content: center; gap: 3px; overflow: hidden; min-width: 0;
+  }
+  .seg .ico { font-size: 14px; line-height: 1; }
+  .seg .pct { font-size: 9.5px; font-weight: 700; color: rgba(255,255,255,.96); }
+  html.light .seg .pct { color: rgba(0,0,0,.72); }
+
+  .anno { position: absolute; inset: 0; z-index: 6; pointer-events: none; }
+  .anno .box { position: absolute; border: 1px dashed rgba(217,72,72,.5); border-radius: 4px; }
+  .anno .line { position: absolute; border-left: 1px dashed rgba(217,72,72,.7); }
+  .anno .pin {
+    position: absolute; width: 15px; height: 15px; border-radius: 999px;
+    background: rgba(217,72,72,.92); color: #fff; font-size: 9.5px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    transform: translate(-50%, -50%); box-shadow: 0 1px 4px rgba(0,0,0,.35);
+  }
+  .legend { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--text-secondary); line-height: 1.5; }
+  .legend b { display: inline-flex; align-items: center; justify-content: center;
+              width: 14px; height: 14px; border-radius: 999px; background: rgba(217,72,72,.85);
+              color: #fff; font-size: 9px; font-weight: 700; margin-right: 5px; flex: none; }
+  .legend i { font-style: normal; display: flex; align-items: flex-start; }
+
+  .cell-cur {
+    position: absolute; width: 30px; height: 27px; border-radius: 6px; background: var(--track-fill);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 2;
+  }
+  .cell-cur .ico { font-size: 13px; line-height: 1.05; }
+  .cell-cur .pct { font-size: 9.5px; font-weight: 500; color: var(--text-secondary); line-height: 1.15; }
+
+  .notes {
+    max-width: 1120px; width: 100%; background: var(--panel-bg);
+    border: 1px solid var(--row-separator); border-radius: 14px; padding: 22px 26px;
+    font-size: 13px; line-height: 1.75; color: var(--text-secondary);
+  }
+  .notes h2 { font-size: 15px; color: var(--text-primary); margin-bottom: 10px; }
+  .notes h3 { font-size: 13.5px; color: var(--text-primary); margin: 18px 0 7px; }
+  .notes ul { padding-left: 19px; }
+  .notes li { margin-bottom: 5px; }
+  .notes strong { color: var(--text-primary); }
+  .notes code {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace; font-size: 11.5px;
+    background: var(--track-fill); padding: 1px 5px; border-radius: 4px; color: var(--text-primary);
+  }
+  .notes .callout {
+    border-left: 2px solid rgba(184,135,46,.7); background: rgba(184,135,46,.08);
+    padding: 9px 12px; border-radius: 0 8px 8px 0; margin: 10px 0;
+  }
+  table { border-collapse: collapse; width: 100%; margin-top: 8px; font-size: 12.5px; }
+  th, td { border-bottom: 1px solid var(--row-separator); padding: 7px 9px; text-align: left; vertical-align: top; }
+  th { color: var(--text-caption); font-weight: 600; font-size: 11.5px; }
+  td.num { font-family: "SF Mono", ui-monospace, Menlo, monospace; white-space: nowrap; }
+  .killed { color: var(--text-caption); }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="tag">适配器双出口 · 扇面回归</div>
+  <h1>落管走适配器正下方，系统节点对齐应用带中点，5 根 S 弯对称扇开</h1>
+  <p>干线直通、电池支路独立；节点中点是扇心，五根扇枝长度对称且比现状更短。呼吸点已去掉，格子越界 bug 已修。</p>
+</div>
+
+<div class="toolbar">
+  <div class="grp"><span>面板宽</span>
+    <button data-w="300" onclick="setW(300)">300</button>
+    <button data-w="340" class="active" onclick="setW(340)">340</button>
+    <button data-w="460" onclick="setW(460)">460</button>
+  </div>
+  <div class="grp"><span>外观</span>
+    <button class="active" onclick="setTheme('dark')">深色</button>
+    <button onclick="setTheme('light')">浅色</button>
+  </div>
+  <div class="grp"><span>电池</span>
+    <button class="active" onclick="setBattery('charging')">充电中</button>
+    <button onclick="setBattery('discharging')">放电中</button>
+  </div>
+  <div class="grp"><span>系统节点</span>
+    <button class="active" onclick="setNode('center')">对齐应用带中点</button>
+    <button onclick="setNode('edge')">贴右</button>
+  </div>
+  <div class="grp"><span>流光</span>
+    <button class="active" id="animBtn" onclick="toggleAnim()">开</button>
+  </div>
+  <div class="grp"><span>数据</span>
+    <button class="active" onclick="setData('skew')">偏斜 46/45/3/1/5</button>
+    <button onclick="setData('balanced')">均衡 38/27/18/11/6</button>
+  </div>
+</div>
+
+<div class="grid">
+
+  <!-- ==================== 现状 ==================== -->
+  <div class="wrap">
+    <div class="cap">现状 · 系统节点下的 1×5 扇面
+      <span class="badge bad" id="badge-cur">高 141pt</span>
+    </div>
+    <div class="panel" id="panel-cur">
+      <div class="row">
+        <div class="row-head"><span class="tab">拓扑 · 实时流向</span><span class="right">交流供电</span></div>
+        <div class="sep"></div>
+        <div class="flow" id="flow-cur"></div>
+      </div>
+    </div>
+    <div class="legend" id="legend-cur"></div>
+  </div>
+
+  <!-- ==================== C · 等分轨 ==================== -->
+  <div class="wrap">
+    <div class="cap">C · 双出口 + 右侧等分轨
+      <span class="badge good" id="badge-C">—</span>
+    </div>
+    <div class="panel" id="panel-C">
+      <div class="row">
+        <div class="row-head"><span class="tab">拓扑 · 实时流向</span><span class="right">交流供电</span></div>
+        <div class="sep"></div>
+        <div class="flow" id="flow-C"></div>
+      </div>
+    </div>
+    <div class="sub">5 个等宽格子铺在适配器右缘 → 面板右缘。<b>扇枝不再从系统节点连出</b>：应用带上方 16pt 有自己的短母轨，五根 S 弯从母轨扇入各格，机器区与应用区之间留 8pt 空隙。</div>
+  </div>
+
+  <!-- ==================== D · 构成条 ==================== -->
+  <div class="wrap">
+    <div class="cap">D · 双出口 + 右侧构成条
+      <span class="badge blue" id="badge-D">—</span>
+    </div>
+    <div class="panel" id="panel-D">
+      <div class="row">
+        <div class="row-head"><span class="tab">拓扑 · 实时流向</span><span class="right">交流供电</span></div>
+        <div class="sep"></div>
+        <div class="flow" id="flow-D"></div>
+      </div>
+    </div>
+    <div class="sub">同一拓扑，应用带改成比例分段（小项 18pt 下限保位），S 弯自母轨落到各段中点。</div>
+  </div>
+
+</div>
+
+<div class="notes">
+  <h2>一、这次改了什么</h2>
+  <ul>
+    <li><strong>修 bug</strong>：格子定位把应用带的 90pt 偏移重复加了一次（<code>left = g.left + i×(cw+gap)</code>，而容器本身已在 <code>g.left</code>），导致 5 格整体右移 90pt 越出面板。现在格子的坐标相对容器计算。</li>
+    <li><strong>扇面接回来</strong>：5 根 S 弯恢复，扇心在系统节点下缘，终点在各格/各段的上缘中点，线宽 ∝ 占比（<code>1 + 占比/最大占比 × 2.2</code>），端点保留 3pt 亮斑——与现有实现同一套参数与控制点公式（<code>0.15 / 0.85</code> 的 S 形）。</li>
+    <li><strong>呼吸点去掉</strong>：双出口拓扑下不再有汇流点，那枚「闪烁的圆点 + 径向呼吸」失去语义，已从 C/D 移除（现状对照块保留原样）。</li>
+    <li><strong>走廊回到 22pt</strong>：扇面要落差，<code>gridGap</code> 不能停在 7。代价见下表。</li>
+  </ul>
+
+  <h2 style="margin-top:24px">二、扇面长度的账（把节点挪到应用带中点之后）</h2>
+  <table>
+    <tr><th>形态（面板 340 / 内容宽 306）</th><th>系统节点 x</th><th>扇心 x</th><th>最长扇枝</th><th>斜率</th><th>区高</th></tr>
+    <tr><td>现状（应用带 158、网格右对齐）</td><td class="num">216–306</td><td class="num">261</td><td class="num">98pt</td><td class="num">4.5 : 1</td><td class="num">141</td></tr>
+    <tr><td>双出口 · 节点贴右</td><td class="num">216–306</td><td class="num">261</td><td class="num">151pt</td><td class="num">6.9 : 1</td><td class="num">145 / 139</td></tr>
+    <tr><td><b>双出口 · 节点对齐应用带中点</b></td><td class="num">153–243</td><td class="num">198</td><td class="num"><b>88pt</b></td><td class="num"><b>4.0 : 1</b></td><td class="num">145 / 139</td></tr>
+  </table>
+  <p style="margin-top:8px">把系统节点从贴右挪到「对齐应用带中点」，扇心就落在应用带中线上：五根扇枝左右各两根、长度对称，最长的一根 88pt，<b>比现状的 98pt 还短</b>，比贴右的 151pt 舒展得多。顶栏「系统节点」可当场对切贴右/对齐。</p>
+  <div class="callout">
+    <strong>代价</strong>：节点左移后，节点行右端会留出一块空置（340 面板约 63×46pt，460 面板约 123×46pt——它随面板变宽而变大）。这是这次唯一新增的空白，位置在应用带右段的正上方，读起来像「应用带的地盘」。如果嫌它碍眼，两种折中：① 节点只左移一半（扇心取应用带中点与右缘的中点，最长扇枝回到约 142pt）；② 用面板最大宽限制这块空白的增长。
+  </div>
+
+  <h2 style="margin-top:24px">三、现状为什么难看：可复算的数字</h2>
+  <ul>
+    <li><strong>汇流点偏心且随宽度漂移</strong>：<code>junctionX = (90 + (W−158)) / 2</code>。内容宽 W=308 时是 <b>120pt = 39%</b>，面板 300 时 37.3%，面板 460 时 42.1%。</li>
+    <li><strong>左下整块空置</strong>：落管左侧 x∈[0,150)、y∈[46,103) 是 <b>150×57pt</b> 的空白，只有一根 2.6pt 竖线经过。</li>
+    <li><strong>5 根 S 弯挤在 22pt 落差里</strong>，最长一根 98pt（斜率 4.5:1），全部从扇心同一点出发。</li>
+    <li><strong>占比与路径长度倒置</strong>：格子按排名左→右，扇心在最右，占比最大的走最长的线。</li>
+    <li><strong>不随宽度伸缩</strong>：格子区固定 158pt，面板 300→460 只是把空置区从 110pt 拉到 270pt。</li>
+    <li><strong>语义错位</strong>：曲线从系统节点出发，读起来像「系统负载被 5 等分」，而口径只是可读进程内部的归一（≈3.4W vs 整机 ≈29W）。双出口拓扑下应用带改为「与干线并列的一条构成带」，不再暗示下游分流。</li>
+  </ul>
+
+  <h2 style="margin-top:24px">四、参数级改法</h2>
+  <table>
+    <tr><th>参数 / 位置</th><th>现状</th><th>改为</th></tr>
+    <tr><td><code>junctionX</code>（落管）</td><td class="num">(90+gridLeft)/2 = 39%</td><td class="num">NODE_W/2 = 45 → 14.6%（对齐适配器中心）</td></tr>
+    <tr><td>干线</td><td>两段 + 中段汇流点</td><td>一条直通：适配器右缘 → 系统左缘</td></tr>
+    <tr><td>应用带</td><td class="num">158 固定、右对齐</td><td class="num">NODE_W → W（面板 340 为 218pt）</td></tr>
+    <tr><td>格 / 段高度</td><td class="num">27（30×27）</td><td class="num">32（轨）/ 26（条）</td></tr>
+    <tr><td><code>gridGap</code></td><td class="num">22</td><td class="num">22（扇面要落差，不能再压）</td></tr>
+    <tr><td>下方间距</td><td class="num">8</td><td class="num">7</td></tr>
+    <tr><td>呼吸辉光 / 汇流点白点</td><td>1.4s autoreverse 呼吸 + 4pt 白点</td><td>删除（双出口下无汇流点）</td></tr>
+    <tr><td>适配器出口端子</td><td>无</td><td>新增 14×3.5pt 底部端子（沿用socketTab 语言）</td></tr>
+    <tr><td>区高</td><td class="num">141</td><td class="num">145（轨）/ 139（条）</td></tr>
+  </table>
+  <p style="margin-top:10px">流光的动效参数<b>一条都不动</b>：底轨 <code>1.8 + √W×0.14</code>（32W → 2.6pt）@ alpha .92、辉光 ×2.4 @ .30、虚线 <code>8 / 12</code>、<code>2.2pt</code>、<code>1.8s linear</code> 平移；放电时虚线方向反向。以上取自 <code>PowerFlowDiagram.swift</code> / <code>PowerFlowFanTracks.swift</code>。</p>
+
+  <div class="callout">
+    <strong>放电态</strong>：双出口拓扑下，放电时画面上是「电池 → 升到适配器下缘 → 从适配器右缘流向系统」，读起来像穿过适配器，而此刻适配器是 40% 灰、数值「—」。顶栏「电池：放电中」可以看这一帧。三种处理：① 接受母线语义；② 放电时竖直段不点亮端点；③ 放电时整条竖直段淡化。
+  </div>
+
+  <h3 class="killed">已排除 / 暂未采用</h3>
+  <ul class="killed">
+    <li>居中落管（应用带能到 308pt 全宽，但落管必须穿过应用带一次）——本轮已从对比里撤掉，需要的话可以加回来。</li>
+    <li>带名称的行列表、右侧竖列、3×2 网格、让适配器位移求对称、已落地的 1×5 图标格。</li>
+    <li>颜色仍是「模块色轮转」（cpu→gpu→network→memory→storage）：第 3 名永远「网络青」，同一应用排名一变就换色。可选改成按名次递亮的单色梯度或按 bundle id 固定取色，需要你点头才动。</li>
+  </ul>
+</div>
+
+<script>
+const NODE_W = 90, NODE_H = 46, BAR_H = 38;
+const GAP_TOP = 24, GAP_BOT = 7;           // 扇面落差：app 内已由 22 提到 24
+const OUTLET_X = NODE_W / 2;               // 45：适配器底部出口 / 电池支路所在列
+const RAIL_H = 32, RIBBON_H = 26;
+const CHIP_GAP = 4, MIN_SEG = 18;
+
+const DATASETS = {
+  skew: [
+    { name: 'Qoder',  icon: '🧠', pct: 46, w: 1.57, c: 'var(--c1)' },
+    { name: 'HapiGo', icon: '🌐', pct: 45, w: 1.53, c: 'var(--c2)' },
+    { name: 'Safari', icon: '🧭', pct: 3,  w: 0.10, c: 'var(--c3)' },
+    { name: '微信',   icon: '💬', pct: 1,  w: 0.03, c: 'var(--c4)' },
+    { name: '其他',   icon: '⋯',  pct: 5,  w: 0.17, c: 'var(--c5)', agg: true }
+  ],
+  balanced: [
+    { name: 'Qoder',  icon: '🧠', pct: 38, w: 1.29, c: 'var(--c1)' },
+    { name: 'HapiGo', icon: '🌐', pct: 27, w: 0.92, c: 'var(--c2)' },
+    { name: 'Safari', icon: '🧭', pct: 18, w: 0.61, c: 'var(--c3)' },
+    { name: '微信',   icon: '💬', pct: 11, w: 0.37, c: 'var(--c4)' },
+    { name: '其他',   icon: '⋯',  pct: 6,  w: 0.20, c: 'var(--c5)', agg: true }
+  ]
+};
+
+const STATE = { w: 340, data: 'skew', battery: 'charging', nodePos: 'center', curve: 'drape', anim: true };
+
+/* ---------- 方案几何：双出口拓扑，应用带从适配器右缘起 ---------- */
+function plan(form, W) {
+  const data = DATASETS[STATE.data];
+  const railH = form === 'rail' ? RAIL_H : RIBBON_H;
+  const railTop = NODE_H + GAP_TOP;
+  const barTop = railTop + railH + GAP_BOT;
+  const left = NODE_W, width = W - NODE_W;
+  // 系统节点默认对齐应用带中点：扇心 = 节点底中点 = 应用带中线，五根扇枝长度对称
+  const bandCenter = left + width / 2;
+  const nodeX = STATE.nodePos === 'edge' ? W - NODE_W : Math.round(bandCenter - NODE_W / 2);
+  const originX = nodeX + NODE_W / 2;
+  let centers, widths;
+  if (form === 'rail') {
+    const cw = (width - CHIP_GAP * (data.length - 1)) / data.length;
+    widths = data.map(() => cw);
+    centers = data.map((_, i) => left + i * (cw + CHIP_GAP) + cw / 2);
+  } else {
+    widths = allocate(data.map(d => d.pct), width - 8, MIN_SEG);
+    let x = left + 2;
+    centers = widths.map(w => { const c = x + w / 2; x += w + 1; return c; });
+  }
+  // 应用区自己的短母轨：距应用带 16pt（与上方机器区留 8pt 空隙，互不接触）。
+  // 五根扇枝不再从系统节点出发——它们只表达「应用带内部的分流」这件事。
+  const busY = railTop - 16;
+  const n = centers.length;
+  const mid = (centers[0] + centers[n - 1]) / 2;
+  const span = (centers[n - 1] - centers[0]) * BUS_SPREAD;
+  const origins = n > 1
+    ? centers.map((_, i) => mid - span / 2 + span * i / (n - 1))
+    : [mid];
+  return {
+    form, railH, railTop, barTop, H: barTop + BAR_H, left, width, widths, centers, data,
+    nodeX, originX, busY, origins, busLeft: origins[0], busRight: origins[n - 1]
+  };
+}
+
+/* ---------- 资源路径：干线与电池支路（参数照抄原实现） ---------- */
+function flowPaths(d, up) {
+  const cls = up ? 'animated-flow flow-up' : 'animated-flow';
+  return `<path d="${d}" stroke="var(--bus)" stroke-width="6.24" opacity=".30" fill="none" stroke-linecap="round"/>
+          <path d="${d}" stroke="var(--bus)" stroke-width="2.6" opacity=".92" fill="none" stroke-linecap="round"/>
+          <path d="${d}" class="${cls}" stroke="var(--dash)" stroke-width="2.2" fill="none" stroke-linecap="round"/>`;
+}
+
+/* 干线：适配器右缘 → 系统节点左缘，一条直通；支路：适配器底部出口 ↓ 电池条 */
+function powerPaths(W, p) {
+  const cy = NODE_H / 2;
+  const up = STATE.battery !== 'charging';
+  return flowPaths(`M ${NODE_W} ${cy} H ${p.nodeX}`, false)
+       + flowPaths(`M ${OUTLET_X} ${NODE_H} V ${p.barTop}`, up);
+}
+
+/* 扇面（甲版）：从**应用带自己的短母轨**扇到各格上缘中点。
+   两端竖直切线：起手从母轨垂直落下、横向微摆、再垂直插入格子——到达端与格顶垂直
+   才是「接上去」；旧版水平切线会横着蹭过格顶。
+   与机器区的关系：**没有连线**。母轨只在应用带上方 16pt 处，与系统节点之间留 8pt 空隙。 */
+function fanPaths(W, p) {
+  const maxPct = Math.max(...p.data.map(d => d.pct));
+  let out = '';
+  p.data.forEach((d, i) => {
+    const ox = p.origins[i], oy = p.busY;
+    const ex = p.centers[i], ey = p.railTop - 1;
+    const lw = 1 + (d.pct / maxPct) * 2.2;
+    const dy = ey - oy;
+    const c1x = ox + (ex - ox) * 0.45, c1y = oy + dy * 0.35;
+    const c2x = ex, c2y = ey - dy * 0.5;
+    out += `<path d="M ${ox} ${oy} C ${c1x} ${c1y}, ${c2x} ${c2y}, ${ex} ${ey}"
+              stroke="${d.c}" stroke-width="${lw.toFixed(2)}" fill="none" opacity=".85" stroke-linecap="round"/>`;
+  });
+  return out;
+}
+
+/* 应用短母轨：中性细线 + 极淡辉光，不参与机器区的绿色电源线语言 */
+function busPaths(p) {
+  const d = `M ${p.busLeft} ${p.busY} H ${p.busRight}`;
+  return `<path d="${d}" stroke="var(--agg)" stroke-width="4.5" opacity=".10" fill="none" stroke-linecap="round"/>
+          <path d="${d}" stroke="var(--agg)" stroke-width="1.3" opacity=".55" fill="none" stroke-linecap="round"/>`;
+}
+const BUS_SPREAD = 0.8;   // 母轨上五个落点的跨度 = 首末格中心距的 80%
+
+/* ---------- 应用带 ---------- */
+function railHTML(p) {
+  const body = p.data.map((d, i) => {
+    const left = i * (p.widths[i] + CHIP_GAP);
+    const fillW = Math.max(2, (p.widths[i] - 4) * d.pct / 100);
+    return `<div class="chip ${d.agg ? 'agg' : ''}" style="left:${left.toFixed(1)}px;width:${p.widths[i].toFixed(1)}px"
+              title="${d.name} · ${d.w.toFixed(2)} W · ${d.pct}% · 实测未含系统进程">
+      <div class="fill" style="width:${fillW.toFixed(1)}px;background:${d.c}"></div>
+      <div class="body"><span class="ico">${d.icon}</span><span class="pct mono">${d.pct}%</span></div>
+    </div>`;
+  }).join('');
+  return `<div class="rail" style="left:${p.left}px;width:${p.width}px;top:${p.railTop}px;height:${p.railH}px">${body}</div>`;
+}
+
+function allocate(pcts, total, minW) {
+  const n = pcts.length;
+  const fixed = new Array(n).fill(false);
+  const w = new Array(n).fill(0);
+  for (let iter = 0; iter < n + 1; iter++) {
+    const freeSum = pcts.reduce((a, x, i) => a + (fixed[i] ? 0 : x), 0);
+    const usedSum = w.reduce((a, v, i) => a + (fixed[i] ? v : 0), 0);
+    const avail = total - usedSum;
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      if (fixed[i]) continue;
+      const wi = freeSum > 0 ? avail * pcts[i] / freeSum : 0;
+      if (wi < minW) { fixed[i] = true; w[i] = minW; changed = true; }
+    }
+    if (!changed) {
+      for (let i = 0; i < n; i++) if (!fixed[i]) w[i] = freeSum > 0 ? avail * pcts[i] / freeSum : 0;
+      break;
+    }
+  }
+  return w;
+}
+
+function ribbonHTML(p) {
+  const segs = p.data.map((d, i) => {
+    const w = p.widths[i];
+    const icoSize = w >= 34 ? 14 : (w >= 15 ? 10.5 : 0);
+    return `<div class="seg" style="flex:0 0 ${w.toFixed(1)}px;background:${d.c};opacity:${d.agg ? .34 : .62}"
+               title="${d.name} · ${d.w.toFixed(2)} W · ${d.pct}% · 实测未含系统进程">
+      ${icoSize ? `<span class="ico" style="font-size:${icoSize}px">${d.icon}</span>` : ''}${w >= 56 ? `<span class="pct mono">${d.pct}%</span>` : ''}
+    </div>`;
+  }).join('');
+  return `<div class="ribbon" style="left:${p.left}px;width:${p.width}px;top:${p.railTop}px;height:${p.railH}px">${segs}</div>`;
+}
+
+function batteryHTML(W, p) {
+  const charging = STATE.battery === 'charging';
+  const pct = charging ? 82 : 76;
+  const status = charging ? '充电中' : '电池供电';
+  const right = charging ? '至 80% 上限' : '剩余 4:12';
+  return `<div class="fbar" style="top:${p.barTop}px">
+      <div class="fill" style="width:${Math.round((W - 4) * pct / 100)}px"></div>
+      <div class="txt"><span class="mono">${pct}%</span><span class="sub2">${status}</span><span class="right">${right}</span></div>
+    </div>
+    <div class="socket" style="left:${OUTLET_X}px;top:${p.barTop - 4}px"></div>`;
+}
+
+/* ---------- 渲染 ---------- */
+function renderVariant(id, form, box, W) {
+  const p = plan(form, W);
+  const onAC = STATE.battery === 'charging';
+  box.style.height = p.H + 'px';
+  box.innerHTML = `
+    <svg class="tracks">${powerPaths(W, p)}${busPaths(p)}${fanPaths(W, p)}</svg>
+    ${form === 'rail' ? railHTML(p) : ribbonHTML(p)}
+    <div class="port" style="left:${OUTLET_X}px;top:${NODE_H}px"></div>
+    <div class="fnode adapter ${onAC ? '' : 'off'}">
+      <span class="lbl">适配器 · 65 W</span><span class="val mono">${onAC ? '32.1 W' : '—'}</span>
+    </div>
+    <div class="fnode system" style="left:${p.nodeX}px"><span class="lbl">系统负载</span><span class="val mono">32.1 W</span></div>
+    ${batteryHTML(W, p)}
+  `;
+  const busSpan = Math.round(p.busRight - p.busLeft);
+  document.getElementById('badge-' + id).textContent =
+    form === 'rail'
+      ? `高 ${p.H}pt · 应用带 ${p.width}pt · 槽宽 ${p.widths[0].toFixed(1)} · 母轨 ${busSpan}pt`
+      : `高 ${p.H}pt · 应用带 ${p.width}pt · 母轨 ${busSpan}pt`;
+}
+
+function renderCurrent(box, W) {
+  const railTop = NODE_H + 22, barTop = railTop + 27 + 8;
+  const m = { railTop, barTop, H: barTop + BAR_H, gapTop: 22 };
+  const gridW = 158, gridLeft = W - gridW;
+  const junctionX = (NODE_W + gridLeft) / 2;
+  const data = DATASETS[STATE.data];
+  const maxPct = Math.max(...data.map(d => d.pct));
+
+  let cells = '', fans = '';
+  data.forEach((d, i) => {
+    const cx = gridLeft + i * 32 + 15;
+    cells += `<div class="cell-cur" style="left:${gridLeft + i * 32}px;top:${railTop}px"
+                title="${d.name} · ${d.w.toFixed(2)} W · ${d.pct}% · 实测未含系统进程">
+      <span class="ico">${d.icon}</span><span class="pct mono">${d.pct}%</span></div>`;
+    const ox = W - NODE_W / 2, oy = NODE_H, ex = cx, ey = railTop - 3;
+    const lw = 1 + (d.pct / maxPct) * 2.2;
+    fans += `<path d="M ${ox} ${oy} C ${ox + (ex - ox) * 0.5} ${oy + (ey - oy) * 0.15},
+                       ${ox + (ex - ox) * 0.5} ${ey - (ey - oy) * 0.15}, ${ex} ${ey}"
+               stroke="${d.c}" stroke-width="${lw.toFixed(2)}" fill="none" opacity=".85" stroke-linecap="round"/>
+             <circle cx="${ex}" cy="${ey}" r="3" fill="${d.c}" opacity=".9"/>`;
+  });
+
+  box.style.height = m.H + 'px';
+  box.innerHTML = `
+    <svg class="tracks">
+      ${flowPaths(`M ${NODE_W} ${NODE_H / 2} H ${junctionX}`, false)}
+      ${flowPaths(`M ${junctionX} ${NODE_H / 2} H ${W - NODE_W}`, false)}
+      ${flowPaths(`M ${junctionX} ${NODE_H / 2} V ${barTop}`, false)}
+      ${fans}
+      <g>
+        <circle cx="${junctionX}" cy="${NODE_H / 2}" r="13" fill="var(--bus)" opacity=".28">
+          <animate attributeName="opacity" values=".30;.80;.30" keyTimes="0;0.5;1" dur="2.8s" repeatCount="indefinite"/>
+          <animate attributeName="r" values="11;16.5;11" keyTimes="0;0.5;1" dur="2.8s" repeatCount="indefinite"/>
+        </circle>
+        <circle cx="${junctionX}" cy="${NODE_H / 2}" r="2" fill="#fff"/>
+      </g>
+    </svg>
+    <div class="fnode adapter"><span class="lbl">适配器 · 65 W</span><span class="val mono">32.1 W</span></div>
+    <div class="fnode system"><span class="lbl">系统负载</span><span class="val mono">32.1 W</span></div>
+    ${cells}
+    <div class="fbar" style="top:${barTop}px">
+      <div class="fill" style="width:${(W - 4) * 0.85}px"></div>
+      <div class="txt"><span class="mono">85%</span><span class="sub2">交流电源</span><span class="right">已达上限</span></div>
+    </div>
+    <div class="socket" style="left:${junctionX}px;top:${barTop - 4}px"></div>
+    <div class="anno">
+      <div class="line" style="left:${junctionX}px;top:${NODE_H / 2}px;height:${barTop - NODE_H / 2}px"></div>
+      <div class="box" style="left:1px;top:${NODE_H + 1}px;width:${gridLeft - 2}px;height:${barTop - NODE_H - 2}px"></div>
+      <div class="pin" style="left:${junctionX}px;top:${barTop - 8}px">1</div>
+      <div class="pin" style="left:${gridLeft * 0.42}px;top:${(NODE_H + barTop) / 2}px">2</div>
+      <div class="pin" style="left:${(W - NODE_W / 2 + gridLeft + 15) / 2}px;top:${NODE_H + 6}px">3</div>
+      <div class="pin" style="left:${gridLeft + 14}px;top:${NODE_H + 18}px">4</div>
+    </div>
+  `;
+  document.getElementById('badge-cur').textContent = `高 ${m.H}pt · 内容宽 ${W}`;
+  updateLegend(W, m, gridLeft, junctionX);
+}
+
+function updateLegend(W, m, gridLeft, junctionX) {
+  const items = [
+    `汇流点被推到 ${(junctionX / W * 100).toFixed(1)}%（x=${Math.round(junctionX)}），经典布局恒为正中 W/2=${Math.round(W / 2)}`,
+    `左下空置 ≈ ${Math.round(gridLeft)}×57pt，只有一根 2.6pt 竖线穿过`,
+    `5 根 S 弯的落差只有 22pt，最长的一根横跑 ${Math.round(W - NODE_W / 2 - (gridLeft + 15))}pt`,
+    `网格按排名从左到右，扇心在最右：占比最大的走最长路径，视觉重量倒置`
+  ];
+  document.getElementById('legend-cur').innerHTML =
+    items.map((t, i) => `<i><b>${i + 1}</b><span>${t}</span></i>`).join('');
+}
+
+function renderAll() {
+  ['cur', 'C', 'D'].forEach(k => document.getElementById('panel-' + k).style.width = STATE.w + 'px');
+  // 与 Swift 侧一致：宽度只取自容器一次（这里直接量取，避免面板边框造成的 2pt 误差）
+  const W = document.getElementById('flow-C').getBoundingClientRect().width;
+  renderCurrent(document.getElementById('flow-cur'), W);
+  renderVariant('C', 'rail', document.getElementById('flow-C'), W);
+  renderVariant('D', 'ribbon', document.getElementById('flow-D'), W);
+}
+
+function setW(w) {
+  STATE.w = w;
+  document.querySelectorAll('.toolbar .grp:nth-child(1) button').forEach(b => b.classList.toggle('active', +b.dataset.w === w));
+  renderAll();
+}
+function setTheme(t) {
+  document.documentElement.classList.toggle('light', t === 'light');
+  document.querySelectorAll('.toolbar .grp:nth-child(2) button').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === (t === 'light' ? '浅色' : '深色')));
+}
+function setBattery(s) {
+  STATE.battery = s;
+  document.querySelectorAll('.toolbar .grp:nth-child(3) button').forEach(b =>
+    b.classList.toggle('active', b.textContent.includes(s === 'charging' ? '充电' : '放电')));
+  renderAll();
+}
+function setNode(pos) {
+  STATE.nodePos = pos;
+  document.querySelectorAll('.toolbar .grp:nth-child(4) button').forEach(b =>
+    b.classList.toggle('active', b.textContent.includes(pos === 'center' ? '对齐' : '贴右')));
+  renderAll();
+}
+function toggleAnim() {
+  STATE.anim = !STATE.anim;
+  document.body.classList.toggle('no-anim', !STATE.anim);
+  document.getElementById('animBtn').classList.toggle('active', STATE.anim);
+  document.getElementById('animBtn').textContent = STATE.anim ? '开' : '关';
+  document.querySelectorAll('svg').forEach(s => STATE.anim ? s.unpauseAnimations() : s.pauseAnimations());
+}
+function setData(d) {
+  STATE.data = d;
+  document.querySelectorAll('.toolbar .grp:nth-child(7) button').forEach(b =>
+    b.classList.toggle('active', b.textContent.includes(d === 'skew' ? '偏斜' : '均衡')));
+  renderAll();
+}
+
+renderAll();
+</script>
+</body>
+</html>
