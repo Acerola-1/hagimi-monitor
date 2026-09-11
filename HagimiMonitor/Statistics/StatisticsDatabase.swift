@@ -140,6 +140,9 @@ struct StatisticsRow: Equatable {
         ("fan_max", .maximum),
         ("uptime_avg", .weightedAverage),
         // 应力列追加末尾:旧库经 ALTER 迁移补 NULL,评分侧对 NULL 走均值回退。
+        // TODO(迁移期):这四列只服务升级前旧记录的近似评分(见 StatisticsHealthScore
+        // 的旧口径与 stressFallback)。记录器已不再写新值;等历史行滚出可选范围后
+        // 可评估从列定义中移除(需同时清掉旧口径读取方与报表 legacyHealthOf)。
         ("stress_mem_avg", .weightedAverage),
         ("stress_thermal_avg", .weightedAverage),
         ("stress_cpu_avg", .weightedAverage),

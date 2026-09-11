@@ -25,6 +25,12 @@ enum StatisticsHealthScore {
     static let minIntersectionSeconds: TimeInterval = 30 * 60
     static let minCoverageRatio = 0.9
 
+    /// 分数等级阈值(低/轻度/偏高):与 `Level(score:)` 同源,报表 JS 共用同一组
+    /// 数字,避免两处各维护一套区间。
+    static let lowThreshold = 95.0
+    static let mildThreshold = 85.0
+    static let elevatedThreshold = 70.0
+
     enum Level: String, CaseIterable {
         case low
         case mild
@@ -34,9 +40,9 @@ enum StatisticsHealthScore {
         /// 分数标签(模型 §6 候选):只描述压力负担,避免「优秀/健康」暗示硬件质量。
         init(score: Double) {
             switch score {
-            case 95...: self = .low
-            case 85..<95: self = .mild
-            case 70..<85: self = .elevated
+            case StatisticsHealthScore.lowThreshold...: self = .low
+            case StatisticsHealthScore.mildThreshold..<StatisticsHealthScore.lowThreshold: self = .mild
+            case StatisticsHealthScore.elevatedThreshold..<StatisticsHealthScore.mildThreshold: self = .elevated
             default: self = .high
             }
         }
@@ -116,6 +122,9 @@ enum StatisticsHealthScore {
     }
 
     // MARK: - 旧口径(升级前历史:无档位秒数,按帧级应力列近似)
+    // TODO(迁移期):秒数时代(2026-09)之前落库的行没有档位秒数,只能走这条近似。
+    // 等历史行滚出可选范围(秒数时代满一年)后,本段连同报表侧的 legacyHealthOf
+    // 一起删除;记录器自 2026-09 起已不再写入 stress_*_avg 新值。
 
     /// 旧口径:四个应力维度的帧数加权均值,CPU/GPU 在其中参与扣分。
     private static func evaluateLegacyStress(_ rows: [StatisticsRow]) -> Result? {

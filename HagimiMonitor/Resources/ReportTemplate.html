@@ -6,6 +6,41 @@
 <title>HagimiMonitor</title>
 <style>
   /*__FLATPICKR_CSS__*/
+  /* 符号图标:字形由生成端按 SF Symbols 渲染并内联为 --i-*,这里只负责着色与尺寸。*/
+  .sf {
+    display: inline-block; vertical-align: -0.14em; flex: none;
+    width: 15px; height: 15px; background-color: currentColor;
+    -webkit-mask-image: var(--i, none); mask-image: var(--i, none);
+    -webkit-mask-size: contain; mask-size: contain;
+    -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+  }
+  /*__SYMBOL_CSS__*/
+  .sf-cpu { --i: var(--i-cpu); }
+  .sf-gpu { --i: var(--i-gpu); }
+  .sf-mem { --i: var(--i-mem); }
+  .sf-net { --i: var(--i-net); }
+  .sf-disk { --i: var(--i-disk); }
+  .sf-power { --i: var(--i-power); }
+  .sf-fan { --i: var(--i-fan); }
+  .sf-thermal { --i: var(--i-thermal); }
+  .sf-batt { --i: var(--i-batt); }
+  .sf-health { --i: var(--i-health); }
+  .sf-trend { --i: var(--i-trend); }
+  .sf-overview { --i: var(--i-overview); }
+  .sf-dist { --i: var(--i-dist); }
+  .sf-heatmap { --i: var(--i-heatmap); }
+  .sf-battHealth { --i: var(--i-battHealth); }
+  .sf-alert { --i: var(--i-alert); }
+  .sf-table { --i: var(--i-table); }
+  .sf-insights { --i: var(--i-insights); }
+  .sf-apps { --i: var(--i-apps); }
+  .sf-legacy { --i: var(--i-legacy); }
+  .sf-top { --i: var(--i-top); }
+  .sf-device { --i: var(--i-device); }
+  .sf-os { --i: var(--i-os); }
+  .sf-clock { --i: var(--i-clock); }
+  .sf-calendar { --i: var(--i-calendar); }
   :root {
     --bg: #0a0b0e;
     --bg-grad-1: rgba(41, 151, 255, 0.07);
@@ -90,14 +125,65 @@
   @media (prefers-reduced-motion: reduce) {
     body::before, body::after { animation: none; }
   }
-  .wrap { max-width: 1180px; margin: 0 auto; padding: 26px 28px 60px; }
+  /* ── 版式:顶部识读条 + 左侧模块栏 + 右侧(时间栏 + 独立滚动内容) ──
+     模块栏与时间栏都常驻在滚动容器之外,不依赖滚动事件或图表渲染才出现;
+     内容区独立滚动,长报表在窄窗口里也不会把导航推出视野。 */
+  .shell { height: 100vh; display: flex; flex-direction: column; }
+  .top {
+    display: flex; align-items: flex-end; justify-content: space-between;
+    gap: 12px 24px; flex-wrap: wrap; flex: none;
+    padding: 16px 26px 14px; border-bottom: 1px solid var(--card-border);
+  }
+  .top-side { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
+  .workspace { display: flex; flex: 1; min-height: 0; }
+  .rail {
+    width: 184px; flex: none; display: flex; flex-direction: column;
+    overflow: auto; padding: 20px 12px 18px;
+    border-right: 1px solid var(--card-border);
+    background: var(--card);
+    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  }
+  .rail .eyebrow {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--text-3); padding: 0 10px 12px; font-family: var(--font-mono);
+  }
+  .module-nav { display: flex; flex-direction: column; gap: 3px; }
+  .module-nav a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 11px; border-radius: 9px; text-decoration: none;
+    color: var(--text-2); font-size: 12.5px; font-weight: 600; white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+  }
+  .module-nav a .sf { width: 16px; height: 16px; flex: none; color: var(--text-3); }
+  .module-nav a:hover { background: var(--inset); color: var(--text); }
+  .module-nav a.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .module-nav a.active .sf { color: var(--accent); }
+  .rail-footer {
+    margin-top: auto; padding: 26px 10px 0;
+    font-size: 10.5px; color: var(--text-3); line-height: 1.7;
+  }
+  .rail-footer .status-dot {
+    display: inline-block; width: 6px; height: 6px; margin-right: 6px;
+    border-radius: 50%; background: var(--accent);
+  }
+  .rail-footer small { display: block; margin-top: 3px; font-size: 10px; }
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .filters {
+    position: relative; flex: none;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+    padding: 12px 26px; border-bottom: 1px solid var(--card-border); background: var(--card);
+  }
+  .filter-title { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); letter-spacing: 0.4px; }
+  .range-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .scroll { flex: 1; min-height: 0; overflow: auto; scroll-behavior: smooth; scroll-padding-top: 18px; }
+  .content { max-width: 1180px; margin: 0 auto; padding: 24px 26px 56px; }
 
   /* ── 报告 masthead:苹果原厂硬件规格档案 (Cupertino Specimen) ── */
-  .hero {
-    display: flex; flex-wrap: wrap; gap: 12px 24px;
-    align-items: flex-end; justify-content: space-between;
-    padding: 4px 0 20px; margin-bottom: 20px;
-    border-bottom: 1px solid var(--card-border);
+  .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+  .brand .mark {
+    width: 34px; height: 34px; border-radius: 9px; flex: none;
+    background-image: var(--app-icon); background-size: 100% 100%;
+    box-shadow: 0 0 0 1px var(--card-border), 0 3px 10px rgba(0, 0, 0, 0.25);
   }
   .brand .kicker {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -105,7 +191,6 @@
     font-family: var(--font-mono);
   }
   .brand h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.6px; color: var(--text); }
-  .brand .sub { margin-top: 5px; font-size: 12.5px; color: var(--text-3); letter-spacing: 0.1px; }
   .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
   .chip {
     display: inline-flex; align-items: center; gap: 6px;
@@ -115,7 +200,7 @@
     box-shadow: 0 1px 0 var(--card-glow) inset;
     backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   }
-  .chip .icon { width: 13px; height: 13px; color: var(--text-3); }
+  .chip .sf { width: 13px; height: 13px; color: var(--text-3); }
 
   /* ── 范围控件(位于固定导航内) ────────────── */
   .toolbar { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; margin: 0; }
@@ -200,7 +285,7 @@
   }
   section { margin-bottom: 18px; }
   .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--card-border); }
-  .sec-head .icon { width: 16px; height: 16px; color: var(--text-3); flex: none; }
+  .sec-head .sf { width: 16px; height: 16px; color: var(--text-3); flex: none; }
   .sec-head h2 { margin: 0; font-size: 13.5px; font-weight: 700; letter-spacing: -0.1px; text-transform: uppercase; }
   .sec-head .hint { margin-left: auto; font-size: 11px; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
   .chart { width: 100%; height: 300px; }
@@ -215,7 +300,7 @@
     display: none; padding: 34px 20px; text-align: center;
     color: var(--text-3); font-size: 13px;
   }
-  .empty .icon { width: 22px; height: 22px; margin-bottom: 8px; opacity: 0.7; }
+  .empty .sf { width: 22px; height: 22px; margin-bottom: 8px; opacity: 0.7; }
 
   /* ── 首屏总览带:健康评分卡 + KPI 网格同行,核心摘要一屏读完 ── */
   .summary { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
@@ -226,7 +311,7 @@
   }
   .summary-kpis .kpi { padding: 12px 14px 10px; border-radius: var(--radius); }
   .summary-kpis .kpi-chip { width: 26px; height: 26px; border-radius: 6px; }
-  .summary-kpis .kpi-chip .icon { width: 13px; height: 13px; }
+  .summary-kpis .kpi-chip .sf { width: 13px; height: 13px; }
   .summary-kpis .kpi .value { font-size: 20px; margin-top: 6px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; }
   .summary-kpis .kpi .sub { margin-top: 2px; }
   .summary-kpis .spark { height: 22px; }
@@ -254,7 +339,7 @@
     display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
     font-size: 11.5px; font-weight: 550; color: #e08e45;
   }
-  .score-capped .icon { width: 13px; height: 13px; }
+  .score-capped .sf { width: 13px; height: 13px; }
 
   /* ── KPI(直接填充 .summary-kpis 栅格) ─── */
   .kpi {
@@ -300,7 +385,7 @@
   .app-row img { width: 24px; height: 24px; border-radius: 6px; flex: none; }
   .app-row .app-icon-fallback { width: 24px; height: 24px; border-radius: 6px; flex: none;
     display: grid; place-items: center; background: var(--inset); color: var(--text-3); }
-  .app-row .app-icon-fallback .icon { width: 12px; height: 12px; }
+  .app-row .app-icon-fallback .sf { width: 12px; height: 12px; }
   .app-row .app-name { width: 38%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--text-2); }
   .app-row .app-bar { flex: 1; height: 5px; border-radius: 3px; background: var(--inset); overflow: hidden; }
   .app-row .app-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
@@ -348,17 +433,17 @@
   }
   .insight:hover { border-color: color-mix(in srgb, currentColor 28%, var(--card-border)); }
   .insight-head { display: flex; align-items: center; gap: 7px; }
-  .insight-head .icon { width: 14px; height: 14px; flex: none; }
+  .insight-head .sf { width: 14px; height: 14px; flex: none; }
   .insight .t { font-size: 11.5px; color: var(--text-3); font-weight: 600; letter-spacing: 0.3px; }
   .insight .v { font-size: 13.5px; color: var(--text); line-height: 1.5; font-weight: 550; }
 
   /* ── 空态 / 页脚 ───────────────────────── */
   .blank-hero { text-align: center; padding: 90px 20px; color: var(--text-2); }
-  .blank-hero .icon { width: 42px; height: 42px; color: var(--accent); opacity: 0.9; }
+  .blank-hero .sf { width: 42px; height: 42px; color: var(--accent); opacity: 0.9; }
   .blank-hero h2 { font-size: 18px; margin: 16px 0 6px; color: var(--text); }
   .blank-hero p { font-size: 13px; color: var(--text-3); line-height: 1.7; max-width: 420px; margin: 0 auto; }
   footer { margin-top: 34px; text-align: center; font-size: 11.5px; color: var(--text-3); line-height: 1.8; }
-  .icon { display: inline-block; vertical-align: middle; }
+  .sf { display: inline-block; vertical-align: middle; }
   [hidden] { display: none !important; }
 
   /* ── 标题渐变 ─────────────────────────── */
@@ -368,59 +453,24 @@
     -webkit-text-fill-color: transparent; color: transparent;
   }
 
-  /* ── 固定顶栏:品牌 + 分区锚点 + 时间范围,不随页面滚动 ── */
-  .sec-nav {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 40;
-    background: var(--nav-bg);
-    backdrop-filter: blur(18px) saturate(1.5); -webkit-backdrop-filter: blur(18px) saturate(1.5);
-    border-bottom: 1px solid var(--card-border);
-  }
-  .nav-inner {
-    max-width: 1180px; margin: 0 auto; padding: 8px 28px 6px;
-    display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  }
-  .nav-brand { display: flex; align-items: center; gap: 9px; flex: none; }
-  .nav-brand .mark {
-    width: 26px; height: 26px; border-radius: 7px; flex: none;
-    background-image: var(--app-icon); background-size: 100% 100%;
-    box-shadow: 0 0 0 1px var(--card-border), 0 3px 10px rgba(0, 0, 0, 0.25);
-  }
-  .nav-brand .name { font-size: 13px; font-weight: 700; letter-spacing: -0.1px; }
-  .nav-links {
-    position: relative; display: flex; gap: 2px; flex: 1;
-    min-width: 0; overflow-x: auto; scrollbar-width: none;
-  }
-  .nav-links::-webkit-scrollbar { display: none; }
-  /* 滑动指示器:由 JS 依激活项定位,提供连续的切换动势 */
-  .nav-pill {
-    position: absolute; top: 0; left: 0; height: 27px; width: 0;
-    border-radius: 8px; opacity: 0;
-    background: color-mix(in srgb, var(--accent) 15%, transparent);
-    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 12%, transparent);
-    transition: transform 0.28s cubic-bezier(0.3, 0.9, 0.3, 1),
-      width 0.28s cubic-bezier(0.3, 0.9, 0.3, 1), opacity 0.2s ease;
-  }
-  .nav-links a {
-    position: relative; z-index: 1; flex: none; text-decoration: none; color: var(--text-3);
-    font-size: 12px; font-weight: 600; letter-spacing: 0.2px;
-    padding: 6px 12px; border-radius: 8px; white-space: nowrap;
-    transition: color 0.15s ease;
-  }
-  .nav-links a:hover { color: var(--text); }
-  .nav-links a.active { color: var(--accent); }
-  /* 底部滚动进度:渐变细线随阅读进度增长 */
+  /* 时间栏下沿的阅读进度:细线随滚动位置增长 */
   .nav-progress {
-    height: 2px; margin-top: 4px; border-radius: 0 2px 2px 0;
+    position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 2px; border-radius: 0 2px 2px 0;
     background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #a855f7));
     width: 0; transition: width 0.1s linear;
   }
-  body.has-sec-nav { padding-top: 56px; }
-  @media (max-width: 880px) {
-    .nav-inner { padding: 8px 16px 6px; }
-    .nav-brand .name { display: none; }
-    .wrap { padding: 20px 16px 48px; }
+  @media (max-width: 980px) {
+    .rail { width: 150px; padding-inline: 9px; }
+    .module-nav a { gap: 8px; padding: 9px 8px; font-size: 12px; }
+    .top, .filters { padding-inline: 18px; }
+    .content { padding: 20px 18px 48px; }
   }
-  @media (max-width: 720px) { .nav-brand { display: none; } }
+  @media (max-width: 720px) {
+    .rail { width: 116px; }
+    .module-nav a { gap: 7px; padding: 8px 7px; font-size: 11px; }
+    .rail-footer { display: none; }
+  }
 
   /* ── 卡片进场动效(滚动触发) ───────────── */
   section, .kpi, .insight { transition: opacity 0.5s ease, transform 0.5s ease; }
@@ -441,7 +491,7 @@
     box-shadow: 0 0 12px color-mix(in srgb, currentColor 12%, transparent);
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .kpi-chip .icon { width: 17px; height: 17px; margin: 0; }
+  .kpi-chip .sf { width: 17px; height: 17px; margin: 0; }
   .kpi:hover .kpi-chip { transform: scale(1.08); box-shadow: 0 0 18px color-mix(in srgb, currentColor 20%, transparent); }
 
   /* ── 分区标题图标芯片化 ────────────────── */
@@ -453,14 +503,15 @@
     box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
   }
-  .sec-head .icon-chip .icon { width: 14px; height: 14px; margin: 0; color: currentColor; }
+  .sec-head .icon-chip .sf { width: 14px; height: 14px; margin: 0; color: currentColor; }
   .card:hover .sec-head .icon-chip {
     transform: scale(1.06);
     box-shadow: 0 0 14px color-mix(in srgb, currentColor 22%, transparent);
   }
 
   /* 粘性导航下的锚点滚动留白 */
-  #content > section { scroll-margin-top: 68px; }
+  /* 锚点跳转(设置页「查看时段」等)落在内层滚动容器里:时间栏在容器之外,留一点呼吸即可 */
+  #content > section { scroll-margin-top: 18px; }
 
   /* ── 卡片悬浮微交互 ───────────────────── */
   .card { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
@@ -478,21 +529,9 @@
   }
   .to-top.show { opacity: 1; transform: none; pointer-events: auto; }
   .to-top:hover { color: var(--accent); }
-  .to-top .icon { width: 18px; height: 18px; }
+  .to-top .sf { width: 18px; height: 18px; }
 
   /* ── 顶栏「打印 / 导出 PDF」按钮:与时间选择器同处导航右端 ── */
-  .nav-print {
-    display: inline-flex; align-items: center; gap: 6px; flex: none;
-    padding: 5px 11px; border-radius: 8px; cursor: pointer;
-    border: 1px solid var(--card-border); background: var(--card);
-    color: var(--text-2); font: inherit; font-size: 12px; font-weight: 600;
-    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-  }
-  .nav-print:hover {
-    color: var(--accent);
-    border-color: color-mix(in srgb, var(--accent) 42%, var(--card-border));
-  }
-  .nav-print .icon { width: 14px; height: 14px; }
 
   /* ── 打印 / 导出 PDF:强制浅色纸张排版,移除屏幕专属的氛围层与交互件 ── */
   @media print {
@@ -507,10 +546,15 @@
       --shadow: none; --shadow-sm: none;
       color-scheme: light;
     }
-    /* 氛围光晕、粘性导航、返回顶部、打印按钮均为屏幕交互层,纸上不需要 */
+    /* 氛围光晕、模块栏、返回顶部、打印按钮均为屏幕交互层,纸上不需要 */
     body::before, body::after,
-    .sec-nav, .to-top, .nav-print { display: none !important; }
-    body.has-sec-nav { padding-top: 0 !important; }
+    .rail, .to-top { display: none !important; }
+    /* 内层滚动容器在纸上必须摊平:否则只印出首屏可见的那一段 */
+    .shell, .workspace, .main, .scroll {
+      display: block !important; height: auto !important; overflow: visible !important;
+    }
+    /* 时间档位是交互控件,纸上只保留「当前范围」文案 */
+    .range-controls { display: none !important; }
     body { background: #ffffff !important; }
     /* 滚动进场的隐藏态必须全部显形,否则未滚到的分区在纸上空白 */
     .reveal { opacity: 1 !important; transform: none !important; }
@@ -520,306 +564,54 @@
     tr, .app-row, .event { break-inside: avoid; page-break-inside: avoid; }
     thead { display: table-header-group; }
     .chart canvas { max-width: 100% !important; height: auto !important; }
-    .wrap { max-width: none; padding: 0; }
+    .content { max-width: none; padding: 0; }
     a { color: inherit; text-decoration: none; }
     @page { margin: 14mm; }
   }
 </style>
 </head>
 <body>
-<svg xmlns="http://www.w3.org/2000/svg" style="display:none" aria-hidden="true">
-  <!-- 设备与平台 (Header Chips) -->
-  <symbol id="i-device-mac" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4 6.5A2.5 2.5 0 0 1 6.5 4h11A2.5 2.5 0 0 1 20 6.5v9a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-9Z" />
-    <path d="M2 19.5h20" stroke-width="2" />
-    <circle cx="12" cy="17.5" r="0.8" fill="currentColor" />
-  </symbol>
-  <symbol id="i-os-apple" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
-    <path d="M8 9.5a2 2 0 1 1 2.5 1.94v2.12A2 2 0 1 1 8 15.5" stroke-width="1.6" />
-    <circle cx="9.5" cy="8.5" r="0.8" fill="currentColor" />
-    <circle cx="9.5" cy="15.5" r="0.8" fill="currentColor" />
-    <path d="M14.5 9.5a2 2 0 1 0-2.5 1.94v2.12a2 2 0 1 0 2.5 1.94" stroke-width="1.6" />
-    <circle cx="14.5" cy="8.5" r="0.8" fill="currentColor" />
-    <circle cx="14.5" cy="15.5" r="0.8" fill="currentColor" />
-  </symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M12 7v5l3.5 2" stroke-width="2" />
-  </symbol>
-  <symbol id="i-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3.5" y="4.5" width="17" height="16" rx="3" />
-    <path d="M3.5 9.5h17" stroke-width="1.5" />
-    <path d="M8 2.5v3.5M16 2.5v3.5" stroke-width="2" />
-    <circle cx="8" cy="14" r="1" fill="currentColor" />
-    <circle cx="12" cy="14" r="1" fill="currentColor" />
-    <circle cx="16" cy="14" r="1" fill="currentColor" />
-  </symbol>
 
-  <!-- 总体健康与趋势 -->
-  <symbol id="i-health" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 3.2L19.5 6.5V12.2C19.5 16.8 16.3 20.8 12 21.8C7.7 20.8 4.5 16.8 4.5 12.2V6.5L12 3.2Z" fill="currentColor" fill-opacity="0.16" />
-    <path d="M8.8 12.2L11 14.5L15.5 9.8" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
-  </symbol>
-  <symbol id="i-trend" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="3" y1="20" x2="21" y2="20" stroke-dasharray="2 3" opacity="0.4" />
-    <path d="M3.5 16.5L8 12.5L13 14.5L20.5 5.5" stroke-width="2" />
-    <circle cx="20.5" cy="5.5" r="2" fill="currentColor" />
-  </symbol>
-  <symbol id="i-overview" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
-    <path d="M3 13.5L7 9.5L11 14.5L15 8L19 13.5L21 11" stroke-width="1.8" />
-  </symbol>
-  <symbol id="i-heatmap" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="4" />
-    <circle cx="7.5" cy="7.5" r="1.5" fill="currentColor" fill-opacity="0.3" />
-    <circle cx="12" cy="7.5" r="1.8" fill="currentColor" fill-opacity="0.6" />
-    <circle cx="16.5" cy="7.5" r="2.2" fill="currentColor" />
-    <circle cx="7.5" cy="12" r="1.8" fill="currentColor" fill-opacity="0.6" />
-    <circle cx="12" cy="12" r="2.4" fill="currentColor" />
-    <circle cx="16.5" cy="12" r="1.8" fill="currentColor" fill-opacity="0.7" />
-    <circle cx="7.5" cy="16.5" r="1.3" fill="currentColor" fill-opacity="0.25" />
-    <circle cx="12" cy="16.5" r="1.6" fill="currentColor" fill-opacity="0.5" />
-    <circle cx="16.5" cy="16.5" r="2" fill="currentColor" fill-opacity="0.85" />
-  </symbol>
 
-  <!-- CPU 家族 -->
-  <symbol id="i-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="4.5" y="4.5" width="15" height="15" rx="3" />
-    <rect x="8.5" y="8.5" width="7" height="7" rx="1.5" fill="currentColor" fill-opacity="0.22" />
-    <path d="M8.5 2v2.5M12 2v2.5M15.5 2v2.5M8.5 19.5V22M12 19.5V22M15.5 19.5V22" />
-    <path d="M2 8.5h2.5M2 12h2.5M2 15.5h2.5M19.5 8.5H22M19.5 12H22M19.5 15.5H22" />
-  </symbol>
-  <symbol id="i-cpu-clusters" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3" width="18" height="18" rx="3.5" />
-    <rect x="5.5" y="5.5" width="6" height="13" rx="1.5" fill="currentColor" fill-opacity="0.25" />
-    <rect x="13.5" y="5.5" width="5" height="5.5" rx="1.2" fill="currentColor" fill-opacity="0.15" />
-    <rect x="13.5" y="13" width="5" height="5.5" rx="1.2" fill="currentColor" fill-opacity="0.15" />
-    <line x1="12.5" y1="5.5" x2="12.5" y2="18.5" stroke-dasharray="1 2" stroke-width="1.2" opacity="0.6" />
-  </symbol>
-  <symbol id="i-distribution" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="3" y1="20" x2="21" y2="20" />
-    <rect x="4.5" y="15" width="2.5" height="5" rx="0.8" fill="currentColor" fill-opacity="0.15" />
-    <rect x="8.5" y="10" width="2.5" height="10" rx="0.8" fill="currentColor" fill-opacity="0.25" />
-    <rect x="12.5" y="6" width="2.5" height="14" rx="0.8" fill="currentColor" fill-opacity="0.35" />
-    <rect x="16.5" y="12" width="2.5" height="8" rx="0.8" fill="currentColor" fill-opacity="0.2" />
-    <path d="M3.5 19C6 18 7.5 12 10.5 7.5C12.5 4.5 14.5 7 17 13C18.5 16.5 19.5 18.5 21 19" stroke-width="1.8" />
-  </symbol>
-
-  <!-- GPU 家族 (彻底替换旧的 i-monitor 桌面显示器) -->
-  <symbol id="i-gpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 2.5L20.5 7.5V16.5L12 21.5L3.5 16.5V7.5L12 2.5Z" />
-    <path d="M12 2.5V12L20.5 7.5" fill="currentColor" fill-opacity="0.24" />
-    <path d="M12 12V21.5L20.5 16.5" fill="currentColor" fill-opacity="0.12" />
-    <path d="M3.5 7.5L12 12L3.5 16.5" fill="currentColor" fill-opacity="0.28" />
-  </symbol>
-  <symbol id="i-gpu-mem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="7" y="5.5" width="10" height="13" rx="2" fill="currentColor" fill-opacity="0.2" />
-    <rect x="2.5" y="7" width="2.5" height="4.5" rx="0.8" />
-    <rect x="2.5" y="12.5" width="2.5" height="4.5" rx="0.8" />
-    <rect x="19" y="7" width="2.5" height="4.5" rx="0.8" />
-    <rect x="19" y="12.5" width="2.5" height="4.5" rx="0.8" />
-    <line x1="5" y1="9.2" x2="7" y2="9.2" stroke-width="1.4" />
-    <line x1="5" y1="14.8" x2="7" y2="14.8" stroke-width="1.4" />
-    <line x1="17" y1="9.2" x2="19" y2="9.2" stroke-width="1.4" />
-    <line x1="17" y1="14.8" x2="19" y2="14.8" stroke-width="1.4" />
-  </symbol>
-
-  <!-- 内存家族 -->
-  <symbol id="i-mem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="2.5" y="6.5" width="19" height="11" rx="2" />
-    <rect x="5" y="9" width="3" height="4" rx="0.8" fill="currentColor" fill-opacity="0.25" />
-    <rect x="9.5" y="9" width="3" height="4" rx="0.8" fill="currentColor" fill-opacity="0.25" />
-    <rect x="14" y="9" width="3" height="4" rx="0.8" fill="currentColor" fill-opacity="0.25" />
-    <path d="M2.5 17.5h6v-1.5h1.5v1.5h11" />
-  </symbol>
-  <symbol id="i-gauge" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M4.5 17.5A8.5 8.5 0 1 1 19.5 17.5" />
-    <line x1="12" y1="13" x2="16.5" y2="8.5" stroke-width="2" />
-    <circle cx="12" cy="13" r="2" fill="currentColor" />
-    <line x1="12" y1="4.5" x2="12" y2="6.5" opacity="0.6" />
-  </symbol>
-
-  <!-- 存储与磁盘 (彻底替换旧的 i-hard-drive 机械硬盘) -->
-  <symbol id="i-disk" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="4" y="3.5" width="16" height="17" rx="2.5" />
-    <rect x="7" y="6" width="10" height="4.5" rx="1" fill="currentColor" fill-opacity="0.25" />
-    <rect x="7" y="12" width="4.5" height="4.5" rx="0.8" fill="currentColor" fill-opacity="0.18" />
-    <rect x="12.5" y="12" width="4.5" height="4.5" rx="0.8" fill="currentColor" fill-opacity="0.18" />
-    <path d="M7 20.5v1.5M10 20.5v1.5M14 20.5v1.5M17 20.5v1.5" stroke-width="1.5" />
-  </symbol>
-  <symbol id="i-disk-daily" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="3" y1="20.5" x2="21" y2="20.5" />
-    <rect x="5" y="9.5" width="5.5" height="11" rx="1.5" fill="currentColor" fill-opacity="0.25" />
-    <rect x="13.5" y="5" width="5.5" height="15.5" rx="1.5" fill="currentColor" fill-opacity="0.15" />
-    <path d="M7.75 7V4M6.25 5.5l1.5-1.5 1.5 1.5" stroke-width="1.5" />
-    <path d="M16.25 2v3M14.75 3.5l1.5 1.5 1.5-1.5" stroke-width="1.5" />
-  </symbol>
-
-  <!-- 网络家族 -->
-  <symbol id="i-network" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9" />
-    <path d="M3.6 9h16.8M3.6 15h16.8" opacity="0.5" />
-    <ellipse cx="12" cy="12" rx="4.5" ry="9" />
-  </symbol>
-  <symbol id="i-net-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 3.5v12.5M6 10.5l6 6 6-6" />
-    <path d="M4 19.5h16" stroke-width="1.8" />
-  </symbol>
-  <symbol id="i-net-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 16.5V4M6 9.5l6-6 6 6" />
-    <path d="M4 20h16" stroke-width="1.8" />
-  </symbol>
-  <symbol id="i-net-daily" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="3" y1="20.5" x2="21" y2="20.5" />
-    <rect x="4.5" y="11" width="4" height="9.5" rx="1.2" fill="currentColor" fill-opacity="0.18" />
-    <rect x="10" y="5.5" width="4" height="15" rx="1.2" fill="currentColor" fill-opacity="0.28" />
-    <rect x="15.5" y="8" width="4" height="12.5" rx="1.2" fill="currentColor" fill-opacity="0.22" />
-    <path d="M8 3.5C10 2.5 14 2.5 16 3.5" stroke-width="1.5" opacity="0.6" />
-  </symbol>
-
-  <!-- 功耗与电池 (彻底替换旧的 i-battery-charging) -->
-  <symbol id="i-power" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9.2" stroke-dasharray="2 3" opacity="0.45" />
-    <path d="M13 2.8L6.5 13H12L11 21.2L17.5 11H12L13 2.8Z" fill="currentColor" fill-opacity="0.22" stroke-width="1.8" />
-  </symbol>
-  <symbol id="i-batt" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="2.5" y="6.5" width="16.5" height="11" rx="3" />
-    <path d="M21 10v4" stroke-width="2" stroke-linecap="round" />
-    <rect x="5" y="9" width="3" height="6" rx="1" fill="currentColor" />
-    <rect x="9.5" y="9" width="3" height="6" rx="1" fill="currentColor" />
-    <rect x="14" y="9" width="3" height="6" rx="1" fill="currentColor" fill-opacity="0.35" />
-  </symbol>
-  <symbol id="i-battery-health" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="2.5" y="6.5" width="16.5" height="11" rx="3" />
-    <path d="M21 10v4" stroke-width="2" stroke-linecap="round" />
-    <path d="M5.5 12h2.2l1.3-2.5 2 5 1.5-3 1 1.5h2" stroke-width="1.7" />
-  </symbol>
-
-  <!-- 热与异常时间线 -->
-  <symbol id="i-thermal" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M14 4.5A2 2 0 0 0 10 4.5V14.2A4 4 0 1 0 14 14.2V4.5Z" />
-    <circle cx="12" cy="16.5" r="2" fill="currentColor" />
-    <line x1="12" y1="9" x2="12" y2="14.5" stroke-width="2" />
-    <path d="M17 7.5c1 .8 1 2.2 0 3M19 5.5c2 1.5 2 4.5 0 6" stroke-width="1.4" opacity="0.7" />
-  </symbol>
-  <symbol id="i-fan" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <circle cx="12" cy="12" r="9.2" />
-    <circle cx="12" cy="12" r="2.5" fill="currentColor" fill-opacity="0.3" />
-    <path d="M12 9.5c0-3.5 3-4.5 3-4.5s0 3.5-3 4.5ZM14.5 12c3.5 0 4.5 3 4.5 3s-3.5 0-4.5-3ZM12 14.5c0 3.5-3 4.5-3 4.5s0-3.5 3-4.5ZM9.5 12c-3.5 0-4.5-3-4.5-3s3.5 0 4.5 3Z" fill="currentColor" fill-opacity="0.25" />
-  </symbol>
-  <symbol id="i-flame" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z" />
-  </symbol>
-  <symbol id="i-events" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="5" y1="3" x2="5" y2="21" stroke-width="2" />
-    <path d="M5 5.5H18.5L15.5 10.5L18.5 15.5H5" fill="currentColor" fill-opacity="0.2" stroke-width="1.8" />
-    <circle cx="5" cy="5.5" r="2" fill="currentColor" />
-  </symbol>
-
-  <!-- 表格与智能洞察 -->
-  <symbol id="i-table" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3.5" width="18" height="17" rx="3" />
-    <line x1="3" y1="9.5" x2="21" y2="9.5" stroke-width="1.8" />
-    <line x1="3" y1="15" x2="21" y2="15" stroke-width="1.2" opacity="0.6" />
-    <line x1="9" y1="3.5" x2="9" y2="20.5" stroke-width="1.5" />
-    <line x1="15" y1="3.5" x2="15" y2="20.5" stroke-width="1.2" opacity="0.6" />
-    <rect x="3" y="3.5" width="18" height="6" rx="3" fill="currentColor" fill-opacity="0.15" />
-  </symbol>
-  <symbol id="i-insights" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="currentColor" fill-opacity="0.2" />
-    <circle cx="18.5" cy="5.5" r="1.2" fill="currentColor" />
-    <circle cx="6" cy="18.5" r="1" fill="currentColor" opacity="0.7" />
-  </symbol>
-  <symbol id="i-sparkles" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 2C12 7.5 7.5 12 2 12C7.5 12 12 16.5 12 22C12 16.5 16.5 12 22 12C16.5 12 12 7.5 12 2Z" fill="currentColor" fill-opacity="0.2" />
-    <circle cx="18.5" cy="5.5" r="1.2" fill="currentColor" />
-    <circle cx="6" cy="18.5" r="1" fill="currentColor" opacity="0.7" />
-  </symbol>
-  <symbol id="i-chart-column" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <line x1="3" y1="20" x2="21" y2="20" />
-    <rect x="5" y="10" width="3" height="10" rx="1" fill="currentColor" fill-opacity="0.2" />
-    <rect x="10.5" y="5" width="3" height="15" rx="1" fill="currentColor" fill-opacity="0.3" />
-    <rect x="16" y="12" width="3" height="8" rx="1" fill="currentColor" fill-opacity="0.2" />
-  </symbol>
-  <symbol id="i-print" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <polyline points="6 9 6 3 18 3 18 9" />
-    <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" />
-    <rect x="6" y="14" width="12" height="7" rx="1" />
-  </symbol>
-  <symbol id="i-arrow-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M12 19V5M5 12l7-7 7 7" />
-  </symbol>
-
-  <!-- Top 应用分类专属角标 -->
-  <symbol id="i-app-cpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
-    <rect x="8" y="8.5" width="8" height="7" rx="1.5" fill="currentColor" fill-opacity="0.25" />
-    <path d="M10 2v1.5M14 2v1.5M10 20.5V22M14 20.5V22" />
-  </symbol>
-  <symbol id="i-app-mem" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
-    <rect x="6.5" y="9" width="3.2" height="6" rx="0.8" fill="currentColor" fill-opacity="0.25" />
-    <rect x="11" y="9" width="3.2" height="6" rx="0.8" fill="currentColor" fill-opacity="0.25" />
-    <rect x="15.5" y="9" width="2" height="6" rx="0.8" fill="currentColor" fill-opacity="0.25" />
-  </symbol>
-  <symbol id="i-app-gpu" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
-    <path d="M12 7L16.5 10V15L12 18L7.5 15V10L12 7Z" fill="currentColor" fill-opacity="0.25" />
-  </symbol>
-  <symbol id="i-app-net" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3" y="3.5" width="18" height="17" rx="3.5" />
-    <circle cx="12" cy="12" r="5" fill="currentColor" fill-opacity="0.2" />
-    <path d="M12 7c2 1.5 2 3.5 0 5s-2 3.5 0 5" opacity="0.6" />
-  </symbol>
-  <symbol id="i-app-generic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="3.5" y="3.5" width="17" height="17" rx="4" />
-    <rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor" fill-opacity="0.2" stroke-dasharray="1 2" stroke-width="1.2" />
-  </symbol>
-</svg>
-
-<div class="wrap" id="app">
-  <header class="hero">
+<div class="shell" id="app">
+  <header class="top">
     <div class="brand">
-      <div class="kicker">DIAGNOSTIC TELEMETRY DOSSIER</div>
-      <h1 id="report-title"></h1>
-      <div class="sub" id="report-sub"></div>
+      <span class="mark" aria-hidden="true"></span>
+      <span>
+        <div class="kicker">DIAGNOSTIC TELEMETRY DOSSIER</div>
+        <h1 id="report-title"></h1>
+      </span>
     </div>
-    <div class="meta-chips" id="meta-chips"></div>
+    <div class="top-side">
+      <div class="meta-chips" id="meta-chips"></div>
+    </div>
   </header>
 
-  <nav class="sec-nav" id="sec-nav" hidden>
-    <div class="nav-inner">
-      <div class="nav-brand">
-        <span class="mark" aria-hidden="true"></span>
-        <span class="name">HagimiMonitor</span>
-      </div>
-      <div class="toolbar" id="toolbar">
-        <div class="nav-links" id="nav-links"><span class="nav-pill" id="nav-pill"></span></div>
-        <div class="ranges" id="ranges"></div>
-        <div class="custom-range" id="custom-range">
-          <input type="text" id="cal-range" class="cal-field" readonly autocomplete="off">
+  <div class="workspace">
+    <aside class="rail" id="rail">
+      <div class="eyebrow" id="rail-eyebrow"></div>
+      <nav class="module-nav" id="module-nav"></nav>
+      <div class="rail-footer" id="rail-footer"></div>
+    </aside>
+
+    <main class="main">
+      <div class="filters" id="filters">
+        <div class="filter-title" id="range-title"></div>
+        <div class="range-controls">
+          <div class="ranges" id="ranges"></div>
+          <div class="custom-range" id="custom-range">
+            <input type="text" id="cal-range" class="cal-field" readonly autocomplete="off">
+          </div>
         </div>
+        <div class="nav-progress" id="nav-progress"></div>
       </div>
-      <button class="nav-print" id="nav-print" type="button">
-        <svg class="icon"><use href="#i-print"/></svg>
-        <span id="nav-print-label"></span>
-      </button>
-    </div>
-    <div class="nav-progress" id="nav-progress"></div>
-  </nav>
 
-  <div id="blank" class="blank-hero" hidden>
-    <div><svg class="icon"><use href="#i-chart-column"/></svg></div>
-    <h2 id="blank-title"></h2>
-    <p id="blank-body"></p>
-  </div>
-
-  <div id="content">
+      <div class="scroll" id="scroller">
+  <div id="content" class="content">
     <section class="summary">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-health"/></svg></span><h2 id="t-health"></h2>
+          <span class="icon-chip c-accent"><span class="sf sf-health"></span></span><h2 id="t-health"></h2>
         </div>
         <div class="health-main" id="health-main"></div>
       </div>
@@ -829,7 +621,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-trend"/></svg></span><h2 id="t-health-trend"></h2>
+          <span class="icon-chip c-accent"><span class="sf sf-trend"></span></span><h2 id="t-health-trend"></h2>
         </div>
         <div class="chart short" id="ch-health-trend"></div>
         <div class="empty" id="e-health-trend"></div>
@@ -839,7 +631,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-overview"/></svg></span><h2 id="t-overview"></h2>
+          <span class="icon-chip c-accent"><span class="sf sf-overview"></span></span><h2 id="t-overview"></h2>
           <span class="hint" id="h-overview"></span>
         </div>
         <div class="chart" id="ch-overview"></div>
@@ -850,7 +642,7 @@
     <section id="sec-heatmap" data-keep-nav>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-accent"><svg class="icon"><use href="#i-heatmap"/></svg></span><h2 id="t-heatmap"></h2>
+          <span class="icon-chip c-accent"><span class="sf sf-heatmap"></span></span><h2 id="t-heatmap"></h2>
           <span class="hint" style="display:flex;align-items:center;gap:14px">
             <span id="h-heatmap"></span>
             <span class="heat-legend"><span id="lbl-low"></span><span class="heat-scale" id="heat-scale"></span><span id="lbl-high"></span></span>
@@ -860,10 +652,10 @@
       </div>
     </section>
 
-    <section>
+    <section id="sec-cpu">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-cpu"/></svg></span><h2 id="t-cpu"></h2>
+          <span class="icon-chip c-cpu"><span class="sf sf-cpu"></span></span><h2 id="t-cpu"></h2>
           <span class="hint" id="h-cpu"></span>
         </div>
         <div class="chart" id="ch-cpu"></div>
@@ -874,24 +666,24 @@
     <section class="inner-grid">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-cpu-clusters"/></svg></span><h2 id="t-cpu-pe" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-cpu"><span class="sf sf-cpu"></span></span><h2 id="t-cpu-pe" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-cpu-pe"></div>
         <div class="empty" id="e-cpu-pe"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-distribution"/></svg></span><h2 id="t-cpu-dist" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-cpu"><span class="sf sf-dist"></span></span><h2 id="t-cpu-dist" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-cpu-dist"></div>
         <div class="empty" id="e-cpu-dist"></div>
       </div>
     </section>
 
-    <section>
+    <section id="sec-gpu">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-gpu"/></svg></span><h2 id="t-gpu"></h2>
+          <span class="icon-chip c-gpu"><span class="sf sf-gpu"></span></span><h2 id="t-gpu"></h2>
           <span class="hint" id="h-gpu"></span>
         </div>
         <div class="chart" id="ch-gpu"></div>
@@ -902,24 +694,24 @@
     <section class="inner-grid">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-distribution"/></svg></span><h2 id="t-gpu-dist" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-gpu"><span class="sf sf-dist"></span></span><h2 id="t-gpu-dist" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-gpu-dist"></div>
         <div class="empty" id="e-gpu-dist"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-gpu-mem"/></svg></span><h2 id="t-gpu-mem" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-gpu"><span class="sf sf-mem"></span></span><h2 id="t-gpu-mem" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-gpu-mem"></div>
         <div class="empty" id="e-gpu-mem"></div>
       </div>
     </section>
 
-    <section>
+    <section id="sec-mem">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-mem"><svg class="icon"><use href="#i-mem"/></svg></span><h2 id="t-mem"></h2>
+          <span class="icon-chip c-mem"><span class="sf sf-mem"></span></span><h2 id="t-mem"></h2>
           <span class="hint" id="h-mem"></span>
         </div>
         <div class="chart" id="ch-mem"></div>
@@ -927,10 +719,10 @@
       </div>
     </section>
 
-    <section>
+    <section id="sec-net">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-net"><svg class="icon"><use href="#i-network"/></svg></span><h2 id="t-net"></h2>
+          <span class="icon-chip c-net"><span class="sf sf-net"></span></span><h2 id="t-net"></h2>
           <span class="hint" id="h-net"></span>
         </div>
         <div class="chart" id="ch-net"></div>
@@ -941,17 +733,17 @@
     <section id="sec-net-daily" data-keep-nav>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-net"><svg class="icon"><use href="#i-net-daily"/></svg></span><h2 id="t-net-daily" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-net"><span class="sf sf-net"></span></span><h2 id="t-net-daily" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-net-daily"></div>
         <div class="empty" id="e-net-daily"></div>
       </div>
     </section>
 
-    <section>
+    <section id="sec-disk">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-disk"><svg class="icon"><use href="#i-disk"/></svg></span><h2 id="t-disk"></h2>
+          <span class="icon-chip c-disk"><span class="sf sf-disk"></span></span><h2 id="t-disk"></h2>
           <span class="hint" id="h-disk"></span>
         </div>
         <div class="chart" id="ch-disk"></div>
@@ -962,17 +754,17 @@
     <section id="sec-disk-daily" data-keep-nav>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-disk"><svg class="icon"><use href="#i-disk-daily"/></svg></span><h2 id="t-disk-daily" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-disk"><span class="sf sf-disk"></span></span><h2 id="t-disk-daily" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-disk-daily"></div>
         <div class="empty" id="e-disk-daily"></div>
       </div>
     </section>
 
-    <section>
+    <section id="sec-power">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-batt"><svg class="icon"><use href="#i-power"/></svg></span><h2 id="t-power"></h2>
+          <span class="icon-chip c-batt"><span class="sf sf-power"></span></span><h2 id="t-power"></h2>
           <span class="hint" id="h-power"></span>
         </div>
         <div class="chart" id="ch-power"></div>
@@ -983,14 +775,14 @@
     <section class="inner-grid" id="sec-batt">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-batt"><svg class="icon"><use href="#i-batt"/></svg></span><h2 id="t-batt" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-batt"><span class="sf sf-batt"></span></span><h2 id="t-batt" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-batt"></div>
         <div class="empty" id="e-batt"></div>
       </div>
       <div class="card" id="sec-battery-health">
         <div class="sec-head">
-          <span class="icon-chip c-batt"><svg class="icon"><use href="#i-battery-health"/></svg></span><h2 id="t-battery-health" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-batt"><span class="sf sf-battHealth"></span></span><h2 id="t-battery-health" style="font-size:13.5px"></h2>
         </div>
         <div class="chart short" id="ch-battery-health"></div>
         <div class="empty" id="e-battery-health"></div>
@@ -1000,25 +792,25 @@
     <section class="apps-section" id="sec-apps">
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-cpu"><svg class="icon"><use href="#i-app-cpu"/></svg></span><h2 id="t-apps-cpu" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-cpu"><span class="sf sf-cpu"></span></span><h2 id="t-apps-cpu" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-cpu"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-mem"><svg class="icon"><use href="#i-app-mem"/></svg></span><h2 id="t-apps-mem" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-mem"><span class="sf sf-mem"></span></span><h2 id="t-apps-mem" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-mem"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-gpu"><svg class="icon"><use href="#i-app-gpu"/></svg></span><h2 id="t-apps-gpu" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-gpu"><span class="sf sf-gpu"></span></span><h2 id="t-apps-gpu" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-gpu"></div>
       </div>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-net"><svg class="icon"><use href="#i-app-net"/></svg></span><h2 id="t-apps-net" style="font-size:13.5px"></h2>
+          <span class="icon-chip c-net"><span class="sf sf-net"></span></span><h2 id="t-apps-net" style="font-size:13.5px"></h2>
         </div>
         <div class="app-list" id="app-list-net"></div>
       </div>
@@ -1028,7 +820,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-thermal"><svg class="icon"><use href="#i-thermal"/></svg></span><h2 id="t-thermal"></h2>
+          <span class="icon-chip c-thermal"><span class="sf sf-thermal"></span></span><h2 id="t-thermal"></h2>
           <span class="hint" id="h-thermal"></span>
         </div>
         <div class="chart" id="ch-thermal"></div>
@@ -1039,7 +831,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-thermal"><svg class="icon"><use href="#i-events"/></svg></span><h2 id="t-events"></h2>
+          <span class="icon-chip c-thermal"><span class="sf sf-alert"></span></span><h2 id="t-events"></h2>
           <span class="hint" id="h-events"></span>
         </div>
         <div class="events" id="events"></div>
@@ -1049,7 +841,7 @@
     <section>
       <div class="card">
         <div class="sec-head">
-          <span class="icon-chip c-muted"><svg class="icon"><use href="#i-table"/></svg></span><h2 id="t-table"></h2>
+          <span class="icon-chip c-muted"><span class="sf sf-table"></span></span><h2 id="t-table"></h2>
         </div>
         <div class="tbl-wrap" id="tbl"></div>
         <div class="empty" id="e-table"></div>
@@ -1058,7 +850,7 @@
 
     <section>
       <div class="sec-head" style="margin:0 0 14px">
-        <span class="icon-chip c-accent"><svg class="icon"><use href="#i-insights"/></svg></span><h2 id="t-insights"></h2>
+        <span class="icon-chip c-accent"><span class="sf sf-insights"></span></span><h2 id="t-insights"></h2>
       </div>
       <div class="insights" id="insights"></div>
     </section>
@@ -1066,8 +858,17 @@
     <footer id="footer"></footer>
   </div>
 
+        <div id="blank" class="blank-hero" hidden>
+          <div><span class="sf sf-dist"></span></div>
+          <h2 id="blank-title"></h2>
+          <p id="blank-body"></p>
+        </div>
+      </div>
+    </main>
+  </div>
+
   <button class="to-top" id="to-top" aria-label="back to top">
-    <svg class="icon"><use href="#i-arrow-up"/></svg>
+    <span class="sf sf-top"></span>
   </button>
 </div>
 
@@ -1088,8 +889,9 @@
 
   const $ = (id) => document.getElementById(id);
   const el = (tag, cls) => { const e = document.createElement(tag); if (cls) e.className = cls; return e; };
-  // 调用点两种约定并存(带/不带 i- 前缀),统一容错,避免空引用画出空图标
-  const icon = (name, cls) => `<svg class="icon ${cls || ""}"><use href="#${name.startsWith("i-") ? name : "i-" + name}"/></svg>`;
+  // 符号图标:字形由生成端内联成 CSS 变量(--i-*),这里只用 class 选色/尺寸,
+  // 颜色跟随 currentColor(主题与选中态自动适配)。
+  const sf = (key, cls) => `<span class="sf sf-${key} ${cls || ""}"></span>`;
 
   // ── 主题调色板(跟随系统明暗,变更时全量重绘) ───────────────────
   const themeQuery = matchMedia("(prefers-color-scheme: light)");
@@ -1224,22 +1026,20 @@
   const generatedMs = DATA.generatedAt < 1e12 ? DATA.generatedAt * 1000 : DATA.generatedAt;
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-  const startOfYear = new Date(now.getFullYear(), 0, 1).getTime();
 
   // ── 文案与静态骨架 ────────────────────────────────────────────
   document.title = I.reportTitle;
   $("report-title").textContent = I.reportTitle;
-  $("report-sub").textContent = I.reportSub;
   const chips = [
-    ["i-device-mac", DATA.meta.device],
-    ["i-cpu", DATA.meta.model],
-    ["i-os-apple", DATA.meta.os],
-    ["i-clock", t("metaDays", { v: DATA.meta.days })],
-    ["i-calendar", t("metaGenerated", { v: fmtDate(generatedMs) + " " + fmtClock(generatedMs) })],
+    ["device", DATA.meta.device],
+    ["cpu", DATA.meta.model],
+    ["os", DATA.meta.os],
+    ["clock", t("metaDays", { v: DATA.meta.days })],
+    ["calendar", t("metaGenerated", { v: fmtDate(generatedMs) + " " + fmtClock(generatedMs) })],
   ];
   chips.forEach(([ic, text]) => {
     const c = el("span", "chip");
-    c.innerHTML = icon(ic) + "<span></span>";
+    c.innerHTML = sf(ic) + "<span></span>";
     c.lastChild.textContent = text;
     $("meta-chips").appendChild(c);
   });
@@ -1275,29 +1075,17 @@
   // 日期范围字段的占位文案(选择后实时写入所选范围)
   $("cal-range").placeholder = I.selectRange;
   $("footer").innerHTML = I.footer + "<br>" + I.footerLocal;
-  // ── 打印 / 导出 PDF ─────────────────────────────
-  $("nav-print-label").textContent = t("print");
-  $("nav-print").title = t("print");
-  $("nav-print").addEventListener("click", () => {
-    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.hagimiPrint) {
-      window.webkit.messageHandlers.hagimiPrint.postMessage("print");
-    } else {
-      enterPrintMode();
-      // 双 rAF:待画布刷新为浅色后再唤起打印,避免预览捕获深色旧帧
-      requestAnimationFrame(() => requestAnimationFrame(() => window.print()));
-    }
-  });
-  // Cmd+P 等浏览器原生打印路径同样在打印前后切换图表配色
+  // 打印由宿主窗口(WebKit 自带打印按钮)发起:打印前后切换图表配色
   window.addEventListener("beforeprint", enterPrintMode);
   window.addEventListener("afterprint", exitPrintMode);
   ["overview", "cpu", "cpu-pe", "cpu-dist", "gpu", "gpu-dist", "gpu-mem", "mem",
    "net", "net-daily", "disk", "disk-daily", "power", "batt",
    "thermal", "table", "health-trend"].forEach((k) => {
     const e = $("e-" + k);
-    if (e) e.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
+    if (e) e.innerHTML = sf("dist") + "<div>" + I.emptySection + "</div>";
   });
   const eBatteryHealth = $("e-battery-health");
-  if (eBatteryHealth) eBatteryHealth.innerHTML = icon("i-chart-column") + "<div>" + I.emptySection + "</div>";
+  if (eBatteryHealth) eBatteryHealth.innerHTML = sf("dist") + "<div>" + I.emptySection + "</div>";
 
   // ── 数据访问 ──────────────────────────────────────────────────
   const v = (row, col) => row[IDX[col]];
@@ -1338,10 +1126,12 @@
   }
   const bucketSeconds = { minutes: 60, hours: 3600, days: 86400 };
 
-  // ── 健康评分 V2(与 App 端 StatisticsHealthScore 同口径) ────────
-  // 「健康时间占比」语义:高负载不扣分,只罚不健康状态。非线性应力曲线在
-  // 落库时按帧作用(存 stress_*_avg 列),这里只做线性重组;旧行无应力列时
-  // 按桶均值回退同套曲线(近似)。
+  // ── 状态评分(与 App 端 StatisticsHealthScore 同口径) ──────────
+  // 只在内存与热状态「同时有效」的交集 J 上算两项负担:负担 = Σ(档位权重 ×
+  // 档位秒数) ÷ J,再按 memWeight/thermalWeight 线性重组。CPU/GPU 使用率是工作
+  // 强度,不参与扣分;缺观测不生成满分。权重/门槛/等级区间随载荷下发
+  // (DATA.scoreModel),与 App 侧同一组数字。
+  // 旧口径(帧级应力)只在整段都没有档位秒数列时使用,并在卡上标明近似。
   const THERMAL_SOFT_CAP = 0.01;
   function stressCPU(u) { return u <= 85 ? 0 : Math.min(1, (u - 85) / 15); }
   function stressGPU(u) { return u <= 90 ? 0 : Math.min(1, (u - 90) / 10); }
@@ -1373,7 +1163,11 @@
         : (v(r, "gpu_avg") != null ? stressGPU(v(r, "gpu_avg")) : null),
     };
   }
-  function healthOf(rows) {
+  // TODO(迁移期):秒数时代(2026-09)之前落库的行没有档位秒数,整段落在那个时期
+  // 的老范围要靠下面这组旧口径回退。等历史行滚出可选范围(秒数时代满一年)后,
+  // legacyHealthOf / rowStress / 四条应力曲线可整体删除。
+  /// 旧口径(升级前历史,或整段都没有档位秒数列):帧级应力按帧数加权平均。
+  function legacyHealthOf(rows) {
     const sums = { mem: 0, thermal: 0, cpu: 0, gpu: 0 };
     const ws = { mem: 0, thermal: 0, cpu: 0, gpu: 0 };
     rows.forEach((r) => {
@@ -1387,55 +1181,118 @@
     if (m == null && t == null && c == null && g == null) return null;
     // 缺维度不扣分也不归一:没观测到不健康信号即不罚。
     const stress = (m || 0) * 0.45 + (t || 0) * 0.30 + (c || 0) * 0.15 + (g || 0) * 0.10;
-    const score = Math.max(0, Math.min(100, 100 * (1 - stress)));
-    const capped = (t || 0) >= THERMAL_SOFT_CAP;
-    let level = levelOf(score);
-    if (capped && level === "excellent") level = "good";
-    return { score, level, capped, m, t, c, g };
+    const score = clamp100(100 * (1 - stress));
+    // 等级仍走新口径的区间:同一套等级名,避免旧段落到另一套标签
+    return { score, level: scoreLevel(score), m, t, c, g, legacy: true };
   }
-  function levelOf(score) {
-    if (score >= 95) return "excellent";
-    if (score >= 85) return "good";
-    if (score >= 70) return "fair";
-    if (score >= 50) return "poor";
-    return "critical";
+
+  function clamp100(x) { return Math.max(0, Math.min(100, x)); }
+
+  /// 新口径:交集 J 上的内存/热两维负担(0~1)与线性重组后的分数。
+  /// 不做门槛判定,单桶复算(评分走势)与范围汇总共用同一函数。
+  function scoreShares(rows) {
+    const M = DATA.scoreModel;
+    const intersection = sumOf(rows, "valid_mem_thermal_s");
+    if (!(intersection > 0)) return null;
+    const burden = (seconds, weights) => {
+      let total = 0;
+      seconds.forEach((s, i) => { total += (s || 0) * (weights[i] || 0); });
+      return total / intersection;
+    };
+    const mem = burden(
+      [sumOf(rows, "mem_normal_s"), sumOf(rows, "mem_warn_s"), sumOf(rows, "mem_crit_s")],
+      M.memoryLevelWeights);
+    const thermal = burden(
+      [sumOf(rows, "th_nominal_s"), sumOf(rows, "th_fair_s"), sumOf(rows, "th_serious_s"), sumOf(rows, "th_crit_s")],
+      M.thermalLevelWeights);
+    const stress = mem * M.memWeight + thermal * M.thermalWeight;
+    return { mem, thermal, score: clamp100(100 * (1 - stress)) };
   }
-  function levelForShare(share) {
-    const p = share * 100;
-    if (p < 1) return "excellent";
-    if (p < 5) return "good";
-    if (p < 15) return "fair";
-    if (p < 30) return "poor";
-    return "critical";
+
+  /// 范围评分:新口径 + 门槛;整段都没有档位秒数列时退回旧口径并标记 legacy;
+  /// 交集不足门槛、或不足应覆盖时长的比例时不出分数。
+  /// 覆盖率的分母从「首个带档位秒数的桶」算起:升级前的旧桶既没有有效观测也
+  /// 无法回填(秒数列为 0/空),把它们算进分母会让迁移期内永远不达标;数据
+  /// 齐备后(不存在旧桶)与「交集 ≥ 覆盖时长 × ratio」完全等价。
+  function healthOf(rows) {
+    const M = DATA.scoreModel;
+    const intersection = sumOf(rows, "valid_mem_thermal_s");
+    if (!(intersection > 0)) return legacyHealthOf(rows);
+    if (intersection < M.minIntersectionSeconds) return { insufficient: true, intersection };
+    // TODO(迁移期):下面这段只在「范围里既有旧行又有新行」时需要。历史行滚出可选
+    // 范围后 modernStart 恒为 0,可与 legacyRows 提示一并删除。
+    const modernStart = rows.findIndex(
+      (r) => (v(r, "valid_mem_s") || 0) > 0 || (v(r, "valid_thermal_s") || 0) > 0);
+    const modern = modernStart > 0 ? rows.slice(modernStart) : rows;
+    // 首个现代桶跨在迁移边界上:它的 cover_s 含秒数时代之前的时间,按该桶实测的
+    // 交集有效秒数计入(与 J 同源),否则迁移当天永远差几个百分点、评分卡一直
+    // 显示观测不足。交集为 0 的边界桶计 0,方向上是保守的(只会更容易出分)。
+    const boundary = modernStart > 0 ? (v(modern[0], "valid_mem_thermal_s") || 0) : null;
+    const covered = (boundary == null ? 0 : Math.min(sumOf([modern[0]], "cover_s"), boundary))
+      + sumOf(modern.slice(1), "cover_s");
+    if (covered > 0 && intersection < covered * M.minCoverageRatio) {
+      return { insufficient: true, intersection, covered };
+    }
+    const shares = scoreShares(rows);
+    if (!shares) return null;
+    return Object.assign(shares, {
+      level: scoreLevel(shares.score),
+      intersection,
+      covered,
+      legacyRows: modernStart > 0,
+    });
   }
+
+  /// 分数 → 等级(区间随载荷下发,与 App 端 Level(score:) 同源)。
+  function scoreLevel(score) {
+    const M = DATA.scoreModel;
+    if (score >= M.lowThreshold) return "low";
+    if (score >= M.mildThreshold) return "mild";
+    if (score >= M.elevatedThreshold) return "elevated";
+    return "high";
+  }
+
+  /// 维度负担 → 等级:负担即该维度单独扣掉的比例,与总分同一组区间,不再另设一套。
+  function levelForShare(share) { return scoreLevel(clamp100(100 * (1 - share))); }
+
   function shareText(s) {
     const p = s * 100;
     return p < 0.05 ? "0%" : p.toFixed(1) + "%";
   }
   const LEVEL_META = {
-    excellent: { color: () => C.good, label: () => I.levelExcellent },
-    good: { color: () => C.scoreGood, label: () => I.levelGood },
-    fair: { color: () => C.fair, label: () => I.levelFair },
-    poor: { color: () => C.poor, label: () => I.levelPoor },
-    critical: { color: () => C.critical, label: () => I.levelCritical },
+    low: { color: () => C.good, label: () => I.levelLow },
+    mild: { color: () => C.scoreGood, label: () => I.levelMild },
+    elevated: { color: () => C.fair, label: () => I.levelElevated },
+    high: { color: () => C.critical, label: () => I.levelHigh },
   };
 
   function renderHealth(rows) {
     const host = $("health-main");
     const h = healthOf(rows);
-    if (!h) {
-      host.innerHTML = '<div class="event-none">' + I.healthNoData + "</div>";
+    if (!h || h.insufficient) {
+      // 观测不足:说清「看了多久」而不是给一个没有依据的分数
+      const hint = h && h.insufficient
+        ? I.healthInsufficient + "(" + fmtSpan(h.intersection) + ")"
+        : I.healthNoData;
+      host.innerHTML = '<div class="event-none">' + hint + "</div>";
       setChart("ch-health-trend", {}, rows, "cpu_avg");
       return;
     }
     const color = LEVEL_META[h.level].color();
 
-    const dims = [
-      h.c != null && { name: I.dimCpu, raw: shareText(h.c), share: h.c },
-      h.g != null && { name: I.dimGpu, raw: shareText(h.g), share: h.g },
-      h.m != null && { name: I.dimPressure, raw: shareText(h.m), share: h.m },
-      h.t != null && { name: I.dimThermal, raw: shareText(h.t), share: h.t },
-    ].filter(Boolean);
+    // 评分只由内存压力与热压力两项构成;旧记录退回的帧级口径是四维,一并展示
+    // (数值含义:该维度单独扣掉的比例)。
+    const dims = h.legacy
+      ? [
+          h.m != null && { name: I.dimPressure, raw: shareText(h.m), share: h.m },
+          h.t != null && { name: I.dimThermal, raw: shareText(h.t), share: h.t },
+          h.c != null && { name: I.dimCpu, raw: shareText(h.c), share: h.c },
+          h.g != null && { name: I.dimGpu, raw: shareText(h.g), share: h.g },
+        ].filter(Boolean)
+      : [
+          { name: I.dimPressure, raw: shareText(h.mem), share: h.mem },
+          { name: I.dimThermal, raw: shareText(h.thermal), share: h.thermal },
+        ];
 
     const circ = 2 * Math.PI * 44;
     const offset = circ * (1 - Math.min(h.score, 100) / 100);
@@ -1445,9 +1302,26 @@
       badges += '<span class="score-badge"><span class="dot" style="background:' + dc + '"></span>'
         + d.name + '<span class="raw">' + d.raw + "</span></span>";
     });
-    const cappedBadge = h.capped
-      ? '<div class="score-capped">' + icon("i-flame") + I.healthCapped + "</div>"
-      : "";
+    // 附注:旧记录标近似;新口径下给「有效观测 + 工作强度(不计分)」
+    const notes = [];
+    if (h.legacy) {
+      notes.push('<div class="score-capped">' + sf("legacy") + I.healthLegacy + "</div>");
+    } else {
+      const workload = [["cpu_high_s", I.kCpu], ["gpu_high_s", I.kGpu]]
+        .map(([col, label]) => {
+          const seconds = sumOf(rows, col);
+          return seconds > 0 ? label + " " + fmtSpan(seconds) : null;
+        })
+        .filter(Boolean);
+      if (workload.length) {
+        notes.push('<div class="score-capped">' + sf("cpu") + I.healthWorkload
+          + " " + workload.join(" · ") + "</div>");
+      }
+      if (h.legacyRows) {
+        notes.push('<div class="score-capped">' + sf("dist") + I.healthLegacyRows + "</div>");
+      }
+    }
+    const cappedBadge = notes.join("");
     host.innerHTML =
       '<div class="score-ring-wrap">' +
         '<svg viewBox="0 0 104 104">' +
@@ -1461,11 +1335,12 @@
       "</div>" +
       '<div><div class="score-dims">' + badges + "</div>" + cappedBadge + "</div>";
 
-    // 评分走势:按当前粒度逐桶复算
+    // 评分走势:按当前粒度逐桶复算。单桶不走总门槛(否则每桶都「观测不足」),
+    // 有新秒数列用新口径,旧记录用帧级近似。
     const trend = [];
     rows.forEach((r) => {
-      const rh = healthOf([r]);
-      if (rh) trend.push([timeOf(r), Math.min(rh.score, 100)]);
+      const rh = scoreShares([r]) || legacyHealthOf([r]);
+      if (rh) trend.push([timeOf(r), clamp100(rh.score)]);
     });
     const option = {
       backgroundColor: "transparent",
@@ -1542,7 +1417,7 @@
         const iconData = apps.icons[entry.idx];
         const iconHTML = iconData
           ? '<img src="data:image/png;base64,' + iconData + '" alt="">'
-          : '<span class="app-icon-fallback">' + icon("i-app-generic") + "</span>";
+          : '<span class="app-icon-fallback">' + sf("apps") + "</span>";
         row.innerHTML = iconHTML +
           '<span class="app-name"></span>' +
           '<span class="app-bar"><span class="app-bar-fill" style="width:' +
@@ -1608,144 +1483,132 @@
   }
 
   // ── 事件时间线(从统计数据即时推导,可回溯任意范围) ─────────────
-  function deriveEvents(rows, source) {
+  // ── 压力告警(与设置页告警块同一口径) ────────────────────────
+  // 只看两类:内存(警告及以上)与热状态(严重及以上);秒数在桶内累计,相邻桶
+  // 连成一段。段的状态按「其后是否还有观测」与观测新鲜度判定,不把观测中断
+  // 说成已恢复;每段给出档位组成与累计时长。升级前的旧桶没有档位秒数,不参与。
+  const ALERT_KINDS = [
+    {
+      titleKey: "alertMem", icon: "mem", threshold: 1,
+      columns: [[2, "mem_crit_s"], [1, "mem_warn_s"]],
+      levelKeys: { 2: "memCritical", 1: "memWarning" },
+    },
+    {
+      titleKey: "alertThermal", icon: "thermal", threshold: 2,
+      columns: [[3, "th_crit_s"], [2, "th_serious_s"], [1, "th_fair_s"]],
+      levelKeys: { 3: "thermalCritical", 2: "thermalSerious", 1: "thermalFair" },
+    },
+  ];
+
+  function deriveAlerts(rows, source) {
     if (!rows.length) return [];
-    const span = bucketSeconds[source];
-    const events = [];
+    const spanMs = bucketSeconds[source] * 1000;
+    const freshWindowMs = 5 * 60 * 1000;
+    // 有观测的桶:用来判断某段之后还有没有观测(中断 ≠ 恢复)
+    const observedEnds = rows
+      .filter((r) => (v(r, "valid_mem_s") || 0) > 0 || (v(r, "valid_thermal_s") || 0) > 0)
+      .map((r) => timeOf(r) + spanMs);
+    const lastObservedEnd = observedEnds.length ? Math.max(...observedEnds) : null;
+    const alerts = [];
 
-    // 连续桶区间扫描:条件满足的桶连成一段事件
-    function scanRuns(col, threshold, minBuckets, build) {
-      let run = null;
+    ALERT_KINDS.forEach((spec) => {
+      const levelsOf = (r) => spec.columns
+        .map(([level, col]) => ({ level, seconds: v(r, col) || 0 }))
+        .filter((item) => item.seconds > 0);
+      const run = { current: null };
+      const flush = () => {
+        if (run.current && run.current.pressureSeconds > 0) alerts.push(run.current);
+        run.current = null;
+      };
       rows.forEach((r) => {
-        const x = v(r, col);
-        if (x != null && x >= threshold) {
-          if (!run) run = { start: r, count: 0, sum: 0 };
-          run.count += 1;
-          run.sum += x;
-        } else if (run) {
-          if (run.count >= minBuckets) events.push(build(run));
-          run = null;
+        const levels = levelsOf(r);
+        const pressure = levels
+          .filter((item) => item.level >= spec.threshold)
+          .reduce((sum, item) => sum + item.seconds, 0);
+        if (pressure <= 0) {
+          flush();
+          return;
         }
-      });
-      if (run && run.count >= minBuckets) events.push(build(run));
-    }
-
-    scanRuns("cpu_avg", 90, 3, (run) => ({
-      ts: timeOf(run.start),
-      sev: run.sum / run.count >= 95 ? 2 : 1,
-      title: I.evCpuHigh,
-      detail: t("evCpuHighDetail", { v: (run.sum / run.count).toFixed(0), dur: fmtSpan(run.count * span) }),
-    }));
-    scanRuns("mem_pressure_avg", 60, 3, (run) => ({
-      ts: timeOf(run.start),
-      sev: run.sum / run.count >= 85 ? 2 : 1,
-      title: I.evPressureHigh,
-      detail: t("evPressureDetail", { v: (run.sum / run.count).toFixed(0), dur: fmtSpan(run.count * span) }),
-    }));
-    scanRuns("cpu_thermal_avg", 2.0, 2, (run) => ({
-      ts: timeOf(run.start),
-      sev: run.sum / run.count >= 2.5 ? 2 : 1,
-      title: I.evThermal,
-      detail: t("evThermalDetail", { dur: fmtSpan(run.count * span) }),
-    }));
-
-    // 尖峰:显著高于范围内中位数且绝对量足够大
-    function median(arr) {
-      if (!arr.length) return 0;
-      const s = arr.slice().sort((a, b) => a - b);
-      return s[Math.floor(s.length / 2)];
-    }
-    const netTotals = rows.map((r) => (v(r, "net_down") || 0) + (v(r, "net_up") || 0));
-    const netMedian = median(netTotals);
-    rows.forEach((r, i) => {
-      const total = netTotals[i];
-      if (total > 100 * 1024 * 1024 && total > netMedian * 8) {
-        events.push({ ts: timeOf(r), sev: 0, title: I.evNetSpike, detail: t("evNetDetail", { v: fmtBytes(total) }) });
-      }
-    });
-    const diskTotals = rows.map((r) => (v(r, "disk_read") || 0) + (v(r, "disk_write") || 0));
-    const diskMedian = median(diskTotals);
-    rows.forEach((r, i) => {
-      const total = diskTotals[i];
-      if (total > 100 * 1024 * 1024 && total > diskMedian * 8) {
-        events.push({ ts: timeOf(r), sev: 0, title: I.evDiskSpike, detail: t("evDiskDetail", { v: fmtBytes(total) }) });
-      }
-    });
-
-    // 系统重启:开机时长回落(时钟重置为更小值)
-    for (let i = 1; i < rows.length; i++) {
-      const a = v(rows[i - 1], "uptime_avg"), b = v(rows[i], "uptime_avg");
-      if (a == null || b == null) continue;
-      if (b < a - 120) {
-        events.push({ ts: timeOf(rows[i]), sev: 0, title: I.evReboot, detail: "" });
-      }
-    }
-
-    // 电源切换:相邻桶 ac_frac 跨 0.5
-    for (let i = 1; i < rows.length; i++) {
-      const a = v(rows[i - 1], "ac_frac"), b = v(rows[i], "ac_frac");
-      if (a == null || b == null) continue;
-      if ((a >= 0.5) !== (b >= 0.5)) {
-        events.push({
-          ts: timeOf(rows[i]),
-          sev: 0,
-          title: b >= 0.5 ? I.evPowerOnAC : I.evPowerOnBattery,
-          detail: "",
+        // 相邻桶(间隔不超过一个桶宽)合并为一段,缺口断开
+        if (run.current && timeOf(r) - run.current.end > spanMs * 1.5) flush();
+        if (!run.current) {
+          run.current = {
+            spec, start: timeOf(r), end: timeOf(r) + spanMs,
+            pressureSeconds: 0, levels: new Map(),
+          };
+        }
+        run.current.end = timeOf(r) + spanMs;
+        run.current.pressureSeconds += pressure;
+        levels.forEach((item) => {
+          run.current.levels.set(item.level, (run.current.levels.get(item.level) || 0) + item.seconds);
         });
-      }
-    }
+      });
+      flush();
+    });
 
-    // 严重度优先,同级按时间倒序:避免大量 info 级电源切换淹没真实告警
-    return events.sort((a, b) => (b.sev - a.sev) || (b.ts - a.ts));
+    alerts.forEach((alert) => {
+      if (lastObservedEnd == null || alert.end < lastObservedEnd) {
+        alert.state = "recovered";
+      } else {
+        alert.state = Date.now() - lastObservedEnd <= freshWindowMs ? "ongoing" : "interrupted";
+      }
+      alert.worstLevel = Math.max(...alert.levels.keys());
+      alert.spanSeconds = (alert.end - alert.start) / 1000;
+    });
+    // 进行中最优先,其次观测中断,再按累计时长倒序
+    const stateRank = { ongoing: 0, interrupted: 1, recovered: 2 };
+    return alerts.sort((a, b) => (stateRank[a.state] - stateRank[b.state]) || (b.pressureSeconds - a.pressureSeconds));
   }
 
   function renderEvents(rows, source) {
     const host = $("events");
     host.innerHTML = "";
-    const events = deriveEvents(rows, source);
-    $("h-events").textContent = events.length
-      ? t("evHint", { n: events.length > 30 ? "30+" : String(events.length) })
-      : "";
-    if (!events.length) {
-      host.innerHTML = '<div class="event-none">' + I.evNone + "</div>";
+    const alerts = deriveAlerts(rows, source);
+    $("h-events").textContent = alerts.length ? t("evHint", { n: String(alerts.length) }) : "";
+    if (!alerts.length) {
+      host.innerHTML = '<div class="event-none">' + I.alertNone + "</div>";
       return;
     }
-    const sevColor = [C.scoreGood, C.fair, C.critical];
-    events.slice(0, 30).forEach((ev) => {
+    const stateText = { ongoing: I.alertOngoing, interrupted: I.alertInterrupted, recovered: I.alertRecovered };
+    // 档位配色与设置页一致:严重/临界红,警告/轻微琥珀
+    const levelColor = (level) => (level >= 2 ? C.critical : C.fair);
+    alerts.forEach((alert) => {
       const d = el("div", "event");
-      d.innerHTML =
-        '<span class="sev" style="background:' + sevColor[ev.sev] + '"></span>' +
-        '<span class="time"></span><span class="what"></span><span class="detail"></span>';
-      d.querySelector(".time").textContent = fmtDate(ev.ts) + " " + fmtClock(ev.ts);
-      d.querySelector(".what").textContent = ev.title;
-      d.querySelector(".detail").textContent = ev.detail;
+      d.innerHTML = '<span class="sev"></span>'
+        + '<span class="time"></span><span class="what"></span><span class="detail"></span>';
+      d.querySelector(".time").textContent =
+        fmtDate(alert.start) + " " + fmtClock(alert.start) + " – " + fmtClock(alert.end);
+      d.querySelector(".what").textContent =
+        I[alert.spec.titleKey] + " · " + I[alert.spec.levelKeys[alert.worstLevel]];
+      // 档位组成(从高到低),较低档用「含 X」列出,与设置页告警块同一读法
+      const parts = [...alert.levels.entries()]
+        .sort((a, b) => b[0] - a[0])
+        .map(([level, seconds], index) => {
+          const name = I[alert.spec.levelKeys[level]];
+          return (index === 0 ? "" : I.alertIncludes + " ") + name + " " + fmtSpan(seconds);
+        });
+      const context = { dur: fmtSpan(alert.pressureSeconds), state: stateText[alert.state] };
+      d.querySelector(".detail").textContent = parts.length > 1
+        ? t("alertDetail", Object.assign({ levels: parts.join(" · ") }, context))
+        : t("alertDetailPlain", context);
+      const dot = d.querySelector(".sev");
+      dot.style.background = levelColor(alert.worstLevel);
+      dot.style.opacity = alert.state === "recovered" ? "0.45" : "1";
       host.appendChild(d);
     });
-    if (events.length > 30) {
-      const more = el("div", "event-none");
-      more.textContent = t("evMore", { n: events.length - 30 });
-      host.appendChild(more);
-    }
   }
 
   // ── 范围与粒度 ────────────────────────────────────────────────
+  // 时间档位:今日 / 近 7 天 / 近 30 天 / 近一年(自选日期另走日期控件)。
+  // 跨度决定取哪一层数据(见 pickSource):今日走分钟,周/月/年走小时或日。
   const RANGES = [
     ["today", I.rToday, () => [startOfToday, Date.now()]],
     ["week", I.rWeek, () => [Date.now() - 7 * DAY, Date.now()]],
     ["month", I.rMonth, () => [Date.now() - 30 * DAY, Date.now()]],
-    ["year", I.rYear, () => [startOfYear, Date.now()]],
-    ["all", I.rAll, () => {
-      let min = Infinity;
-      ["minutes", "hours", "days"].forEach((k) => {
-        if (DATA[k].length) min = Math.min(min, timeOf(DATA[k][0]));
-      });
-      return [min === Infinity ? Date.now() : min, Date.now()];
-    }],
+    ["year", I.rYear, () => [Date.now() - 365 * DAY, Date.now()]],
   ];
   let currentRange = "today";
   let custom = null;
-  // 粘性导航收集结果:供 applyRange 同步跨日板块锚点的显隐
-  let navItems = [];
 
   RANGES.forEach(([key, label]) => {
     const b = el("button");
@@ -1910,29 +1773,29 @@
     const grid = $("kpi");
     grid.innerHTML = "";
     const defs = [
-      ["cpu", "i-cpu", "c-cpu", I.kCpu, fmtPct(avgOf(rows, "cpu_avg")),
+      ["cpu", "cpu", "c-cpu", I.kCpu, fmtPct(avgOf(rows, "cpu_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "cpu_max")) }), "cpu_avg"],
-      ["gpu", "i-gpu", "c-gpu", I.kGpu, fmtPct(avgOf(rows, "gpu_avg")),
+      ["gpu", "gpu", "c-gpu", I.kGpu, fmtPct(avgOf(rows, "gpu_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "gpu_max")) }), "gpu_avg"],
-      ["mem", "i-mem", "c-mem", I.kMem, fmtPct(avgOf(rows, "mem_pct_avg")),
+      ["mem", "mem", "c-mem", I.kMem, fmtPct(avgOf(rows, "mem_pct_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "mem_pct_max")) }), "mem_pct_avg"],
-      ["mem-pressure", "i-gauge", "c-mem", I.kMemPressure,
+      ["mem-pressure", "health", "c-mem", I.kMemPressure,
         fmtPct(avgOf(rows, "mem_pressure_avg")),
         t("kPeak", { v: fmtPct(maxOf(rows, "mem_pressure_avg")) }), "mem_pressure_avg"],
-      ["net-down", "i-net-down", "c-net", I.kNetDown, fmtBytes(sumOf(rows, "net_down")),
+      ["net-down", "net", "c-net", I.kNetDown, fmtBytes(sumOf(rows, "net_down")),
         t("kPeakRate", { v: fmtRate(maxOf(rows, "net_down_peak")) }), "net_down"],
-      ["net-up", "i-net-up", "c-net", I.kNetUp, fmtBytes(sumOf(rows, "net_up")),
+      ["net-up", "net", "c-net", I.kNetUp, fmtBytes(sumOf(rows, "net_up")),
         t("kPeakRate", { v: fmtRate(maxOf(rows, "net_up_peak")) }), "net_up"],
-      ["disk", "i-disk", "c-disk", I.kDisk, fmtBytes(sumOf(rows, "disk_read")),
+      ["disk", "disk", "c-disk", I.kDisk, fmtBytes(sumOf(rows, "disk_read")),
         t("kDiskW", { v: fmtBytes(sumOf(rows, "disk_write")) }), "disk_read"],
-      ["power", "i-power", "c-batt", I.kPower, fmtW(avgOf(rows, "power_avg")),
+      ["power", "power", "c-batt", I.kPower, fmtW(avgOf(rows, "power_avg")),
         t("kPeak", { v: fmtW(maxOf(rows, "power_max")) }), "power_avg"],
     ];
     defs.forEach(([key, ic, cls, label, value, sub, sparkCol]) => {
       const k = el("div", "kpi");
       const spark = sparkSVG(rows.map((r) => v(r, sparkCol)));
       k.innerHTML = '<div class="kpi-top">' +
-        '<span class="kpi-chip ' + cls + '">' + icon(ic) + '</span>' +
+        '<span class="kpi-chip ' + cls + '">' + sf(ic) + '</span>' +
         '<span class="label"></span></div>' +
         '<div class="value"></div><div class="sub"></div>' +
         (spark ? '<span class="spark-wrap ' + cls + '">' + spark + "</span>" : "");
@@ -2571,7 +2434,7 @@
     const cpuAvg = avgOf(rows, "cpu_avg");
     if (cpuAvg != null) {
       const level = cpuAvg < 20 ? I.insLoadLow : cpuAvg < 50 ? I.insLoadMid : I.insLoadHigh;
-      items.push(["i-gauge", "c-accent", I.insLoadTitle,
+      items.push(["health", "c-accent", I.insLoadTitle,
         t("insLoad", { v: cpuAvg.toFixed(1) }) + " — " + level]);
     }
     let peak = null;
@@ -2580,7 +2443,7 @@
       if (x != null && (!peak || x > peak[1])) peak = [timeOf(r), x];
     });
     if (peak) {
-      items.push(["i-cpu", "c-cpu", I.insPeakTitle,
+      items.push(["cpu", "c-cpu", I.insPeakTitle,
         t("insPeak", { v: peak[1].toFixed(1), time: fmtDate(peak[0]) + " " + fmtClock(peak[0]) })]);
     }
     // 最忙时段:小时内数据(所选范围 ≤60 天时);分钟粒度范围也要把小时层裁到同一窗口
@@ -2601,23 +2464,23 @@
         if (!busiest || avg > busiest[1]) busiest = [Number(h), avg];
       }
       if (busiest) {
-        items.push(["i-flame", "c-thermal", I.insBusyTitle,
+        items.push(["alert", "c-thermal", I.insBusyTitle,
           t("insBusy", { v: String(busiest[0]).padStart(2, "0") + ":00–" + String((busiest[0] + 1) % 24).padStart(2, "0") + ":00", p: busiest[1].toFixed(1) })]);
       }
     }
     const netDown = sumOf(rows, "net_down");
     if (netDown != null) {
-      items.push(["i-arrow-down", "c-net", I.insNetTitle, t("insNet", { v: fmtBytes(netDown) })]);
+      items.push(["trend", "c-net", I.insNetTitle, t("insNet", { v: fmtBytes(netDown) })]);
     }
     const covered = rows.reduce((a, r) => a + coverSeconds(r), 0);
     const spanSeconds = (currentTo - currentFrom) / 1000;
     if (spanSeconds > 0) {
-      items.push(["i-clock", "c-muted", I.insCoverageTitle,
+      items.push(["clock", "c-muted", I.insCoverageTitle,
         t("insCoverage", { v: Math.min(100, covered / spanSeconds * 100).toFixed(1), h: fmtHours(covered) })]);
     }
     items.forEach(([ic, cls, title, text]) => {
       const d = el("div", "insight " + cls);
-      d.innerHTML = '<div class="insight-head">' + icon(ic) + '<div class="t"></div></div><div class="v"></div>';
+      d.innerHTML = '<div class="insight-head">' + sf(ic) + '<div class="t"></div></div><div class="v"></div>';
       d.querySelector(".t").textContent = title;
       d.querySelector(".v").textContent = text;
       box.appendChild(d);
@@ -2643,14 +2506,14 @@
     if (custom) rangeField.value = fmtDate(custom[0]) + " – " + fmtDate(custom[1] - 1);
     else { rangeField.value = ""; if (calPicker.selectedDates.length) calPicker.clear(); }
     // 跨日聚合板块(活动热力图、网络每日、磁盘每日)只在多维概览(周/月/自定义)
-    // 才有价值—今日下热力图退化为单日、每日柱状只剩一根。今日时隐藏,
-    // 其余范围恢复。data-keep-nav 标记保证隐藏时仍保留粘性导航锚点。
+    // 才有价值—今日下热力图退化为单日、每日柱状只剩一根。今日时隐藏,其余范围恢复。
     const isToday = currentRange === "today";
     $("sec-heatmap").hidden = isToday;
     $("sec-net-daily").hidden = isToday;
     $("sec-disk-daily").hidden = isToday;
-    // 同步粘性导航锚点可见性:跨日板块今日隐藏时其链接同时收起
-    navItems.forEach(([link, sec]) => { if (sec.dataset["keepNav"]) link.hidden = sec.hidden; });
+    // 时间栏左侧的当前档位说明:自选时显示范围控件本身的文案
+    $("range-title").textContent = I.rangeLabel + " · "
+      + (custom ? I.selectRange : (RANGES.find(([k]) => k === currentRange) || [null, ""])[1]);
     let from, to;
     if (custom) {
       [from, to] = custom;
@@ -2707,10 +2570,11 @@
     renderHeatmap(from, to);
   }
 
-  // 整库无数据 → 空态页
+  // 整库无数据 → 空态页(模块栏与时间栏一并收起,只留空态说明)
   if (!DATA.minutes.length && !DATA.hours.length && !DATA.days.length) {
     $("content").hidden = true;
-    $("toolbar").hidden = true;
+    $("rail").hidden = true;
+    $("filters").hidden = true;
     $("blank").hidden = false;
     $("blank-title").textContent = I.blankTitle;
     $("blank-body").textContent = I.blankBody;
@@ -2731,80 +2595,73 @@
     // 分区标题图标包进同色芯片,层次更现代
     document.querySelectorAll(".sec-head").forEach((head) => {
       if (head.querySelector(".icon-chip")) return;
-      const svg = head.querySelector(":scope > svg.icon");
-      if (!svg) return;
+      const mark = head.querySelector(":scope > .sf");
+      if (!mark) return;
       const chip = el("span", "icon-chip");
-      const colorClass = Array.from(svg.classList).find((c) => c.startsWith("c-"));
+      const colorClass = Array.from(mark.classList).find((c) => c.startsWith("c-"));
       if (colorClass) {
         chip.classList.add(colorClass);
-        svg.classList.remove(colorClass);
-      } else if (svg.style.color) {
-        chip.style.color = svg.style.color;
-        svg.style.color = "";
+        mark.classList.remove(colorClass);
+      } else if (mark.style.color) {
+        chip.style.color = mark.style.color;
+        mark.style.color = "";
       }
-      head.insertBefore(chip, svg);
-      chip.appendChild(svg);
+      head.insertBefore(chip, mark);
+      chip.appendChild(mark);
     });
 
-    // 粘性分区导航:从实际渲染出的分区收集锚点(隐藏分区不入导航)
-    const nav = $("sec-nav");
-    const navLinks = $("nav-links");
-    const navPill = $("nav-pill");
+    // 左侧模块栏:固定六条核心硬件,其余板块(评分/走势/概览/热力图/应用/热压力/
+    // 告警/明细/洞察)顺次出现在正文里、不进栏。点击与滚动高亮都作用在内层滚动
+    // 容器上(导航与时间栏都在滚动容器之外,任何窗口高度下都常驻可见)。
+    const railNav = $("module-nav");
     const navProgress = $("nav-progress");
-    navItems = [];
-    document.querySelectorAll("#content > section").forEach((sec, i) => {
-      // 常规 section 隐藏时不入导航;data-keep-nav(跨日聚合板块)例外,其锚点
-      // 常驻导航,仅随板块显隐切换链接可见性(今日隐藏、周/月显示)。
-      if ((sec.hidden && !sec.dataset["keepNav"]) || sec.classList.contains("inner-grid")) return;
-      const heading = sec.querySelector("h2");
-      if (!heading || !heading.textContent) return;
-      if (!sec.id) sec.id = "sec-auto-" + i;
+    const scroller = $("scroller");
+    $("rail-eyebrow").textContent = I.railEyebrow;
+    $("rail-footer").innerHTML = '<span class="status-dot"></span>' + I.railLocal
+      + "<small>" + [DATA.meta.model, DATA.meta.os].filter(Boolean).join(" · ") + "</small>";
+    // 栏内用模块短名(与面板/设置页的模块名一致),不用板块全称(内存构成/磁盘读写速率…)
+    const railLinks = [
+      ["sec-cpu", I.kCpu, "cpu"],
+      ["sec-gpu", I.kGpu, "gpu"],
+      ["sec-mem", I.kMem, "mem"],
+      ["sec-net", I.railNet, "net"],
+      ["sec-disk", I.railDisk, "disk"],
+      ["sec-power", I.railPower, "power"],
+    ].map(([id, label, iconKey]) => {
+      const sec = $(id);
+      if (!sec) return null;
       const link = el("a");
-      link.href = "#" + sec.id;
-      link.textContent = sec.id === "sec-apps" && I.secAppsTitle ? I.secAppsTitle : heading.textContent;
+      link.href = "#" + id;
+      link.innerHTML = sf(iconKey) + '<span class="rail-label"></span>';
+      link.querySelector(".rail-label").textContent = label;
       link.addEventListener("click", (e) => {
         e.preventDefault();
         if (sec.hidden) return;
         sec.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
       });
-      link.hidden = sec.hidden;
-      navLinks.appendChild(link);
-      navItems.push([link, sec]);
-    });
-    if (navItems.length) {
-      nav.hidden = false;
-      document.body.classList.add("has-sec-nav");
-      // 滑动指示器:贴合激活项的位置与宽度
-      const movePill = () => {
-        const active = navLinks.querySelector("a.active");
-        if (!active) { navPill.style.opacity = "0"; return; }
-        navPill.style.opacity = "1";
-        navPill.style.width = active.offsetWidth + "px";
-        navPill.style.transform = "translateX(" + active.offsetLeft + "px)";
-      };
-      let ticking = false;
-      const spy = () => {
-        ticking = false;
-        const offset = nav.offsetHeight + 30;
-        let current = navItems[0];
-        navItems.forEach((item) => {
-          if (!item[1].hidden && item[1].getBoundingClientRect().top <= offset) current = item;
-        });
-        navItems.forEach((item) => item[0].classList.toggle("active", item === current));
-        movePill();
-        const active = navLinks.querySelector("a.active");
-        if (active) active.scrollIntoView({ block: "nearest", inline: "nearest" });
-      };
-      window.addEventListener("scroll", () => {
-        // 滚动进度:顶栏底部细线随阅读位置增长
-        const root = document.documentElement;
-        const max = root.scrollHeight - root.clientHeight;
-        navProgress.style.width = (max > 0 ? (root.scrollTop / max) * 100 : 0) + "%";
-        if (!ticking) { ticking = true; requestAnimationFrame(spy); }
-      }, { passive: true });
-      window.addEventListener("resize", movePill);
-      spy();
-    }
+      railNav.appendChild(link);
+      return [link, sec];
+    }).filter(Boolean);
+
+    let ticking = false;
+    const spy = () => {
+      ticking = false;
+      // 视口上沿下 24pt 处为判定线:最后一个越过该线的模块即当前模块
+      const line = scroller.getBoundingClientRect().top + 24;
+      let current = null;
+      railLinks.forEach((item) => {
+        if (!item[1].hidden && item[1].getBoundingClientRect().top <= line) current = item;
+      });
+      railLinks.forEach((item) => item[0].classList.toggle("active", item === current));
+    };
+    scroller.addEventListener("scroll", () => {
+      // 阅读进度:时间栏下沿细线随滚动位置增长
+      const max = scroller.scrollHeight - scroller.clientHeight;
+      navProgress.style.width = (max > 0 ? (scroller.scrollTop / max) * 100 : 0) + "%";
+      if (!ticking) { ticking = true; requestAnimationFrame(spy); }
+    }, { passive: true });
+    window.addEventListener("resize", spy);
+    spy();
 
     // 分区滚动进场
     if ("IntersectionObserver" in window && !reduceMotion) {
@@ -2822,13 +2679,13 @@
       });
     }
 
-    // 回到顶部
+    // 回到顶部(滚回内层容器顶部)
     const toTop = $("to-top");
-    window.addEventListener("scroll", () => {
-      toTop.classList.toggle("show", window.scrollY > 700);
+    scroller.addEventListener("scroll", () => {
+      toTop.classList.toggle("show", scroller.scrollTop > 700);
     }, { passive: true });
     toTop.addEventListener("click", () => {
-      window.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
+      scroller.scrollTo({ top: 0, behavior: reduceMotion ? "auto" : "smooth" });
     });
   } catch (err) {
     console.error("visual enhancements failed:", err);

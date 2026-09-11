@@ -24,6 +24,41 @@ enum StatisticsReportBuilder {
     /// 日期范围选择用的日期选择库(Flatpickr)及其基础样式,单文件产物需一并内联。
     private static let flatpickrResource = "flatpickr"
 
+    /// 报表用到的符号图标:与面板同一批 SF Symbols(面板用 `MonitorKind.symbol`),
+    /// 生成时渲染成位图随载荷内联,模板用 mask + currentColor 着色——
+    /// 不用手绘 SVG,也不受网页环境拿不到 SF Symbols 字体所限。
+    /// (符号名, 模板 CSS 变量后缀)
+    private static let reportSymbols: [(name: String, key: String)] = [
+        // 模块图标与面板同源(MonitorKind.symbol)
+        ("cpu", "cpu"),
+        ("display", "gpu"),
+        ("memorychip", "mem"),
+        ("network", "net"),
+        ("internaldrive", "disk"),
+        ("powerplug", "power"),
+        ("fan.fill", "fan"),
+        ("thermometer.medium", "thermal"),
+        ("battery.100", "batt"),
+        // 报表板块图标
+        ("gauge.medium", "health"),
+        ("chart.line.uptrend.xyaxis", "trend"),
+        ("chart.xyaxis.line", "overview"),
+        ("chart.bar.fill", "dist"),
+        ("square.grid.3x3", "heatmap"),
+        ("heart.text.square", "battHealth"),
+        ("exclamationmark.triangle", "alert"),
+        ("tablecells", "table"),
+        ("sparkles", "insights"),
+        ("app.dashed", "apps"),
+        ("clock.arrow.circlepath", "legacy"),
+        ("arrow.up", "top"),
+        // 顶部信息条
+        ("laptopcomputer", "device"),
+        ("apple.logo", "os"),
+        ("clock", "clock"),
+        ("calendar", "calendar"),
+    ]
+
     /// 组装并写出报表文件。可在任意线程调用(内部只做文件与数据库读)。
     static func write(
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
@@ -51,6 +86,7 @@ enum StatisticsReportBuilder {
         }
         let escapedJSON = json.replacingOccurrences(of: "</", with: "<\\/")
         let html = template
+            .replacingOccurrences(of: "/*__SYMBOL_CSS__*/", with: symbolCSSVariables())
             .replacingOccurrences(of: "/*__ECHARTS__*/", with: echarts)
             .replacingOccurrences(of: "/*__FLATPICKR__*/", with: flatpickrJS)
             .replacingOccurrences(of: "/*__FLATPICKR_CSS__*/", with: flatpickrCSS)
@@ -83,6 +119,49 @@ enum StatisticsReportBuilder {
         return png.base64EncodedString()
     }
 
+    /// 把用到的 SF Symbols 渲染成 3x 位图,拼成模板的 CSS 变量块(`--i-*`)。
+    /// 位图只贡献 alpha(作 mask),颜色交给模板的 currentColor——因此天然跟随
+    /// 明暗主题与选中态,不必为两种外观各存一份。渲染失败(符号不存在)跳过,
+    /// 模板端该处图标留空,不影响报表其余部分。
+    private static func symbolCSSVariables() -> String {
+        var lines: [String] = []
+        for symbol in reportSymbols {
+            guard let png = symbolImageData(symbol.name) else { continue }
+            lines.append("--i-\(symbol.key): url(\"data:image/png;base64,\(png.base64EncodedString())\");")
+        }
+        return ":root {\n    " + lines.joined(separator: "\n    ") + "\n  }"
+    }
+
+    /// 单个符号 → 16pt@3x 的 PNG(透明底,字形占 alpha 通道)。
+    private static func symbolImageData(_ name: String) -> Data? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) else { return nil }
+        let side = 48
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: side, pixelsHigh: side,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        rep.size = NSSize(width: 16, height: 16)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        // 按本征比例居中放入方形画布:符号宽度不一,前端 mask 用 contain 呈现
+        let natural = symbol.size
+        let scale = min(16 / max(natural.width, 1), 16 / max(natural.height, 1))
+        let drawSize = NSSize(width: natural.width * scale, height: natural.height * scale)
+        symbol.draw(in: NSRect(
+            x: (16 - drawSize.width) / 2,
+            y: (16 - drawSize.height) / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        ))
+        NSGraphicsContext.current = nil
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .png, properties: [:])
+    }
+
     /// 报表产物路径:应用支持目录下固定文件名,重复打开即覆盖刷新。
     /// Application Support 目录不可得(沙盒/受管账户极端情形)时退到临时目录,
     /// 与统计库取路径的防御口径一致,不在后台任务里强制解包。
@@ -106,6 +185,19 @@ enum StatisticsReportBuilder {
         var payload: [String: Any] = [
             "generatedAt": Int(Date().timeIntervalSince1970),
             "meta": meta,
+            // 评分常量随载荷下发:报表 JS 与 App 端 StatisticsHealthScore 共用同一组
+            // 权重、门槛与等级区间,改口径只需改一处,不会两边各写一套数字。
+            "scoreModel": [
+                "memWeight": StatisticsHealthScore.memWeight,
+                "thermalWeight": StatisticsHealthScore.thermalWeight,
+                "memoryLevelWeights": StatisticsHealthScore.memoryLevelWeights,
+                "thermalLevelWeights": StatisticsHealthScore.thermalLevelWeights,
+                "minIntersectionSeconds": StatisticsHealthScore.minIntersectionSeconds,
+                "minCoverageRatio": StatisticsHealthScore.minCoverageRatio,
+                "lowThreshold": StatisticsHealthScore.lowThreshold,
+                "mildThreshold": StatisticsHealthScore.mildThreshold,
+                "elevatedThreshold": StatisticsHealthScore.elevatedThreshold,
+            ],
             "cols": columnNames,
             "minutes": snapshot.minutes.map { encodeRow($0, columns: columnNames) },
             "hours": snapshot.hours.map { encodeRow($0, columns: columnNames) },
@@ -151,22 +243,24 @@ enum StatisticsReportBuilder {
     /// 模板 JS 以短键读文案;此处短键 → xcstrings 键(stats.r.*)一一映射,
     /// 两语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
     private static let stringKeys = [
-        "reportTitle", "reportSub", "print", "metaDays", "metaGenerated",
-        "rToday", "rWeek", "rMonth", "rYear", "rAll", "selectRange",
+        "reportTitle", "metaDays", "metaGenerated",
+        "rToday", "rWeek", "rMonth", "rYear", "selectRange",
+        "rangeLabel", "railEyebrow", "railLocal", "railNet", "railDisk", "railPower",
         "kCpu", "kGpu", "kMem", "kMemPressure", "kNetDown", "kNetUp", "kDisk", "kPower",
         "kPeak", "kPeakRate", "kDiskW",
         "secOverview", "secHeatmap", "secCpu", "secCpuPE", "secCpuDist", "secGpu",
         "secGpuDist", "secGpuMem", "secMem", "secNet", "secNetDaily", "secDisk",
         "secDiskDaily", "secPower", "secBatt", "secThermal",
         "secTable", "secInsights",
-        "healthTitle", "healthTrend", "healthNoData", "healthCapped",
-        "levelExcellent", "levelGood", "levelFair", "levelPoor", "levelCritical",
+        "healthTitle", "healthTrend", "healthNoData",
+        "healthInsufficient", "healthLegacy", "healthLegacyRows", "healthWorkload",
+        "levelLow", "levelMild", "levelElevated", "levelHigh",
         "dimCpu", "dimGpu", "dimPressure", "dimThermal",
         "thermalNominal", "thermalFair", "thermalSerious", "thermalCritical",
-        "secEvents", "evHint", "evNone", "evMore",
-        "evCpuHigh", "evCpuHighDetail", "evPressureHigh", "evPressureDetail",
-        "evThermal", "evThermalDetail", "evNetSpike", "evNetDetail",
-        "evDiskSpike", "evDiskDetail", "evPowerOnAC", "evPowerOnBattery", "evReboot",
+        "memWarning", "memCritical",
+        "secEvents", "evHint",
+        "alertMem", "alertThermal", "alertOngoing", "alertRecovered", "alertInterrupted",
+        "alertNone", "alertIncludes", "alertDetail", "alertDetailPlain",
         "secBatteryHealth", "sCycles", "sHealth",
         "secAppsTitle", "appsCpu", "appsMem", "appsGpu", "appsNet", "appsNone",
         "heatLow", "heatHigh", "heatHint", "hourOfDay",

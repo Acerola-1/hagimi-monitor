@@ -453,6 +453,38 @@
         }
       }
     },
+    "about.telemetry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage Data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用数据"
+          }
+        }
+      }
+    },
+    "about.telemetry.detail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share anonymous usage data to help improve the app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享匿名使用数据以帮助改进应用"
+          }
+        }
+      }
+    },
     "about.unknown": {
       "localizations": {
         "en": {
@@ -698,6 +730,86 @@
         }
       }
     },
+    "bluetooth.battery-unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电量不可用"
+          }
+        }
+      }
+    },
+    "bluetooth.row.collapse-hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to collapse device list"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击收起设备列表"
+          }
+        }
+      }
+    },
+    "bluetooth.row.devices-count": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d devices"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d 个设备"
+          }
+        }
+      }
+    },
+    "bluetooth.row.devices-with-min": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d devices, min %2$d%%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d 个设备，最低 %2$d%%"
+          }
+        }
+      }
+    },
+    "bluetooth.row.expand-hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap to expand device list"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击展开设备列表"
+          }
+        }
+      }
+    },
     "bluetooth.summary.count %lld": {
       "localizations": {
         "en": {
@@ -902,6 +1014,70 @@
           "stringUnit": {
             "state": "translated",
             "value": "喵～被你发现啦"
+          }
+        }
+      }
+    },
+    "cell-balance.rating.excellent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Excellent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "极佳"
+          }
+        }
+      }
+    },
+    "cell-balance.rating.fair": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fair"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般"
+          }
+        }
+      }
+    },
+    "cell-balance.rating.good": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Good"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "良好"
+          }
+        }
+      }
+    },
+    "cell-balance.rating.unbalanced": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unbalanced"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失衡"
           }
         }
       }
@@ -1210,6 +1386,54 @@
         }
       }
     },
+    "display.control.brightness": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Brightness"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "亮度"
+          }
+        }
+      }
+    },
+    "display.control.contrast": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contrast"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "对比度"
+          }
+        }
+      }
+    },
+    "display.control.volume": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volume"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "音量"
+          }
+        }
+      }
+    },
     "display.controls-disabled": {
       "localizations": {
         "en": {
@@ -1254,6 +1478,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "外接显示器"
+          }
+        }
+      }
+    },
+    "display.last-set": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last set"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次设置"
           }
         }
       }
@@ -1306,6 +1546,22 @@
         }
       }
     },
+    "display.software-dimming": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Software"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "软件调光"
+          }
+        }
+      }
+    },
     "display.unit-count": {
       "localizations": {
         "en": {
@@ -1318,6 +1574,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "台"
+          }
+        }
+      }
+    },
+    "display.value-unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
           }
         }
       }
@@ -2578,6 +2850,22 @@
         }
       }
     },
+    "language.system": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跟随系统"
+          }
+        }
+      }
+    },
     "mediaKey.brightness-toggle": {
       "localizations": {
         "en": {
@@ -2626,6 +2914,54 @@
         }
       }
     },
+    "mediaKey.permission-title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Accessibility"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "辅助功能权限"
+          }
+        }
+      }
+    },
+    "mediaKey.permission.close-guide": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Close permission guide"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭权限引导"
+          }
+        }
+      }
+    },
+    "mediaKey.permission.drag-app": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Drag this app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拖动此应用"
+          }
+        }
+      }
+    },
     "mediaKey.permission.guide-subtitle": {
       "localizations": {
         "en": {
@@ -2654,54 +2990,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "允许接管媒体键"
-          }
-        }
-      }
-    },
-    "mediaKey.permission.drag-app": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drag this app"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拖动此应用"
-          }
-        }
-      }
-    },
-    "mediaKey.permission.close-guide": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Close permission guide"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "关闭权限引导"
-          }
-        }
-      }
-    },
-    "mediaKey.permission-title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Accessibility"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "辅助功能权限"
           }
         }
       }
@@ -3116,6 +3404,38 @@
         }
       }
     },
+    "menu-bar-metric-prefix.display-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "DSP"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-prefix.display-refresh-rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": ""
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
     "menu-bar-metric-prefix.fan-speed": {
       "localizations": {
         "en": {
@@ -3128,6 +3448,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "风扇"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-prefix.gpu-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPWR"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU功耗"
           }
         }
       }
@@ -3145,6 +3481,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "GPU"
+          }
+        }
+      }
+    },
+    "menu-bar-metric-prefix.memory-bandwidth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BW"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带宽"
           }
         }
       }
@@ -3264,6 +3616,38 @@
         }
       }
     },
+    "menu-bar-metric.display-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Power"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕功耗"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.display-refresh-rate": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Refresh Rate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕刷新率"
+          }
+        }
+      }
+    },
     "menu-bar-metric.fan-speed": {
       "localizations": {
         "en": {
@@ -3280,6 +3664,22 @@
         }
       }
     },
+    "menu-bar-metric.gpu-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU Power"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU 功耗"
+          }
+        }
+      }
+    },
     "menu-bar-metric.gpu-usage": {
       "localizations": {
         "en": {
@@ -3292,6 +3692,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "GPU 使用率"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.memory-bandwidth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory Bandwidth"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存总线带宽"
           }
         }
       }
@@ -3570,6 +3986,54 @@
         }
       }
     },
+    "metric.battery.adapter-port": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Port"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "端口"
+          }
+        }
+      }
+    },
+    "metric.battery.adapter-transports": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared Lanes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同口通道"
+          }
+        }
+      }
+    },
+    "metric.battery.ane-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANE"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ANE"
+          }
+        }
+      }
+    },
     "metric.battery.capacity": {
       "localizations": {
         "en": {
@@ -3586,6 +4050,54 @@
         }
       }
     },
+    "metric.battery.cell-balance": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cell Balance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电芯平衡"
+          }
+        }
+      }
+    },
+    "metric.battery.cell-qmax": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cell Qmax"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电芯化学容量"
+          }
+        }
+      }
+    },
+    "metric.battery.cell-resistance": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cell Resistance"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电芯内阻"
+          }
+        }
+      }
+    },
     "metric.battery.charging-power": {
       "localizations": {
         "en": {
@@ -3598,6 +4110,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "充电功率"
+          }
+        }
+      }
+    },
+    "metric.battery.cpu-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU"
           }
         }
       }
@@ -3634,6 +4162,38 @@
         }
       }
     },
+    "metric.battery.display-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕"
+          }
+        }
+      }
+    },
+    "metric.battery.gpu-power": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU"
+          }
+        }
+      }
+    },
     "metric.battery.health": {
       "localizations": {
         "en": {
@@ -3646,6 +4206,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "健康度"
+          }
+        }
+      }
+    },
+    "metric.battery.input-telemetry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adapter Input"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适配器输入"
+          }
+        }
+      }
+    },
+    "metric.battery.pd-contract": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PD Contract"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "PD 协议"
+          }
+        }
+      }
+    },
+    "metric.battery.pd-tiers": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supported Tiers"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可协商档位"
           }
         }
       }
@@ -3711,6 +4319,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "温度"
+          }
+        }
+      }
+    },
+    "metric.battery.thermal-limit-seconds": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thermal Throttling"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "温控限充"
+          }
+        }
+      }
+    },
+    "metric.battery.time-at-high-soc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High SoC Time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "满电驻留"
           }
         }
       }
@@ -4213,6 +4853,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "压缩"
+          }
+        }
+      }
+    },
+    "metric.memory.memory-bandwidth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "BW"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "带宽"
           }
         }
       }
@@ -4900,6 +5556,22 @@
         }
       }
     },
+    "panel.battery.diag.disconnected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disconnected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未连接"
+          }
+        }
+      }
+    },
     "panel.battery.low-power-on": {
       "localizations": {
         "en": {
@@ -4912,6 +5584,118 @@
           "stringUnit": {
             "state": "translated",
             "value": "低电量模式已开启"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.cells": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cells"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电芯"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.devices": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Devices"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.flow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Topology"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "拓扑"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.hardware": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hardware"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "硬件"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.health": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Health"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "健康"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.ranking": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "User Process Ranking"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户进程排名"
+          }
+        }
+      }
+    },
+    "panel.battery.tab.supply": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supply"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "供电"
           }
         }
       }
@@ -5156,6 +5940,38 @@
         }
       }
     },
+    "panel.power-flow.fully-charged": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fully Charged"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已充满"
+          }
+        }
+      }
+    },
+    "panel.power-flow.hold-limit": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At Charge Limit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已达上限"
+          }
+        }
+      }
+    },
     "panel.power-flow.note.insufficient": {
       "localizations": {
         "en": {
@@ -5172,6 +5988,22 @@
         }
       }
     },
+    "panel.power-flow.optimized-protection": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optimized Charging"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "优化电池充电"
+          }
+        }
+      }
+    },
     "panel.power-flow.system": {
       "localizations": {
         "en": {
@@ -5184,6 +6016,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "系统负载"
+          }
+        }
+      }
+    },
+    "panel.power-flow.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Flow Diagram"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "流向图"
+          }
+        }
+      }
+    },
+    "panel.power-flow.tooltip.input-telemetry": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current Input: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前输入: %@"
+          }
+        }
+      }
+    },
+    "panel.power-flow.tooltip.pd-contract": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Input Spec: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入规格: %@"
           }
         }
       }
@@ -6228,6 +7108,86 @@
         }
       }
     },
+    "settings.language": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语言"
+          }
+        }
+      }
+    },
+    "settings.language.restart.later": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Later"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "稍后重启"
+          }
+        }
+      }
+    },
+    "settings.language.restart.message": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The new language takes effect fully after the app restarts."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新语言将在应用重启后完全生效。"
+          }
+        }
+      }
+    },
+    "settings.language.restart.now": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restart Now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即重启"
+          }
+        }
+      }
+    },
+    "settings.language.restart.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Language Changed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "语言已切换"
+          }
+        }
+      }
+    },
     "settings.launch-at-login": {
       "localizations": {
         "en": {
@@ -6257,6 +7217,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "登录后自动打开 HagimiMonitor"
+          }
+        }
+      }
+    },
+    "settings.liquid-glass": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Liquid Glass"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "液态玻璃"
+          }
+        }
+      }
+    },
+    "settings.liquid-glass.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use Liquid Glass for panels and interface surfaces (in testing)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "为监控面板与界面表面使用液态玻璃效果（开发测试中）"
           }
         }
       }
@@ -6417,6 +7409,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "按下快捷键…"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "工具"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tools"
           }
         }
       }
@@ -6658,6 +7666,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "NEW"
+          }
+        }
+      }
+    },
+    "settings.sidebar.quick-tools": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "小工具"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quick Tools"
           }
         }
       }
@@ -7100,6 +8124,150 @@
           "stringUnit": {
             "state": "translated",
             "value": "峰值"
+          }
+        }
+      }
+    },
+    "stats.r.alertDetail": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total {dur} · {state} · {levels}"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "累计 {dur} · {state} · {levels}"
+          }
+        }
+      }
+    },
+    "stats.r.alertDetailPlain": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Total {dur} · {state}"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "累计 {dur} · {state}"
+          }
+        }
+      }
+    },
+    "stats.r.alertIncludes": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "incl."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "含"
+          }
+        }
+      }
+    },
+    "stats.r.alertInterrupted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observation gap"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观测中断"
+          }
+        }
+      }
+    },
+    "stats.r.alertMem": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存压力"
+          }
+        }
+      }
+    },
+    "stats.r.alertNone": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No pressure alerts in this range"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该范围没有压力告警"
+          }
+        }
+      }
+    },
+    "stats.r.alertOngoing": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ongoing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进行中"
+          }
+        }
+      }
+    },
+    "stats.r.alertRecovered": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovered"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已恢复"
+          }
+        }
+      }
+    },
+    "stats.r.alertThermal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thermal pressure"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "热压力"
           }
         }
       }
@@ -7568,70 +8736,6 @@
         }
       }
     },
-    "stats.r.evCpuHigh": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sustained high CPU load"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU 持续高负载"
-          }
-        }
-      }
-    },
-    "stats.r.evCpuHighDetail": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "avg {v}%, for {dur}"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "均值 {v}%，持续 {dur}"
-          }
-        }
-      }
-    },
-    "stats.r.evDiskDetail": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{v} total"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "总量 {v}"
-          }
-        }
-      }
-    },
-    "stats.r.evDiskSpike": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disk I/O spike"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "磁盘读写尖峰"
-          }
-        }
-      }
-    },
     "stats.r.evHint": {
       "localizations": {
         "en": {
@@ -7644,182 +8748,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "共 {n} 条"
-          }
-        }
-      }
-    },
-    "stats.r.evMore": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{n} more earlier events"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "还有 {n} 条更早的事件"
-          }
-        }
-      }
-    },
-    "stats.r.evNetDetail": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "{v} total"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "总量 {v}"
-          }
-        }
-      }
-    },
-    "stats.r.evNetSpike": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Network traffic spike"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "网络流量尖峰"
-          }
-        }
-      }
-    },
-    "stats.r.evNone": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No notable events in this range"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "该范围未检测到值得注意的事件"
-          }
-        }
-      }
-    },
-    "stats.r.evPowerOnAC": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected to power adapter"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "接入电源适配器"
-          }
-        }
-      }
-    },
-    "stats.r.evPowerOnBattery": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Switched to battery"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "切换到电池供电"
-          }
-        }
-      }
-    },
-    "stats.r.evPressureDetail": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "avg {v}%, for {dur}"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "均值 {v}%，持续 {dur}"
-          }
-        }
-      }
-    },
-    "stats.r.evPressureHigh": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "High memory pressure"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内存压力偏高"
-          }
-        }
-      }
-    },
-    "stats.r.evReboot": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "System restart"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "系统重启"
-          }
-        }
-      }
-    },
-    "stats.r.evThermal": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Thermal pressure elevated"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "热压力升高"
-          }
-        }
-      }
-    },
-    "stats.r.evThermalDetail": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "for {dur}"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "持续 {dur}"
           }
         }
       }
@@ -7904,18 +8832,50 @@
         }
       }
     },
-    "stats.r.healthCapped": {
+    "stats.r.healthInsufficient": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Overheat share above threshold — rating capped at Good"
+            "value": "Not enough observation to score yet"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "过热时长占比超阈值,评级至多「良好」"
+            "value": "观测时长不足,暂不评分"
+          }
+        }
+      }
+    },
+    "stats.r.healthLegacy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Legacy record: approximated from per-frame stress"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "旧记录:按帧级应力近似"
+          }
+        }
+      }
+    },
+    "stats.r.healthLegacyRows": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Range contains legacy rows: scoring covers only rows with level seconds"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该范围含旧记录:评分只覆盖有档位秒数的部分"
           }
         }
       }
@@ -7964,6 +8924,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "评分走势"
+          }
+        }
+      }
+    },
+    "stats.r.healthWorkload": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High-load total"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高负载累计"
           }
         }
       }
@@ -8416,86 +9392,6 @@
         }
       }
     },
-    "stats.r.levelCritical": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Critical"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "危急"
-          }
-        }
-      }
-    },
-    "stats.r.levelExcellent": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Excellent"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "优秀"
-          }
-        }
-      }
-    },
-    "stats.r.levelFair": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fair"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一般"
-          }
-        }
-      }
-    },
-    "stats.r.levelGood": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Good"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "良好"
-          }
-        }
-      }
-    },
-    "stats.r.levelPoor": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Poor"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "较差"
-          }
-        }
-      }
-    },
     "stats.r.levelElevated": {
       "localizations": {
         "en": {
@@ -8560,6 +9456,38 @@
         }
       }
     },
+    "stats.r.memCritical": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Critical"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "严重"
+          }
+        }
+      }
+    },
+    "stats.r.memWarning": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Warning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "警告"
+          }
+        }
+      }
+    },
     "stats.r.metaDays": {
       "localizations": {
         "en": {
@@ -8588,38 +9516,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "{v} 生成"
-          }
-        }
-      }
-    },
-    "stats.r.print": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Print / Export PDF"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打印 / 导出 PDF"
-          }
-        }
-      }
-    },
-    "stats.r.rAll": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "All"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "全部"
           }
         }
       }
@@ -8677,29 +9573,109 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This Year"
+            "value": "Last 12 months"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "今年"
+            "value": "近一年"
           }
         }
       }
     },
-    "stats.r.reportSub": {
+    "stats.r.railDisk": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "A visual overview of historical metrics from this Mac. All data stays on your device."
+            "value": "Disk"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这台 Mac 的历史监测数据总览，全部数据保存在本机。"
+            "value": "磁盘"
+          }
+        }
+      }
+    },
+    "stats.r.railEyebrow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "THIS MAC"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 MAC"
+          }
+        }
+      }
+    },
+    "stats.r.railLocal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Local device snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地设备快照"
+          }
+        }
+      }
+    },
+    "stats.r.railNet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络"
+          }
+        }
+      }
+    },
+    "stats.r.railPower": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电源"
+          }
+        }
+      }
+    },
+    "stats.r.rangeLabel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "历史记录"
           }
         }
       }
@@ -9237,13 +10213,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Event Timeline"
+            "value": "Pressure alerts"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "事件时间线"
+            "value": "压力告警"
           }
         }
       }
@@ -9717,6 +10693,22 @@
         }
       }
     },
+    "stats.report.export.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Hardware Telemetry Dossier"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出硬件规格档案"
+          }
+        }
+      }
+    },
     "stats.report.footer": {
       "extractionState": "stale",
       "localizations": {
@@ -9814,6 +10806,118 @@
           "stringUnit": {
             "state": "translated",
             "value": "性能统计报表"
+          }
+        }
+      }
+    },
+    "stats.report.toolbar.export": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出"
+          }
+        }
+      }
+    },
+    "stats.report.toolbar.export.tooltip": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as standalone HTML file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另存为 HTML 文件"
+          }
+        }
+      }
+    },
+    "stats.report.toolbar.print": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打印"
+          }
+        }
+      }
+    },
+    "stats.report.toolbar.print.tooltip": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print or save as PDF"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打印或保存为 PDF"
+          }
+        }
+      }
+    },
+    "stats.report.toolbar.reload": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新"
+          }
+        }
+      }
+    },
+    "stats.report.toolbar.reload.tooltip": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reload report"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新载入报表"
+          }
+        }
+      }
+    },
+    "stats.report.window.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hardware Telemetry Dossier · HagimiMonitor"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "硬件规格档案 · HagimiMonitor"
           }
         }
       }
@@ -10410,6 +11514,22 @@
         }
       }
     },
+    "stats.storage.apps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用记录"
+          }
+        }
+      }
+    },
     "stats.storage.categories": {
       "localizations": {
         "en": {
@@ -10458,6 +11578,22 @@
         }
       }
     },
+    "stats.storage.category-metrics-desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aggregated CPU, memory, network, and hardware metrics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU、内存、网络等硬件性能分桶聚合数据"
+          }
+        }
+      }
+    },
     "stats.storage.category-report-desc": {
       "localizations": {
         "en": {
@@ -10490,6 +11626,22 @@
         }
       }
     },
+    "stats.storage.category-system-desc": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Database schemas, reusable free space, and app logs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据库表结构、待复用空间与运行日志"
+          }
+        }
+      }
+    },
     "stats.storage.clear": {
       "localizations": {
         "en": {
@@ -10502,6 +11654,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "清理"
+          }
+        }
+      }
+    },
+    "stats.storage.clear-apps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear App Records"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理应用记录"
           }
         }
       }
@@ -10662,6 +11830,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "管理"
+          }
+        }
+      }
+    },
+    "stats.storage.metric": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Metrics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "硬件指标"
+          }
+        }
+      }
+    },
+    "stats.storage.report": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reports"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "报表缓存"
           }
         }
       }
@@ -11270,1254 +12470,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "© 2026 Acerola"
-          }
-        }
-      }
-    },
-    "about.telemetry": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Usage Data"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "使用数据"
-          }
-        }
-      }
-    },
-    "about.telemetry.detail": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Share anonymous usage data to help improve the app"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "共享匿名使用数据以帮助改进应用"
-          }
-        }
-      }
-    },
-    "settings.sidebar.quick-tools": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "小工具"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Quick Tools"
-          }
-        }
-      }
-    },
-    "settings.quick-tools.group": {
-      "localizations": {
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "工具"
-          }
-        },
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tools"
-          }
-        }
-      }
-    },
-    "language.system": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "System"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "跟随系统"
-          }
-        }
-      }
-    },
-    "settings.language": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Language"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "语言"
-          }
-        }
-      }
-    },
-    "settings.language.restart.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Language Changed"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "语言已切换"
-          }
-        }
-      }
-    },
-    "settings.language.restart.message": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "The new language takes effect fully after the app restarts."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "新语言将在应用重启后完全生效。"
-          }
-        }
-      }
-    },
-    "settings.language.restart.later": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restart Later"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "稍后重启"
-          }
-        }
-      }
-    },
-    "settings.language.restart.now": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Restart Now"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "立即重启"
-          }
-        }
-      }
-    },
-    "stats.report.window.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hardware Telemetry Dossier · HagimiMonitor"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "硬件规格档案 · HagimiMonitor"
-          }
-        }
-      }
-    },
-    "stats.report.export.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Export Hardware Telemetry Dossier"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导出硬件规格档案"
-          }
-        }
-      }
-    },
-    "stats.report.toolbar.export": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Export"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "导出"
-          }
-        }
-      }
-    },
-    "stats.report.toolbar.export.tooltip": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Save as standalone HTML file"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "另存为 HTML 文件"
-          }
-        }
-      }
-    },
-    "stats.report.toolbar.print": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Print"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打印"
-          }
-        }
-      }
-    },
-    "stats.report.toolbar.print.tooltip": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Print or save as PDF"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "打印或保存为 PDF"
-          }
-        }
-      }
-    },
-    "stats.report.toolbar.reload": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reload"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新"
-          }
-        }
-      }
-    },
-    "stats.report.toolbar.reload.tooltip": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reload report"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "重新载入报表"
-          }
-        }
-      }
-    },
-    "stats.storage.metric": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Metrics"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "硬件指标"
-          }
-        }
-      }
-    },
-    "stats.storage.category-metrics-desc": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Aggregated CPU, memory, network, and hardware metrics"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU、内存、网络等硬件性能分桶聚合数据"
-          }
-        }
-      }
-    },
-    "stats.storage.apps": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Apps"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "应用记录"
-          }
-        }
-      }
-    },
-    "stats.storage.report": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Reports"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "报表缓存"
-          }
-        }
-      }
-    },
-    "stats.storage.category-system-desc": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Database schemas, reusable free space, and app logs"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "数据库表结构、待复用空间与运行日志"
-          }
-        }
-      }
-    },
-    "stats.storage.clear-apps": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Clear App Records"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "清理应用记录"
-          }
-        }
-      }
-    },
-    "metric.battery.cell-balance": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cell Balance"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电芯平衡"
-          }
-        }
-      }
-    },
-    "cell-balance.rating.excellent": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Excellent"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "极佳"
-          }
-        }
-      }
-    },
-    "cell-balance.rating.good": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Good"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "良好"
-          }
-        }
-      }
-    },
-    "cell-balance.rating.fair": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fair"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "一般"
-          }
-        }
-      }
-    },
-    "cell-balance.rating.unbalanced": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unbalanced"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "失衡"
-          }
-        }
-      }
-    },
-    "panel.power-flow.hold-limit": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "At Charge Limit"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已达上限"
-          }
-        }
-      }
-    },
-    "panel.power-flow.optimized-protection": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Optimized Charging"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "优化电池充电"
-          }
-        }
-      }
-    },
-    "panel.power-flow.fully-charged": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fully Charged"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已充满"
-          }
-        }
-      }
-    },
-    "panel.power-flow.tooltip.pd-contract": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Input Spec: %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "输入规格: %@"
-          }
-        }
-      }
-    },
-    "panel.power-flow.tooltip.input-telemetry": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Current Input: %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前输入: %@"
-          }
-        }
-      }
-    },
-    "panel.power-flow.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Flow Diagram"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "流向图"
-          }
-        }
-      }
-    },
-    "bluetooth.battery-unavailable": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Battery unavailable"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电量不可用"
-          }
-        }
-      }
-    },
-    "bluetooth.row.expand-hint": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to expand device list"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "点击展开设备列表"
-          }
-        }
-      }
-    },
-    "bluetooth.row.collapse-hint": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Tap to collapse device list"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "点击收起设备列表"
-          }
-        }
-      }
-    },
-    "bluetooth.row.devices-with-min": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$d devices, min %2$d%%"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$d 个设备，最低 %2$d%%"
-          }
-        }
-      }
-    },
-    "bluetooth.row.devices-count": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$d devices"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%1$d 个设备"
-          }
-        }
-      }
-    },
-    "panel.battery.tab.flow": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Topology"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "拓扑"
-          }
-        }
-      }
-    },
-    "panel.battery.tab.hardware": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hardware"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "硬件"
-          }
-        }
-      }
-    },
-    "panel.battery.tab.supply": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supply"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "供电"
-          }
-        }
-      }
-    },
-    "panel.battery.tab.cells": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cells"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电芯"
-          }
-        }
-      }
-    },
-    "panel.battery.tab.devices": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Devices"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "设备"
-          }
-        }
-      }
-    },
-    "panel.battery.diag.disconnected": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Disconnected"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未连接"
-          }
-        }
-      }
-    },
-    "settings.liquid-glass": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Liquid Glass"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "液态玻璃"
-          }
-        }
-      }
-    },
-    "settings.liquid-glass.subtitle": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Use Liquid Glass for panels and interface surfaces (in testing)"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "为监控面板与界面表面使用液态玻璃效果（开发测试中）"
-          }
-        }
-      }
-    },
-    "metric.battery.ane-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ANE"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "ANE"
-          }
-        }
-      }
-    },
-    "metric.battery.cpu-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "CPU"
-          }
-        }
-      }
-    },
-    "metric.battery.display-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Display"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "屏幕"
-          }
-        }
-      }
-    },
-    "metric.battery.gpu-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU"
-          }
-        }
-      }
-    },
-    "panel.battery.tab.health": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Health"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "健康"
-          }
-        }
-      }
-    },
-    "panel.battery.tab.ranking": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "User Process Ranking"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "用户进程排名"
-          }
-        }
-      }
-    },
-    "metric.battery.cell-qmax": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cell Qmax"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电芯化学容量"
-          }
-        }
-      }
-    },
-    "metric.battery.cell-resistance": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cell Resistance"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "电芯内阻"
-          }
-        }
-      }
-    },
-    "metric.battery.thermal-limit-seconds": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Thermal Throttling"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "温控限充"
-          }
-        }
-      }
-    },
-    "metric.battery.time-at-high-soc": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "High SoC Time"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "满电驻留"
-          }
-        }
-      }
-    },
-    "metric.memory.memory-bandwidth": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BW"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "带宽"
-          }
-        }
-      }
-    },
-    "menu-bar-metric.gpu-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU Power"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU 功耗"
-          }
-        }
-      }
-    },
-    "menu-bar-metric-prefix.gpu-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPWR"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "GPU功耗"
-          }
-        }
-      }
-    },
-    "menu-bar-metric.memory-bandwidth": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Memory Bandwidth"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内存总线带宽"
-          }
-        }
-      }
-    },
-    "menu-bar-metric-prefix.memory-bandwidth": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "BW"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "带宽"
-          }
-        }
-      }
-    },
-    "menu-bar-metric.display-refresh-rate": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Display Refresh Rate"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "屏幕刷新率"
-          }
-        }
-      }
-    },
-    "menu-bar-metric-prefix.display-refresh-rate": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": ""
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "刷新"
-          }
-        }
-      }
-    },
-    "menu-bar-metric.display-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Display Power"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "屏幕功耗"
-          }
-        }
-      }
-    },
-    "menu-bar-metric-prefix.display-power": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "DSP"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "屏幕"
-          }
-        }
-      }
-    },
-    "display.value-unknown": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unknown"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未知"
-          }
-        }
-      }
-    },
-    "display.software-dimming": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Software"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "软件调光"
-          }
-        }
-      }
-    },
-    "display.last-set": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Last set"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "上次设置"
-          }
-        }
-      }
-    },
-    "display.control.brightness": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Brightness"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "亮度"
-          }
-        }
-      }
-    },
-    "display.control.volume": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Volume"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "音量"
-          }
-        }
-      }
-    },
-    "display.control.contrast": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Contrast"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "对比度"
-          }
-        }
-      }
-    },
-    "metric.battery.adapter-port": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Port"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "端口"
-          }
-        }
-      }
-    },
-    "metric.battery.pd-contract": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PD Contract"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "PD 协议"
-          }
-        }
-      }
-    },
-    "metric.battery.pd-tiers": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Supported Tiers"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "可协商档位"
-          }
-        }
-      }
-    },
-    "metric.battery.adapter-transports": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Shared Lanes"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "同口通道"
-          }
-        }
-      }
-    },
-    "metric.battery.input-telemetry": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Adapter Input"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "适配器输入"
           }
         }
       }

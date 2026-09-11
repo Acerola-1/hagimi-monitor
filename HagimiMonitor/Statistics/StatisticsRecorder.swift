@@ -260,24 +260,14 @@ final class StatisticsRecorder: ObservableObject {
         }
         lastFrameAt = date
 
-        // 本帧各应力输入(跨模块收集,循环后统一算帧级应力)。
-        var frameCPU: Double?, frameGPU: Double?, frameThermal: Double?, frameTemp: Double?
-        var framePressurePct: Double?, framePressureLevel: Double?
-
         for module in modules where !module.isPlaceholder {
             switch module.kind {
             case .cpu:
                 accumulateCPU(module)
-                frameCPU = module.value
-                frameThermal = numeric("thermal-pressure", in: module)
-                frameTemp = numeric("temperature", in: module)
             case .gpu:
                 accumulateGPU(module)
-                frameGPU = module.value
             case .memory:
                 accumulateMemory(module)
-                framePressurePct = module.pressureValue
-                framePressureLevel = numeric("pressure-level", in: module)
             case .network: accumulateNetwork(module, at: date)
             case .storage: accumulateStorage(module, at: date)
             case .battery: accumulateBattery(module)
@@ -285,22 +275,9 @@ final class StatisticsRecorder: ObservableObject {
             }
         }
 
-        // 帧级应力:非线性曲线只作用在单帧上,桶内存均值,
-        // 评分侧线性重组即可,饱和尖峰不被桶均值抹平。报表沿用本口径。
-        if framePressurePct != nil || framePressureLevel != nil {
-            accumulator.add(Self.index("stress_mem_avg"),
-                            StatisticsHealthScore.stressMem(percent: framePressurePct, level: framePressureLevel))
-        }
-        if let frameCPU {
-            accumulator.add(Self.index("stress_cpu_avg"), StatisticsHealthScore.stressCPU(frameCPU))
-        }
-        if let frameGPU {
-            accumulator.add(Self.index("stress_gpu_avg"), StatisticsHealthScore.stressGPU(frameGPU))
-        }
-        if frameThermal != nil || frameTemp != nil {
-            accumulator.add(Self.index("stress_thermal_avg"),
-                            StatisticsHealthScore.stressThermal(state: frameThermal, temp: frameTemp))
-        }
+        // 帧级应力列(stress_*_avg)不再逐帧写入:评分与告警已全部走档位秒数口径,
+        // 唯一读它的是升级前旧记录的近似回退,而那些列的历史值仍在库里。
+        // 需要时由 StatisticsRow.stressFallback 从指标列现算(曲线同源)。
 
         accrueSeconds(modules: modules, freshKinds: freshKinds, at: date)
 
@@ -899,11 +876,13 @@ final class StatisticsRecorder: ObservableObject {
         let todayStart = calendar.startOfDay(for: now)
         var rows = database.dayRows(from: .distantPast, to: now.addingTimeInterval(86400))
         let todayKey = Int64(todayStart.timeIntervalSince1970)
-        if !rows.contains(where: { $0.t == todayKey }) {
-            let minutes = database.minuteRows(from: todayStart, to: now.addingTimeInterval(120))
-            if let today = StatisticsRow.aggregate(minutes, t: todayKey) {
-                rows.append(today)
-            }
+        // 今日桶总是从分钟层现算,不沿用库里的今日行:那一行是当天早些时候汇总写入
+        // 的快照,后来新增的秒数列(有效秒/档位秒)不会回填到它里面,按日层聚合的
+        // 报表与评分会读到「有覆盖、无有效观测」的半空行。翻日时的正式汇总不受影响。
+        rows.removeAll { $0.t == todayKey }
+        let minutes = database.minuteRows(from: todayStart, to: now.addingTimeInterval(120))
+        if let today = StatisticsRow.aggregate(minutes, t: todayKey) {
+            rows.append(today)
         }
         return rows
             .sorted { $0.t < $1.t }
