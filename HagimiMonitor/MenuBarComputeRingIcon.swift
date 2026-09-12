@@ -2,14 +2,19 @@ import AppKit
 import Foundation
 
 enum MenuBarComputeRingIcon {
+    /// 图标画布 21pt:原 18pt 图标区域居中,四周各留 1.5pt,让告警红点落在环外
+    /// 而不是压在环线上;环与轨道的几何不变,只多了这圈留白。
+    private static let iconSize: CGFloat = 21
+
     private static let cache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
-        // 桶组合上限 101(负载)×2(明暗)×4(等级)=808,但菜单栏实际只在当前负载附近的
-        // 少数桶间移动。840 会让几乎所有历史桶常驻,且每张被绘制过的缓存图会各持有一个
-        // AppKit 位图 rep,累积成内存高水位。displayedComputeLoad 由 30fps 平滑定时器驱动,
-        // 负载爬升/回落时会连续扫过一整段整数桶,limit 太小会导致近期刚淘汰的桶被
-        // 立刻重新访问、频繁重绘。300 约等于「整段负载范围 × 明暗两态」(101×2=202)
-        // 再留一些余量给相邻等级切换,足以覆盖单次爬升/回落的连续扫桶,不必到 840。
+        // 桶组合上限 101(负载)×2(明暗)×4(等级)×2(告警红点)=1616,但菜单栏实际只在
+        // 当前负载附近的少数桶间移动。840 会让几乎所有历史桶常驻,且每张被绘制过的缓存图
+        // 会各持有一个 AppKit 位图 rep,累积成内存高水位。displayedComputeLoad 由 30fps
+        // 平滑定时器驱动,负载爬升/回落时会连续扫过一整段整数桶,limit 太小会导致近期刚
+        // 淘汰的桶被立刻重新访问、频繁重绘。300 约等于「整段负载范围 × 明暗两态」
+        // (101×2=202,红点开或关各算一套)再留一些余量给相邻等级切换,足以覆盖单次
+        // 爬升/回落的连续扫桶,不必到 1616。
         cache.countLimit = 300
         return cache
     }()
@@ -18,19 +23,19 @@ enum MenuBarComputeRingIcon {
         Int(min(100.0, max(0.0, load)).rounded())
     }
 
-    private static func cacheKey(loadBucket: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSString {
-        "\(loadBucket)|\(darkMode ? 1 : 0)|\(loadLevel.cacheIndex)" as NSString
+    private static func cacheKey(loadBucket: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool) -> NSString {
+        "\(loadBucket)|\(darkMode ? 1 : 0)|\(loadLevel.cacheIndex)|\(showsAlert ? 1 : 0)" as NSString
     }
 
-    static func image(load: Double, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel) -> NSImage {
+    static func image(load: Double, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool = false) -> NSImage {
         let loadBucket = loadBucket(for: load)
         let canonicalLoad = Double(loadBucket)
-        let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel)
+        let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel, showsAlert: showsAlert)
         if let cached = cache.object(forKey: key) {
             return cached
         }
 
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { rect in
+        let image = NSImage(size: NSSize(width: Self.iconSize, height: Self.iconSize), flipped: false) { rect in
             NSGraphicsContext.current?.imageInterpolation = .high
             NSColor.clear.setFill()
             rect.fill()
@@ -44,7 +49,10 @@ enum MenuBarComputeRingIcon {
             }
 
             let style = MenuBarComputeRingImageStyle(load: canonicalLoad, darkMode: isDark, loadLevel: loadLevel)
-            drawRing(style: style)
+            drawRing(style: style, center: NSPoint(x: rect.midX, y: rect.midY))
+            if showsAlert {
+                MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
+            }
             return true
         }
         image.isTemplate = false
@@ -53,8 +61,7 @@ enum MenuBarComputeRingIcon {
         return image
     }
 
-    private static func drawRing(style: MenuBarComputeRingImageStyle) {
-        let center = NSPoint(x: 9, y: 9)
+    private static func drawRing(style: MenuBarComputeRingImageStyle, center: NSPoint) {
         let ringRect = NSRect(
             x: center.x - style.ringSize / 2,
             y: center.y - style.ringSize / 2,
@@ -63,8 +70,13 @@ enum MenuBarComputeRingIcon {
         )
 
         style.trackColor.setStroke()
-        let trackInset = (18 - style.trackSize) / 2
-        let trackRect = NSRect(x: trackInset, y: trackInset, width: style.trackSize, height: style.trackSize)
+        // 底环与弧线、核心同圆心:画布扩容后不能再按固定内衬定位,否则会与弧线错开。
+        let trackRect = NSRect(
+            x: center.x - style.trackSize / 2,
+            y: center.y - style.trackSize / 2,
+            width: style.trackSize,
+            height: style.trackSize
+        )
         let track = NSBezierPath(ovalIn: trackRect)
         track.lineWidth = style.trackWidth
         track.stroke()

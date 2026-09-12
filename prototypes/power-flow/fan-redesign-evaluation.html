@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 颠覆式能耗流向重构方案</title>
+<style>
+  :root {
+    --canvas: #121418;
+    --panel-bg: rgba(26, 29, 36, 0.85);
+    --trackFill: rgba(255, 255, 255, 0.08);
+    --trackFillSubtle: rgba(255, 255, 255, 0.04);
+    --rowSeparator: rgba(122, 145, 180, 0.22);
+    --textPrimary: rgba(255, 255, 255, 0.96);
+    --textSecondary: rgba(255, 255, 255, 0.78);
+    --textCaption: rgba(255, 255, 255, 0.55);
+    --calm: #2F9E64;
+    --warning: #B8872E;
+    --critical: #D94848;
+    --busColor: #2F9E64;
+    --cpu: #D27A4A;
+    --gpu: #5D8CF0;
+    --network: #43A6A0;
+    --memory: #42A39A;
+    --storage: #9A865E;
+  }
+
+  html.light {
+    --canvas: #eaedf2;
+    --panel-bg: rgba(245, 247, 250, 0.92);
+    --trackFill: rgba(60, 72, 90, 0.09);
+    --trackFillSubtle: rgba(60, 72, 90, 0.04);
+    --rowSeparator: rgba(122, 145, 180, 0.20);
+    --textPrimary: #171D2A;
+    --textSecondary: #465164;
+    --textCaption: #687385;
+    --calm: #248a54;
+    --busColor: #248a54;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    background: var(--canvas);
+    color: var(--textPrimary);
+    padding: 28px 16px 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .header { text-align: center; max-width: 860px; }
+  .header h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.3px; margin-bottom: 6px; }
+  .header p { font-size: 13px; color: var(--textSecondary); line-height: 1.5; }
+
+  /* Toolbar */
+  .toolbar {
+    display: flex;
+    gap: 12px;
+    background: var(--panel-bg);
+    padding: 6px 12px;
+    border-radius: 12px;
+    border: 1px solid var(--rowSeparator);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+  .btn-group { display: flex; gap: 4px; align-items: center; }
+  .btn-group span { font-size: 11px; color: var(--textCaption); margin-right: 4px; }
+  button {
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--textSecondary);
+    padding: 4px 10px;
+    border-radius: 7px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  button:hover { background: var(--trackFill); color: var(--textPrimary); }
+  button.active {
+    background: var(--trackFill);
+    border-color: var(--rowSeparator);
+    color: var(--textPrimary);
+    font-weight: 600;
+  }
+
+  /* Grid */
+  .stage-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    max-width: 1400px;
+    width: 100%;
+    gap: 24px;
+    justify-items: center;
+  }
+
+  .card-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    width: 100%;
+    max-width: 350px;
+  }
+  .card-label {
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--textSecondary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    text-align: center;
+  }
+  .badge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .badge.bad { background: rgba(217, 72, 72, 0.2); color: #ff7a7a; border: 1px solid rgba(217, 72, 72, 0.4); }
+  .badge.good { background: rgba(47, 158, 100, 0.2); color: #4ade80; border: 1px solid rgba(47, 158, 100, 0.4); }
+  .badge.blue { background: rgba(93, 140, 240, 0.2); color: #7db0ff; border: 1px solid rgba(93, 140, 240, 0.4); }
+
+  /* Panel */
+  .panel {
+    background: var(--panel-bg);
+    border-radius: 14px;
+    padding: 20px;
+    border: 1px solid var(--rowSeparator);
+    box-shadow: 0 16px 36px rgba(0,0,0,0.3);
+    transition: width 0.2s ease;
+  }
+  .panel.w-340 { width: 340px; }
+  .panel.w-300 { width: 300px; }
+
+  .content-box {
+    position: relative;
+    border-radius: 10px;
+    background: rgba(0,0,0,0.15);
+    overflow: hidden;
+  }
+
+  /* Nodes */
+  .fnode {
+    position: absolute;
+    height: 46px;
+    border-radius: 9px;
+    background: var(--trackFill);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+  }
+  .fnode .lbl { font-size: 10px; color: var(--textCaption); }
+  .fnode .val { font-size: 13px; font-weight: 600; }
+  .fnode.adapter { left: 0; top: 0; width: 90px; }
+  .fnode.system { right: 0; top: 0; width: 90px; }
+
+  /* Battery bar */
+  .fbar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--trackFill);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    z-index: 2;
+  }
+  .fbar-fill {
+    position: absolute;
+    inset: 2px auto 2px 2px;
+    width: 85%;
+    border-radius: 8px;
+    background: linear-gradient(90deg, rgba(47, 158, 100, 0.4), rgba(47, 158, 100, 0.8));
+    z-index: 1;
+  }
+  .fbar-text { position: relative; z-index: 2; font-size: 11.5px; font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .fbar-sub { position: relative; z-index: 2; font-size: 10.5px; color: var(--textCaption); }
+
+  .socket-pin {
+    position: absolute;
+    top: -4px;
+    width: 8px;
+    height: 4px;
+    background: var(--busColor);
+    border-radius: 1px;
+    transform: translateX(-50%);
+    z-index: 3;
+  }
+
+  svg.tracks {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  @keyframes flowDash {
+    from { stroke-dashoffset: 0; }
+    to { stroke-dashoffset: -20; }
+  }
+  .animated-flow {
+    stroke-dasharray: 8 12;
+    animation: flowDash 1.8s linear infinite;
+  }
+
+  /* ----------------------------------------------------
+     方案 0: 现状（141pt，偏心 39%，八爪鱼线）
+  ---------------------------------------------------- */
+  .flow-current { height: 141px; position: relative; }
+  .grid-current {
+    position: absolute;
+    top: 68px;
+    right: 0;
+    display: flex;
+    gap: 2px;
+    z-index: 2;
+  }
+  .cell-cur {
+    width: 30px;
+    height: 27px;
+    border-radius: 6px;
+    background: var(--trackFill);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .cell-cur .ico { font-size: 13px; line-height: 1; }
+  .cell-cur .pct { font-size: 9.5px; font-weight: 500; color: var(--textSecondary); }
+
+  /* ----------------------------------------------------
+     颠覆方案 1:【系统节点舱内裂变】(In-Node Fission Hub)
+     高度仅 102pt！完全 0 外部连线！
+  ---------------------------------------------------- */
+  .flow-fission { height: 102px; position: relative; }
+  .fnode.fission-hub {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 160px;
+    height: 48px;
+    border-radius: 10px;
+    background: var(--trackFill);
+    border: 1px solid rgba(255,255,255,0.06);
+    display: flex;
+    flex-direction: column;
+    padding: 4px 6px 3px;
+    gap: 3px;
+    z-index: 2;
+  }
+  .hub-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 14px;
+  }
+  .hub-top .lbl { font-size: 9.5px; color: var(--textCaption); font-weight: 500; }
+  .hub-top .val { font-size: 12px; font-weight: 600; }
+  .hub-ribbon {
+    width: 100%;
+    height: 3.5px;
+    border-radius: 2px;
+    display: flex;
+    gap: 1px;
+    overflow: hidden;
+  }
+  .hub-ribbon > div { height: 100%; border-radius: 1px; }
+  .hub-apps {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 20px;
+  }
+  .hub-app-item {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 9px;
+  }
+  .hub-app-item .ico { font-size: 11px; }
+  .hub-app-item .pct { font-size: 8.5px; font-weight: 600; color: var(--textSecondary); }
+
+  /* ----------------------------------------------------
+     颠覆方案 2:【单母线分流槽】(Bus Duct & Micro Deck)
+     高度 114pt，仅 1 根利落下引线引入横轨
+  ---------------------------------------------------- */
+  .flow-duct { height: 114px; position: relative; }
+  .duct-shelf {
+    position: absolute;
+    top: 48px;
+    right: 0;
+    width: 140px;
+    height: 24px;
+    background: var(--trackFillSubtle);
+    border-radius: 6px;
+    border: 1px solid rgba(255,255,255,0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4px;
+    z-index: 2;
+  }
+  .duct-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
+  .duct-item .ico { font-size: 11px; }
+  .duct-item .pct { font-size: 8.5px; font-weight: 600; color: var(--textSecondary); line-height: 1; }
+
+  /* ----------------------------------------------------
+     颠覆方案 3:【两级流向 · 全宽能量光谱轨】(Two-Tier Cascade)
+     高度 132pt，全宽 300pt 释放，带真实文字名称！
+  ---------------------------------------------------- */
+  .flow-cascade { height: 132px; position: relative; }
+  .cascade-rail {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 26px;
+    border-radius: 8px;
+    background: var(--trackFill);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 6px;
+    z-index: 2;
+  }
+  .cascade-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    padding: 2px 4px;
+    border-radius: 4px;
+  }
+  .cascade-item .ico { font-size: 12px; }
+  .cascade-item .name { font-size: 10px; color: var(--textSecondary); font-weight: 500; }
+  .cascade-item .pct { font-size: 9.5px; font-weight: 600; color: var(--textPrimary); }
+
+  /* Explanation section */
+  .desc-box {
+    max-width: 960px;
+    width: 100%;
+    background: var(--panel-bg);
+    border: 1px solid var(--rowSeparator);
+    border-radius: 12px;
+    padding: 20px 24px;
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--textSecondary);
+  }
+  .desc-box h3 { color: var(--textPrimary); margin-bottom: 8px; font-size: 15px; }
+  .desc-box ul { padding-left: 20px; margin-top: 6px; }
+  .desc-box li { margin-bottom: 6px; }
+  .desc-box strong { color: var(--textPrimary); }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>HagimiMonitor · 颠覆式能耗流向架构方案</h1>
+  <p>保留「底部长电源条」与「适配器/系统负载」核心认知模型，彻底破除中间夹层拥挤与偏心失衡。</p>
+</div>
+
+<div class="toolbar">
+  <div class="btn-group">
+    <span>容器宽度</span>
+    <button class="active" onclick="setWidth(340)">340pt (内容 300pt)</button>
+    <button onclick="setWidth(300)">300pt (内容 260pt)</button>
+  </div>
+  <div class="btn-group">
+    <span>外观主题</span>
+    <button class="active" onclick="setTheme('dark')">深色外观</button>
+    <button onclick="setTheme('light')">浅色外观</button>
+  </div>
+  <div class="btn-group">
+    <span>流光动画</span>
+    <button class="active" id="animToggle" onclick="toggleAnim()">开</button>
+  </div>
+</div>
+
+<div class="stage-grid">
+
+  <!-- ======================== 方案 0：现状 ======================== -->
+  <div class="card-wrap">
+    <div class="card-label">
+      现状（外挂 5 格散落）
+      <span class="badge bad">高 141pt · 39% 偏心 · 夹层极挤</span>
+    </div>
+    <div class="panel w-340">
+      <div class="content-box flow-current">
+        <svg class="tracks" id="svg-cur"></svg>
+        <div class="fnode adapter"><span class="lbl">适配器 · 65 W</span><span class="val mono">32.1 W</span></div>
+        <div class="fnode system"><span class="lbl">系统负载</span><span class="val mono">32.1 W</span></div>
+        <div class="grid-current">
+          <div class="cell-cur"><span class="ico">🧠</span><span class="pct mono">46%</span></div>
+          <div class="cell-cur"><span class="ico">🌐</span><span class="pct mono">45%</span></div>
+          <div class="cell-cur"><span class="ico">🧭</span><span class="pct mono">3%</span></div>
+          <div class="cell-cur"><span class="ico">💬</span><span class="pct mono">1%</span></div>
+          <div class="cell-cur"><span class="ico" style="color:var(--textCaption)">⋯</span><span class="pct mono" style="color:var(--textCaption)">5%</span></div>
+        </div>
+        <div class="fbar">
+          <div class="fbar-fill"></div>
+          <div class="fbar-text">85% 交流电源</div>
+          <div class="fbar-sub">已达上限</div>
+        </div>
+        <div class="socket-pin" id="socket-cur"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== 颠覆 1：舱内裂变 ======================== -->
+  <div class="card-wrap">
+    <div class="card-label">
+      颠覆 1 · 系统负载舱内裂变
+      <span class="badge good">高 102pt · 零外部杂线 · 50% 绝对中轴</span>
+    </div>
+    <div class="panel w-340">
+      <div class="content-box flow-fission">
+        <svg class="tracks" id="svg-fission"></svg>
+        <div class="fnode adapter" style="width:84px;"><span class="lbl">适配器 · 65 W</span><span class="val mono">32.1 W</span></div>
+        <!-- 核心能耗舱 -->
+        <div class="fnode fission-hub" id="hub-fission">
+          <div class="hub-top">
+            <span class="lbl">系统负载分流</span>
+            <span class="val mono">32.1 W</span>
+          </div>
+          <div class="hub-ribbon">
+            <div style="width:46%; background:var(--cpu)"></div>
+            <div style="width:45%; background:var(--gpu)"></div>
+            <div style="width:3%; background:var(--network)"></div>
+            <div style="width:1%; background:var(--memory)"></div>
+            <div style="width:5%; background:var(--textCaption)"></div>
+          </div>
+          <div class="hub-apps">
+            <div class="hub-app-item"><span class="ico">🧠</span><span class="pct mono">46%</span></div>
+            <div class="hub-app-item"><span class="ico">🌐</span><span class="pct mono">45%</span></div>
+            <div class="hub-app-item"><span class="ico">🧭</span><span class="pct mono">3%</span></div>
+            <div class="hub-app-item"><span class="ico">💬</span><span class="pct mono">1%</span></div>
+            <div class="hub-app-item"><span class="ico" style="color:var(--textCaption)">◌</span><span class="pct mono" style="color:var(--textCaption)">5%*</span></div>
+          </div>
+        </div>
+        <div class="fbar">
+          <div class="fbar-fill"></div>
+          <div class="fbar-text">85% 交流电源</div>
+          <div class="fbar-sub">已达上限</div>
+        </div>
+        <div class="socket-pin" id="socket-fission"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== 颠覆 2：单母线切片槽 ======================== -->
+  <div class="card-wrap">
+    <div class="card-label">
+      颠覆 2 · 单母线分流配电槽
+      <span class="badge blue">高 114pt · 1 根规整主管 · 秩序感</span>
+    </div>
+    <div class="panel w-340">
+      <div class="content-box flow-duct">
+        <svg class="tracks" id="svg-duct"></svg>
+        <div class="fnode adapter"><span class="lbl">适配器 · 65 W</span><span class="val mono">32.1 W</span></div>
+        <div class="fnode system"><span class="lbl">系统负载</span><span class="val mono">32.1 W</span></div>
+        <!-- 贴边配电槽 -->
+        <div class="duct-shelf" id="duct-shelf">
+          <div class="duct-item"><span class="ico">🧠</span><span class="pct mono">46%</span></div>
+          <div class="duct-item"><span class="ico">🌐</span><span class="pct mono">45%</span></div>
+          <div class="duct-item"><span class="ico">🧭</span><span class="pct mono">3%</span></div>
+          <div class="duct-item"><span class="ico">💬</span><span class="pct mono">1%</span></div>
+          <div class="duct-item"><span class="ico" style="color:var(--textCaption)">◌</span><span class="pct mono" style="color:var(--textCaption)">5%*</span></div>
+        </div>
+        <div class="fbar">
+          <div class="fbar-fill"></div>
+          <div class="fbar-text">85% 交流电源</div>
+          <div class="fbar-sub">已达上限</div>
+        </div>
+        <div class="socket-pin" id="socket-duct"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================== 颠覆 3：两级全宽流 ======================== -->
+  <div class="card-wrap">
+    <div class="card-label">
+      颠覆 3 · 两级级联 · 全宽光谱轨
+      <span class="badge good">高 132pt · 300pt 完整名称 · 宏微解耦</span>
+    </div>
+    <div class="panel w-340">
+      <div class="content-box flow-cascade">
+        <svg class="tracks" id="svg-cascade"></svg>
+        <div class="fnode adapter"><span class="lbl">适配器 · 65 W</span><span class="val mono">32.1 W</span></div>
+        <div class="fnode system"><span class="lbl">系统负载</span><span class="val mono">32.1 W</span></div>
+        <!-- 经典中间电池条 -->
+        <div class="fbar" style="bottom: 30px;">
+          <div class="fbar-fill"></div>
+          <div class="fbar-text">85% 交流电源</div>
+          <div class="fbar-sub">已达上限</div>
+        </div>
+        <div class="socket-pin" id="socket-cascade" style="bottom: 64px;"></div>
+        <!-- 全宽底轨 (带名字！) -->
+        <div class="cascade-rail" id="cascade-rail">
+          <div class="cascade-item"><span class="ico">🧠</span><span class="name">Qoder</span><span class="pct mono">46%</span></div>
+          <div class="cascade-item"><span class="ico">🌐</span><span class="name">HapiGo</span><span class="pct mono">45%</span></div>
+          <div class="cascade-item"><span class="ico">🧭</span><span class="name">Safari</span><span class="pct mono">3%</span></div>
+          <div class="cascade-item"><span class="ico">💬</span><span class="name">微信</span><span class="pct mono">1%</span></div>
+          <div class="cascade-item"><span class="ico" style="color:var(--textCaption)">◌</span><span class="name" style="color:var(--textCaption)">其他</span><span class="pct mono" style="color:var(--textCaption)">5%*</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="desc-box">
+  <h3>为什么这三种颠覆彻底解决了「挤、丑、失衡」？</h3>
+  <ul>
+    <li><strong>颠覆 1（舱内裂变）</strong>：彻底破除「进程是外挂小节点」的误区。进程能耗本来就是系统负载的内部构成，将其整合到「系统能耗舱」内部后，<strong>所有八爪鱼连线全部消失，总高恢复至惊人的 102pt</strong>，主干中轴 100% 绝对对称，空间利用率极高！</li>
+    <li><strong>颠覆 2（单母线切片槽）</strong>：保留原节点尺寸，但用「单根利落下引母线」替代「5 根下垂曲线」，连线直接接入一体化横向配电槽，呈现精密仪器的秩序美。</li>
+    <li><strong>颠覆 3（两级级联全宽轨）</strong>：宏观供电（适配器 ━━ 电池 ━━ 系统）保持经典纯净；从系统引出分支接入<strong>底部的 300pt 全宽光谱轨</strong>。由于拥有整整 300pt，<strong>应用名称（Qoder / HapiGo / Safari）终于能完整呈现</strong>，彻底解决 18pt 盲猜图标问题！</li>
+  </ul>
+</div>
+
+<script>
+  let currentWidth = 340;
+  let isAnimating = true;
+
+  function setWidth(w) {
+    currentWidth = w;
+    document.querySelectorAll('.btn-group button').forEach(b => {
+      if (b.innerText.includes(w + 'pt')) b.classList.add('active');
+      else if (b.innerText.includes('340pt') || b.innerText.includes('300pt')) b.classList.remove('active');
+    });
+    document.querySelectorAll('.panel').forEach(p => {
+      p.className = `panel w-${w}`;
+    });
+    renderAll();
+  }
+
+  function setTheme(t) {
+    if (t === 'light') document.documentElement.classList.add('light');
+    else document.documentElement.classList.remove('light');
+    document.querySelectorAll('.btn-group button').forEach(b => {
+      if (b.innerText.includes(t === 'light' ? '浅色' : '深色')) b.classList.add('active');
+      else if (b.innerText.includes('浅色') || b.innerText.includes('深色')) b.classList.remove('active');
+    });
+  }
+
+  function toggleAnim() {
+    isAnimating = !isAnimating;
+    document.getElementById('animToggle').innerText = isAnimating ? '开' : '关';
+    document.getElementById('animToggle').classList.toggle('active', isAnimating);
+    document.querySelectorAll('.animated-flow').forEach(el => {
+      el.style.animationPlayState = isAnimating ? 'running' : 'paused';
+    });
+  }
+
+  function renderAll() {
+    const contentW = currentWidth - 40;
+    renderCurrent(contentW);
+    renderFission(contentW);
+    renderDuct(contentW);
+    renderCascade(contentW);
+  }
+
+  // 0. 现状
+  function renderCurrent(w) {
+    const svg = document.getElementById('svg-cur');
+    const nodeW = 90;
+    const gridW = 158;
+    const gridLeft = w - gridW;
+    const junctionX = (nodeW + gridLeft) / 2;
+    document.getElementById('socket-cur').style.left = junctionX + 'px';
+
+    let html = `
+      <path d="M 90 23 H ${w - 90}" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M 90 23 H ${w - 90}" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <path d="M ${junctionX} 23 V 103" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M ${junctionX} 23 V 103" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <circle cx="${junctionX}" cy="23" r="5" fill="var(--busColor)" opacity="0.4"/>
+      <circle cx="${junctionX}" cy="23" r="2" fill="#fff"/>
+    `;
+    const startX = w - 45, startY = 46;
+    const shares = [0.46, 0.45, 0.03, 0.01, 0.05];
+    const colors = ['var(--cpu)', 'var(--gpu)', 'var(--network)', 'var(--memory)', 'var(--textCaption)'];
+    for (let i = 0; i < 5; i++) {
+      const cellCenterX = gridLeft + i * 32 + 15;
+      const lw = 1 + (shares[i] / 0.46) * 2.2;
+      html += `<path d="M ${startX} ${startY} C ${startX} ${startY + 11}, ${cellCenterX} 57, ${cellCenterX} 68" stroke="${colors[i]}" stroke-width="${lw}" fill="none" opacity="0.85"/>`;
+    }
+    svg.innerHTML = html;
+  }
+
+  // 1. 舱内裂变 (In-Node Fission)
+  function renderFission(w) {
+    const svg = document.getElementById('svg-fission');
+    const isCompact = (w <= 260);
+    const adaptW = isCompact ? 76 : 84;
+    const hubW = isCompact ? 140 : 162;
+    const hubEl = document.getElementById('hub-fission');
+    hubEl.style.width = hubW + 'px';
+
+    const junctionX = w / 2; // 50% 正中轴线！
+    document.getElementById('socket-fission').style.left = junctionX + 'px';
+
+    let html = `
+      <!-- 主干横管：适配器 → 系统能耗舱 -->
+      <path d="M ${adaptW} 24 H ${w - hubW}" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M ${adaptW} 24 H ${w - hubW}" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <!-- 正中垂直落管 -->
+      <path d="M ${junctionX} 24 V 64" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M ${junctionX} 24 V 64" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <circle cx="${junctionX}" cy="24" r="5" fill="var(--busColor)" opacity="0.3"/>
+      <circle cx="${junctionX}" cy="24" r="2.2" fill="#fff"/>
+    `;
+    svg.innerHTML = html;
+  }
+
+  // 2. 单母线切片槽 (Bus Duct)
+  function renderDuct(w) {
+    const svg = document.getElementById('svg-duct');
+    const junctionX = w / 2;
+    document.getElementById('socket-duct').style.left = junctionX + 'px';
+
+    const isCompact = (w <= 260);
+    const shelfW = isCompact ? 116 : 140;
+    const shelfEl = document.getElementById('duct-shelf');
+    shelfEl.style.width = shelfW + 'px';
+
+    let html = `
+      <path d="M 90 23 H ${w - 90}" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M 90 23 H ${w - 90}" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <path d="M ${junctionX} 23 V 76" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M ${junctionX} 23 V 76" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <circle cx="${junctionX}" cy="23" r="5" fill="var(--busColor)" opacity="0.3"/>
+      <circle cx="${junctionX}" cy="23" r="2.2" fill="#fff"/>
+      <!-- 极干净的单根垂直引下线 -->
+      <path d="M ${w - shelfW / 2} 46 V 48" stroke="var(--busColor)" stroke-width="2" opacity="0.8" fill="none"/>
+    `;
+    svg.innerHTML = html;
+  }
+
+  // 3. 两级全宽光谱轨 (Two-Tier Cascade)
+  function renderCascade(w) {
+    const svg = document.getElementById('svg-cascade');
+    const junctionX = w / 2;
+    document.getElementById('socket-cascade').style.left = junctionX + 'px';
+
+    let html = `
+      <path d="M 90 23 H ${w - 90}" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M 90 23 H ${w - 90}" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <path d="M ${junctionX} 23 V 64" stroke="var(--busColor)" stroke-width="2.2" opacity="0.9" fill="none"/>
+      <path class="animated-flow" d="M ${junctionX} 23 V 64" stroke="#fff" stroke-width="2.2" fill="none"/>
+      <circle cx="${junctionX}" cy="23" r="5" fill="var(--busColor)" opacity="0.3"/>
+      <circle cx="${junctionX}" cy="23" r="2.2" fill="#fff"/>
+      <!-- 系统节点右侧顺流而下的次级母线 -->
+      <path d="M ${w - 12} 46 V 104 C ${w - 12} 105, ${w - 12} 106, ${w - 14} 106" stroke="var(--busColor)" stroke-width="1.2" opacity="0.4" fill="none"/>
+    `;
+    svg.innerHTML = html;
+  }
+
+  renderAll();
+</script>
+
+</body>
+</html>

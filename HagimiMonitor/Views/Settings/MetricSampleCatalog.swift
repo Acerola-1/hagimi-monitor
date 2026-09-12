@@ -57,6 +57,12 @@ enum MetricSampleCatalog {
             return MetricSample(parts: [MetricSamplePart(text: "23%")])
         case (.gpu, "tiler"):
             return MetricSample(parts: [MetricSamplePart(text: "12%")])
+        case (.gpu, "clock-state"):
+            return MetricSample(parts: [MetricSamplePart(text: "P3 77%")])
+        case (.gpu, "throttle"):
+            return MetricSample(parts: [MetricSamplePart(text: "23%")])
+        case (.gpu, "power-cap"):
+            return MetricSample(parts: [MetricSamplePart(text: "75%")])
         case (.memory, "used"):
             return MetricSample(parts: [MetricSamplePart(text: "12.4 GB")])
         case (.memory, "pressure"):
@@ -101,7 +107,7 @@ enum MetricSampleCatalog {
         case (.battery, "temperature"):
             return MetricSample(parts: [MetricSamplePart(text: "31", unit: "°C")])
         case (.battery, "power-loss"):
-            return MetricSample(parts: [MetricSamplePart(text: "8.4", unit: "W")])
+            return MetricSample(parts: [MetricSamplePart(text: "7", unit: "%")])
         case (.battery, "voltage"):
             return MetricSample(parts: [MetricSamplePart(text: "12.8", unit: "V")])
         case (.battery, "current"):
@@ -187,13 +193,26 @@ enum MetricSampleCatalog {
             MonitorMetric(name: "power-in", value: "42.5 W", numericValue: 42.5, unit: " W"),
             MonitorMetric(name: "battery-flow", value: "24.2 W", numericValue: 24.2, unit: " W"),
             MonitorMetric(name: "time-remaining", value: "45", numericValue: 45),
-            MonitorMetric(name: "pd-contract", value: "20V / 4.8A (96W)"),
+            MonitorMetric(name: "pd-contract", value: "20V/3.25A/65W"),
+            MonitorMetric(name: "pd-tiers", value: "5/9/15/20V"),
+            MonitorMetric(name: "adapter-port", value: "USB-C 4"),
+            MonitorMetric(name: "adapter-transports", value: "USB2·DP"),
             MonitorMetric(name: "input-telemetry", value: "20.12 V · 2.11 A"),
             MonitorMetric(name: "not-charging-reason", value: "0", numericValue: 0),
             MonitorMetric(name: "charging-allowed", value: "1", numericValue: 1)
         ],
         samples: sparklineSamples
     )
+
+    /// 排名页示例：五个应用行（图标留空，预览用占位图标渲染）。
+    /// 瓦数形态与 `ProcessEnergySampler` 同口径（同用户可读进程的实测平均功率）。
+    static let appEnergyRankingShares: [ProcessEnergyShare] = [
+        ProcessEnergyShare(pid: 1, name: "Xcode", icon: nil, share: 0.34, watts: 1.86),
+        ProcessEnergyShare(pid: 2, name: "Safari", icon: nil, share: 0.26, watts: 1.42),
+        ProcessEnergyShare(pid: 3, name: "Music", icon: nil, share: 0.18, watts: 0.98),
+        ProcessEnergyShare(pid: 4, name: "Photos", icon: nil, share: 0.12, watts: 0.65),
+        ProcessEnergyShare(pid: 5, name: "Notes", icon: nil, share: 0.07, watts: 0.38)
+    ]
 
     /// 运行时长示例与采样器同参格式化(abbreviated、最多两单位),
     /// 保证中英文语境下的示例形态一致。

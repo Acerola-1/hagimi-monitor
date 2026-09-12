@@ -40,3 +40,14 @@
 |---|---|
 | [`Xcode 27.txt`](./notes/Xcode%2027.txt) | Xcode 27 Beta Release Notes 原始发行日志备忘。 |
 | [`macos27.txt`](./notes/macos27.txt) | macOS 27 Beta 系统变化与 API 变更备忘。 |
+
+---
+
+## 4. report-prototypes/ — 报表视觉原型历史资产
+
+保留本轮报表改版会议中用于比较信息架构、配色与卡片层级的 HTML/JavaScript 原型及目测截图。
+这些文件只用于回溯设计过程，不属于生产报表运行链路。
+
+| 资产 | 说明 |
+|---|---|
+| [`2026-09-report-aesthetics/`](./report-prototypes/2026-09-report-aesthetics/) | e1 雾窗与 e2 分区两套报表原型、共享演示脚本及方案截图。 |

@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+<meta charset="UTF-8" />
+<title>HagimiMonitor · 图标化扇面候选（悬浮显示名称）</title>
+<style>
+  :root {
+    --panel-bg: rgba(0, 0, 0, 0.35);
+    --row-glass: rgba(122, 145, 180, 0.12);
+    --row-separator: rgba(122, 145, 180, 0.22);
+    --text-primary: rgba(255, 255, 255, 0.96);
+    --text-secondary: rgba(255, 255, 255, 0.82);
+    --text-caption: rgba(255, 255, 255, 0.68);
+    --track-fill: rgba(255, 255, 255, 0.08);
+    --tint-cpu: #D27A4A; --tint-gpu: #5D8CF0; --tint-net: #43A6A0;
+    --tint-mem: #42A39A; --tint-sto: #9A865E; --tint-bat: #65AF52;
+    --sev-warn: #B8872E; --row-radius: 14px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    min-height: 100vh; color: var(--text-primary);
+    background: radial-gradient(1400px 800px at 30% 0%, #2b3a5c 0%, transparent 55%),
+                radial-gradient(1200px 700px at 85% 100%, #3d2b4f 0%, transparent 55%), #191c24;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 30px 16px 60px; -webkit-font-smoothing: antialiased;
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  .ctl { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: center; }
+  .ctl .grp { display: flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); padding: 5px 8px; border-radius: 9px; }
+  .ctl .grp > span { font-size: 11px; color: var(--text-caption); }
+  .ctl button { font: inherit; font-size: 12px; color: var(--text-secondary); background: transparent;
+                border: 1px solid rgba(255,255,255,0.14); border-radius: 7px; padding: 3px 10px; cursor: pointer; }
+  .ctl button.active { background: rgba(101,175,82,0.22); border-color: rgba(101,175,82,0.55); color: #fff; }
+
+  .panel { width: 340px; background: var(--panel-bg); border-radius: 18px; padding: 10px;
+           backdrop-filter: blur(28px) saturate(1.2); -webkit-backdrop-filter: blur(28px) saturate(1.2);
+           box-shadow: 0 22px 60px rgba(0,0,0,0.45); display: flex; flex-direction: column; gap: 8px; }
+  .row-glass { background: var(--row-glass); border-radius: var(--row-radius); padding: 8px 10px; }
+  .row-head { display: flex; align-items: center; gap: 6px; height: 26px; }
+  .row-head .label { font-size: 13px; color: var(--text-secondary); }
+  .row-head .value { font-size: 14px; font-weight: 600; }
+  .row-head .spacer { flex: 1; }
+  .pill { display: inline-flex; align-items: center; gap: 3px; font-size: 10px; color: var(--text-secondary);
+          background: rgba(255,255,255,0.08); border-radius: 999px; padding: 2px 7px; }
+  .sep { height: 1px; background: var(--row-separator); opacity: 0.7; margin: 7px 0; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px 8px; }
+  .gcell { display: flex; align-items: center; justify-content: space-between; gap: 6px;
+           background: var(--track-fill); border-radius: 7px; padding: 4px 8px; height: 24px; }
+  .gcell .gl { font-size: 12px; color: var(--text-caption); }
+  .gcell .gv { font-size: 12px; font-weight: 600; }
+  .sec-title { display: flex; align-items: center; gap: 8px; margin: 5px 0 4px; }
+  .sec-title .t { font-size: 10.5px; letter-spacing: 0.08em; color: var(--text-caption); white-space: nowrap; }
+  .sec-title .line { flex: 1; height: 1px; background: var(--row-separator); opacity: 0.7; }
+  .sec-title .hint { font-size: 10px; color: var(--text-caption); white-space: nowrap; }
+
+  .flow { position: relative; }
+  .flow svg.edges { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+  .fnode { border-radius: 9px; background: var(--track-fill); display: flex; flex-direction: column;
+           align-items: center; justify-content: center; gap: 1px; }
+  .fnode.adapt { width: 90px; height: 46px; }
+  .fnode.sys { width: 90px; height: 46px; }
+  .fnode .fl { font-size: 10.5px; color: var(--text-caption); }
+  .fnode .fv { font-size: 12.5px; font-weight: 600; }
+  .fnode .fv .u { font-size: 9.5px; color: var(--text-caption); margin-left: 2px; }
+  .fbar { position: relative; height: 38px; border-radius: 8px; background: var(--track-fill); overflow: hidden; }
+  .fbar .fill { position: absolute; top: 2px; bottom: 2px; left: 2px; border-radius: 6px;
+                background: linear-gradient(90deg, rgba(101,175,82,0.55), rgba(101,175,82,0.9)); }
+  .fbar .label { position: absolute; inset: 0; display: flex; align-items: center; justify-content: space-between;
+                 padding: 0 10px; font-size: 11.5px; }
+  .flow-note { margin-top: 4px; font-size: 10px; color: var(--text-caption); }
+  .fan-hint { margin-top: 3px; font-size: 9.5px; color: var(--text-caption); text-align: right; }
+
+  /* ===== 图标化扇面的四种形态 ===== */
+  .chipcell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+              border-radius: 8px; background: var(--track-fill); cursor: default; }
+  .chipcell .ico { display: flex; align-items: center; justify-content: center; border-radius: 5px;
+                   background: rgba(255,255,255,0.10); }
+  .chipcell .pct { font-size: 10px; font-weight: 500; color: var(--text-secondary); }
+  .chipcell.agg .ico { background: var(--track-fill); color: var(--text-caption); }
+  .chipcell.agg .pct { color: var(--text-caption); }
+
+  .strip { display: flex; align-items: center; gap: 6px; }         /* V1 单行 */
+  .vrow { display: flex; align-items: center; gap: 6px; }          /* V2 竖排 */
+  .vrow .pct { font-size: 11.5px; color: var(--text-secondary); }
+  .arc { display: grid; gap: 6px; }                                /* V3 网格 */
+  .anchors { position: relative; }                                 /* V4 锚点 */
+
+  .budget { max-width: 900px; font-size: 12px; line-height: 1.8; color: var(--text-caption); }
+  .budget b { color: var(--text-secondary); font-weight: 600; }
+  .budget code { font-family: "SF Mono", ui-monospace, monospace; font-size: 11.5px; }
+  .budget .ok { color: #7DC48B; }
+  .budget .bad { color: var(--sev-warn); }
+</style>
+</head>
+<body>
+
+<div class="ctl">
+  <div class="grp"><span>形态</span>
+    <button data-v="strip" class="active">V1 单行图标条</button>
+    <button data-v="rows">V2 竖排图标列</button>
+    <button data-v="grid">V3 两行网格</button>
+    <button data-v="anchors">V4 分支锚点</button>
+  </div>
+  <div class="grp"><span>面板宽</span>
+    <button data-w="300">300</button>
+    <button data-w="340" class="active">340</button>
+    <button data-w="460">460</button>
+  </div>
+  <div class="grp"><span>图标尺寸</span>
+    <button data-s="16">16</button>
+    <button data-s="20" class="active">20</button>
+    <button data-s="24">24</button>
+  </div>
+</div>
+
+<div class="panel" id="panel">
+  <div class="row-head">
+    <span class="label">电源:</span><span class="value mono">85%</span>
+    <span class="spacer"></span>
+    <span class="pill mono">⚡︎ 30.4W</span>
+    <span class="pill mono">◔ 19.7W</span>
+  </div>
+
+  <div class="row-glass">
+    <div class="sep" style="margin-top:0"></div>
+    <div class="grid2">
+      <div class="gcell"><span class="gl">健康度</span><span class="gv mono">92%</span></div>
+      <div class="gcell"><span class="gl">循环次数</span><span class="gv mono">118</span></div>
+      <div class="gcell"><span class="gl">温度</span><span class="gv mono">31°C</span></div>
+      <div class="gcell"><span class="gl">转换损耗</span><span class="gv mono">3.2 W</span></div>
+    </div>
+
+    <div class="sec-title">
+      <span class="t">功率流</span><span class="line"></span>
+      <span class="hint">进程为实测 · 未含系统进程</span>
+    </div>
+
+    <div class="flow" id="flow">
+      <svg class="edges" id="edges"></svg>
+
+      <div style="display:flex; align-items:flex-start; gap:6px;">
+        <div style="display:flex; flex-direction:column; gap:18px; flex-shrink:0;">
+          <div class="fnode adapt" id="node-adapt">
+            <div class="fl">适配器 · 65W</div>
+            <div class="fv mono">19.7<span class="u">W</span></div>
+          </div>
+          <div class="fnode sys" id="node-sys">
+            <div class="fl">系统负载</div>
+            <div class="fv mono">19.7<span class="u">W</span></div>
+          </div>
+        </div>
+        <div id="fan-host" style="flex:1; min-width:0;"></div>
+      </div>
+
+      <div class="fbar" id="fbar" style="margin-top:8px;">
+        <div class="fill" id="bar-fill"></div>
+        <div class="label"><span>85% 交流电源</span><span class="mono">已达上限</span></div>
+      </div>
+    </div>
+    <div class="flow-note">约 52 分钟充满</div>
+    <div class="fan-hint">图标悬浮查看应用名与瓦数 · 未含系统进程</div>
+  </div>
+</div>
+
+<div class="budget" id="budget"></div>
+
+<script>
+/* 示例分布（真实读数会在 1 秒级抖动，形态以最坏情况校验：4 个 1% 的小项） */
+const APPS = [
+  { name: 'Qoder CN',    emoji: '🧠', w: 1.30, color: 'var(--tint-gpu)' },
+  { name: 'HapiGo',      emoji: '🔍', w: 0.72, color: 'var(--tint-cpu)' },
+  { name: 'WindowManager', emoji: '🪟', w: 0.34, color: 'var(--tint-net)' },
+  { name: 'Microsoft Edge', emoji: '🌐', w: 0.22, color: 'var(--tint-mem)' },
+  { name: '微信',        emoji: '💬', w: 0.17, color: 'var(--tint-sto)' },
+];
+const OTHER_W = 0.18;
+
+let variant = 'strip', width = 340, iconSize = 20;
+
+function compute() {
+  const rows = APPS.map(a => ({ ...a })).sort((a, b) => b.w - a.w);
+  const total = rows.reduce((s, r) => s + r.w, 0) + OTHER_W;
+  const top = rows.slice(0, 5).map(r => ({ ...r, share: r.w / total }));
+  const other = Math.max(0, 1 - top.reduce((s, r) => s + r.share, 0));
+  const pcts = top.map(r => Math.max(1, Math.round(r.share * 100)));
+  return { top, other, otherPct: Math.max(0, 100 - pcts.reduce((s, v) => s + v, 0)), pcts };
+}
+
+function iconHTML(app, size) {
+  return `<span class="ico" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.55)}px">${app.emoji}</span>`;
+}
+
+function renderFan(d) {
+  const host = document.getElementById('fan-host');
+  const s = iconSize;
+  const items = [...d.top.map((r, i) => ({ name: r.name, emoji: r.emoji, pct: d.pcts[i], agg: false, color: r.color, watts: r.w })),
+                 { name: '其他（聚合）', emoji: '⋯', pct: d.otherPct, agg: true, color: 'rgba(255,255,255,0.34)', watts: OTHER_W }];
+  const tip = (it) => `title="${it.name} · ${it.watts.toFixed(2)} W · ${it.pct}%"`;
+
+  if (variant === 'strip') {
+    host.innerHTML = `<div class="strip" id="strip">` + items.map(it =>
+      `<div class="chipcell${it.agg ? ' agg' : ''}" ${tip(it)} style="width:${s + 12}px;height:${s + 16}px">
+         ${iconHTML(it, s)}<span class="pct">${it.pct}%</span></div>`).join('') + `</div>`;
+  } else if (variant === 'rows') {
+    host.innerHTML = `<div style="display:flex; flex-direction:column; gap:6px;">` + items.map(it =>
+      `<div class="vrow" ${tip(it)}>
+         <div class="chipcell${it.agg ? ' agg' : ''}" style="width:${s + 8}px;height:${s + 8}px">${iconHTML(it, s)}</div>
+         <span class="pct mono">${it.pct}%</span></div>`).join('') + `</div>`;
+  } else if (variant === 'grid') {
+    host.innerHTML = `<div class="arc" id="arc" style="grid-template-columns:repeat(3, ${s + 14}px);">` + items.map(it =>
+      `<div class="chipcell${it.agg ? ' agg' : ''}" ${tip(it)} style="height:${s + 18}px">
+         ${iconHTML(it, s)}<span class="pct">${it.pct}%</span></div>`).join('') + `</div>`;
+  } else {
+    host.innerHTML = `<div class="anchors" id="anchors" style="height:${Math.max(120, 6 * (s + 8))}px;"></div>`;
+    const host2 = document.getElementById('anchors');
+    items.forEach((it, i) => {
+      const top = 6 + i * (s + 10);
+      host2.innerHTML += `<div class="chipcell${it.agg ? ' agg' : ''}" ${tip(it)}
+        style="position:absolute; right:0; top:${top}px; width:${s + 8}px; height:${s + 8}px;">${iconHTML(it, s)}</div>
+        <div class="mono" ${tip(it)} style="position:absolute; right:${s + 14}px; top:${top + s / 2 - 7}px; font-size:11px; color:var(--text-secondary)">${it.pct}%</div>`;
+    });
+  }
+  drawCurves(d);
+}
+
+/* 连线：竖管（适配器→系统）、落管（系统→电池条）、扇面（系统→各图标）。
+   字符串按值传递，拼好后统一写回。 */
+function drawCurves(d) {
+  const flow = document.getElementById('flow');
+  const svg = document.getElementById('edges');
+  const box = flow.getBoundingClientRect();
+  svg.setAttribute('viewBox', `0 0 ${flow.clientWidth} ${flow.clientHeight}`);
+  const rel = (el) => {
+    const r = el.getBoundingClientRect();
+    return { left: r.left - box.left, right: r.right - box.left, top: r.top - box.top,
+             bottom: r.bottom - box.top, cx: r.left - box.left + r.width / 2,
+             cy: r.top - box.top + r.height / 2, w: r.width, h: r.height };
+  };
+  const adapt = rel(document.getElementById('node-adapt'));
+  const sys = rel(document.getElementById('node-sys'));
+  const bar = rel(document.getElementById('fbar'));
+  let s = '';
+  s += `<path d="M${adapt.cx} ${adapt.bottom} V${sys.top}" stroke="rgba(93,140,240,0.85)" stroke-width="2" fill="none"/>`;
+  s += `<circle cx="${adapt.cx}" cy="${(adapt.bottom + sys.top) / 2}" r="4.5" fill="#4F8FF7"/>`;
+  s += `<path d="M${sys.cx} ${sys.bottom} V${bar.top}" stroke="rgba(255,255,255,0.35)" stroke-width="1.6" fill="none"/>`;
+
+  const specs = [...d.top.map(r => ({ share: r.share, color: r.color })), { share: d.other, color: 'rgba(255,255,255,0.34)' }];
+  const max = Math.max(...specs.map(x => x.share), 0.0001);
+  const targets = [...document.querySelectorAll('#fan-host .chipcell')];
+  const pctLabels = [...document.querySelectorAll('#fan-host .pct')];
+  targets.forEach((el, i) => {
+    if (!specs[i]) return;
+    const t = rel(el);
+    const startX = sys.right, startY = sys.cy;
+    const endX = t.left - 4, endY = t.cy;
+    const w = (1 + (specs[i].share / max) * 2.2).toFixed(2);
+    s += `<path d="M${startX} ${startY} C${startX + (endX - startX) * 0.55} ${startY}, ${startX + (endX - startX) * 0.45} ${endY}, ${endX} ${endY}"
+            stroke="${specs[i].color}" stroke-width="${w}" fill="none" opacity="0.9"/>`;
+    void pctLabels;
+  });
+  svg.innerHTML = s;
+}
+
+function renderAll() {
+  document.getElementById('panel').style.width = width + 'px';
+  document.getElementById('bar-fill').style.width = 'calc(85% - 4px)';
+  const d = compute();
+  renderFan(d);
+  requestAnimationFrame(() => drawCurves(d));
+
+  const content = width - 20 - 20;
+  const leftCol = 90 + 6;
+  const fanWidth = Math.round(content - leftCol);
+  const notes = {
+    strip: `单行 6 格：每格宽 <code>${iconSize + 12}pt</code>（图标 ${iconSize} + 百分比），占高 <code>${iconSize + 16}pt</code>。`,
+    rows: `竖排 6 行：行宽 <code>${iconSize + 8 + 6 + 30}pt</code>（图标 + 百分比），占高 <code>6×${iconSize + 8} + 5×6 = ${6 * (iconSize + 8) + 30}pt</code>。`,
+    grid: `两行三列：格宽 <code>${iconSize + 14}pt</code>，占高 <code>2×${iconSize + 18} + 6 = ${2 * (iconSize + 18) + 6}pt</code>。`,
+    anchors: `锚点列：右侧图标列宽 <code>${iconSize + 8}pt</code> + 百分比 30pt，占高 <code>6×${iconSize + 10} = ${6 * (iconSize + 10)}pt</code>（与节点列相近，扇面得以横向铺开）。`
+  };
+  document.getElementById('budget').innerHTML = `
+    <p><b>形态</b>：${({strip:'V1 单行图标条',rows:'V2 竖排图标列',grid:'V3 两行网格',anchors:'V4 分支锚点'})[variant]}
+       · 面板宽 ${width}pt（内容 ${content}pt）· 图标 ${iconSize}pt</p>
+    <p><b>空间占用</b>：${notes[variant]}</p>
+    <p><b>扇面可用横向</b>：<code>${fanWidth}pt</code>（内容 ${content} − 节点列 96）→
+       ${fanWidth >= (variant === 'strip' ? 6 * (iconSize + 12) + 30 : variant === 'grid' ? 3 * (iconSize + 14) + 12 : 150)
+          ? '<span class="ok">当前形态放得下</span>' : '<span class="bad">放不下，需要缩小图标或改用更紧凑形态</span>'}</p>
+    <p><b>名称去哪儿了</b>：全部改为悬浮显示（<code>title</code> / macOS .help），行内只留图标与百分比 —— 牺牲的是"一眼认出是谁"，换来的是横向空间与更大的图标（16→24pt 可调）。</p>
+  `;
+}
+
+document.querySelectorAll('.ctl button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (btn.dataset.v) variant = btn.dataset.v;
+    if (btn.dataset.w) width = Number(btn.dataset.w);
+    if (btn.dataset.s) iconSize = Number(btn.dataset.s);
+    renderAll();
+  });
+});
+window.addEventListener('resize', renderAll);
+renderAll();
+</script>
+</body>
+</html>

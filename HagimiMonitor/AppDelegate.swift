@@ -1,6 +1,8 @@
 import AppKit
+import Combine
 import KeyboardShortcuts
 import SwiftUI
+import UserNotifications
 
 /// App 生命周期代理,持有 `MonitorStore` 和 `FluidPanelController`。
 /// 使用 `@NSApplicationDelegateAdaptor` 接入 SwiftUI 生命周期。
@@ -14,6 +16,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static private(set) weak var shared: AppDelegate?
 
     private(set) lazy var store: MonitorStore = MonitorStore()
+    /// 启动期的订阅(通知开关)。AppDelegate 与 App 同生命周期,不留释放路径。
+    private var startupCancellables = Set<AnyCancellable>()
 
     override init() {
         super.init()
@@ -51,11 +55,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // 通知代理须在启动完成前就位:前台横幅(菜单栏 App 打开面板时即前台)
+        // 与通知点击路由都由它承接,冷启动自通知点击的场景也走这里。
+        UNUserNotificationCenter.current().delegate = AlertNotificationDelegate.shared
+
         // 触发 lazy 初始化。菜单栏面板需在启动即常驻(承载状态项图标);
         // 快捷键面板则延迟到首次按下快捷键时再创建(见下方 onKeyUp),
         // 避免开机就构建第二棵完整的 SwiftUI 面板视图树、白白常驻内存。
         _ = store
+        // 实时压力告警:订阅采样、记录开关与通知开关,驱动红点与系统通知。
+        PressureAlertCenter.shared.attach(to: store)
+        // 通知授权只在开关打开时申请一次:开关默认关,所以首次启动不弹授权窗;
+        // 之后用户打开开关(或本次启动时它已经开着)才申请。
+        store.settings.$alertNotificationsEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { enabled in
+                guard enabled else { return }
+                AlertNotificationDelegate.shared.requestAuthorizationIfNeeded()
+            }
+            .store(in: &startupCancellables)
         _ = fluidPanelController
+
+        // 验证夹具模式(HAGIMI_STATS_FIXTURE):启动即打开「数据统计」页,
+        // 供摘要各状态在设置窗口实际宽度下逐项目测;正式运行不受影响。
+        if ProcessInfo.processInfo.environment["HAGIMI_STATS_FIXTURE"] != nil {
+            DispatchQueue.main.async {
+                SettingsWindowPresenter.open(tab: .statistics)
+            }
+        }
 
         // 注册全局快捷键:切换钉住面板显隐。首次触发时惰性创建 pinnedPanelController。
         KeyboardShortcuts.onKeyUp(for: .togglePinnedPanel) { [weak self] in

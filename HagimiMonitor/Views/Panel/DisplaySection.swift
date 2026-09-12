@@ -151,6 +151,14 @@ struct DisplaySection: View {
                 }
                 animate(Self.sectionKey, isExpanded, true)
             }
+            // 无障碍语义与其余模块行同款。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "kind.display"))
+            .accessibilityValue(summaryText)
+            .accessibilityHint(!displays.isEmpty ? (isExpanded
+                ? String(localized: "panel.row.collapse-hint")
+                : String(localized: "panel.row.expand-hint")) : "")
+            .accessibilityAddTraits(!displays.isEmpty ? .isButton : [])
 
             if PanelMotionExperiment.enabled {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
@@ -172,6 +180,7 @@ struct DisplaySection: View {
             }
             }
         }
+        .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.palette.displayGlassFill
         }
@@ -249,6 +258,14 @@ struct DisplaySection: View {
             .onTapGesture {
                 toggleExpansion()
             }
+            // 无障碍语义与其余模块行同款。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "kind.display"))
+            .accessibilityValue(summary(for: visibleDisplays, hasControls: hasControls))
+            .accessibilityHint(!visibleDisplays.isEmpty ? (isExpanded
+                ? String(localized: "panel.row.collapse-hint")
+                : String(localized: "panel.row.expand-hint")) : "")
+            .accessibilityAddTraits(!visibleDisplays.isEmpty ? .isButton : [])
 
             if PanelMotionExperiment.enabled && hasControls && !visibleDisplays.isEmpty {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
@@ -349,6 +366,7 @@ struct DisplaySection: View {
                 NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
             }
         }
+        .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             palette.displayGlassFill
         }
@@ -655,7 +673,7 @@ private struct DisplayInfoCard: View {
             HStack(spacing: 8) {
                 Text(display.name)
                     .monitorPanelLabelFont(tracking: 0.8)
-                    .foregroundStyle(palette.captionText)
+                    .foregroundStyle(palette.primaryText)
                     .fixedSize()
                 Rectangle()
                     .fill(palette.displaySeparator)

@@ -27,21 +27,6 @@ struct RawCPUProcess {
     let cpuUsage: Double
 }
 
-/// 后台采样 CPU 占用最高的 N 个进程,按宿主 App 合并子进程。
-/// 直连版用 `ps -Aceo pid,pcpu,comm -r`:读 root/跨用户进程的 CPU 只有带 Apple
-/// 签名权利的平台二进制办得到——实测内核对普通用户进程在 TASKINFO、
-/// proc_pid_rusage、sysctl kinfo(p_pctcpu/p_rtime/ticks,含 KERN_PROC_PID 单查)
-/// 各条进程内路径上对 root 进程一律返回零值或失败,ps 是直连版让 WindowServer
-/// 等进榜的唯一数据源。
-/// 沙盒版 spawn ps 被拒,改用进程内 sysctl 枚举 + TASKINFO 累计时间差分,
-/// 仅同用户进程进榜(能力边界与沙盒内一切第三方工具一致)。
-func sampleTopCPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawCPUProcess] {
-    #if DIRECT_DISTRIBUTION
-    return sampleTopCPUViaPS(limit: limit, includeSystemProcesses: includeSystemProcesses)
-    #else
-    return panelCPUCursor.sample(limit: limit, includeSystemProcesses: includeSystemProcesses)
-    #endif
-}
 
 /// 把逐进程 CPU% 按宿主 App 合并、过滤系统进程、排序截断为 TOP N。
 private func assembleTopCPU(perProcessCPU: [pid_t: Double], limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
@@ -94,7 +79,9 @@ private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]
 private let psSampleTimeout: TimeInterval = 8
 
 /// 直连版 CPU 采样:解析 ps 输出,得到逐进程 CPU% 后交给共享归并逻辑。
-private func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
+/// 直连版 CPU TOP 的 ps 通道。`internal` 是为了让 `MonitorStore` 的面板路径直接调用——
+/// 原先它藏在文件级包装函数后面,而那个包装用的全局游标会被多个 store 实例并发改写。
+func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
     let task = Process()
     task.launchPath = "/bin/ps"
     task.arguments = ["-Aceo pid,pcpu,comm", "-r"]
@@ -200,9 +187,6 @@ final class CPUDeltaCursor {
         return assembleTopCPU(perProcessCPU: perProcess, limit: limit, includeSystemProcesses: includeSystemProcesses)
     }
 }
-
-/// 面板 TOP 榜专用差分游标。
-private let panelCPUCursor = CPUDeltaCursor()
 
 /// 枚举全部进程并读取各自的 TASKINFO 累计 CPU 时间。
 private func taskInfoCPUSnapshot() -> [pid_t: (user: UInt64, system: UInt64)] {

@@ -82,6 +82,11 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     /// fanAvailable 过滤掉风扇入口,不出现无效开关。
     static let userVisibleCases: [MonitorKind] = allCases
 
+    /// **默认可见**的模块。蓝牙默认关闭:设备电量属于「偶尔一看」的信息,
+    /// 常驻一行反而占地方,用户在设置里需要时再打开。
+    /// 无存量设置的新用户按这份集合初始化(见 MonitorSettings 的读取分支)。
+    static let defaultVisibleCases: [MonitorKind] = allCases.filter { $0 != .bluetooth }
+
     /// SystemMonitorSampler 管线驱动的模块全集。风扇/蓝牙的输出是「设备列表」
     /// 而非「单模块值」,由各自独立采样器产出、MonitorStore 合成注入,不进采样
     /// 排期——排期会令无注册采样器的类目每秒空转报错。
@@ -158,12 +163,19 @@ enum MonitorKind: String, CaseIterable, Identifiable {
                 MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),
             ]
         case .gpu:
-            return [
+            var metrics = [
                 MetricSwitch(id: "gpu-memory", title: String(localized: "metric.gpu.gpu-memory"), isDefault: true),
                 MetricSwitch(id: "allocated", title: String(localized: "metric.gpu.allocated"), isDefault: true),
                 MetricSwitch(id: "render", title: String(localized: "metric.gpu.render"), isDefault: true),
                 MetricSwitch(id: "tiler", title: String(localized: "metric.gpu.tiler"), isDefault: true),
             ]
+            #if DIRECT_DISTRIBUTION
+            // 时钟态常驻;限频与功耗上限只在偏离常态时占格,故默认开也不扰布局。
+            metrics.append(MetricSwitch(id: "clock-state", title: String(localized: "metric.gpu.clock-state"), isDefault: true))
+            metrics.append(MetricSwitch(id: "throttle", title: String(localized: "metric.gpu.throttle"), isDefault: true))
+            metrics.append(MetricSwitch(id: "power-cap", title: String(localized: "metric.gpu.power-cap"), isDefault: true))
+            #endif
+            return metrics
         case .memory:
             var metrics = [
                 MetricSwitch(id: "used", title: String(localized: "metric.memory.used"), isDefault: true),
@@ -207,7 +219,19 @@ enum MonitorKind: String, CaseIterable, Identifiable {
             metrics.append(contentsOf: [
                 MetricSwitch(id: "power", title: String(localized: "metric.battery.power"), isDefault: true),
                 MetricSwitch(id: "display-power", title: String(localized: "metric.battery.display-power"), isDefault: true),
-                MetricSwitch(id: "gpu-power", title: String(localized: "metric.battery.gpu-power"), isDefault: true)
+                MetricSwitch(
+                    id: "cpu-power",
+                    title: String(localized: "metric.battery.cpu-power"),
+                    isDefault: true,
+                    tip: String(localized: "settings.battery.cpu-power.tip")
+                ),
+                MetricSwitch(id: "gpu-power", title: String(localized: "metric.battery.gpu-power"), isDefault: true),
+                MetricSwitch(
+                    id: "ane-power",
+                    title: String(localized: "metric.battery.ane-power"),
+                    isDefault: true,
+                    tip: String(localized: "settings.battery.ane-power.tip")
+                )
             ])
             #endif
             metrics.append(contentsOf: [
@@ -237,6 +261,8 @@ struct MetricSwitch: Identifiable, Hashable {
     let id: String
     let title: String
     let isDefault: Bool
+    /// 设置页监测项目行的悬浮提示（如「部分机型尚不可用」）；nil 不渲染角标。
+    var tip: String? = nil
 }
 
 /// 面板来源类型,用于引用计数式可见性判定。
@@ -373,6 +399,9 @@ struct MonitorModule: Identifiable, Equatable {
     /// 逐核负载与 P/E 分组占用(仅 CPU 模块且拓扑可识别时有值)。
     /// 面板展开区据此渲染逐核环形图,独立于 metrics 字段。
     var cpuCoreDetail: CPUCoreDetail? = nil
+    /// 分应用能耗排名(仅 Direct 版且能读到同用户进程时有值)。
+    /// 电源展开区的「排名」分页按此渲染前 5 名列表,独立于 metrics 字段。
+    var processEnergy: ProcessEnergyBreakdown? = nil
     /// 采样失败/未产出时的占位模块标记:数值无真实数据源,
     /// 统计入库据此过滤,避免把兜底值当作真实读数写入历史。
     var isPlaceholder: Bool = false
@@ -389,6 +418,8 @@ struct MonitorModule: Identifiable, Equatable {
             if value >= MonitorConstants.networkWarningThreshold { return .warning }
             return .calm
         case .battery:
+            // 缺失帧(isPlaceholder)不参与阈值判定:value 沿用上一帧,不得据此报红。
+            if isPlaceholder { return .calm }
             if metrics.first(where: { $0.name == MonitorMetricKey.type })?.value == MonitorMetricKey.acPower {
                 return .calm
             }
@@ -431,6 +462,8 @@ struct MonitorModule: Identifiable, Equatable {
 enum MonitorMetricKey {
     static let type = "type"
     static let acPower = "ac-power"
+    /// 电池模块 type 的缺失态取值:IOPS 接口不可信,读数不参与 UI/统计消费。
+    static let batteryUnavailable = "battery-unavailable"
 }
 
 final class MonitorStore: ObservableObject {
@@ -589,7 +622,7 @@ final class MonitorStore: ObservableObject {
         // 原因:告警服务需在面板关闭时也能检测风扇异常(停转/过载)并通知用户。
         // SMC 读取(FNum/F0Ac)极轻量(单次 IOConnectCall),2s 周期对功耗无感。
         fanSampler.start()
-        FanAlertService.shared.attach(to: fanSampler)
+        FanAlertService.shared.attach(to: fanSampler, settings: settings)
 
         // 蓝牙设备电量:独立采样器(IOBluetooth 连断事件驱动 + profiler 10s 兜底
         // 轮询,高成本源后台执行),结果经 Combine 回主线程。
@@ -646,6 +679,19 @@ final class MonitorStore: ObservableObject {
     private var statsProcTimer: AnyCancellable?
     private let statsDiskCursor = DiskSnapshotCursor()
     private let statsGPUCursor = GPUDeltaCursor()
+    // 面板 TOP 榜的增量游标。**每个 store 各持一份**:游标是有状态的差分器
+    // (`previous*` 跨调用保持),而统计路径的游标同样如此——原先面板这四个是
+    // 文件级全局实例,多个 store 实例(测试里很常见)会并发改写同一份差分状态,
+    // 实测表现为在状态写回处释放已释放对象的 SIGSEGV 与 `UInt64(±inf)` trap。
+    // 收归实例所有后,同一 store 内的所有采样都跑在它自己的串行队列上,天然串行。
+    private let panelGPUCursor = GPUDeltaCursor()
+    private let panelDiskCursor = DiskSnapshotCursor()
+    private let panelNetworkCursor = NetworkDeltaCursor()
+    #if !DIRECT_DISTRIBUTION
+    // 直连版的 CPU TOP 走 ps 通道(`sampleTopCPUViaPS`),没有差分游标;
+    // `CPUDeltaCursor` 本身也只在非直连渠道编译。
+    private let panelCPUCursor = CPUDeltaCursor()
+    #endif
     #if DIRECT_DISTRIBUTION
     private let statsNetworkCursor = NetworkDeltaCursor()
     #else
@@ -711,7 +757,8 @@ final class MonitorStore: ObservableObject {
         let sampleFast: () -> Void = {
             #if DIRECT_DISTRIBUTION
             // 直连版 CPU 来自 ps,无基线,与面板不存在共享问题。
-            let cpu = enrichCPU(sampleTopCPUProcesses(limit: 12, includeSystemProcesses: true))
+            // 直连版 CPU 来自 ps,无基线,不与面板游标共享状态。
+            let cpu = enrichCPU(sampleTopCPUViaPS(limit: 12, includeSystemProcesses: true))
             #else
             let cpu = enrichCPU(cpuCursor.sample(limit: 12, includeSystemProcesses: true))
             #endif
@@ -899,7 +946,11 @@ final class MonitorStore: ObservableObject {
         if active.contains(.cpu) {
             group.enter()
             procSampleQueue.async {
-                let raw = sampleTopCPUProcesses(includeSystemProcesses: cpuIncludeSystem)
+                #if DIRECT_DISTRIBUTION
+                let raw = sampleTopCPUViaPS(limit: 5, includeSystemProcesses: cpuIncludeSystem)
+                #else
+                let raw = self.panelCPUCursor.sample(limit: 5, includeSystemProcesses: cpuIncludeSystem)
+                #endif
                 cpuProcesses = enrichCPU(raw)
                 group.leave()
             }
@@ -908,7 +959,7 @@ final class MonitorStore: ObservableObject {
         if active.contains(.gpu) {
             group.enter()
             procSampleQueue.async {
-                let raw = sampleTopGPUProcesses(includeSystemProcesses: gpuIncludeSystem)
+                let raw = self.panelGPUCursor.sample(limit: 5, includeSystemProcesses: gpuIncludeSystem)
                 gpuProcesses = enrichGPU(raw)
                 group.leave()
             }
@@ -917,7 +968,7 @@ final class MonitorStore: ObservableObject {
         if active.contains(.storage) {
             group.enter()
             procSampleQueue.async {
-                let raw = sampleTopDiskProcesses(includeSystemProcesses: diskIncludeSystem)
+                let raw = self.panelDiskCursor.sampleTopDiskProcesses(limit: 5, includeSystemProcesses: diskIncludeSystem)
                 diskProcesses = enrichDisk(raw)
                 group.leave()
             }
@@ -926,7 +977,7 @@ final class MonitorStore: ObservableObject {
         if active.contains(.network) {
             group.enter()
             nettopQueue.async {
-                let raw = sampleTopNetworkProcesses(includeSystemProcesses: networkIncludeSystem)
+                let raw = self.panelNetworkCursor.sample(limit: 5, includeSystemProcesses: networkIncludeSystem)
                 networkProcesses = enrichNetwork(raw)
                 group.leave()
             }
@@ -1033,7 +1084,11 @@ final class MonitorStore: ObservableObject {
             // 连续压力百分比,口径同面板压力曲线(活动监视器压力图)。
             return MenuBarMetricFormatter.fixedPercentage(allModules.first { $0.kind == .memory }?.pressureValue)
         case .batteryLevel:
-            return MenuBarMetricFormatter.fixedPercentage(moduleValue(.battery))
+            // IOPS 缺失帧显示 " --%"(与数值缺失的既有格式一致),不消费沿用值。
+            guard let battery = allModules.first(where: { $0.kind == .battery }), !battery.isPlaceholder else {
+                return MenuBarMetricFormatter.fixedPercentage(nil)
+            }
+            return MenuBarMetricFormatter.fixedPercentage(battery.value)
         case .networkDownload:
             return MenuBarMetricFormatter.throughput(metricValue("download", in: .network), direction: "↓")
         case .networkUpload:
@@ -1143,7 +1198,7 @@ final class MonitorStore: ObservableObject {
         let previousModules = allModules
         sampler.sampleAsync(kinds: kinds, previousModules: previousModules, on: samplingQueue) { [weak self] result in
             guard let self else { return }
-            self.applySamplingResult(result)
+            self.applySamplingResult(result, freshKinds: kinds)
         }
     }
 
@@ -1168,13 +1223,13 @@ final class MonitorStore: ObservableObject {
         }
     }
 
-    private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>) {
+    private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>, freshKinds: Set<MonitorKind>) {
         switch result {
         case .success(let snapshot):
             // 展开/收起动画窗口期内推迟应用,与 TOP 列表发布同规则
             // (见 deferUntilExpansionSettles)。
             deferUntilExpansionSettles { [weak self] in
-                self?.applySamplingSuccess(snapshot)
+                self?.applySamplingSuccess(snapshot, freshKinds: freshKinds)
             }
 
         case .failure(let error):
@@ -1193,7 +1248,7 @@ final class MonitorStore: ObservableObject {
     }
 
     /// 应用一次成功采样的结果到发布属性。
-    private func applySamplingSuccess(_ snapshot: SystemMonitorSnapshot) {
+    private func applySamplingSuccess(_ snapshot: SystemMonitorSnapshot, freshKinds: Set<MonitorKind>) {
         // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
         // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
         if allModules != snapshot.modules {
@@ -1211,7 +1266,7 @@ final class MonitorStore: ObservableObject {
         }
         updateMenuBarTargetComputeLoad()
         if statisticsSamplingActive {
-            statisticsRecorder.record(modules: allModules, fans: fans, at: Date())
+            statisticsRecorder.record(modules: allModules, fans: fans, freshKinds: freshKinds, at: Date())
         }
     }
 

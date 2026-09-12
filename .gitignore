@@ -89,6 +89,7 @@ promo-codes.html
 
 # 本地临时产物（构建缓存、探针二进制、截图）
 tmp/
+tmp-shots/
 *.profraw
 
 # macOS 桌面杂项

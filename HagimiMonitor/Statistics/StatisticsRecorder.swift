@@ -121,6 +121,42 @@ final class StatisticsRecorder: ObservableObject {
     /// 上一帧时刻,用于分段累计采样覆盖秒数(cover_s)。
     private var lastFrameAt: Date?
 
+    // MARK: - 秒数口径(运行状态评估模型 v0.1)
+
+    /// 秒数口径的观测维度。
+    private enum ObservationDimension: Hashable {
+        case cpu, gpu, memory, thermal
+    }
+
+    /// 每源的预期采样周期(与 MonitorRefreshSchedule 的排期一致)。maxGap 取
+    /// 模型 §5 的初始建议「3× 预期周期、上限 30s」;1s 源的 3 倍仅 3s,采样
+    /// 串行排队与展开动画推迟会让相邻帧短暂超过它,那不是中断,故设 6s 下限。
+    private static let expectedIntervals: [ObservationDimension: TimeInterval] = [
+        .cpu: 1,
+        .gpu: 2,
+        .memory: 3,
+        // 热状态与 CPU 同帧产出(ProcessInfo.thermalState),契约与 CPU 一致。
+        .thermal: 1,
+    ]
+
+    private static func maxGap(for dimension: ObservationDimension) -> TimeInterval {
+        min(30, max(3 * (expectedIntervals[dimension] ?? 1), 6))
+    }
+
+    /// 上次新鲜观测:时刻 + 当时的判定值。CPU/GPU 存利用率;内存/热状态存
+    /// 原生档位编号,「观测到但无法判定」档位为 nil——未知会切断后续累计,
+    /// 不能当作正常或沿用旧档位。
+    private struct LastObservation {
+        let at: Date
+        let value: Double?
+        let level: Int?
+    }
+
+    private var lastObservation: [ObservationDimension: LastObservation] = [:]
+
+    /// 上次「内存与热状态同时已知」的交集观测(模型 §6 的 J)。
+    private var lastIntersection: (at: Date, memLevel: Int, thermalLevel: Int)?
+
     /// 统计开关状态:关闭期间 record 直返,不积累分钟累加器。
     private var recordingActive = true
 
@@ -183,6 +219,8 @@ final class StatisticsRecorder: ObservableObject {
         lastDiskRead = nil
         lastDiskWrite = nil
         lastFrameAt = nil
+        lastObservation = [:]
+        lastIntersection = nil
         lastBatterySlow = nil
     }
 
@@ -198,8 +236,10 @@ final class StatisticsRecorder: ObservableObject {
 
     /// 记录一帧。由 MonitorStore 在每次采样成功应用后调用;各指标采样节奏
     /// (1~10s)不同,按「本帧里有什么就累加什么」独立统计,互不等待。
+    /// `freshKinds` 是本帧真正新鲜采样的类目:快照会带上未到期模块的缓存值,
+    /// 缓存回读不当作一次新观测(秒数口径与连续性都据此判定)。
     /// 统计开关关闭期间直返,不积累任何分钟数据。
-    func record(modules: [MonitorModule], fans: [FanInfo], at date: Date) {
+    func record(modules: [MonitorModule], fans: [FanInfo], freshKinds: Set<MonitorKind>, at date: Date) {
         guard recordingActive else { return }
         let minuteStart = Int64((date.timeIntervalSince1970 / 60).rounded(.down) * 60)
         if minuteStart != currentMinuteStart {
@@ -220,24 +260,14 @@ final class StatisticsRecorder: ObservableObject {
         }
         lastFrameAt = date
 
-        // 本帧各应力输入(跨模块收集,循环后统一算帧级应力)。
-        var frameCPU: Double?, frameGPU: Double?, frameThermal: Double?, frameTemp: Double?
-        var framePressurePct: Double?, framePressureLevel: Double?
-
         for module in modules where !module.isPlaceholder {
             switch module.kind {
             case .cpu:
                 accumulateCPU(module)
-                frameCPU = module.value
-                frameThermal = numeric("thermal-pressure", in: module)
-                frameTemp = numeric("temperature", in: module)
             case .gpu:
                 accumulateGPU(module)
-                frameGPU = module.value
             case .memory:
                 accumulateMemory(module)
-                framePressurePct = module.pressureValue
-                framePressureLevel = numeric("pressure-level", in: module)
             case .network: accumulateNetwork(module, at: date)
             case .storage: accumulateStorage(module, at: date)
             case .battery: accumulateBattery(module)
@@ -245,26 +275,174 @@ final class StatisticsRecorder: ObservableObject {
             }
         }
 
-        // 帧级应力:非线性曲线只作用在单帧上,桶内存均值,
-        // 评分侧线性重组即可,饱和尖峰不被桶均值抹平。
-        if framePressurePct != nil || framePressureLevel != nil {
-            accumulator.add(Self.index("stress_mem_avg"),
-                            StatisticsHealthScore.stressMem(percent: framePressurePct, level: framePressureLevel))
-        }
-        if let frameCPU {
-            accumulator.add(Self.index("stress_cpu_avg"), StatisticsHealthScore.stressCPU(frameCPU))
-        }
-        if let frameGPU {
-            accumulator.add(Self.index("stress_gpu_avg"), StatisticsHealthScore.stressGPU(frameGPU))
-        }
-        if frameThermal != nil || frameTemp != nil {
-            accumulator.add(Self.index("stress_thermal_avg"),
-                            StatisticsHealthScore.stressThermal(state: frameThermal, temp: frameTemp))
-        }
+        // 帧级应力列(stress_*_avg)不再逐帧写入:评分与告警已全部走档位秒数口径,
+        // 唯一读它的是升级前旧记录的近似回退,而那些列的历史值仍在库里。
+        // 需要时由 StatisticsRow.stressFallback 从指标列现算(曲线同源)。
+
+        accrueSeconds(modules: modules, freshKinds: freshKinds, at: date)
 
         if let maxRPM = fans.map(\.currentRPM).max(), maxRPM > 0 {
             accumulator.add(Self.index("fan_avg"), Double(maxRPM))
             accumulator.trackMax(Self.index("fan_max"), Double(maxRPM))
+        }
+    }
+
+    // MARK: - 秒数口径累计
+
+    /// 把「上次观测 → 本次观测」的时长记给上次观测的状态(模型 §5:连续性
+    /// 必须有新鲜证据覆盖,不把旧状态外推;睡眠、退出、暂停与超过 maxGap 的
+    /// 间隔都算中断)。首帧只建立基线不累计,中断后的第一帧同理。
+    private func accrueSeconds(modules: [MonitorModule], freshKinds: Set<MonitorKind>, at date: Date) {
+        var cpuUsage: Double?
+        var gpuUsage: Double?
+        var memObserved = false
+        var memLevel: Int?
+        var thermalObserved = false
+        var thermalLevel: Int?
+
+        for module in modules where !module.isPlaceholder && freshKinds.contains(module.kind) {
+            switch module.kind {
+            case .cpu:
+                cpuUsage = module.value
+                if let raw = numeric("thermal-pressure", in: module) {
+                    thermalObserved = true
+                    thermalLevel = Self.thermalLevel(raw)
+                }
+            case .gpu:
+                gpuUsage = module.value
+            case .memory:
+                // 压力档位缺失时不算一次观测:保住旧档位的连续区间,由 maxGap 兜底。
+                if let raw = numeric("pressure-level", in: module) {
+                    memObserved = true
+                    memLevel = Self.memoryLevel(raw)
+                }
+            default:
+                break
+            }
+        }
+
+        if let cpuUsage {
+            if let (previous, gap) = noteObservation(.cpu, value: cpuUsage, at: date) {
+                accumulator.sums[Self.index("valid_cpu_s")] += gap
+                if let usage = previous.value, usage >= StatisticsHealthScore.cpuHighThreshold {
+                    accumulator.sums[Self.index("cpu_high_s")] += gap
+                }
+            }
+        }
+        if let gpuUsage {
+            if let (previous, gap) = noteObservation(.gpu, value: gpuUsage, at: date) {
+                accumulator.sums[Self.index("valid_gpu_s")] += gap
+                if let usage = previous.value, usage >= StatisticsHealthScore.gpuHighThreshold {
+                    accumulator.sums[Self.index("gpu_high_s")] += gap
+                }
+            }
+        }
+        if memObserved {
+            if let (previous, gap) = noteObservation(.memory, level: memLevel, at: date),
+               let level = previous.level {
+                accumulator.sums[Self.index("valid_mem_s")] += gap
+                accumulator.sums[Self.memorySecondsIndex(level)] += gap
+            }
+        }
+        if thermalObserved {
+            if let (previous, gap) = noteObservation(.thermal, level: thermalLevel, at: date),
+               let level = previous.level {
+                accumulator.sums[Self.index("valid_thermal_s")] += gap
+                accumulator.sums[Self.thermalSecondsIndex(level)] += gap
+            }
+        }
+        accrueIntersection(at: date)
+    }
+
+    /// 记录一次新鲜观测,返回上次观测与可累计的间隔;首次观测或间隔越界返回 nil。
+    /// 未知档位(level 为 nil)同样更新观测:未知要切断后续累计,不能沿用旧档位。
+    private func noteObservation(
+        _ dimension: ObservationDimension,
+        value: Double? = nil,
+        level: Int? = nil,
+        at date: Date
+    ) -> (previous: LastObservation, gap: TimeInterval)? {
+        defer { lastObservation[dimension] = LastObservation(at: date, value: value, level: level) }
+        guard let previous = lastObservation[dimension] else { return nil }
+        let gap = date.timeIntervalSince(previous.at)
+        guard gap > 0, gap <= Self.maxGap(for: dimension) else { return nil }
+        return (previous, gap)
+    }
+
+    /// 交集 J:内存与热状态同时处于「已知」时才累计,任何一侧未知或过期都会
+    /// 断开交集链;区间归给上次交集观测时的双档位。J 的间隔上限取两侧 maxGap
+    /// 的较小者,保证 J 不会超过任一维度的有效秒数。
+    private func accrueIntersection(at date: Date) {
+        guard let memLevel = knownLevel(of: .memory, at: date),
+              let thermalLevel = knownLevel(of: .thermal, at: date) else {
+            lastIntersection = nil
+            return
+        }
+        defer { lastIntersection = (date, memLevel, thermalLevel) }
+        guard let last = lastIntersection else { return }
+        let gap = date.timeIntervalSince(last.at)
+        guard gap > 0, gap <= min(Self.maxGap(for: .memory), Self.maxGap(for: .thermal)) else { return }
+        accumulator.sums[Self.index("valid_mem_thermal_s")] += gap
+        accumulator.sums[Self.memoryIntersectionSecondsIndex(last.memLevel)] += gap
+        accumulator.sums[Self.thermalIntersectionSecondsIndex(last.thermalLevel)] += gap
+    }
+
+    /// 维度在该时刻是否已知:有观测、未被 maxGap 判过期、档位可判定。
+    private func knownLevel(of dimension: ObservationDimension, at date: Date) -> Int? {
+        guard let observation = lastObservation[dimension], let level = observation.level else { return nil }
+        return date.timeIntervalSince(observation.at) <= Self.maxGap(for: dimension) ? level : nil
+    }
+
+    /// 内存压力档位:kern.memorystatus_vm_pressure_level 的 0/1/2(normal/
+    /// warning/critical),其余(含 MemoryPressureLevel.unknown)返回 nil。
+    /// 与实时告警中心共用(同一原始读数必须折成同一档位)。
+    static func memoryLevel(_ raw: Double) -> Int? {
+        switch Int(raw) {
+        case 0, 1, 2: return Int(raw)
+        default: return nil
+        }
+    }
+
+    /// 热状态档位:ProcessInfo.thermalState 的 0...3(nominal/fair/serious/
+    /// critical),越界值返回 nil 而不是当作正常。与实时告警中心共用。
+    static func thermalLevel(_ raw: Double) -> Int? {
+        switch Int(raw) {
+        case 0, 1, 2, 3: return Int(raw)
+        default: return nil
+        }
+    }
+
+    private static func memorySecondsIndex(_ level: Int) -> Int {
+        switch level {
+        case 1: return index("mem_warn_s")
+        case 2: return index("mem_crit_s")
+        default: return index("mem_normal_s")
+        }
+    }
+
+    private static func thermalSecondsIndex(_ level: Int) -> Int {
+        switch level {
+        case 1: return index("th_fair_s")
+        case 2: return index("th_serious_s")
+        case 3: return index("th_crit_s")
+        default: return index("th_nominal_s")
+        }
+    }
+
+    private static func memoryIntersectionSecondsIndex(_ level: Int) -> Int {
+        switch level {
+        case 1: return index("mem_warn_j_s")
+        case 2: return index("mem_crit_j_s")
+        default: return index("mem_normal_j_s")
+        }
+    }
+
+    private static func thermalIntersectionSecondsIndex(_ level: Int) -> Int {
+        switch level {
+        case 1: return index("th_fair_j_s")
+        case 2: return index("th_serious_j_s")
+        case 3: return index("th_crit_j_s")
+        default: return index("th_nominal_j_s")
         }
     }
 
@@ -557,6 +735,49 @@ final class StatisticsRecorder: ObservableObject {
         var id: Int64 { row.t }
     }
 
+    /// 拉取指定范围的时间序列(后台执行,主线程回调),供「时段分析」按桶渲染:
+    /// 今日优先分钟层(最细),周/月用小时层,与概览同源同窗口。
+    func rangeSeries(_ range: StatisticsOverviewRange, completion: @escaping ([StatisticsRow]) -> Void) {
+        maintenanceQueue.async { [weak self] in
+            guard let self, let database = self.database else {
+                DispatchQueue.main.async { completion([]) }
+                return
+            }
+            let now = Date()
+            let windowStart = range.startOfDayWindow(from: now, calendar: self.calendar)
+            let rows: [StatisticsRow]
+            switch range {
+            case .today:
+                let minutes = database.minuteRows(from: windowStart, to: now.addingTimeInterval(120))
+                rows = minutes.isEmpty
+                    ? database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
+                    : minutes
+            case .week, .month:
+                rows = database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
+            }
+            DispatchQueue.main.async { completion(rows) }
+        }
+    }
+
+    /// 最近一次分钟观测(概览页「当前状态」用):返回最新一行与其桶起点。
+    /// 优先取有档位观测的行;只读,不改变采样与记录链路。
+    /// 按需调用:摘要页暂未展示「当前状态」,调用方接入前不必轮询。
+    func latestObservation(completion: @escaping ((row: StatisticsRow, at: Date)?) -> Void) {
+        maintenanceQueue.async { [weak self] in
+            guard let self, let database = self.database else {
+                DispatchQueue.main.async { completion(nil) }
+                return
+            }
+            let now = Date()
+            let rows = database.minuteRows(from: now.addingTimeInterval(-2 * 3600), to: now.addingTimeInterval(120))
+            let latest = rows.last { ($0.validMemS ?? 0) > 0 || ($0.validThermalS ?? 0) > 0 } ?? rows.last
+            let result: (row: StatisticsRow, at: Date)? = latest.map {
+                ($0, Date(timeIntervalSince1970: TimeInterval($0.t)))
+            }
+            DispatchQueue.main.async { completion(result) }
+        }
+    }
+
     /// 拉取指定粒度的历史桶(后台执行,主线程回调),供设置页存储浏览。
     /// 日粒度 = 日层行 + 今日分钟行现算;周/月由日桶按本地时区归组。
     func storageBuckets(_ granularity: StorageGranularity, completion: @escaping ([StorageBucket]) -> Void) {
@@ -655,11 +876,13 @@ final class StatisticsRecorder: ObservableObject {
         let todayStart = calendar.startOfDay(for: now)
         var rows = database.dayRows(from: .distantPast, to: now.addingTimeInterval(86400))
         let todayKey = Int64(todayStart.timeIntervalSince1970)
-        if !rows.contains(where: { $0.t == todayKey }) {
-            let minutes = database.minuteRows(from: todayStart, to: now.addingTimeInterval(120))
-            if let today = StatisticsRow.aggregate(minutes, t: todayKey) {
-                rows.append(today)
-            }
+        // 今日桶总是从分钟层现算,不沿用库里的今日行:那一行是当天早些时候汇总写入
+        // 的快照,后来新增的秒数列(有效秒/档位秒)不会回填到它里面,按日层聚合的
+        // 报表与评分会读到「有覆盖、无有效观测」的半空行。翻日时的正式汇总不受影响。
+        rows.removeAll { $0.t == todayKey }
+        let minutes = database.minuteRows(from: todayStart, to: now.addingTimeInterval(120))
+        if let today = StatisticsRow.aggregate(minutes, t: todayKey) {
+            rows.append(today)
         }
         return rows
             .sorted { $0.t < $1.t }

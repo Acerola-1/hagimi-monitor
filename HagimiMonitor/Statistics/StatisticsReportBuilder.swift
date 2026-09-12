@@ -22,21 +22,74 @@ enum StatisticsReportBuilder {
     private static let templateResource = "ReportTemplate"
     private static let echartsResource = "echarts"
     /// 日期范围选择用的日期选择库(Flatpickr)及其基础样式,单文件产物需一并内联。
+    private static let hardwareSectionResource = "HardwareSection"
     private static let flatpickrResource = "flatpickr"
+
+    /// 符号位图的像素边长。逻辑绘制区域仍是 16pt；128px 可覆盖报表内
+    /// 12–16px 常规图标、42px 空态图标以及预览放大场景，避免 48px 源图被放大后发糊。
+    private static let symbolCanvasPixels = 128
+
+    /// 报表用到的符号图标:与面板同一批 SF Symbols(面板用 `MonitorKind.symbol`),
+    /// 生成时渲染成位图随载荷内联,模板用 mask + currentColor 着色——
+    /// 不用手绘 SVG,也不受网页环境拿不到 SF Symbols 字体所限。
+    /// (符号名, 模板 CSS 变量后缀)
+    private static let reportSymbols: [(name: String, key: String)] = [
+        // 模块图标与面板同源(MonitorKind.symbol)
+        ("cpu", "cpu"),
+        ("display", "gpu"),
+        ("memorychip", "mem"),
+        ("network", "net"),
+        ("internaldrive", "disk"),
+        ("powerplug", "power"),
+        ("fan.fill", "fan"),
+        ("thermometer.medium", "thermal"),
+        ("battery.100", "batt"),
+        // 报表板块图标
+        ("gauge.medium", "health"),
+        ("chart.line.uptrend.xyaxis", "trend"),
+        ("chart.xyaxis.line", "overview"),
+        ("chart.bar.fill", "dist"),
+        ("square.grid.3x3", "heatmap"),
+        ("heart.text.square", "battHealth"),
+        ("exclamationmark.triangle", "alert"),
+        ("list.bullet.rectangle", "table"),
+        ("eyeglasses", "insights"),
+        // 系统进程/后台服务的统一兜底图标:报表内与面板保持 SF Symbols 体系一致。
+        ("terminal", "apps"),
+        ("trophy", "rank"),
+        // 显示器分类图标与主面板同源(Mac 显示器符号,保证可渲染)
+        ("display", "display"),
+        ("clock.arrow.circlepath", "legacy"),
+        ("arrow.up", "top"),
+        // 顶部信息条
+        ("laptopcomputer", "device"),
+        ("apple.logo", "os"),
+        ("clock", "clock"),
+        ("calendar", "calendar"),
+    ]
 
     /// 组装并写出报表文件。可在任意线程调用(内部只做文件与数据库读)。
     static func write(
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
-        process: StatisticsProcessSnapshot? = nil
+        process: StatisticsProcessSnapshot? = nil,
+        hardware: HardwareInventory? = nil
     ) throws -> URL {
         guard let templateURL = Bundle.main.url(forResource: templateResource, withExtension: "html"),
+              let hardwareCSSURL = Bundle.main.url(forResource: hardwareSectionResource, withExtension: "css"),
+              let hardwareJSURL = Bundle.main.url(forResource: hardwareSectionResource, withExtension: "js"),
               let echartsURL = Bundle.main.url(forResource: echartsResource, withExtension: "min.js"),
               let flatpickrJSURL = Bundle.main.url(forResource: flatpickrResource, withExtension: "min.js"),
               let flatpickrCSSURL = Bundle.main.url(forResource: flatpickrResource, withExtension: "min.css") else {
             throw StatisticsReportError.missingResources
         }
+        // 硬件模块块的样式与脚本独立成资源,与 ECharts/Flatpickr 同一种内联方式:
+        // 模板本体保持干净,改硬件版面不必动那 2600 行。
+        let hardwareCSS = try String(contentsOf: hardwareCSSURL, encoding: .utf8)
+        let hardwareJS = try String(contentsOf: hardwareJSURL, encoding: .utf8)
         let template = try String(contentsOf: templateURL, encoding: .utf8)
+            .replacingOccurrences(of: "/*__HARDWARE_CSS__*/", with: hardwareCSS)
+            .replacingOccurrences(of: "/*__HARDWARE_JS__*/", with: hardwareJS)
         let echarts = try String(contentsOf: echartsURL, encoding: .utf8)
         let flatpickrJS = try String(contentsOf: flatpickrJSURL, encoding: .utf8)
         let flatpickrCSS = try String(contentsOf: flatpickrCSSURL, encoding: .utf8)
@@ -45,12 +98,13 @@ enum StatisticsReportBuilder {
         // 编码失败(NaN/非 JSON 值混入 payload)抛错走统一的失败上报,不 trap 进程。
         let json: String
         do {
-            json = try payloadJSON(snapshot: snapshot, meta: meta, process: process)
+            json = try payloadJSON(snapshot: snapshot, meta: meta, process: process, hardware: hardware)
         } catch {
             throw StatisticsReportError.encodingFailed(error)
         }
         let escapedJSON = json.replacingOccurrences(of: "</", with: "<\\/")
         let html = template
+            .replacingOccurrences(of: "/*__SYMBOL_CSS__*/", with: symbolCSSVariables())
             .replacingOccurrences(of: "/*__ECHARTS__*/", with: echarts)
             .replacingOccurrences(of: "/*__FLATPICKR__*/", with: flatpickrJS)
             .replacingOccurrences(of: "/*__FLATPICKR_CSS__*/", with: flatpickrCSS)
@@ -60,16 +114,23 @@ enum StatisticsReportBuilder {
         return outputURL
     }
 
-    /// 应用图标渲染为 256px PNG 的 base64,注入模板品牌位。
-    /// 报表是单文件产物,图标需随文件内嵌;256px 覆盖页内最大 58px 展示位的 4x 屏,
-    /// 避免 2x 以下在 Retina 放大时发糊。位图绘制为纯数据操作,后台线程安全;
-    /// 失败返回空串,品牌位退化为纯文字。
+    /// 应用图标渲染为 1024px PNG 的 base64,注入模板品牌位。
+    /// 报表是单文件产物,图标需随文件内嵌。源用资产里像素最大的 representation
+    /// (asset 通常带 1024px 的 @2x),不依赖 NSImage 按当前屏幕选的默认档——否则
+    /// 低分屏下会拿小图插值放大,导出后 Retina 上仍发糊。位图绘制为纯数据操作,
+    /// 后台线程安全;失败返回空串,品牌位退化为纯文字。
     private static func appIconBase64() -> String {
         guard let icon = NSImage(named: "AppIcon") else { return "" }
-        let size = NSSize(width: 256, height: 256)
+        // 取最大像素源:优先 1024,其次 asset 里存在的最大档
+        let maxSource = icon.representations
+            .map { CGFloat($0.pixelsWide) }
+            .filter { $0 > 0 }
+            .max() ?? 512
+        let side = max(512, min(maxSource, 1024))
+        let size = NSSize(width: side, height: side)
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
-            pixelsWide: 256, pixelsHigh: 256,
+            pixelsWide: Int(side), pixelsHigh: Int(side),
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
         ) else { return "" }
@@ -81,6 +142,49 @@ enum StatisticsReportBuilder {
         NSGraphicsContext.restoreGraphicsState()
         guard let png = rep.representation(using: .png, properties: [:]) else { return "" }
         return png.base64EncodedString()
+    }
+
+    /// 把用到的 SF Symbols 渲染成高分辨率位图,拼成模板的 CSS 变量块(`--i-*`)。
+    /// 位图只贡献 alpha(作 mask),颜色交给模板的 currentColor——因此天然跟随
+    /// 明暗主题与选中态,不必为两种外观各存一份。渲染失败(符号不存在)跳过,
+    /// 模板端该处图标留空,不影响报表其余部分。
+    private static func symbolCSSVariables() -> String {
+        var lines: [String] = []
+        for symbol in reportSymbols {
+            guard let png = symbolImageData(symbol.name) else { continue }
+            lines.append("--i-\(symbol.key): url(\"data:image/png;base64,\(png.base64EncodedString())\");")
+        }
+        return ":root {\n    " + lines.joined(separator: "\n    ") + "\n  }"
+    }
+
+    /// 单个符号 → 16pt@8x 的 PNG(透明底,字形占 alpha 通道)。
+    private static func symbolImageData(_ name: String) -> Data? {
+        let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
+        guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(configuration) else { return nil }
+        let side = Self.symbolCanvasPixels
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: side, pixelsHigh: side,
+            bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
+            colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
+        ) else { return nil }
+        rep.size = NSSize(width: 16, height: 16)
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
+        // 按本征比例居中放入方形画布:符号宽度不一,前端 mask 用 contain 呈现
+        let natural = symbol.size
+        let scale = min(16 / max(natural.width, 1), 16 / max(natural.height, 1))
+        let drawSize = NSSize(width: natural.width * scale, height: natural.height * scale)
+        symbol.draw(in: NSRect(
+            x: (16 - drawSize.width) / 2,
+            y: (16 - drawSize.height) / 2,
+            width: drawSize.width,
+            height: drawSize.height
+        ))
+        NSGraphicsContext.current = nil
+        NSGraphicsContext.restoreGraphicsState()
+        return rep.representation(using: .png, properties: [:])
     }
 
     /// 报表产物路径:应用支持目录下固定文件名,重复打开即覆盖刷新。
@@ -100,12 +204,26 @@ enum StatisticsReportBuilder {
     private static func payloadJSON(
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
-        process: StatisticsProcessSnapshot?
+        process: StatisticsProcessSnapshot?,
+        hardware: HardwareInventory?
     ) throws -> String {
         let columnNames = StatisticsRow.columns.map(\.name)
         var payload: [String: Any] = [
             "generatedAt": Int(Date().timeIntervalSince1970),
             "meta": meta,
+            // 评分常量随载荷下发:报表 JS 与 App 端 StatisticsHealthScore 共用同一组
+            // 权重、门槛与等级区间,改口径只需改一处,不会两边各写一套数字。
+            "scoreModel": [
+                "memWeight": StatisticsHealthScore.memWeight,
+                "thermalWeight": StatisticsHealthScore.thermalWeight,
+                "memoryLevelWeights": StatisticsHealthScore.memoryLevelWeights,
+                "thermalLevelWeights": StatisticsHealthScore.thermalLevelWeights,
+                "minIntersectionSeconds": StatisticsHealthScore.minIntersectionSeconds,
+                "minCoverageRatio": StatisticsHealthScore.minCoverageRatio,
+                "lowThreshold": StatisticsHealthScore.lowThreshold,
+                "mildThreshold": StatisticsHealthScore.mildThreshold,
+                "elevatedThreshold": StatisticsHealthScore.elevatedThreshold,
+            ],
             "cols": columnNames,
             "minutes": snapshot.minutes.map { encodeRow($0, columns: columnNames) },
             "hours": snapshot.hours.map { encodeRow($0, columns: columnNames) },
@@ -116,8 +234,41 @@ enum StatisticsReportBuilder {
             payload["apps"] = ["rows": process.appRows, "names": process.appNames, "icons": process.appIcons]
             payload["batteryDaily"] = process.batteryDaily
         }
+        // 硬件清单:一次性采集(见 HardwareInventoryReader),随载荷内联。
+        // 采集层只带文案 key,这里统一解析成显示文本再下发——前端拿到什么显示什么,
+        // 报表语言 = 生成时刻的系统语言(与框架文案的 t() 同一语义)。
+        // 缺失值保留成 null 由前端显示 —。
+        if let hardware {
+            payload["hardware"] = [
+                "capturedAt": Int(hardware.capturedAt.timeIntervalSince1970),
+                "categories": hardware.categories.map(encodeCategory),
+                // 各模块右栏要展示的分组由 App 侧选好,报表只渲染——分组名与其
+                // 消费者不再分处两种语言两套文件。
+                "rails": hardware.rails.mapValues { $0.map(encodeGroup) },
+            ]
+        }
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.withoutEscapingSlashes])
         return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    /// 硬件分类编码成前端要的最小结构。缺失值编成 NSNull,前端按「—」渲染——
+    /// 不能省略这一行,省略会让「读不到」和「这一项不存在」混为一谈。
+    private static func encodeCategory(_ category: HardwareCategory) -> [String: Any] {
+        [
+            "id": category.id,
+            "name": hwText(category.nameKey),
+            "subtitle": hwText(category.subtitleKey),
+            "groups": category.groups.map(encodeGroup),
+        ]
+    }
+
+    private static func encodeGroup(_ group: HardwareFactGroup) -> [String: Any] {
+        [
+            "name": group.name.resolve(hwText),
+            "facts": group.facts.map { fact -> [String: Any] in
+                ["label": fact.label.resolve(hwText), "value": fact.value ?? NSNull()]
+            },
+        ] as [String: Any]
     }
 
     /// 行编码为 [t, ...列值, n];按列名做精度收敛,控制报表体积。
@@ -151,22 +302,33 @@ enum StatisticsReportBuilder {
     /// 模板 JS 以短键读文案;此处短键 → xcstrings 键(stats.r.*)一一映射,
     /// 两语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
     private static let stringKeys = [
-        "reportTitle", "reportSub", "print", "metaDays", "metaGenerated",
-        "rToday", "rWeek", "rMonth", "rYear", "rAll", "selectRange",
+        "reportTitle", "metaDays", "metaGenerated",
+        "kThisMac", "hwCardTitle", "hwNoData", "hwItemCount", "hwCategoryCount",
+        "hwLiveGroup", "hwLiveTag",
+        "hwLiveCpuUsage", "hwLiveThermal", "hwLiveProcessCount", "hwLiveIdle",
+        "hwLiveGpuUsage", "hwLiveGpuMemory", "hwLiveRenderer", "hwLiveTiler",
+        "hwLiveMemUsed", "hwLiveCompressed", "hwLiveSwap", "hwLivePressure",
+        "hwLiveDiskUsed", "hwLiveDiskFree", "hwLiveDiskRead", "hwLiveDiskWrite",
+        "hwLiveDownload", "hwLiveUpload", "hwLiveSignal",
+        "hwLiveBatteryLevel", "hwLiveBatteryState", "hwLiveBatteryTemp",
+        "rToday", "rWeek", "rMonth", "rYear", "selectRange",
+        "rangeLabel", "railEyebrow", "railLocal", "railNet", "railDisk", "railPower",
+        "navOverview", "navModules", "navAnalysis", "navMachine",
         "kCpu", "kGpu", "kMem", "kMemPressure", "kNetDown", "kNetUp", "kDisk", "kPower",
         "kPeak", "kPeakRate", "kDiskW",
         "secOverview", "secHeatmap", "secCpu", "secCpuPE", "secCpuDist", "secGpu",
         "secGpuDist", "secGpuMem", "secMem", "secNet", "secNetDaily", "secDisk",
         "secDiskDaily", "secPower", "secBatt", "secThermal",
         "secTable", "secInsights",
-        "healthTitle", "healthTrend", "healthNoData", "healthCapped",
-        "levelExcellent", "levelGood", "levelFair", "levelPoor", "levelCritical",
+        "healthTitle", "healthTrend", "healthNoData",
+        "healthInsufficient", "healthLegacy", "healthLegacyRows", "healthWorkload",
+        "levelLow", "levelMild", "levelElevated", "levelHigh",
         "dimCpu", "dimGpu", "dimPressure", "dimThermal",
         "thermalNominal", "thermalFair", "thermalSerious", "thermalCritical",
-        "secEvents", "evHint", "evNone", "evMore",
-        "evCpuHigh", "evCpuHighDetail", "evPressureHigh", "evPressureDetail",
-        "evThermal", "evThermalDetail", "evNetSpike", "evNetDetail",
-        "evDiskSpike", "evDiskDetail", "evPowerOnAC", "evPowerOnBattery", "evReboot",
+        "memWarning", "memCritical",
+        "secEvents", "evHint",
+        "alertMem", "alertThermal", "alertOngoing", "alertRecovered", "alertInterrupted",
+        "alertNone", "alertIncludes", "alertDetail", "alertDetailPlain",
         "secBatteryHealth", "sCycles", "sHealth",
         "secAppsTitle", "appsCpu", "appsMem", "appsGpu", "appsNet", "appsNone",
         "heatLow", "heatHigh", "heatHint", "hourOfDay",
@@ -294,13 +456,27 @@ enum StatisticsReportError: LocalizedError {
     }
 }
 
+/// 报表内要定位的板块。板块标题与报表模板同源(模板的粘性导航也按标题组织),
+/// 报表改版只要标题还在,跳转就继续有效。
+enum StatisticsReportAnchor: Sendable {
+    case memory
+    case thermal
+
+    var sectionTitle: String {
+        switch self {
+        case .memory: String(localized: "stats.r.secMem")
+        case .thermal: String(localized: "stats.r.secThermal")
+        }
+    }
+}
+
 /// 报表打开流程:设置页按钮与 App 菜单共用。生成在后台执行,
 /// 完成后唤起默认浏览器打开本地文件。
 @MainActor
 enum StatisticsReportFlow {
     private static var isGenerating = false
 
-    static func open(recorder: StatisticsRecorder) {
+    static func open(recorder: StatisticsRecorder, anchor: StatisticsReportAnchor? = nil) {
         guard !isGenerating else { return }
         isGenerating = true
         let snapshotProvider: () -> (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow])? = {
@@ -318,10 +494,15 @@ enum StatisticsReportFlow {
             // 先 flush 进程累加器再取快照,保证报表含当日最新应用数据
             processStore?.flush()
             let process = processStore.map { StatisticsReportBuilder.processSnapshot(from: $0) } ?? nil
+            // 硬件清单也在这里采集:16 个 system_profiler DataType 本机实测约 2.1 秒,
+            // 必须留在后台任务里,绝不上主线程。采集为空(例如极端受限环境)不影响报表,
+            // 「本机」模块会在前端按空清单自行隐藏。
+            let hardware = HardwareInventoryReader().capture()
             do {
-                let url = try StatisticsReportBuilder.write(snapshot: snapshot, meta: meta, process: process)
+                let url = try StatisticsReportBuilder.write(
+                    snapshot: snapshot, meta: meta, process: process, hardware: hardware)
                 await MainActor.run {
-                    ReportWindowPresenter.open(url: url)
+                    ReportWindowPresenter.open(url: url, anchor: anchor)
                 }
             } catch {
                 AppLogger.settings.error("Statistics report generation failed: \(String(describing: error), privacy: .public)")

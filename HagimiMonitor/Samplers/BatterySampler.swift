@@ -26,6 +26,8 @@ final class BatterySampler: MonitorSampler {
 
     #if DIRECT_DISTRIBUTION
     private var componentPower = IOReportPowerSample()
+    /// 分应用能耗占比：逐帧推进 rusage 基线，供电页排名榜消费。
+    private var processEnergy: ProcessEnergyBreakdown?
     #endif
 
     deinit {
@@ -39,25 +41,25 @@ final class BatterySampler: MonitorSampler {
         // IOReport 是累计能量计数，必须在每个既有采样帧持续推进基线；即使本帧
         // IOPS 读取失败或机器无电池，也照常更新 CPU/GPU/内建屏功耗。
         componentPower = IOReportPowerSampler.shared.sample()
+        processEnergy = ProcessEnergySampler.shared.sample()
         #endif
 
-        // IOPS 接口本身失败(info/列表读不出):电源状态不可信,兜底模块标记为占位,
-        // 统计不得把它按「交流供电」计入,否则电池供电会被误记成 AC。
+        // IOPS 接口本身失败(info/列表读不出):电源状态不可信,返回缺失态模块,
+        // 面板/菜单栏/统计均不把它当真实读数消费(尤其不得伪装成交流供电)。
         guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else {
             AppLogger.sampler.error("BatterySampler failed to read power source info")
-            return externalPowerModule(isPlaceholder: true)
+            return unavailableModule(previous: previous)
         }
-        // 空列表 = 无电池电源(桌面机型):AC 直供是真实稳态而非失败兜底。
+        // 空列表 = 无电池电源(桌面机型):AC 直供是真实稳态,按真实读数展示。
         if sources.isEmpty {
-            return externalPowerModule(isPlaceholder: false)
+            return externalPowerModule()
         }
-        // 有电源硬件但描述读不出:与 info/列表失败同属接口不可信,标记占位,
-        // 避免这几帧被统计按「交流供电」计入。
+        // 有电源硬件但描述读不出:与 info/列表失败同属接口不可信,返回缺失态。
         guard let source = sources.first,
               let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
             AppLogger.sampler.error("BatterySampler failed to read power source description")
-            return externalPowerModule(isPlaceholder: true)
+            return unavailableModule(previous: previous)
         }
 
         let current = doubleValue(description[kIOPSCurrentCapacityKey]) ?? 0
@@ -124,14 +126,11 @@ final class BatterySampler: MonitorSampler {
             return nil
         }()
 
-        // 转换损耗(W):适配器输入 − 系统负载 − |电池流向|。仅插电时可算;
-        // 差值为负说明遥测失衡(典型为电池正在补差),显示"--"。
-        let powerLoss: Double? = {
-            guard connected, let powerIn, let systemPower else { return nil }
-            let flow = batteryFlow.map(abs) ?? 0
-            let loss = powerIn - systemPower - flow
-            return loss >= 0 ? loss : nil
-        }()
+        // 转换损耗(%):固件实测的适配器损耗率(见 adapterLossRate);仅插电时有意义。
+        let powerLossRate = connected ? smart.adapterLossRate : nil
+        // 端口级诊断(物理端口 + 同口并行通道):IOPort 节点只在 PD 伙伴接入时出现,
+        // 未插电时不查找。
+        let portInfo = connected ? AdapterPortReader.read() : nil
 
         let cellBalance = cellBalanceMetric(smart.cellVoltages)
 
@@ -161,15 +160,20 @@ final class BatterySampler: MonitorSampler {
             MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow, unit: " W"),
             MonitorMetric(name: "time-remaining", value: timeRemaining.map { "\($0)" } ?? "--", numericValue: timeRemaining.map(Double.init)),
             MonitorMetric(name: "pd-contract", value: smart.pdContract ?? "--"),
+            // 端口级供电诊断(供电页单行消费):可协商档位列表、物理端口、同口并行通道。
+            MonitorMetric(name: "pd-tiers", value: smart.pdTiers ?? "--"),
+            MonitorMetric(name: "adapter-port", value: portInfo?.portLabel ?? "--"),
+            MonitorMetric(name: "adapter-transports", value: portInfo?.transports ?? "--"),
             MonitorMetric(name: "input-telemetry", value: smart.inputTelemetry ?? "--"),
             MonitorMetric(name: "input-voltage", value: smart.inputVoltageVolts.map { String(format: "%.2f V", $0) } ?? "--", numericValue: smart.inputVoltageVolts, unit: " V"),
             MonitorMetric(name: "input-current", value: smart.inputCurrentAmps.map { String(format: "%.2f A", $0) } ?? "--", numericValue: smart.inputCurrentAmps, unit: " A"),
             MonitorMetric(name: "not-charging-reason", value: smart.notChargingReason.map(String.init) ?? "--", numericValue: smart.notChargingReason.map(Double.init)),
             MonitorMetric(name: "charging-allowed", value: smart.chargingAllowed.map(String.init) ?? "--", numericValue: smart.chargingAllowed.map(Double.init)),
-            // 展开区明细网格新增项:转换损耗/充电限制/低电量模式。
+            // 转换损耗/充电限制/低电量模式。
+            // power-loss 是固件实测的适配器损耗率(非功率守恒反推),电池供电时无意义;
             // charge-limit 为尽力读取(IORegistry 无该键的机型显示"--");
             // low-power-mode 存 on/off 原值,由视图层 localizedMetricValue 本地化。
-            MonitorMetric(name: "power-loss", value: wattString(powerLoss), numericValue: powerLoss, unit: " W"),
+            MonitorMetric(name: "power-loss", value: powerLossRate.map(percent) ?? "--", numericValue: powerLossRate, unit: "%"),
             MonitorMetric(name: "charge-limit", value: smart.chargeLimit.map { "\($0)%" } ?? "--", numericValue: smart.chargeLimit.map(Double.init), unit: "%"),
             MonitorMetric(name: "low-power-mode", value: ProcessInfo.processInfo.isLowPowerModeEnabled ? "on" : "off"),
             // 深度电芯与终身诊断指标
@@ -179,19 +183,22 @@ final class BatterySampler: MonitorSampler {
             MonitorMetric(name: "time-at-high-soc", value: smart.timeAtHighSocMinutes.map { "\($0 / 60) h" } ?? "--", numericValue: smart.timeAtHighSocMinutes.map { Double($0 / 60) }, unit: " h")
         ])
 
-        return MonitorModule(
+        var module = MonitorModule(
             kind: .battery,
             value: percentage,
             summary: percent(percentage),
             metrics: metrics,
             samples: seedSamples(percentage)
         )
+        #if DIRECT_DISTRIBUTION
+        module.processEnergy = processEnergy
+        #endif
+        return module
     }
 
-    /// 无电池机型的 AC 直供展示模块(桌面机型稳态与 IOPS 失败兜底共用)。
-    /// `isPlaceholder` 区分两种语义:桌面稳态是真实读数(统计计入电源构成),
-    /// IOPS 失败时电源状态不可信(统计过滤,避免电池供电被误记成 AC)。
-    private func externalPowerModule(isPlaceholder: Bool) -> MonitorModule {
+    /// 无电池机型的 AC 直供展示模块:桌面机型稳态,是真实读数(统计计入电源构成)。
+    /// IOPS 接口失败不共用本模块,走 `unavailableModule`,避免伪装成交流供电。
+    private func externalPowerModule() -> MonitorModule {
         let adapterWatts = externalAdapterWatts()
         // 桌面机型无 AppleSmartBattery, PowerTelemetry 恒为 nil;
         // Direct 版由 SMC 补充:优先取 PSTR(整机负载),缺失时以 PDTR(DC 输入)作为负载的近似兜底。
@@ -219,13 +226,32 @@ final class BatterySampler: MonitorSampler {
             MonitorMetric(name: "power-in", value: wattString(powerInWatts), numericValue: powerInWatts, unit: " W"),
             MonitorMetric(name: "pd-contract", value: pdContract ?? "--")
         ])
-        return MonitorModule(
+        var module = MonitorModule(
             kind: .battery,
             value: 100,
             summary: "ac-power",
             metrics: metrics,
-            samples: seedSamples(100),
-            isPlaceholder: isPlaceholder
+            samples: seedSamples(100)
+        )
+        #if DIRECT_DISTRIBUTION
+        module.processEnergy = processEnergy
+        #endif
+        return module
+    }
+
+    /// IOPS 接口不可信时的缺失态模块:不声称任何电源状态、不产出数值,
+    /// 只携带不可用标记。UI 按 `isPlaceholder` 显示缺失态,统计据此过滤。
+    /// 数值沿用上一帧仅为让曲线不出假跳变(UI 不消费该值)。
+    private func unavailableModule(previous: MonitorModule?) -> MonitorModule {
+        MonitorModule(
+            kind: .battery,
+            value: previous?.value ?? 0,
+            summary: "--",
+            metrics: [
+                MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.batteryUnavailable)
+            ],
+            samples: previous?.samples ?? seedSamples(0),
+            isPlaceholder: true
         )
     }
 
@@ -333,6 +359,8 @@ final class BatterySampler: MonitorSampler {
 
         let designCycles = lookupInt("DesignCycleCount9C")
         let pdContract = adapterPDContract(service)
+        let tiers = pdTiers(service)
+        let lossRate = adapterLossRate(service)
         let telemetry = adapterInputTelemetry(service)
         let notChargingReason = notChargingReason(service)
         let chargingAllowed = ipdChargingAllowed(service)
@@ -356,6 +384,8 @@ final class BatterySampler: MonitorSampler {
             remainingCapacitymAh: remainingCapacity,
             fullChargeCapacitymAh: fullChargeCapacity,
             pdContract: pdContract,
+            pdTiers: tiers,
+            adapterLossRate: lossRate,
             inputTelemetry: telemetry?.text,
             inputVoltageVolts: telemetry?.volts,
             inputCurrentAmps: telemetry?.amps,
@@ -447,10 +477,44 @@ final class BatterySampler: MonitorSampler {
             : ((amps * 10).truncatingRemainder(dividingBy: 1) == 0
                 ? String(format: "%.1fA", amps)
                 : String(format: "%.2fA", amps))
-        if let watts, watts > 0 {
-            return "\(vStr) / \(aStr) (\(Int(watts.rounded()))W)"
+        guard let watts, watts > 0 else { return "\(vStr)/\(aStr)" }
+        // 单行口径:电压/电流/功率斜杠直连,不套括号——供电页一行内三个量等权可读。
+        return "\(vStr)/\(aStr)/\(Int(watts.rounded()))W"
+    }
+
+    /// PD 可协商档位(如 "5/9/15/20V"):AdapterDetails.UsbHvcMenu 的全部档位电压,升序去重。
+    /// 仅一档时返回 nil——单档即当前协商值,重复展示不增值。
+    private func pdTiers(_ service: io_service_t) -> String? {
+        guard let details = IORegistryEntryCreateCFProperty(service, "AdapterDetails" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any],
+              let menu = details["UsbHvcMenu"] as? [[String: Any]] else {
+            return nil
         }
-        return "\(vStr) / \(aStr)"
+        let volts = Set(menu.compactMap { item -> Int? in
+            guard let millivolts = doubleValue(item["MaxVoltage"]), millivolts > 0 else { return nil }
+            return Int((millivolts / 1_000).rounded())
+        }).sorted()
+        guard volts.count > 1 else { return nil }
+        return volts.map(String.init).joined(separator: "/") + "V"
+    }
+
+    /// 适配器转换损耗率(%):固件实测口径,不用功率守恒反推。
+    ///
+    /// PowerTelemetryData 中 `WallEnergyEstimate = SystemEnergyConsumed + AdapterEfficiencyLoss`
+    /// 逐位成立(本机实测两组数据误差为 0),三者都是「功率 × 定标系数」的同一窗口能量值,
+    /// 取后两者之比即得损耗率——比值同时消掉定标系数与窗口时长,所以不换算成瓦数
+    /// (窗口定义未经验证,换算会引入未证实的口径)。
+    /// 旧口径(输入 − 负载 − 电池流向)是直流节点的遥测自洽性检查,不是转换损耗,
+    /// 且插电维持期常无读数,故整体替换。机型无该遥测时返回 nil。
+    private func adapterLossRate(_ service: io_service_t) -> Double? {
+        guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
+            .takeRetainedValue() as? [String: Any],
+              let wall = doubleValue(value["WallEnergyEstimate"]), wall > 0,
+              let loss = doubleValue(value["AdapterEfficiencyLoss"]), loss >= 0 else {
+            return nil
+        }
+        let rate = loss / wall * 100
+        return (0..<100).contains(rate) ? rate : nil
     }
 
     /// 适配器实测输入遥测:PowerTelemetryData.SystemVoltageIn / SystemCurrentIn。
@@ -670,7 +734,9 @@ final class BatterySampler: MonitorSampler {
     private func componentPowerMetrics() -> [MonitorMetric] {
         [
             MonitorMetric(name: "display-power", value: wattString(componentPower.displayWatts), numericValue: componentPower.displayWatts, unit: " W"),
-            MonitorMetric(name: "gpu-power", value: wattString(componentPower.gpuWatts), numericValue: componentPower.gpuWatts, unit: " W")
+            MonitorMetric(name: "cpu-power", value: wattString(componentPower.cpuWatts), numericValue: componentPower.cpuWatts, unit: " W"),
+            MonitorMetric(name: "gpu-power", value: wattString(componentPower.gpuWatts), numericValue: componentPower.gpuWatts, unit: " W"),
+            MonitorMetric(name: "ane-power", value: wattString(componentPower.aneWatts), numericValue: componentPower.aneWatts, unit: " W")
         ]
     }
     #endif
@@ -754,6 +820,8 @@ private struct SmartBatteryInfo {
     var remainingCapacitymAh: Int?
     var fullChargeCapacitymAh: Int?
     var pdContract: String?
+    var pdTiers: String?
+    var adapterLossRate: Double?
     var inputTelemetry: String?
     var inputVoltageVolts: Double?
     var inputCurrentAmps: Double?

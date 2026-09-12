@@ -1,0 +1,112 @@
+/* 硬件模块块:把每个监控模块收进「主列 + 右栏规格」,并追加「本机」模块。
+   由 StatisticsReportBuilder 内联进报表模板(与 ECharts/Flatpickr 同一机制),
+   令牌全部取自报表既有的 :root,不新造一套颜色。 */
+
+:root {
+  --hw-live: #41c184;
+}
+@media (prefers-color-scheme: light) {
+  :root { --hw-live: #259458; }
+}
+
+/* ── 模块块:主列(原有板块) + 右栏(硬件规格) ── */
+.module-block { margin-bottom: 44px; }
+/* 模块头:石板墨大标题 + 发丝线下边线(与分区方案一致),无序号 */
+.mod-head {
+  display: flex; align-items: baseline; gap: 10px;
+  padding: 0 2px 12px; margin-bottom: 18px; flex-wrap: wrap;
+  border-bottom: 1px solid var(--card-border);
+}
+.mod-head h2 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.3px; }
+.mod-head .sub { font-size: 12.5px; color: var(--text-3); }
+.mod-head .meta {
+  margin-left: auto; font-size: 11px; color: var(--text-3);
+  font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.mod-body {
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--hw-rail, 300px);
+  gap: 14px; align-items: start;
+}
+.mod-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* 收进主列后,原有 section 的上下外边距交给 mod-main 的 gap 统一控制 */
+.mod-main > section { margin-bottom: 0; }
+
+/* ── 右栏规格卡:白面 + 发丝线 + 微阴影,随滚动吸附 ── */
+.hw-card {
+  background: var(--card);
+  border: 1px solid var(--card-border); border-radius: var(--radius);
+  padding: 15px 17px 11px; box-shadow: var(--shadow-sm);
+  position: sticky; top: 16px;
+}
+.hw-card-head {
+  display: flex; align-items: baseline; gap: 8px; padding-bottom: 10px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--card-border);
+}
+.hw-card-head .t { font-size: 12.5px; font-weight: 650; }
+.hw-card-head .src { font-size: 10px; color: var(--text-3); margin-left: auto; }
+.hw-group { padding-top: 10px; }
+.hw-group-name {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
+  font-size: 10.5px; font-weight: 600; color: var(--text-3);
+}
+.hw-group-name .rt { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--hw-live); }
+.hw-group-name .rt .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--hw-live); animation: hwPulse 1.6s ease-in-out infinite; }
+@keyframes hwPulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .hw-group-name .rt .dot { animation: none; } }
+
+.hw-rows { display: flex; flex-direction: column; gap: 1px; }
+.hw-row {
+  display: flex; align-items: baseline; gap: 10px; padding: 4.5px 8px;
+  border-radius: 6px; font-size: 12px; min-width: 0;
+}
+.hw-row:nth-child(odd) { background: var(--inset); }
+.hw-row .k { color: var(--text-3); flex: none; }
+.hw-row .v {
+  margin-left: auto; text-align: right; color: var(--text); font-weight: 600;
+  font-variant-numeric: tabular-nums; min-width: 0;
+  /* 窄宽不折行:超长值直接省略号,不换行堆叠 */
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.hw-row .v.missing { color: var(--text-3); font-weight: 500; }
+
+/* 窄窗口:右栏下移到主列下方,规格行改多列,保住图表宽度 */
+@media (max-width: 1120px) {
+  .mod-body { grid-template-columns: minmax(0, 1fr); }
+  .hw-card { position: static; }
+  .hw-rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px 14px; }
+}
+
+/* ── 本机模块:分类菜单(墨黑胶囊激活) + 画布灰内衬规格组 ── */
+.hw-workbench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+/* 分类胶囊槽:固定容器内等分排布,多就按内容折行,不出横向滚动条 */
+.hw-tabs {
+  display: flex; flex-wrap: wrap; gap: 4px; padding: 2.5px;
+  background: var(--inset); border-radius: 12px; align-self: start;
+}
+.hw-tab {
+  appearance: none; cursor: pointer; flex: 1 1 auto; white-space: nowrap; text-align: center;
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font: 500 12.5px/1 var(--font); color: var(--text-2);
+  padding: 6.5px 12px; border-radius: 9px;
+  background: transparent; border: 0;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+.hw-tab:hover { color: var(--text); }
+/* 激活胶囊:墨黑底白字 + 微阴影 */
+.hw-tab.active {
+  color: var(--pill-text); background: var(--pill); font-weight: 570;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+}
+.hw-tab .sf { width: 14px; height: 14px; }
+.hw-pane-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 10px; flex-wrap: wrap; }
+.hw-pane-head h3 { margin: 0; font-size: 15px; font-weight: 650; }
+.hw-pane-head .sub { font-size: 11.5px; color: var(--text-3); }
+.hw-pane-head .count { margin-left: auto; font-size: 11px; color: var(--text-3); font-variant-numeric: tabular-nums; }
+.hw-pane-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; align-items: start; }
+/* 规格组改画布灰内衬:白卡内再嵌白卡会糊成一片,下沉一档才有层次 */
+.hw-pane-group {
+  background: var(--bg);
+  border-radius: 10px;
+  padding: 12px 14px 8px;
+}
+.hw-pane-group h4 { margin: 0 0 7px; font-size: 11px; font-weight: 600; color: var(--text-3); }

@@ -12,7 +12,7 @@ struct ModuleRowPreview: View {
     /// 功率流开关(仅电池模块消费,与面板 batteryShowPowerFlow 门控同源)。
     let showPowerFlow: Bool
     let palette: MonitorPalette
-    /// 电池模块分页选择(拓扑/健康/供电):由设置页持有,驱动预览分页与下方指标选项联动。
+    /// 电池模块分页选择(拓扑/健康/排名/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
 
     private var theme: MonitorPanelTheme {
@@ -237,15 +237,16 @@ struct ModuleRowPreview: View {
     // MARK: 电池分页预览
 
     /// 与面板 BatteryGlassRow 同构的分页展开区:动态小标题 + 胶囊切换器,
-    /// 三页各自渲染示例内容(拓扑=分项功耗网格+功率流图,健康=指标网格,
-    /// 供电=固定诊断视图)。静态示例数据渲染,不向设置页引入常驻动画驱动。
+    /// 各页渲染示例内容(拓扑=分项功耗网格+功率流图,健康=指标网格,沙盒版
+    /// 流向图随面板迁入健康页,供电=固定诊断视图)。静态示例数据渲染,
+    /// 不向设置页引入常驻动画驱动。
     @ViewBuilder
     private var batteryTabbedDetail: some View {
         VStack(spacing: 8) {
             PowerSectionHeader(title: batteryTab.title, theme: theme) {
                 PanelCapsulePicker(
                     selection: $batteryTab,
-                    items: BatteryPageTab.allCases,
+                    items: BatteryPageTab.previewCases,
                     icon: { $0.icon },
                     tooltip: { $0.title },
                     tint: tint,
@@ -270,11 +271,26 @@ struct ModuleRowPreview: View {
                 if !healthMetrics.isEmpty {
                     previewGrid(healthMetrics)
                 }
+                #if !DIRECT_DISTRIBUTION
+                // 沙盒版流向图随面板迁入健康页,预览同构(示例数据)。
+                if showPowerFlow {
+                    PowerFlowDiagram(
+                        module: MetricSampleCatalog.powerFlowModule,
+                        theme: theme,
+                        tint: tint,
+                        animate: false
+                    )
+                }
+                #endif
+            case .ranking:
+                PowerAppRankingList(
+                    shares: MetricSampleCatalog.appEnergyRankingShares,
+                    theme: theme
+                )
             case .supply:
                 PowerSupplyDiagnosticsView(
                     module: MetricSampleCatalog.powerFlowModule,
-                    theme: theme,
-                    tint: tint
+                    theme: theme
                 )
             }
         }

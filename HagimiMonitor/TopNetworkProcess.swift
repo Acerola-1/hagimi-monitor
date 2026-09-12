@@ -112,24 +112,25 @@ final class NetworkDeltaCursor {
             currentList[pid] = NetworkSnapshotEntry(rawName: rawName, download: download, upload: upload)
         }
 
-        // 计算增量与速率（字节/秒）。dt 在已有基线时必然 > 0（首拍无 prev，逐项被 continue 跳过）。
+        // 计算增量与速率（字节/秒）。
+        //
+        // `dt` 必须显式校验,不能只靠「首拍没有 prev」来保证它为正:`Date()` 是**墙钟**,
+        // 同一瞬间的两次采样会得到 dt == 0(`x / 0` → `+inf`),墙钟回拨会得到负值——
+        // 两种情况下 `UInt64(Double)` 都**直接 trap**(实测在测试宿主里稳定复现:
+        // `_assertionFailure` @ TopNetworkProcess.swift:129)。
         let now = Date()
         let dt = previousTime.map { now.timeIntervalSince($0) } ?? 0
         var perProcessRate: [pid_t: (download: UInt64, upload: UInt64)] = [:]
 
-        for (pid, current) in currentList {
-            let prev = previousSnapshot[pid]
-            let downloadDelta = prev.map { current.download >= $0.download ? current.download - $0.download : 0 } ?? 0
-            let uploadDelta = prev.map { current.upload >= $0.upload ? current.upload - $0.upload : 0 } ?? 0
-
-            // 首次采样没有增量，跳过
-            if prev == nil { continue }
-
-            // 将累计字节增量转换为速率（字节/秒），与 Stats 等行业惯例对齐
-            let downloadRate = UInt64(Double(downloadDelta) / dt)
-            let uploadRate = UInt64(Double(uploadDelta) / dt)
-            guard downloadDelta > 0 || uploadDelta > 0 else { continue }
-            perProcessRate[pid] = (downloadRate, uploadRate)
+        if dt > 0 {
+            for (pid, current) in currentList {
+                // 首次采样没有基线,跳过
+                guard let prev = previousSnapshot[pid] else { continue }
+                let downloadDelta = current.download >= prev.download ? current.download - prev.download : 0
+                let uploadDelta = current.upload >= prev.upload ? current.upload - prev.upload : 0
+                guard downloadDelta > 0 || uploadDelta > 0 else { continue }
+                perProcessRate[pid] = (rate(downloadDelta, over: dt), rate(uploadDelta, over: dt))
+            }
         }
 
         // 按 responsible pid 归并:助手进程(浏览器渲染进程、各类 Helper)的流量并入宿主
@@ -176,15 +177,18 @@ final class NetworkDeltaCursor {
             return firstMax > secondMax
         }.prefix(limit))
     }
+
+    /// 字节增量 → 速率(字节/秒),与 Stats 等行业惯例对齐。
+    ///
+    /// 极小的 dt 也会让商超过 UInt64 上限,这里统一夹住——不给 `UInt64(_:)` 留 trap 的机会,
+    /// 返回 0 表示这一项本轮不计入(调用方随后还有 `downloadDelta > 0` 的门)。
+    private func rate(_ delta: UInt64, over dt: TimeInterval) -> UInt64 {
+        let value = Double(delta) / dt
+        guard value.isFinite, value > 0 else { return 0 }
+        return value < Double(UInt64.max) ? UInt64(value) : UInt64.max
+    }
 }
 
-/// 面板 TOP 榜专用差分游标。
-private let panelNetworkCursor = NetworkDeltaCursor()
-
-/// 面板采样入口:委托面板专用游标。
-func sampleTopNetworkProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawNetworkProcess] {
-    panelNetworkCursor.sample(limit: limit, includeSystemProcesses: includeSystemProcesses)
-}
 
 /// 用 NSRunningApplication(pid:) 为网络采样结果补齐本地化名与 App 图标。
 /// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。

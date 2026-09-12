@@ -55,21 +55,12 @@ struct SettingsGroup<Content: View, TitleAccessory: View>: View {
                 }
             }
 
-            if #available(macOS 26, *) {
-                // 不包 GlassEffectContainer:卡片已是 NSVisualEffectView 毛玻璃
-                // (见 compatibleGlassEffect),容器对其无作用,反而在 appearance
-                // 切换(主题/配色变化)时整块重合成,是组内控件闪烁的诱因
-                // (面板行级因同一诱因已降级,见 CompatibleGlassEffect 注释)。
-                VStack(spacing: 0) {
-                    content
-                }
-                .compatibleGlassEffect(cornerRadius: 13)
-            } else {
-                VStack(spacing: 0) {
-                    content
-                }
-                .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+            // 分组背景用平面浅色主题表面,不叠加玻璃:玻璃在切换外观/配色时整块重合成,
+            // 是组内控件闪烁的诱因(面板行级也因同一诱因降级,见 CompatibleGlassEffect 注释)。
+            VStack(spacing: 0) {
+                content
             }
+            .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
     }
 }
@@ -193,12 +184,8 @@ struct SettingsIconHeader<Accessory: View>: View {
         .padding(.vertical, 12)
         .padding(.horizontal, 14)
 
-        if #available(macOS 26, *) {
-            header
-                .compatibleGlassEffect(cornerRadius: 12)
-        } else {
-            header
-                .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        }
+        // 与 SettingsGroup 同一平面主题表面。
+        header
+            .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 }

@@ -16,6 +16,9 @@ struct MonitorPanelView: View {
     let store: MonitorStore
     @ObservedObject private var refreshGate: PanelRefreshGate
     @ObservedObject private var quickPanelPresentation: QuickPanelPresentation
+    /// 压力告警只在 episode 起止/读取时发布(不是每秒),这里直接观察,
+    /// 让统计入口的红点即时起灭。
+    @ObservedObject private var alerts = PressureAlertCenter.shared
     private let showsQuickPanelControls: Bool
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
@@ -187,6 +190,7 @@ struct MonitorPanelView: View {
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
                             .panelRowHeaderHeight()
+
                         }
                     }
                     .scrollBounceBehavior(.basedOnSize)
@@ -237,7 +241,7 @@ struct MonitorPanelView: View {
                 }
             }
             // 顶部留白收紧至 8pt 与 header—主体间距 4pt 配合压缩首屏空白;
-            // 侧边与底边留白均与行间节奏(6pt)对齐，与卡片/按钮圆角(14pt)共同构成 20pt 同心外框圆角。
+            // 侧边与底边留白与行间节奏(6pt)对齐;外框圆角与卡片/按钮同为 14pt,取舍见 MonitorConstants.panelCornerRadius。
             .padding(.top, 8)
             .padding(.horizontal, 6)
             .padding(.bottom, 6)
@@ -419,6 +423,7 @@ struct MonitorPanelView: View {
                             .font(.callout.weight(.medium))
                             .foregroundStyle(theme.primaryText)
                             .panelRowHeaderHeight()
+
     }
 
     private var panelBackgroundColor: Color {
@@ -529,6 +534,14 @@ struct MonitorPanelView: View {
             ) {
                 SettingsWindowPresenter.open(tab: .statistics)
             }
+            .overlay(alignment: .topTrailing) {
+                if alerts.statisticsEntryUnread {
+                    Circle()
+                        .fill(theme.palette.severityTint(for: .critical))
+                        .frame(width: 5, height: 5)
+                        .allowsHitTesting(false)
+                }
+            }
         }
     }
 
@@ -570,9 +583,9 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: pressureMode ? memoryPressureText(for: module) : module.summary,
-                // 压力模式下头部即压力等级文案,按等级着色(与热压力/SMART 同口径);
-                // 使用率模式保持常规数值色。
-                detailColor: pressureMode ? memoryPressureColor(level: pressureRawLevel(module), theme: theme) : nil,
+                // 压力模式下头部即压力等级文案:等级色落在词前小圆点,正文保持
+                // 常规数值色——状态色不与行玻璃底色叠加,两套色彩语义各归其位。
+                statusTint: pressureMode ? memoryPressureColor(level: pressureRawLevel(module), theme: theme) : nil,
                 // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
                 samples: pressureMode ? module.pressureSamples : [],
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
@@ -588,6 +601,8 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
+                // 每秒采样累积使用率历史(采样器 seed 起步),行尾与 CPU/GPU 同款趋势。
+                samples: module.samples,
                 details: enabledMetrics(for: module),
                 isExpanded: isExpanded,
                 topDiskProcesses: store.topDiskProcesses,
@@ -815,6 +830,8 @@ private struct QuickPanelControlButton: View {
         }
         .buttonStyle(QuickPanelControlButtonStyle(tint: tint, isHovering: isHovering))
         .help(help)
+        // 图标无文字,help 文案兼作 VoiceOver 标签。
+        .accessibilityLabel(help)
         .onHover { isHovering = $0 }
     }
 }
@@ -879,6 +896,10 @@ private struct PanelHeaderToolBadges: View {
         .onTapGesture {
             store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
         }
+        // 无障碍:徽章簇合并为单一按钮(打开快捷工具浮层)。
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(localized: "panel.tools"))
+        .accessibilityAddTraits(.isButton)
         .background(QuickToolsAnchorView(box: anchor))
         // 菜单栏上已无任何激活工具时,收起本簇锚定的浮层,避免它随塌缩的
         // 徽章簇漂移到统计入口下方(脱离触发来源变得突兀)。仅作用于 header
@@ -913,8 +934,9 @@ private struct MetricGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let detail: String
-    /// 明细文字自定义着色(如内存压力等级);nil 时用常规 valueText。
-    var detailColor: Color? = nil
+    /// 行头状态词的状态色(如内存压力等级):着色于词前小圆点,正文恒为
+    /// valueText——状态色不与行玻璃底色叠加,避免两套色彩语义互相稀释。
+    var statusTint: Color? = nil
     var samples: [Double] = []
     var details: [MonitorMetric] = []
     var isExpanded = false
@@ -937,7 +959,7 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.theme.palette.preference == rhs.theme.palette.preference
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.detail == rhs.detail
-            && lhs.detailColor == rhs.detailColor
+            && lhs.statusTint == rhs.statusTint
             && lhs.samples == rhs.samples else { return false }
         // 收起态下明细网格与进程列表均不可见，跳过对未展开内容的深度比对，阻断无关重绘。
         if !lhs.isExpanded && !PanelMotionExperiment.enabled {
@@ -997,10 +1019,17 @@ private struct MetricGlassRow: View, Equatable {
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
 
-                Text(detail)
-                    .monitorPanelMonoFont(weight: .semibold)
-                    .foregroundStyle(detailColor ?? theme.valueText)
-                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    if let statusTint {
+                        Circle()
+                            .fill(statusTint)
+                            .frame(width: 6, height: 6)
+                    }
+                    Text(detail)
+                        .monitorPanelMonoFont(weight: .semibold)
+                        .foregroundStyle(theme.valueText)
+                        .lineLimit(1)
+                }
 
                 Spacer(minLength: 8)
 
@@ -1017,6 +1046,15 @@ private struct MetricGlassRow: View, Equatable {
                 guard detailAvailable else { return }
                 toggleExpansion?()
             }
+            // 无障碍语义与蓝牙行同款:行头合并为单一元素,可展开时
+            // 暴露按钮语义与展开/收起提示。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(module.kind.title)
+            .accessibilityValue(detail)
+            .accessibilityHint(detailAvailable ? (isExpanded
+                ? String(localized: "panel.row.collapse-hint")
+                : String(localized: "panel.row.expand-hint")) : "")
+            .accessibilityAddTraits(detailAvailable ? .isButton : [])
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -1061,6 +1099,7 @@ private struct MetricGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
+        .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -1072,20 +1111,24 @@ private struct MetricGlassRow: View, Equatable {
         case .cpu, .gpu:
             if !samples.isEmpty {
                 SparklineChart(samples: samples, tint: tint)
-                    .frame(width: 56, height: 18)
+                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
             }
         case .memory:
             // 压力模式才会传入 samples(压力历史):有则画曲线,无则维持使用率占比进度条。
             if !samples.isEmpty {
                 SparklineChart(samples: samples, tint: tint)
-                    .frame(width: 56, height: 18)
+                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
             } else {
-                ProgressMeter(value: module.value, tint: tint, theme: theme)
-                    .frame(width: 56, height: 3)
+                trailingMeter(theme: theme)
             }
         case .storage:
-            ProgressMeter(value: module.value, tint: tint, theme: theme)
-                .frame(width: 56, height: 3)
+            // 使用率历史每秒累积:有采样即画趋势(与 CPU/GPU 同槽位),未到时回退占比条。
+            if !samples.isEmpty {
+                SparklineChart(samples: samples, tint: tint)
+                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
+            } else {
+                trailingMeter(theme: theme)
+            }
         case .network, .battery, .bluetooth:
             EmptyView()
         case .fan:
@@ -1096,13 +1139,20 @@ private struct MetricGlassRow: View, Equatable {
                 let fanMin = Double(fans?.map(\.minRPM).min() ?? 0)
                 let fanMax = Double(fans?.map(\.maxRPM).max() ?? 100)
                 SparklineChart(samples: samples, tint: tint, minValue: fanMin, maxValue: fanMax)
-                    .frame(width: 56, height: 18)
+                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
             } else {
                 Text(module.summary)
                     .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
             }
         }
+    }
+
+    /// 占比进度条:5pt 细条在统一槽位(56×18)内垂直居中,与 sparkline 同右缘节奏。
+    private func trailingMeter(theme: MonitorPanelTheme) -> some View {
+        ProgressMeter(value: module.value, tint: tint, theme: theme)
+            .frame(width: MonitorConstants.trailingSlotWidth, height: 5)
+            .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
     }
 
     private var storageVolumes: [StorageVolumeInfo]? {
@@ -1300,7 +1350,9 @@ private struct CoreLoadRing: View {
     }
 }
 
-private struct MetricDetailGrid: View {
+/// 明细指标网格:供电页与健康页共用同一套逐格内衬排版(供电页在
+/// PowerDetailPages 中直接引用,故不设为 private)。
+struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
     let kind: MonitorKind
     let theme: MonitorPanelTheme
@@ -1310,7 +1362,6 @@ private struct MetricDetailGrid: View {
     /// 是否在顶部绘制贯穿分隔线。电源等已有专属分区头组件的场景可关闭。
     var showsSeparator: Bool = true
 
-    private var rowSpacing: CGFloat { MetricGridMetrics.rowSpacing }
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
 
@@ -1841,6 +1892,14 @@ private struct NetworkGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
+            // 无障碍语义与其余行同款:行头单一元素 + 按钮语义 + 展开提示。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "kind.network"))
+            .accessibilityValue(localizedNetworkInterface(module.summary))
+            .accessibilityHint(hasExpandableContent ? (isExpanded
+                ? String(localized: "panel.row.collapse-hint")
+                : String(localized: "panel.row.expand-hint")) : "")
+            .accessibilityAddTraits(hasExpandableContent ? .isButton : [])
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -1866,6 +1925,7 @@ private struct NetworkGlassRow: View, Equatable {
                 toggleExpansion?()
             }
         }
+        .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -1984,6 +2044,14 @@ private struct BatteryGlassRow: View, Equatable {
                     toggleExpansion?()
                 }
             }
+            // 无障碍语义与其余行同款。
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(String(localized: "kind.battery"))
+            .accessibilityValue(summaryText)
+            .accessibilityHint(canExpand ? (isExpanded
+                ? String(localized: "panel.row.collapse-hint")
+                : String(localized: "panel.row.expand-hint")) : "")
+            .accessibilityAddTraits(canExpand ? .isButton : [])
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -2015,6 +2083,8 @@ private struct BatteryGlassRow: View, Equatable {
                             MetricDetailGrid(metrics: flowMetrics, kind: module.kind, theme: theme, showsSeparator: false)
                         }
                         if showPowerFlow && numericValue("power") != nil {
+                            // 与顶部同款小标题 + 贯穿分隔线：把监控参数与流向图明确分成两段
+                            PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
                             PowerFlowDiagram(
                                 module: module,
                                 theme: theme,
@@ -2027,11 +2097,30 @@ private struct BatteryGlassRow: View, Equatable {
                         if !healthMetrics.isEmpty {
                             MetricDetailGrid(metrics: healthMetrics, kind: module.kind, theme: theme, showsSeparator: false)
                         }
+                        #if !DIRECT_DISTRIBUTION
+                        // 沙盒版已裁撤拓扑页:流向图整体迁入健康页尾部,
+                        // 渲染与数据门控同直连版拓扑页原样,不做渠道语义分叉。
+                        if showPowerFlow && numericValue("power") != nil {
+                            PowerSectionHeader(title: String(localized: "panel.power-flow.title"), theme: theme)
+                            PowerFlowDiagram(
+                                module: module,
+                                theme: theme,
+                                tint: tint,
+                                animate: isExpanded && showPowerFlow && panelVisible && powerFlowActive
+                            )
+                        }
+                        #endif
+                    case .ranking:
+                        // 逐进程能耗实测的前 5 名应用。视觉沿用 CPU/内存/GPU 共用的
+                        // TopProcessList，不自造样式；无数据时该页本身不会出现在分页里。
+                        PowerAppRankingList(
+                            shares: module.processEnergy?.shares ?? [],
+                            theme: theme
+                        )
                     case .supply:
                         PowerSupplyDiagnosticsView(
                             module: module,
-                            theme: theme,
-                            tint: tint
+                            theme: theme
                         )
                     }
                 }
@@ -2039,6 +2128,7 @@ private struct BatteryGlassRow: View, Equatable {
                 .padding(.bottom, 9)
             }
         }
+        .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -2058,6 +2148,10 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var powerSymbol: String {
+        // 缺失帧:电源状态未知,用同族空壳图标示意无读数,不冒充插头/电量。
+        if module.isPlaceholder {
+            return "battery.0percent"
+        }
         guard hasBattery else {
             return "powerplug"
         }
@@ -2086,27 +2180,38 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     private var summaryText: String {
-        if hasBattery {
-            localizedBatteryState(module.summary)
-        } else if let adapter = numericValue("adapter") {
-            wattString(adapter, rounded: true)
-        } else {
-            localizedBatteryState("ac-power")
+        // 缺失帧直接显示模块自带的缺失摘要("--"),不落进 AC 兜底分支。
+        if module.isPlaceholder {
+            return module.summary
         }
+        if hasBattery {
+            return localizedBatteryState(module.summary)
+        }
+        if let adapter = numericValue("adapter") {
+            return wattString(adapter, rounded: true)
+        }
+        return localizedBatteryState("ac-power")
     }
 
     /// 当前硬件与设置条件下可用的分页集合。
-    /// - 拓扑（.flow）：开启 showPowerFlow 且有 power 数据，或存在分项功耗指标时可用；
+    /// - 拓扑（.flow）：仅直连版存在;沙盒版分项功耗产不出、拓扑页近乎空页,
+    ///   整页裁撤,流向图迁入健康页尾部(见 case .health);
     /// - 健康（.health）：仅带电池设备可用；
+    /// - 排名（.ranking）：需要逐进程能耗实测（仅直连版产得出），无数据时整页不出现；
     /// - 供电（.supply）：始终可用（未插电时优雅提示未连接）。
     private var availableTabs: [BatteryPageTab] {
         var tabs: [BatteryPageTab] = []
+        #if DIRECT_DISTRIBUTION
         let hasFlowData = (showPowerFlow && numericValue("power") != nil) || !tabMetrics(for: .flow).isEmpty
         if hasFlowData {
             tabs.append(.flow)
         }
+        #endif
         if hasBattery {
             tabs.append(.health)
+        }
+        if module.processEnergy != nil {
+            tabs.append(.ranking)
         }
         tabs.append(.supply)
         return tabs
@@ -2397,6 +2502,30 @@ private struct NetworkRatePill: View {
     }
 }
 
+/// 行卡常驻白色提亮:白亮观感固化为常态底色。
+/// 提亮层挂 background,落在玻璃底与卡片内容之间——只提亮玻璃、不洗文字。
+/// 亮色 0.15 / 暗色 0.08(暗色玻璃对白敏感,低浓度即可)。
+private struct PanelCardBrightenModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
+            .background {
+                RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
+                    .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.15))
+                    .allowsHitTesting(false)
+            }
+    }
+}
+
+extension View {
+    /// 行卡常驻白亮;挂载点必须在 compatibleGlassEffect 之前:提亮层要落在
+    /// 玻璃与内容之间,挂到玻璃之后会沉进玻璃底下不可见。
+    func panelCardBrighten() -> some View {
+        modifier(PanelCardBrightenModifier())
+    }
+}
+
 extension Text {
     func monitorPanelLabelFont(tracking: CGFloat) -> some View {
         self
@@ -2606,6 +2735,35 @@ private struct MemoryProcessList: View {
                     name: $0.name,
                     icon: $0.icon,
                     valueText: byteCountString(Int64($0.memoryUsage), countStyle: .memory),
+                    apiText: nil,
+                    translated: false
+                )
+            },
+            theme: theme,
+            showRosettaBanner: false
+        )
+    }
+}
+
+// MARK: - 电源排名列表
+
+/// 电源排名页（拓扑 / 健康 / 排名 / 供电 的第三页）：逐进程能耗实测的前 5 名应用。
+/// 视觉沿用 CPU/内存/GPU 共用的 `TopProcessList`——分隔线、5 行、图标 + 名称 + 右对齐数值。
+/// 数值为该应用的实测平均功率（瓦），保留两位小数以免轻载应用被四舍五入成 0.0 W。
+/// 口径仍是同用户可读进程（系统进程读不到，不在榜单内）。
+/// 设置页预览也复用本视图，故不加 private。
+struct PowerAppRankingList: View {
+    let shares: [ProcessEnergyShare]
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        TopProcessList(
+            kind: .battery,
+            rows: shares.map {
+                TopProcessRowData(
+                    name: $0.name,
+                    icon: $0.icon,
+                    valueText: String(format: "%.2f W", $0.watts),
                     apiText: nil,
                     translated: false
                 )
@@ -2966,6 +3124,7 @@ private struct BluetoothGlassRow: View, Equatable {
                     .padding(.bottom, 9)
             }
         }
+        .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.rowGlassFill(for: module.kind)
         }
@@ -3160,7 +3319,7 @@ private struct ProcessRowView: View {
     }
 }
 
-/// 取不到图标(命令行进程等)时回退到通用应用占位图标,保证每行视觉对齐一致。
+/// 取不到图标(命令行进程等)时回退到终端符号,保证面板与报表的系统进程视觉统一。
 private struct ProcessIcon: View {
     let icon: NSImage?
     let theme: MonitorPanelTheme
@@ -3172,7 +3331,7 @@ private struct ProcessIcon: View {
                 .interpolation(.high)
                 .aspectRatio(contentMode: .fit)
         } else {
-            Image(systemName: "app.dashed")
+            Image(systemName: "terminal")
                 .font(.caption2)
                 .foregroundStyle(theme.captionText)
         }

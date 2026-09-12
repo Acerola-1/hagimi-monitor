@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>原型 v3 · 模块真实子项 + 本机分类菜单 — HagimiMonitor</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 原型工具条(不属于产品;首屏顶部用于确认打开的是本轮新方案) -->
+<div class="proto">
+  <span class="ver">原型 v3 · 2026-09-12</span>
+  <div class="grp">
+    <label>变体</label>
+    <button data-variant-btn="side" aria-pressed="true">A 右栏常驻</button>
+    <button data-variant-btn="band" aria-pressed="false">B 底部横带</button>
+    <button data-variant-btn="collapsed" aria-pressed="false">C 折叠右栏</button>
+  </div>
+  <div class="grp">
+    <label>本机分类菜单</label>
+    <button data-tabs-btn="strip" aria-pressed="true">顶栏</button>
+    <button data-tabs-btn="menu" aria-pressed="false">下拉</button>
+    <button data-tabs-btn="side" aria-pressed="false">左栏</button>
+  </div>
+  <div class="grp">
+    <label>窗口</label>
+    <button data-w-btn="860" aria-pressed="false">860</button>
+    <button data-w-btn="1040" aria-pressed="false">1040</button>
+    <button data-w-btn="1240" aria-pressed="true">1240 建议</button>
+    <button data-w-btn="1280" aria-pressed="false">1280</button>
+    <button id="fit-btn" aria-pressed="true">适应窗口</button>
+  </div>
+  <div class="grp">
+    <button id="src-btn" aria-pressed="false">数据来源</button>
+  </div>
+  <div class="grp spacer"><span class="note">数值为演示夹具 · 实时开关在报表时间栏内</span></div>
+</div>
+
+<div class="stage-wrap">
+  <div class="stage" data-w="1240" data-variant="side">
+    <div class="shell"><!-- app.js 渲染 --></div>
+  </div>
+</div>
+
+<div class="wb" id="wb" style="max-width:1360px;margin:0 auto 40px;padding:0 18px"></div>
+
+<script src="data-core.js"></script>
+<script src="data-modules.js"></script>
+<script src="data-machine.js"></script>
+<script src="data-source.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

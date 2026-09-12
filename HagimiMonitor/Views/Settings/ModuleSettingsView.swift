@@ -5,7 +5,12 @@ struct ModuleSettingsView: View {
     @ObservedObject var settings: MonitorSettings
     @Environment(\.colorScheme) private var colorScheme
     /// 电池分页预览的当前页:驱动预览胶囊与下方指标选项联动过滤。
+    /// 沙盒版无拓扑页,默认落在健康页。
+    #if DIRECT_DISTRIBUTION
     @State private var batteryTab: BatteryPageTab = .flow
+    #else
+    @State private var batteryTab: BatteryPageTab = .health
+    #endif
 
     /// 与面板同源的调色板,供实时预览卡取令牌。
     private var palette: MonitorPalette {
@@ -74,7 +79,7 @@ struct ModuleSettingsView: View {
                 }
 
                 if kind == .battery && selectionMetrics.isEmpty {
-                    // 供电页(及沙盒版拓扑页)无归属可勾指标,给出说明而非空白。
+                    // 供电页无归属可勾指标,给出说明而非空白。
                     Text(String(localized: "settings.battery.tab-no-metrics"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -91,7 +96,8 @@ struct ModuleSettingsView: View {
                             MetricSelectionRow(
                                 title: metric.title,
                                 isSelected: isSelected,
-                                isEnabled: settings.canEnableMetric(metric.id, for: kind)
+                                isEnabled: settings.canEnableMetric(metric.id, for: kind),
+                                tip: metric.tip
                             ) {
                                 settings.setMetric(metric.id, enabled: !isSelected, for: kind)
                             }
@@ -275,7 +281,7 @@ struct ModuleSettingsView: View {
     }
 }
 
-/// 小号 Beta 胶囊徐章:用于标注实验性设置项(如功率流),与侧边栏 BetaBadge 同样式。
+/// 小号 Beta 胶囊徽章:用于标注实验性设置项(如功率流)。
 private struct PowerFlowBetaBadge: View {
     var body: some View {
         Text(String(localized: "settings.sidebar.beta-badge"))
@@ -291,6 +297,9 @@ private struct MetricSelectionRow: View {
     let title: String
     let isSelected: Bool
     let isEnabled: Bool
+    /// 悬浮说明（如「部分 macOS 27 机型尚不可用」）。nil 时不渲染角标，
+    /// 行为与普通行完全一致；角标只作提示，不阻断勾选。
+    var tip: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -305,6 +314,13 @@ private struct MetricSelectionRow: View {
                     .font(.body)
                     .foregroundStyle(isEnabled ? .primary : .secondary)
 
+                if let tip {
+                    Image(systemName: "info.circle")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .help(tip)
+                }
+
                 Spacer(minLength: 16)
             }
             .padding(.horizontal, 14)
@@ -314,6 +330,7 @@ private struct MetricSelectionRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+        .help(tip ?? "")
     }
 }
 

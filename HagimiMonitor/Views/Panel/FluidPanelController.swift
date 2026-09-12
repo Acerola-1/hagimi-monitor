@@ -60,6 +60,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let isDark: Bool
         let layout: MenuBarMetricLayoutStyle
         let scale: CGFloat
+        /// 告警红点开关:数值不变而红点起灭时也要重栅格化。
+        let showsAlert: Bool
     }
     private var lastMetricsRenderKey: MetricsRenderKey?
 
@@ -68,7 +70,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 面板圆角半径。由 window 层的 NSVisualEffectView / hosting layer 裁剪,
     /// 恢复系统 popover 般的圆角外观(自建 borderless 窗口默认是方角)。
-    /// 面板外框圆角:与行卡片/底部按钮(rowCornerRadius=14)及留白(6pt)同心,满足 R_outer = R_inner + padding。
+    /// 面板外框圆角:取值与取舍见 MonitorConstants.panelCornerRadius。
     private static let panelCornerRadius = CGFloat(MonitorConstants.panelCornerRadius)
 
     /// 面板底部距屏幕可视区下缘(Dock 上沿)的最小留白。
@@ -264,6 +266,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
 
+        // 告警红点起灭:立即重刷,不等下一秒的 modules tick。
+        PressureAlertCenter.shared.$menuBarUnread
+            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .store(in: &cancellables)
+
         // 显示模式(环/指标)切换。
         store.settings.$menuBarDisplayMode
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
@@ -382,6 +389,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func showPanel() {
+        // 用户点开面板即视为看过菜单栏那处告警:只清这一处红点,
+        // 面板统计入口与统计页的红点各有各的清除时机。
+        PressureAlertCenter.shared.markRead(.menuBar)
         // 恢复隐藏期间卸下的 contentView(见 reclaimHiddenPanelResources)。
         // 必须在布局/定位之前恢复,后续 layoutSubtreeIfNeeded 才能测到内容尺寸。
         if let savedContentView, panel.contentView == nil {
@@ -661,8 +671,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 浅色系统 + 彩色壁纸时会画成黑环,和白色的系统图标格格不入。
         let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
         let isDark = appearance.isDark
+        let showsAlert = PressureAlertCenter.shared.menuBarUnread
 
-        // 环模式:MenuBarComputeRingIcon 已直接产出一张缓存好的 18×18 AppKit NSImage,
+        // 环模式:MenuBarComputeRingIcon 已直接产出一张缓存好的 21×21 AppKit NSImage,
         // 无需再走 SwiftUI + ImageRenderer 二次光栅化。直接赋给 button.image,可绕开
         // CoreSVG/ImageRenderer 的快照中间对象(CGImage/NSCGImageSnapshotRep/SVGPath)——
         // 它们会随负载动画持续累积、常驻不释放,推高空闲 CPU。
@@ -675,7 +686,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let image = MenuBarComputeRingIcon.image(
                 load: store.loadAnimator.displayedComputeLoad,
                 darkMode: isDark,
-                loadLevel: store.haloRingLoadLevel
+                loadLevel: store.haloRingLoadLevel,
+                showsAlert: showsAlert
             )
             // 负载未跨整数桶 / 外观未变时,image(...) 返回同一缓存 NSImage 对象。此时跳过
             // button.image 重新赋值:$modules 每秒 tick 都会触发本方法,重复赋同一张图会让
@@ -702,7 +714,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             items: store.menuBarMetricItems,
             isDark: isDark,
             layout: store.settings.menuBarMetricLayoutStyle,
-            scale: scale
+            scale: scale,
+            showsAlert: showsAlert
         )
         guard renderKey != lastMetricsRenderKey else { return }
 
@@ -729,8 +742,21 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             guard let cgImage else { return }
 
             let pointSize = NSSize(width: CGFloat(cgImage.width) / scale, height: CGFloat(cgImage.height) / scale)
-            let image = NSImage(cgImage: cgImage, size: pointSize)
-            image.isTemplate = false
+            let base = NSImage(cgImage: cgImage, size: pointSize)
+            base.isTemplate = false
+            let image: NSImage
+            if showsAlert {
+                // 指标模式的红点是后处理盖上去的:标签本身不含告警状态,
+                // 快照宽度不变,状态项长度也不受影响。
+                image = NSImage(size: pointSize, flipped: false) { rect in
+                    base.draw(in: rect)
+                    MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
+                    return true
+                }
+                image.isTemplate = false
+            } else {
+                image = base
+            }
 
             statusItem.button?.image = image
             updateStatusItemLength(pointSize.width)

@@ -70,7 +70,14 @@ enum StaticMetricSizing {
             "battery.capacity",
             "battery.cell-balance",
             "battery.cell-qmax",
-            "battery.cell-resistance"
+            "battery.cell-resistance",
+            // 供电诊断五行:值是「20V/3.25A/65W」「5/9/15/20V」这类长技术串,
+            // 半格放不下;两语登记保持一致,行序固定由视图决定。
+            "battery.adapter-port",
+            "battery.pd-contract",
+            "battery.pd-tiers",
+            "battery.adapter-transports",
+            "battery.input-telemetry"
         ],
         "en": [
             "cpu.uptime",
@@ -86,7 +93,12 @@ enum StaticMetricSizing {
             "battery.thermal-limit-seconds",
             "battery.time-at-high-soc",
             // 「Compressed」标签 78pt,GB 级两位小数值放不下
-            "memory.compressed"
+            "memory.compressed",
+            "battery.adapter-port",
+            "battery.pd-contract",
+            "battery.pd-tiers",
+            "battery.adapter-transports",
+            "battery.input-telemetry"
         ]
     ]
 
@@ -152,6 +164,10 @@ extension StaticMetricSizing {
         AuditEntry(kind: .gpu, name: "render", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .gpu, name: "tiler", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .gpu, name: "temperature", layout: .measured(WorstValue(number: "100", unit: "°C"))),
+        // 时钟态驻留是「档位 + 占比」的组合串,最宽形态 P15 100%;限频与功耗上限为百分比。
+        AuditEntry(kind: .gpu, name: "clock-state", layout: .measured(WorstValue(number: "P15 100%", unit: nil))),
+        AuditEntry(kind: .gpu, name: "throttle", layout: .measured(WorstValue(number: "100%", unit: nil))),
+        AuditEntry(kind: .gpu, name: "power-cap", layout: .measured(WorstValue(number: "100%", unit: nil))),
         // 内存(used/swap/compressed 为任意小数,契约覆盖 ≤128GB 常规内存;
         // total 为整 GiB;swap 用短标签(en「Swap」/zh「交换」)换得半行)
         AuditEntry(kind: .memory, name: "used", layout: .measured(WorstValue(number: "99.99 GB", unit: nil))),
@@ -184,12 +200,15 @@ extension StaticMetricSizing {
         AuditEntry(kind: .battery, name: "cycle-count", layout: .measured(WorstValue(number: "88888", unit: nil))),
         AuditEntry(kind: .battery, name: "cell-balance", layout: .measured(WorstValue(number: "Δ888 mV (极佳)", unit: nil))),
         AuditEntry(kind: .battery, name: "temperature", layout: .measured(WorstValue(number: "100", unit: "°C"))),
-        AuditEntry(kind: .battery, name: "power-loss", layout: .measured(WorstValue(number: "888.8", unit: "W"))),
-        // Apple Silicon 便携式设备的整机/GPU 按三位瓦数、内建屏按
-        // 两位瓦数上界登记；覆盖硬件范围并保持最窄半格可读。
+        // 转换损耗为固件实测的适配器损耗率(百分数),不再是减法算出的瓦数。
+        AuditEntry(kind: .battery, name: "power-loss", layout: .measured(WorstValue(number: "100", unit: "%"))),
+        // Apple Silicon 便携式设备的整机/CPU/GPU 按三位瓦数、内建屏与
+        // ANE 按两位瓦数上界登记；覆盖硬件范围并保持最窄半格可读。
         AuditEntry(kind: .battery, name: "power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "display-power", layout: .measured(WorstValue(number: "88.8", unit: "W"))),
+        AuditEntry(kind: .battery, name: "cpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "gpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
+        AuditEntry(kind: .battery, name: "ane-power", layout: .measured(WorstValue(number: "88.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "voltage", layout: .measured(WorstValue(number: "88.88", unit: "V"))),
         AuditEntry(kind: .battery, name: "current", layout: .measured(WorstValue(number: "8888", unit: "mA"))),
         AuditEntry(kind: .battery, name: "capacity", layout: .measured(WorstValue(number: "8888 / 8888 mAh", unit: nil))),
@@ -200,6 +219,13 @@ extension StaticMetricSizing {
         AuditEntry(kind: .battery, name: "status", layout: .specialForm),
         AuditEntry(kind: .battery, name: "adapter", layout: .specialForm),
         AuditEntry(kind: .battery, name: "charging-power", layout: .specialForm),
-        AuditEntry(kind: .battery, name: "type", layout: .specialForm)
+        AuditEntry(kind: .battery, name: "type", layout: .specialForm),
+        // 供电诊断五行（供电页固定行序渲染）。两语都按整行登记，故不做半格预算
+        // 断言；最坏值按 PD 3.1 上界与端口/通道的已知形态登记。
+        AuditEntry(kind: .battery, name: "adapter-port", layout: .measured(WorstValue(number: "MagSafe 3", unit: nil))),
+        AuditEntry(kind: .battery, name: "pd-contract", layout: .measured(WorstValue(number: "48V/5A/240W", unit: nil))),
+        AuditEntry(kind: .battery, name: "pd-tiers", layout: .measured(WorstValue(number: "5/9/15/20/28/36/48V", unit: nil))),
+        AuditEntry(kind: .battery, name: "adapter-transports", layout: .measured(WorstValue(number: "DP·USB3·USB2·CIO", unit: nil))),
+        AuditEntry(kind: .battery, name: "input-telemetry", layout: .measured(WorstValue(number: "48.00 V · 5.00 A", unit: nil)))
     ]
 }

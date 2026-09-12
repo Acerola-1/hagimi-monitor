@@ -48,6 +48,23 @@ struct HagimiMonitorTests {
         #expect(module.severity == .calm)
     }
 
+    @Test func unavailableBatteryModuleStaysCalmRegardlessOfCarriedValue() {
+        // 缺失帧的 value 仅用于曲线延续,不得参与阈值/电源状态判定:
+        // 低电量值(5 ≤ critical 阈值)也不得把缺失帧报成 critical。
+        let module = MonitorModule(
+            kind: .battery,
+            value: 5,
+            summary: "--",
+            metrics: [
+                MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.batteryUnavailable)
+            ],
+            samples: [],
+            isPlaceholder: true
+        )
+
+        #expect(module.severity == .calm)
+    }
+
     @Test func placeholderMetricNamesAreStableKeys() {
         let module = MonitorModule.placeholder(kind: .cpu)
 

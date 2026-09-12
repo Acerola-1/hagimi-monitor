@@ -47,6 +47,16 @@ struct MenuBarComputeRingIconCacheTests {
         #expect(a !== b)
     }
 
+    @Test("alert badge dimension is part of cache key")
+    func alertBadgeIsKeyed() {
+        let a = MenuBarComputeRingIcon.image(load: 30, darkMode: true, loadLevel: .idle, showsAlert: false)
+        let b = MenuBarComputeRingIcon.image(load: 30, darkMode: true, loadLevel: .idle, showsAlert: true)
+        #expect(a !== b)
+        // 同参数(含红点开关)仍命中同一实例,维持「同态同对象」的赋值去重前提。
+        let c = MenuBarComputeRingIcon.image(load: 30, darkMode: true, loadLevel: .idle, showsAlert: true)
+        #expect(b === c)
+    }
+
     @Test("Out-of-range loads are clamped to valid buckets")
     func clampingBehavior() {
         let negative = MenuBarComputeRingIcon.image(load: -10, darkMode: false, loadLevel: .idle)

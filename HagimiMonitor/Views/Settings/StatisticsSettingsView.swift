@@ -1,87 +1,656 @@
 import SwiftUI
 
-/// 设置侧栏「数据统计」:健康评分 + 范围总览卡 + 网页报表入口。
-/// 存储占用与清理见独立的「存储管理」页(StorageSettingsView)。
-/// 数据由 StatisticsRecorder 每分钟封口后发布,本视图只读展示。
+/// 设置侧栏「数据统计」:记录开关 + 可直读的统计摘要 + 使用打卡与存储入口。
+/// 摘要在本页内即可读完——范围 → 一句结论 → 几行指标 → 「查看完整统计」;
+/// 完整趋势、事件与模块明细仍由现有独立报表窗口承载,这里不复制第二套详情。
 struct StatisticsSettingsView: View {
     @ObservedObject var recorder: StatisticsRecorder
     @ObservedObject var settings: MonitorSettings
-    @Environment(\.colorScheme) private var colorScheme
-    @State private var selectedRange: StatisticsOverviewRange = .today
     /// 跳转存储管理页(入口收在本页底部,归属数据统计)。
     var openStorage: () -> Void = {}
 
-    private var row: StatisticsRow? {
-        recorder.rangeRows[selectedRange] ?? nil
+    /// 摘要数据源:正式运行跟随记录器发布;验证夹具模式下只读夹具。
+    @StateObject private var dataSource: StatisticsOverviewDataSource
+    @State private var range: StatisticsOverviewRange = StatisticsSettingsView.initialRange
+    /// 当前范围的时间序列:事件聚合与压力累计由它推导,换范围或新桶封口时重取。
+    @State private var series: [StatisticsRow] = []
+    /// 压力告警:本页是「查看」落点,在屏即视为已读(红点清除)。
+    @ObservedObject private var alerts = PressureAlertCenter.shared
+    /// 本页是否真的在屏(窗口可见且为活跃窗口)→ 新告警直接按已读处理。
+    @State private var isPageOnScreen = false
+
+    init(
+        recorder: StatisticsRecorder,
+        settings: MonitorSettings,
+        openStorage: @escaping () -> Void = {}
+    ) {
+        self.recorder = recorder
+        self.settings = settings
+        self.openStorage = openStorage
+        _dataSource = StateObject(wrappedValue: StatisticsOverviewDataSource.make(recorder: recorder))
+    }
+
+    /// 初始范围可由验证环境变量指定(HAGIMI_STATS_RANGE=week/month),
+    /// 便于三个范围逐项目测;正式运行始终从「今日」开始。
+    private static var initialRange: StatisticsOverviewRange {
+        switch ProcessInfo.processInfo.environment["HAGIMI_STATS_RANGE"] {
+        case "week": return .week
+        case "month": return .month
+        default: return .today
+        }
+    }
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var palette: MonitorPalette {
+        MonitorPalette(preference: settings.colorSchemePreference, colorScheme: colorScheme)
+    }
+
+    private var aggregate: StatisticsRow? { dataSource.range(range) }
+
+    private var events: [StatisticsOverviewModel.Event] {
+        StatisticsOverviewModel.events(from: series, bucketSeconds: bucketSeconds, now: dataSource.referenceNow)
+    }
+
+    /// 序列桶宽:从序列推断(判据见 StatisticsOverviewModel.bucketSeconds)。
+    private var bucketSeconds: TimeInterval {
+        StatisticsOverviewModel.bucketSeconds(for: range, series: series)
+    }
+
+    private var conclusion: StatisticsOverviewModel.Conclusion {
+        StatisticsOverviewModel.conclusion(row: aggregate, events: events)
     }
 
     var body: some View {
         SettingsPage {
-            header
-
-            SettingsGroup {
-                SettingsRow(
-                    title: String(localized: "stats.settings.toggle")
-                ) {
-                    Toggle("", isOn: $settings.statisticsEnabled)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                }
-            }
-
-            if settings.statisticsEnabled {
-                if hasAnyData {
-                    SettingsGroup(String(localized: "stats.settings.overview"),
-                                  titleAccessory: { reportEntryButton }) {
-                        rangePicker
-                        healthCard
-                        overviewGrid
-                    }
-                } else {
-                    SettingsGroup {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label(String(localized: "stats.settings.empty-title"), systemImage: "hourglass")
-                                .font(.body.weight(.medium))
-                            Text(String(localized: "stats.settings.empty-body"))
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 12)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-
-                // 无数据时总览组不显示,报表入口退回独立行兜底;有数据时入口已收进总览标题行。
-                if !hasAnyData {
-                    SettingsGroup {
-                        entryRow(
-                            icon: "safari",
-                            title: String(localized: "stats.settings.report-title"),
-                            subtitle: nil,
-                            action: { StatisticsReportFlow.open(recorder: recorder) }
-                        )
-                    }
-                }
-            }
+            recordToggleGroup
+            checkinSection
+            summaryGroup
 
             SettingsGroup {
                 entryRow(
                     icon: "internaldrive",
                     title: String(localized: "settings.sidebar.storage"),
-                    subtitle: nil,
                     action: openStorage
                 )
             }
         }
+        .task {
+            dataSource.start()
+            loadSeries()
+        }
+        .onChange(of: range) { _, _ in loadSeries() }
+        .onChange(of: aggregate?.t) { _, _ in loadSeries() }
+        .background {
+            SettingsPageOnScreenReader { isPageOnScreen = $0 }
+        }
+        // 查看即清:页面成为在屏内容时清全部入口的红点;页面持续在屏期间
+        // 新到的告警也直接按已读处理——用户正看着这块内容,不必再点一次。
+        .onChange(of: isPageOnScreen) { _, onScreen in
+            if onScreen { alerts.markAllRead() }
+        }
+        .onChange(of: alerts.statisticsEntryUnread) { _, unread in
+            if unread, isPageOnScreen { alerts.markAllRead() }
+        }
     }
 
-    // MARK: - 头部(默认折叠的使用打卡)
+    private func loadSeries() {
+        dataSource.series(range) { rows in
+            series = rows
+        }
+    }
+
+    private var recordToggleGroup: some View {
+        SettingsGroup {
+            SettingsRow(title: String(localized: "stats.settings.toggle")) {
+                Toggle("", isOn: $settings.statisticsEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+            }
+        }
+    }
+
+    // MARK: - 统计摘要
+
+    private var summaryGroup: some View {
+        SettingsGroup {
+            VStack(alignment: .leading, spacing: 0) {
+                if settings.statisticsEnabled {
+                    rangePicker
+                }
+                statusSection
+                if showsSummaryBody {
+                    metricsSection
+                    SettingsDivider()
+                    reportEntryRow
+                }
+            }
+            // 只有状态行时(尚无记录/记录已关闭)内容不撑满,卡片会缩成一小块;
+            // 固定占满分组宽度,与其余分组对齐。
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    /// 有可用记录才展开指标与入口;「尚无记录」「记录已关闭」只留状态行。
+    private var showsSummaryBody: Bool {
+        guard settings.statisticsEnabled else { return false }
+        if case .noObservation = conclusion { return false }
+        return true
+    }
+
+    /// 时间范围一行,「通知 + 开关」靠本栏右缘。
+    ///
+    /// 中间用 Spacer 顶开而不是紧挨着 Picker:两者不是同一组信息(一个是看的范围,
+    /// 一个是打扰开关),贴在一起会被读成「时间范围的一部分」。
+    private var rangePicker: some View {
+        HStack(spacing: 12) {
+            Picker(String(localized: "overview.range.label"), selection: $range) {
+                Text(String(localized: "stats.settings.range.today")).tag(StatisticsOverviewRange.today)
+                Text(String(localized: "stats.settings.range.week")).tag(StatisticsOverviewRange.week)
+                Text(String(localized: "stats.settings.range.month")).tag(StatisticsOverviewRange.month)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Spacer(minLength: 16)
+
+            Toggle(String(localized: "stats.settings.notifications"),
+                   isOn: $settings.alertNotificationsEnabled)
+                .toggleStyle(.switch)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 14)
+        .padding(.bottom, 2)
+    }
+
+    // MARK: 状态区(一行结论,必要时附档位与限定)
+
+    /// 状态块单独铺一层浅底,与下方指标行拉开界限:结论是「发生了什么」,
+    /// 指标行是「这段时间的整体用量」,两者不是同一种信息。
+    /// 真实异常(持续中的压力)用告警色浅底,其余状态用中性底,不滥用颜色。
+    private var statusSection: some View {
+        statusContent
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(statusFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, 8)
+            .padding(.top, settings.statisticsEnabled ? 10 : 8)
+            .padding(.bottom, 8)
+    }
+
+    @ViewBuilder
+    private var statusContent: some View {
+        if !settings.statisticsEnabled {
+            statusLine(
+                icon: "pause.circle",
+                tint: Color.secondary,
+                headline: String(localized: "stats.summary.off")
+            )
+        } else {
+            switch conclusion {
+            case .noObservation:
+                statusLine(
+                    icon: "tray",
+                    tint: Color.secondary,
+                    headline: String(localized: "stats.summary.noRecord")
+                )
+            case .insufficient(let recorded):
+                statusLine(
+                    icon: "hourglass",
+                    tint: Color.secondary,
+                    headline: String(localized: "overview.conclusion.insufficient"),
+                    qualifier: String(localized: "overview.conclusion.recorded \(StatisticsDisplayFormat.duration(recorded))")
+                )
+            case .quiet:
+                statusLine(
+                    icon: "checkmark.circle.fill",
+                    tint: palette.severityTint(for: .calm),
+                    headline: String(localized: "overview.conclusion.quiet")
+                )
+            case .events:
+                if let leading = pressureKinds.first {
+                    eventStatusLine(leading, kinds: pressureKinds)
+                }
+            }
+        }
+    }
+
+    private var pressureKinds: [StatisticsOverviewModel.PressureKind] {
+        StatisticsOverviewModel.pressureKinds(row: aggregate, events: events)
+    }
+
+    /// 状态块底色:平稳用中性偏绿;压力进行中用档位浅底;已过去的压力用中性底
+    /// (绿勾已经在说「现在不在了」,不必再铺一层告警色)。浅底只负责把结论块
+    /// 与下方指标行分开,不喧宾夺主。
+    private var statusFill: Color {
+        guard settings.statisticsEnabled else { return Color.primary.opacity(0.045) }
+        switch conclusion {
+        case .quiet:
+            return palette.severityTint(for: .calm).opacity(0.10)
+        case .events:
+            guard let leading = pressureKinds.first, leading.state == .ongoing else {
+                return Color.primary.opacity(0.045)
+            }
+            return pressureTint(leading).opacity(0.08)
+        default:
+            return Color.primary.opacity(0.045)
+        }
+    }
+
+    private func statusLine(
+        icon: String,
+        tint: Color,
+        headline: String,
+        qualifier: String? = nil
+    ) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(headline)
+                    .font(.body.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if let qualifier {
+                    Text(qualifier)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    /// 异常状态:标题一句总括,具体压力逐条分行列出。
+    /// 状态用行首图标表达——进行中是告警三角、已恢复是勾、观测中断是问号,
+    /// 标题在已恢复时用「出现过」的措辞,让「这件事已经过去」一眼可见;
+    /// 同类较低档位的时长并进«累计»后的括号,不做灰色小字另起一行。
+    private func eventStatusLine(
+        _ leading: StatisticsOverviewModel.PressureKind,
+        kinds: [StatisticsOverviewModel.PressureKind]
+    ) -> some View {
+        let tint = pressureTint(leading)
+        let headline: String
+        if kinds.count == 1 {
+            headline = leading.state == .recovered
+                ? String(localized: "stats.summary.pressureDuringPast \(eventKindText(leading.kind))")
+                : String(localized: "stats.summary.pressureDuring \(eventKindText(leading.kind))")
+        } else {
+            headline = String(localized: "stats.summary.multipleKinds \(kinds.count)")
+        }
+
+        return HStack(alignment: .top, spacing: 10) {
+            Image(systemName: stateSymbol(leading.state))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(stateTint(leading))
+                .frame(width: 16)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 12) {
+                    Text(headline)
+                        .font(.body.weight(.semibold))
+                        // 进行中才用告警色;已过去的事实保持正文颜色,不淡化也不喊。
+                        .foregroundStyle(leading.state == .ongoing ? tint : Color.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer(minLength: 12)
+
+                    Button {
+                        // 是谁的压力就落到谁的板块:内存压力→内存构成,热压力→热压力与温度。
+                        StatisticsReportFlow.open(
+                            recorder: recorder,
+                            anchor: leading.kind == .memory ? .memory : .thermal
+                        )
+                    } label: {
+                        Text(String(localized: "overview.events.view"))
+                    }
+                    .buttonStyle(.link)
+                    .font(.body)
+                }
+
+                // 逐条列出:多类时每条带维度名与状态图标,单类时维度名已在标题里,不重复。
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(kinds.enumerated()), id: \.offset) { _, kind in
+                        pressureKindRow(
+                            kind,
+                            showsKindName: kinds.count > 1,
+                            showsStateIcon: kinds.count > 1
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    /// 单条压力:多条并列时行首带状态图标(单条时标题图标已表状态,不重复),
+    /// 正文是「档位 · 累计(含较低档位)」,保持正文颜色。
+    private func pressureKindRow(
+        _ kind: StatisticsOverviewModel.PressureKind,
+        showsKindName: Bool,
+        showsStateIcon: Bool
+    ) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            if showsStateIcon {
+                Image(systemName: stateSymbol(kind.state))
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(stateTint(kind))
+                    .frame(width: 16)
+            }
+
+            pressureFactsText(kind, showsKindName: showsKindName)
+                .font(.body)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 单条压力的事实文本:维度名与剩余事实用正文色,档位名按等级着色
+    /// (警告/轻微=琥珀,严重/临界=红),一眼能看出这条压力的分量。
+    private func pressureFactsText(
+        _ kind: StatisticsOverviewModel.PressureKind,
+        showsKindName: Bool
+    ) -> Text {
+        var segments: [Text] = []
+        if let worst = kind.worstLevel, let levelName = levelText(kind.kind, worst.level) {
+            let tint = levelTint(kind.kind, worst.level)
+            if showsKindName {
+                segments.append(
+                    Text(String(localized: "stats.summary.kindWithLevel \(eventKindText(kind.kind)) \(levelName)"))
+                        .foregroundStyle(tint)
+                )
+            } else {
+                segments.append(Text(levelName).foregroundStyle(tint))
+            }
+        } else if showsKindName {
+            segments.append(Text(eventKindText(kind.kind)))
+        }
+
+        // 括号短语直接跟在「累计 X 分钟」后面,不再多一个分隔符。
+        var accumulated = Text(String(localized: "stats.summary.accumulated \(StatisticsDisplayFormat.duration(kind.seconds))"))
+        if let includes = lowerLevelsText(kind) {
+            accumulated = accumulated + includes
+        }
+        segments.append(accumulated)
+
+        // 观测中断会改变「现在到底怎样」的判断,这一条限定仍用文字写明。
+        if kind.state == .interrupted {
+            segments.append(Text(eventStateText(kind.state)))
+        }
+        return segments.dropFirst().reduce(segments[0]) { $0 + Text(" · ") + $1 }
+    }
+
+    /// 状态图标:进行中是告警三角,已恢复是勾,观测中断是问号。
+    private func stateSymbol(_ state: StatisticsOverviewModel.Event.State) -> String {
+        switch state {
+        case .ongoing: "exclamationmark.triangle.fill"
+        case .recovered: "checkmark.circle.fill"
+        case .interrupted: "questionmark.circle"
+        }
+    }
+
+    /// 状态配色:已恢复用平静色示意「现在不在了」,中断中性,进行中随档位。
+    private func stateTint(_ kind: StatisticsOverviewModel.PressureKind) -> Color {
+        switch kind.state {
+        case .ongoing: pressureTint(kind)
+        case .recovered: palette.severityTint(for: .calm)
+        case .interrupted: Color.secondary
+        }
+    }
+
+    /// 同类较低档位的组成,如「（含警告 10 分钟）」;档位名同样按等级着色。
+    /// 只有一个档位时返回 nil,不做重复陈述。
+    private func lowerLevelsText(_ kind: StatisticsOverviewModel.PressureKind) -> Text? {
+        let items = kind.levels.dropFirst().compactMap { item -> Text? in
+            guard let levelName = levelText(kind.kind, item.level) else { return nil }
+            let duration = Text(StatisticsDisplayFormat.duration(item.seconds))
+            return Text(levelName).foregroundStyle(levelTint(kind.kind, item.level)) + Text(" ") + duration
+        }
+        guard !items.isEmpty else { return nil }
+        let joined = items.dropFirst().reduce(items[0]) { $0 + Text(" · ") + $1 }
+        return Text(String(localized: "stats.summary.levelIncludesOpen")) + joined + Text(String(localized: "stats.summary.levelIncludesClose"))
+    }
+
+    /// 压力配色按达到的最高档位定;已恢复不等于没事发生——
+    /// 压在范围内的存在感不因状态回退而变浅。
+    private func pressureTint(_ kind: StatisticsOverviewModel.PressureKind) -> Color {
+        levelTint(kind.kind, kind.worstLevel?.level ?? 0)
+    }
+
+    /// 档位配色:警告/轻微用琥珀,严重/临界用红色。
+    private func levelTint(_ kind: StatisticsOverviewModel.Event.Kind, _ level: Int) -> Color {
+        let isCritical: Bool
+        switch (kind, level) {
+        case (.memory, 2), (.thermal, 2), (.thermal, 3):
+            isCritical = true
+        default:
+            isCritical = false
+        }
+        return palette.severityTint(for: isCritical ? .critical : .warning)
+    }
+
+    /// 原生档位文案:内存 1=警告 2=严重;热状态 1=轻微 2=严重 3=临界。
+    private func levelText(_ kind: StatisticsOverviewModel.Event.Kind, _ level: Int) -> String? {
+        switch (kind, level) {
+        case (.memory, 2): String(localized: "memory-pressure.critical")
+        case (.memory, 1): String(localized: "memory-pressure.warning")
+        case (.thermal, 3): String(localized: "thermal-pressure.critical")
+        case (.thermal, 2): String(localized: "thermal-pressure.serious")
+        case (.thermal, 1): String(localized: "thermal-pressure.fair")
+        default: nil
+        }
+    }
+
+    // MARK: 指标行
+
+    private struct SummaryMetric: Identifiable {
+        let id: String
+        let label: String
+        /// 行首图标:沿用 MonitorKind.symbol 语义映射与 MonitorPalette 模块色,
+        /// 与设置侧栏/面板同一套语义,作纯文字行间的扫读锚点。
+        let icon: String
+        let tint: Color
+        /// 数值文本(主值加粗等宽、限定词次要小字的组合文本);nil = 暂无数据。
+        let value: Text?
+    }
+
+    private var metricsSection: some View {
+        VStack(spacing: 0) {
+            metricGroup(caption: String(localized: "stats.group.usage"), metrics: usageMetrics)
+            SettingsDivider()
+                .padding(.leading, 34)
+            metricGroup(caption: String(localized: "stats.group.transfer"), metrics: transferMetrics)
+        }
+        .padding(.top, 2)
+        .padding(.bottom, 4)
+    }
+
+    /// 一组指标:组标题(次要小字)+ 逐行。分组把「机器用了多少」与「进出多少数据」
+    /// 在视觉上分开,不必逐字读完所有行。
+    private func metricGroup(caption: String, metrics: [SummaryMetric]) -> some View {
+        VStack(spacing: 0) {
+            Text(caption)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
+            ForEach(metrics) { metric in
+                metricRow(metric)
+            }
+        }
+    }
+
+    /// 「用量」组:CPU / GPU 平均使用率(附高负载累计)、内存占用、功耗。
+    /// 内存压力不再单列——状态块已按档位与累计时长承载同一信息,重复列一遍只会
+    /// 互相打架;峰值、压缩、Swap 与评分明细仍留给报表。
+    private var usageMetrics: [SummaryMetric] {
+        let row = aggregate
+        return [
+            SummaryMetric(
+                id: "cpu",
+                label: String(localized: "stats.metrics.cpu"),
+                icon: MonitorKind.cpu.symbol,
+                tint: palette.moduleTint(for: .cpu),
+                value: usageValue(average: row?.cpuAvg, highSeconds: row?.cpuHighS)
+            ),
+            SummaryMetric(
+                id: "gpu",
+                label: String(localized: "stats.metrics.gpu"),
+                icon: MonitorKind.gpu.symbol,
+                tint: palette.moduleTint(for: .gpu),
+                value: usageValue(average: row?.gpuAvg, highSeconds: row?.gpuHighS)
+            ),
+            SummaryMetric(
+                id: "memoryUsage",
+                label: String(localized: "stats.metrics.memoryUsage"),
+                icon: MonitorKind.memory.symbol,
+                tint: palette.moduleTint(for: .memory),
+                value: row?.memPctAvg.map { averageText(StatisticsDisplayFormat.percent($0)) }
+            ),
+            SummaryMetric(
+                id: "power",
+                label: String(localized: "stats.metrics.power"),
+                icon: MonitorKind.battery.symbol,
+                tint: palette.moduleTint(for: .battery),
+                value: row?.powerAvg.map { averageText(String(format: "%.1f W", $0)) }
+            ),
+        ]
+    }
+
+    /// 「传输」组:网络收发与磁盘读写的范围累计量。
+    private var transferMetrics: [SummaryMetric] {
+        let row = aggregate
+        return [
+            SummaryMetric(
+                id: "network",
+                label: String(localized: "overview.resources.network"),
+                icon: MonitorKind.network.symbol,
+                tint: palette.moduleTint(for: .network),
+                value: networkValue(row)
+            ),
+            SummaryMetric(
+                id: "disk",
+                label: String(localized: "stats.metrics.disk"),
+                icon: MonitorKind.storage.symbol,
+                tint: palette.moduleTint(for: .storage),
+                value: diskValue(row)
+            ),
+        ]
+    }
+
+    /// 主值:加粗等宽数字,行内的扫读落点。
+    private func mainValueText(_ value: String) -> Text {
+        Text(value).font(.body.weight(.semibold)).monospacedDigit()
+    }
+
+    /// 限定词(平均/高负载/读/写/方向符):次要色小字,需要细读时才进入视野。
+    private func qualifierText(_ text: String) -> Text {
+        Text(text).font(.callout).foregroundStyle(.secondary)
+    }
+
+    /// 「平均 X」:限定词前缀 + 主值。
+    private func averageText(_ value: String) -> Text {
+        qualifierText(String(localized: "stats.metrics.word.average") + " ") + mainValueText(value)
+    }
+
+    /// CPU/GPU 行:平均使用率为主值,有过高负载时以限定词补累计时长(没有就不写,不堆零值)。
+    private func usageValue(average: Double?, highSeconds: Double?) -> Text? {
+        var parts: [Text] = []
+        if let average {
+            parts.append(averageText(StatisticsDisplayFormat.percent(average)))
+        }
+        if let highSeconds, highSeconds > 0 {
+            parts.append(qualifierText(String(localized: "stats.metrics.word.highLoad") + " " + StatisticsDisplayFormat.duration(highSeconds)))
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.dropFirst().reduce(parts[0]) { $0 + qualifierText(" · ") + $1 }
+    }
+
+    private func networkValue(_ row: StatisticsRow?) -> Text? {
+        guard let row, row.netDown != nil || row.netUp != nil else { return nil }
+        let down = StatisticsDisplayFormat.bytes(row.netDown ?? 0)
+        let up = StatisticsDisplayFormat.bytes(row.netUp ?? 0)
+        return qualifierText("↓ ") + mainValueText(down) + qualifierText("  ↑ ") + mainValueText(up)
+    }
+
+    private func diskValue(_ row: StatisticsRow?) -> Text? {
+        guard let row, row.diskRead != nil || row.diskWrite != nil else { return nil }
+        let read = StatisticsDisplayFormat.bytes(row.diskRead ?? 0)
+        let write = StatisticsDisplayFormat.bytes(row.diskWrite ?? 0)
+        return qualifierText(String(localized: "stats.metrics.word.read") + " ") + mainValueText(read)
+            + qualifierText("  " + String(localized: "stats.metrics.word.write") + " ") + mainValueText(write)
+    }
+
+    private func metricRow(_ metric: SummaryMetric) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: metric.icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(metric.tint)
+                .frame(width: 24, height: 24)
+                .background(metric.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
+            Text(metric.label)
+                .font(.body)
+
+            Spacer(minLength: 16)
+
+            if let value = metric.value {
+                value
+            } else {
+                Text(String(localized: "overview.resources.noData"))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 6)
+    }
+
+    private var reportEntryRow: some View {
+        Button {
+            StatisticsReportFlow.open(recorder: recorder)
+        } label: {
+            HStack(spacing: 8) {
+                Text(String(localized: "stats.settings.open-report"))
+                    .font(.body)
+
+                Spacer(minLength: 16)
+
+                Image(systemName: "arrow.up.forward")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 11)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func eventKindText(_ kind: StatisticsOverviewModel.Event.Kind) -> String {
+        switch kind {
+        case .memory: String(localized: "overview.event.kind.memory")
+        case .thermal: String(localized: "overview.event.kind.thermal")
+        }
+    }
+
+    private func eventStateText(_ state: StatisticsOverviewModel.Event.State) -> String {
+        switch state {
+        case .ongoing: String(localized: "overview.event.state.ongoing")
+        case .recovered: String(localized: "overview.event.state.recovered")
+        case .interrupted: String(localized: "overview.event.state.interrupted")
+        }
+    }
+
+    // MARK: - 使用打卡(默认折叠)
 
     @State private var showCheckin = false
     @State private var dayCoverage: [Int64: Double] = [:]
 
-    private var header: some View {
+    private var checkinSection: some View {
         VStack(spacing: 0) {
             Button {
                 withAnimation(.easeOut(duration: 0.2)) { showCheckin.toggle() }
@@ -233,27 +802,9 @@ struct StatisticsSettingsView: View {
         return date.formatted(.dateTime.year().month().day())
     }
 
-    private var hasAnyData: Bool {
-        StatisticsOverviewRange.allCases.contains { range in
-            (recorder.rangeRows[range] ?? nil) != nil
-        }
-    }
-
-    /// 总览标题行右侧的报表快捷入口:与总览内容同属一屏,不必滚动到底部找入口。
-    private var reportEntryButton: some View {
-        Button {
-            StatisticsReportFlow.open(recorder: recorder)
-        } label: {
-            Label(String(localized: "stats.settings.report-details"), systemImage: "safari")
-                .font(.caption.weight(.medium))
-        }
-        .buttonStyle(.bordered)
-        .controlSize(.small)
-    }
-
-    /// 报表与存储管理入口共用的导航行:图标+标题(+可选副标题)+右箭头,视觉统一。
+    /// 功能入口行:图标 + 标题 + 右箭头,视觉统一。
     @ViewBuilder
-    private func entryRow(icon: String, title: String, subtitle: String?, action: @escaping () -> Void) -> some View {
+    private func entryRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 Image(systemName: icon)
@@ -261,16 +812,9 @@ struct StatisticsSettingsView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 24)
 
-                VStack(alignment: .leading, spacing: subtitle == nil ? 0 : 2) {
-                    Text(title)
-                        .font(.body.weight(.medium))
-                        .foregroundStyle(.primary)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+                Text(title)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
 
                 Spacer(minLength: 16)
 
@@ -284,323 +828,6 @@ struct StatisticsSettingsView: View {
         }
         .buttonStyle(.plain)
     }
-
-    // MARK: - 范围切换
-
-    private var rangePicker: some View {
-        HStack {
-            Spacer(minLength: 0)
-            Picker(String(localized: "stats.settings.overview"), selection: $selectedRange) {
-                Text(String(localized: "stats.settings.range.today")).tag(StatisticsOverviewRange.today)
-                Text(String(localized: "stats.settings.range.week")).tag(StatisticsOverviewRange.week)
-                Text(String(localized: "stats.settings.range.month")).tag(StatisticsOverviewRange.month)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 260)
-            .labelsHidden()
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 12)
-    }
-
-    // MARK: - 健康评分
-
-    private var healthScore: StatisticsHealthScore.Result? {
-        guard let row else { return nil }
-        return StatisticsHealthScore.evaluate(rows: [row])
-    }
-
-    @ViewBuilder
-    private var healthCard: some View {
-        if let health = healthScore {
-            HStack(spacing: 18) {
-                scoreRing(health)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
-                                        GridItem(.flexible(), alignment: .leading)],
-                              alignment: .leading, spacing: 6) {
-                        ForEach(health.dimensions) { dimension in
-                            dimensionBadge(dimension)
-                        }
-                    }
-
-                    if health.thermalCapped {
-                        Label(String(localized: "stats.r.healthCapped"), systemImage: "flame")
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(.orange)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 12)
-        }
-    }
-
-    private func scoreRing(_ health: StatisticsHealthScore.Result) -> some View {
-        let tint = levelColor(health.level)
-        let fraction = min(health.score / 100, 1)
-        return ZStack {
-            Circle()
-                .stroke(Color.secondary.opacity(0.15), lineWidth: 8)
-
-            Circle()
-                .trim(from: 0, to: fraction)
-                .stroke(
-                    AngularGradient(
-                        colors: [tint.opacity(0.72), tint],
-                        center: .center,
-                        startAngle: .degrees(0),
-                        endAngle: .degrees(360 * fraction)
-                    ),
-                    style: StrokeStyle(lineWidth: 8, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-
-            VStack(spacing: 1) {
-                Text("\(Int(health.score.rounded()))")
-                    .font(.system(size: 23, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(tint)
-                Text(health.level.title)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(tint.opacity(0.9))
-            }
-        }
-        .frame(width: 76, height: 76)
-    }
-
-    /// 维度迷你卡:与总览 tile 同语言的圆角色块。名称独占一行、应力值右对齐在
-    /// 进度条行尾,名称不与数值抢宽,两词以上的维度名(如 CPU saturation)任何语言都单行。
-    private func dimensionBadge(_ dimension: StatisticsHealthScore.Dimension) -> some View {
-        let tint = levelColor(dimension.level)
-        return VStack(alignment: .leading, spacing: 5) {
-            Text(dimension.name)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-
-            HStack(spacing: 6) {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(tint.opacity(0.15))
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .fill(tint)
-                            .frame(width: geo.size.width * dimension.stressShare)
-                    }
-                }
-                .frame(height: 4)
-
-                Text(dimension.rawText)
-                    .font(.caption2.weight(.semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(tint)
-            }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(tint.opacity(0.20), lineWidth: 0.5)
-        )
-    }
-
-    private func levelColor(_ level: StatisticsHealthScore.Level) -> Color {
-        let dark = colorScheme == .dark
-        switch level {
-        case .excellent: return Color(hex: dark ? 0x34C759 : 0x2EAE68)
-        case .good: return Color(hex: dark ? 0x64D2FF : 0x2BAEE0)
-        case .fair: return Color(hex: dark ? 0xFFD60A : 0xE3B23C)
-        case .poor: return Color(hex: dark ? 0xFF9F0A : 0xE89042)
-        case .critical: return Color(hex: dark ? 0xFF6961 : 0xDF5252)
-        }
-    }
-
-    // MARK: - 总览格
-
-    /// 总览卡模块配色:与网页报表同套模块主色,双主题各一档。
-    private enum ModuleTint {
-        static func cpu(_ dark: Bool) -> Color { Color(hex: dark ? 0xF97316 : 0xEA580C) }
-        static func gpu(_ dark: Bool) -> Color { Color(hex: dark ? 0xA855F7 : 0x9333EA) }
-        static func memory(_ dark: Bool) -> Color { Color(hex: dark ? 0x38BDF8 : 0x0284C7) }
-        static func network(_ dark: Bool) -> Color { Color(hex: dark ? 0x2DD4BF : 0x0D9488) }
-        static func disk(_ dark: Bool) -> Color { Color(hex: dark ? 0xD9A94A : 0xB45309) }
-        static func power(_ dark: Bool) -> Color { Color(hex: dark ? 0x34D399 : 0x059669) }
-    }
-
-    private struct MetricLine {
-        let label: String
-        let systemImage: String?
-        let value: String
-    }
-
-    private struct TileSpec {
-        let title: String
-        let icon: String
-        let tint: Color
-        let lines: [MetricLine]
-    }
-
-    private var tiles: [TileSpec] {
-        let row = row
-        let dark = colorScheme == .dark
-        func line(_ label: String, icon: String? = nil, _ value: String) -> MetricLine {
-            MetricLine(label: label, systemImage: icon, value: value)
-        }
-        func pct(_ v: Double?) -> String { v == nil ? "—" : String(format: "%.1f%%", v!) }
-        return [
-            TileSpec(title: String(localized: "stats.settings.k-cpu"), icon: "cpu", tint: ModuleTint.cpu(dark), lines: [
-                line(String(localized: "stats.settings.avg"), pct(row?.cpuAvg)),
-                line(String(localized: "stats.settings.peak-label"), pct(row?.cpuMax)),
-            ]),
-            TileSpec(title: String(localized: "stats.settings.k-gpu"), icon: "display", tint: ModuleTint.gpu(dark), lines: [
-                line(String(localized: "stats.settings.avg"), pct(row?.gpuAvg)),
-                line(String(localized: "stats.settings.peak-label"), pct(row?.gpuMax)),
-            ]),
-            TileSpec(title: String(localized: "stats.settings.k-mem"), icon: "memorychip", tint: ModuleTint.memory(dark), lines: [
-                line(String(localized: "stats.settings.avg"), pct(row?.memPctAvg)),
-                line(String(localized: "stats.settings.peak-label"), pct(row?.memPctMax)),
-            ]),
-            // 网络值带单位最长,只留箭头图标省宽度,保证单行不换行
-            TileSpec(title: String(localized: "stats.settings.k-net"), icon: "network", tint: ModuleTint.network(dark), lines: [
-                line("", icon: "arrow.down", bytes(row?.netDown)),
-                line("", icon: "arrow.up", bytes(row?.netUp)),
-            ]),
-            TileSpec(title: String(localized: "stats.settings.k-disk"), icon: "internaldrive", tint: ModuleTint.disk(dark), lines: [
-                line(String(localized: "stats.settings.read"), bytes(row?.diskRead)),
-                line(String(localized: "stats.settings.write"), bytes(row?.diskWrite)),
-            ]),
-            // 桌面机型无电池,插电占比恒为常量无信息量;只保留整机平均功耗,
-            // 标题用「系统负载」避免「功率/充电功率」歧义。
-            TileSpec(title: String(localized: "stats.settings.k-load"), icon: "bolt", tint: ModuleTint.power(dark), lines: [
-                line(String(localized: "stats.settings.avg"), watts(row?.powerAvg)),
-            ]),
-        ]
-    }
-
-    private var overviewGrid: some View {
-        VStack(spacing: 10) {
-            ForEach(0..<(tiles.count / 3), id: \.self) { rowIndex in
-                HStack(spacing: 10) {
-                    ForEach(0..<3, id: \.self) { column in
-                        tile(tiles[rowIndex * 3 + column])
-                    }
-                }
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 4)
-        .padding(.bottom, 14)
-    }
-
-    private func tile(_ spec: TileSpec) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 7) {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(spec.tint.opacity(0.16))
-                    .frame(width: 22, height: 22)
-                    .overlay(
-                        Image(systemName: spec.icon)
-                            .font(.system(size: 11.5, weight: .semibold))
-                            .foregroundStyle(spec.tint)
-                    )
-
-                Text(spec.title)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
-
-            // 标签与数值同行放不下时整卡降级为「标签在上、数值在下」的堆叠形态;
-            // 降级以整卡为单位、卡内不混排两种形态,数值自身永不拆行(单位不掉行)。
-            ViewThatFits(in: .horizontal) {
-                tileLines(spec.lines, stacked: false)
-                tileLines(spec.lines, stacked: true)
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 11)
-        // 撑满行高:单行内容的格子(如系统负载)与多行格子同高同外观,顶对齐
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(spec.tint.opacity(colorScheme == .dark ? 0.10 : 0.09))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(spec.tint.opacity(0.20), lineWidth: 0.5)
-        )
-    }
-
-    /// 指标行组:紧凑形态标签左、数值紧随其后;堆叠形态标签独占一行、图标与数值成行
-    /// (箭头这类方向符号在语义上属于数值)。
-    private func tileLines(_ lines: [MetricLine], stacked: Bool) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(Array(lines.enumerated()), id: \.offset) { _, metric in
-                if stacked {
-                    VStack(alignment: .leading, spacing: 2) {
-                        if !metric.label.isEmpty {
-                            Text(metric.label)
-                                .font(.caption2)
-                                .foregroundStyle(.tertiary)
-                                .lineLimit(1)
-                        }
-                        HStack(spacing: 2) {
-                            if let systemImage = metric.systemImage {
-                                Image(systemName: systemImage)
-                                    .font(.system(size: 8.5, weight: .semibold))
-                            }
-                            Text(metric.value)
-                                .font(.callout.weight(.medium))
-                                .monospacedDigit()
-                                .foregroundStyle(.primary)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.75)
-                        }
-                    }
-                } else {
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        HStack(spacing: 2) {
-                            if let systemImage = metric.systemImage {
-                                Image(systemName: systemImage)
-                                    .font(.system(size: 8.5, weight: .semibold))
-                            }
-                            if !metric.label.isEmpty {
-                                Text(metric.label)
-                                    .font(.caption2)
-                                    .foregroundStyle(.tertiary)
-                                    .lineLimit(1)
-                            }
-                        }
-                        Text(metric.value)
-                            .font(.callout.weight(.medium))
-                            .monospacedDigit()
-                            .foregroundStyle(.primary)
-                            .lineLimit(1)
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - 格式化
-
-    private func bytes(_ value: Double?) -> String {
-        guard let value, value > 0 else { return "0 B" }
-        return ByteCountFormatter.string(fromByteCount: Int64(value), countStyle: .file)
-    }
-
-    private func watts(_ value: Double?) -> String {
-        guard let value else { return "—" }
-        return String(format: "%.1f W", value)
-    }
 }
 
 /// 打卡卡展开按钮的专属样式:按下时标签外观完全静止。
@@ -609,5 +836,79 @@ struct StatisticsSettingsView: View {
 private struct StaticPressButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
+    }
+}
+
+/// 统计页「在屏」跟踪:窗口可见、未最小化且是活跃窗口时才算用户真的在看。
+/// 之所以需要它:关闭设置窗口只是 orderOut,SwiftUI 收不到 onDisappear,
+/// 单靠 onAppear 分不出「正在看」与「窗口被关掉/切走」,红点会在不该亮时
+/// 亮、该清时清不掉。状态以异步方式回传,避免在视图挂载/更新过程中改状态。
+private struct SettingsPageOnScreenReader: NSViewRepresentable {
+    let onChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> OnScreenObservingView {
+        OnScreenObservingView { visible in
+            DispatchQueue.main.async { onChange(visible) }
+        }
+    }
+
+    func updateNSView(_ nsView: OnScreenObservingView, context: Context) {
+        nsView.onChange = { visible in
+            DispatchQueue.main.async { onChange(visible) }
+        }
+    }
+}
+
+private final class OnScreenObservingView: NSView {
+    var onChange: ((Bool) -> Void)?
+    private var observers: [NSObjectProtocol] = []
+
+    init(onChange: @escaping (Bool) -> Void) {
+        self.onChange = onChange
+        super.init(frame: .zero)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        observers.forEach(NotificationCenter.default.removeObserver)
+    }
+
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        observers.forEach(NotificationCenter.default.removeObserver)
+        observers = []
+
+        // 未挂到窗口时不订阅通知:report() 会把「不在屏」直接回传。
+        guard window != nil else {
+            report()
+            return
+        }
+        let names: [Notification.Name] = [
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didResignKeyNotification,
+            NSWindow.didMiniaturizeNotification,
+            NSWindow.didDeminiaturizeNotification,
+            NSWindow.willCloseNotification,
+            NSApplication.didBecomeActiveNotification,
+            NSApplication.didResignActiveNotification,
+        ]
+        observers = names.map { name in
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                self?.report()
+            }
+        }
+        report()
+    }
+
+    private func report() {
+        guard let window else {
+            onChange?(false)
+            return
+        }
+        onChange?(window.isVisible && !window.isMiniaturized && window.isKeyWindow)
     }
 }

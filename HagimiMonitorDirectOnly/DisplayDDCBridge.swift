@@ -21,23 +21,54 @@ final class DisplayDDCBridge: @unchecked Sendable {
     /// 每个控制"生效"过的 VCP 码缓存。检测阶段一旦确定,运行期只用该码读写,
     /// 保持总线请求有界。
     private var controlCodes: [ControlKey: DDCVCPCode] = [:]
+    /// 三张表的访问锁。刷新(worker 队列)与运行期读取(主线程 serviceHandle、
+    /// engine 的并发 transport 读写)跨上下文,字典必须串行化。锁只覆盖字典
+    /// 查找/赋值,DDC I/O 一律在锁外执行——持锁等待 2s 看门狗会阻塞其他访问。
+    /// 它保证单次字典操作与「服务表替换 + 派生表裁剪」的原子性,不保证跨多次
+    /// 刷新的时序;跨表不变量见 `refresh`。
+    private let lock = NSLock()
     private let capabilities = DDCCapabilityStore()
     private let gate = DDCEnvironmentGate.shared
 
+    /// 取显示器对应的 DDC 服务(值拷贝,持锁期间完成查找,I/O 由调用方在锁外执行)。
+    private func ddcService(for displayID: CGDirectDisplayID) -> DDCService? {
+        lock.lock(); defer { lock.unlock() }
+        return servicesByDisplayID[displayID]
+    }
+
+    /// 重建服务表,并让两张派生表与之保持一致。
+    ///
+    /// 不变量:`maxValues`/`controlCodes` 的键只属于服务表中在线服务的显示器。
+    /// 系统会把已下线显示器的 displayID 复用给别的型号,残留的旧 max/VCP 会被
+    /// 当成新显示器的读数直接套用(写入百分比错位)。因此裁剪与替换在同一临界区
+    /// 内完成,避免两次取锁之间读到不一致的服务表。
+    ///
+    /// 扫描本身在锁外,IORegistry 匹配耗时不应阻塞其他表的访问;调用方(控制器
+    /// worker)单线程序列调用,故不引入代次校验。若将来出现并发调用,旧扫描结果
+    /// 可能覆盖较新的表,需在此处加代次比对。
     func refresh(displayIDs: [CGDirectDisplayID]) {
-        let knownIDs = Set(servicesByDisplayID.keys)
-        for id in knownIDs.subtracting(displayIDs) {
+        // IORegistry 匹配成本高,扫描放锁外;表更新在锁内一次完成。
+        let matched = Arm64DDCMatcher().matchedServices(for: displayIDs)
+        lock.lock()
+        let previousIDs = Set(servicesByDisplayID.keys)
+        let activeIDs = Set(matched.keys)
+        servicesByDisplayID = matched
+        maxValues = maxValues.filter { activeIDs.contains($0.key.displayID) }
+        controlCodes = controlCodes.filter { activeIDs.contains($0.key.displayID) }
+        lock.unlock()
+        // 能力表自带锁,清理放替换之后:扫描窗口内迟到的探测结果会被一并清掉。
+        // 被清掉的显示器下一轮检测期探测会重建 max/VCP(displays() 每轮无条件重探)。
+        for id in previousIDs.subtracting(activeIDs) {
             capabilities.reset(displayID: id)
         }
-        servicesByDisplayID = Arm64DDCMatcher().matchedServices(for: displayIDs)
     }
 
     func hasService(for displayID: CGDirectDisplayID) -> Bool {
-        servicesByDisplayID[displayID] != nil
+        ddcService(for: displayID) != nil
     }
 
     func serviceHandle(displayID: CGDirectDisplayID, identity: String) -> DDCServiceHandle? {
-        guard let service = servicesByDisplayID[displayID] else { return nil }
+        guard let service = ddcService(for: displayID) else { return nil }
         return DDCServiceHandle(
             identity: identity,
             chipAddress: service.chipAddress,
@@ -46,7 +77,7 @@ final class DisplayDDCBridge: @unchecked Sendable {
     }
 
     func transportRead(service handle: DDCServiceHandle, vcpCode: UInt8) -> DDCTransportReply? {
-        guard let service = servicesByDisplayID[CGDirectDisplayID(handle.displayID)] else { return nil }
+        guard let service = ddcService(for: CGDirectDisplayID(handle.displayID)) else { return nil }
         guard let reply = LegacyDDCPacketTransport.read(
             service: service.service,
             chipAddress: service.chipAddress,
@@ -57,7 +88,7 @@ final class DisplayDDCBridge: @unchecked Sendable {
     }
 
     func transportWrite(service handle: DDCServiceHandle, vcpCode: UInt8, value: UInt16) -> Bool {
-        guard let service = servicesByDisplayID[CGDirectDisplayID(handle.displayID)] else { return false }
+        guard let service = ddcService(for: CGDirectDisplayID(handle.displayID)) else { return false }
         return LegacyDDCPacketTransport.write(
             service: service.service,
             chipAddress: service.chipAddress,
@@ -77,7 +108,7 @@ final class DisplayDDCBridge: @unchecked Sendable {
     /// - 无任何有效应答 → unknown(乐观:仍显示、仍可写)。
     func probe(_ control: DisplayControlKind, displayID: CGDirectDisplayID) -> DDCProbeResult {
         let key = ControlKey(displayID: displayID, control: control)
-        guard let service = servicesByDisplayID[displayID] else {
+        guard let service = ddcService(for: displayID) else {
             capabilities.set(.unknown, for: key)
             return DDCProbeResult(capability: .unknown, value: nil)
         }
@@ -102,8 +133,10 @@ final class DisplayDDCBridge: @unchecked Sendable {
             // 完整 UInt16 范围可表示,无 32767 截断;current 超 max 按饱和处理。
             let safeMax = reply.max
             let safeCurrent = min(reply.current, safeMax)
+            lock.lock()
             maxValues[key] = safeMax
             controlCodes[key] = vcp
+            lock.unlock()
             capabilities.set(.supported, for: key)
             let percentage = DDCRawConversion.percent(raw: safeCurrent, max: safeMax) ?? 0
             displayDDCLog.notice(
@@ -127,7 +160,7 @@ final class DisplayDDCBridge: @unchecked Sendable {
     /// 无论何种结果,瞬时失败都不冒泡给用户(见上层 handleWriteResult 的乐观处理)。
     func write(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) -> DisplayWriteOutcome {
         let key = ControlKey(displayID: displayID, control: control)
-        guard let service = servicesByDisplayID[displayID] else {
+        guard let service = ddcService(for: displayID) else {
             displayDDCLog.warning("No DDC service while writing display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public)")
             return .busError
         }
@@ -138,7 +171,7 @@ final class DisplayDDCBridge: @unchecked Sendable {
             return .busError
         }
 
-        let maxValue = maxValues[key] ?? 100
+        let maxValue = cachedMaxValue(for: key)
         guard var ddcValue = DDCRawConversion.ddcRaw(percent: value, max: maxValue) else {
             return .busError
         }
@@ -152,16 +185,26 @@ final class DisplayDDCBridge: @unchecked Sendable {
                 "Write DDC display \(displayID, privacy: .public) control \(String(describing: control), privacy: .public) code \(vcp.rawValue, privacy: .public) value \(ddcValue, privacy: .public) success \(success, privacy: .public)"
             )
             if success {
+                lock.lock()
                 controlCodes[key] = vcp
+                lock.unlock()
                 return .written
             }
         }
         return .busError
     }
 
+    private func cachedMaxValue(for key: ControlKey) -> UInt16 {
+        lock.lock(); defer { lock.unlock() }
+        return maxValues[key] ?? 100
+    }
+
     private func orderedCandidates(for key: ControlKey) -> [DDCVCPCode] {
         let candidates = DDCVCPCode.candidates(for: key.control)
-        guard let preferred = controlCodes[key], candidates.contains(preferred) else {
+        lock.lock()
+        let preferred = controlCodes[key]
+        lock.unlock()
+        guard let preferred, candidates.contains(preferred) else {
             return candidates
         }
         return [preferred] + candidates.filter { $0 != preferred }
