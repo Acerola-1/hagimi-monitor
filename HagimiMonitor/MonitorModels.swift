@@ -82,6 +82,11 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     /// fanAvailable 过滤掉风扇入口,不出现无效开关。
     static let userVisibleCases: [MonitorKind] = allCases
 
+    /// **默认可见**的模块。蓝牙默认关闭:设备电量属于「偶尔一看」的信息,
+    /// 常驻一行反而占地方,用户在设置里需要时再打开。
+    /// 无存量设置的新用户按这份集合初始化(见 MonitorSettings 的读取分支)。
+    static let defaultVisibleCases: [MonitorKind] = allCases.filter { $0 != .bluetooth }
+
     /// SystemMonitorSampler 管线驱动的模块全集。风扇/蓝牙的输出是「设备列表」
     /// 而非「单模块值」,由各自独立采样器产出、MonitorStore 合成注入,不进采样
     /// 排期——排期会令无注册采样器的类目每秒空转报错。
@@ -617,7 +622,7 @@ final class MonitorStore: ObservableObject {
         // 原因:告警服务需在面板关闭时也能检测风扇异常(停转/过载)并通知用户。
         // SMC 读取(FNum/F0Ac)极轻量(单次 IOConnectCall),2s 周期对功耗无感。
         fanSampler.start()
-        FanAlertService.shared.attach(to: fanSampler)
+        FanAlertService.shared.attach(to: fanSampler, settings: settings)
 
         // 蓝牙设备电量:独立采样器(IOBluetooth 连断事件驱动 + profiler 10s 兜底
         // 轮询,高成本源后台执行),结果经 Combine 回主线程。
@@ -674,6 +679,19 @@ final class MonitorStore: ObservableObject {
     private var statsProcTimer: AnyCancellable?
     private let statsDiskCursor = DiskSnapshotCursor()
     private let statsGPUCursor = GPUDeltaCursor()
+    // 面板 TOP 榜的增量游标。**每个 store 各持一份**:游标是有状态的差分器
+    // (`previous*` 跨调用保持),而统计路径的游标同样如此——原先面板这四个是
+    // 文件级全局实例,多个 store 实例(测试里很常见)会并发改写同一份差分状态,
+    // 实测表现为在状态写回处释放已释放对象的 SIGSEGV 与 `UInt64(±inf)` trap。
+    // 收归实例所有后,同一 store 内的所有采样都跑在它自己的串行队列上,天然串行。
+    private let panelGPUCursor = GPUDeltaCursor()
+    private let panelDiskCursor = DiskSnapshotCursor()
+    private let panelNetworkCursor = NetworkDeltaCursor()
+    #if !DIRECT_DISTRIBUTION
+    // 直连版的 CPU TOP 走 ps 通道(`sampleTopCPUViaPS`),没有差分游标;
+    // `CPUDeltaCursor` 本身也只在非直连渠道编译。
+    private let panelCPUCursor = CPUDeltaCursor()
+    #endif
     #if DIRECT_DISTRIBUTION
     private let statsNetworkCursor = NetworkDeltaCursor()
     #else
@@ -739,7 +757,8 @@ final class MonitorStore: ObservableObject {
         let sampleFast: () -> Void = {
             #if DIRECT_DISTRIBUTION
             // 直连版 CPU 来自 ps,无基线,与面板不存在共享问题。
-            let cpu = enrichCPU(sampleTopCPUProcesses(limit: 12, includeSystemProcesses: true))
+            // 直连版 CPU 来自 ps,无基线,不与面板游标共享状态。
+            let cpu = enrichCPU(sampleTopCPUViaPS(limit: 12, includeSystemProcesses: true))
             #else
             let cpu = enrichCPU(cpuCursor.sample(limit: 12, includeSystemProcesses: true))
             #endif
@@ -927,7 +946,11 @@ final class MonitorStore: ObservableObject {
         if active.contains(.cpu) {
             group.enter()
             procSampleQueue.async {
-                let raw = sampleTopCPUProcesses(includeSystemProcesses: cpuIncludeSystem)
+                #if DIRECT_DISTRIBUTION
+                let raw = sampleTopCPUViaPS(limit: 5, includeSystemProcesses: cpuIncludeSystem)
+                #else
+                let raw = self.panelCPUCursor.sample(limit: 5, includeSystemProcesses: cpuIncludeSystem)
+                #endif
                 cpuProcesses = enrichCPU(raw)
                 group.leave()
             }
@@ -936,7 +959,7 @@ final class MonitorStore: ObservableObject {
         if active.contains(.gpu) {
             group.enter()
             procSampleQueue.async {
-                let raw = sampleTopGPUProcesses(includeSystemProcesses: gpuIncludeSystem)
+                let raw = self.panelGPUCursor.sample(limit: 5, includeSystemProcesses: gpuIncludeSystem)
                 gpuProcesses = enrichGPU(raw)
                 group.leave()
             }
@@ -945,7 +968,7 @@ final class MonitorStore: ObservableObject {
         if active.contains(.storage) {
             group.enter()
             procSampleQueue.async {
-                let raw = sampleTopDiskProcesses(includeSystemProcesses: diskIncludeSystem)
+                let raw = self.panelDiskCursor.sampleTopDiskProcesses(limit: 5, includeSystemProcesses: diskIncludeSystem)
                 diskProcesses = enrichDisk(raw)
                 group.leave()
             }
@@ -954,7 +977,7 @@ final class MonitorStore: ObservableObject {
         if active.contains(.network) {
             group.enter()
             nettopQueue.async {
-                let raw = sampleTopNetworkProcesses(includeSystemProcesses: networkIncludeSystem)
+                let raw = self.panelNetworkCursor.sample(limit: 5, includeSystemProcesses: networkIncludeSystem)
                 networkProcesses = enrichNetwork(raw)
                 group.leave()
             }

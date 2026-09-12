@@ -133,14 +133,6 @@ final class DiskSnapshotCursor {
     }
 }
 
-/// 面板进程列表专用游标(全局兼容入口)。
-private let panelDiskCursor = DiskSnapshotCursor()
-
-/// 面板采样入口:委托面板专用游标,保持既有全局调用点不变。
-func sampleTopDiskProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawDiskProcess] {
-    panelDiskCursor.sampleTopDiskProcesses(limit: limit, includeSystemProcesses: includeSystemProcesses)
-}
-
 /// 用 NSRunningApplication(pid:) 为磁盘 I/O 采样结果补齐本地化名与 App 图标。
 /// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
 func enrichDisk(_ rawProcesses: [RawDiskProcess]) -> [TopDiskProcess] {

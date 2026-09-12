@@ -10,7 +10,8 @@ import UserNotifications
 /// - 红点:任一维度进入非正常档即点亮;「查看统计页」或「恢复」后熄灭;
 /// - 通知:仅严重档(内存 2;热 2/3)且持续满 `notificationSustain` 才发,
 ///   同一 episode 同档位只发一次;
-/// - 关闭「数据统计」即静音:红点熄灭、不再通知(查看路径本就在统计页)。
+/// - 关闭「数据统计」即静音:红点熄灭、不再通知(查看路径本就在统计页);
+///   关闭「通知」开关同样整体静默——那个开关只管打扰,不影响统计记录。
 final class PressureAlertCenter: ObservableObject {
     static let shared = PressureAlertCenter()
 
@@ -32,6 +33,9 @@ final class PressureAlertCenter: ObservableObject {
     private var machine = PressureAlertStateMachine()
     private var cancellables = Set<AnyCancellable>()
     private var isEnabled = true
+    /// 通知总开关(默认关)。关着时连判定都不做:红点与系统通知一起静默,
+    /// 重新打开后按新观测重新累计——与「关闭记录即静音」同一套语义。
+    private var isNotificationsEnabled = false
 
     /// 验证夹具(仅环境变量触发,正式运行零开销):
     /// - `1`:跳过实时判定、两处红点常亮,供截图核对落点;
@@ -64,6 +68,13 @@ final class PressureAlertCenter: ObservableObject {
                 self?.setEnabled(enabled)
             }
             .store(in: &cancellables)
+
+        store.settings.$alertNotificationsEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                self?.setNotificationsEnabled(enabled)
+            }
+            .store(in: &cancellables)
     }
 
     /// 某个入口已被用户点开:只清该入口的红点(同一 episode 内不再重新点亮,
@@ -82,7 +93,7 @@ final class PressureAlertCenter: ObservableObject {
     }
 
     private func ingest(modules: [MonitorModule]) {
-        guard isEnabled else { return }
+        guard isEnabled, isNotificationsEnabled else { return }
         let levels = isSimulating ? (memory: 1, thermal: nil) : Self.levels(from: modules)
         let alerts = machine.ingest(
             memoryLevel: levels.memory,
@@ -105,10 +116,19 @@ final class PressureAlertCenter: ObservableObject {
         publishIfChanged()
     }
 
+    private func setNotificationsEnabled(_ enabled: Bool) {
+        guard enabled != isNotificationsEnabled else { return }
+        isNotificationsEnabled = enabled
+        if !enabled { machine.reset() }
+        publishIfChanged()
+    }
+
     private func publishIfChanged() {
-        let menuBar = machine.isUnread(.menuBar)
+        // 两处红点都受通知总开关门控:关掉通知时菜单栏角标与面板统计入口一并熄灭。
+        let active = isEnabled && isNotificationsEnabled
+        let menuBar = active && machine.isUnread(.menuBar)
         if menuBarUnread != menuBar { menuBarUnread = menuBar }
-        let entry = machine.isUnread(.statisticsEntry)
+        let entry = active && machine.isUnread(.statisticsEntry)
         if statisticsEntryUnread != entry { statisticsEntryUnread = entry }
     }
 

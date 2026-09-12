@@ -10,8 +10,27 @@ import OSLog
 final class AlertNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
     static let shared = AlertNotificationDelegate()
 
+    /// 授权只申请一次:重复调用系统不再弹窗,这里再挡一道,免得日志里刷无效请求。
+    private var didRequestAuthorization = false
+
     private override init() {
         super.init()
+    }
+
+    /// 申请通知权限(.alert + .sound)。
+    ///
+    /// **只在通知开关打开时调用**(见 AppDelegate):开关默认关,所以首次启动不会弹
+    /// 授权窗——用户没打算要通知时不该被打扰。风扇告警与压力告警共用这一次申请。
+    func requestAuthorizationIfNeeded() {
+        guard !didRequestAuthorization else { return }
+        didRequestAuthorization = true
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
+            if let error {
+                AppLogger.sampler.error("通知授权失败: \(error.localizedDescription, privacy: .public)")
+            } else if !granted {
+                AppLogger.sampler.notice("用户未授权通知,告警将仅通过界面展示")
+            }
+        }
     }
 
     func userNotificationCenter(

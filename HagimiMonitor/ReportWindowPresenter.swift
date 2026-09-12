@@ -19,6 +19,12 @@ enum ReportWindowPresenter {
     private static let navigationDelegate = ReportNavigationDelegate()
     /// 主题订阅:窗口长驻,用户切换深浅色后报表窗口立即跟随(与设置窗口同规则)。
     private static var themeCancellable: AnyCancellable?
+    /// 实时刷新定时器:报表本体是打开时生成的快照,但右栏「运行状态」组要跟着走。
+    /// 只在窗口可见时跑(见 `pushLiveReadings`),窗口关闭时由 `closeObserver` 停掉。
+    private static var liveTimer: Timer?
+    /// 窗口关闭观察者。窗口常驻复用(`isReleasedWhenClosed = false`),不监听关闭事件
+    /// 的话关窗后 timer 会一直每秒空跑一次 Task+guard。
+    private static var closeObserver: NSObjectProtocol?
 
     /// 打开或刷新硬件报表窗口;带 anchor 时加载完成后滚到对应板块。
     static func open(url: URL, anchor: StatisticsReportAnchor? = nil) {
@@ -27,6 +33,7 @@ enum ReportWindowPresenter {
         let win = ensureWindow()
         win.appearance = AppDelegate.shared?.store.settings.themePreference.appearance
         webView?.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        startLiveUpdates()
         focus(win)
     }
 
@@ -51,6 +58,40 @@ enum ReportWindowPresenter {
           return true;
         })();
         """
+    }
+
+    // MARK: - 实时读数
+
+    /// 启动每秒推送。窗口常驻复用,重复打开不重复建定时器。
+    private static func startLiveUpdates() {
+        guard liveTimer == nil else { return }
+        liveTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
+            Task { @MainActor in pushLiveReadings() }
+        }
+    }
+
+    private static func stopLiveUpdates() {
+        liveTimer?.invalidate()
+        liveTimer = nil
+    }
+
+    /// 把 `MonitorStore` 的当前读数推给网页。
+    ///
+    /// 遮挡门控:窗口不可见(最小化、被完全遮挡、切到别的空间)时不推——
+    /// 每秒一次 `evaluateJavaScript` 对常驻窗口是白烧 CPU,而用户根本看不到。
+    private static func pushLiveReadings() {
+        guard let win = window, win.isVisible, win.occlusionState.contains(.visible),
+              let webView,
+              let store = AppDelegate.shared?.store else {
+            return
+        }
+        let readings = HardwareLiveReadings.snapshot(from: store)
+        guard !readings.isEmpty,
+              let data = try? JSONSerialization.data(withJSONObject: readings),
+              let json = String(data: data, encoding: .utf8) else {
+            return
+        }
+        webView.evaluateJavaScript("window.__HAGIMI_HARDWARE_LIVE__ && window.__HAGIMI_HARDWARE_LIVE__(\(json));")
     }
 
     /// 聚焦窗口并激活应用。
@@ -162,6 +203,14 @@ enum ReportWindowPresenter {
         toolbar.displayMode = .iconOnly
         win.toolbar = toolbar
         win.toolbarStyle = .unified
+
+        // 关窗即停推;重新打开时 startLiveUpdates() 会再起(它按 liveTimer == nil 去重)。
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: win, queue: .main
+        ) { _ in
+            Task { @MainActor in stopLiveUpdates() }
+        }
 
         self.window = win
 

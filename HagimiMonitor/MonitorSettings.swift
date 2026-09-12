@@ -160,6 +160,10 @@ final class MonitorSettings: ObservableObject {
     @Published var batteryShowPowerFlow: Bool = true
     /// 数据统计总开关:关闭后停止记录监控数据与使用打卡,历史数据保留。
     @Published var statisticsEnabled: Bool = true
+    /// 通知总开关,**默认关**:关掉后菜单栏图标红点、系统通知与面板统计入口红点
+    /// 一律不出现。它与 `statisticsEnabled` 是两个维度——那个管「记录与统计」,
+    /// 这个只管「要不要打扰我」,所以不做成同一个开关。
+    @Published var alertNotificationsEnabled: Bool = false
     /// 小工具(快捷功能)入口是否在面板中显示。
     @Published var quickToolsVisible: Bool = true
     /// 在工具浮层中显示的工具集合。集合由 QuickToolKind 驱动,新增工具只补枚举
@@ -229,6 +233,7 @@ final class MonitorSettings: ObservableObject {
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
         batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
         statisticsEnabled = defaults.object(forKey: Keys.statisticsEnabled) as? Bool ?? true
+        alertNotificationsEnabled = defaults.object(forKey: Keys.alertNotificationsEnabled) as? Bool ?? false
         quickToolsVisible = defaults.object(forKey: Keys.quickToolsVisible) as? Bool ?? true
         if let storedTools = defaults.array(forKey: Keys.visibleQuickTools) as? [String] {
             let stored = Set(storedTools.compactMap { key in
@@ -277,9 +282,19 @@ final class MonitorSettings: ObservableObject {
                 }
                 defaults.set(true, forKey: Keys.bluetoothVisibilityMigrated)
             }
+            // 蓝牙改为**默认关闭**,存量按新默认移除一次。
+            //
+            // 取舍:无法区分「上一次迁移自动补上的」与「用户后来手动打开的」——两者
+            // 在存量里长得一样,所以手动开过蓝牙的人也会被这次迁移关掉一次。接受这点
+            // 误伤,换取「默认关闭」对新老用户一致;之后再开走正常读写,不会被本迁移覆盖。
+            if !defaults.bool(forKey: Keys.bluetoothDefaultOffMigrated) {
+                kinds.removeAll { $0 == .bluetooth }
+                defaults.set(kinds.map(\.rawValue), forKey: Keys.visibleKinds)
+                defaults.set(true, forKey: Keys.bluetoothDefaultOffMigrated)
+            }
             visibleKinds = Set(kinds)
         } else {
-            visibleKinds = Set(MonitorKind.userVisibleCases)
+            visibleKinds = Set(MonitorKind.defaultVisibleCases)
         }
 
         if let storedExpanded = defaults.array(forKey: Keys.defaultExpandedKinds) as? [String] {
@@ -822,6 +837,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $alertNotificationsEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.alertNotificationsEnabled)
+            }
+            .store(in: &cancellables)
+
         $quickToolsVisible
             .dropFirst()
             .sink { [weak self] newValue in
@@ -946,6 +968,7 @@ private enum Keys {
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let statisticsEnabled = "settings.statistics.enabled"
+    static let alertNotificationsEnabled = "settings.alerts.notificationsEnabled"
     static let quickToolsVisible = "settings.quickTools.visible"
     static let visibleQuickTools = "settings.quickTools.visibleKinds"
     /// 一次性迁移标记:小工具新增工具 case 时,把新工具并回老用户的已启用集合
@@ -958,6 +981,7 @@ private enum Keys {
     /// 一次性迁移标记:蓝牙模块新增时,给老用户的已存储可见列表补上 bluetooth,
     /// 语义同 fanVisibilityMigrated。
     static let bluetoothVisibilityMigrated = "settings.bluetoothVisibilityMigrated"
+    static let bluetoothDefaultOffMigrated = "settings.bluetoothDefaultOffMigrated"
     /// 一次性迁移标记:内存模块新增总线带宽默认开指标时,给存量用户的内存
     /// 指标列表补上该项(语义同 metricsDefaultOnMigrated,只限带宽一项)。
     static let memoryBandwidthMigrated = "settings.memoryBandwidthMigrated"

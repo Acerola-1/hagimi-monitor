@@ -22,6 +22,7 @@ enum StatisticsReportBuilder {
     private static let templateResource = "ReportTemplate"
     private static let echartsResource = "echarts"
     /// 日期范围选择用的日期选择库(Flatpickr)及其基础样式,单文件产物需一并内联。
+    private static let hardwareSectionResource = "HardwareSection"
     private static let flatpickrResource = "flatpickr"
 
     /// 报表用到的符号图标:与面板同一批 SF Symbols(面板用 `MonitorKind.symbol`),
@@ -55,6 +56,7 @@ enum StatisticsReportBuilder {
         // 顶部信息条
         ("laptopcomputer", "device"),
         ("apple.logo", "os"),
+        ("display", "display"),
         ("clock", "clock"),
         ("calendar", "calendar"),
     ]
@@ -63,15 +65,24 @@ enum StatisticsReportBuilder {
     static func write(
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
-        process: StatisticsProcessSnapshot? = nil
+        process: StatisticsProcessSnapshot? = nil,
+        hardware: HardwareInventory? = nil
     ) throws -> URL {
         guard let templateURL = Bundle.main.url(forResource: templateResource, withExtension: "html"),
+              let hardwareCSSURL = Bundle.main.url(forResource: hardwareSectionResource, withExtension: "css"),
+              let hardwareJSURL = Bundle.main.url(forResource: hardwareSectionResource, withExtension: "js"),
               let echartsURL = Bundle.main.url(forResource: echartsResource, withExtension: "min.js"),
               let flatpickrJSURL = Bundle.main.url(forResource: flatpickrResource, withExtension: "min.js"),
               let flatpickrCSSURL = Bundle.main.url(forResource: flatpickrResource, withExtension: "min.css") else {
             throw StatisticsReportError.missingResources
         }
+        // 硬件模块块的样式与脚本独立成资源,与 ECharts/Flatpickr 同一种内联方式:
+        // 模板本体保持干净,改硬件版面不必动那 2600 行。
+        let hardwareCSS = try String(contentsOf: hardwareCSSURL, encoding: .utf8)
+        let hardwareJS = try String(contentsOf: hardwareJSURL, encoding: .utf8)
         let template = try String(contentsOf: templateURL, encoding: .utf8)
+            .replacingOccurrences(of: "/*__HARDWARE_CSS__*/", with: hardwareCSS)
+            .replacingOccurrences(of: "/*__HARDWARE_JS__*/", with: hardwareJS)
         let echarts = try String(contentsOf: echartsURL, encoding: .utf8)
         let flatpickrJS = try String(contentsOf: flatpickrJSURL, encoding: .utf8)
         let flatpickrCSS = try String(contentsOf: flatpickrCSSURL, encoding: .utf8)
@@ -80,7 +91,7 @@ enum StatisticsReportBuilder {
         // 编码失败(NaN/非 JSON 值混入 payload)抛错走统一的失败上报,不 trap 进程。
         let json: String
         do {
-            json = try payloadJSON(snapshot: snapshot, meta: meta, process: process)
+            json = try payloadJSON(snapshot: snapshot, meta: meta, process: process, hardware: hardware)
         } catch {
             throw StatisticsReportError.encodingFailed(error)
         }
@@ -179,7 +190,8 @@ enum StatisticsReportBuilder {
     private static func payloadJSON(
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
-        process: StatisticsProcessSnapshot?
+        process: StatisticsProcessSnapshot?,
+        hardware: HardwareInventory?
     ) throws -> String {
         let columnNames = StatisticsRow.columns.map(\.name)
         var payload: [String: Any] = [
@@ -208,8 +220,41 @@ enum StatisticsReportBuilder {
             payload["apps"] = ["rows": process.appRows, "names": process.appNames, "icons": process.appIcons]
             payload["batteryDaily"] = process.batteryDaily
         }
+        // 硬件清单:一次性采集(见 HardwareInventoryReader),随载荷内联。
+        // 采集层只带文案 key,这里统一解析成显示文本再下发——前端拿到什么显示什么,
+        // 报表语言 = 生成时刻的系统语言(与框架文案的 t() 同一语义)。
+        // 缺失值保留成 null 由前端显示 —。
+        if let hardware {
+            payload["hardware"] = [
+                "capturedAt": Int(hardware.capturedAt.timeIntervalSince1970),
+                "categories": hardware.categories.map(encodeCategory),
+                // 各模块右栏要展示的分组由 App 侧选好,报表只渲染——分组名与其
+                // 消费者不再分处两种语言两套文件。
+                "rails": hardware.rails.mapValues { $0.map(encodeGroup) },
+            ]
+        }
         let data = try JSONSerialization.data(withJSONObject: payload, options: [.withoutEscapingSlashes])
         return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
+    /// 硬件分类编码成前端要的最小结构。缺失值编成 NSNull,前端按「—」渲染——
+    /// 不能省略这一行,省略会让「读不到」和「这一项不存在」混为一谈。
+    private static func encodeCategory(_ category: HardwareCategory) -> [String: Any] {
+        [
+            "id": category.id,
+            "name": hwText(category.nameKey),
+            "subtitle": hwText(category.subtitleKey),
+            "groups": category.groups.map(encodeGroup),
+        ]
+    }
+
+    private static func encodeGroup(_ group: HardwareFactGroup) -> [String: Any] {
+        [
+            "name": group.name.resolve(hwText),
+            "facts": group.facts.map { fact -> [String: Any] in
+                ["label": fact.label.resolve(hwText), "value": fact.value ?? NSNull()]
+            },
+        ] as [String: Any]
     }
 
     /// 行编码为 [t, ...列值, n];按列名做精度收敛,控制报表体积。
@@ -244,6 +289,14 @@ enum StatisticsReportBuilder {
     /// 两语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
     private static let stringKeys = [
         "reportTitle", "metaDays", "metaGenerated",
+        "kThisMac", "hwCardTitle", "hwNoData", "hwItemCount", "hwMachineSub", "hwCategoryCount",
+        "hwLiveGroup", "hwLiveTag",
+        "hwLiveCpuUsage", "hwLiveThermal", "hwLiveProcessCount", "hwLiveIdle",
+        "hwLiveGpuUsage", "hwLiveGpuMemory", "hwLiveRenderer", "hwLiveTiler",
+        "hwLiveMemUsed", "hwLiveCompressed", "hwLiveSwap", "hwLivePressure",
+        "hwLiveDiskUsed", "hwLiveDiskFree", "hwLiveDiskRead", "hwLiveDiskWrite",
+        "hwLiveDownload", "hwLiveUpload", "hwLiveSignal",
+        "hwLiveBatteryLevel", "hwLiveBatteryState", "hwLiveBatteryTemp",
         "rToday", "rWeek", "rMonth", "rYear", "selectRange",
         "rangeLabel", "railEyebrow", "railLocal", "railNet", "railDisk", "railPower",
         "kCpu", "kGpu", "kMem", "kMemPressure", "kNetDown", "kNetUp", "kDisk", "kPower",
@@ -426,8 +479,13 @@ enum StatisticsReportFlow {
             // 先 flush 进程累加器再取快照,保证报表含当日最新应用数据
             processStore?.flush()
             let process = processStore.map { StatisticsReportBuilder.processSnapshot(from: $0) } ?? nil
+            // 硬件清单也在这里采集:16 个 system_profiler DataType 本机实测约 2.1 秒,
+            // 必须留在后台任务里,绝不上主线程。采集为空(例如极端受限环境)不影响报表,
+            // 「本机」模块会在前端按空清单自行隐藏。
+            let hardware = HardwareInventoryReader().capture()
             do {
-                let url = try StatisticsReportBuilder.write(snapshot: snapshot, meta: meta, process: process)
+                let url = try StatisticsReportBuilder.write(
+                    snapshot: snapshot, meta: meta, process: process, hardware: hardware)
                 await MainActor.run {
                     ReportWindowPresenter.open(url: url, anchor: anchor)
                 }

@@ -138,14 +138,26 @@ struct StatisticsSettingsView: View {
         return true
     }
 
+    /// 时间范围一行,「通知 + 开关」靠本栏右缘。
+    ///
+    /// 中间用 Spacer 顶开而不是紧挨着 Picker:两者不是同一组信息(一个是看的范围,
+    /// 一个是打扰开关),贴在一起会被读成「时间范围的一部分」。
     private var rangePicker: some View {
-        Picker(String(localized: "overview.range.label"), selection: $range) {
-            Text(String(localized: "stats.settings.range.today")).tag(StatisticsOverviewRange.today)
-            Text(String(localized: "stats.settings.range.week")).tag(StatisticsOverviewRange.week)
-            Text(String(localized: "stats.settings.range.month")).tag(StatisticsOverviewRange.month)
+        HStack(spacing: 12) {
+            Picker(String(localized: "overview.range.label"), selection: $range) {
+                Text(String(localized: "stats.settings.range.today")).tag(StatisticsOverviewRange.today)
+                Text(String(localized: "stats.settings.range.week")).tag(StatisticsOverviewRange.week)
+                Text(String(localized: "stats.settings.range.month")).tag(StatisticsOverviewRange.month)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            Spacer(minLength: 16)
+
+            Toggle(String(localized: "stats.settings.notifications"),
+                   isOn: $settings.alertNotificationsEnabled)
+                .toggleStyle(.switch)
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 2)

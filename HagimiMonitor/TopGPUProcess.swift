@@ -94,13 +94,6 @@ final class GPUDeltaCursor {
     }
 }
 
-/// 面板 TOP 榜专用差分游标。
-private let panelGPUCursor = GPUDeltaCursor()
-
-/// 面板采样入口:委托面板专用游标。
-func sampleTopGPUProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawGPUProcess] {
-    panelGPUCursor.sample(limit: limit, includeSystemProcesses: includeSystemProcesses)
-}
 
 /// AGX 驱动的每进程累计 GPU 时间:IOAccelerator 服务的 user client 子节点
 /// (AGXDeviceUserClient)在 AppUsage 属性里按图形 API 记录 accumulatedGPUTime。

@@ -568,6 +568,7 @@
     a { color: inherit; text-decoration: none; }
     @page { margin: 14mm; }
   }
+  /*__HARDWARE_CSS__*/
 </style>
 </head>
 <body>
@@ -892,6 +893,8 @@
   // 符号图标:字形由生成端内联成 CSS 变量(--i-*),这里只用 class 选色/尺寸,
   // 颜色跟随 currentColor(主题与选中态自动适配)。
   const sf = (key, cls) => `<span class="sf sf-${key} ${cls || ""}"></span>`;
+
+  /*__HARDWARE_JS__*/
 
   // ── 主题调色板(跟随系统明暗,变更时全量重绘) ───────────────────
   const themeQuery = matchMedia("(prefers-color-scheme: light)");
@@ -2592,6 +2595,10 @@
   // ── 视觉增强:分区标题图标芯片 / 粘性导航 / 滚动进场 / 回到顶部 ──
   // 独立隔离:任何一步失败不影响已渲染的数据区。
   try {
+    // 硬件模块块:把各模块板块收进「主列 + 右栏硬件规格」,并追加「本机」模块。
+    // 单独再包一层 try:这一步失败时报表按原样可用,不会连累下面的视觉增强。
+    try { buildHardwareLayout(); } catch (error) { console.warn("hardware layout failed", error); }
+
     // 分区标题图标包进同色芯片,层次更现代
     document.querySelectorAll(".sec-head").forEach((head) => {
       if (head.querySelector(".icon-chip")) return;
@@ -2627,8 +2634,11 @@
       ["sec-net", I.railNet, "net"],
       ["sec-disk", I.railDisk, "disk"],
       ["sec-power", I.railPower, "power"],
+      ["mod-machine", I.kThisMac, "device"],
     ].map(([id, label, iconKey]) => {
-      const sec = $(id);
+      // 模块板块已被收进 .module-block,左栏与滚动高亮都应以整块为单位,
+      // 否则高亮会在模块内部各板块之间来回跳。
+      const sec = $(id) && ($(id).closest(".module-block") || $(id));
       if (!sec) return null;
       const link = el("a");
       link.href = "#" + id;

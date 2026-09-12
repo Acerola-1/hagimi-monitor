@@ -1,0 +1,109 @@
+/* 硬件模块块:把每个监控模块收进「主列 + 右栏规格」,并追加「本机」模块。
+   由 StatisticsReportBuilder 内联进报表模板(与 ECharts/Flatpickr 同一机制),
+   令牌全部取自报表既有的 :root,不新造一套颜色。 */
+
+:root {
+  --hw-live: #30d158;
+}
+@media (prefers-color-scheme: light) {
+  :root { --hw-live: #248a3d; }
+}
+
+/* ── 模块块:主列(原有板块) + 右栏(硬件规格) ── */
+.module-block { margin-bottom: 22px; }
+.mod-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 0 2px 10px; flex-wrap: wrap;
+}
+.mod-head .icon-chip { width: 28px; height: 28px; border-radius: 8px; }
+.mod-head h2 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+.mod-head .sub { font: 500 11.5px/1 var(--font-mono); color: var(--text-3); }
+.mod-head .meta {
+  margin-left: auto; font: 600 10.5px/1 var(--font-mono); color: var(--text-3);
+  padding: 4px 8px; border-radius: 6px; background: var(--inset); white-space: nowrap;
+}
+.mod-head .index {
+  margin-left: 8px; font: 700 11px/1 var(--font-mono); color: var(--text-3);
+  padding: 4px 8px; border-radius: 6px; background: var(--inset);
+}
+.mod-body {
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--hw-rail, 300px);
+  gap: 16px; align-items: start;
+}
+.mod-main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+/* 收进主列后,原有 section 的上下外边距交给 mod-main 的 gap 统一控制 */
+.mod-main > section { margin-bottom: 0; }
+
+/* ── 右栏规格卡 ── */
+.hw-card {
+  background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card);
+  border: 1px solid var(--card-border); border-radius: var(--radius);
+  padding: 16px 18px 14px; box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+  position: sticky; top: 0;
+}
+.hw-card-head {
+  display: flex; align-items: baseline; gap: 8px; padding-bottom: 9px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--card-border);
+}
+.hw-card-head .t { font-size: 12.5px; font-weight: 700; }
+.hw-card-head .src { font: 500 10.5px/1 var(--font-mono); color: var(--text-3); margin-left: auto; }
+.hw-group { padding-top: 11px; }
+.hw-group-name {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 6px;
+  font: 600 10.5px/1 var(--font-mono); letter-spacing: 0.5px; text-transform: uppercase;
+  color: var(--text-3);
+}
+.hw-group-name .rt { display: inline-flex; align-items: center; gap: 4px; margin-left: auto; color: var(--hw-live); }
+.hw-group-name .rt .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--hw-live); animation: hwPulse 1.6s ease-in-out infinite; }
+@keyframes hwPulse { 50% { opacity: 0.25; } }
+@media (prefers-reduced-motion: reduce) { .hw-group-name .rt .dot { animation: none; } }
+
+.hw-rows { display: flex; flex-direction: column; gap: 1px; }
+.hw-row {
+  display: flex; align-items: baseline; gap: 10px; padding: 5px 8px;
+  border-radius: 7px; font-size: 11.5px;
+}
+.hw-row:nth-child(odd) { background: var(--inset); }
+.hw-row .k { color: var(--text-3); flex: none; }
+.hw-row .v {
+  margin-left: auto; text-align: right; color: var(--text); font-weight: 600;
+  font-family: var(--font-mono); font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.hw-row .v.missing { color: var(--text-3); font-weight: 500; }
+
+/* 窄窗口:右栏下移到主列下方,规格行改多列,保住图表宽度 */
+@media (max-width: 1120px) {
+  .mod-body { grid-template-columns: minmax(0, 1fr); }
+  .hw-card { position: static; }
+  .hw-rows { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px 14px; }
+}
+
+/* ── 本机模块:分类菜单 + 详细规格 ── */
+.hw-workbench { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.hw-tabs { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 2px; }
+.hw-tab {
+  appearance: none; cursor: pointer; flex: none; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 7px;
+  font: 600 12px/1 var(--font); color: var(--text-2);
+  padding: 8px 12px; border-radius: 9px;
+  background: var(--inset); border: 1px solid transparent;
+}
+.hw-tab:hover { color: var(--text); }
+.hw-tab.active {
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 15%, transparent);
+  border-color: color-mix(in srgb, var(--accent) 38%, transparent);
+}
+.hw-tab .sf { width: 14px; height: 14px; }
+.hw-pane-head { display: flex; align-items: baseline; gap: 10px; padding: 0 2px 10px; flex-wrap: wrap; }
+.hw-pane-head h3 { margin: 0; font-size: 14px; font-weight: 700; }
+.hw-pane-head .sub { font-size: 11.5px; color: var(--text-3); }
+.hw-pane-head .count { margin-left: auto; font: 600 10.5px/1 var(--font-mono); color: var(--text-3); }
+.hw-pane-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; align-items: start; }
+.hw-pane-group {
+  background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card);
+  border: 1px solid var(--card-border); border-radius: var(--radius);
+  padding: 14px 16px 12px; box-shadow: var(--shadow-sm);
+}
+.hw-pane-group h4 { margin: 0 0 8px; font-size: 12px; font-weight: 700; }

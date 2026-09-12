@@ -19,36 +19,43 @@ final class FanAlertService {
     /// 单例私有的 FanSampler 引用,attach 后持有。
     private weak var sampler: FanSampler?
     private var cancellable: AnyCancellable?
+    private var settingsCancellable: AnyCancellable?
     /// 上一次触发过通知的状态(去重用)。初始为 unknown,首次到 normal 不发恢复通知。
     private var lastAlertedStatus: FanStatus = .unknown
-    /// 通知权限是否已请求过(避免重复弹窗)。
-    private var didRequestAuthorization = false
+    /// 通知设置的持有者。**必须由 attach 注入,不能反向取 `AppDelegate.shared?.store`**:
+    /// attach 是在 `MonitorStore.init` 内部调用的,那时 store 的 `lazy var` 初始化还没返回,
+    /// 反查会重入同一个惰性初始化并**直接死锁**(实测表现为测试宿主启动即挂起)。
+    private weak var settings: MonitorSettings?
+
+    /// 通知总开关:关着就完全不发。授权申请与压力告警共用一处
+    /// (`AlertNotificationDelegate.requestAuthorizationIfNeeded`)。
+    /// 关掉期间只更新 `lastAlertedStatus`、不发通知;重新打开时按当前状态补判一次。
+    private var notificationsEnabled: Bool {
+        settings?.alertNotificationsEnabled ?? false
+    }
 
     private init() {}
 
     /// 绑定到 FanSampler,开始监听状态变化并发送告警通知。
     /// - Parameter sampler: 风扇采样器,弱引用持有,避免循环引用。
-    func attach(to sampler: FanSampler) {
+    func attach(to sampler: FanSampler, settings: MonitorSettings) {
         self.sampler = sampler
-        requestNotificationAuthorization()
+        self.settings = settings
         cancellable = sampler.$status
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newStatus in
                 self?.handleStatusChange(newStatus, sampler: sampler)
             }
-    }
-
-    /// 请求通知权限(.alert + .sound)。仅在首次调用时弹窗,被拒后不再骚扰。
-    private func requestNotificationAuthorization() {
-        guard !didRequestAuthorization else { return }
-        didRequestAuthorization = true
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, error in
-            if let error {
-                AppLogger.sampler.error("风扇告警通知授权失败: \(error.localizedDescription, privacy: .public)")
-            } else if !granted {
-                AppLogger.sampler.notice("用户未授权风扇告警通知,告警将仅通过面板展示")
+        // 通知重开时按**当前**状态补判一次:与压力告警「关掉即 reset、重开后重新累计」
+        // 同一套语义。否则风扇一直停在 warning 时,重开通知也永远不响——状态没变化
+        // 就不会再有新帧,`lastAlertedStatus` 永远等于它。
+        settingsCancellable = settings.$alertNotificationsEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                guard let self, enabled else { return }
+                self.lastAlertedStatus = .unknown
+                self.handleStatusChange(sampler.status, sampler: sampler)
             }
-        }
     }
 
     /// 处理状态变化:决定是否发送告警/恢复通知。
@@ -56,6 +63,11 @@ final class FanAlertService {
     ///   - newStatus: FanSampler 最新发布的风扇状态。
     ///   - sampler: 风扇采样器,用于读取当前风扇详情填充通知正文。
     private func handleStatusChange(_ newStatus: FanStatus, sampler: FanSampler) {
+        // 通知关着时只更新已上报状态,不发任何通知——恢复通知同理。
+        guard notificationsEnabled else {
+            lastAlertedStatus = newStatus
+            return
+        }
         // 状态未变则不处理(理论上 Combine 已去重,这里二次保险)。
         guard newStatus != lastAlertedStatus else { return }
 
