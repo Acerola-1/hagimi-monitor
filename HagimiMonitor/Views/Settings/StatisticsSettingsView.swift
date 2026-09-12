@@ -447,114 +447,151 @@ struct StatisticsSettingsView: View {
     private struct SummaryMetric: Identifiable {
         let id: String
         let label: String
-        /// 数值文本(组合文本:压力档位按等级着色);nil = 暂无数据。
+        /// 行首图标:沿用 MonitorKind.symbol 语义映射与 MonitorPalette 模块色,
+        /// 与设置侧栏/面板同一套语义,作纯文字行间的扫读锚点。
+        let icon: String
+        let tint: Color
+        /// 数值文本(主值加粗等宽、限定词次要小字的组合文本);nil = 暂无数据。
         let value: Text?
     }
 
     private var metricsSection: some View {
         VStack(spacing: 0) {
-            ForEach(summaryMetrics) { metric in
-                metricRow(metric)
-            }
+            metricGroup(caption: String(localized: "stats.group.usage"), metrics: usageMetrics)
+            SettingsDivider()
+                .padding(.leading, 34)
+            metricGroup(caption: String(localized: "stats.group.transfer"), metrics: transferMetrics)
         }
         .padding(.top, 2)
         .padding(.bottom, 4)
     }
 
-    /// 行内容:CPU / GPU 平均使用率(附高负载累计)、功耗、内存占用、内存压力、
-    /// 网络收发、磁盘读写。峰值、压缩、Swap 与评分明细留给报表。
-    private var summaryMetrics: [SummaryMetric] {
+    /// 一组指标:组标题(次要小字)+ 逐行。分组把「机器用了多少」与「进出多少数据」
+    /// 在视觉上分开,不必逐字读完所有行。
+    private func metricGroup(caption: String, metrics: [SummaryMetric]) -> some View {
+        VStack(spacing: 0) {
+            Text(caption)
+                .font(.callout.weight(.medium))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 14)
+                .padding(.top, 8)
+                .padding(.bottom, 2)
+            ForEach(metrics) { metric in
+                metricRow(metric)
+            }
+        }
+    }
+
+    /// 「用量」组:CPU / GPU 平均使用率(附高负载累计)、内存占用、功耗。
+    /// 内存压力不再单列——状态块已按档位与累计时长承载同一信息,重复列一遍只会
+    /// 互相打架;峰值、压缩、Swap 与评分明细仍留给报表。
+    private var usageMetrics: [SummaryMetric] {
         let row = aggregate
         return [
             SummaryMetric(
                 id: "cpu",
                 label: String(localized: "stats.metrics.cpu"),
+                icon: MonitorKind.cpu.symbol,
+                tint: palette.moduleTint(for: .cpu),
                 value: usageValue(average: row?.cpuAvg, highSeconds: row?.cpuHighS)
             ),
             SummaryMetric(
                 id: "gpu",
                 label: String(localized: "stats.metrics.gpu"),
+                icon: MonitorKind.gpu.symbol,
+                tint: palette.moduleTint(for: .gpu),
                 value: usageValue(average: row?.gpuAvg, highSeconds: row?.gpuHighS)
-            ),
-            SummaryMetric(
-                id: "power",
-                label: String(localized: "stats.metrics.power"),
-                value: row?.powerAvg.map { Text(String(localized: "stats.metrics.average \(String(format: "%.1f W", $0))")) }
             ),
             SummaryMetric(
                 id: "memoryUsage",
                 label: String(localized: "stats.metrics.memoryUsage"),
-                value: row?.memPctAvg.map { Text(String(localized: "stats.metrics.average \(StatisticsDisplayFormat.percent($0))")) }
+                icon: MonitorKind.memory.symbol,
+                tint: palette.moduleTint(for: .memory),
+                value: row?.memPctAvg.map { averageText(StatisticsDisplayFormat.percent($0)) }
             ),
             SummaryMetric(
-                id: "memory",
-                label: String(localized: "overview.event.kind.memory"),
-                value: memoryPressureValue(row)
+                id: "power",
+                label: String(localized: "stats.metrics.power"),
+                icon: MonitorKind.battery.symbol,
+                tint: palette.moduleTint(for: .battery),
+                value: row?.powerAvg.map { averageText(String(format: "%.1f W", $0)) }
             ),
+        ]
+    }
+
+    /// 「传输」组:网络收发与磁盘读写的范围累计量。
+    private var transferMetrics: [SummaryMetric] {
+        let row = aggregate
+        return [
             SummaryMetric(
                 id: "network",
                 label: String(localized: "overview.resources.network"),
+                icon: MonitorKind.network.symbol,
+                tint: palette.moduleTint(for: .network),
                 value: networkValue(row)
             ),
             SummaryMetric(
                 id: "disk",
                 label: String(localized: "stats.metrics.disk"),
+                icon: MonitorKind.storage.symbol,
+                tint: palette.moduleTint(for: .storage),
                 value: diskValue(row)
             ),
         ]
     }
 
-    /// CPU/GPU 行:平均使用率,有过高负载时补上累计时长(没有就不写,不堆零值)。
+    /// 主值:加粗等宽数字,行内的扫读落点。
+    private func mainValueText(_ value: String) -> Text {
+        Text(value).font(.body.weight(.semibold)).monospacedDigit()
+    }
+
+    /// 限定词(平均/高负载/读/写/方向符):次要色小字,需要细读时才进入视野。
+    private func qualifierText(_ text: String) -> Text {
+        Text(text).font(.callout).foregroundStyle(.secondary)
+    }
+
+    /// 「平均 X」:限定词前缀 + 主值。
+    private func averageText(_ value: String) -> Text {
+        qualifierText(String(localized: "stats.metrics.word.average") + " ") + mainValueText(value)
+    }
+
+    /// CPU/GPU 行:平均使用率为主值,有过高负载时以限定词补累计时长(没有就不写,不堆零值)。
     private func usageValue(average: Double?, highSeconds: Double?) -> Text? {
         var parts: [Text] = []
         if let average {
-            parts.append(Text(String(localized: "stats.metrics.average \(StatisticsDisplayFormat.percent(average))")))
+            parts.append(averageText(StatisticsDisplayFormat.percent(average)))
         }
         if let highSeconds, highSeconds > 0 {
-            parts.append(Text(String(localized: "stats.metrics.highLoad \(StatisticsDisplayFormat.duration(highSeconds))")))
+            parts.append(qualifierText(String(localized: "stats.metrics.word.highLoad") + " " + StatisticsDisplayFormat.duration(highSeconds)))
         }
         guard !parts.isEmpty else { return nil }
-        return parts.dropFirst().reduce(parts[0]) { $0 + Text(" · ") + $1 }
-    }
-
-    /// 内存压力行:有压力写「最高档位 · 累计时长」,档位按等级着色(与告警块同一口径);
-    /// 观测不足时不说「正常」;无有效观测显示暂无数据。
-    private func memoryPressureValue(_ row: StatisticsRow?) -> Text? {
-        guard let row else { return nil }
-        switch StatisticsOverviewModel.memoryPressureStatus(row) {
-        case .noObservation:
-            return nil
-        case .pressure(let seconds):
-            var parts: [Text] = []
-            if let worst = StatisticsOverviewModel.pressureLevels(of: .memory, row: row).first,
-               let level = levelText(.memory, worst.level) {
-                parts.append(Text(level).foregroundStyle(levelTint(.memory, worst.level)))
-            }
-            parts.append(Text(String(localized: "stats.summary.accumulated \(StatisticsDisplayFormat.duration(seconds))")))
-            return parts.dropFirst().reduce(parts[0]) { $0 + Text(" · ") + $1 }
-        case .insufficient:
-            return Text(String(localized: "stats.metrics.insufficient"))
-        case .normal:
-            return Text(String(localized: "memory-pressure.normal"))
-        }
+        return parts.dropFirst().reduce(parts[0]) { $0 + qualifierText(" · ") + $1 }
     }
 
     private func networkValue(_ row: StatisticsRow?) -> Text? {
         guard let row, row.netDown != nil || row.netUp != nil else { return nil }
         let down = StatisticsDisplayFormat.bytes(row.netDown ?? 0)
         let up = StatisticsDisplayFormat.bytes(row.netUp ?? 0)
-        return Text(String(localized: "stats.metrics.networkValues \(down) \(up)"))
+        return qualifierText("↓ ") + mainValueText(down) + qualifierText("  ↑ ") + mainValueText(up)
     }
 
     private func diskValue(_ row: StatisticsRow?) -> Text? {
         guard let row, row.diskRead != nil || row.diskWrite != nil else { return nil }
         let read = StatisticsDisplayFormat.bytes(row.diskRead ?? 0)
         let write = StatisticsDisplayFormat.bytes(row.diskWrite ?? 0)
-        return Text(String(localized: "stats.metrics.diskValues \(read) \(write)"))
+        return qualifierText(String(localized: "stats.metrics.word.read") + " ") + mainValueText(read)
+            + qualifierText("  " + String(localized: "stats.metrics.word.write") + " ") + mainValueText(write)
     }
 
     private func metricRow(_ metric: SummaryMetric) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 16) {
+        HStack(spacing: 10) {
+            Image(systemName: metric.icon)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(metric.tint)
+                .frame(width: 24, height: 24)
+                .background(metric.tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+
             Text(metric.label)
                 .font(.body)
 
@@ -562,17 +599,14 @@ struct StatisticsSettingsView: View {
 
             if let value = metric.value {
                 value
-                    .font(.body)
-                    .monospacedDigit()
             } else {
                 Text(String(localized: "overview.resources.noData"))
-                    .font(.body)
+                    .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
-        .frame(minHeight: 28)
     }
 
     private var reportEntryRow: some View {
