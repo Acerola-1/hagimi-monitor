@@ -37,7 +37,8 @@ struct MonitorPalette {
         case .balanced:
             Color(hex: 0x4E7FD9)
         case .vibrant:
-            Color(hex: 0xC268B8)
+            // 中性蓝灰:紫族只留给 GPU,显示器是附属信息行,低饱和退场不抢色。
+            Color(hex: 0x64748B)
         }
     }
 
@@ -198,6 +199,8 @@ struct MonitorPalette {
         case .battery:
             Color(hex: 0x2AB55E)
         case .fan:
+            // 靛蓝紫:与相邻内存行(#1192E8 蓝)、GPU 紫(#A855F7)同为蓝紫族,
+            // 色相相邻、保持可辨。
             Color(hex: 0x6366F1)
         case .bluetooth:
             // Bluetooth SIG 官方蓝。
@@ -215,6 +218,7 @@ extension Color {
             blue: Double(hex & 0xFF) / 255
         )
     }
+
 }
 
 /// 活力行玻璃的垂直衰减填充:停靠点按实际行高换算,收起的行整卡落在

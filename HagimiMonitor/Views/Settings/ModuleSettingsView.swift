@@ -5,7 +5,12 @@ struct ModuleSettingsView: View {
     @ObservedObject var settings: MonitorSettings
     @Environment(\.colorScheme) private var colorScheme
     /// 电池分页预览的当前页:驱动预览胶囊与下方指标选项联动过滤。
+    /// 沙盒版无拓扑页,默认落在健康页。
+    #if DIRECT_DISTRIBUTION
     @State private var batteryTab: BatteryPageTab = .flow
+    #else
+    @State private var batteryTab: BatteryPageTab = .health
+    #endif
 
     /// 与面板同源的调色板,供实时预览卡取令牌。
     private var palette: MonitorPalette {
@@ -74,7 +79,7 @@ struct ModuleSettingsView: View {
                 }
 
                 if kind == .battery && selectionMetrics.isEmpty {
-                    // 供电页(及沙盒版拓扑页)无归属可勾指标,给出说明而非空白。
+                    // 供电页无归属可勾指标,给出说明而非空白。
                     Text(String(localized: "settings.battery.tab-no-metrics"))
                         .font(.callout)
                         .foregroundStyle(.secondary)

@@ -35,13 +35,13 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 设置页预览可选的分页:排名页的数据源(逐进程能耗)仅直连版产得出,
-    /// 商店版既不产也不展示,避免预览出现面板永远不会出现的分页。
+    /// 设置页预览可选的分页:排名页(逐进程能耗)与拓扑页(分项功耗)仅直连版
+    /// 产得出,商店版既不产也不展示,避免预览出现面板永远不会出现的分页。
     static var previewCases: [BatteryPageTab] {
         #if DIRECT_DISTRIBUTION
         return allCases
         #else
-        return allCases.filter { $0 != .ranking }
+        return allCases.filter { $0 != .ranking && $0 != .flow }
         #endif
     }
 

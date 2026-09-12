@@ -25,6 +25,7 @@
   .sf-fan { --i: var(--i-fan); }
   .sf-thermal { --i: var(--i-thermal); }
   .sf-batt { --i: var(--i-batt); }
+  .sf-display { --i: var(--i-display); }
   .sf-health { --i: var(--i-health); }
   .sf-trend { --i: var(--i-trend); }
   .sf-overview { --i: var(--i-overview); }
@@ -35,6 +36,7 @@
   .sf-table { --i: var(--i-table); }
   .sf-insights { --i: var(--i-insights); }
   .sf-apps { --i: var(--i-apps); }
+  .sf-rank { --i: var(--i-rank); }
   .sf-legacy { --i: var(--i-legacy); }
   .sf-top { --i: var(--i-top); }
   .sf-device { --i: var(--i-device); }
@@ -42,25 +44,30 @@
   .sf-clock { --i: var(--i-clock); }
   .sf-calendar { --i: var(--i-calendar); }
   :root {
-    --bg: #0a0b0e;
-    --bg-grad-1: rgba(41, 151, 255, 0.07);
-    --bg-grad-2: rgba(255, 255, 255, 0.02);
-    --bg-grad-3: transparent;
-    --card: rgba(20, 23, 29, 0.78);
+    /* ── 界面分区 CRISP:白铬(顶栏+侧栏) → 灰画布 → 白卡的三层明度台阶 ──
+       品牌色与图表色取自应用真实调色板(MonitorPalette):石板墨文字四级、
+       平衡主题模块色、good/warn/crit 语义色。无雾、无渐变字、无玻璃。 */
+    --bg: #0f1013;                  /* 画布 */
+    --chrome: #16171c;              /* 铬层:顶栏 + 侧栏 + 时间栏 */
+    --bg-grad-1: transparent; --bg-grad-2: transparent; --bg-grad-3: transparent;
+    --card: #1d1f24;
     --card-border: rgba(255, 255, 255, 0.08);
-    --card-hover: rgba(255, 255, 255, 0.04);
-    --card-glow: rgba(255, 255, 255, 0.03);
-    --inset: rgba(255, 255, 255, 0.04);
-    --text: #f5f5f7;
-    --text-2: #a1a1a6;
-    --text-3: #86868b;
-    --tooltip-bg: rgba(18, 20, 26, 0.96);
-    --tooltip-border: rgba(255, 255, 255, 0.12);
-    --accent: #2997ff;
-    --radius: 12px;
-    --nav-bg: rgba(10, 11, 14, 0.82);
-    --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-    --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.20);
+    --card-hover: rgba(255, 255, 255, 0.05);
+    --card-glow: transparent;
+    --inset: rgba(255, 255, 255, 0.045);
+    --text: rgba(255, 255, 255, 0.96);
+    --text-2: rgba(255, 255, 255, 0.66);
+    --text-3: rgba(255, 255, 255, 0.42);
+    --tooltip-bg: rgba(38, 40, 47, 0.98);
+    --tooltip-border: rgba(255, 255, 255, 0.08);
+    --accent: #41c184;              /* 应用 good 绿(MonitorPalette) */
+    --accent-soft: rgba(65, 193, 132, 0.16);
+    --pill: #2e323b;                /* 侧栏选中:墨黑胶囊 */
+    --pill-text: rgba(255, 255, 255, 0.96);
+    --radius: 14px;
+    --nav-bg: #16171c;
+    --shadow: 0 18px 44px rgba(0, 0, 0, 0.52);
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
     --font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "PingFang SC",
             "Hiragino Sans GB", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
     --font-mono: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", monospace;
@@ -70,167 +77,140 @@
   }
   @media (prefers-color-scheme: light) {
     :root {
-      --bg: #f5f5f7;
-      --bg-grad-1: rgba(0, 113, 227, 0.05);
-      --bg-grad-2: rgba(0, 0, 0, 0.02);
-      --bg-grad-3: transparent;
+      --bg: #f5f6f8;
+      --chrome: #ffffff;
+      --bg-grad-1: transparent; --bg-grad-2: transparent; --bg-grad-3: transparent;
       --card: #ffffff;
-      --card-border: rgba(0, 0, 0, 0.08);
+      --card-border: rgba(23, 29, 42, 0.08);
       --card-hover: #ffffff;
-      --card-glow: rgba(0, 0, 0, 0.02);
-      --inset: #f5f5f7;
-      --text: #1d1d1f;
-      --text-2: #515154;
-      --text-3: #86868b;
+      --card-glow: transparent;
+      --inset: rgba(58, 72, 90, 0.045);
+      --text: #171d2a;
+      --text-2: #465164;
+      --text-3: #7a8494;
       --tooltip-bg: rgba(255, 255, 255, 0.98);
-      --tooltip-border: rgba(0, 0, 0, 0.10);
-      --accent: #0071e3;
-      --nav-bg: rgba(245, 245, 247, 0.85);
-      --shadow: 0 4px 16px rgba(0, 0, 0, 0.06);
-      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04);
+      --tooltip-border: rgba(23, 29, 42, 0.08);
+      --accent: #259458;            /* 应用 good 绿微加深,白底小字可读 */
+      --accent-soft: rgba(47, 158, 100, 0.11);
+      --pill: #171d2a;
+      --pill-text: #ffffff;
+      --nav-bg: #ffffff;
+      --shadow: 0 18px 44px rgba(23, 29, 42, 0.16);
+      --shadow-sm: 0 1px 2px rgba(23, 29, 42, 0.05);
       color-scheme: light;
     }
   }
   * { box-sizing: border-box; }
   html { scroll-behavior: smooth; }
+  /* 键盘焦点可见性:统一绿色描边 */
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
   body {
     margin: 0;
     font-family: var(--font);
     color: var(--text);
-    background:
-      radial-gradient(1200px 500px at 15% -10%, var(--bg-grad-1), transparent 60%),
-      radial-gradient(1000px 600px at 90% 0%, var(--bg-grad-2), transparent 55%),
-      radial-gradient(800px 400px at 50% 100%, var(--bg-grad-3), transparent 70%),
-      var(--bg);
-    background-attachment: fixed;
+    background: var(--bg);
     -webkit-font-smoothing: antialiased;
   }
-  /* 氛围光斑:两枚低透明度光晕缓慢漂移,为深浅色主题提供空间层次 */
-  body::before, body::after {
-    content: ""; position: fixed; z-index: -1; border-radius: 50%;
-    filter: blur(90px); pointer-events: none;
-  }
-  body::before {
-    width: 560px; height: 560px; left: -160px; top: -180px;
-    background: radial-gradient(circle, rgba(122, 162, 247, 0.16), transparent 65%);
-    animation: aurora-a 26s ease-in-out infinite alternate;
-  }
-  body::after {
-    width: 640px; height: 640px; right: -220px; top: 260px;
-    background: radial-gradient(circle, rgba(168, 85, 247, 0.12), transparent 65%);
-    animation: aurora-b 34s ease-in-out infinite alternate;
-  }
-  @keyframes aurora-a { to { transform: translate(130px, 90px) scale(1.18); } }
-  @keyframes aurora-b { to { transform: translate(-150px, -70px) scale(0.88); } }
-  @media (prefers-reduced-motion: reduce) {
-    body::before, body::after { animation: none; }
-  }
   /* ── 版式:顶部识读条 + 左侧模块栏 + 右侧(时间栏 + 独立滚动内容) ──
-     模块栏与时间栏都常驻在滚动容器之外,不依赖滚动事件或图表渲染才出现;
-     内容区独立滚动,长报表在窄窗口里也不会把导航推出视野。 */
+     铬层(顶栏/侧栏/时间栏)与灰画布形成三层明度台阶,层级靠表面分层。 */
   .shell { height: 100vh; display: flex; flex-direction: column; }
   .top {
-    display: flex; align-items: flex-end; justify-content: space-between;
+    display: flex; align-items: center; justify-content: space-between;
     gap: 12px 24px; flex-wrap: wrap; flex: none;
-    padding: 16px 26px 14px; border-bottom: 1px solid var(--card-border);
+    padding: 17px 28px 15px; border-bottom: 1px solid var(--card-border);
+    background: var(--chrome);
   }
   .top-side { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; justify-content: flex-end; }
   .workspace { display: flex; flex: 1; min-height: 0; }
   .rail {
-    width: 184px; flex: none; display: flex; flex-direction: column;
-    overflow: auto; padding: 20px 12px 18px;
+    width: 212px; flex: none; display: flex; flex-direction: column;
+    overflow: auto; padding: 16px 12px 16px;
     border-right: 1px solid var(--card-border);
-    background: var(--card);
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    background: var(--chrome);
   }
+  /* 分组小标题与条目聚合:小标题贴近本组首条,组前留白把组与上组拉开。
+     注意结构是 eyebrow + 若干 a 交错,组间距必须作用于每个 eyebrow 自身,
+     不能用相邻选择器(.eyebrow + .eyebrow)判断。 */
   .rail .eyebrow {
-    font-size: 10px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase;
-    color: var(--text-3); padding: 0 10px 12px; font-family: var(--font-mono);
+    font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+    color: var(--text-3); padding: 0 10px 2px; margin: 18px 0 2px;
   }
+  .rail .eyebrow:first-child { margin-top: 0; }
   .module-nav { display: flex; flex-direction: column; gap: 3px; }
   .module-nav a {
-    display: flex; align-items: center; gap: 10px;
-    padding: 9px 11px; border-radius: 9px; text-decoration: none;
-    color: var(--text-2); font-size: 12.5px; font-weight: 600; white-space: nowrap;
-    transition: background 0.15s ease, color 0.15s ease;
+    display: flex; align-items: center; gap: 9px;
+    padding: 6.5px 10px; border-radius: 8px; text-decoration: none;
+    color: var(--text-2); font-size: 13px; font-weight: 480; white-space: nowrap;
+    transition: background 0.12s ease, color 0.12s ease;
   }
   .module-nav a .sf { width: 16px; height: 16px; flex: none; color: var(--text-3); }
   .module-nav a:hover { background: var(--inset); color: var(--text); }
-  .module-nav a.active { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+  .module-nav a.active { background: var(--pill); color: var(--pill-text); font-weight: 560; }
   .module-nav a.active .sf { color: var(--accent); }
-  .rail-footer {
-    margin-top: auto; padding: 26px 10px 0;
-    font-size: 10.5px; color: var(--text-3); line-height: 1.7;
-  }
-  .rail-footer .status-dot {
-    display: inline-block; width: 6px; height: 6px; margin-right: 6px;
-    border-radius: 50%; background: var(--accent);
-  }
-  .rail-footer small { display: block; margin-top: 3px; font-size: 10px; }
   .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .filters {
     position: relative; flex: none;
     display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-    padding: 12px 26px; border-bottom: 1px solid var(--card-border); background: var(--card);
+    padding: 10px 28px 11px; border-bottom: 1px solid var(--card-border); background: var(--chrome);
   }
-  .filter-title { font-size: 11px; color: var(--text-3); font-family: var(--font-mono); letter-spacing: 0.4px; }
+  .filter-title { font-size: 12px; font-weight: 560; color: var(--text-3); }
   .range-controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .scroll { flex: 1; min-height: 0; overflow: auto; scroll-behavior: smooth; scroll-padding-top: 18px; }
-  .content { max-width: 1180px; margin: 0 auto; padding: 24px 26px 56px; }
+  .content { max-width: 1140px; margin: 0 auto; padding: 32px 32px 72px; }
+  /* 本机信息查询翻页视图:内容起始即本机模块,贴住时间栏下沿顶格 */
+  body.in-machine .content { padding-top: 0; }
 
-  /* ── 报告 masthead:苹果原厂硬件规格档案 (Cupertino Specimen) ── */
-  .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+  /* ── 报告 masthead:应用图标 + 刊名 + 石板墨标题,无渐变字 ── */
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  /* 图标直接展示圆角原图,不垫底色、不描边,让它在铬层上自然落成图形 */
   .brand .mark {
-    width: 34px; height: 34px; border-radius: 9px; flex: none;
+    width: 32px; height: 32px; border-radius: 8px; flex: none;
     background-image: var(--app-icon); background-size: 100% 100%;
-    box-shadow: 0 0 0 1px var(--card-border), 0 3px 10px rgba(0, 0, 0, 0.25);
   }
   .brand .kicker {
-    font-size: 10px; font-weight: 700; text-transform: uppercase;
-    letter-spacing: 1.5px; color: var(--accent); margin-bottom: 5px;
-    font-family: var(--font-mono);
+    font-size: 10px; font-weight: 600; letter-spacing: 0.14em;
+    color: var(--text-3); margin-bottom: 3px;
   }
-  .brand h1 { margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.6px; color: var(--text); }
-  .meta-chips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+  .brand h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.2px; color: var(--text); }
+  /* 顶栏元信息:苹果网页式「名称加粗 + 间隔点」规格串 */
+  .meta-chips { display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; justify-content: flex-end; }
   .chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    font-size: 11.5px; color: var(--text-2); font-family: var(--font-mono);
-    padding: 5px 11px; border-radius: 8px;
-    background: var(--card); border: 1px solid var(--card-border);
-    box-shadow: 0 1px 0 var(--card-glow) inset;
-    backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    display: inline-flex; align-items: center;
+    font-size: 12.5px; color: var(--text-2); font-variant-numeric: tabular-nums;
   }
-  .chip .sf { width: 13px; height: 13px; color: var(--text-3); }
+  .chip + .chip::before { content: "·"; color: var(--text-3); margin: 0 10px; }
+  .chip:first-child { color: var(--text); font-weight: 600; }
 
   /* ── 范围控件(位于固定导航内) ────────────── */
   .toolbar { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; margin: 0; }
-  .ranges { display: inline-flex; padding: 3px; gap: 2px; border-radius: 11px;
-    background: linear-gradient(180deg, var(--card-glow), transparent), var(--card);
-    border: 1px solid var(--card-border); box-shadow: 0 1px 0 var(--card-glow) inset; }
+  /* macOS 分段控件:灰槽 + 白钮微阴影 */
+  .ranges { display: inline-flex; padding: 2.5px; gap: 2px; border-radius: 9px;
+    background: var(--inset); }
   .ranges button {
     appearance: none; border: 0; background: transparent; color: var(--text-2);
-    font: 600 12px/1 var(--font); padding: 7px 12px; border-radius: 8px; cursor: pointer;
+    font: 500 12.5px/1 var(--font); padding: 5px 15px; border-radius: 7px; cursor: pointer;
     transition: background 0.15s ease, color 0.15s ease;
   }
-  .ranges button:hover { color: var(--text); background: var(--inset); }
-  .ranges button.active { background: color-mix(in srgb, var(--accent) 20%, transparent); color: var(--accent);
-    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .ranges button:hover { color: var(--text); }
+  .ranges button.active { background: var(--card); color: var(--text); font-weight: 570;
+    box-shadow: 0 1px 3px rgba(23, 29, 42, 0.14), 0 0 0 0.5px rgba(23, 29, 42, 0.04); }
+  @media (prefers-color-scheme: dark) {
+    .ranges button.active { box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4); }
+  }
   .custom-range { position: relative; flex: none; }
-  /* 自定义日期范围:Flatpickr 日期选择库的字段与日历皮肤,跟随报告暗色令牌体系 */
+  /* 自定义日期范围:Flatpickr 字段做成胶囊按钮,激活时墨黑底白字 */
   .cal-field {
     appearance: none; cursor: pointer; min-width: 132px;
-    font: 600 12px/1 var(--font);
-    padding: 8px 12px; border-radius: 8px;
-    background: var(--card); border: 1px solid var(--card-border);
+    font: 500 12.5px/1 var(--font);
+    padding: 6.5px 14px; border-radius: 99px;
+    background: var(--inset); border: 1px solid transparent;
     color: var(--text-2); color-scheme: inherit;
-    box-shadow: 0 1px 0 var(--card-glow) inset;
-    transition: color 0.15s ease, border-color 0.15s ease;
+    transition: color 0.15s ease, background 0.15s ease;
   }
   .cal-field::placeholder { color: var(--text-3); font-weight: 500; }
-  .cal-field:hover { color: var(--text); border-color: color-mix(in srgb, var(--accent) 42%, transparent); }
-  .cal-field:focus { outline: none; color: var(--text); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
-  .cal-field.active { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 42%, transparent);
-    box-shadow: 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent); }
+  .cal-field:hover { color: var(--text); }
+  .cal-field:focus { outline: none; color: var(--text); }
+  .cal-field.active { color: var(--pill-text); background: var(--pill); }
   /* Flatpickr 日历面板结构,覆盖其默认浅色皮肤为暗色毛玻璃 */
   .flatpickr-calendar {
     margin-top: 8px; width: auto; padding: 8px;
@@ -273,21 +253,18 @@
   .flatpickr-monthDropdown-months { background: var(--tooltip-bg); color: var(--text); border-radius: 6px; }
   .flatpickr-months .flatpickr-month { padding: 4px 0 8px; }
 
-  /* ── 卡片通用 ──────────────────────────── */
+  /* ── 卡片通用:白面 + 发丝线 + 一层微阴影,无玻璃无渐变 ── */
   .card {
-    background:
-      linear-gradient(180deg, var(--card-glow), transparent 50%),
-      var(--card);
+    background: var(--card);
     border: 1px solid var(--card-border);
-    border-radius: var(--radius); padding: 18px 20px 14px;
+    border-radius: var(--radius); padding: 18px 20px 16px;
     box-shadow: var(--shadow-sm);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
   }
   section { margin-bottom: 18px; }
-  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--card-border); }
+  .sec-head { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--card-border); }
   .sec-head .sf { width: 16px; height: 16px; color: var(--text-3); flex: none; }
-  .sec-head h2 { margin: 0; font-size: 13.5px; font-weight: 700; letter-spacing: -0.1px; text-transform: uppercase; }
-  .sec-head .hint { margin-left: auto; font-size: 11px; color: var(--text-3); font-family: var(--font-mono); font-weight: 500; }
+  .sec-head h2 { margin: 0; font-size: 13px; font-weight: 600; letter-spacing: 0; }
+  .sec-head .hint { margin-left: auto; font-size: 11.5px; color: var(--text-3); font-weight: 500; font-variant-numeric: tabular-nums; }
   .chart { width: 100%; height: 300px; }
   .chart.tall { height: 340px; }
   .chart.short { height: 260px; }
@@ -304,6 +281,8 @@
 
   /* ── 首屏总览带:健康评分卡 + KPI 网格同行,核心摘要一屏读完 ── */
   .summary { display: grid; grid-template-columns: 340px 1fr; gap: 18px; align-items: start; }
+  /* 总览补的模块大标题横跨两列,不参与评分/KPI 分栏 */
+  .summary > .mod-head { grid-column: 1 / -1; margin-bottom: 0; }
   @media (max-width: 1020px) { .summary { grid-template-columns: 1fr; } }
   .summary-kpis {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
@@ -316,7 +295,11 @@
   .summary-kpis .kpi .sub { margin-top: 2px; }
   .summary-kpis .spark { height: 22px; }
   .summary-kpis .spark-wrap { padding-top: 7px; }
-  .health-main { display: flex; align-items: center; gap: 20px; padding: 10px 2px 4px; flex-wrap: wrap; }
+  /* 评分卡内容整体居中:圆环居方块中央,维度徽章与附注纵向堆叠其后 */
+  .health-main {
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 12px 2px 8px; text-align: center;
+  }
   .score-ring-wrap { position: relative; width: 108px; height: 108px; flex: none; }
   .score-ring-text {
     position: absolute; inset: 0; display: grid; place-content: center; text-align: center;
@@ -325,16 +308,16 @@
   .score-ring-wrap svg circle.arc { transition: stroke-dashoffset 0.9s cubic-bezier(0.25, 0.9, 0.35, 1); }
   .score-num { font-size: 32px; font-weight: 800; font-family: var(--font-mono); font-variant-numeric: tabular-nums; line-height: 1; letter-spacing: -0.5px; }
   .score-level { font-size: 11px; font-weight: 600; margin-top: 5px; letter-spacing: 0.3px; }
-  .score-dims { display: flex; flex-wrap: wrap; gap: 6px; max-width: 380px; }
+  .score-dims { display: flex; flex-wrap: wrap; gap: 6px; max-width: 380px; justify-content: center; }
+  .score-side { display: flex; flex-direction: column; align-items: center; }
   .score-badge {
     display: inline-flex; align-items: center; gap: 5px;
     font-size: 11px; font-weight: 550; color: var(--text-2);
-    border: 1px solid var(--card-border);
-    background: linear-gradient(180deg, var(--card-glow), transparent), var(--inset);
-    padding: 4px 10px; border-radius: 999px;
+    background: var(--bg);
+    padding: 5px 11px; border-radius: 999px;
   }
-  .score-badge .dot { width: 6px; height: 6px; border-radius: 50%; box-shadow: 0 0 6px currentColor; }
-  .score-badge .raw { color: var(--text-3); font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
+  .score-badge .dot { width: 6px; height: 6px; border-radius: 50%; }
+  .score-badge .raw { color: var(--text-3); font-variant-numeric: tabular-nums; font-weight: 500; }
   .score-capped {
     display: inline-flex; align-items: center; gap: 6px; margin-top: 10px;
     font-size: 11.5px; font-weight: 550; color: #e08e45;
@@ -343,40 +326,39 @@
 
   /* ── KPI(直接填充 .summary-kpis 栅格) ─── */
   .kpi {
-    background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card);
-    border: 1px solid var(--card-border); border-radius: var(--radius);
-    padding: 14px 16px 12px; display: flex; flex-direction: column;
-    box-shadow: 0 1px 0 var(--card-glow) inset;
-    backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-    transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+    background: var(--card);
+    border: 1px solid var(--card-border); border-radius: 13px;
+    padding: 13px 15px 11px; display: flex; flex-direction: column;
+    box-shadow: var(--shadow-sm);
+    transition: border-color 0.15s ease;
   }
-  .kpi:hover { background: linear-gradient(180deg, var(--card-glow), transparent 50%), var(--card-hover); transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 20%, var(--card-border)); }
+  .kpi:hover { border-color: rgba(23, 29, 42, 0.16); }
+  @media (prefers-color-scheme: dark) { .kpi:hover { border-color: rgba(255, 255, 255, 0.16); } }
   .kpi-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-  .kpi .label { font-size: 11px; color: var(--text-3); font-weight: 650; letter-spacing: 0.4px; }
-  .kpi .value { font-weight: 700; margin-top: 9px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
-  .kpi .sub { font-size: 11px; color: var(--text-3); margin-top: 3px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 500; }
-  .spark-wrap { margin-top: auto; padding-top: 10px; display: block; }
+  .kpi .label { font-size: 11px; color: var(--text-3); font-weight: 620; }
+  .kpi .value { font-weight: 650; margin-top: 8px; font-variant-numeric: tabular-nums; letter-spacing: -0.3px; }
+  .kpi .sub { font-size: 10.5px; color: var(--text-3); margin-top: 4px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .spark-wrap { margin-top: auto; padding-top: 9px; display: block; }
   .spark { width: 100%; height: 30px; display: block; overflow: visible; }
   .spark polyline { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
   .spark .spark-area { fill: currentColor; opacity: 0.13; }
-  .c-cpu { color: #2997ff; } .c-gpu { color: #bf5af2; } .c-mem { color: #64d2ff; }
-  .c-net { color: #70d7c7; } .c-disk { color: #ffd60a; } .c-batt { color: #30d158; }
-  .c-thermal { color: #ff453a; } .c-muted { color: var(--text-3); } .c-accent { color: var(--accent); }
-  @media (prefers-color-scheme: light) {
-    .c-cpu { color: #0071e3; } .c-gpu { color: #8944ab; } .c-mem { color: #0284c7; }
-    .c-net { color: #00c7be; } .c-disk { color: #b45309; } .c-batt { color: #34c759; }
-    .c-thermal { color: #ff3b30; }
-  }
+  /* 图表模块色 = MonitorPalette balancedModuleTint;内存/网络同图叠加时在各自色相内拉开 */
+  .c-cpu { color: #d27a4a; } .c-gpu { color: #5d8cf0; } .c-mem { color: #3e9eb8; }
+  .c-net { color: #2e9c8e; } .c-disk { color: #9a865e; } .c-batt { color: #55bc6f; }
+  .c-thermal { color: #d94848; } .c-muted { color: #7a8494; } .c-accent { color: var(--accent); }
 
-  /* ── 热力图 ────────────────────────────── */
+  /* ── 热力图:绿色单色梯度(低→高),与应用 good 绿一致 ── */
   .heat-legend { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-3); }
-  .heat-scale { width: 110px; height: 8px; border-radius: 4px; border: 1px solid var(--card-border); }
-  .heat-scale.theme-dark { background: linear-gradient(90deg, #1c2534, #274068, #4c7fd0, #f0a34c, #f4643c); }
-  .heat-scale.theme-light { background: linear-gradient(90deg, #e8edf4, #c3d4ee, #7fa8e0, #f0a34c, #e2543c); }
+  .heat-scale { width: 110px; height: 7px; border-radius: 3.5px; }
+  .heat-scale.theme-dark { background: linear-gradient(90deg, #232826, #2f5230, #4a9257, #6fd59c); }
+  .heat-scale.theme-light { background: linear-gradient(90deg, #eef0ef, #a9d5b8, #6fbb8e, #259458); }
 
   /* ── 应用排行 ──────────────────────────── */
   .apps-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   section.apps-section { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+  /* JS 注入的 .mod-head 大标题不参与两列排卡:独占整行,分隔线贯穿全宽(与 .summary 同规);
+     否则标题格与首行卡片同高拉伸,标题下出现大空白。 */
+  .apps-section > .mod-head { grid-column: 1 / -1; margin-bottom: 0; }
   @media (max-width: 900px) { .apps-grid, section.apps-section { grid-template-columns: 1fr; } }
   .app-list { display: flex; flex-direction: column; }
   .app-row { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--card-border); transition: background 0.12s ease; }
@@ -400,10 +382,10 @@
     font-size: 12.5px;
   }
   .event:last-child { border-bottom: none; }
-  .event .sev { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; box-shadow: 0 0 6px currentColor; }
-  .event .time { color: var(--text-3); font-family: var(--font-mono); font-variant-numeric: tabular-nums; flex: none; width: 128px; font-size: 11.5px; }
-  .event .what { color: var(--text); font-weight: 550; }
-  .event .detail { color: var(--text-3); margin-left: auto; font-family: var(--font-mono); font-variant-numeric: tabular-nums; text-align: right; font-weight: 500; }
+  .event .sev { width: 7px; height: 7px; border-radius: 50%; flex: none; align-self: center; }
+  .event .time { color: var(--text-3); font-variant-numeric: tabular-nums; flex: none; width: 128px; font-size: 11px; }
+  .event .what { color: var(--text); font-weight: 600; }
+  .event .detail { color: var(--text-3); margin-left: auto; font-variant-numeric: tabular-nums; text-align: right; font-weight: 500; font-size: 11px; }
   .event-none { padding: 26px 0; text-align: center; color: var(--text-3); font-size: 13px; }
 
   /* ── 表格 ──────────────────────────────── */
@@ -418,24 +400,20 @@
   td { color: var(--text-2); font-family: var(--font-mono); font-weight: 500; }
   td.day { color: var(--text); font-weight: 600; font-family: var(--font); }
 
-  /* ── 洞察 ─────────────────────────────── */
+  /* ── 洞察:白卡 + 左侧语义色描边 ── */
   .insights { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
   .insight {
     display: flex; flex-direction: column; gap: 9px;
-    background:
-      linear-gradient(150deg, color-mix(in srgb, currentColor 10%, transparent), transparent 62%),
-      linear-gradient(180deg, var(--card-glow), transparent 50%),
-      var(--card);
-    border: 1px solid color-mix(in srgb, currentColor 16%, var(--card-border));
-    border-radius: 14px; padding: 14px 16px;
-    box-shadow: 0 1px 0 var(--card-glow) inset;
-    transition: border-color 0.2s ease;
+    background: var(--card);
+    border: 1px solid var(--card-border);
+    border-left: 2.5px solid currentColor;
+    border-radius: 13px; padding: 14px 16px;
+    box-shadow: var(--shadow-sm);
   }
-  .insight:hover { border-color: color-mix(in srgb, currentColor 28%, var(--card-border)); }
   .insight-head { display: flex; align-items: center; gap: 7px; }
   .insight-head .sf { width: 14px; height: 14px; flex: none; }
-  .insight .t { font-size: 11.5px; color: var(--text-3); font-weight: 600; letter-spacing: 0.3px; }
-  .insight .v { font-size: 13.5px; color: var(--text); line-height: 1.5; font-weight: 550; }
+  .insight .t { font-size: 12px; color: currentColor; font-weight: 650; }
+  .insight .v { font-size: 12.5px; color: var(--text-2); line-height: 1.7; font-weight: 500; }
 
   /* ── 空态 / 页脚 ───────────────────────── */
   .blank-hero { text-align: center; padding: 90px 20px; color: var(--text-2); }
@@ -446,30 +424,24 @@
   .sf { display: inline-block; vertical-align: middle; }
   [hidden] { display: none !important; }
 
-  /* ── 标题渐变 ─────────────────────────── */
-  .brand h1 {
-    background: linear-gradient(120deg, var(--text) 40%, var(--accent) 95%);
-    -webkit-background-clip: text; background-clip: text;
-    -webkit-text-fill-color: transparent; color: transparent;
-  }
+  /* ── 标题:石板墨实色,无渐变字 ── */
 
-  /* 时间栏下沿的阅读进度:细线随滚动位置增长 */
+  /* 时间栏下沿的阅读进度:绿线随滚动位置增长 */
   .nav-progress {
     position: absolute; left: 0; right: 0; bottom: -1px;
     height: 2px; border-radius: 0 2px 2px 0;
-    background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 60%, #a855f7));
+    background: var(--accent);
     width: 0; transition: width 0.1s linear;
   }
   @media (max-width: 980px) {
-    .rail { width: 150px; padding-inline: 9px; }
-    .module-nav a { gap: 8px; padding: 9px 8px; font-size: 12px; }
+    .rail { width: 160px; padding-inline: 9px; }
+    .module-nav a { gap: 8px; padding: 6.5px 8px; font-size: 12px; }
     .top, .filters { padding-inline: 18px; }
     .content { padding: 20px 18px 48px; }
   }
   @media (max-width: 720px) {
-    .rail { width: 116px; }
-    .module-nav a { gap: 7px; padding: 8px 7px; font-size: 11px; }
-    .rail-footer { display: none; }
+    .rail { width: 124px; }
+    .module-nav a { gap: 7px; padding: 6px 7px; font-size: 11px; }
   }
 
   /* ── 卡片进场动效(滚动触发) ───────────── */
@@ -482,54 +454,45 @@
     html { scroll-behavior: auto; }
   }
 
-  /* ── KPI 图标芯片:外层 span 承载底色,svg 只画图形 ── */
+  /* ── KPI 图标芯片:外层 span 承载底色,svg 只画图形(无辉光与缩放动效) ── */
   .kpi-chip {
-    width: 34px; height: 34px; border-radius: 10px; flex: none;
+    width: 30px; height: 30px; border-radius: 9px; flex: none;
     display: grid; place-items: center;
-    background: color-mix(in srgb, currentColor 14%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-    box-shadow: 0 0 12px color-mix(in srgb, currentColor 12%, transparent);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    background: color-mix(in srgb, currentColor 13%, transparent);
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
   }
-  .kpi-chip .sf { width: 17px; height: 17px; margin: 0; }
-  .kpi:hover .kpi-chip { transform: scale(1.08); box-shadow: 0 0 18px color-mix(in srgb, currentColor 20%, transparent); }
+  .kpi-chip .sf { width: 15px; height: 15px; margin: 0; }
 
-  /* ── 分区标题图标芯片化 ────────────────── */
+  /* ── 分区标题图标芯片:同色淡底,保持模块色语义 ── */
   .sec-head .icon-chip {
-    display: grid; place-items: center; width: 26px; height: 26px;
-    border-radius: 7.5px; flex: none;
+    display: grid; place-items: center; width: 24px; height: 24px;
+    border-radius: 7px; flex: none;
     background: color-mix(in srgb, currentColor 12%, transparent);
-    border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
-    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.08) inset;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid color-mix(in srgb, currentColor 16%, transparent);
   }
-  .sec-head .icon-chip .sf { width: 14px; height: 14px; margin: 0; color: currentColor; }
-  .card:hover .sec-head .icon-chip {
-    transform: scale(1.06);
-    box-shadow: 0 0 14px color-mix(in srgb, currentColor 22%, transparent);
-  }
+  .sec-head .icon-chip .sf { width: 13px; height: 13px; margin: 0; color: currentColor; }
 
   /* 粘性导航下的锚点滚动留白 */
   /* 锚点跳转(设置页「查看时段」等)落在内层滚动容器里:时间栏在容器之外,留一点呼吸即可 */
   #content > section { scroll-margin-top: 18px; }
 
-  /* ── 卡片悬浮微交互 ───────────────────── */
-  .card { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
-  .card:hover { border-color: color-mix(in srgb, var(--accent) 18%, var(--card-border)); }
+  /* ── 卡片悬浮微交互:仅描边微亮,无位移 ── */
+  .card { transition: border-color 0.2s ease; }
+  .card:hover { border-color: rgba(23, 29, 42, 0.14); }
+  @media (prefers-color-scheme: dark) { .card:hover { border-color: rgba(255, 255, 255, 0.14); } }
 
-  /* ── 回到顶部 ─────────────────────────── */
+  /* ── 回到顶部:铬层圆钮 ── */
   .to-top {
     position: fixed; right: 26px; bottom: 26px; z-index: 50;
-    width: 42px; height: 42px; border-radius: 13px; border: 1px solid var(--card-border);
+    width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--card-border);
     display: grid; place-items: center; cursor: pointer;
-    background: var(--nav-bg); color: var(--text-2);
-    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: var(--chrome); color: var(--text-2);
     box-shadow: var(--shadow); opacity: 0; transform: translateY(10px); pointer-events: none;
     transition: opacity 0.25s ease, transform 0.25s ease, color 0.15s ease;
   }
   .to-top.show { opacity: 1; transform: none; pointer-events: auto; }
-  .to-top:hover { color: var(--accent); }
-  .to-top .sf { width: 18px; height: 18px; }
+  .to-top:hover { color: var(--text); }
+  .to-top .sf { width: 16px; height: 16px; }
 
   /* ── 顶栏「打印 / 导出 PDF」按钮:与时间选择器同处导航右端 ── */
 
@@ -542,7 +505,7 @@
       --card-glow: transparent; --inset: #f5f5f7;
       --text: #1d1d1f; --text-2: #424245; --text-3: #6e6e73;
       --tooltip-bg: #ffffff; --tooltip-border: #e5e5e7;
-      --accent: #2563eb; --nav-bg: #ffffff;
+      --accent: #259458; --nav-bg: #ffffff;
       --shadow: none; --shadow-sm: none;
       color-scheme: light;
     }
@@ -590,9 +553,7 @@
 
   <div class="workspace">
     <aside class="rail" id="rail">
-      <div class="eyebrow" id="rail-eyebrow"></div>
       <nav class="module-nav" id="module-nav"></nav>
-      <div class="rail-footer" id="rail-footer"></div>
     </aside>
 
     <main class="main">
@@ -609,7 +570,7 @@
 
       <div class="scroll" id="scroller">
   <div id="content" class="content">
-    <section class="summary">
+    <section class="summary" id="sec-summary">
       <div class="card">
         <div class="sec-head">
           <span class="icon-chip c-accent"><span class="sf sf-health"></span></span><h2 id="t-health"></h2>
@@ -790,6 +751,17 @@
       </div>
     </section>
 
+    <section id="sec-thermal">
+      <div class="card">
+        <div class="sec-head">
+          <span class="icon-chip c-thermal"><span class="sf sf-thermal"></span></span><h2 id="t-thermal"></h2>
+          <span class="hint" id="h-thermal"></span>
+        </div>
+        <div class="chart" id="ch-thermal"></div>
+        <div class="empty" id="e-thermal"></div>
+      </div>
+    </section>
+
     <section class="apps-section" id="sec-apps">
       <div class="card">
         <div class="sec-head">
@@ -818,18 +790,7 @@
       <div class="app-none" id="apps-none" hidden></div>
     </section>
 
-    <section>
-      <div class="card">
-        <div class="sec-head">
-          <span class="icon-chip c-thermal"><span class="sf sf-thermal"></span></span><h2 id="t-thermal"></h2>
-          <span class="hint" id="h-thermal"></span>
-        </div>
-        <div class="chart" id="ch-thermal"></div>
-        <div class="empty" id="e-thermal"></div>
-      </div>
-    </section>
-
-    <section>
+    <section id="sec-events">
       <div class="card">
         <div class="sec-head">
           <span class="icon-chip c-thermal"><span class="sf sf-alert"></span></span><h2 id="t-events"></h2>
@@ -839,7 +800,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="sec-table">
       <div class="card">
         <div class="sec-head">
           <span class="icon-chip c-muted"><span class="sf sf-table"></span></span><h2 id="t-table"></h2>
@@ -849,7 +810,7 @@
       </div>
     </section>
 
-    <section>
+    <section id="sec-insights">
       <div class="sec-head" style="margin:0 0 14px">
         <span class="icon-chip c-accent"><span class="sf sf-insights"></span></span><h2 id="t-insights"></h2>
       </div>
@@ -902,29 +863,31 @@
   // 打印 / 导出 PDF 期间为真:关图表动画与数字滚动,强制浅色重绘。
   let PRINTING = false;
   function makePalette(isLight) {
+    // 模块色 = 应用真实调色板(MonitorPalette balancedModuleTint),深浅主题同色;
+    // 语义色 good/warn/crit 与面板一致。轴/网格/环轨按主题明度档位取值。
     if (isLight) {
       return {
-        cpu: "#0071e3", gpu: "#8944ab", mem: "#0284c7", net: "#00c7be",
-        netUp: "#5856d6", disk: "#b45309", diskW: "#d97706", batt: "#34c759",
-        thermal: "#ff3b30", battTemp: "#ff9500", fan: "#8e8e93", accent: "#0071e3",
-        good: "#34c759", scoreGood: "#0071e3", fair: "#ff9500", poor: "#ff9500", critical: "#ff3b30",
-        grid: "rgba(0,0,0,0.05)", axis: "rgba(0,0,0,0.16)",
-        label: "rgba(0,0,0,0.55)", ring: "rgba(0,0,0,0.08)",
-        tooltipBg: "rgba(255,255,255,0.98)", tooltipBorder: "rgba(0,0,0,0.10)", tooltipText: "#1d1d1f",
-        heat: ["#e8edf4", "#c3d4ee", "#7fa8e0", "#f0a34c", "#e2543c"],
-        heatBorder: "rgba(242,244,248,0.9)", pieBorder: "rgba(242,244,248,0.95)",
+        cpu: "#d27a4a", gpu: "#5d8cf0", mem: "#3e9eb8", net: "#2e9c8e",
+        netUp: "#3e9eb8", disk: "#9a865e", diskW: "#b8872e", batt: "#55bc6f",
+        thermal: "#d94848", battTemp: "#b8872e", fan: "#7a8494", accent: "#259458",
+        good: "#259458", scoreGood: "#259458", fair: "#b8872e", poor: "#d94848", critical: "#d94848",
+        grid: "rgba(58,72,90,0.10)", axis: "rgba(58,72,90,0.22)",
+        label: "#7a8494", ring: "rgba(58,72,90,0.10)",
+        tooltipBg: "rgba(255,255,255,0.98)", tooltipBorder: "rgba(23,29,42,0.08)", tooltipText: "#171d2a",
+        heat: ["#eef0ef", "#cde5d5", "#a9d5b8", "#6fbb8e", "#259458"],
+        heatBorder: "rgba(245,246,248,0.9)", pieBorder: "rgba(245,246,248,0.95)",
       };
     }
     return {
-      cpu: "#2997ff", gpu: "#bf5af2", mem: "#64d2ff", net: "#70d7c7",
-      netUp: "#7d7aff", disk: "#ffd60a", diskW: "#ff9f0a", batt: "#30d158",
-      thermal: "#ff453a", battTemp: "#ff9f0a", fan: "#98989d", accent: "#2997ff",
-      good: "#30d158", scoreGood: "#2997ff", fair: "#ffd60a", poor: "#ff9f0a", critical: "#ff453a",
-      grid: "rgba(255,255,255,0.05)", axis: "rgba(255,255,255,0.12)",
-      label: "rgba(255,255,255,0.50)", ring: "rgba(255,255,255,0.08)",
-      tooltipBg: "rgba(18,20,26,0.96)", tooltipBorder: "rgba(255,255,255,0.12)", tooltipText: "#f5f5f7",
-      heat: ["#151922", "#203452", "#3a6bb5", "#d9822b", "#e05328"],
-      heatBorder: "rgba(10,11,14,0.85)", pieBorder: "rgba(10,11,14,0.9)",
+      cpu: "#d27a4a", gpu: "#5d8cf0", mem: "#3e9eb8", net: "#2e9c8e",
+      netUp: "#3e9eb8", disk: "#9a865e", diskW: "#b8872e", batt: "#55bc6f",
+      thermal: "#d94848", battTemp: "#b8872e", fan: "#7a8494", accent: "#41c184",
+      good: "#41c184", scoreGood: "#41c184", fair: "#b8872e", poor: "#d94848", critical: "#d94848",
+      grid: "rgba(255,255,255,0.09)", axis: "rgba(255,255,255,0.16)",
+      label: "rgba(255,255,255,0.42)", ring: "rgba(255,255,255,0.10)",
+      tooltipBg: "rgba(38,40,47,0.98)", tooltipBorder: "rgba(255,255,255,0.08)", tooltipText: "rgba(255,255,255,0.96)",
+      heat: ["#232826", "#2b3d2e", "#375c3b", "#4a9257", "#6fd59c"],
+      heatBorder: "rgba(15,16,19,0.85)", pieBorder: "rgba(15,16,19,0.9)",
     };
   }
   function applyTheme() {
@@ -1033,17 +996,17 @@
   // ── 文案与静态骨架 ────────────────────────────────────────────
   document.title = I.reportTitle;
   $("report-title").textContent = I.reportTitle;
+  // 顶栏元信息:苹果网页式「名称加粗 + 间隔点」规格串,不带图标与边框
   const chips = [
-    ["device", DATA.meta.device],
-    ["cpu", DATA.meta.model],
-    ["os", DATA.meta.os],
-    ["clock", t("metaDays", { v: DATA.meta.days })],
-    ["calendar", t("metaGenerated", { v: fmtDate(generatedMs) + " " + fmtClock(generatedMs) })],
+    DATA.meta.device,
+    DATA.meta.model,
+    DATA.meta.os,
+    t("metaDays", { v: DATA.meta.days }),
+    t("metaGenerated", { v: fmtDate(generatedMs) + " " + fmtClock(generatedMs) }),
   ];
-  chips.forEach(([ic, text]) => {
+  chips.forEach((text) => {
     const c = el("span", "chip");
-    c.innerHTML = sf(ic) + "<span></span>";
-    c.lastChild.textContent = text;
+    c.textContent = text;
     $("meta-chips").appendChild(c);
   });
 
@@ -1336,7 +1299,7 @@
         '<div class="score-ring-text"><span class="score-num" style="color:' + color + '">' + Math.round(h.score) + '</span>' +
         '<span class="score-level" style="color:' + color + '">' + LEVEL_META[h.level].label() + "</span></div>" +
       "</div>" +
-      '<div><div class="score-dims">' + badges + "</div>" + cappedBadge + "</div>";
+      '<div class="score-side"><div class="score-dims">' + badges + "</div>" + cappedBadge + "</div>";
 
     // 评分走势:按当前粒度逐桶复算。单桶不走总门槛(否则每桶都「观测不足」),
     // 有新秒数列用新口径,旧记录用帧级近似。
@@ -1568,6 +1531,7 @@
     host.innerHTML = "";
     const alerts = deriveAlerts(rows, source);
     $("h-events").textContent = alerts.length ? t("evHint", { n: String(alerts.length) }) : "";
+    syncMovedSectionHead("sec-events");
     if (!alerts.length) {
       host.innerHTML = '<div class="event-none">' + I.alertNone + "</div>";
       return;
@@ -1813,7 +1777,7 @@
     const option = {
       backgroundColor: "transparent",
       textStyle: { fontFamily: FONT },
-      color: [C.cpu, C.gpu, C.mem, "#0ea5e9"],
+      color: [C.cpu, C.gpu, C.mem, C.fan],
       tooltip: Object.assign({}, liveTooltip(), {
         valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
       }),
@@ -1828,7 +1792,7 @@
           { areaStyle: { color: areaGrad(C.cpu, 0.26) } }),
         lineSeries(I.sGpu, seriesData(rows, "gpu_avg"), C.gpu),
         lineSeries(I.sMemPressure, seriesData(rows, "mem_pressure_avg"), C.mem),
-        lineSeries(I.sMemUsage, seriesData(rows, "mem_pct_avg"), "#0ea5e9",
+        lineSeries(I.sMemUsage, seriesData(rows, "mem_pct_avg"), C.fan,
           { lineStyle: { width: 1.4, type: [4, 4] } }),
       ],
     };
@@ -1956,10 +1920,11 @@
   }
 
   function renderCpuPE(rows) {
+    // P/E 核同图堆叠:P 核用 CPU 模块橙,E 核用冷调蓝拉开对比
     const option = {
       backgroundColor: "transparent",
       textStyle: { fontFamily: FONT },
-      color: ["#fb7185", "#60a5fa"],
+      color: [C.cpu, C.gpu],
       tooltip: Object.assign({}, liveTooltip(), {
         valueFormatter: (val) => val == null ? "—" : val.toFixed(1) + "%",
       }),
@@ -1970,10 +1935,10 @@
       yAxis: baseAxis({ type: "value", max: 100, axisLabel: { formatter: "{value}%", color: C.label, fontSize: 11 } }),
       dataZoom: [{ type: "inside" }],
       series: [
-        Object.assign(lineSeries(I.sPerfCore, seriesData(rows, "cpu_p_avg"), "#fb7185"),
-          { stack: "pe", areaStyle: { color: areaGrad("#fb7185", 0.30) } }),
-        Object.assign(lineSeries(I.sEffCore, seriesData(rows, "cpu_e_avg"), "#60a5fa"),
-          { stack: "pe", areaStyle: { color: areaGrad("#60a5fa", 0.30) } }),
+        Object.assign(lineSeries(I.sPerfCore, seriesData(rows, "cpu_p_avg"), C.cpu),
+          { stack: "pe", areaStyle: { color: areaGrad(C.cpu, 0.30) } }),
+        Object.assign(lineSeries(I.sEffCore, seriesData(rows, "cpu_e_avg"), C.gpu),
+          { stack: "pe", areaStyle: { color: areaGrad(C.gpu, 0.30) } }),
       ],
     };
     setChart("ch-cpu-pe", option, rows, "cpu_p_avg");
@@ -1982,7 +1947,7 @@
   function renderCpuDist(rows) {
     const buckets = distribution(rows, "cpu_avg");
     setChart("ch-cpu-dist", buckets ? distOption(buckets,
-      [C.ring, "#4c7fd0", C.mem, C.fair, C.critical]) : {}, rows, "cpu_avg");
+      [C.ring, "#7a91b4", C.mem, C.fair, C.critical]) : {}, rows, "cpu_avg");
   }
 
   function renderGpu(rows) {
@@ -2049,7 +2014,7 @@
     const option = {
       backgroundColor: "transparent",
       textStyle: { fontFamily: FONT },
-      color: ["#0ea5e9", C.mem, C.fan, "#f472b6"],
+      color: [C.gpu, C.mem, C.fan, C.thermal],
       tooltip: Object.assign({}, liveTooltip(), {
         formatter: (params) => {
           let html = '<div style="opacity:.6;font-size:11px;margin-bottom:4px">'
@@ -2076,12 +2041,12 @@
       dataZoom: [{ type: "inside" }],
       series: [
         { name: I.sMemUsed, type: "line", stack: "mem", smooth: 0.25, symbol: "none",
-          data: other, lineStyle: { width: 0 }, areaStyle: { color: areaGrad("#0ea5e9", 0.42) },
+          data: other, lineStyle: { width: 0 }, areaStyle: { color: areaGrad(C.gpu, 0.42) },
           emphasis: { focus: "series" } },
         { name: I.sMemCompressed, type: "line", stack: "mem", smooth: 0.25, symbol: "none",
           data: compressed, lineStyle: { width: 0 }, areaStyle: { color: areaGrad(C.mem, 0.72) },
           emphasis: { focus: "series" } },
-        lineSeries(I.sMemPressure, pressure, "#f472b6", { yAxisIndex: 1 }),
+        lineSeries(I.sMemPressure, pressure, C.thermal, { yAxisIndex: 1 }),
         lineSeries(I.sMemSwap, swap, C.fan, { lineStyle: { width: 1.5 } }),
       ],
     };
@@ -2268,9 +2233,12 @@
       }
     }
     if (!series.length) {
-      setChart("ch-thermal", {}, rows, "cpu_thermal_avg");
+      // 整段无任何温度/热压力/风扇数据(App Store 版无 SMC 数据源时常态):
+      // 整节隐藏,导航条目由 spy 同步收起,不留空卡占位。
+      $("sec-thermal").hidden = true;
       return;
     }
+    $("sec-thermal").hidden = false;
     const option = {
       backgroundColor: "transparent",
       textStyle: { fontFamily: FONT },
@@ -2322,6 +2290,16 @@
     if (state < 1.5) return I.thermalFair;
     if (state < 2.5) return I.thermalSerious;
     return I.thermalCritical;
+  }
+
+  // 模块大标题接管了卡片内重复标题后,同步卡片头的剩余元信息。
+  // 有“小时粒度/事件数量”时保留这一行并右对齐;没有任何内容时整行收起,
+  // 避免留下孤零零的图标或空白分隔线。
+  function syncMovedSectionHead(sectionID) {
+    const head = $(sectionID)?.querySelector(".sec-head.section-title-moved");
+    if (!head) return;
+    const hint = head.querySelector(".hint");
+    head.style.display = hint && hint.textContent.trim() ? "" : "none";
   }
 
   function renderTable(rows, source) {
@@ -2499,6 +2477,8 @@
   let currentFrom = 0, currentTo = 0;
   let rowsCurrent = [];
   let currentSource = "hours";
+  // 范围重渲后的导航同步钩子:视觉增强段装配导航时赋值(见文件尾)
+  let onRangeRerender = null;
 
   function applyRange() {
     document.querySelectorAll("#ranges button").forEach((b) => {
@@ -2571,6 +2551,8 @@
     const heatDays = Math.round((to - from) / DAY);
     $("h-heatmap").textContent = t("heatHint", { d: heatDays });
     renderHeatmap(from, to);
+    // 范围切换可能改变板块 hidden 态(如热压力段无数据):同步导航可见性与高亮
+    if (onRangeRerender) onRangeRerender();
   }
 
   // 整库无数据 → 空态页(模块栏与时间栏一并收起,只留空态说明)
@@ -2599,6 +2581,41 @@
     // 单独再包一层 try:这一步失败时报表按原样可用,不会连累下面的视觉增强。
     try { buildHardwareLayout(); } catch (error) { console.warn("hardware layout failed", error); }
 
+    // ── 游离板块统一模块标题 ──
+    // 硬件模块块(cpu…power)已有 .mod-head 大标题与序号,但总览/热压力/应用排行/
+    // 事件/表格/洞察还在模块块之外,没有同名大标题,序号也断层(模块块 02~07 起)。
+    // 这里给它们补上与 .mod-head 同款的大标题,序号全表连续:总览 01 → 本机 13;
+    // 卡内与模块名重复的小标题(热压力等)一并隐藏,避免上下两行同名。
+    const LONE_MODS = [
+      ["sec-summary", I.navOverview],
+      ["sec-thermal", I.secThermal],
+      ["sec-apps", I.secAppsTitle],
+      ["sec-events", I.secEvents],
+      ["sec-table", I.secTable],
+      ["sec-insights", I.secInsights],
+    ];
+    LONE_MODS.forEach(([id, title]) => {
+      const sec = $(id);
+      if (!sec || sec.querySelector(".mod-head")) return;
+      const head = el("div", "mod-head");
+      const h = el("h2");
+      h.textContent = title;
+      head.appendChild(h);
+      sec.insertBefore(head, sec.firstChild);
+      // 卡内小标题与模块名重复的,隐藏卡内 h2,只留大标题一层
+      const dup = sec.querySelector(".sec-head h2");
+      if (dup && dup.textContent.trim() === title) {
+        dup.style.display = "none";
+        const dupHead = dup.closest(".sec-head");
+        if (dupHead) {
+          dupHead.classList.add("section-title-moved");
+          const dupIcon = dupHead.querySelector(":scope > .icon-chip");
+          if (dupIcon) dupIcon.style.display = "none";
+        }
+        syncMovedSectionHead(id);
+      }
+    });
+
     // 分区标题图标包进同色芯片,层次更现代
     document.querySelectorAll(".sec-head").forEach((head) => {
       if (head.querySelector(".icon-chip")) return;
@@ -2617,53 +2634,140 @@
       chip.appendChild(mark);
     });
 
-    // 左侧模块栏:固定六条核心硬件,其余板块(评分/走势/概览/热力图/应用/热压力/
-    // 告警/明细/洞察)顺次出现在正文里、不进栏。点击与滚动高亮都作用在内层滚动
-    // 容器上(导航与时间栏都在滚动容器之外,任何窗口高度下都常驻可见)。
+    // 左侧模块栏:按信息架构分四组——总览 / 监测数据 / 分析 / 本机信息查询。
+    // 点击与滚动高亮都作用在内层滚动容器上(导航与时间栏都在滚动容器之外,
+    // 任何窗口高度下都常驻可见)。整页无硬件清单时(HARDWARE_JS 跳过装配),
+    // 本机组条目与模块块一起缺席,导航仍按剩余分组渲染。
     const railNav = $("module-nav");
     const navProgress = $("nav-progress");
     const scroller = $("scroller");
-    $("rail-eyebrow").textContent = I.railEyebrow;
-    $("rail-footer").innerHTML = '<span class="status-dot"></span>' + I.railLocal
-      + "<small>" + [DATA.meta.model, DATA.meta.os].filter(Boolean).join(" · ") + "</small>";
-    // 栏内用模块短名(与面板/设置页的模块名一致),不用板块全称(内存构成/磁盘读写速率…)
-    const railLinks = [
-      ["sec-cpu", I.kCpu, "cpu"],
-      ["sec-gpu", I.kGpu, "gpu"],
-      ["sec-mem", I.kMem, "mem"],
-      ["sec-net", I.railNet, "net"],
-      ["sec-disk", I.railDisk, "disk"],
-      ["sec-power", I.railPower, "power"],
-      ["mod-machine", I.kThisMac, "device"],
-    ].map(([id, label, iconKey]) => {
-      // 模块板块已被收进 .module-block,左栏与滚动高亮都应以整块为单位,
-      // 否则高亮会在模块内部各板块之间来回跳。
-      const sec = $(id) && ($(id).closest(".module-block") || $(id));
-      if (!sec) return null;
-      const link = el("a");
-      link.href = "#" + id;
-      link.innerHTML = sf(iconKey) + '<span class="rail-label"></span>';
-      link.querySelector(".rail-label").textContent = label;
-      link.addEventListener("click", (e) => {
-        e.preventDefault();
-        if (sec.hidden) return;
-        sec.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
+
+    // ── 本机信息查询「翻页」视图 ──
+    // 侧栏点本机时整页只留本机模块,tab 分段控件顶格独占一页,与"分析"彻底分页;
+    // 切到其他导航时退出并复位数据层显示。机器模式下该页无滚动(内容高不足一屏)。
+    let machineMode = false;
+    const MACHINE_ID = "mod-machine";
+    const exitMachineMode = () => {
+      if (!machineMode) return;
+      machineMode = false;
+      document.body.classList.remove("in-machine");
+      // 时间栏(历史记录/范围切换)与本机分类无关,翻页视图里一并隐藏,退出时恢复
+      const ft = $("filters");
+      if (ft) ft.style.display = "";
+      // 恢复所有板块内联显隐,数据层 hidden 由 applyRange 统一重设(重绘+导航同步);
+      // 单个板块渲染异常不应卡死翻页退出,包 try 兜底
+      document.querySelectorAll("#content .module-block, #content > section, #content > footer").forEach((n) => {
+        n.style.display = "";
       });
-      railNav.appendChild(link);
-      return [link, sec];
-    }).filter(Boolean);
+      try { applyRange(); } catch (err) { console.warn("exit machine mode reset failed", err); }
+    };
+    const enterMachineMode = () => {
+      if (machineMode) return;
+      machineMode = true;
+      document.body.classList.add("in-machine");
+      // 时间栏在本机翻页里没有意义,隐藏;内容只留本机模块,切换条顶格
+      const ft = $("filters");
+      if (ft) ft.style.display = "none";
+      document.querySelectorAll("#content .module-block, #content > section").forEach((n) => {
+        n.style.display = n.id === MACHINE_ID ? "" : "none";
+      });
+      const foot = document.querySelector("#content > footer");
+      if (foot) foot.style.display = "none";
+      scroller.scrollTop = 0;
+      spy();
+    };
+
+    const NAV_GROUPS = [
+      ["navOverview", [
+        ["sec-summary", "navOverview", "overview"],
+      ]],
+      ["navModules", [
+        ["sec-cpu", "kCpu", "cpu"],
+        ["sec-gpu", "kGpu", "gpu"],
+        ["sec-mem", "kMem", "mem"],
+        ["sec-net", "railNet", "net"],
+        ["sec-disk", "railDisk", "disk"],
+        ["sec-power", "railPower", "power"],
+        ["sec-thermal", "secThermal", "thermal"],
+      ]],
+      ["navAnalysis", [
+        ["sec-apps", "secAppsTitle", "rank"],
+        ["sec-events", "secEvents", "alert"],
+        ["sec-table", "secTable", "table"],
+        ["sec-insights", "secInsights", "insights"],
+      ]],
+      ["navMachine", [
+        ["mod-machine", "kThisMac", "device"],
+      ]],
+    ];
+    // 栏内用模块短名(与面板/设置页的模块名一致),不用板块全称(内存构成/磁盘读写速率…)
+    const railLinks = [];
+    NAV_GROUPS.forEach(([groupKey, entries]) => {
+      const eyebrow = el("div", "eyebrow");
+      eyebrow.textContent = I[groupKey];
+      railNav.appendChild(eyebrow);
+      entries.forEach(([id, labelKey, iconKey]) => {
+        // 模块板块已被收进 .module-block,左栏与滚动高亮都应以整块为单位,
+        // 否则高亮会在模块内部各板块之间来回跳。
+        const sec = $(id) && ($(id).closest(".module-block") || $(id));
+        if (!sec) return;
+        const link = el("a");
+        link.href = "#" + id;
+        link.innerHTML = sf(iconKey) + '<span class="rail-label"></span>';
+        link.querySelector(".rail-label").textContent = I[labelKey];
+        link.addEventListener("click", (e) => {
+          e.preventDefault();
+          if (sec.hidden) return;
+          // 本机信息查询走独立翻页视图;其他导航先退出该视图再常规滚动
+          if (id === MACHINE_ID) {
+            enterMachineMode();
+            return;
+          }
+          if (machineMode) exitMachineMode();
+          // 同步置位滚动:与 spy 判定线同一基准(板块顶对齐视口顶下 24pt)。
+          // 不用 scrollIntoView(会顺带横向滚动)、也不用 smooth(落点要一眼到位)。
+          const targetTop = scroller.scrollTop
+            + sec.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 24;
+          scroller.scrollTop = Math.max(0, targetTop);
+          // 立即同步一次高亮:落点已到位,不等 scroll 事件/rAF,点击即高亮
+          spy();
+        });
+        railNav.appendChild(link);
+        railLinks.push([link, sec]);
+      });
+    });
 
     let ticking = false;
     const spy = () => {
       ticking = false;
+      // 机器视图:整页只显示本机模块,直接高亮本机项,不参与常规判定
+      if (machineMode) {
+        railLinks.forEach((item) => item[0].classList.toggle("active", item[1].id === MACHINE_ID));
+        return;
+      }
       // 视口上沿下 24pt 处为判定线:最后一个越过该线的模块即当前模块
       const line = scroller.getBoundingClientRect().top + 24;
       let current = null;
+      const visible = [];
       railLinks.forEach((item) => {
-        if (!item[1].hidden && item[1].getBoundingClientRect().top <= line) current = item;
+        // 板块被数据层隐藏(如 App Store 版无热压力数据)时,导航条目一并收起
+        item[0].style.display = item[1].hidden ? "none" : "";
+        if (!item[1].hidden) visible.push(item);
       });
+      visible.forEach((item) => {
+        if (item[1].getBoundingClientRect().top <= line) current = item;
+      });
+      // 判定线上方无任何板块时(首屏,内容 padding 使第一项晚于 24pt 线)归属第一项:
+      // 顶部区域本就是第一个板块的地盘,不留"无高亮"状态。
+      if (!current && visible.length) current = visible[0];
+      // 滚动到底时高亮最后一个可见条目:末尾短板块(洞察等)因滚动上限贴不到
+      // 判定线,否则点它跳到底后高亮仍停在上一条(压力告警)。
+      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 2;
+      if (atBottom && visible.length) current = visible[visible.length - 1];
       railLinks.forEach((item) => item[0].classList.toggle("active", item === current));
     };
+    // applyRange 每次重渲后(范围切换会改变各板块 hidden 态)同步导航可见性与高亮
+    onRangeRerender = spy;
     scroller.addEventListener("scroll", () => {
       // 阅读进度:时间栏下沿细线随滚动位置增长
       const max = scroller.scrollHeight - scroller.clientHeight;

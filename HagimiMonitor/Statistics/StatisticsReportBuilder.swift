@@ -25,6 +25,10 @@ enum StatisticsReportBuilder {
     private static let hardwareSectionResource = "HardwareSection"
     private static let flatpickrResource = "flatpickr"
 
+    /// 符号位图的像素边长。逻辑绘制区域仍是 16pt；128px 可覆盖报表内
+    /// 12–16px 常规图标、42px 空态图标以及预览放大场景，避免 48px 源图被放大后发糊。
+    private static let symbolCanvasPixels = 128
+
     /// 报表用到的符号图标:与面板同一批 SF Symbols(面板用 `MonitorKind.symbol`),
     /// 生成时渲染成位图随载荷内联,模板用 mask + currentColor 着色——
     /// 不用手绘 SVG,也不受网页环境拿不到 SF Symbols 字体所限。
@@ -48,15 +52,18 @@ enum StatisticsReportBuilder {
         ("square.grid.3x3", "heatmap"),
         ("heart.text.square", "battHealth"),
         ("exclamationmark.triangle", "alert"),
-        ("tablecells", "table"),
-        ("sparkles", "insights"),
-        ("app.dashed", "apps"),
+        ("list.bullet.rectangle", "table"),
+        ("eyeglasses", "insights"),
+        // 系统进程/后台服务的统一兜底图标:报表内与面板保持 SF Symbols 体系一致。
+        ("terminal", "apps"),
+        ("trophy", "rank"),
+        // 显示器分类图标与主面板同源(Mac 显示器符号,保证可渲染)
+        ("display", "display"),
         ("clock.arrow.circlepath", "legacy"),
         ("arrow.up", "top"),
         // 顶部信息条
         ("laptopcomputer", "device"),
         ("apple.logo", "os"),
-        ("display", "display"),
         ("clock", "clock"),
         ("calendar", "calendar"),
     ]
@@ -107,16 +114,23 @@ enum StatisticsReportBuilder {
         return outputURL
     }
 
-    /// 应用图标渲染为 256px PNG 的 base64,注入模板品牌位。
-    /// 报表是单文件产物,图标需随文件内嵌;256px 覆盖页内最大 58px 展示位的 4x 屏,
-    /// 避免 2x 以下在 Retina 放大时发糊。位图绘制为纯数据操作,后台线程安全;
-    /// 失败返回空串,品牌位退化为纯文字。
+    /// 应用图标渲染为 1024px PNG 的 base64,注入模板品牌位。
+    /// 报表是单文件产物,图标需随文件内嵌。源用资产里像素最大的 representation
+    /// (asset 通常带 1024px 的 @2x),不依赖 NSImage 按当前屏幕选的默认档——否则
+    /// 低分屏下会拿小图插值放大,导出后 Retina 上仍发糊。位图绘制为纯数据操作,
+    /// 后台线程安全;失败返回空串,品牌位退化为纯文字。
     private static func appIconBase64() -> String {
         guard let icon = NSImage(named: "AppIcon") else { return "" }
-        let size = NSSize(width: 256, height: 256)
+        // 取最大像素源:优先 1024,其次 asset 里存在的最大档
+        let maxSource = icon.representations
+            .map { CGFloat($0.pixelsWide) }
+            .filter { $0 > 0 }
+            .max() ?? 512
+        let side = max(512, min(maxSource, 1024))
+        let size = NSSize(width: side, height: side)
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
-            pixelsWide: 256, pixelsHigh: 256,
+            pixelsWide: Int(side), pixelsHigh: Int(side),
             bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
             colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0
         ) else { return "" }
@@ -130,7 +144,7 @@ enum StatisticsReportBuilder {
         return png.base64EncodedString()
     }
 
-    /// 把用到的 SF Symbols 渲染成 3x 位图,拼成模板的 CSS 变量块(`--i-*`)。
+    /// 把用到的 SF Symbols 渲染成高分辨率位图,拼成模板的 CSS 变量块(`--i-*`)。
     /// 位图只贡献 alpha(作 mask),颜色交给模板的 currentColor——因此天然跟随
     /// 明暗主题与选中态,不必为两种外观各存一份。渲染失败(符号不存在)跳过,
     /// 模板端该处图标留空,不影响报表其余部分。
@@ -143,12 +157,12 @@ enum StatisticsReportBuilder {
         return ":root {\n    " + lines.joined(separator: "\n    ") + "\n  }"
     }
 
-    /// 单个符号 → 16pt@3x 的 PNG(透明底,字形占 alpha 通道)。
+    /// 单个符号 → 16pt@8x 的 PNG(透明底,字形占 alpha 通道)。
     private static func symbolImageData(_ name: String) -> Data? {
         let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else { return nil }
-        let side = 48
+        let side = Self.symbolCanvasPixels
         guard let rep = NSBitmapImageRep(
             bitmapDataPlanes: nil,
             pixelsWide: side, pixelsHigh: side,
@@ -289,7 +303,7 @@ enum StatisticsReportBuilder {
     /// 两语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
     private static let stringKeys = [
         "reportTitle", "metaDays", "metaGenerated",
-        "kThisMac", "hwCardTitle", "hwNoData", "hwItemCount", "hwMachineSub", "hwCategoryCount",
+        "kThisMac", "hwCardTitle", "hwNoData", "hwItemCount", "hwCategoryCount",
         "hwLiveGroup", "hwLiveTag",
         "hwLiveCpuUsage", "hwLiveThermal", "hwLiveProcessCount", "hwLiveIdle",
         "hwLiveGpuUsage", "hwLiveGpuMemory", "hwLiveRenderer", "hwLiveTiler",
@@ -299,6 +313,7 @@ enum StatisticsReportBuilder {
         "hwLiveBatteryLevel", "hwLiveBatteryState", "hwLiveBatteryTemp",
         "rToday", "rWeek", "rMonth", "rYear", "selectRange",
         "rangeLabel", "railEyebrow", "railLocal", "railNet", "railDisk", "railPower",
+        "navOverview", "navModules", "navAnalysis", "navMachine",
         "kCpu", "kGpu", "kMem", "kMemPressure", "kNetDown", "kNetUp", "kDisk", "kPower",
         "kPeak", "kPeakRate", "kDiskW",
         "secOverview", "secHeatmap", "secCpu", "secCpuPE", "secCpuDist", "secGpu",

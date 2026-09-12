@@ -19,6 +19,16 @@ enum ReportWindowPresenter {
     private static let navigationDelegate = ReportNavigationDelegate()
     /// 主题订阅:窗口长驻,用户切换深浅色后报表窗口立即跟随(与设置窗口同规则)。
     private static var themeCancellable: AnyCancellable?
+    /// 报表窗口内容区:按内容最佳宽度给足(内容 1140 上限 + 侧栏 + 内边距 + 余量),
+    /// 打开即完整显示;宽度全程锁死(只能调纵向),纵向下限守双列可读。
+    private static let contentRect = NSRect(x: 0, y: 0, width: 1380, height: 880)
+    private static let windowStyleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
+    /// 拉伸代理需强持有:NSWindow.delegate 是弱引用,内联新实例赋值后会立刻释放,
+    /// windowWillResize/windowDidResize 将不再触发(与设置窗口同一范式)。
+    private static let resizeDelegate = ReportResizeDelegate(
+        fixedWidth: NSWindow.frameRect(forContentRect: contentRect, styleMask: windowStyleMask).width,
+        minHeight: 640
+    )
     /// 实时刷新定时器:报表本体是打开时生成的快照,但右栏「运行状态」组要跟着走。
     /// 只在窗口可见时跑(见 `pushLiveReadings`),窗口关闭时由 `closeObserver` 停掉。
     private static var liveTimer: Timer?
@@ -180,21 +190,27 @@ enum ReportWindowPresenter {
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         #endif
         config.userContentController.add(scriptMessageHandler, name: "hagimiPrint")
+        // 非持久数据存储:报表窗口每次加载都从磁盘读新文件,不带 WebKit 文件缓存,
+        // 避免重新生成后仍显示旧模板/旧图标。
+        config.websiteDataStore = WKWebsiteDataStore.nonPersistent()
 
         let view = WKWebView(frame: .zero, configuration: config)
         view.underPageBackgroundColor = .clear
         view.navigationDelegate = navigationDelegate
         self.webView = view
 
+        // 默认尺寸按内容最佳宽度给足,打开即完整显示,不让用户再手动拉宽。
+        let lockedFrameWidth = NSWindow.frameRect(forContentRect: contentRect, styleMask: windowStyleMask).width
         let win = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 1040, height: 760),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: contentRect,
+            styleMask: windowStyleMask,
             backing: .buffered,
             defer: false
         )
         win.title = String(localized: "stats.report.window.title", defaultValue: "硬件规格档案 · HagimiMonitor")
         win.titleVisibility = .visible
-        win.minSize = NSSize(width: 860, height: 580)
+        win.minSize = NSSize(width: lockedFrameWidth, height: 640)
+        win.delegate = resizeDelegate
         win.isReleasedWhenClosed = false
         win.contentView = view
 
@@ -242,6 +258,43 @@ final class ReportScriptMessageHandler: NSObject, WKScriptMessageHandler {
                 ReportWindowPresenter.printCurrentReport()
             }
         }
+    }
+}
+
+/// 报表窗口:宽度锁死、高度随意的伸缩裁定,与设置窗口同一套代理范式。
+/// 用户拖拽横边/对角时宽度一律回归固定值,只保留纵向伸缩。
+@MainActor
+private final class ReportResizeDelegate: NSObject, NSWindowDelegate {
+    private let fixedWidth: CGFloat
+    private let minHeight: CGFloat
+    private var liveResizeOriginX: CGFloat?
+
+    init(fixedWidth: CGFloat, minHeight: CGFloat) {
+        self.fixedWidth = fixedWidth
+        self.minHeight = minHeight
+        super.init()
+    }
+
+    func windowWillResize(_ sender: NSWindow, to size: NSSize) -> NSSize {
+        NSSize(width: fixedWidth, height: max(size.height, minHeight))
+    }
+
+    func windowWillStartLiveResize(_ notification: Notification) {
+        if let window = notification.object as? NSWindow {
+            liveResizeOriginX = window.frame.origin.x
+        }
+    }
+
+    func windowDidResize(_ notification: Notification) {
+        guard let window = notification.object as? NSWindow,
+              window.inLiveResize,
+              let liveResizeOriginX else { return }
+        guard window.frame.origin.x != liveResizeOriginX else { return }
+        window.setFrameOrigin(NSPoint(x: liveResizeOriginX, y: window.frame.origin.y))
+    }
+
+    func windowDidEndLiveResize(_ notification: Notification) {
+        liveResizeOriginX = nil
     }
 }
 

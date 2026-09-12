@@ -114,12 +114,11 @@ function hwBuildModule(spec, index) {
 
   var block = el("section", "module-block");
   block.id = "mod-" + spec.id;
+  // 模块头:石板墨大标题 + 卡片数
   block.innerHTML =
     '<div class="mod-head">' +
-    '<span class="icon-chip">' + sf(spec.icon) + "</span>" +
     "<h2>" + hwEsc(t(spec.label)) + "</h2>" +
     '<span class="meta">' + cardCount + " " + hwEsc(t("hwItemCount")) + "</span>" +
-    '<span class="index">' + (index < 10 ? "0" + index : index) + "</span>" +
     "</div>";
 
   // 顺序很重要:必须**先把块插进文档、再把板块搬进主列**。
@@ -139,6 +138,9 @@ function hwBuildModule(spec, index) {
 
 /* ── 本机模块:顶栏分类菜单 + 选中分类的详细规格 ── */
 var hwActiveCategory = null;
+/* 规格面板的已见最大高度(px):各分类内容长短不一,面板高度取历史最大值固定,
+   切换分类时整块高度不再塌缩,滚动位置与模块头(顶部栏目)保持原位。 */
+var hwPaneMaxHeight = 0;
 
 function hwPane(category) {
   var pane = document.querySelector("#mod-machine .hw-pane");
@@ -155,6 +157,12 @@ function hwPane(category) {
         group.facts.map(function (f) { return hwRow(category.id, f.label, f.value); }).join("") +
         "</div></div>";
     }).join("") + "</div>";
+  // 渲染后同步测量并抬高固定高度(强制布局一次,切换频率低,开销可忽略)
+  var height = pane.offsetHeight;
+  if (height > hwPaneMaxHeight) {
+    hwPaneMaxHeight = height;
+    pane.style.minHeight = hwPaneMaxHeight + "px";
+  }
 }
 
 function hwSelectCategory(id) {
@@ -177,11 +185,8 @@ function hwBuildMachine(index) {
   block.id = "mod-machine";
   block.innerHTML =
     '<div class="mod-head">' +
-    '<span class="icon-chip">' + sf("device") + "</span>" +
     "<h2>" + hwEsc(t("kThisMac")) + "</h2>" +
-    '<span class="sub">' + hwEsc(t("hwMachineSub")) + "</span>" +
     '<span class="meta">' + categories.length + " " + hwEsc(t("hwCategoryCount")) + "</span>" +
-    '<span class="index">' + (index < 10 ? "0" + index : index) + "</span>" +
     "</div>";
 
   var workbench = el("div", "hw-workbench");
@@ -202,13 +207,17 @@ function hwBuildMachine(index) {
   workbench.appendChild(pane);
   block.appendChild(workbench);
 
-  // 插在本机模块应在的位置:紧跟在「电源」模块块之后。
-  var power = $("mod-power");
-  if (power && power.parentNode) {
-    power.parentNode.insertBefore(block, power.nextSibling);
+  // 插在本机模块应在的位置:内容区末尾(分析板块之后、页脚之前),
+  // 与左栏导航分组顺序「总览 / 监测数据 / 分析 / 本机信息查询」保持一致。
+  var content = $("content");
+  var footer = content && content.querySelector(":scope > footer");
+  if (content && footer) {
+    content.insertBefore(block, footer);
+  } else if (content) {
+    content.appendChild(block);
   } else {
-    var content = $("content");
-    if (content) content.insertBefore(block, content.firstChild);
+    var power = $("mod-power");
+    if (power && power.parentNode) power.parentNode.insertBefore(block, power.nextSibling);
   }
   hwSelectCategory(categories[0].id);
   return block;
