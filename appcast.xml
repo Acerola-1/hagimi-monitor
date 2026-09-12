@@ -3,66 +3,32 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.5.5</title>
-            <pubDate>Wed, 09 Sep 2026 13:04:27 +0000</pubDate>
-            <sparkle:version>83</sparkle:version>
-            <sparkle:shortVersionString>1.5.5</sparkle:shortVersionString>
+            <title>1.5.6</title>
+            <pubDate>Sat, 12 Sep 2026 20:49:54 +0000</pubDate>
+            <sparkle:version>84</sparkle:version>
+            <sparkle:shortVersionString>1.5.6</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-HagimiMonitor 1.5.5 带来电源模块三页式深度诊断、外接显示器控制可靠性重构、内存带宽与分项功耗遥测，以及功率流向图的渲染架构升级。感谢 @zhaojiseng 在 #105 中贡献的面板性能优化与分项功耗方案（已整合进本版本）。
+### 中文
 
-> 🙏 Thanks to @zhaojiseng for the panel performance optimization and split power telemetry work in #105 (integrated into this release).
+- 归档报表视觉原型及演示脚本，保留本轮设计评审资产。
+- 提升报表 SF Symbols 导出分辨率，并统一系统进程使用终端图标。
+- 修复报表重复标题下的孤立图标和显示器图标黑方块问题。
+- 优化报表模块标题与元信息布局。
 
-HagimiMonitor 1.5.5 brings three-page in-depth power diagnostics, a reliability rework for external display control, memory bandwidth and split power telemetry, and a render-architecture upgrade for the power flow diagram.
+### English
 
-## 🇨🇳 更新内容
-
-### ✨ 新功能
-- **电源展开区升级为「拓扑 / 健康 / 供电」三页**：电池健康类指标独立成页，设置页实时预览同构联动，指标开关随分页自动过滤。
-- **电芯深度健康指标**：新增电芯化学容量（Qmax）、电芯内阻、温控限充时长、满电驻留时间四项诊断指标（默认关闭，可在设置 → 电源明细中开启）。
-- **内存总线带宽**：内存模块新增实时带宽指标，支持面板明细与菜单栏展示。
-- **分项功耗遥测**：电源明细与菜单栏新增屏幕功耗、GPU 功耗。
-- **菜单栏新增屏幕刷新率指标**。
-- **媒体键目标选择**：可直接指定媒体键控制哪一台外接显示器。
-- **辅助功能授权引导**：新增拖拽授权引导卡片，辅助功能权限授予流程更直观。
-
-### ⚡ 优化与体验
-- **外接显示器 DDC 控制可靠性重构**：逐属性能力探测（控制项与显示器实际能力匹配）、写入后确认读取、连接身份绑定与中断后自动恢复；新增诊断日志，硬件兼容问题有据可查；DDC 不支持的显示器自动回退 Gamma 软件调光。
-- **功率流向图渲染服务驱动**：流向动画迁移至 Render Server，主线程动画占用降至 0；流向随充/放电方向自动反转，汇聚点呼吸光晕。
-- **全宽对称排版**：明细区移除额外缩进，统一 10pt 对称全宽；网络与电源行头药丸像素级对齐，消除数值位数变化导致的推挤。
-- **菜单栏动画按需降频**：面板展开期间菜单栏图标动画降至 30fps 并消除常驻循环动画；菜单栏指标改读采样管线已发布数据，不再于主线程触发采样。
-
-### 🛠 问题修复
-- 修复内存压力格不按压力等级着色的问题。
-- 修复显示器控制滑杆旋钮下半部分被裁剪的问题。
-
-## 🇺🇸 English Release Notes
-
-### ✨ New
-- **Power panel now spans three pages — Topology / Health / Supply**: battery health metrics live on their own page; the settings preview mirrors the same structure with per-page metric toggles.
-- **Deep cell health metrics**: four new diagnostics — cell chemical capacity (Qmax), cell internal resistance, thermal-throttling duration, and time at high state-of-charge (off by default; enable them in Settings → Power details).
-- **Memory bus bandwidth**: the memory module gains a live bandwidth metric, available in the detail grid and the menu bar.
-- **Split power telemetry**: Display and GPU power are now available in the power details and the menu bar.
-- **Display refresh rate**: new menu bar metric.
-- **Media key target selector**: choose exactly which external display your media keys control.
-- **Accessibility permission guide**: a new drag-and-drop guide card makes granting the Accessibility permission more straightforward.
-
-### ⚡ Improved
-- **DDC control reliability rework**: per-attribute capability probing (controls match what each display actually supports), write-then-read-back confirmation, connection identity binding, and automatic recovery after interruptions. A new diagnostics log makes hardware compatibility issues traceable; displays without DDC support automatically fall back to Gamma software dimming.
-- **Power flow diagram driven by the render server**: flow animations now run on the Render Server, bringing main-thread animation cost to zero; flow direction reverses with charge/discharge, with a breathing glow at the junction.
-- **Full-width symmetric layout**: detail grids drop extra indentation in favor of 10pt symmetric full-width alignment; network and power row-header pills are pixel-aligned, eliminating jitter from digit-width changes.
-- **On-demand menu bar throttling**: menu bar icon animations drop to 30fps while the panel is open, and permanently repeating animations were removed; menu bar metrics now read published sampler data instead of triggering sampling on the main thread.
-
-### 🛠 Fixed
-- Fixed memory pressure cells not being colored by pressure level.
-- Fixed the lower half of external display slider knobs being clipped.
+- Archived the report visual prototypes and demo scripts for design history.
+- Increased report SF Symbols export resolution and unified terminal fallback icons for system processes.
+- Fixed orphaned icons under duplicated report headings and the black-square display icon.
+- Improved report module heading and metadata layout.
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.5.5/HagimiMonitor-v1.5.5.zip" length="4924489" type="application/octet-stream" sparkle:edSignature="n3MxGuRkkN8zVYy8VtHYpbMRRPm4MXEG+oGBQFOtTr3eQcjwlde/MTqDOePqM/6930a09BFb3t6arPKKoUHTAg=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.5.6/HagimiMonitor-v1.5.6.zip" length="5135746" type="application/octet-stream" sparkle:edSignature="7zv/iP4fTNOQFAi8KY31BakSt0AVIOkKm647Kj46JI1A7b7i+XCCXf/75ShY/kXWor1WrY0RYqP2DBaAMGuDBw=="/>
         </item>
     </channel>
 </rss>
