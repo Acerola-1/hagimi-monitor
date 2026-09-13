@@ -16,8 +16,13 @@ struct StatisticsSettingsView: View {
     @State private var series: [StatisticsRow] = []
     /// 压力告警:本页是「查看」落点,在屏即视为已读(红点清除)。
     @ObservedObject private var alerts = PressureAlertCenter.shared
+    /// 进程长期高负载告警与时间分布
+    @ObservedObject private var processAlerts = ProcessAlertCenter.shared
     /// 本页是否真的在屏(窗口可见且为活跃窗口)→ 新告警直接按已读处理。
     @State private var isPageOnScreen = false
+    /// 是否展开所有高负载应用（默认只展示 1 个，保护下方核心用量在首屏可见）
+    @State private var isAlertsExpanded = false
+    @State private var isExpandHovered = false
 
     init(
         recorder: StatisticsRecorder,
@@ -64,7 +69,6 @@ struct StatisticsSettingsView: View {
     var body: some View {
         SettingsPage {
             recordToggleGroup
-            checkinSection
             summaryGroup
 
             SettingsGroup {
@@ -107,6 +111,14 @@ struct StatisticsSettingsView: View {
                     .labelsHidden()
                     .toggleStyle(.switch)
             }
+            if settings.statisticsEnabled {
+                SettingsDivider()
+                SettingsRow(title: String(localized: "stats.settings.notifications", defaultValue: "推送异常警报通知")) {
+                    Toggle("", isOn: $settings.alertNotificationsEnabled)
+                        .labelsHidden()
+                        .toggleStyle(.switch)
+                }
+            }
         }
     }
 
@@ -118,8 +130,9 @@ struct StatisticsSettingsView: View {
                 if settings.statisticsEnabled {
                     rangePicker
                 }
-                statusSection
+                systemStatusAndAlertsSection
                 if showsSummaryBody {
+                    SettingsDivider()
                     metricsSection
                     SettingsDivider()
                     reportEntryRow
@@ -134,16 +147,13 @@ struct StatisticsSettingsView: View {
     /// 有可用记录才展开指标与入口;「尚无记录」「记录已关闭」只留状态行。
     private var showsSummaryBody: Bool {
         guard settings.statisticsEnabled else { return false }
-        if case .noObservation = conclusion { return false }
+        if case .noObservation = conclusion, processAlerts.activeAlerts.isEmpty { return false }
         return true
     }
 
-    /// 时间范围一行,「通知 + 开关」靠本栏右缘。
-    ///
-    /// 中间用 Spacer 顶开而不是紧挨着 Picker:两者不是同一组信息(一个是看的范围,
-    /// 一个是打扰开关),贴在一起会被读成「时间范围的一部分」。
+    /// 时间范围选择栏
     private var rangePicker: some View {
-        HStack(spacing: 12) {
+        HStack {
             Picker(String(localized: "overview.range.label"), selection: $range) {
                 Text(String(localized: "stats.settings.range.today")).tag(StatisticsOverviewRange.today)
                 Text(String(localized: "stats.settings.range.week")).tag(StatisticsOverviewRange.week)
@@ -152,41 +162,47 @@ struct StatisticsSettingsView: View {
             .pickerStyle(.segmented)
             .labelsHidden()
 
-            Spacer(minLength: 16)
-
-            Toggle(String(localized: "stats.settings.notifications"),
-                   isOn: $settings.alertNotificationsEnabled)
-                .toggleStyle(.switch)
+            Spacer()
         }
         .padding(.horizontal, 14)
         .padding(.top, 14)
         .padding(.bottom, 2)
     }
 
-    // MARK: 状态区(一行结论,必要时附档位与限定)
+    // MARK: - 系统状态与异常告警统一编排
 
-    /// 状态块单独铺一层浅底,与下方指标行拉开界限:结论是「发生了什么」,
-    /// 指标行是「这段时间的整体用量」,两者不是同一种信息。
-    /// 真实异常(持续中的压力)用告警色浅底,其余状态用中性底,不滥用颜色。
-    private var statusSection: some View {
-        statusContent
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(statusFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    private var hasPressureEvents: Bool {
+        if case .events = conclusion, !pressureKinds.isEmpty {
+            return true
+        }
+        return false
+    }
+
+    private var unifiedAlertFill: Color {
+        Color.primary.opacity(0.035)
+    }
+
+    private var systemStatusAndAlertsSection: some View {
+        systemStatusAndAlertsContent
             .padding(.horizontal, 8)
             .padding(.top, settings.statisticsEnabled ? 10 : 8)
             .padding(.bottom, 8)
     }
 
     @ViewBuilder
-    private var statusContent: some View {
+    private var systemStatusAndAlertsContent: some View {
         if !settings.statisticsEnabled {
             statusLine(
                 icon: "pause.circle",
                 tint: Color.secondary,
                 headline: String(localized: "stats.summary.off")
             )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else if hasPressureEvents || !processAlerts.activeAppGroups.isEmpty {
+            unifiedAlertCard
         } else {
             switch conclusion {
             case .noObservation:
@@ -195,6 +211,10 @@ struct StatisticsSettingsView: View {
                     tint: Color.secondary,
                     headline: String(localized: "stats.summary.noRecord")
                 )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             case .insufficient(let recorded):
                 statusLine(
                     icon: "hourglass",
@@ -202,40 +222,208 @@ struct StatisticsSettingsView: View {
                     headline: String(localized: "overview.conclusion.insufficient"),
                     qualifier: String(localized: "overview.conclusion.recorded \(StatisticsDisplayFormat.duration(recorded))")
                 )
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             case .quiet:
-                statusLine(
-                    icon: "checkmark.circle.fill",
-                    tint: palette.severityTint(for: .calm),
-                    headline: String(localized: "overview.conclusion.quiet")
-                )
+                quietStatusContent
             case .events:
-                if let leading = pressureKinds.first {
-                    eventStatusLine(leading, kinds: pressureKinds)
+                EmptyView()
+            }
+        }
+    }
+
+    private var quietStatusContent: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "checkmark.circle.fill")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(palette.severityTint(for: .calm))
+                .frame(width: 16)
+
+            Text(String(localized: "overview.conclusion.quiet"))
+                .font(.body.weight(.semibold))
+
+            Spacer()
+
+            Button {
+                processAlerts.simulateWindowServerDemo()
+            } label: {
+                Text(String(localized: "stats.process.simulate.btn", defaultValue: "演练示例"))
+            }
+            .buttonStyle(.link)
+            .font(.caption)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.primary.opacity(0.035))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
+    }
+
+    private var unifiedAlertCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // 1. 系统级压力（内存 / 热压力）
+            if hasPressureEvents, let leading = pressureKinds.first {
+                HStack(alignment: .center, spacing: 8) {
+                    Image(systemName: stateSymbol(leading.state))
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(stateTint(leading))
+                        .frame(width: 14)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        let headline: String = {
+                            if pressureKinds.count == 1 {
+                                return leading.state == .recovered
+                                    ? String(localized: "stats.summary.pressureDuringPast \(eventKindText(leading.kind))")
+                                    : String(localized: "stats.summary.pressureDuring \(eventKindText(leading.kind))")
+                            } else {
+                                return String(localized: "stats.summary.multipleKinds \(pressureKinds.count)")
+                            }
+                        }()
+
+                        Text(headline)
+                            .font(.system(size: 12.5, weight: .semibold))
+                            .foregroundStyle(leading.state == .ongoing ? pressureTint(leading) : Color.primary)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            ForEach(Array(pressureKinds.enumerated()), id: \.offset) { _, kind in
+                                pressureKindRow(
+                                    kind,
+                                    showsKindName: pressureKinds.count > 1,
+                                    showsStateIcon: pressureKinds.count > 1
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(minLength: 8)
+
+                    viewDetailsButton
+                }
+            } else if !processAlerts.activeAppGroups.isEmpty {
+                // 没有系统级压力，但有应用级高负载告警时，首行提供概括标题与右侧「查看明细」按钮
+                let hasOngoing = processAlerts.activeAppGroups.contains { $0.worstState == .ongoing }
+                HStack(alignment: .center, spacing: 8) {
+                    Image(systemName: hasOngoing ? "exclamationmark.triangle.fill" : "clock.arrow.circlepath")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(hasOngoing ? palette.severityTint(for: .critical) : Color.secondary)
+                        .frame(width: 14)
+
+                    Text(hasOngoing
+                         ? String(localized: "stats.alerts.apps.ongoing")
+                         : String(localized: "stats.alerts.apps.recovered"))
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(Color.primary)
+
+                    Spacer(minLength: 8)
+
+                    viewDetailsButton
                 }
             }
+
+            // 若同时存在系统压力与软件告警，显示浅分隔线
+            if hasPressureEvents && !processAlerts.activeAppGroups.isEmpty {
+                Divider()
+                    .opacity(0.4)
+                    .padding(.vertical, 1)
+            }
+
+            // 2. 软件级长期高负载告警（同应用合并，首屏限 1 个应用）
+            if !processAlerts.activeAppGroups.isEmpty {
+                let groups = processAlerts.activeAppGroups
+                let displayedGroups = isAlertsExpanded ? groups : Array(groups.prefix(1))
+
+                VStack(spacing: 6) {
+                    ForEach(displayedGroups) { group in
+                        processAppGroupCard(group)
+                    }
+
+                    if groups.count > 1 {
+                        expandLineButton(groupsCount: groups.count)
+                            .padding(.top, 2)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(unifiedAlertFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 0.5)
+        )
+    }
+
+    private var viewDetailsButton: some View {
+        Button {
+            StatisticsReportFlow.open(recorder: recorder, anchor: .apps)
+        } label: {
+            Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+    }
+
+    private func expandLineButton(groupsCount: Int) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                isAlertsExpanded.toggle()
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Rectangle()
+                    .fill(Color.primary.opacity(isExpandHovered ? 0.18 : 0.10))
+                    .frame(height: 0.5)
+
+                HStack(spacing: 5) {
+                    Text(isAlertsExpanded
+                         ? String(localized: "stats.alerts.collapse", defaultValue: "收起高负载应用")
+                         : String(format: String(localized: "stats.alerts.expandOthers", defaultValue: "展开其余 %d 个高负载应用"), groupsCount - 1))
+                        .lineLimit(1)
+                    Image(systemName: isAlertsExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 8.5, weight: .semibold))
+                }
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(isExpandHovered ? Color.primary : Color.secondary)
+                .fixedSize()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 3.5)
+                .background(
+                    Capsule()
+                        .fill(Color.primary.opacity(isExpandHovered ? 0.07 : 0.035))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(Color.primary.opacity(isExpandHovered ? 0.14 : 0.07), lineWidth: 0.5)
+                )
+
+                Rectangle()
+                    .fill(Color.primary.opacity(isExpandHovered ? 0.18 : 0.10))
+                    .frame(height: 0.5)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 28)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isExpandHovered = hovering
         }
     }
 
     private var pressureKinds: [StatisticsOverviewModel.PressureKind] {
         StatisticsOverviewModel.pressureKinds(row: aggregate, events: events)
-    }
-
-    /// 状态块底色:平稳用中性偏绿;压力进行中用档位浅底;已过去的压力用中性底
-    /// (绿勾已经在说「现在不在了」,不必再铺一层告警色)。浅底只负责把结论块
-    /// 与下方指标行分开,不喧宾夺主。
-    private var statusFill: Color {
-        guard settings.statisticsEnabled else { return Color.primary.opacity(0.045) }
-        switch conclusion {
-        case .quiet:
-            return palette.severityTint(for: .calm).opacity(0.10)
-        case .events:
-            guard let leading = pressureKinds.first, leading.state == .ongoing else {
-                return Color.primary.opacity(0.045)
-            }
-            return pressureTint(leading).opacity(0.08)
-        default:
-            return Color.primary.opacity(0.045)
-        }
     }
 
     private func statusLine(
@@ -259,67 +447,6 @@ struct StatisticsSettingsView: View {
                     Text(qualifier)
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                }
-            }
-        }
-    }
-
-    /// 异常状态:标题一句总括,具体压力逐条分行列出。
-    /// 状态用行首图标表达——进行中是告警三角、已恢复是勾、观测中断是问号,
-    /// 标题在已恢复时用「出现过」的措辞,让「这件事已经过去」一眼可见;
-    /// 同类较低档位的时长并进«累计»后的括号,不做灰色小字另起一行。
-    private func eventStatusLine(
-        _ leading: StatisticsOverviewModel.PressureKind,
-        kinds: [StatisticsOverviewModel.PressureKind]
-    ) -> some View {
-        let tint = pressureTint(leading)
-        let headline: String
-        if kinds.count == 1 {
-            headline = leading.state == .recovered
-                ? String(localized: "stats.summary.pressureDuringPast \(eventKindText(leading.kind))")
-                : String(localized: "stats.summary.pressureDuring \(eventKindText(leading.kind))")
-        } else {
-            headline = String(localized: "stats.summary.multipleKinds \(kinds.count)")
-        }
-
-        return HStack(alignment: .top, spacing: 10) {
-            Image(systemName: stateSymbol(leading.state))
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(stateTint(leading))
-                .frame(width: 16)
-
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(alignment: .firstTextBaseline, spacing: 12) {
-                    Text(headline)
-                        .font(.body.weight(.semibold))
-                        // 进行中才用告警色;已过去的事实保持正文颜色,不淡化也不喊。
-                        .foregroundStyle(leading.state == .ongoing ? tint : Color.primary)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    Spacer(minLength: 12)
-
-                    Button {
-                        // 是谁的压力就落到谁的板块:内存压力→内存构成,热压力→热压力与温度。
-                        StatisticsReportFlow.open(
-                            recorder: recorder,
-                            anchor: leading.kind == .memory ? .memory : .thermal
-                        )
-                    } label: {
-                        Text(String(localized: "overview.events.view"))
-                    }
-                    .buttonStyle(.link)
-                    .font(.body)
-                }
-
-                // 逐条列出:多类时每条带维度名与状态图标,单类时维度名已在标题里,不重复。
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(kinds.enumerated()), id: \.offset) { _, kind in
-                        pressureKindRow(
-                            kind,
-                            showsKindName: kinds.count > 1,
-                            showsStateIcon: kinds.count > 1
-                        )
-                    }
                 }
             }
         }
@@ -439,6 +566,212 @@ struct StatisticsSettingsView: View {
         case (.thermal, 2): String(localized: "thermal-pressure.serious")
         case (.thermal, 1): String(localized: "thermal-pressure.fair")
         default: nil
+        }
+    }
+
+    // MARK: - 长期高负载软件卡片
+
+    private func processAppGroupCard(_ group: ProcessAppAlertGroup) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            // App 头部
+            HStack(alignment: .center, spacing: 8) {
+                processIconView(iconPNG: group.iconPNG, name: group.name)
+                    .frame(width: 24, height: 24)
+
+                Text(group.name)
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(Color.primary)
+
+                Spacer()
+
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(group.worstState == .ongoing ? palette.severityTint(for: .critical) : palette.severityTint(for: .calm))
+                        .frame(width: 5, height: 5)
+                    Text(group.worstState == .ongoing
+                         ? String(localized: "stats.alerts.state.ongoing", defaultValue: "持续高负荷")
+                         : String(localized: "stats.alerts.state.recovered", defaultValue: "已恢复"))
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(group.worstState == .ongoing ? palette.severityTint(for: .critical) : palette.severityTint(for: .calm))
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(
+                    Capsule()
+                        .fill((group.worstState == .ongoing ? palette.severityTint(for: .critical) : palette.severityTint(for: .calm)).opacity(0.12))
+                )
+            }
+
+            // 该 App 下合并的各超标指标列表
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(group.episodes) { ep in
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(metricTag(ep.metric))
+                                .font(.system(size: 9.5, weight: .bold))
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(metricColor(ep.metric).opacity(0.12), in: RoundedRectangle(cornerRadius: 3, style: .continuous))
+                                .foregroundStyle(metricColor(ep.metric))
+
+                            Text(metricDetailText(ep))
+                                .font(.system(size: 11))
+                                .foregroundStyle(.primary)
+
+                            Spacer()
+
+                            Text(timeRangeText(ep))
+                                .font(.system(size: 10.5))
+                                .foregroundStyle(.secondary)
+                        }
+
+                        // 紧凑档位分布条
+                        GeometryReader { geo in
+                            let total = max(1, ep.tier1Minutes + ep.tier2Minutes + ep.tier3Minutes)
+                            let w1 = max(geo.size.width * CGFloat(ep.tier1Minutes) / CGFloat(total), ep.tier1Minutes > 0 ? 6 : 0)
+                            let w2 = max(geo.size.width * CGFloat(ep.tier2Minutes) / CGFloat(total), ep.tier2Minutes > 0 ? 6 : 0)
+                            let w3 = max(geo.size.width * CGFloat(ep.tier3Minutes) / CGFloat(total), ep.tier3Minutes > 0 ? 6 : 0)
+
+                            HStack(spacing: 2) {
+                                if ep.tier1Minutes > 0 {
+                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                        .fill(Color(hex: 0xD4A034))
+                                        .frame(width: w1)
+                                }
+                                if ep.tier2Minutes > 0 {
+                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                        .fill(palette.severityTint(for: .warning))
+                                        .frame(width: w2)
+                                }
+                                if ep.tier3Minutes > 0 {
+                                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                        .fill(palette.severityTint(for: .critical))
+                                        .frame(width: w3)
+                                }
+                            }
+                        }
+                        .frame(height: 4)
+
+                        // 紧凑档位标签
+                        HStack(spacing: 8) {
+                            tierLabel(name: tierName(metric: ep.metric, tier: 1), minutes: ep.tier1Minutes, color: Color(hex: 0xD4A034))
+                            tierLabel(name: tierName(metric: ep.metric, tier: 2), minutes: ep.tier2Minutes, color: palette.severityTint(for: .warning))
+                            tierLabel(name: tierName(metric: ep.metric, tier: 3), minutes: ep.tier3Minutes, color: palette.severityTint(for: .critical))
+                        }
+                        .font(.system(size: 9.5))
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private static let alertTimeFormatter: DateFormatter = {
+        let df = DateFormatter()
+        df.dateFormat = "HH:mm"
+        return df
+    }()
+
+    private func timeRangeText(_ ep: ProcessAlertEpisode) -> String {
+        let startStr = Self.alertTimeFormatter.string(from: ep.startedAt)
+        if ep.state == .ongoing {
+            return String(format: String(localized: "stats.alerts.timeRange.ongoing", defaultValue: "%@ 至今 · 已持续 %d 分钟"), startStr, ep.durationMinutes)
+        } else {
+            let endStr = Self.alertTimeFormatter.string(from: ep.endedAt ?? ep.lastSeenAt)
+            return String(format: String(localized: "stats.alerts.timeRange.recovered", defaultValue: "%@ - %@ · 持续 %d 分钟"), startStr, endStr, ep.durationMinutes)
+        }
+    }
+
+    private func tierName(metric: ProcessAlertEpisode.Metric, tier: Int) -> String {
+        switch (metric, tier) {
+        case (.gpu, 1): return "20-40%"
+        case (.gpu, 2): return "40-70%"
+        case (.gpu, 3): return "70%+"
+        case (.memory, 1): return "2-4 GB"
+        case (.memory, 2): return "4-8 GB"
+        case (.memory, 3): return "8 GB+"
+        case (.network, 1): return "10-30 MB/s"
+        case (.network, 2): return "30-80 MB/s"
+        case (.network, 3): return "80 MB/s+"
+        default:
+            return tier == 1 ? "30-50%" : (tier == 2 ? "50-80%" : "80%+")
+        }
+    }
+
+    private func tierLabel(name: String, minutes: Int, color: Color) -> some View {
+        HStack(spacing: 3) {
+            Circle()
+                .fill(color)
+                .frame(width: 3.5, height: 3.5)
+            Text("\(name): \(minutes)m")
+                .foregroundStyle(minutes > 0 ? Color.primary : Color.secondary.opacity(0.55))
+        }
+    }
+
+    private func metricTag(_ metric: ProcessAlertEpisode.Metric) -> String {
+        switch metric {
+        case .cpu: return "CPU"
+        case .gpu: return "GPU"
+        case .memory: return String(localized: "stats.metric.memory", defaultValue: "内存")
+        case .network: return String(localized: "stats.metric.network", defaultValue: "网络")
+        }
+    }
+
+    private func metricColor(_ metric: ProcessAlertEpisode.Metric) -> Color {
+        switch metric {
+        case .cpu: return palette.moduleTint(for: .cpu)
+        case .gpu: return palette.moduleTint(for: .gpu)
+        case .memory: return palette.moduleTint(for: .memory)
+        case .network: return palette.moduleTint(for: .network)
+        }
+    }
+
+    private func formatMemoryMB(_ mb: Double) -> String {
+        if mb >= 1024 {
+            let gb = (mb / 1024.0 * 10).rounded() / 10
+            if gb == gb.rounded() {
+                return String(format: "%.0f GB", gb)
+            }
+            return String(format: "%.1f GB", gb)
+        }
+        return "\(Int(mb.rounded())) MB"
+    }
+
+    private func metricDetailText(_ ep: ProcessAlertEpisode) -> String {
+        let peakLabel = String(localized: "stats.alerts.peakLabel", defaultValue: "峰值")
+        switch ep.metric {
+        case .gpu, .cpu:
+            let avg = String(format: "%.1f%%", ep.averageUsage)
+            let peak = String(format: "%.1f%%", ep.peakUsage)
+            return "\(avg) (\(peakLabel) \(peak))"
+        case .memory:
+            return "\(formatMemoryMB(ep.averageUsage)) (\(peakLabel) \(formatMemoryMB(ep.peakUsage)))"
+        case .network:
+            return "\(String(format: "%.1f MB/s", ep.averageUsage))"
+        }
+    }
+
+    @ViewBuilder
+    private func processIconView(iconPNG: Data?, name: String) -> some View {
+        if let data = iconPNG, let img = NSImage(data: data) {
+            Image(nsImage: img)
+                .resizable()
+                .scaledToFit()
+                .clipShape(RoundedRectangle(cornerRadius: 5, style: .continuous))
+        } else if name == "WindowServer" {
+            Image(systemName: "display")
+                .font(.system(size: 13))
+                .foregroundStyle(Color.accentColor)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+        } else {
+            Image(systemName: "terminal")
+                .font(.system(size: 13))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
         }
     }
 
@@ -645,163 +978,6 @@ struct StatisticsSettingsView: View {
         }
     }
 
-    // MARK: - 使用打卡(默认折叠)
-
-    @State private var showCheckin = false
-    @State private var dayCoverage: [Int64: Double] = [:]
-
-    private var checkinSection: some View {
-        VStack(spacing: 0) {
-            Button {
-                withAnimation(.easeOut(duration: 0.2)) { showCheckin.toggle() }
-                if showCheckin { loadDayCoverage() }
-            } label: {
-                HStack(spacing: 12) {
-                    RoundedRectangle(cornerRadius: 11, style: .continuous)
-                        .fill(LinearGradient(
-                            colors: [Color.accentColor.opacity(0.9), Color.accentColor.opacity(0.55)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .frame(width: 46, height: 46)
-                        .overlay(
-                            Image(systemName: "chart.bar.doc.horizontal")
-                                .font(.system(size: 20, weight: .medium))
-                                .foregroundStyle(.white)
-                        )
-
-                    Text(headerPrimary)
-                        .font(.headline.weight(.semibold))
-
-                    Spacer(minLength: 0)
-
-                    Image(systemName: "chevron.down")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.tertiary)
-                        .rotationEffect(.degrees(showCheckin ? -180 : 0))
-                }
-                .padding(.vertical, 12)
-                .padding(.horizontal, 14)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(StaticPressButtonStyle())
-
-            if showCheckin {
-                checkinPanel
-                    .padding(.horizontal, 14)
-                    .padding(.bottom, 14)
-            }
-        }
-        .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var headerPrimary: String {
-        if recorder.usageTotalDays > 0 {
-            return String(localized: "stats.settings.checkin-total \(recorder.usageTotalDays)")
-        }
-        if recorder.recordDays > 0 {
-            return String(localized: "stats.settings.record-days \(recorder.recordDays)")
-        }
-        return String(localized: "stats.settings.subtitle-empty")
-    }
-
-    /// 展开区:周列 × 星期行的使用打卡日历 + 起始日摘要。
-    @ViewBuilder
-    private var checkinPanel: some View {
-        let calendar = Calendar.current
-        let active = Set(recorder.usageActiveDays)
-        let todayKey = StatisticsProcessStore.dayKey(Date(), calendar: calendar)
-        // 周一起列,与报表打卡网格一致,不随 locale firstWeekday 变化。
-        // Calendar.weekday 为 1-based(周日=1):周一回退 0 天,周日回退 6 天。
-        let weekday = calendar.component(.weekday, from: Date())
-        let monday = calendar.date(
-            byAdding: .day, value: -((weekday + 5) % 7),
-            to: calendar.startOfDay(for: Date()))!
-
-        VStack(alignment: .leading, spacing: 10) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    // 懒加载周列:26 周 × 7 格一次性建齐会让展开/收起瞬间的视图
-                    // 重建与头部同帧竞争,只建可见列,切换更顺滑。
-                    LazyHStack(alignment: .top, spacing: 3) {
-                        ForEach(0..<26, id: \.self) { weekIndex in
-                            let weekStart = calendar.date(byAdding: .weekOfYear, value: weekIndex - 25, to: monday)!
-                            VStack(spacing: 3) {
-                                Text(monthLabel(for: weekStart, calendar: calendar))
-                                    .font(.system(size: 8.5, weight: .medium))
-                                    .foregroundStyle(.tertiary)
-                                    .frame(height: 10)
-                                ForEach(0..<7, id: \.self) { dayIndex in
-                                    let date = calendar.date(byAdding: .day, value: dayIndex, to: weekStart)!
-                                    let key = StatisticsProcessStore.dayKey(date, calendar: calendar)
-                                    checkinCell(active: active.contains(key),
-                                                hours: dayCoverage[key] ?? 0,
-                                                isToday: key == todayKey)
-                                }
-                            }
-                            .id(weekIndex)
-                        }
-                    }
-                    .padding(.vertical, 2)
-                }
-                .onAppear {
-                    // 展开时滚到最后一列(今天所在周),不让用户从 26 周前开始翻。
-                    // 延后到主线程帧末无动画定位:立即动画滚动会与展开切换竞争,产生跳动。
-                    DispatchQueue.main.async {
-                        proxy.scrollTo(25, anchor: .trailing)
-                    }
-                }
-            }
-
-            if recorder.usageFirstDay > 0 {
-                Text(String(localized: "stats.settings.checkin-footer \(firstDayText) \(recorder.usageTotalDays)"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    /// 周列顶部月份标签:仅当该周跨入新月份时显示。
-    private func monthLabel(for weekStart: Date, calendar: Calendar) -> String {
-        let thisMonth = calendar.component(.month, from: weekStart)
-        let prevMonth = calendar.component(.month, from: calendar.date(byAdding: .day, value: -7, to: weekStart)!)
-        guard thisMonth != prevMonth else { return "" }
-        return weekStart.formatted(.dateTime.month(.abbreviated))
-    }
-
-    /// 打卡格:未使用灰色;使用过按当日采样覆盖时长分四档深浅。
-    private func checkinCell(active: Bool, hours: Double, isToday: Bool) -> some View {
-        let opacity: Double = !active ? 0 : hours < 2 ? 0.35 : hours < 6 ? 0.6 : hours < 12 ? 0.85 : 1
-        return RoundedRectangle(cornerRadius: 3, style: .continuous)
-            .fill(active ? Color.accentColor.opacity(opacity) : Color.secondary.opacity(0.14))
-            .frame(width: 12, height: 12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .strokeBorder(Color.accentColor, lineWidth: isToday ? 1 : 0)
-            )
-    }
-
-    /// 展开时拉取日桶覆盖时长,供打卡格分档着色。
-    /// 优先真实采样覆盖秒数(cover_s);迁移前的旧行回退帧数口径。
-    private func loadDayCoverage() {
-        recorder.storageBuckets(.day) { buckets in
-            var map: [Int64: Double] = [:]
-            let calendar = Calendar.current
-            for bucket in buckets {
-                let seconds = bucket.row.coverS ?? Double(bucket.row.n)
-                map[StatisticsProcessStore.dayKey(bucket.start, calendar: calendar)] = seconds / 3600
-            }
-            dayCoverage = map
-        }
-    }
-
-    private var firstDayText: String {
-        let key = recorder.usageFirstDay
-        let components = DateComponents(year: Int(key / 10_000), month: Int(key % 10_000 / 100), day: Int(key % 100))
-        guard let date = Calendar.current.date(from: components) else { return "" }
-        return date.formatted(.dateTime.year().month().day())
-    }
-
     /// 功能入口行:图标 + 标题 + 右箭头,视觉统一。
     @ViewBuilder
     private func entryRow(icon: String, title: String, action: @escaping () -> Void) -> some View {
@@ -827,15 +1003,6 @@ struct StatisticsSettingsView: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-    }
-}
-
-/// 打卡卡展开按钮的专属样式:按下时标签外观完全静止。
-/// 按钮标签内含高饱和渐变图标,系统按压反馈施加在其上会被放大成一次可见
-/// 闪烁;展开/收起反馈由 chevron 旋转与高度动画承担,按钮本身不做视觉变化。
-private struct StaticPressButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
     }
 }
 

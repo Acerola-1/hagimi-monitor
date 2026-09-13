@@ -73,6 +73,10 @@
     --font-mono: "SF Mono", ui-monospace, "Cascadia Code", "JetBrains Mono", monospace;
     /* 应用图标扁平渲染:报告为单文件产物,图标以 data URI 随模板内嵌 */
     --app-icon: url("data:image/png;base64,__APP_ICON_B64__");
+    --c-calm: #41c184;
+    --c-fair: #b8872e;
+    --c-warning: #d27a4a;
+    --c-critical: #d94848;
     color-scheme: dark;
   }
   @media (prefers-color-scheme: light) {
@@ -97,6 +101,10 @@
       --nav-bg: #ffffff;
       --shadow: 0 18px 44px rgba(23, 29, 42, 0.16);
       --shadow-sm: 0 1px 2px rgba(23, 29, 42, 0.05);
+      --c-calm: #259458;
+      --c-fair: #b8872e;
+      --c-warning: #d27a4a;
+      --c-critical: #d94848;
       color-scheme: light;
     }
   }
@@ -373,6 +381,51 @@
   .app-row .app-bar-fill { height: 100%; border-radius: 3px; transition: width 0.3s ease; }
   .app-row .app-value { flex: none; min-width: 74px; text-align: right; font-size: 11.5px; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--text); font-weight: 600; }
   .app-none { grid-column: 1 / -1; padding: 20px 0 14px; text-align: center; color: var(--text-3); font-size: 12.5px; }
+
+  /* ── 长期高负载分析与时间分布 ──────────────────── */
+  .full-width-card { grid-column: 1 / -1; }
+  .highload-list { display: flex; flex-direction: column; gap: 12px; margin-top: 6px; }
+  .highload-item {
+    background: var(--inset);
+    border: 1px solid var(--card-border);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .hl-head { display: flex; align-items: center; justify-content: space-between; }
+  .hl-left { display: flex; align-items: center; gap: 12px; }
+  .hl-icon { width: 34px; height: 34px; border-radius: 8px; flex: none; }
+  .hl-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+  .hl-sub { font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
+  .hl-sub strong { color: var(--text); font-weight: 600; }
+  .hl-state {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 999px;
+  }
+  .hl-ongoing { background: rgba(255, 69, 58, 0.12); color: var(--c-critical); }
+  .hl-recovered { background: rgba(52, 199, 89, 0.12); color: var(--c-calm); }
+  .hl-dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+  .hl-dist { display: flex; flex-direction: column; gap: 6px; padding-top: 4px; border-top: 1px solid var(--card-border); }
+  .hl-dist-title { font-size: 11px; font-weight: 600; color: var(--text-3); }
+  .hl-dist-bar {
+    display: flex; height: 8px; border-radius: 4px; overflow: hidden; background: rgba(128,128,128,0.15); gap: 2px;
+  }
+  .hl-seg { height: 100%; border-radius: 3px; }
+  .hl-t1 { background: var(--c-fair); }
+  .hl-t2 { background: var(--c-warning); }
+  .hl-t3 { background: var(--c-critical); }
+  .hl-dist-labels { display: flex; gap: 12px; font-size: 11px; color: var(--text-2); flex-wrap: wrap; }
+  .hl-chip { display: inline-flex; align-items: center; gap: 4px; }
+  .hl-chip::before { content: ""; width: 7px; height: 7px; border-radius: 50%; }
+  .hl-chip-t1::before { background: var(--c-fair); }
+  .hl-chip-t2::before { background: var(--c-warning); }
+  .hl-chip-t3::before { background: var(--c-critical); }
+  .hl-chip strong { color: var(--text); }
+  .hl-metric-item { display: flex; flex-direction: column; gap: 5px; }
+  .hl-metric-item + .hl-metric-item { border-top: 1px dashed var(--card-border); padding-top: 8px; margin-top: 4px; }
+  .app-row-tier-hint { font-size: 10px; color: var(--text-3); margin-top: 2px; }
 
   /* ── 事件时间线 ─────────────────────────── */
   .events { display: flex; flex-direction: column; }
@@ -763,6 +816,13 @@
     </section>
 
     <section class="apps-section" id="sec-apps">
+      <div class="card full-width-card" id="card-highload" hidden>
+        <div class="sec-head">
+          <span class="icon-chip c-critical"><span class="sf sf-alert"></span></span><h2 id="t-apps-highload" style="font-size:13.5px">长期高负载软件监测与时间分布</h2>
+          <span class="hint" id="h-apps-highload">持续占用造成系统压力的进程追踪与负载档位分布</span>
+        </div>
+        <div class="highload-list" id="highload-list"></div>
+      </div>
       <div class="card">
         <div class="sec-head">
           <span class="icon-chip c-cpu"><span class="sf sf-cpu"></span></span><h2 id="t-apps-cpu" style="font-size:13.5px"></h2>
@@ -1343,12 +1403,24 @@
     apps.rows.forEach((r) => {
       const day = r[0], idx = r[1];
       if (day < fromKey || day > toKey) return;
-      const a = agg[idx] || (agg[idx] = { cpu: 0, cn: 0, gpu: 0, gn: 0, mem: 0, mn: 0, net: 0 });
+      const a = agg[idx] || (agg[idx] = { cpu: 0, cn: 0, gpu: 0, gn: 0, mem: 0, mn: 0, net: 0,
+        cpuT1: 0, cpuT2: 0, cpuT3: 0, cpuPeak: 0,
+        gpuT1: 0, gpuT2: 0, gpuT3: 0, gpuPeak: 0
+      });
       a.cpu += r[2] * r[3]; a.cn += r[3];
       a.gpu += r[4] * r[5]; a.gn += r[5];
       a.mem += r[6] * r[7]; a.mn += r[7];
       a.net += r[8] + r[9];
+      if (r.length > 10) {
+        a.cpuT1 += r[10] || 0; a.cpuT2 += r[11] || 0; a.cpuT3 += r[12] || 0;
+        a.cpuPeak = Math.max(a.cpuPeak, r[13] || 0);
+        a.gpuT1 += r[14] || 0; a.gpuT2 += r[15] || 0; a.gpuT3 += r[16] || 0;
+        a.gpuPeak = Math.max(a.gpuPeak, r[17] || 0);
+      }
     });
+
+    renderHighLoadAlerts();
+
     function entries(field, countField) {
       return Object.keys(agg)
         .map((idx) => ({ idx: Number(idx), v: countField ? agg[idx][field] / (agg[idx][countField] || 1) : agg[idx][field] }))
@@ -1384,18 +1456,168 @@
         const iconHTML = iconData
           ? '<img src="data:image/png;base64,' + iconData + '" alt="">'
           : '<span class="app-icon-fallback">' + sf("apps") + "</span>";
+        const appAgg = agg[entry.idx];
+        let tierHint = "";
+        if (listId === "app-list-cpu" && appAgg && (appAgg.cpuT1 + appAgg.cpuT2 + appAgg.cpuT3 > 0)) {
+          tierHint = "30-50%: " + appAgg.cpuT1 + "m · 50-80%: " + appAgg.cpuT2 + "m · 80%+: " + appAgg.cpuT3 + "m";
+        } else if (listId === "app-list-gpu" && appAgg && (appAgg.gpuT1 + appAgg.gpuT2 + appAgg.gpuT3 > 0)) {
+          tierHint = "20-40%: " + appAgg.gpuT1 + "m · 40-70%: " + appAgg.gpuT2 + "m · 70%+: " + appAgg.gpuT3 + "m";
+        }
         row.innerHTML = iconHTML +
-          '<span class="app-name"></span>' +
+          '<span class="app-name">' + (apps.names[entry.idx] || "?") + (tierHint ? '<span class="app-row-tier-hint" style="display:block;font-size:10px;color:var(--text-3)">' + tierHint + '</span>' : '') + '</span>' +
           '<span class="app-bar"><span class="app-bar-fill" style="width:' +
           Math.max(3, entry.v / max * 100).toFixed(1) + "%;background:linear-gradient(90deg," +
           color + "," + rgba(color, 0.45) + ')"></span></span>' +
           '<span class="app-value"></span>';
-        row.querySelector(".app-name").textContent = apps.names[entry.idx] || "?";
+        if (tierHint) row.title = tierHint;
         row.querySelector(".app-value").textContent = format(entry.v);
         host.appendChild(row);
       });
     });
     $("apps-none").hidden = any;
+  }
+
+  function renderHighLoadAlerts() {
+    const card = $("card-highload");
+    const listHost = $("highload-list");
+    if (!card || !listHost) return;
+    const alerts = (DATA.apps && DATA.apps.alerts) || [];
+    if (!alerts.length) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    listHost.innerHTML = "";
+
+    const isZh = (I.sAvg === "平均" || !I.sAvg);
+    const tTitle = $("t-apps-highload");
+    if (tTitle && I.highLoadTitle) tTitle.textContent = I.highLoadTitle;
+    const hSub = $("h-apps-highload");
+    if (hSub && I.highLoadSub) hSub.textContent = I.highLoadSub;
+
+    // 按应用名称合并同一应用的多个高负载维度
+    const groups = new Map();
+    alerts.forEach((alert) => {
+      const key = alert.name || "Unknown";
+      if (!groups.has(key)) {
+        groups.set(key, []);
+      }
+      groups.get(key).push(alert);
+    });
+
+    function formatHM(ts) {
+      if (!ts) return "";
+      const d = new Date(ts * 1000);
+      const h = String(d.getHours()).padStart(2, "0");
+      const m = String(d.getMinutes()).padStart(2, "0");
+      return h + ":" + m;
+    }
+
+    groups.forEach((episodes, name) => {
+      const item = el("div", "highload-item");
+      const isOngoing = episodes.some((e) => e.state === "ongoing");
+      const iconData = episodes.find((e) => e.iconBase64)?.iconBase64;
+
+      const maxDur = Math.max(...episodes.map(e => e.durationMinutes || 0));
+      const validStarts = episodes.map(e => e.startedAt || 0).filter(Boolean);
+      const earliestStart = validStarts.length ? Math.min(...validStarts) : 0;
+      const headStartStr = earliestStart ? formatHM(earliestStart) : "";
+      const maxDurText = isZh ? "最长持续 " + maxDur + " 分钟" : "Max duration " + maxDur + " min";
+      let headTimeSub = maxDurText;
+      if (headStartStr) {
+        const prefix = isZh
+          ? (isOngoing ? headStartStr + " 至今 · " : headStartStr + " 起 · ")
+          : (isOngoing ? "Since " + headStartStr + " · " : "From " + headStartStr + " · ");
+        headTimeSub = prefix + headTimeSub;
+      }
+
+      function formatMem(mb) {
+        if (!mb) return "0 MB";
+        if (mb >= 1024) {
+          const gb = Math.round(mb / 102.4) / 10;
+          return (gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)) + " GB";
+        }
+        return Math.round(mb) + " MB";
+      }
+
+      const iconHTML = iconData
+        ? '<img src="data:image/png;base64,' + iconData + '" class="hl-icon" alt="">'
+        : '<span class="app-icon-fallback hl-icon">' + (name === "WindowServer" ? sf("display") : sf("apps")) + '</span>';
+
+      const sustainedWord = isZh ? "持续占用" : "Sustained";
+      const avgWord = isZh ? "均值" : "avg";
+      const peakWord = isZh ? "峰值" : "peak";
+      const minUnit = isZh ? "分钟" : " min";
+
+      let metricsHTML = "";
+      episodes.forEach(alert => {
+        const metricLabel = alert.metric ? alert.metric.toUpperCase() : "LOAD";
+        const usageStr = alert.metric === "memory" ? formatMem(alert.avgUsage) : alert.avgUsage + "%";
+        const peakStr = alert.metric === "memory" ? formatMem(alert.peakUsage) : alert.peakUsage + "%";
+
+        const startStr = formatHM(alert.startedAt);
+        let timeRange = "";
+        if (startStr) {
+          if (alert.state === "ongoing") {
+            timeRange = isZh
+              ? startStr + " 至今 · 已持续 " + alert.durationMinutes + " 分钟"
+              : "Since " + startStr + " · " + alert.durationMinutes + " min";
+          } else {
+            const endStr = formatHM(alert.endedAt || alert.lastSeenAt);
+            timeRange = isZh
+              ? startStr + " - " + endStr + " · 持续 " + alert.durationMinutes + " 分钟"
+              : startStr + " - " + endStr + " · " + alert.durationMinutes + " min";
+          }
+        } else {
+          timeRange = isZh ? "持续 " + alert.durationMinutes + " 分钟" : alert.durationMinutes + " min";
+        }
+
+        let t1Name = "30-50%", t2Name = "50-80%", t3Name = "80%+";
+        if (alert.metric === "gpu") {
+          t1Name = "20-40%"; t2Name = "40-70%"; t3Name = "70%+";
+        } else if (alert.metric === "memory") {
+          t1Name = "2-4 GB"; t2Name = "4-8 GB"; t3Name = "8 GB+";
+        } else if (alert.metric === "network") {
+          t1Name = "10-30 MB/s"; t2Name = "30-80 MB/s"; t3Name = "80 MB/s+";
+        }
+        const t1 = alert.tier1 || 0, t2 = alert.tier2 || 0, t3 = alert.tier3 || 0;
+        const totalT = Math.max(1, t1 + t2 + t3);
+
+        metricsHTML +=
+          '<div class="hl-metric-item">' +
+            '<div class="hl-sub">' + sustainedWord + ' <strong>' + metricLabel + '</strong> ' + avgWord + ' <strong>' + usageStr + '</strong> (' + peakWord + ' ' + peakStr + ') · <span style="font-feature-settings:\'tnum\' 1;">' + timeRange + '</span></div>' +
+            '<div class="hl-dist-bar">' +
+              (t1 > 0 ? '<div class="hl-seg hl-t1" style="width:' + (t1 / totalT * 100).toFixed(1) + '%" title="' + t1Name + ': ' + t1 + minUnit + '"></div>' : '') +
+              (t2 > 0 ? '<div class="hl-seg hl-t2" style="width:' + (t2 / totalT * 100).toFixed(1) + '%" title="' + t2Name + ': ' + t2 + minUnit + '"></div>' : '') +
+              (t3 > 0 ? '<div class="hl-seg hl-t3" style="width:' + (t3 / totalT * 100).toFixed(1) + '%" title="' + t3Name + ': ' + t3 + minUnit + '"></div>' : '') +
+            '</div>' +
+            '<div class="hl-dist-labels">' +
+              '<span class="hl-chip hl-chip-t1">' + t1Name + ': <strong>' + t1 + minUnit + '</strong></span>' +
+              '<span class="hl-chip hl-chip-t2">' + t2Name + ': <strong>' + t2 + minUnit + '</strong></span>' +
+              '<span class="hl-chip hl-chip-t3">' + t3Name + ': <strong>' + t3 + minUnit + '</strong></span>' +
+            '</div>' +
+          '</div>';
+      });
+
+      item.innerHTML =
+        '<div class="hl-head">' +
+          '<div class="hl-left">' +
+            iconHTML +
+            '<div>' +
+              '<div class="hl-name">' + (name || "?") + '</div>' +
+              '<div class="hl-sub" style="margin-top:1px;">' + headTimeSub + '</div>' +
+            '</div>' +
+          '</div>' +
+          '<div class="hl-state ' + (isOngoing ? 'hl-ongoing' : 'hl-recovered') + '">' +
+            '<span class="hl-dot"></span>' + (isOngoing ? (isZh ? '持续高负荷' : 'Heavy Load') : (isZh ? '已恢复平稳' : 'Recovered')) +
+          '</div>' +
+        '</div>' +
+        '<div class="hl-dist">' +
+          '<div class="hl-dist-title">' + (isZh ? '异常占用指标与档位时间分布' : 'Anomaly Metric & Tier Time Distribution') + '</div>' +
+          metricsHTML +
+        '</div>';
+      listHost.appendChild(item);
+    });
   }
 
   function renderBatteryHealth(from, to) {

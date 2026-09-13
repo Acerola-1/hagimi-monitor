@@ -5,13 +5,15 @@ import OSLog
 
 /// 进程/电池维度的报表数据(来自 SwiftData 进程存储)。
 struct StatisticsProcessSnapshot {
-    /// 行:[日键, 名称下标, cpu%, cpu样本, gpu%, gpu样本, 内存MB, 内存样本, 网络MB, 磁盘MB]
+    /// 行:[日键, 名称下标, cpu%, cpu样本, gpu%, gpu样本, 内存MB, 内存样本, 网络MB, 磁盘MB, cpuT1, cpuT2, cpuT3, cpuPeak, gpuT1, gpuT2, gpuT3, gpuPeak]
     let appRows: [[Any]]
     let appNames: [String]
     /// 与 appNames 对齐的 base64 PNG(空串 = 无图标)。
     let appIcons: [String]
     /// [日键, 循环次数, 健康度%]
     let batteryDaily: [[Any]]
+    /// 进程高负载告警与时间分布事件列表
+    var alerts: [[String: Any]] = []
 }
 
 /// 网页报表生成器:从统计库拉取分钟/小时/日三层行,连同元信息与当前语言文案
@@ -231,7 +233,15 @@ enum StatisticsReportBuilder {
             "i18n": localizedStrings(),
         ]
         if let process {
-            payload["apps"] = ["rows": process.appRows, "names": process.appNames, "icons": process.appIcons]
+            var appsDict: [String: Any] = [
+                "rows": process.appRows,
+                "names": process.appNames,
+                "icons": process.appIcons,
+            ]
+            if !process.alerts.isEmpty {
+                appsDict["alerts"] = process.alerts
+            }
+            payload["apps"] = appsDict
             payload["batteryDaily"] = process.batteryDaily
         }
         // 硬件清单:一次性采集(见 HardwareInventoryReader),随载荷内联。
@@ -331,6 +341,7 @@ enum StatisticsReportBuilder {
         "alertNone", "alertIncludes", "alertDetail", "alertDetailPlain",
         "secBatteryHealth", "sCycles", "sHealth",
         "secAppsTitle", "appsCpu", "appsMem", "appsGpu", "appsNet", "appsNone",
+        "highLoadTitle", "highLoadSub", "highLoadOngoing", "highLoadRecovered", "highLoadDistTitle",
         "heatLow", "heatHigh", "heatHint", "hourOfDay",
         "granMinute", "granHour", "granDay",
         "sCpu", "sGpu", "sMemPressure", "sMemUsage", "sAvg", "sPeak", "sPerfCore", "sEffCore",
@@ -377,7 +388,7 @@ enum StatisticsReportBuilder {
             icons.append(identity.iconPNG?.base64EncodedString() ?? "")
         }
 
-        // 行:[日键, 名称下标, cpu%, cpuN, gpu%, gpuN, 内存MB, 内存N, 下行MB, 上行MB]
+        // 行:[日键, 名称下标, cpu%, cpuN, gpu%, gpuN, 内存MB, 内存N, 下行MB, 上行MB, cpuT1, cpuT2, cpuT3, cpuPeak, gpuT1, gpuT2, gpuT3, gpuPeak]
         let rows: [[Any]] = store.dailyRows(fromDay: fromDay, toDay: toDay).map { row in
             let index = nameIndex[row.appKey] ?? {
                 nameIndex[row.appKey] = names.count
@@ -389,12 +400,37 @@ enum StatisticsReportBuilder {
                     row.cpuAvg, row.cpuSamples,
                     row.gpuAvg, row.gpuSamples,
                     row.memAvgBytes / 1_048_576, row.memSamples,
-                    row.netDownBytes / 1_048_576, row.netUpBytes / 1_048_576] as [Any]
+                    row.netDownBytes / 1_048_576, row.netUpBytes / 1_048_576,
+                    row.cpuTier1, row.cpuTier2, row.cpuTier3, row.cpuPeak,
+                    row.gpuTier1, row.gpuTier2, row.gpuTier3, row.gpuPeak] as [Any]
         }
 
         let battery = store.batteryHistory().map { [$0.day, $0.cycleCount, $0.healthPercent] as [Any] }
-        guard !names.isEmpty || !battery.isEmpty else { return nil }
-        return StatisticsProcessSnapshot(appRows: rows, appNames: names, appIcons: icons, batteryDaily: battery)
+        let alertList: [[String: Any]] = (ProcessAlertCenter.shared.activeAlerts + ProcessAlertCenter.shared.recentAlerts).map { alert in
+            var dict: [String: Any] = [
+                "appKey": alert.appKey,
+                "name": alert.name,
+                "metric": alert.metric.rawValue,
+                "peakUsage": (alert.peakUsage * 10).rounded() / 10,
+                "avgUsage": (alert.averageUsage * 10).rounded() / 10,
+                "durationMinutes": alert.durationMinutes,
+                "state": alert.state.rawValue,
+                "startedAt": Int(alert.startedAt.timeIntervalSince1970),
+                "lastSeenAt": Int(alert.lastSeenAt.timeIntervalSince1970),
+                "tier1": alert.tier1Minutes,
+                "tier2": alert.tier2Minutes,
+                "tier3": alert.tier3Minutes,
+            ]
+            if let endedAt = alert.endedAt {
+                dict["endedAt"] = Int(endedAt.timeIntervalSince1970)
+            }
+            if let iconPNG = alert.iconPNG {
+                dict["iconBase64"] = iconPNG.base64EncodedString()
+            }
+            return dict
+        }
+        guard !names.isEmpty || !battery.isEmpty || !alertList.isEmpty else { return nil }
+        return StatisticsProcessSnapshot(appRows: rows, appNames: names, appIcons: icons, batteryDaily: battery, alerts: alertList)
     }
 
     // MARK: - 元信息
@@ -461,11 +497,13 @@ enum StatisticsReportError: LocalizedError {
 enum StatisticsReportAnchor: Sendable {
     case memory
     case thermal
+    case apps
 
     var sectionTitle: String {
         switch self {
         case .memory: String(localized: "stats.r.secMem")
         case .thermal: String(localized: "stats.r.secThermal")
+        case .apps: String(localized: "stats.r.secAppsTitle")
         }
     }
 }

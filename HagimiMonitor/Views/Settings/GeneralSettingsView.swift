@@ -17,6 +17,8 @@ struct GeneralSettingsView: View {
 
     var body: some View {
         SettingsPage {
+            UsageCheckinCard(recorder: store.statisticsRecorder)
+
             SettingsGroup {
                 SettingsRow(title: String(localized: "settings.launch-at-login")) {
                     Toggle("", isOn: $settings.launchAtLogin)
@@ -484,5 +486,172 @@ private struct MenuBarMetricRow: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
         .frame(minHeight: 44)
+    }
+}
+
+// MARK: - 使用打卡(默认折叠)
+
+struct UsageCheckinCard: View {
+    @ObservedObject var recorder: StatisticsRecorder
+    @State private var showCheckin = false
+    @State private var dayCoverage: [Int64: Double] = [:]
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Button {
+                withAnimation(.easeOut(duration: 0.2)) { showCheckin.toggle() }
+                if showCheckin { loadDayCoverage() }
+            } label: {
+                HStack(spacing: 12) {
+                    RoundedRectangle(cornerRadius: 11, style: .continuous)
+                        .fill(LinearGradient(
+                            colors: [Color.accentColor.opacity(0.9), Color.accentColor.opacity(0.55)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .frame(width: 46, height: 46)
+                        .overlay(
+                            Image(systemName: "chart.bar.doc.horizontal")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundStyle(.white)
+                        )
+
+                    Text(headerPrimary)
+                        .font(.headline.weight(.semibold))
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .rotationEffect(.degrees(showCheckin ? -180 : 0))
+                }
+                .padding(.vertical, 12)
+                .padding(.horizontal, 14)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(StaticPressButtonStyle())
+
+            if showCheckin {
+                checkinPanel
+                    .padding(.horizontal, 14)
+                    .padding(.bottom, 14)
+            }
+        }
+        .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var headerPrimary: String {
+        if recorder.usageTotalDays > 0 {
+            return String(localized: "stats.settings.checkin-total \(recorder.usageTotalDays)")
+        }
+        if recorder.recordDays > 0 {
+            return String(localized: "stats.settings.record-days \(recorder.recordDays)")
+        }
+        return String(localized: "stats.settings.subtitle-empty")
+    }
+
+    /// 展开区:周列 × 星期行的使用打卡日历 + 起始日摘要。
+    @ViewBuilder
+    private var checkinPanel: some View {
+        let calendar = Calendar.current
+        let active = Set(recorder.usageActiveDays)
+        let todayKey = StatisticsProcessStore.dayKey(Date(), calendar: calendar)
+        // 周一起列,与报表打卡网格一致,不随 locale firstWeekday 变化。
+        // Calendar.weekday 为 1-based(周日=1):周一回退 0 天,周日回退 6 天。
+        let weekday = calendar.component(.weekday, from: Date())
+        let monday = calendar.date(
+            byAdding: .day, value: -((weekday + 5) % 7),
+            to: calendar.startOfDay(for: Date()))!
+
+        VStack(alignment: .leading, spacing: 10) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    // 懒加载周列:26 周 × 7 格一次性建齐会让展开/收起瞬间的视图
+                    // 重建与头部同帧竞争,只建可见列,切换更顺滑。
+                    LazyHStack(alignment: .top, spacing: 3) {
+                        ForEach(0..<26, id: \.self) { weekIndex in
+                            let weekStart = calendar.date(byAdding: .weekOfYear, value: weekIndex - 25, to: monday)!
+                            VStack(spacing: 3) {
+                                Text(monthLabel(for: weekStart, calendar: calendar))
+                                    .font(.system(size: 8.5, weight: .medium))
+                                    .foregroundStyle(.tertiary)
+                                    .frame(height: 10)
+                                ForEach(0..<7, id: \.self) { dayIndex in
+                                    let date = calendar.date(byAdding: .day, value: dayIndex, to: weekStart)!
+                                    let key = StatisticsProcessStore.dayKey(date, calendar: calendar)
+                                    checkinCell(active: active.contains(key),
+                                                hours: dayCoverage[key] ?? 0,
+                                                isToday: key == todayKey)
+                                }
+                            }
+                            .id(weekIndex)
+                        }
+                    }
+                    .padding(.vertical, 2)
+                }
+                .onAppear {
+                    // 展开时滚到最后一列(今天所在周),不让用户从 26 周前开始翻。
+                    // 延后到主线程帧末无动画定位:立即动画滚动会与展开切换竞争,产生跳动。
+                    DispatchQueue.main.async {
+                        proxy.scrollTo(25, anchor: .trailing)
+                    }
+                }
+            }
+
+            if recorder.usageFirstDay > 0 {
+                Text(String(localized: "stats.settings.checkin-footer \(firstDayText) \(recorder.usageTotalDays)"))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    /// 周列顶部月份标签:仅当该周跨入新月份时显示。
+    private func monthLabel(for weekStart: Date, calendar: Calendar) -> String {
+        let thisMonth = calendar.component(.month, from: weekStart)
+        let prevMonth = calendar.component(.month, from: calendar.date(byAdding: .day, value: -7, to: weekStart)!)
+        guard thisMonth != prevMonth else { return "" }
+        return weekStart.formatted(.dateTime.month(.abbreviated))
+    }
+
+    /// 打卡格:未使用灰色;使用过按当日采样覆盖时长分四档深浅。
+    private func checkinCell(active: Bool, hours: Double, isToday: Bool) -> some View {
+        let opacity: Double = !active ? 0 : hours < 2 ? 0.35 : hours < 6 ? 0.6 : hours < 12 ? 0.85 : 1
+        return RoundedRectangle(cornerRadius: 3, style: .continuous)
+            .fill(active ? Color.accentColor.opacity(opacity) : Color.secondary.opacity(0.14))
+            .frame(width: 12, height: 12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 3, style: .continuous)
+                    .strokeBorder(Color.accentColor, lineWidth: isToday ? 1 : 0)
+            )
+    }
+
+    /// 展开时拉取日桶覆盖时长,供打卡格分档着色。
+    /// 优先真实采样覆盖秒数(cover_s);迁移前的旧行回退帧数口径。
+    private func loadDayCoverage() {
+        recorder.storageBuckets(.day) { buckets in
+            var map: [Int64: Double] = [:]
+            let calendar = Calendar.current
+            for bucket in buckets {
+                let seconds = bucket.row.coverS ?? Double(bucket.row.n)
+                map[StatisticsProcessStore.dayKey(bucket.start, calendar: calendar)] = seconds / 3600
+            }
+            dayCoverage = map
+        }
+    }
+
+    private var firstDayText: String {
+        let key = recorder.usageFirstDay
+        let components = DateComponents(year: Int(key / 10_000), month: Int(key % 10_000 / 100), day: Int(key % 100))
+        guard let date = Calendar.current.date(from: components) else { return "" }
+        return date.formatted(.dateTime.year().month().day())
+    }
+}
+
+/// 打卡卡展开按钮的专属样式:按下时标签外观完全静止。
+private struct StaticPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }

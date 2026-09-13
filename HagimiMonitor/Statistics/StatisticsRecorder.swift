@@ -194,15 +194,32 @@ final class StatisticsRecorder: ObservableObject {
         at date: Date
     ) {
         guard recordingActive else { return }
+        let cpuEntries = cpu.map { (name: $0.name, pid: $0.pid, usage: $0.cpuUsage) }
+        let memEntries = memory.map { (name: $0.name, pid: $0.pid, bytes: Double($0.memoryUsage)) }
+        let gpuEntries = gpu.map { (name: $0.name, pid: $0.pid, usage: $0.gpuUsage) }
+        let netEntries = network.map { (name: $0.name, pid: $0.pid, downBytes: Double($0.download) * 60, upBytes: Double($0.upload) * 60) }
+        let diskEntries = disk.map { (name: $0.name, pid: $0.pid, readBytes: Double($0.bytesRead), writeBytes: Double($0.bytesWritten)) }
+
         processStore?.record(
-            cpu: cpu.map { (name: $0.name, pid: $0.pid, usage: $0.cpuUsage) },
-            memory: memory.map { (name: $0.name, pid: $0.pid, bytes: Double($0.memoryUsage)) },
-            gpu: gpu.map { (name: $0.name, pid: $0.pid, usage: $0.gpuUsage) },
-            network: network.map { (name: $0.name, pid: $0.pid, downBytes: Double($0.download) * 60, upBytes: Double($0.upload) * 60) },
-            disk: disk.map { (name: $0.name, pid: $0.pid, readBytes: Double($0.bytesRead), writeBytes: Double($0.bytesWritten)) },
+            cpu: cpuEntries,
+            memory: memEntries,
+            gpu: gpuEntries,
+            network: netEntries,
+            disk: diskEntries,
             at: date,
             calendar: calendar
         )
+
+        ProcessAlertCenter.shared.ingest(
+            cpu: cpuEntries,
+            memory: memEntries,
+            gpu: gpuEntries,
+            network: netEntries,
+            at: date
+        ) { [weak self] name, pid in
+            self?.processStore?.iconPNG(for: name)
+                ?? ProcessIconCache.fullSizePNG(forPID: pid, sidePixels: 128)
+        }
     }
 
     // MARK: - 采集(主线程,微秒级)

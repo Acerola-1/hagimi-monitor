@@ -45,26 +45,57 @@ enum ReportWindowPresenter {
         webView?.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
         startLiveUpdates()
         focus(win)
+        if anchor != nil {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 200_000_000)
+                if pendingAnchor != nil, let webView {
+                    scrollToPendingAnchor(in: webView)
+                }
+            }
+        }
     }
 
     /// 页面加载完成后定位板块;板块被当前范围隐藏或标题对不上时停在页首。
     static func scrollToPendingAnchor(in webView: WKWebView) {
         guard let anchor = pendingAnchor else { return }
         pendingAnchor = nil
-        webView.evaluateJavaScript(anchorScrollScript(title: anchor.sectionTitle), completionHandler: nil)
+        webView.evaluateJavaScript(anchorScrollScript(anchor: anchor), completionHandler: nil)
     }
 
-    /// 按板块标题匹配,与模板粘性导航同一依据,不依赖具体元素 id。
-    private static func anchorScrollScript(title: String) -> String {
-        let literal = (try? JSONEncoder().encode(title))
+    /// 优先定位目标元素（如高负载卡片或对应模块），其次按板块内任一 h2 标题做后备匹配。
+    private static func anchorScrollScript(anchor: StatisticsReportAnchor) -> String {
+        let titleLiteral = (try? JSONEncoder().encode(anchor.sectionTitle))
             .flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
+        let preferredId: String = {
+            switch anchor {
+            case .memory: return "sec-mem"
+            case .thermal: return "sec-thermal"
+            case .apps: return "card-highload"
+            }
+        }()
         return """
         (function () {
-          const title = \(literal);
+          const pref = document.getElementById('\(preferredId)');
+          if (pref && !pref.hidden && pref.offsetParent !== null) {
+            pref.scrollIntoView({ block: 'start', behavior: 'smooth' });
+            return true;
+          }
+          if ('\(preferredId)' === 'card-highload') {
+            const secApps = document.getElementById('sec-apps');
+            if (secApps && !secApps.hidden) {
+              secApps.scrollIntoView({ block: 'start', behavior: 'smooth' });
+              return true;
+            }
+          }
+          const title = \(titleLiteral);
           const sections = Array.from(document.querySelectorAll('#content > section'));
-          const match = sections.find((sec) => ((sec.querySelector('h2') || {}).textContent || '').trim() === title);
+          const match = sections.find((sec) => {
+            if (sec.hidden) return false;
+            const h2s = Array.from(sec.querySelectorAll('h2'));
+            return h2s.some(h => ((h.textContent || '').trim() === title));
+          });
           if (!match || match.hidden) return false;
-          match.scrollIntoView({ block: 'start' });
+          match.scrollIntoView({ block: 'start', behavior: 'smooth' });
           return true;
         })();
         """
