@@ -65,6 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = store
         // 实时压力告警:订阅采样、记录开关与通知开关,驱动红点与系统通知。
         PressureAlertCenter.shared.attach(to: store)
+        ProcessAlertCenter.shared.attach(to: store)
         // 通知授权只在开关打开时申请一次:开关默认关,所以首次启动不弹授权窗;
         // 之后用户打开开关(或本次启动时它已经开着)才申请。
         store.settings.$alertNotificationsEnabled

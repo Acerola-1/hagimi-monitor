@@ -38,6 +38,18 @@ final class StatsAppDaily {
     var netUp: Double
     var diskRead: Double
     var diskWrite: Double
+    var cpuTier1: Int = 0
+    var cpuTier2: Int = 0
+    var cpuTier3: Int = 0
+    var cpuPeak: Double = 0.0
+    var gpuTier1: Int = 0
+    var gpuTier2: Int = 0
+    var gpuTier3: Int = 0
+    var gpuPeak: Double = 0.0
+    var memTier1: Int = 0
+    var memTier2: Int = 0
+    var memTier3: Int = 0
+    var memPeak: Double = 0.0
 
     init(day: Int64, appKey: String, name: String) {
         self.day = day
@@ -48,6 +60,9 @@ final class StatsAppDaily {
         self.memSum = 0; self.memSamples = 0
         self.netDown = 0; self.netUp = 0
         self.diskRead = 0; self.diskWrite = 0
+        self.cpuTier1 = 0; self.cpuTier2 = 0; self.cpuTier3 = 0; self.cpuPeak = 0.0
+        self.gpuTier1 = 0; self.gpuTier2 = 0; self.gpuTier3 = 0; self.gpuPeak = 0.0
+        self.memTier1 = 0; self.memTier2 = 0; self.memTier3 = 0; self.memPeak = 0.0
     }
 }
 
@@ -113,6 +128,18 @@ final class StatisticsProcessStore {
         var netUp = 0.0
         var diskRead = 0.0
         var diskWrite = 0.0
+        var cpuTier1 = 0
+        var cpuTier2 = 0
+        var cpuTier3 = 0
+        var cpuPeak = 0.0
+        var gpuTier1 = 0
+        var gpuTier2 = 0
+        var gpuTier3 = 0
+        var gpuPeak = 0.0
+        var memTier1 = 0
+        var memTier2 = 0
+        var memTier3 = 0
+        var memPeak = 0.0
     }
     private var currentDay: Int64 = 0
     private var accumulators: [String: AppAccumulator] = [:]
@@ -266,6 +293,14 @@ final class StatisticsProcessStore {
                 var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
                 acc.cpuScore += entry.usage
                 acc.cpuSamples += 1
+                acc.cpuPeak = max(acc.cpuPeak, entry.usage)
+                if entry.usage >= 80 {
+                    acc.cpuTier3 += 1
+                } else if entry.usage >= 50 {
+                    acc.cpuTier2 += 1
+                } else if entry.usage >= 30 {
+                    acc.cpuTier1 += 1
+                }
                 self.accumulators[entry.name] = acc
                 self.captureIcon(entry.name, pid: entry.pid)
             }
@@ -273,6 +308,15 @@ final class StatisticsProcessStore {
                 var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
                 acc.memSum += entry.bytes
                 acc.memSamples += 1
+                acc.memPeak = max(acc.memPeak, entry.bytes)
+                let gb = entry.bytes / 1_073_741_824
+                if gb >= 4.0 {
+                    acc.memTier3 += 1
+                } else if gb >= 2.0 {
+                    acc.memTier2 += 1
+                } else if gb >= 1.0 {
+                    acc.memTier1 += 1
+                }
                 self.accumulators[entry.name] = acc
                 self.captureIcon(entry.name, pid: entry.pid)
             }
@@ -280,6 +324,14 @@ final class StatisticsProcessStore {
                 var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
                 acc.gpuScore += entry.usage
                 acc.gpuSamples += 1
+                acc.gpuPeak = max(acc.gpuPeak, entry.usage)
+                if entry.usage >= 70 {
+                    acc.gpuTier3 += 1
+                } else if entry.usage >= 40 {
+                    acc.gpuTier2 += 1
+                } else if entry.usage >= 20 {
+                    acc.gpuTier1 += 1
+                }
                 self.accumulators[entry.name] = acc
                 self.captureIcon(entry.name, pid: entry.pid)
             }
@@ -372,6 +424,12 @@ final class StatisticsProcessStore {
             row.memSum += acc.memSum; row.memSamples += acc.memSamples
             row.netDown += acc.netDown; row.netUp += acc.netUp
             row.diskRead += acc.diskRead; row.diskWrite += acc.diskWrite
+            row.cpuTier1 += acc.cpuTier1; row.cpuTier2 += acc.cpuTier2; row.cpuTier3 += acc.cpuTier3
+            row.cpuPeak = max(row.cpuPeak, acc.cpuPeak)
+            row.gpuTier1 += acc.gpuTier1; row.gpuTier2 += acc.gpuTier2; row.gpuTier3 += acc.gpuTier3
+            row.gpuPeak = max(row.gpuPeak, acc.gpuPeak)
+            row.memTier1 += acc.memTier1; row.memTier2 += acc.memTier2; row.memTier3 += acc.memTier3
+            row.memPeak = max(row.memPeak, acc.memPeak)
         }
         accumulators.removeAll()
         try? context.save()
@@ -414,6 +472,17 @@ final class StatisticsProcessStore {
 
     private static func iconPixels(_ data: Data) -> Int {
         NSBitmapImageRep(data: data)?.pixelsWide ?? 0
+    }
+
+    /// 查询某应用持久化的图标 PNG（内存缓存命中即返，未命中查库）
+    func iconPNG(for name: String) -> Data? {
+        queue.sync {
+            if let cached = iconCache[name] { return cached }
+            guard let context else { return nil }
+            let key = name
+            let predicate = #Predicate<StatsAppIdentity> { $0.appKey == key }
+            return (try? context.fetch(FetchDescriptor(predicate: predicate)).first)?.iconPNG
+        }
     }
 
     // MARK: - 查询
@@ -459,6 +528,12 @@ final class StatisticsProcessStore {
                     merged.memSum += row.memSum; merged.memSamples += row.memSamples
                     merged.netDown += row.netDown; merged.netUp += row.netUp
                     merged.diskRead += row.diskRead; merged.diskWrite += row.diskWrite
+                    merged.cpuTier1 += row.cpuTier1; merged.cpuTier2 += row.cpuTier2; merged.cpuTier3 += row.cpuTier3
+                    merged.cpuPeak = max(merged.cpuPeak, row.cpuPeak)
+                    merged.gpuTier1 += row.gpuTier1; merged.gpuTier2 += row.gpuTier2; merged.gpuTier3 += row.gpuTier3
+                    merged.gpuPeak = max(merged.gpuPeak, row.gpuPeak)
+                    merged.memTier1 += row.memTier1; merged.memTier2 += row.memTier2; merged.memTier3 += row.memTier3
+                    merged.memPeak = max(merged.memPeak, row.memPeak)
                     merged.name = row.name
                 } else {
                     let fresh = StatsAppDaily(day: 0, appKey: row.appKey, name: row.name)
@@ -467,6 +542,12 @@ final class StatisticsProcessStore {
                     fresh.memSum = row.memSum; fresh.memSamples = row.memSamples
                     fresh.netDown = row.netDown; fresh.netUp = row.netUp
                     fresh.diskRead = row.diskRead; fresh.diskWrite = row.diskWrite
+                    fresh.cpuTier1 = row.cpuTier1; fresh.cpuTier2 = row.cpuTier2; fresh.cpuTier3 = row.cpuTier3
+                    fresh.cpuPeak = row.cpuPeak
+                    fresh.gpuTier1 = row.gpuTier1; fresh.gpuTier2 = row.gpuTier2; fresh.gpuTier3 = row.gpuTier3
+                    fresh.gpuPeak = row.gpuPeak
+                    fresh.memTier1 = row.memTier1; fresh.memTier2 = row.memTier2; fresh.memTier3 = row.memTier3
+                    fresh.memPeak = row.memPeak
                     aggregated[row.appKey] = fresh
                 }
             }
@@ -515,6 +596,18 @@ final class StatisticsProcessStore {
         let memSamples: Int
         let netDownBytes: Double
         let netUpBytes: Double
+        let cpuTier1: Int
+        let cpuTier2: Int
+        let cpuTier3: Int
+        let cpuPeak: Double
+        let gpuTier1: Int
+        let gpuTier2: Int
+        let gpuTier3: Int
+        let gpuPeak: Double
+        let memTier1: Int
+        let memTier2: Int
+        let memTier3: Int
+        let memPeak: Double
     }
 
     func dailyRows(fromDay: Int64, toDay: Int64) -> [DailyAppRow] {
@@ -534,7 +627,19 @@ final class StatisticsProcessStore {
                     memAvgBytes: row.memSamples > 0 ? row.memSum / Double(row.memSamples) : 0,
                     memSamples: row.memSamples,
                     netDownBytes: row.netDown,
-                    netUpBytes: row.netUp
+                    netUpBytes: row.netUp,
+                    cpuTier1: row.cpuTier1,
+                    cpuTier2: row.cpuTier2,
+                    cpuTier3: row.cpuTier3,
+                    cpuPeak: row.cpuPeak,
+                    gpuTier1: row.gpuTier1,
+                    gpuTier2: row.gpuTier2,
+                    gpuTier3: row.gpuTier3,
+                    gpuPeak: row.gpuPeak,
+                    memTier1: row.memTier1,
+                    memTier2: row.memTier2,
+                    memTier3: row.memTier3,
+                    memPeak: row.memPeak
                 )
             }
         }

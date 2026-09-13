@@ -96,13 +96,8 @@ enum ProcessIconCache {
         return NSImage(cgImage: scaled, size: NSSize(width: side, height: side))
     }
 
-    /// 取进程的全分辨率 bundle 图标,重绘为 sidePixels 见方并编码为 PNG。
-    /// 一次性调用、不缓存:供统计存储等需要持久化高清位图的消费方使用--
-    /// `icon(forPID:path:)` 返回的是 32px 降采样产物,放大到 128px 会永久糊化。
-    /// 走 CoreGraphics + ImageIO,可在后台线程安全调用;进程已退出等取不到
-    /// 源图时返回 nil,调用方下轮采样再试。
-    static func fullSizePNG(forPID pid: pid_t, sidePixels: Int) -> Data? {
-        guard let source = NSRunningApplication(processIdentifier: pid)?.icon else { return nil }
+    /// 把 NSImage 重绘为 sidePixels 见方并编码为 PNG Data。
+    static func fullSizePNG(forImage source: NSImage, sidePixels: Int) -> Data? {
         var proposedRect = NSRect(x: 0, y: 0, width: source.size.width, height: source.size.height)
 
         guard let cgSource = source.cgImage(
@@ -133,5 +128,28 @@ enum ProcessIconCache {
         CGImageDestinationAddImage(destination, scaled, nil)
         guard CGImageDestinationFinalize(destination) else { return nil }
         return out as Data
+    }
+
+    /// 取进程的全分辨率 bundle 图标,重绘为 sidePixels 见方并编码为 PNG。
+    /// 一次性调用、不缓存:供统计存储等需要持久化高清位图的消费方使用--
+    /// `icon(forPID:path:)` 返回的是 32px 降采样产物,放大到 128px 会永久糊化。
+    /// 走 CoreGraphics + ImageIO,可在后台线程安全调用;进程已退出等取不到
+    /// 源图时返回 nil,调用方下轮采样再试。
+    static func fullSizePNG(forPID pid: pid_t, sidePixels: Int) -> Data? {
+        guard let source = NSRunningApplication(processIdentifier: pid)?.icon else { return nil }
+        return fullSizePNG(forImage: source, sidePixels: sidePixels)
+    }
+
+    /// 取指定 Bundle Identifier 对应应用的高清图标并重绘为 PNG。
+    static func fullSizePNG(forBundleIdentifier bundleID: String, sidePixels: Int) -> Data? {
+        if let running = NSRunningApplication.runningApplications(withBundleIdentifier: bundleID).first,
+           let icon = running.icon {
+            return fullSizePNG(forImage: icon, sidePixels: sidePixels)
+        }
+        if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleID) {
+            let icon = NSWorkspace.shared.icon(forFile: url.path)
+            return fullSizePNG(forImage: icon, sidePixels: sidePixels)
+        }
+        return nil
     }
 }
