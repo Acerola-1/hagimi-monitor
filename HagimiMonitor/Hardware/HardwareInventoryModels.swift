@@ -3,7 +3,7 @@ import Foundation
 /// 报表硬件文案解析:短键 → `stats.r.<key>`。与报表框架文案、JS 的 `t()`
 /// 同一命名空间与解析路径。键缺失返回键本身——裸键名上屏一眼可见,
 /// 比静默错译好排查(测试也据此拦缺失键)。
-func hwText(_ key: String) -> String {
+nonisolated func hwText(_ key: String) -> String {
     Bundle.main.localizedString(forKey: "stats.r.\(key)", value: nil, table: nil)
 }
 
@@ -11,7 +11,7 @@ func hwText(_ key: String) -> String {
 ///
 /// 硬件文案的本地化键一律是**短键**(如 `hwLabelProductName`),真实键为
 /// `stats.r.<key>`,与报表框架文案同一命名空间;文本解析统一发生在
-/// `StatisticsReportBuilder` 的编码层——采集层与测试只认 key,不断言文本
+/// `StandaloneHTMLReportExporter` 的编码层——采集层与测试只认 key,不断言文本
 /// (测试宿主语言不固定,文本断言会在英文环境翻车)。
 enum HardwareLabel: Sendable, Equatable {
     /// 静态文案。
@@ -22,7 +22,7 @@ enum HardwareLabel: Sendable, Equatable {
     case text(String)
 
     /// 解析成显示文本。lookup 输入短键,返回本地化文本。
-    func resolve(_ lookup: (String) -> String) -> String {
+    nonisolated func resolve(_ lookup: (String) -> String) -> String {
         switch self {
         case .key(let key):
             return lookup(key)

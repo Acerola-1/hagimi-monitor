@@ -93,7 +93,7 @@ Apple Silicon 没有公开的当前 CPU 频率接口（`powermetrics` 需 root�
 
 | 用途 | 键 | 我们现状 |
 | --- | --- | --- |
-| 机型标识 | `hw.model` | ✅ 已有（`StatisticsReportBuilder.modelName()`） |
+| 机型标识 | `hw.model` | ✅ 已有（`StandaloneHTMLReportExporter` 的元信息编码） |
 | 芯片名 | `machdep.cpu.brand_string` | ✅ 已有（`UsageReporter.chipName()`） |
 | 架构 | `hw.machine` | 🆕 |
 | CPU 核数 | `hw.physicalcpu` / `hw.logicalcpu` | 🆕 |
@@ -429,9 +429,9 @@ Apple Silicon 没有公开的当前 CPU 频率接口（`powermetrics` 需 root�
 | 部分 | 位置 | 状态 |
 | --- | --- | --- |
 | 采集器 | `HagimiMonitor/Hardware/`（Models / Sysctl / IOKit / SystemProfilerRunner / InventoryReader / InventoryReaderComponents / LiveReadings） | 10 分类全部实现,8 个测试（`HardwareInventoryReaderTests`） |
-| 载荷 | `StatisticsReportBuilder.payloadJSON` 的 `hardware` 段（分类 → 分组 → 规格行,缺失编成 `null`） | 生成报表时在后台任务里一次性采集 |
+| 载荷 | `StandaloneHTMLReportExporter` 的 `payloadJSON` `hardware` 段（分类 → 分组 → 规格行,缺失编成 `null`） | 生成报表时在后台任务里一次性采集 |
 | 版面 | `HagimiMonitor/Resources/HardwareSection.{css,js}`，由生成器内联进模板（与 ECharts/Flatpickr 同一机制） | 模块块 + 右栏规格 + 本机分类菜单 |
-| 实时 | `HardwareLiveReadings` + `ReportWindowPresenter` 的 1 秒定时器 | 只推「运行状态」组,窗口被遮挡即停 |
+| 实时 | 历史原型中的实时模拟映射 | 仅供原型讨论；生产使用 `ReportLiveReadings` 与原生窗口可见性门控 |
 
 **实际落地的取舍**（与本文件前面的建议有出入的地方,以这里为准）:
 
@@ -460,4 +460,3 @@ Apple Silicon 没有公开的当前 CPU 频率接口（`powermetrics` 需 root�
 - **NVMe SMART 是否本轮做**（9.3 ②）：要先验证沙盒可行性，还是先落「累计读·写 + SMART 状态」。
 - 「其他」温度域（67 个键）按「N 个传感器 · 最热 X °C + 点开看全量」折叠，是否接受。
 - 风扇行区分「停转 / 转速 / 不可读」三态，面板那边要不要一起改（现在 0 与失败都归 unavailable）。
-

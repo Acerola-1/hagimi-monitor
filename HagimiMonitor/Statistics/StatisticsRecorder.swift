@@ -33,7 +33,7 @@ final class StatisticsRecorder: ObservableObject {
     @Published private(set) var rangeRows: [StatisticsOverviewRange: StatisticsRow?] = [:]
     /// 从最早一条记录至今的自然日数(0 = 尚无任何数据)。
     @Published private(set) var recordDays = 0
-    /// 本地存储占用快照(统计库/应用统计库/报表文件),随概览一起刷新。
+    /// 本地存储占用快照(统计库/应用统计库/系统开销),随概览一起刷新。
     @Published private(set) var storageInfo: StorageInfo?
     /// 本 App 使用打卡:累计活跃天数与截至今日的连续天数。
     @Published private(set) var usageTotalDays = 0
@@ -42,21 +42,19 @@ final class StatisticsRecorder: ObservableObject {
     @Published private(set) var usageFirstDay: Int64 = 0
     @Published private(set) var usageActiveDays: [Int64] = []
 
-    /// 本地存储产物的四分类占用分解与记录规模。
+    /// 本地存储产物的三分类占用分解与记录规模。
     /// - 硬件指标：统计库中的有效数据页与活跃写入；
     /// - 应用记录：应用统计库中的应用资源用量、图标缓存与电池历史；
-    /// - 报表缓存：独立离线硬件规格档案页面；
     /// - 系统开销：数据库表结构、待复用空闲空间、WAL 索引以及运行日志。
     struct StorageInfo: Equatable {
         var metricBytes: Int64
         var appBytes: Int64
-        var reportBytes: Int64
         var systemBytes: Int64
         var minuteCount: Int64
         var hourCount: Int64
         var dayCount: Int64
 
-        var totalBytes: Int64 { metricBytes + appBytes + reportBytes + systemBytes }
+        var totalBytes: Int64 { metricBytes + appBytes + systemBytes }
     }
 
     /// 进程/电池/打卡的 SwiftData 存储(图标随身份持久化,卸载应用不丢历史)。
@@ -688,18 +686,15 @@ final class StatisticsRecorder: ObservableObject {
         }
     }
 
-    /// 汇总四类存储产物的占用与记录规模(后台队列执行)。
+    /// 汇总三类存储产物的占用与记录规模(后台队列执行)。
     private func currentStorageInfo(database: StatisticsDatabase) -> StorageInfo {
         let counts = database.rowCounts
-        let reportBytes = (try? FileManager.default
-            .attributesOfItem(atPath: StatisticsReportBuilder.outputURL.path))?[.size] as? Int64 ?? 0
         let stat = database.breakdown
         let app = processStore?.breakdown ?? .zero
         let logBytes = AppLogStore.totalLogsBytes()
         return StorageInfo(
             metricBytes: stat.dataBytes,
             appBytes: app.dataBytes,
-            reportBytes: reportBytes,
             systemBytes: stat.systemBytes + app.systemBytes + logBytes,
             minuteCount: counts.minute,
             hourCount: counts.hour,
@@ -852,7 +847,6 @@ final class StatisticsRecorder: ObservableObject {
     }
 
     /// 删除单个浏览桶(统计库三层区间 + 应用统计对应日区间),完成后刷新概览。
-    /// 报表缓存不在此列,由存储页独立入口清理。
     /// 清空应用统计(进程聚合/身份图标/电池快照,使用打卡保留),完成后刷新概览。
     func clearAppStats(completion: @escaping () -> Void) {
         maintenanceQueue.async { [weak self] in
@@ -864,24 +858,12 @@ final class StatisticsRecorder: ObservableObject {
         }
     }
 
-    /// 删除报表缓存文件,完成后刷新概览。
-    func clearReportCache(completion: @escaping () -> Void) {
-        maintenanceQueue.async { [weak self] in
-            if let self {
-                try? FileManager.default.removeItem(at: StatisticsReportBuilder.outputURL)
-                self.refreshOverview()
-            }
-            DispatchQueue.main.async { completion() }
-        }
-    }
-
-    /// 清空全部统计数据(统计库 + 应用统计 + 报表文件),完成后刷新概览。
+    /// 清空全部统计数据(统计库 + 应用统计),完成后刷新概览。
     func deleteAllData(completion: @escaping () -> Void) {
         maintenanceQueue.async { [weak self] in
             if let self {
                 self.database?.deleteAll()
                 self.processStore?.deleteAll()
-                try? FileManager.default.removeItem(at: StatisticsReportBuilder.outputURL)
                 self.refreshOverview()
             }
             DispatchQueue.main.async { completion() }

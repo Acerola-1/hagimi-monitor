@@ -848,13 +848,12 @@ struct StatisticsBreakdownTests {
         let info = StatisticsRecorder.StorageInfo(
             metricBytes: 1000,
             appBytes: 2000,
-            reportBytes: 500,
             systemBytes: 300,
             minuteCount: 10,
             hourCount: 2,
             dayCount: 1
         )
-        #expect(info.totalBytes == 3800)
+        #expect(info.totalBytes == 3300)
     }
 }
 

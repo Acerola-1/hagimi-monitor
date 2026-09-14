@@ -85,6 +85,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
+        // 验证夹具模式(HAGIMI_REPORT_FIXTURE):启动即打开「统计报表」原生窗口,
+        // 可选配合 HAGIMI_REPORT_ANCHOR 指定锚点模块,供原生报表面板与各模块目测/基准测试。
+        if ProcessInfo.processInfo.environment["HAGIMI_REPORT_FIXTURE"] != nil {
+            let rawAnchor = ProcessInfo.processInfo.environment["HAGIMI_REPORT_ANCHOR"]
+            let anchor: StatisticsReportAnchor? = {
+                switch rawAnchor?.lowercased() {
+                case "mem", "memory": return .memory
+                case "thermal": return .thermal
+                case "apps": return .apps
+                default: return nil
+                }
+            }()
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                StatisticsReportFlow.open(recorder: self.store.statisticsRecorder, anchor: anchor)
+            }
+        }
+
         // 注册全局快捷键:切换钉住面板显隐。首次触发时惰性创建 pinnedPanelController。
         KeyboardShortcuts.onKeyUp(for: .togglePinnedPanel) { [weak self] in
             MainActor.assumeIsolated {

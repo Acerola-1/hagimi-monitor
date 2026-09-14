@@ -16,26 +16,26 @@ struct StatisticsProcessSnapshot {
     var alerts: [[String: Any]] = []
 }
 
-/// 网页报表生成器:从统计库拉取分钟/小时/日三层行,连同元信息与当前语言文案
+/// 独立 HTML 报表导出器:从统计库拉取分钟/小时/日三层行,连同元信息与当前语言文案
 /// 注入 Bundle 内的 HTML 模板(图表库与图标已内嵌模板),写出单文件报表。
-/// 生成在后台线程完成,产物落在应用支持目录,每次打开覆盖同一个文件。
-enum StatisticsReportBuilder {
+/// 生成与写入均由调用方放在后台任务中执行;导出器本身不创建固定缓存文件。
+enum StandaloneHTMLReportExporter {
     /// 报表模板与内嵌图表库的资源名。
-    private static let templateResource = "ReportTemplate"
-    private static let echartsResource = "echarts"
+    nonisolated private static let templateResource = "ReportTemplate"
+    nonisolated private static let echartsResource = "echarts"
     /// 日期范围选择用的日期选择库(Flatpickr)及其基础样式,单文件产物需一并内联。
-    private static let hardwareSectionResource = "HardwareSection"
-    private static let flatpickrResource = "flatpickr"
+    nonisolated private static let hardwareSectionResource = "HardwareSection"
+    nonisolated private static let flatpickrResource = "flatpickr"
 
     /// 符号位图的像素边长。逻辑绘制区域仍是 16pt；128px 可覆盖报表内
     /// 12–16px 常规图标、42px 空态图标以及预览放大场景，避免 48px 源图被放大后发糊。
-    private static let symbolCanvasPixels = 128
+    nonisolated private static let symbolCanvasPixels = 128
 
     /// 报表用到的符号图标:与面板同一批 SF Symbols(面板用 `MonitorKind.symbol`),
     /// 生成时渲染成位图随载荷内联,模板用 mask + currentColor 着色——
     /// 不用手绘 SVG,也不受网页环境拿不到 SF Symbols 字体所限。
     /// (符号名, 模板 CSS 变量后缀)
-    private static let reportSymbols: [(name: String, key: String)] = [
+    nonisolated private static let reportSymbols: [(name: String, key: String)] = [
         // 模块图标与面板同源(MonitorKind.symbol)
         ("cpu", "cpu"),
         ("display", "gpu"),
@@ -70,8 +70,15 @@ enum StatisticsReportBuilder {
         ("calendar", "calendar"),
     ]
 
+    /// 模板与符号集合不随报表数据变化,进程内只生成一次,避免每次导出重复走 AppKit
+    /// 位图渲染和大段 Base64 拼接。
+    nonisolated private static let reportSymbolCSS = makeSymbolCSSVariables()
+    nonisolated private static let reportAppIconBase64 = makeAppIconBase64()
+
     /// 组装并写出报表文件。可在任意线程调用(内部只做文件与数据库读)。
-    static func write(
+    /// `outputURL` 由调用方决定:用户导出直接写入目标,打印使用唯一临时文件。
+    nonisolated static func write(
+        to outputURL: URL,
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
         process: StatisticsProcessSnapshot? = nil,
@@ -86,15 +93,19 @@ enum StatisticsReportBuilder {
             throw StatisticsReportError.missingResources
         }
         // 硬件模块块的样式与脚本独立成资源,与 ECharts/Flatpickr 同一种内联方式:
-        // 模板本体保持干净,改硬件版面不必动那 2600 行。
-        let hardwareCSS = try String(contentsOf: hardwareCSSURL, encoding: .utf8)
-        let hardwareJS = try String(contentsOf: hardwareJSURL, encoding: .utf8)
-        let template = try String(contentsOf: templateURL, encoding: .utf8)
-            .replacingOccurrences(of: "/*__HARDWARE_CSS__*/", with: hardwareCSS)
-            .replacingOccurrences(of: "/*__HARDWARE_JS__*/", with: hardwareJS)
-        let echarts = try String(contentsOf: echartsURL, encoding: .utf8)
-        let flatpickrJS = try String(contentsOf: flatpickrJSURL, encoding: .utf8)
-        let flatpickrCSS = try String(contentsOf: flatpickrCSSURL, encoding: .utf8)
+        // 模板本体保持干净,改硬件版面不必动那 2600 行。逐段注入并及时释放资源
+        // 字符串,避免把所有大型资源同时留在导出函数的作用域中。
+        var html = try String(contentsOf: templateURL, encoding: .utf8)
+        replace("/*__HARDWARE_CSS__*/",
+                with: try String(contentsOf: hardwareCSSURL, encoding: .utf8), in: &html)
+        replace("/*__HARDWARE_JS__*/",
+                with: try String(contentsOf: hardwareJSURL, encoding: .utf8), in: &html)
+        replace("/*__ECHARTS__*/",
+                with: try String(contentsOf: echartsURL, encoding: .utf8), in: &html)
+        replace("/*__FLATPICKR__*/",
+                with: try String(contentsOf: flatpickrJSURL, encoding: .utf8), in: &html)
+        replace("/*__FLATPICKR_CSS__*/",
+                with: try String(contentsOf: flatpickrCSSURL, encoding: .utf8), in: &html)
 
         // JSON 内联进 <script> 时,"</" 可能提前终结脚本标签,统一转义为合法的 "<\/"。
         // 编码失败(NaN/非 JSON 值混入 payload)抛错走统一的失败上报,不 trap 进程。
@@ -105,15 +116,20 @@ enum StatisticsReportBuilder {
             throw StatisticsReportError.encodingFailed(error)
         }
         let escapedJSON = json.replacingOccurrences(of: "</", with: "<\\/")
-        let html = template
-            .replacingOccurrences(of: "/*__SYMBOL_CSS__*/", with: symbolCSSVariables())
-            .replacingOccurrences(of: "/*__ECHARTS__*/", with: echarts)
-            .replacingOccurrences(of: "/*__FLATPICKR__*/", with: flatpickrJS)
-            .replacingOccurrences(of: "/*__FLATPICKR_CSS__*/", with: flatpickrCSS)
-            .replacingOccurrences(of: "window.__DATA__ = /*__DATA__*/null;", with: "window.__DATA__ = \(escapedJSON);")
-            .replacingOccurrences(of: "__APP_ICON_B64__", with: appIconBase64())
+        replace("/*__SYMBOL_CSS__*/", with: reportSymbolCSS, in: &html)
+        replace("window.__DATA__ = /*__DATA__*/null;",
+                with: "window.__DATA__ = \(escapedJSON);", in: &html)
+        replace("__APP_ICON_B64__", with: reportAppIconBase64, in: &html)
+        let outputDirectory = outputURL.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
         try html.write(to: outputURL, atomically: true, encoding: .utf8)
         return outputURL
+    }
+
+    /// 原地替换单次模板占位符,避免连续 `replacingOccurrences` 产生多份完整 HTML。
+    nonisolated private static func replace(_ token: String, with replacement: String, in html: inout String) {
+        guard let range = html.range(of: token) else { return }
+        html.replaceSubrange(range, with: replacement)
     }
 
     /// 应用图标渲染为 1024px PNG 的 base64,注入模板品牌位。
@@ -121,7 +137,7 @@ enum StatisticsReportBuilder {
     /// (asset 通常带 1024px 的 @2x),不依赖 NSImage 按当前屏幕选的默认档——否则
     /// 低分屏下会拿小图插值放大,导出后 Retina 上仍发糊。位图绘制为纯数据操作,
     /// 后台线程安全;失败返回空串,品牌位退化为纯文字。
-    private static func appIconBase64() -> String {
+    nonisolated private static func makeAppIconBase64() -> String {
         guard let icon = NSImage(named: "AppIcon") else { return "" }
         // 取最大像素源:优先 1024,其次 asset 里存在的最大档
         let maxSource = icon.representations
@@ -150,7 +166,7 @@ enum StatisticsReportBuilder {
     /// 位图只贡献 alpha(作 mask),颜色交给模板的 currentColor——因此天然跟随
     /// 明暗主题与选中态,不必为两种外观各存一份。渲染失败(符号不存在)跳过,
     /// 模板端该处图标留空,不影响报表其余部分。
-    private static func symbolCSSVariables() -> String {
+    nonisolated private static func makeSymbolCSSVariables() -> String {
         var lines: [String] = []
         for symbol in reportSymbols {
             guard let png = symbolImageData(symbol.name) else { continue }
@@ -160,7 +176,7 @@ enum StatisticsReportBuilder {
     }
 
     /// 单个符号 → 16pt@8x 的 PNG(透明底,字形占 alpha 通道)。
-    private static func symbolImageData(_ name: String) -> Data? {
+    nonisolated private static func symbolImageData(_ name: String) -> Data? {
         let configuration = NSImage.SymbolConfiguration(pointSize: 16, weight: .medium)
         guard let symbol = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
             .withSymbolConfiguration(configuration) else { return nil }
@@ -189,21 +205,7 @@ enum StatisticsReportBuilder {
         return rep.representation(using: .png, properties: [:])
     }
 
-    /// 报表产物路径:应用支持目录下固定文件名,重复打开即覆盖刷新。
-    /// Application Support 目录不可得(沙盒/受管账户极端情形)时退到临时目录,
-    /// 与统计库取路径的防御口径一致,不在后台任务里强制解包。
-    static var outputURL: URL {
-        let base = FileManager.default
-            .urls(for: .applicationSupportDirectory, in: .userDomainMask)
-            .first ?? FileManager.default.temporaryDirectory
-        let directory = base
-            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "HagimiMonitor", isDirectory: true)
-            .appendingPathComponent("reports", isDirectory: true)
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        return directory.appendingPathComponent("HagimiMonitor-Report.html")
-    }
-
-    private static func payloadJSON(
+    nonisolated private static func payloadJSON(
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
         process: StatisticsProcessSnapshot?,
@@ -263,7 +265,7 @@ enum StatisticsReportBuilder {
 
     /// 硬件分类编码成前端要的最小结构。缺失值编成 NSNull,前端按「—」渲染——
     /// 不能省略这一行,省略会让「读不到」和「这一项不存在」混为一谈。
-    private static func encodeCategory(_ category: HardwareCategory) -> [String: Any] {
+    nonisolated private static func encodeCategory(_ category: HardwareCategory) -> [String: Any] {
         [
             "id": category.id,
             "name": hwText(category.nameKey),
@@ -272,7 +274,7 @@ enum StatisticsReportBuilder {
         ]
     }
 
-    private static func encodeGroup(_ group: HardwareFactGroup) -> [String: Any] {
+    nonisolated private static func encodeGroup(_ group: HardwareFactGroup) -> [String: Any] {
         [
             "name": group.name.resolve(hwText),
             "facts": group.facts.map { fact -> [String: Any] in
@@ -282,7 +284,7 @@ enum StatisticsReportBuilder {
     }
 
     /// 行编码为 [t, ...列值, n];按列名做精度收敛,控制报表体积。
-    private static func encodeRow(_ row: StatisticsRow, columns: [String]) -> [Any] {
+    nonisolated private static func encodeRow(_ row: StatisticsRow, columns: [String]) -> [Any] {
         var encoded: [Any] = [row.t]
         for (index, name) in columns.enumerated() {
             if let value = row.values[index] {
@@ -295,7 +297,7 @@ enum StatisticsReportBuilder {
         return encoded
     }
 
-    private static func rounded(_ name: String, _ value: Double) -> Double {
+    nonisolated private static func rounded(_ name: String, _ value: Double) -> Double {
         if name.hasSuffix("_frac") {
             return (value * 10_000).rounded() / 10_000
         }
@@ -311,16 +313,9 @@ enum StatisticsReportBuilder {
 
     /// 模板 JS 以短键读文案;此处短键 → xcstrings 键(stats.r.*)一一映射,
     /// 两语在 xcstrings 内维护。新增文案两处同步:此列表 + xcstrings。
-    private static let stringKeys = [
+    nonisolated private static let stringKeys = [
         "reportTitle", "metaDays", "metaGenerated",
         "kThisMac", "hwCardTitle", "hwNoData", "hwItemCount", "hwCategoryCount",
-        "hwLiveGroup", "hwLiveTag",
-        "hwLiveCpuUsage", "hwLiveThermal", "hwLiveProcessCount", "hwLiveIdle",
-        "hwLiveGpuUsage", "hwLiveGpuMemory", "hwLiveRenderer", "hwLiveTiler",
-        "hwLiveMemUsed", "hwLiveCompressed", "hwLiveSwap", "hwLivePressure",
-        "hwLiveDiskUsed", "hwLiveDiskFree", "hwLiveDiskRead", "hwLiveDiskWrite",
-        "hwLiveDownload", "hwLiveUpload", "hwLiveSignal",
-        "hwLiveBatteryLevel", "hwLiveBatteryState", "hwLiveBatteryTemp",
         "rToday", "rWeek", "rMonth", "rYear", "selectRange",
         "rangeLabel", "railEyebrow", "railLocal", "railNet", "railDisk", "railPower",
         "navOverview", "navModules", "navAnalysis", "navMachine",
@@ -359,7 +354,7 @@ enum StatisticsReportBuilder {
         "emptySection", "blankTitle", "blankBody", "footer", "footerLocal",
     ]
 
-    static func localizedStrings() -> [String: String] {
+    nonisolated static func localizedStrings() -> [String: String] {
         var strings: [String: String] = [:]
         strings.reserveCapacity(stringKeys.count)
         // 文案键在运行期拼接,必须走 Bundle.localizedString 显式查表:
@@ -433,10 +428,65 @@ enum StatisticsReportBuilder {
         return StatisticsProcessSnapshot(appRows: rows, appNames: names, appIcons: icons, batteryDaily: battery, alerts: alertList)
     }
 
+    /// 从原生报表进程数据快照转换 HTML 报表所需的结构
+    nonisolated static func processSnapshot(from data: ReportProcessData) -> StatisticsProcessSnapshot? {
+        var nameIndex: [String: Int] = [:]
+        var names: [String] = []
+        var icons: [String] = []
+        for identity in data.identities.values {
+            nameIndex[identity.appKey] = names.count
+            names.append(identity.name)
+            icons.append(identity.iconPNG?.base64EncodedString() ?? "")
+        }
+
+        let rows: [[Any]] = data.dailyRows.map { row in
+            let index = nameIndex[row.appKey] ?? {
+                nameIndex[row.appKey] = names.count
+                names.append(row.name)
+                icons.append("")
+                return names.count - 1
+            }()
+            return [row.day, index,
+                    row.cpuAvg, row.cpuSamples,
+                    row.gpuAvg, row.gpuSamples,
+                    row.memAvgBytes / 1_048_576, row.memSamples,
+                    row.netDownBytes / 1_048_576, row.netUpBytes / 1_048_576,
+                    row.cpuTier1, row.cpuTier2, row.cpuTier3, row.cpuPeak,
+                    row.gpuTier1, row.gpuTier2, row.gpuTier3, row.gpuPeak] as [Any]
+        }
+
+        let battery = data.batteryHistory.map { [$0.day, $0.cycleCount, $0.healthPercent] as [Any] }
+        let alertList: [[String: Any]] = data.alerts.map { alert in
+            var dict: [String: Any] = [
+                "appKey": alert.appKey,
+                "name": alert.name,
+                "metric": alert.metric.rawValue,
+                "peakUsage": (alert.peakUsage * 10).rounded() / 10,
+                "avgUsage": (alert.averageUsage * 10).rounded() / 10,
+                "durationMinutes": alert.durationMinutes,
+                "state": alert.state.rawValue,
+                "startedAt": Int(alert.startedAt.timeIntervalSince1970),
+                "lastSeenAt": Int(alert.lastSeenAt.timeIntervalSince1970),
+                "tier1": alert.tier1Minutes,
+                "tier2": alert.tier2Minutes,
+                "tier3": alert.tier3Minutes,
+            ]
+            if let endedAt = alert.endedAt {
+                dict["endedAt"] = Int(endedAt.timeIntervalSince1970)
+            }
+            if let iconPNG = alert.iconPNG {
+                dict["iconBase64"] = iconPNG.base64EncodedString()
+            }
+            return dict
+        }
+        guard !names.isEmpty || !battery.isEmpty || !alertList.isEmpty else { return nil }
+        return StatisticsProcessSnapshot(appRows: rows, appNames: names, appIcons: icons, batteryDaily: battery, alerts: alertList)
+    }
+
     // MARK: - 元信息
 
     /// 报告头元信息(设备/机型/系统/覆盖天数)。
-    static func meta(days: Int) -> [String: Any] {
+    nonisolated static func meta(days: Int) -> [String: Any] {
         let version = ProcessInfo.processInfo.operatingSystemVersion
         return [
             "device": deviceName(),
@@ -449,7 +499,7 @@ enum StatisticsReportBuilder {
     }
 
     /// 是否为直连版(Direct):沙盒版拿不到的数据源在此门控。
-    private static var isDirect: Bool {
+    nonisolated static var isDirect: Bool {
         #if DIRECT_DISTRIBUTION
         return true
         #else
@@ -457,7 +507,7 @@ enum StatisticsReportBuilder {
         #endif
     }
 
-    private static func deviceName() -> String {
+    nonisolated static func deviceName() -> String {
         if let name = Host.current().localizedName, !name.isEmpty {
             return name
         }
@@ -465,7 +515,7 @@ enum StatisticsReportBuilder {
         return hostName.split(separator: ".").first.map(String.init) ?? "Mac"
     }
 
-    private static func modelName() -> String {
+    nonisolated static func modelName() -> String {
         var size = 0
         guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else {
             return "Mac"
@@ -492,60 +542,17 @@ enum StatisticsReportError: LocalizedError {
     }
 }
 
-/// 报表内要定位的板块。板块标题与报表模板同源(模板的粘性导航也按标题组织),
-/// 报表改版只要标题还在,跳转就继续有效。
+/// 原生报表打开时要定位的模块。视图模型将枚举 case 映射为初始选中的模块。
 enum StatisticsReportAnchor: Sendable {
     case memory
     case thermal
     case apps
-
-    var sectionTitle: String {
-        switch self {
-        case .memory: String(localized: "stats.r.secMem")
-        case .thermal: String(localized: "stats.r.secThermal")
-        case .apps: String(localized: "stats.r.secAppsTitle")
-        }
-    }
 }
 
-/// 报表打开流程:设置页按钮与 App 菜单共用。生成在后台执行,
-/// 完成后唤起默认浏览器打开本地文件。
+/// 报表打开流程：设置页按钮与 App 菜单共用。直接唤起原生报表窗口。
 @MainActor
 enum StatisticsReportFlow {
-    private static var isGenerating = false
-
     static func open(recorder: StatisticsRecorder, anchor: StatisticsReportAnchor? = nil) {
-        guard !isGenerating else { return }
-        isGenerating = true
-        let snapshotProvider: () -> (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow])? = {
-            recorder.reportSnapshot(now: Date())
-        }
-        let processStore = recorder.processStore
-        let meta = StatisticsReportBuilder.meta(days: recorder.recordDays)
-        Task.detached(priority: .userInitiated) {
-            defer {
-                Task { @MainActor in
-                    isGenerating = false
-                }
-            }
-            guard let snapshot = snapshotProvider() else { return }
-            // 先 flush 进程累加器再取快照,保证报表含当日最新应用数据
-            processStore?.flush()
-            let process = processStore.map { StatisticsReportBuilder.processSnapshot(from: $0) } ?? nil
-            // 硬件清单也在这里采集:16 个 system_profiler DataType 本机实测约 2.1 秒,
-            // 必须留在后台任务里,绝不上主线程。采集为空(例如极端受限环境)不影响报表,
-            // 「本机」模块会在前端按空清单自行隐藏。
-            let hardware = HardwareInventoryReader().capture()
-            do {
-                let url = try StatisticsReportBuilder.write(
-                    snapshot: snapshot, meta: meta, process: process, hardware: hardware)
-                await MainActor.run {
-                    ReportWindowPresenter.open(url: url, anchor: anchor)
-                }
-            } catch {
-                AppLogger.settings.error("Statistics report generation failed: \(String(describing: error), privacy: .public)")
-                AppLogStore.shared.error("Statistics report generation failed: \(error.localizedDescription)", category: "settings")
-            }
-        }
+        ReportWindowPresenter.open(recorder: recorder, anchor: anchor)
     }
 }

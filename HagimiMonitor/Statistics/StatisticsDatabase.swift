@@ -103,7 +103,7 @@ struct StatisticsRow: Equatable {
     var thCritJS: Double?
 
     /// (列名, 聚合方式, 字段读写)。顺序即表列序/JSON 列序。
-    static let columns: [(name: String, aggregation: StatisticsAggregation)] = [
+    nonisolated static let columns: [(name: String, aggregation: StatisticsAggregation)] = [
         ("cpu_avg", .weightedAverage),
         ("cpu_max", .maximum),
         ("cpu_sys_avg", .weightedAverage),
@@ -175,7 +175,7 @@ struct StatisticsRow: Equatable {
     ]
 
     /// 按 columns 顺序输出数值(nil 列保持 nil),供 SQL 绑定与 JSON 编码复用。
-    var values: [Double?] {
+    nonisolated var values: [Double?] {
         [
             cpuAvg, cpuMax, cpuSysAvg, cpuUserAvg, cpuPAvg, cpuEAvg,
             cpuThermalAvg, cpuTempAvg,

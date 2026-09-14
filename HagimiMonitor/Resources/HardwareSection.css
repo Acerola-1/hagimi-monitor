@@ -1,13 +1,6 @@
 /* 硬件模块块:把每个监控模块收进「主列 + 右栏规格」,并追加「本机」模块。
-   由 StatisticsReportBuilder 内联进报表模板(与 ECharts/Flatpickr 同一机制),
+   由 StandaloneHTMLReportExporter 内联进报表模板(与 ECharts/Flatpickr 同一机制),
    令牌全部取自报表既有的 :root,不新造一套颜色。 */
-
-:root {
-  --hw-live: #41c184;
-}
-@media (prefers-color-scheme: light) {
-  :root { --hw-live: #259458; }
-}
 
 /* ── 模块块:主列(原有板块) + 右栏(硬件规格) ── */
 .module-block { margin-bottom: 44px; }
@@ -49,10 +42,6 @@
   display: flex; align-items: center; gap: 6px; margin-bottom: 5px;
   font-size: 10.5px; font-weight: 600; color: var(--text-3);
 }
-.hw-group-name .rt { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--hw-live); }
-.hw-group-name .rt .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--hw-live); animation: hwPulse 1.6s ease-in-out infinite; }
-@keyframes hwPulse { 50% { opacity: 0.25; } }
-@media (prefers-reduced-motion: reduce) { .hw-group-name .rt .dot { animation: none; } }
 
 .hw-rows { display: flex; flex-direction: column; gap: 1px; }
 .hw-row {

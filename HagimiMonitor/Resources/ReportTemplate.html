@@ -180,7 +180,7 @@
     color: var(--text-3); margin-bottom: 3px;
   }
   .brand h1 { margin: 0; font-size: 20px; font-weight: 650; letter-spacing: -0.2px; color: var(--text); }
-  /* 顶栏元信息:苹果网页式「名称加粗 + 间隔点」规格串 */
+  /* 顶栏元信息:「名称加粗 + 间隔点」规格串 */
   .meta-chips { display: flex; flex-wrap: wrap; align-items: center; row-gap: 4px; justify-content: flex-end; }
   .chip {
     display: inline-flex; align-items: center;
@@ -1056,7 +1056,7 @@
   // ── 文案与静态骨架 ────────────────────────────────────────────
   document.title = I.reportTitle;
   $("report-title").textContent = I.reportTitle;
-  // 顶栏元信息:苹果网页式「名称加粗 + 间隔点」规格串,不带图标与边框
+  // 顶栏元信息:「名称加粗 + 间隔点」规格串,不带图标与边框
   const chips = [
     DATA.meta.device,
     DATA.meta.model,
@@ -1101,7 +1101,7 @@
   // 日期范围字段的占位文案(选择后实时写入所选范围)
   $("cal-range").placeholder = I.selectRange;
   $("footer").innerHTML = I.footer + "<br>" + I.footerLocal;
-  // 打印由宿主窗口(WebKit 自带打印按钮)发起:打印前后切换图表配色
+  // 打印会话进入 print mode: 打印前后切换图表配色
   window.addEventListener("beforeprint", enterPrintMode);
   window.addEventListener("afterprint", exitPrintMode);
   ["overview", "cpu", "cpu-pe", "cpu-dist", "gpu", "gpu-dist", "gpu-mem", "mem",

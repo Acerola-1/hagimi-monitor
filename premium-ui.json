@@ -1,0 +1,8 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["HagimiMonitor/Views/Report"],
+  "canonicalMap": "docs/development/native-report-ui-contract.md",
+  "requiredCapabilities": ["Select/Listbox", "Date", "Scrollbar"],
+  "requiredCommands": ["nativeBuild"],
+  "commands": {"nativeBuild": "scripts/build-native-report.sh"}
+}
