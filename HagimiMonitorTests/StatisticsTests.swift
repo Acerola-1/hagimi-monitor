@@ -881,3 +881,80 @@ struct ProcessStoreCheckinTests {
         #expect(store.activeDays().count == 2)
     }
 }
+
+@Suite("StatisticsProcessStore memory & cache governance")
+struct StatisticsProcessStoreMemoryTests {
+    @Test func flushSavesAndResetsContextCleanly() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("procstore-mem-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StatisticsProcessStore(directory: directory)
+        let calendar = Calendar(identifier: .gregorian)
+        let now = Date(timeIntervalSince1970: 1_760_000_000)
+
+        store.record(
+            cpu: [("AppA", 100, 25.0), ("AppB", 101, 85.0)],
+            memory: [("AppA", 100, 200 * 1_048_576)],
+            gpu: [],
+            network: [],
+            disk: [],
+            at: now,
+            calendar: calendar
+        )
+
+        store.flush()
+
+        let day = StatisticsProcessStore.dayKey(now, calendar: calendar)
+        let top = store.topApps(fromDay: day, toDay: day, category: .cpu)
+        #expect(!top.isEmpty)
+        #expect(top.first?.name == "AppB")
+    }
+
+    @Test func iconCacheProvidesDataAndHandlesMissing() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("procstore-icon-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StatisticsProcessStore(directory: directory)
+
+        #expect(store.iconPNG(for: "NonExistentApp") == nil)
+
+        store.deleteAll()
+        #expect(store.iconPNG(for: "NonExistentApp") == nil)
+    }
+
+    @Test func deleteRangeRepairsUsageMetadataAfterFlushResetsContext() throws {
+        let directory = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("procstore-range-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = StatisticsProcessStore(directory: directory)
+        let calendar = Calendar(identifier: .gregorian)
+        let firstDate = Date(timeIntervalSince1970: 1_760_000_000)
+        let secondDate = firstDate.addingTimeInterval(86_400)
+        let thirdDate = secondDate.addingTimeInterval(86_400)
+
+        store.recordUsageDay(at: firstDate, calendar: calendar)
+        store.recordUsageDay(at: secondDate, calendar: calendar)
+        store.recordUsageDay(at: thirdDate, calendar: calendar)
+
+        store.record(
+            cpu: [("AppA", 100, 25.0)],
+            memory: [],
+            gpu: [],
+            network: [],
+            disk: [],
+            at: thirdDate,
+            calendar: calendar
+        )
+
+        let firstDay = StatisticsProcessStore.dayKey(firstDate, calendar: calendar)
+        let secondDay = StatisticsProcessStore.dayKey(secondDate, calendar: calendar)
+        let thirdDay = StatisticsProcessStore.dayKey(thirdDate, calendar: calendar)
+        store.deleteRange(fromDay: firstDay, toDay: secondDay)
+
+        #expect(store.activeDays() == [secondDay, thirdDay])
+        let summary = try #require(store.usageSummary())
+        #expect(summary.firstUseDay == secondDay)
+        #expect(summary.totalActiveDays == 2)
+        #expect(summary.lastActiveDay == thirdDay)
+    }
+}

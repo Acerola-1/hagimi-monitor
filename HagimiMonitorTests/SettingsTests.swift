@@ -222,4 +222,26 @@ struct SettingsTests {
         #expect(settings.isMetricEnabled("health", for: .battery))
         #expect(defaults.bool(forKey: "settings.batteryCellBalanceMigrated"))
     }
+
+    @MainActor
+    @Test func settingsWindowLifecycleReleasesOnClose() {
+        let appDelegate = AppDelegate()
+        _ = appDelegate.store
+        #expect(SettingsWindowPresenter.settingsWindow == nil)
+
+        SettingsWindowPresenter.open()
+        let window1 = SettingsWindowPresenter.settingsWindow
+        #expect(window1 != nil)
+
+        SettingsWindowPresenter.close()
+        #expect(SettingsWindowPresenter.settingsWindow == nil)
+
+        SettingsWindowPresenter.open()
+        let window2 = SettingsWindowPresenter.settingsWindow
+        #expect(window2 != nil)
+        #expect(window2 !== window1)
+
+        SettingsWindowPresenter.close()
+        #expect(SettingsWindowPresenter.settingsWindow == nil)
+    }
 }

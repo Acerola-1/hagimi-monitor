@@ -95,10 +95,11 @@ final class ProcessEnergySampler {
             let share = entry.watts / total
             guard share > 0 else { continue }
             topWatts += entry.watts
+            let path = executablePath(for: pid)
             shares.append(ProcessEnergyShare(
                 pid: pid,
                 name: Self.displayName(for: pid),
-                icon: NSRunningApplication(processIdentifier: pid)?.icon,
+                icon: ProcessIconCache.icon(forPID: pid, path: path),
                 share: share,
                 watts: entry.watts
             ))

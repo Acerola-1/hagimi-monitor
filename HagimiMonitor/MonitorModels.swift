@@ -495,6 +495,9 @@ final class MonitorStore: ObservableObject {
 
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
+    /// 面板进程采样代次。最后一个面板消失时推进，令关闭前已在途的采样结果失效；
+    /// 仅检查“当前可见”不足以覆盖关闭后立即重开的场景。
+    private var processSampleGeneration: UInt64 = 0
 
     /// 展开/收起动画截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
     /// 由 `beginExpansionAnimation` 在每次展开/收起起点置位。
@@ -561,12 +564,8 @@ final class MonitorStore: ObservableObject {
 
         startPowerSourceMonitoring()
 
-        // 进程采样定时器自 init 常驻:TOP 列表在打开面板/展开行之前即绑好,
-        // 展开即刻落真实数据,无需等基线建立。统一为单个定时器串行驱动
-        // 各类目采样,避免多个独立定时器导致的密集触发;采样在后台串行队列,
-        // 沙盒版全程进程内读,直连版每周期另 spawn 一轮 ps/nettop。
-        startProcSampleTimer()
-        refreshProcesses(for: enabledProcessKinds(), allowClear: false)
+        // 进程采样按需驱动：初始 visiblePanelKinds 为空，定时器保持休眠。
+        // 仅当面板出现时（panelDidAppear）才启动 2 秒定时器并按需刷新，收起时（panelDidDisappear）休眠并清空列表。
 
         settings.$memoryShowSystemProcesses
             .dropFirst()
@@ -796,7 +795,7 @@ final class MonitorStore: ObservableObject {
         panelDidDisappear(.menuBar)
     }
 
-    /// 面板出现时调用:记录来源。进程采样自 init 常驻,不随面板可见性启停。
+    /// 面板出现时调用:记录来源。当首个面板出现时启动 2 秒进程采样定时器并立即刷新。
     func panelDidAppear(_ kind: PanelKind) {
         let wasEmpty = visiblePanelKinds.isEmpty
         visiblePanelKinds.insert(kind)
@@ -806,16 +805,20 @@ final class MonitorStore: ObservableObject {
         if wasEmpty {
             loadAnimator.setPanelVisible(true)
             isPanelVisible = true
+            startProcSampleTimer()
+            refreshAllProcesses()
         }
     }
 
-    /// 面板消失时调用:移除来源。TOP 列表与采样常驻,隐藏期不清空、不停表,
-    /// 下次打开/展开即刻有数据。
+    /// 面板消失时调用:移除来源。当所有面板均收起时，暂停 2 秒高频定时器并清空 TOP 进程列表，切断后台开销。
     func panelDidDisappear(_ kind: PanelKind) {
         visiblePanelKinds.remove(kind)
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
             loadAnimator.setPanelVisible(false)
+            processSampleGeneration &+= 1
+            stopProcSampleTimer()
+            clearProcesses()
         }
     }
 
@@ -893,10 +896,23 @@ final class MonitorStore: ObservableObject {
             }
     }
 
+    private func stopProcSampleTimer() {
+        procSampleTimer?.cancel()
+        procSampleTimer = nil
+    }
+
+    /// 清空所有 TOP 进程列表，释放持有的进程模型与图标对象。
+    private func clearProcesses() {
+        topMemoryProcesses = []
+        topCPUProcesses = []
+        topGPUProcesses = []
+        topDiskProcesses = []
+        topNetworkProcesses = []
+    }
+
     /// 刷新设置里开启的进程列表(不论是否展开)。由 2 秒定时器驱动。
-    /// 定时周期拥有完整测量窗口,结果权威,允许用空结果清列表(真实空闲时列表
-    /// 应诚实变空);init 首采一次性禁用清空(见调用处)。
     private func refreshAllProcesses() {
+        guard !visiblePanelKinds.isEmpty else { return }
         refreshProcesses(for: enabledProcessKinds())
     }
 
@@ -904,11 +920,11 @@ final class MonitorStore: ObservableObject {
     /// 在 procSampleQueue、nettop 在 nettopQueue 各自串行执行(串行是各游标
     /// 快照无锁安全的前提),全部完成后回主线程更新 @Published 属性——命中
     /// 展开/收起动画窗口时推迟到弹簧收尾(见 deferUntilExpansionSettles)。
-    /// allowClear=false 时空结果不覆盖已有列表(init 首采用)。
     private func refreshProcesses(
-        for kinds: Set<MonitorKind>,
-        allowClear: Bool = true
+        for kinds: Set<MonitorKind>
     ) {
+        guard !visiblePanelKinds.isEmpty else { return }
+        let generation = processSampleGeneration
         let enabled = enabledProcessKinds()
 
         let active = Self.activeProcessKinds(expanded: kinds, enabled: enabled)
@@ -985,26 +1001,45 @@ final class MonitorStore: ObservableObject {
 
         // 全部采样完成后,在主线程更新 @Published 属性。命中展开/收起动画窗口时
         // 推迟到弹簧收尾(与模块采样同规则),避免整表替换撞动画帧、拖视图树重算。
+        // 若在此期间面板已收起，则直接丢弃采样结果，确保清空后的列表不被陈旧后台帧覆写。
         group.notify(queue: .main) { [weak self] in
             guard let self else { return }
+            guard Self.shouldPublishProcessSample(
+                startedAt: generation,
+                current: self.processSampleGeneration,
+                hasVisiblePanel: !self.visiblePanelKinds.isEmpty
+            ) else { return }
             self.deferUntilExpansionSettles {
-                // 采样常驻:结果不论面板可见与否都发布,隐藏期列表也保持
-                // 鲜活,展开即刻渲染最近一期常驻结果。
-                func publish<T>(_ kind: MonitorKind, _ result: [T]?, assign: ([T]) -> Void) {
+                guard Self.shouldPublishProcessSample(
+                    startedAt: generation,
+                    current: self.processSampleGeneration,
+                    hasVisiblePanel: !self.visiblePanelKinds.isEmpty
+                ) else { return }
+                func publish<T>(_ result: [T]?, assign: ([T]) -> Void) {
                     guard let result else { return }
-                    if !result.isEmpty || allowClear { assign(result) }
+                    assign(result)
                 }
-                publish(.memory, memoryProcesses) { self.topMemoryProcesses = $0 }
-                publish(.cpu, cpuProcesses) { self.topCPUProcesses = $0 }
-                publish(.gpu, gpuProcesses) { self.topGPUProcesses = $0 }
-                publish(.storage, diskProcesses) { self.topDiskProcesses = $0 }
-                publish(.network, networkProcesses) { self.topNetworkProcesses = $0 }
+                publish(memoryProcesses) { self.topMemoryProcesses = $0 }
+                publish(cpuProcesses) { self.topCPUProcesses = $0 }
+                publish(gpuProcesses) { self.topGPUProcesses = $0 }
+                publish(diskProcesses) { self.topDiskProcesses = $0 }
+                publish(networkProcesses) { self.topNetworkProcesses = $0 }
             }
         }
     }
 
-    /// 设置变化时立即重采一期;采样常驻,不受面板可见性限制。
+    /// 采样结果仅能发布到启动它的同一轮面板会话。
+    static func shouldPublishProcessSample(
+        startedAt generation: UInt64,
+        current: UInt64,
+        hasVisiblePanel: Bool
+    ) -> Bool {
+        hasVisiblePanel && generation == current
+    }
+
+    /// 设置变化时立即重采一期；仅在面板可见时执行。
     private func refreshAllProcessesIfNeeded() {
+        guard !visiblePanelKinds.isEmpty else { return }
         refreshAllProcesses()
     }
 

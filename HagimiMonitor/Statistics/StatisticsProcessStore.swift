@@ -143,8 +143,12 @@ final class StatisticsProcessStore {
     }
     private var currentDay: Int64 = 0
     private var accumulators: [String: AppAccumulator] = [:]
-    /// 名称 → 图标 PNG 内存缓存,避免重复转码。
-    private var iconCache: [String: Data] = [:]
+    /// 名称 → 图标 PNG 内存缓存,避免重复转码。设置上限防止无界常驻。
+    private let iconCache: NSCache<NSString, NSData> = {
+        let cache = NSCache<NSString, NSData>()
+        cache.countLimit = 64
+        return cache
+    }()
     /// 确认无图标的进程名集合,避免对守护进程反复查询。
     private var iconSkipSet: Set<String> = []
 
@@ -185,6 +189,15 @@ final class StatisticsProcessStore {
     private func ensureContextLocked() {
         guard context == nil, databaseURL != nil else { return }
         try? reopenStoreLocked()
+    }
+
+    /// 在落库持久化完成后重建上下文，释放本次落库过程中常驻的托管对象（StatsAppDaily、StatsAppIdentity 等），
+    /// 防止 ModelContext 在长期运行中无限累积已持久化的实体与快照。
+    private func resetContextLocked() {
+        guard let container else { return }
+        let newContext = ModelContext(container)
+        newContext.autosaveEnabled = false
+        self.context = newContext
     }
 
     private func restorePendingCheckinsLocked() {
@@ -367,6 +380,9 @@ final class StatisticsProcessStore {
                 context.insert(StatsBatteryDaily(day: day, cycleCount: cycleCount, healthPercent: healthPercent))
             }
             try? context.save()
+            if !context.hasChanges {
+                self.resetContextLocked()
+            }
         }
     }
 
@@ -395,6 +411,9 @@ final class StatisticsProcessStore {
                 context.insert(StatsActiveDay(day: day))
             }
             try? context.save()
+            if !context.hasChanges {
+                self.resetContextLocked()
+            }
         }
     }
 
@@ -432,7 +451,14 @@ final class StatisticsProcessStore {
             row.memPeak = max(row.memPeak, acc.memPeak)
         }
         accumulators.removeAll()
-        try? context.save()
+        do {
+            try context.save()
+            resetContextLocked()
+        } catch {
+            // 失败时保留当前 context：上面已写入托管对象的改动仍可由后续 save 重试。
+            // 若此处直接重建 context，会把已清空累加器对应的数据永久丢弃。
+            AppLogger.settings.error("Statistics process flush failed: \(String(describing: error), privacy: .public)")
+        }
     }
 
     /// 报表 Retina 显示需要 2x 以上源图:图标以 128px PNG 落库,
@@ -445,13 +471,14 @@ final class StatisticsProcessStore {
     /// 不触碰 NSGraphicsContext.current,后台队列安全。
     /// 落库不单独 save:由 flushLocked/分钟封口的统一 save 收口。
     private func captureIcon(_ name: String, pid: pid_t) {
-        guard iconCache[name] == nil, !iconSkipSet.contains(name) else { return }
+        let nameKey = name as NSString
+        guard iconCache.object(forKey: nameKey) == nil, !iconSkipSet.contains(name) else { return }
         guard let context else { return }
         let key = name
         let predicate = #Predicate<StatsAppIdentity> { $0.appKey == key }
         let existing = (try? context.fetch(FetchDescriptor(predicate: predicate)).first) ?? nil
         if let stored = existing?.iconPNG, Self.iconPixels(stored) >= Int(Self.iconSize) {
-            iconCache[name] = stored
+            iconCache.setObject(stored as NSData, forKey: nameKey)
             return
         }
         // 守护进程(.prohibited 或无 Launch Services 注册)使用通用系统图标,
@@ -462,7 +489,7 @@ final class StatisticsProcessStore {
             return
         }
         guard let png = ProcessIconCache.fullSizePNG(forPID: pid, sidePixels: Int(Self.iconSize)) else { return }
-        iconCache[name] = png
+        iconCache.setObject(png as NSData, forKey: nameKey)
         if let existing {
             existing.iconPNG = png
         } else {
@@ -474,14 +501,23 @@ final class StatisticsProcessStore {
         NSBitmapImageRep(data: data)?.pixelsWide ?? 0
     }
 
+    private func iconPNGLocked(for name: String) -> Data? {
+        let nameKey = name as NSString
+        if let cached = iconCache.object(forKey: nameKey) { return cached as Data }
+        guard let context else { return nil }
+        let key = name
+        let predicate = #Predicate<StatsAppIdentity> { $0.appKey == key }
+        let data = (try? context.fetch(FetchDescriptor(predicate: predicate)).first)?.iconPNG
+        if let data {
+            iconCache.setObject(data as NSData, forKey: nameKey)
+        }
+        return data
+    }
+
     /// 查询某应用持久化的图标 PNG（内存缓存命中即返，未命中查库）
     func iconPNG(for name: String) -> Data? {
         queue.sync {
-            if let cached = iconCache[name] { return cached }
-            guard let context else { return nil }
-            let key = name
-            let predicate = #Predicate<StatsAppIdentity> { $0.appKey == key }
-            return (try? context.fetch(FetchDescriptor(predicate: predicate)).first)?.iconPNG
+            iconPNGLocked(for: name)
         }
     }
 
@@ -493,6 +529,21 @@ final class StatisticsProcessStore {
         let value: Double
         let secondary: Double
         let iconPNG: Data?
+    }
+
+    private struct AppAggregatedMetrics {
+        var name: String
+        var cpuScore: Double = 0; var cpuSamples: Int = 0
+        var gpuScore: Double = 0; var gpuSamples: Int = 0
+        var memSum: Double = 0; var memSamples: Int = 0
+        var netDown: Double = 0; var netUp: Double = 0
+        var diskRead: Double = 0; var diskWrite: Double = 0
+        var cpuTier1: Int = 0; var cpuTier2: Int = 0; var cpuTier3: Int = 0
+        var cpuPeak: Double = 0
+        var gpuTier1: Int = 0; var gpuTier2: Int = 0; var gpuTier3: Int = 0
+        var gpuPeak: Double = 0
+        var memTier1: Int = 0; var memTier2: Int = 0; var memTier3: Int = 0
+        var memPeak: Double = 0
     }
 
     struct BatteryPoint {
@@ -520,9 +571,9 @@ final class StatisticsProcessStore {
             guard let context else { return [] }
             let predicate = #Predicate<StatsAppDaily> { $0.day >= fromDay && $0.day <= toDay }
             let rows = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
-            var aggregated: [String: StatsAppDaily] = [:]
+            var aggregated: [String: AppAggregatedMetrics] = [:]
             rows.forEach { row in
-                if let merged = aggregated[row.appKey] {
+                if var merged = aggregated[row.appKey] {
                     merged.cpuScore += row.cpuScore; merged.cpuSamples += row.cpuSamples
                     merged.gpuScore += row.gpuScore; merged.gpuSamples += row.gpuSamples
                     merged.memSum += row.memSum; merged.memSamples += row.memSamples
@@ -535,8 +586,9 @@ final class StatisticsProcessStore {
                     merged.memTier1 += row.memTier1; merged.memTier2 += row.memTier2; merged.memTier3 += row.memTier3
                     merged.memPeak = max(merged.memPeak, row.memPeak)
                     merged.name = row.name
+                    aggregated[row.appKey] = merged
                 } else {
-                    let fresh = StatsAppDaily(day: 0, appKey: row.appKey, name: row.name)
+                    var fresh = AppAggregatedMetrics(name: row.name)
                     fresh.cpuScore = row.cpuScore; fresh.cpuSamples = row.cpuSamples
                     fresh.gpuScore = row.gpuScore; fresh.gpuSamples = row.gpuSamples
                     fresh.memSum = row.memSum; fresh.memSamples = row.memSamples
@@ -551,35 +603,45 @@ final class StatisticsProcessStore {
                     aggregated[row.appKey] = fresh
                 }
             }
-            let identities = (try? context.fetch(FetchDescriptor<StatsAppIdentity>())) ?? []
-            // 旧库/迁移异常可能存在重复 appKey 行,first-wins 去重,不做会 trap 的强唯一构造
-            let iconByKey = Dictionary(
-                identities.map { ($0.appKey, $0.iconPNG) },
-                uniquingKeysWith: { first, _ in first }
-            )
 
             let entries: [(key: String, name: String, value: Double, secondary: Double)]
             switch category {
             case .cpu:
-                entries = aggregated.values
-                    .filter { $0.cpuSamples > 0 }
-                    .map { ($0.appKey, $0.name, $0.cpuScore / Double($0.cpuSamples), Double($0.cpuSamples)) }
+                entries = aggregated
+                    .filter { $0.value.cpuSamples > 0 }
+                    .map { ($0.key, $0.value.name, $0.value.cpuScore / Double($0.value.cpuSamples), Double($0.value.cpuSamples)) }
             case .memory:
-                entries = aggregated.values
-                    .filter { $0.memSamples > 0 }
-                    .map { ($0.appKey, $0.name, $0.memSum / Double($0.memSamples), Double($0.memSamples)) }
+                entries = aggregated
+                    .filter { $0.value.memSamples > 0 }
+                    .map { ($0.key, $0.value.name, $0.value.memSum / Double($0.value.memSamples), Double($0.value.memSamples)) }
             case .gpu:
-                entries = aggregated.values
-                    .filter { $0.gpuSamples > 0 }
-                    .map { ($0.appKey, $0.name, $0.gpuScore / Double($0.gpuSamples), Double($0.gpuSamples)) }
+                entries = aggregated
+                    .filter { $0.value.gpuSamples > 0 }
+                    .map { ($0.key, $0.value.name, $0.value.gpuScore / Double($0.value.gpuSamples), Double($0.value.gpuSamples)) }
             case .network:
-                entries = aggregated.values
-                    .map { ($0.appKey, $0.name, $0.netDown + $0.netUp, $0.netDown) }
+                entries = aggregated
+                    .map { ($0.key, $0.value.name, $0.value.netDown + $0.value.netUp, $0.value.netDown) }
             }
-            return entries
+
+            let topEntries = entries
                 .sorted { $0.value > $1.value }
                 .prefix(limit)
-                .map { AppRankEntry(appKey: $0.key, name: $0.name, value: $0.value, secondary: $0.secondary, iconPNG: iconByKey[$0.key] ?? nil) }
+
+            let result = topEntries.map { entry in
+                AppRankEntry(
+                    appKey: entry.key,
+                    name: entry.name,
+                    value: entry.value,
+                    secondary: entry.secondary,
+                    iconPNG: self.iconPNGLocked(for: entry.key)
+                )
+            }
+
+            if !context.hasChanges {
+                resetContextLocked()
+            }
+
+            return result
         }
     }
 
@@ -615,7 +677,7 @@ final class StatisticsProcessStore {
             guard let context else { return [] }
             let predicate = #Predicate<StatsAppDaily> { $0.day >= fromDay && $0.day <= toDay }
             let rows = (try? context.fetch(FetchDescriptor(predicate: predicate, sortBy: [SortDescriptor(\.day)]))) ?? []
-            return rows.map { row in
+            let result = rows.map { row in
                 DailyAppRow(
                     day: row.day,
                     appKey: row.appKey,
@@ -642,6 +704,10 @@ final class StatisticsProcessStore {
                     memPeak: row.memPeak
                 )
             }
+            if !context.hasChanges {
+                resetContextLocked()
+            }
+            return result
         }
     }
 
@@ -650,7 +716,11 @@ final class StatisticsProcessStore {
         queue.sync {
             guard let context else { return [] }
             let rows = (try? context.fetch(FetchDescriptor<StatsAppIdentity>())) ?? []
-            return rows.map { ($0.appKey, $0.name, $0.iconPNG) }
+            let result = rows.map { ($0.appKey, $0.name, $0.iconPNG) }
+            if !context.hasChanges {
+                resetContextLocked()
+            }
+            return result
         }
     }
 
@@ -712,8 +782,14 @@ final class StatisticsProcessStore {
             let batteryRows = (try? context.fetch(FetchDescriptor<StatsBatteryDaily>(predicate: #Predicate { $0.day < day }))) ?? []
             batteryRows.forEach { context.delete($0) }
             repairUsageMetaLocked()
-            try? context.save()
-            compactDatabaseLocked()
+            do {
+                try context.save()
+                compactDatabaseLocked()
+                resetContextLocked()
+            } catch {
+                // 保留含待删除对象的 context，后续保存仍有机会完成本次操作。
+                AppLogger.settings.error("Statistics delete-before save failed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 
@@ -722,8 +798,10 @@ final class StatisticsProcessStore {
     /// 应用身份(名称+图标)保留,与 deleteBefore 同口径。
     func deleteRange(fromDay: Int64, toDay: Int64) {
         queue.sync {
-            guard let context else { return }
             flushLocked()
+            // flush 成功时会重建 context；必须在它之后重新获取，保证删除、
+            // 打卡元信息修复与 save 位于同一个事务上下文。
+            guard let context else { return }
             let appRows = (try? context.fetch(FetchDescriptor<StatsAppDaily>(predicate: #Predicate { $0.day >= fromDay && $0.day < toDay }))) ?? []
             appRows.forEach { context.delete($0) }
             let activeRows = (try? context.fetch(FetchDescriptor<StatsActiveDay>(predicate: #Predicate { $0.day >= fromDay && $0.day < toDay }))) ?? []
@@ -731,8 +809,14 @@ final class StatisticsProcessStore {
             let batteryRows = (try? context.fetch(FetchDescriptor<StatsBatteryDaily>(predicate: #Predicate { $0.day >= fromDay && $0.day < toDay }))) ?? []
             batteryRows.forEach { context.delete($0) }
             repairUsageMetaLocked()
-            try? context.save()
-            compactDatabaseLocked()
+            do {
+                try context.save()
+                compactDatabaseLocked()
+                resetContextLocked()
+            } catch {
+                // 不替换失败的 context，避免把尚未持久化的删除与元信息修复丢掉。
+                AppLogger.settings.error("Statistics delete-range save failed: \(String(describing: error), privacy: .public)")
+            }
         }
     }
 
@@ -777,7 +861,7 @@ final class StatisticsProcessStore {
             }
 
             accumulators.removeAll()
-            iconCache.removeAll()
+            iconCache.removeAllObjects()
             iconSkipSet.removeAll()
             currentDay = 0
             // 先断开容器再删文件;即便旧连接延迟关闭,POSIX unlink 下它写的
