@@ -56,7 +56,8 @@ struct ReportAppsView: View {
                             Text(tab.label).tag(tab)
                         }
                     }
-                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .compatibleTabPickerStyle()
                     .frame(maxWidth: 360)
 
                     Spacer()

@@ -44,7 +44,8 @@ struct ReportEventsView: View {
                         Text(filter.label).tag(filter)
                     }
                 }
-                .pickerStyle(.segmented)
+                .labelsHidden()
+                .compatibleTabPickerStyle()
                 .frame(maxWidth: 300)
 
                 // R04: 中性空态，不臆断“系统稳定/运行良好”

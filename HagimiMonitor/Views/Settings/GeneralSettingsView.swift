@@ -41,7 +41,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: Self.segmentedPickerWidth)
                 }
 
@@ -54,7 +54,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: Self.segmentedPickerWidth)
                 }
 
@@ -67,7 +67,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: Self.segmentedPickerWidth)
                 }
 
@@ -347,8 +347,8 @@ private struct MenuBarDisplaySettingsSection: View {
                     }
                 }
                 .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 190)
+                .compatibleTabPickerStyle()
+                .frame(width: 220)
             }
 
             if settings.menuBarDisplayMode == .metrics {
@@ -361,7 +361,7 @@ private struct MenuBarDisplaySettingsSection: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: 210)
                 }
 

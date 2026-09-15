@@ -34,8 +34,9 @@ BRANCH="${1:-$(git branch --show-current)}"
 VERSION="${2:-direct}"
 CURRENT=$(git branch --show-current)
 PROJECT="hagimi-monitor.xcodeproj"
-BUILD_DIR="/tmp/hagimi-builds"
-PACKAGE_DIR="$(cd "$(dirname "$0")" && pwd)/build"
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BUILD_DIR="$ROOT_DIR/tmp/builds"
+PACKAGE_DIR="$ROOT_DIR/build"
 
 case "$VERSION" in
     direct|full|pro)
@@ -64,9 +65,11 @@ fi
 # 构建
 echo "构建 $BRANCH 分支 ($SCHEME)..."
 BUILD_LOG="$BUILD_DIR/$BRANCH/xcodebuild.log"
+DERIVED_DATA_DIR="$BUILD_DIR/$BRANCH/DerivedData"
+
 if xcodebuild -project "$PROJECT" -scheme "$SCHEME" -configuration Debug \
-    CONFIGURATION_BUILD_DIR="$BUILD_DIR/$BRANCH" \
-    -derivedDataPath "$BUILD_DIR/$BRANCH/DerivedData" \
+    -destination 'platform=macOS' \
+    -derivedDataPath "$DERIVED_DATA_DIR" \
     build >"$BUILD_LOG" 2>&1; then
     grep -E "\\*\\* BUILD SUCCEEDED \\*\\*" "$BUILD_LOG" | tail -1
 else
@@ -75,8 +78,15 @@ else
     exit 1
 fi
 
-# 启动
+BUILT_APP="$DERIVED_DATA_DIR/Build/Products/Debug/$APP_NAME.app"
 APP_PATH="$BUILD_DIR/$BRANCH/$APP_NAME.app"
+
+if [ -d "$BUILT_APP" ]; then
+    rm -rf "$APP_PATH"
+    ditto "$BUILT_APP" "$APP_PATH"
+fi
+
+# 启动
 if [ -d "$APP_PATH" ]; then
     echo ""
     echo "================================================================"
@@ -84,12 +94,29 @@ if [ -d "$APP_PATH" ]; then
     echo "  $APP_PATH"
     echo "================================================================"
     echo ""
-    echo "启动 $BRANCH 版本 ($SCHEME)"
+    echo "启动 $BRANCH 版本 ($SCHEME)..."
     echo "关闭正在运行的 HagimiMonitor 实例..."
     killall HagimiMonitor >/dev/null 2>&1 || true
     killall HagimiMonitorDirect >/dev/null 2>&1 || true
-    sleep 0.3
-    open -n "$APP_PATH"
+    
+    # 优雅等待旧进程完全退出
+    for _ in {1..20}; do
+        if ! pgrep -x HagimiMonitor >/dev/null 2>&1 && ! pgrep -x HagimiMonitorDirect >/dev/null 2>&1; then
+            break
+        fi
+        sleep 0.1
+    done
+
+    open "$APP_PATH"
+
+    # 启动健康检查
+    sleep 0.6
+    if pgrep -f "$APP_PATH/Contents/MacOS/$APP_NAME" >/dev/null 2>&1 || pgrep -x "$APP_NAME" >/dev/null 2>&1; then
+        echo "✅ $APP_NAME 启动成功并在后台运行！"
+    else
+        echo "⚠️ 提示: 未在活动进程中检测到 $APP_NAME，可能正在初始化或需要权限确认。"
+    fi
+
     # 仅当传入 -r/--reveal 时在 Finder 中显示,方便拖到系统设置授权列表
     if $REVEAL; then
         open -R "$APP_PATH"
