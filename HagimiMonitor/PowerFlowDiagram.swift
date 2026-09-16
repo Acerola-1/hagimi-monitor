@@ -50,6 +50,7 @@ struct PowerFlowDiagram: View {
                 chargeTint: chargeTint,
                 dischargeTint: dischargeTint,
                 neutralEdge: neutralEdge,
+                nodeFill: theme.trackFill,
                 edgeShimmer: edgeShimmer,
                 animate: animate
             )
@@ -507,6 +508,9 @@ private struct PowerFlowHardwareTracksView: NSViewRepresentable {
     let chargeTint: Color
     let dischargeTint: Color
     let neutralEdge: Color
+    /// 适配器/系统方块自身的填充色。未插电时左段(适配器侧支线)用它绘制,
+    /// 与方块同色同浓度,读作「这根线不存在」。
+    let nodeFill: Color
     let edgeShimmer: Color
     let animate: Bool
 
@@ -526,6 +530,7 @@ private struct PowerFlowHardwareTracksView: NSViewRepresentable {
             chargeTint: chargeTint.toCGColor(),
             dischargeTint: dischargeTint.toCGColor(),
             neutralEdge: neutralEdge.toCGColor(),
+            nodeFill: nodeFill.toCGColor(),
             edgeShimmer: edgeShimmer.toCGColor(),
             animate: animate
         )
@@ -574,6 +579,7 @@ private final class PowerFlowTracksNSView: NSView {
     private var chargeTint: CGColor = NSColor.white.cgColor
     private var dischargeTint: CGColor = NSColor.white.cgColor
     private var neutralEdge: CGColor = NSColor.gray.cgColor
+    private var nodeFill: CGColor = NSColor.clear.cgColor
     private var edgeShimmer: CGColor = NSColor.white.cgColor
     private var animate = false
 
@@ -637,6 +643,7 @@ private final class PowerFlowTracksNSView: NSView {
         chargeTint: CGColor,
         dischargeTint: CGColor,
         neutralEdge: CGColor,
+        nodeFill: CGColor,
         edgeShimmer: CGColor,
         animate: Bool
     ) {
@@ -650,6 +657,7 @@ private final class PowerFlowTracksNSView: NSView {
         self.chargeTint = chargeTint
         self.dischargeTint = dischargeTint
         self.neutralEdge = neutralEdge
+        self.nodeFill = nodeFill
         self.edgeShimmer = edgeShimmer
         self.animate = animate
 
@@ -774,14 +782,19 @@ private final class PowerFlowTracksNSView: NSView {
     }
 
     private func updateLayerStyling() {
-        // 左段样式
-        let leftColor = connected ? activeTint : neutralEdge
-        let leftGlowAlpha: CGFloat = connected ? 0.35 : 0.22
+        // 左段样式。未插电时适配器不在回路里:左段改用适配器方块自身的填充色
+        // (nodeFill)并按方块同档的 0.4 浓度绘制,不再叠辉光——拼出来就是方块
+        // 本身的观感,读作「这根线不存在」。不能沿用 neutralEdge:它的语义是
+        // 「导管在、只是没有能量」(如满电不充电),画在未插电的左段上既是一根
+        // 接好的实线,浓度也重过方块。
+        let leftColor = connected ? activeTint : nodeFill
+        let leftTrackAlpha: CGFloat = connected ? 0.92 : 0.4
+        let leftGlowAlpha: CGFloat = connected ? 0.35 : 0
         let effectiveWatts = hasBattery ? (connected ? powerInWatts : nil) : (systemWatts ?? powerInWatts)
         let wLeft = Self.edgeWidth(effectiveWatts)
         baseTrackLeft.lineWidth = wLeft
         baseGlowLeft.lineWidth = wLeft * 2.4
-        baseTrackLeft.strokeColor = leftColor.copy(alpha: 0.92) ?? leftColor
+        baseTrackLeft.strokeColor = leftColor.copy(alpha: leftTrackAlpha) ?? leftColor
         baseGlowLeft.strokeColor = leftColor.copy(alpha: leftGlowAlpha) ?? leftColor
 
         let leftDashColor = connected ? activeTint : edgeShimmer
@@ -862,7 +875,10 @@ private final class PowerFlowTracksNSView: NSView {
 
     private func updateJunctionBreathing(active: Bool) {
         let breatheAnimKey = "junctionBreathe"
-        let baseColor = connected ? activeTint : neutralEdge
+        // 汇流点辉光跟随该时刻真正流过的能量色,即竖向支路的颜色:未插电时电池
+        // 正往上供电,汇流点同用 dischargeTint(activeTint 在放电态就是它),
+        // 而不是中性灰——否则整条通路亮着、中心却是灭的。
+        let baseColor = activeTint
         junctionGlowLayer.colors = [
             baseColor.copy(alpha: 0.65) ?? baseColor,
             baseColor.copy(alpha: 0.0) ?? baseColor
