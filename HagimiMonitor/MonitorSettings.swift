@@ -493,19 +493,16 @@ final class MonitorSettings: ObservableObject {
         menuBarMetricKinds.contains(kind)
     }
 
-    func canSelectMenuBarMetric(_ kind: MenuBarMetricKind) -> Bool {
-        isMenuBarMetricSelected(kind) || menuBarMetricKinds.count < MenuBarMetricKind.maximumSelectionCount
-    }
-
     func setMenuBarMetric(_ kind: MenuBarMetricKind, selected: Bool) {
         var current = menuBarMetricKinds
         if selected {
-            guard !current.contains(kind), current.count < MenuBarMetricKind.maximumSelectionCount else { return }
+            guard !current.contains(kind) else { return }
             current.append(kind)
         } else {
+            guard current.count > 1, current.contains(kind) else { return }
             current.removeAll { $0 == kind }
         }
-        menuBarMetricKinds = current.isEmpty ? MenuBarMetricKind.defaultSelection : current
+        menuBarMetricKinds = current
     }
 
     func moveMenuBarMetric(_ kind: MenuBarMetricKind, direction: Int) {
@@ -513,6 +510,24 @@ final class MonitorSettings: ObservableObject {
         let target = index + direction
         guard menuBarMetricKinds.indices.contains(target) else { return }
         menuBarMetricKinds.swapAt(index, target)
+    }
+
+    /// 应用 macOS 27 原生重排容器给出的目标位置。只在已选指标集合内移动,
+    /// 不改变备选池顺序;批量 source 也按当前菜单栏顺序稳定处理。
+    func reorderMenuBarMetrics(_ sources: [MenuBarMetricKind], before destination: MenuBarMetricKind?) {
+        let moving = menuBarMetricKinds.filter { sources.contains($0) }
+        guard !moving.isEmpty else { return }
+        if let destination, moving.contains(destination) { return }
+
+        var remaining = menuBarMetricKinds.filter { !sources.contains($0) }
+        let insertionIndex: Int
+        if let destination, let index = remaining.firstIndex(of: destination) {
+            insertionIndex = index
+        } else {
+            insertionIndex = remaining.endIndex
+        }
+        remaining.insert(contentsOf: moving, at: insertionIndex)
+        menuBarMetricKinds = remaining
     }
 
     /// 保存钉住面板窗口位置。
@@ -541,9 +556,6 @@ final class MonitorSettings: ObservableObject {
                 continue
             }
             result.append(kind)
-            if result.count == MenuBarMetricKind.maximumSelectionCount {
-                break
-            }
         }
 
         return result.isEmpty ? MenuBarMetricKind.defaultSelection : result

@@ -194,6 +194,9 @@ struct ReportDetailsTableView: View {
                 }
             }
             .menuStyle(.borderedButton)
+            // macOS 27 默认会隐藏 Menu item 的 image;显式要求导出格式的
+            // SF Symbols 与标题一起呈现。该修饰符在旧系统保持原有 Label 语义。
+            .labelStyle(.titleAndIcon)
             .controlSize(.small)
             .disabled(allRows.isEmpty)
         }

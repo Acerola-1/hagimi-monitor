@@ -12,7 +12,7 @@ nonisolated enum DiagnosticsDirectories {
 }
 
 extension JSONEncoder {
-    static var hagimiDiagnostics: JSONEncoder {
+    nonisolated static var hagimiDiagnostics: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -21,7 +21,7 @@ extension JSONEncoder {
 }
 
 extension JSONDecoder {
-    static var hagimiDiagnostics: JSONDecoder {
+    nonisolated static var hagimiDiagnostics: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
@@ -260,14 +260,15 @@ enum CrashHandler {
 
 // MARK: - Launch State
 
-struct AppLaunchState: Codable {
+nonisolated struct AppLaunchState: Codable, Sendable {
     var launchID: String
     var launchDate: Date
     var lastCleanExitDate: Date?
     var previousRunEndedUnexpectedly: Bool
 }
 
-final class AppLaunchStateTracker {
+/// 安全不变式：通过内部私有串行队列 queue 保护所有状态读写，对外提供线程安全的并发调用契约。
+nonisolated final class AppLaunchStateTracker: @unchecked Sendable {
     static let shared = AppLaunchStateTracker()
 
     private let stateURL: URL
@@ -347,7 +348,8 @@ final class AppLaunchStateTracker {
 /// Periodically logs memory usage and main-thread responsiveness.
 /// Helps diagnose SIGKILL kills that leave no crash handler output
 /// (typically memory jetsam or watchdog timeout).
-final class HealthMonitor {
+/// 安全不变式：通过内部私有 utility 队列调度定时健康自检，非 MainActor 隔离，保障跨线程诊断安全。
+nonisolated final class HealthMonitor: @unchecked Sendable {
     static let shared = HealthMonitor()
 
     private var timer: DispatchSourceTimer?
@@ -357,7 +359,7 @@ final class HealthMonitor {
 
     /// Main-thread liveness ping — written by the main thread, read by the monitor.
     /// Note: intentionally accessed from two queues without lock (diagnostic flag, race is harmless).
-    private var mainThreadAlive: Bool = true
+    nonisolated(unsafe) private var mainThreadAlive: Bool = true
 
     init(interval: TimeInterval = 300) { // 5 minutes
         self.interval = interval

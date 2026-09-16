@@ -3822,18 +3822,34 @@
         }
       }
     },
-    "menu-bar-display.metrics-limit": {
+    "menu-bar-display.metrics-available": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Select up to 4 metrics"
+            "value": "Available Metrics"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "最多选择 4 个指标"
+            "value": "备选指标"
+          }
+        }
+      }
+    },
+    "menu-bar-display.metrics-minimum": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select at least one metric"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "至少选择 1 个指标"
           }
         }
       }
@@ -3850,6 +3866,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "菜单栏指标"
+          }
+        }
+      }
+    },
+    "menu-bar-display.metrics-selected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected Metrics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选指标"
           }
         }
       }
@@ -4012,6 +4044,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "文字"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.move-down": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Down"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下移指标"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.move-up": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move Up"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上移指标"
           }
         }
       }
