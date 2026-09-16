@@ -2,7 +2,9 @@ import AppKit
 import Darwin
 import Foundation
 
-struct TopCPUProcess: Identifiable, Equatable {
+/// TopCPUProcess 仅持有不可变的只读属性；所持有的 NSImage 为 ProcessIconCache 生成的固定位图，
+/// 跨线程传递用于视图绑定，不进行并发修改。
+struct TopCPUProcess: Identifiable, Equatable, @unchecked Sendable {
     let pid: pid_t
     let name: String
     /// 进程 CPU 占用百分比。
@@ -20,7 +22,7 @@ struct TopCPUProcess: Identifiable, Equatable {
     }
 }
 
-struct RawCPUProcess {
+struct RawCPUProcess: Sendable {
     let pid: pid_t
     let path: String
     let fallbackName: String
@@ -29,7 +31,7 @@ struct RawCPUProcess {
 
 
 /// 把逐进程 CPU% 按宿主 App 合并、过滤系统进程、排序截断为 TOP N。
-private func assembleTopCPU(perProcessCPU: [pid_t: Double], limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
+nonisolated private func assembleTopCPU(perProcessCPU: [pid_t: Double], limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
     // 按 responsible pid 合并,首次遇到分组时立即捕获宿主路径
     var groups: [pid_t: (path: String, totalCPU: Double)] = [:]
     groups.reserveCapacity(perProcessCPU.count)
@@ -72,16 +74,35 @@ private func assembleTopCPU(perProcessCPU: [pid_t: Double], limit: Int, includeS
 #if DIRECT_DISTRIBUTION
 /// ps 输出行的解析正则,提取行首 pid、紧跟的 cpu%。整个采样周期只编译一次,
 /// 避免在 enumerateLines 逐行闭包里为每个进程重新编译同一个 pattern。
-private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]+)\\s+(.+)$")
+nonisolated private let psLineRegex = try! NSRegularExpression(pattern: "^(\\d+)\\s+([0-9,.]+)\\s+(.+)$")
 
 /// ps 子进程采样的超时阈值。ps 在极端系统状态下可能挂起不退出,若无防护会永久
 /// 堵死 procSampleQueue,连带内存/CPU/GPU/磁盘四类 TOP 列表全部停摆。
-private let psSampleTimeout: TimeInterval = 8
+nonisolated private let psSampleTimeout: TimeInterval = 8
+
+/// 线程安全的管道输出暂存器，内部由 NSLock 保护跨队列读写。
+nonisolated private final class OutputDataCaptureBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _data: Data?
+
+    var data: Data? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _data
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _data = newValue
+        }
+    }
+}
 
 /// 直连版 CPU 采样:解析 ps 输出,得到逐进程 CPU% 后交给共享归并逻辑。
 /// 直连版 CPU TOP 的 ps 通道。`internal` 是为了让 `MonitorStore` 的面板路径直接调用——
 /// 原先它藏在文件级包装函数后面,而那个包装用的全局游标会被多个 store 实例并发改写。
-func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
+nonisolated func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
     let task = Process()
     task.launchPath = "/bin/ps"
     task.arguments = ["-Aceo pid,pcpu,comm", "-r"]
@@ -97,10 +118,10 @@ func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProce
     }
 
     // 读输出放后台线程,信号量等待,超时终止进程并放弃本次结果(保留上一次列表)。
-    nonisolated(unsafe) var data: Data?
+    let box = OutputDataCaptureBox()
     let done = DispatchSemaphore(value: 0)
     DispatchQueue.global(qos: .utility).async {
-        data = pipe.fileHandleForReading.readDataToEndOfFile()
+        box.data = pipe.fileHandleForReading.readDataToEndOfFile()
         done.signal()
     }
     if done.wait(timeout: .now() + psSampleTimeout) == .timedOut {
@@ -108,7 +129,7 @@ func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProce
         return []
     }
     task.waitUntilExit()
-    let outputData = data ?? Data()
+    let outputData = box.data ?? Data()
     pipe.fileHandleForReading.closeFile()
 
     guard task.terminationStatus == 0,
@@ -143,16 +164,16 @@ func sampleTopCPUViaPS(limit: Int, includeSystemProcesses: Bool) -> [RawCPUProce
 }
 #else
 /// mach ticks -> 纳秒的换算系数(Apple Silicon 上为 125/3,Intel 上为 1)。
-private let machTimeToNanos: Double = {
+nonisolated private let machTimeToNanos: Double = {
     var timebase = mach_timebase_info_data_t()
     mach_timebase_info(&timebase)
     return Double(timebase.numer) / Double(timebase.denom)
 }()
 
 /// CPU 差分游标:自持上拍 TASKINFO 快照,各使用方(面板 2s、统计 60s)各用
-/// 独立游标,互不截断对方的差分窗口。线程安全依赖每个游标只被 procSampleQueue
-/// 一条串行队列读写。
-final class CPUDeltaCursor {
+/// 独立游标,互不截断对方的差分窗口。
+/// 安全不变式：内部状态仅在串行采样队列（procSampleQueue）上读写，不存在跨线程并发修改。
+nonisolated final class CPUDeltaCursor: @unchecked Sendable {
     private var previousSnapshot: [pid_t: (user: UInt64, system: UInt64)] = [:]
     private var previousTime: Date?
 
@@ -189,7 +210,7 @@ final class CPUDeltaCursor {
 }
 
 /// 枚举全部进程并读取各自的 TASKINFO 累计 CPU 时间。
-private func taskInfoCPUSnapshot() -> [pid_t: (user: UInt64, system: UInt64)] {
+nonisolated private func taskInfoCPUSnapshot() -> [pid_t: (user: UInt64, system: UInt64)] {
     var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
     var size = 0
     guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return [:] }
@@ -220,7 +241,7 @@ private func taskInfoCPUSnapshot() -> [pid_t: (user: UInt64, system: UInt64)] {
 
 /// 用 NSRunningApplication(pid:) 为 CPU 采样结果补齐本地化名与 App 图标。
 /// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
-func enrichCPU(_ rawProcesses: [RawCPUProcess]) -> [TopCPUProcess] {
+nonisolated func enrichCPU(_ rawProcesses: [RawCPUProcess]) -> [TopCPUProcess] {
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 
@@ -246,7 +267,7 @@ func enrichCPU(_ rawProcesses: [RawCPUProcess]) -> [TopCPUProcess] {
 /// 查询指定进程是否正通过 Rosetta 转译运行。
 /// 走官方推荐的 `sysctl.proc_translated`(传入 pid 作为输入参数),仅查询不干预,
 /// 沙盒下同样可用;失败/不支持一律视为非转译。
-func isTranslatedProcess(_ pid: pid_t) -> Bool {
+nonisolated func isTranslatedProcess(_ pid: pid_t) -> Bool {
     #if arch(arm64)
     var translated: Int32 = 0
     var size = MemoryLayout<Int32>.size

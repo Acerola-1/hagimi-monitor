@@ -18,13 +18,13 @@ import Foundation
 /// 后续睡眠状态不会被过期的定时任务解除。
 ///
 /// 线程安全:状态由 NSLock 保护,`isSuppressed` 可在任意 DDC 后台队列安全读取。
-nonisolated final class DDCEnvironmentGate {
+nonisolated final class DDCEnvironmentGate: @unchecked Sendable {
     static let shared = DDCEnvironmentGate()
 
     private let lock = NSLock()
     private let runtime: DDCGateRuntime
 
-    private var changeHandlers: [UUID: () -> Void] = [:]
+    private var changeHandlers: [UUID: @Sendable () -> Void] = [:]
 
     /// 生产环境用默认时长并注册系统观察者。测试可注入更短时长并跳过系统注册,
     /// 通过 `handleWillSleep()`/`handleDidWake()`/`handleReconfigure(flags:)` 手动触发。
@@ -89,7 +89,7 @@ nonisolated final class DDCEnvironmentGate {
 
     /// 注册"显示器/电源状态发生实质变化、应重新检测"的回调。回调在主线程调用,
     /// 且经过抑制窗口对齐——只在总线大概率就绪后才触发,避免刚唤醒就读到空值。
-    func addChangeHandler(_ handler: @escaping () -> Void) -> UUID {
+    func addChangeHandler(_ handler: @escaping @Sendable () -> Void) -> UUID {
         let token = UUID()
         lock.lock()
         changeHandlers[token] = handler

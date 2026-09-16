@@ -1,9 +1,33 @@
 import Foundation
+import Dispatch
 import Testing
 @testable import HagimiMonitorDirect
 
 @Suite("报表正确性回归测试 (R01~R17)")
 struct ReportCorrectnessTests {
+
+    @Test func reportSnapshotProviderRunsStorageReadsOffMainActor() async {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("report-provider-(UUID().uuidString).sqlite3")
+        defer {
+            try? FileManager.default.removeItem(at: url)
+            try? FileManager.default.removeItem(atPath: url.path + "-wal")
+            try? FileManager.default.removeItem(atPath: url.path + "-shm")
+        }
+        let database = StatisticsDatabase(url: url)
+        let provider = StatisticsReportDataProvider(
+            database: database,
+            processStore: nil,
+            calendar: .current
+        )
+
+        let input = await Task.detached(priority: .utility) {
+            dispatchPrecondition(condition: .notOnQueue(.main))
+            return provider.load(now: Date(), alerts: [])
+        }.value
+
+        #expect(input != nil)
+    }
 
     private func makeRow(
         t: Int64,

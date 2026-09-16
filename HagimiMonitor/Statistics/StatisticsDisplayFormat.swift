@@ -3,9 +3,9 @@ import Foundation
 /// 概览与详情共用的展示转换:把底层真实数值(秒、字节、比例)折成用户可读文本。
 /// 只做展示,不改动统计数据本身;零值、缺失与非零短时长在这里有明确区分
 /// (需求:没有有效观测显示「暂无数据」,真实非零但不足一分钟显示「不足 1 分钟」)。
-enum StatisticsDisplayFormat {
+nonisolated enum StatisticsDisplayFormat: Sendable {
     /// 时长的结构分解,便于单测分支(小时/分钟/不足一分钟),渲染另走文本模板。
-    struct DurationParts: Equatable {
+    struct DurationParts: Sendable, Equatable {
         let hours: Int
         let minutes: Int
         /// 真实非零但不足一分钟(渲染为「不足 1 分钟」而不是「0 分钟」)。

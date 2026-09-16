@@ -105,7 +105,8 @@ final class StatsUsageMeta {
 
 /// SwiftData 存储的进程/电池/打卡统计。所有公开方法内部经专用串行队列执行,
 /// ModelContext 只在该队列上创建与使用。API 值类型进出,调用方不接触托管对象。
-final class StatisticsProcessStore {
+/// 安全不变式：内部 ModelContext 与所有状态均由专用串行队列（com.acerola.hagimi-monitor.stats-process-db）串行管理，对外提供线程安全的访问接口。
+nonisolated final class StatisticsProcessStore: @unchecked Sendable {
     private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.stats-process-db", qos: .utility)
     private var container: ModelContainer?
     private var context: ModelContext?

@@ -1,17 +1,70 @@
 import Foundation
 
-func percent(_ value: Double) -> String {
+/// 进程探针异步读管道的结果盒。
+/// 安全不变式：读管道的 utility 队列只写一次，等待方在信号量返回后读取；NSLock
+/// 同时提供明确的内存同步，避免用 `nonisolated(unsafe)` 跨队列共享局部变量。
+nonisolated final class SamplerProcessOutputBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedData: Data?
+
+    var data: Data? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return storedData
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            storedData = newValue
+        }
+    }
+}
+
+nonisolated func percent(_ value: Double) -> String {
     "\(Int(value.rounded()))%"
 }
 
-func bytes(_ value: Double) -> String {
-    byteFormatter.string(fromByteCount: Int64(max(0, value)))
+/// 线程安全的字节格式化器封装。
+/// 安全不变式：内部持有非 Sendable 的 ByteCountFormatter，所有格式化方法均由内部 NSLock 同步保护。
+nonisolated private final class ThreadSafeByteFormatters: @unchecked Sendable {
+    private let lock = NSLock()
+    private let byteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB, .useMB]
+        formatter.countStyle = .file
+        return formatter
+    }()
+    private let memoryByteFormatter: ByteCountFormatter = {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useGB, .useMB]
+        formatter.countStyle = .memory
+        return formatter
+    }()
+
+    func bytes(_ value: Double) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return byteFormatter.string(fromByteCount: Int64(max(0, value)))
+    }
+
+    func memoryBytes(_ value: Double) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return memoryByteFormatter.string(fromByteCount: Int64(max(0, value)))
+    }
+}
+
+nonisolated private let formatters = ThreadSafeByteFormatters()
+
+nonisolated func bytes(_ value: Double) -> String {
+    formatters.bytes(value)
 }
 
 /// 将字节数格式化为固定单位(B/KB/MB/GB/TB)字符串。
 /// `ByteCountFormatter` 会把 bytes 单位本地化成「字节」,而单位不应随语言翻译,故自行格式化。
 /// `.file` 用 1000 进制、`.memory` 用 1024 进制,与 `ByteCountFormatter` 语义保持一致。
-func byteCountString(_ value: Int64, countStyle: ByteCountFormatter.CountStyle = .file) -> String {
+nonisolated func byteCountString(_ value: Int64, countStyle: ByteCountFormatter.CountStyle = .file) -> String {
     let base: Double = countStyle == .memory ? 1024 : 1000
     var scaled = Double(max(0, value))
     let units = ["B", "KB", "MB", "GB", "TB"]
@@ -26,11 +79,11 @@ func byteCountString(_ value: Int64, countStyle: ByteCountFormatter.CountStyle =
     return "\(String(format: scaled >= 10 ? "%.0f" : "%.1f", scaled)) \(units[index])"
 }
 
-func memoryBytes(_ value: Double) -> String {
-    memoryByteFormatter.string(fromByteCount: Int64(max(0, value)))
+nonisolated func memoryBytes(_ value: Double) -> String {
+    formatters.memoryBytes(value)
 }
 
-func wattString(_ value: Double?, rounded: Bool = false) -> String {
+nonisolated func wattString(_ value: Double?, rounded: Bool = false) -> String {
     guard let value else {
         return "--"
     }
@@ -40,42 +93,28 @@ func wattString(_ value: Double?, rounded: Bool = false) -> String {
     return "\(String(format: "%.1f", value)) W"
 }
 
-func wattStringAllowZero(_ value: Double?) -> String {
+nonisolated func wattStringAllowZero(_ value: Double?) -> String {
     guard let value else {
         return "--"
     }
     return value == 0 ? "0 W" : "\(String(format: "%.1f", value)) W"
 }
 
-func nonZeroWatts(_ value: Double?) -> Double? {
+nonisolated func nonZeroWatts(_ value: Double?) -> Double? {
     guard let value, value >= 0.05 else {
         return nil
     }
     return value
 }
 
-func interpretedChargingPowerWatts(batteryPowerMilliwatts: Double?, isCharging: Bool) -> Double? {
+nonisolated func interpretedChargingPowerWatts(batteryPowerMilliwatts: Double?, isCharging: Bool) -> Double? {
     guard isCharging, let batteryPowerMilliwatts else {
         return nil
     }
     return nonZeroWatts(abs(batteryPowerMilliwatts) / 1_000)
 }
 
-private let byteFormatter: ByteCountFormatter = {
-    let formatter = ByteCountFormatter()
-    formatter.allowedUnits = [.useGB, .useMB]
-    formatter.countStyle = .file
-    return formatter
-}()
-
-private let memoryByteFormatter: ByteCountFormatter = {
-    let formatter = ByteCountFormatter()
-    formatter.allowedUnits = [.useGB, .useMB]
-    formatter.countStyle = .memory
-    return formatter
-}()
-
-func bytesPerSecond(_ value: Double) -> String {
+nonisolated func bytesPerSecond(_ value: Double) -> String {
     let safeValue = max(0, value)
     let units = ["B/s", "KB/s", "MB/s", "GB/s"]
     var scaled = safeValue
@@ -92,7 +131,7 @@ func bytesPerSecond(_ value: Double) -> String {
     return "\(String(format: scaled >= 10 ? "%.0f" : "%.1f", scaled)) \(units[unitIndex])"
 }
 
-func doubleValue(_ value: Any?) -> Double? {
+nonisolated func doubleValue(_ value: Any?) -> Double? {
     switch value {
     case let value as Double:
         value
@@ -111,7 +150,7 @@ func doubleValue(_ value: Any?) -> Double? {
     }
 }
 
-func signedDoubleValue(_ value: Any?) -> Double? {
+nonisolated func signedDoubleValue(_ value: Any?) -> Double? {
     switch value {
     case let value as Int:
         return Double(value)
@@ -135,13 +174,13 @@ func signedDoubleValue(_ value: Any?) -> Double? {
 
 /// 安全的 Double → Int 转换，防止 NaN / Inf 触发 Swift fatalError (EXC_BREAKPOINT)。
 /// 用于任何直接来自除法/加权平均等计算、显示前未经校验的数值格式化场景。
-func safeIntDisplay(_ value: Double) -> Int {
+nonisolated func safeIntDisplay(_ value: Double) -> Int {
     guard value.isFinite else { return 0 }
     let clamped = min(Double(Int.max), max(Double(Int.min), value))
     return Int(clamped)
 }
 
-func intValue(_ value: Any?) -> Int? {
+nonisolated func intValue(_ value: Any?) -> Int? {
     switch value {
     case let value as Int:
         value
@@ -156,7 +195,7 @@ func intValue(_ value: Any?) -> Int? {
     }
 }
 
-func placeholderModule(_ kind: MonitorKind, summary: String) -> MonitorModule {
+nonisolated func placeholderModule(_ kind: MonitorKind, summary: String) -> MonitorModule {
     MonitorModule(
         kind: kind,
         value: 0,
@@ -171,6 +210,6 @@ func placeholderModule(_ kind: MonitorKind, summary: String) -> MonitorModule {
     )
 }
 
-func seedSamples(_ value: Double) -> [Double] {
+nonisolated func seedSamples(_ value: Double) -> [Double] {
     Array(repeating: min(100, max(0, value)), count: 28)
 }

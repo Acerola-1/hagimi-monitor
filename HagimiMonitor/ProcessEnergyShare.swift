@@ -6,7 +6,9 @@ import AppKit
 /// **全部可读进程**（同用户）的平滑能耗之和。
 /// 系统进程（WindowServer、powerd 等）对该计数一律 EPERM，不在统计内——不得用 0
 /// 或估算值冒充。采样与权限边界见 `ProcessEnergySampler`。
-struct ProcessEnergyShare: Identifiable, Equatable {
+/// ProcessEnergyShare 仅持有不可变的只读属性；所持有的 NSImage 为 ProcessIconCache 生成的固定位图，
+/// 跨线程传递用于视图绑定，不进行并发修改。
+nonisolated struct ProcessEnergyShare: Identifiable, Equatable, @unchecked Sendable {
     /// 宿主进程 pid（responsible pid）。
     let pid: pid_t
     let name: String
@@ -25,7 +27,7 @@ struct ProcessEnergyShare: Identifiable, Equatable {
 }
 
 /// 分应用能耗占比的整体结果：前 N 名 + 其余聚合。
-struct ProcessEnergyBreakdown: Equatable {
+nonisolated struct ProcessEnergyBreakdown: Equatable, Sendable {
     /// 排名页展示的应用行数：与 `TopProcessList` 的固定 5 行一致，故取前 5 名。
     /// 视图与采样器共用，避免两处写死。
     static let topCount = 5

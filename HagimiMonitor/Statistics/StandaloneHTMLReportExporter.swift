@@ -4,7 +4,8 @@ import Foundation
 import OSLog
 
 /// 进程/电池维度的报表数据(来自 SwiftData 进程存储)。
-struct StatisticsProcessSnapshot {
+/// 内部包含只读的基础值集合（数组、字符串、字典），供后台导出线程只读传递。
+nonisolated struct StatisticsProcessSnapshot: @unchecked Sendable {
     /// 行:[日键, 名称下标, cpu%, cpu样本, gpu%, gpu样本, 内存MB, 内存样本, 网络MB, 磁盘MB, cpuT1, cpuT2, cpuT3, cpuPeak, gpuT1, gpuT2, gpuT3, gpuPeak]
     let appRows: [[Any]]
     let appNames: [String]
@@ -19,7 +20,7 @@ struct StatisticsProcessSnapshot {
 /// 独立 HTML 报表导出器:从统计库拉取分钟/小时/日三层行,连同元信息与当前语言文案
 /// 注入 Bundle 内的 HTML 模板(图表库与图标已内嵌模板),写出单文件报表。
 /// 生成与写入均由调用方放在后台任务中执行;导出器本身不创建固定缓存文件。
-enum StandaloneHTMLReportExporter {
+nonisolated enum StandaloneHTMLReportExporter {
     /// 报表模板与内嵌图表库的资源名。
     nonisolated private static let templateResource = "ReportTemplate"
     nonisolated private static let echartsResource = "echarts"
@@ -368,7 +369,7 @@ enum StandaloneHTMLReportExporter {
 
     /// 从进程存储拉取报表所需的进程/电池数据。
     /// 应用行取近 60 天(与报表小时层窗口一致),日级粒度供网页端按范围聚合。
-    static func processSnapshot(from store: StatisticsProcessStore, calendar: Calendar = .current) -> StatisticsProcessSnapshot? {
+    @MainActor static func processSnapshot(from store: StatisticsProcessStore, calendar: Calendar = .current) -> StatisticsProcessSnapshot? {
         let now = Date()
         let fromDay = StatisticsProcessStore.dayKey(now.addingTimeInterval(-59 * 86400), calendar: calendar)
         let toDay = StatisticsProcessStore.dayKey(now, calendar: calendar)

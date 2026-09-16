@@ -41,7 +41,6 @@ struct ReportDetailsTableView: View {
     }
 
     private var sortedRows: [StatisticsRow] {
-        let bSec = bucketSeconds
         return allRows.sorted { (a: StatisticsRow, b: StatisticsRow) -> Bool in
             let res: Bool
             switch sortColumn {

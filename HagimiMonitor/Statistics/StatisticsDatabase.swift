@@ -4,7 +4,7 @@ import SQLite3
 
 /// 单库磁盘占用的两方分解。有效数据 = 在用页中扣除表结构页的部分 + 未合并的
 /// WAL 写入;系统侧 = 表结构页 + 空闲页(已删行、待复用) + WAL 索引文件。
-struct StorageBreakdown: Equatable {
+nonisolated struct StorageBreakdown: Equatable, Sendable {
     var dataBytes: Int64 = 0
     var systemBytes: Int64 = 0
 
@@ -15,7 +15,7 @@ struct StorageBreakdown: Equatable {
 /// - weightedAverage: 上层均值 = Σ(下层均值×下层n) / Σn(占比型同此口径)
 /// - maximum:         取下层最大值(峰值)
 /// - total:           求和(速率积分出的字节总量)
-enum StatisticsAggregation {
+nonisolated enum StatisticsAggregation: Sendable {
     case weightedAverage
     case maximum
     case total
@@ -23,7 +23,7 @@ enum StatisticsAggregation {
 
 /// 一行统计数据。分/时/日三张表共用同一组数值列;列顺序由 `columns` 单一来源
 /// 决定,同时是 SQL 建表列序与报表 JSON 的列序契约。
-struct StatisticsRow: Equatable {
+nonisolated struct StatisticsRow: Equatable, Sendable {
     /// 桶起点(unix 秒)。分=分钟起点,时=本地小时起点,日=本地日起点。
     var t: Int64
     /// 该桶内采到的帧数(加权平均的权重)。
@@ -283,7 +283,8 @@ struct StatisticsRow: Equatable {
 
 /// SQLite 统计库。所有公开方法内部经串行队列同步执行,可从任意线程调用;
 /// 写入只发生在分钟封口/汇总/清理三类低频操作上,常年零 IO。
-final class StatisticsDatabase {
+/// 安全不变式：内部状态与 SQLite 操作全部由专用串行队列（com.acerola.hagimi-monitor.statistics-db）同步执行，对外提供线程安全的访问接口。
+nonisolated final class StatisticsDatabase: @unchecked Sendable {
     /// 分钟行保留窗口(汇总完成后才清理,先汇总后清理见 `maintain`)。
     static let minuteRetention: TimeInterval = 45 * 86400
     static let hourRetention: TimeInterval = 400 * 86400

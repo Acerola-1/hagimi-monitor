@@ -13,21 +13,22 @@ final class AccessibilityPermissionService: ObservableObject {
     /// 超时仍未授权即停止轮询。授权变化仍有系统广播(accessibilityChanged)兜底感知。
     private static let maxPollingSeconds: Int = 120
 
-    private var pollTimer: DispatchSourceTimer?
+    private let cleanupBox = AccessibilityServiceCleanupBox()
     private var polledSeconds = 0
 
     init() {
-        DistributedNotificationCenter.default().addObserver(
-            self,
-            selector: #selector(accessibilityChanged(_:)),
-            name: .init("com.apple.accessibility.api"),
-            object: nil
-        )
-    }
-
-    deinit {
-        DistributedNotificationCenter.default().removeObserver(self)
-        pollTimer?.cancel()
+        let observer = DistributedNotificationCenter.default().addObserver(
+            forName: .init("com.apple.accessibility.api"),
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                MainActor.assumeIsolated {
+                    self?.refresh()
+                }
+            }
+        }
+        cleanupBox.notificationObserver = observer
     }
 
     func refresh() {
@@ -46,7 +47,7 @@ final class AccessibilityPermissionService: ObservableObject {
 
     func request() {
         let options: NSDictionary = [
-            kAXTrustedCheckOptionPrompt.takeRetainedValue() as NSString: false
+            "AXTrustedCheckOptionPrompt" as NSString: false
         ]
         _ = AXIsProcessTrustedWithOptions(options)
         openSystemSettings()
@@ -59,14 +60,8 @@ final class AccessibilityPermissionService: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
-    @objc private func accessibilityChanged(_ note: Notification) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
-            self?.refresh()
-        }
-    }
-
     private func startPollingUntilGranted() {
-        pollTimer?.cancel()
+        cleanupBox.pollTimer?.cancel()
         polledSeconds = 0
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + 1, repeating: 1)
@@ -76,11 +71,24 @@ final class AccessibilityPermissionService: ObservableObject {
             self.polledSeconds += 1
             // 授权通过或超过最长等待窗口(用户拒绝/忽略)即停止轮询。
             if self.isTrusted || self.polledSeconds >= Self.maxPollingSeconds {
-                self.pollTimer?.cancel()
-                self.pollTimer = nil
+                self.cleanupBox.pollTimer?.cancel()
+                self.cleanupBox.pollTimer = nil
             }
         }
-        pollTimer = timer
+        cleanupBox.pollTimer = timer
         timer.resume()
+    }
+}
+
+/// 线程安全清理容器：在 deinit 阶段安全释放定时器与通知监听。
+private nonisolated final class AccessibilityServiceCleanupBox: @unchecked Sendable {
+    var pollTimer: DispatchSourceTimer?
+    var notificationObserver: (any NSObjectProtocol)?
+
+    deinit {
+        pollTimer?.cancel()
+        if let notificationObserver {
+            DistributedNotificationCenter.default().removeObserver(notificationObserver)
+        }
     }
 }

@@ -2,6 +2,52 @@ import AppKit
 import Combine
 import SwiftUI
 
+/// 自动管理 PinnedPanelController 外部资源生命周期的包装器。
+/// 安全不变式：在 deinit 时自动在主线程注销 NSEvent 监视器并在面板仍可见时通知 store。
+nonisolated private final class PinnedPanelCleanupBox: @unchecked Sendable {
+    private var localEventMonitor: Any?
+    private var globalEventMonitor: Any?
+    private weak var panel: NSPanel?
+    private weak var store: MonitorStore?
+
+    func setMonitors(local: Any?, global: Any?) {
+        localEventMonitor = local
+        globalEventMonitor = global
+    }
+
+    func setContext(panel: NSPanel, store: MonitorStore) {
+        self.panel = panel
+        self.store = store
+    }
+
+    deinit {
+        let local = localEventMonitor
+        let global = globalEventMonitor
+        let p = panel
+        let s = store
+
+        let cleanup = { @MainActor in
+            if let local { NSEvent.removeMonitor(local) }
+            if let global { NSEvent.removeMonitor(global) }
+            if let p, p.isVisible, let s {
+                s.panelDidDisappear(.pinned)
+            }
+        }
+
+        if Thread.isMainThread {
+            MainActor.assumeIsolated {
+                cleanup()
+            }
+        } else {
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    cleanup()
+                }
+            }
+        }
+    }
+}
+
 /// 快捷键面板控制器。默认是失焦即收的临时面板，钉住后才变为常驻窗口。
 @MainActor
 final class PinnedPanelController: NSObject, NSWindowDelegate {
@@ -15,8 +61,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private var hostingView: NSHostingView<AnyView>?
     private var glassHost: CompatiblePanelGlassHost?
     private var cancellables = Set<AnyCancellable>()
-    private var localEventMonitor: Any?
-    private var globalEventMonitor: Any?
+    private let cleanupBox = PinnedPanelCleanupBox()
 
     /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
     private let panelRefreshGate: PanelRefreshGate
@@ -44,6 +89,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         super.init()
 
         configurePanel()
+        cleanupBox.setContext(panel: panel, store: store)
         presentation.configure(
             togglePin: { [weak self] in self?.togglePin() },
             close: { [weak self] in self?.hide(resetPin: true) }
@@ -56,19 +102,6 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
                 self?.glassHost?.updateMaterial(liquidGlassEnabled: enabled)
             }
             .store(in: &cancellables)
-    }
-
-    deinit {
-        if let localEventMonitor {
-            NSEvent.removeMonitor(localEventMonitor)
-        }
-        if let globalEventMonitor {
-            NSEvent.removeMonitor(globalEventMonitor)
-        }
-        // 若面板仍可见,通知 store 移除引用。
-        if panel.isVisible {
-            store.panelDidDisappear(.pinned)
-        }
     }
 
     // MARK: - Setup
@@ -133,17 +166,18 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     }
 
     private func installEventMonitor() {
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+        let local = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self, event.window !== self.panel else { return event }
             self.dismissIfTransient()
             return event
         }
 
-        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+        let global = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             MainActor.assumeIsolated {
                 self?.dismissIfTransient()
             }
         }
+        cleanupBox.setMonitors(local: local, global: global)
     }
 
     private func updatePresentationMode() {

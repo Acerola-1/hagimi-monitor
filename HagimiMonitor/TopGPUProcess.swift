@@ -3,7 +3,9 @@ import Darwin
 import Foundation
 import IOKit
 
-struct TopGPUProcess: Identifiable, Equatable {
+/// TopGPUProcess 仅持有不可变的只读属性；所持有的 NSImage 为 ProcessIconCache 生成的固定位图，
+/// 跨线程传递用于视图绑定，不进行并发修改。
+struct TopGPUProcess: Identifiable, Equatable, @unchecked Sendable {
     let pid: pid_t
     let name: String
     /// 采样窗口内的 GPU 占用百分比(累计 GPU 时间增量 / 窗口时长)。
@@ -20,7 +22,7 @@ struct TopGPUProcess: Identifiable, Equatable {
     }
 }
 
-struct RawGPUProcess {
+struct RawGPUProcess: Sendable {
     let pid: pid_t
     let path: String
     let fallbackName: String
@@ -29,9 +31,9 @@ struct RawGPUProcess {
 }
 
 /// GPU 差分游标:自持上拍累计 GPU 时间快照,各使用方(面板 2s、统计 60s)各用
-/// 独立游标,互不截断对方的差分窗口。线程安全依赖每个游标只被 procSampleQueue
-/// 一条串行队列读写。
-final class GPUDeltaCursor {
+/// 独立游标,互不截断对方的差分窗口。
+/// 安全不变式：内部状态仅在串行队列（procSampleQueue）上读写，不存在跨线程并发修改。
+nonisolated final class GPUDeltaCursor: @unchecked Sendable {
     private var previous: (perPid: [pid_t: UInt64], timestamp: TimeInterval)?
 
     /// 后台采样 GPU 占用最高的 N 个进程。
@@ -99,7 +101,7 @@ final class GPUDeltaCursor {
 /// (AGXDeviceUserClient)在 AppUsage 属性里按图形 API 记录 accumulatedGPUTime。
 /// user client 不在 service plane,IOServiceMatching 匹配不到,须从 IOAccelerator
 /// 遍历子节点。纯 IORegistry 属性读取,无 user client open,沙盒下同样可用。
-private func gpuTimePerClientPid() -> [pid_t: (gpuTime: UInt64, api: String)] {
+nonisolated private func gpuTimePerClientPid() -> [pid_t: (gpuTime: UInt64, api: String)] {
     var iterator: io_iterator_t = 0
     guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOAccelerator"), &iterator) == KERN_SUCCESS else {
         return [:]
@@ -155,7 +157,7 @@ private func gpuTimePerClientPid() -> [pid_t: (gpuTime: UInt64, api: String)] {
 
 /// 用 NSRunningApplication(pid:) 为 GPU 采样结果补齐本地化名与 App 图标。
 /// 与 enrichCPU 同构,可在任意线程调用。
-func enrichGPU(_ rawProcesses: [RawGPUProcess]) -> [TopGPUProcess] {
+nonisolated func enrichGPU(_ rawProcesses: [RawGPUProcess]) -> [TopGPUProcess] {
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 

@@ -2,13 +2,20 @@ import Darwin
 import Foundation
 import OSLog
 
-final class MemorySampler: MonitorSampler {
+/// 采样器由 SystemMonitorSampler 持有并在串行采样循环中调用，内部状态单线程顺序更新。
+nonisolated final class MemorySampler: MonitorSampler, @unchecked Sendable {
     var kind: MonitorKind { .memory }
 
     // mach_host_self() 每次调用都会泄漏一个 host port 的 send right，累积到阈值会被
     // jetsam 静默 SIGKILL。缓存为 stored property，进程生命周期内只获取一次。
-    private let host = mach_host_self()
-    private lazy var totalMemorySize = memoryTotalSize()
+    private let host: mach_port_t
+    private let totalMemorySize: Double
+
+    init() {
+        let hostPort = mach_host_self()
+        self.host = hostPort
+        self.totalMemorySize = Self.memoryTotalSize(host: hostPort)
+    }
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         var stats = vm_statistics64()
@@ -24,7 +31,7 @@ final class MemorySampler: MonitorSampler {
             return placeholderModule(.memory, summary: String(localized: "sampler.unavailable"))
         }
 
-        let pageSize = Double(vm_kernel_page_size)
+        let pageSize = Double(getpagesize())
         let active = Double(stats.active_count) * pageSize
         let speculative = Double(stats.speculative_count) * pageSize
         let inactive = Double(stats.inactive_count) * pageSize
@@ -80,7 +87,7 @@ final class MemorySampler: MonitorSampler {
         )
     }
 
-    private func memoryTotalSize() -> Double {
+    private static func memoryTotalSize(host: mach_port_t) -> Double {
         var info = host_basic_info()
         var count = mach_msg_type_number_t(MemoryLayout<host_basic_info_data_t>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &info) {
@@ -149,7 +156,7 @@ final class MemorySampler: MonitorSampler {
     }
 }
 
-private enum MemoryPressureState {
+nonisolated private enum MemoryPressureState: Sendable {
     case normal
     case warning
     case critical
@@ -165,7 +172,7 @@ private enum MemoryPressureState {
     }
 }
 
-private struct SwapUsage {
+nonisolated private struct SwapUsage: Sendable {
     let used: Double
     let total: Double
     let available: Double

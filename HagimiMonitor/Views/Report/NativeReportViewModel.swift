@@ -171,7 +171,9 @@ final class ReportLiveHardwareSource: ObservableObject {
         }
         guard timer == nil else { return }
         let newTimer = Timer(timeInterval: interval, repeats: true) { [weak self] _ in
-            self?.timerDidFire()
+            MainActor.assumeIsolated {
+                self?.timerDidFire()
+            }
         }
         newTimer.tolerance = tolerance
         timer = newTimer
@@ -268,45 +270,28 @@ final class NativeReportViewModel: ObservableObject {
 
         let now = Date()
         let recordDays = recorder.recordDays
-        let processStore = recorder.processStore
         let targetRange = selectedRange
+        let dataProvider = recorder.reportDataProvider()
+        // ProcessAlertCenter 是 MainActor 状态;只复制不可变值,后台不直接访问它。
+        let alertSnapshot = ProcessAlertCenter.shared.activeAlerts + ProcessAlertCenter.shared.recentAlerts
+        // NSScreen 只能在 MainActor 读取;这里只复制轻量值,重型硬件探针仍在后台。
+        let screenSnapshots = DisplaySection.captureScreenSnapshots()
 
         loadTask?.cancel()
         loadTask = Task.detached(priority: .userInitiated) { [weak self] in
-            // 后台拉取数据库分/时/日快照
-            guard let rows = recorder.reportSnapshot(now: now) else {
+            guard let input = dataProvider.load(now: now, alerts: alertSnapshot) else {
+                guard !Task.isCancelled else { return }
                 await MainActor.run {
                     guard let self, self.currentRequestID == requestID, !self.isClosed else { return }
                     self.isLoading = false
                 }
                 return
             }
-
-            // 先刷新累加器再取进程快照
-            processStore?.flush()
-            let processData: ReportProcessData? = {
-                guard let store = processStore else { return nil }
-                let calendar = Calendar.current
-                let fromDay = StatisticsProcessStore.dayKey(now.addingTimeInterval(-59 * 86400), calendar: calendar)
-                let toDay = StatisticsProcessStore.dayKey(now, calendar: calendar)
-                let rawIdentities = store.identities()
-                var idDict: [String: ReportAppIdentity] = [:]
-                for id in rawIdentities {
-                    idDict[id.appKey] = ReportAppIdentity(appKey: id.appKey, name: id.name, iconPNG: id.iconPNG)
-                }
-                let dailyRows = store.dailyRows(fromDay: fromDay, toDay: toDay)
-                let battery = store.batteryHistory()
-                let alerts = ProcessAlertCenter.shared.activeAlerts + ProcessAlertCenter.shared.recentAlerts
-                return ReportProcessData(
-                    identities: idDict,
-                    dailyRows: dailyRows,
-                    batteryHistory: battery,
-                    alerts: alerts
-                )
-            }()
+            guard !Task.isCancelled else { return }
 
             // 硬件清单采集 (约 2 秒耗时操作，务必在后台执行)
-            let hardware = HardwareInventoryReader().capture()
+            let hardware = HardwareInventoryReader().capture(
+                screenSnapshots: screenSnapshots)
 
             let meta = ReportMeta(
                 deviceName: StandaloneHTMLReportExporter.deviceName(),
@@ -320,10 +305,10 @@ final class NativeReportViewModel: ObservableObject {
             let fullSnapshot = ReportSnapshot(
                 capturedAt: now,
                 meta: meta,
-                minutes: rows.minutes,
-                hours: rows.hours,
-                days: rows.days,
-                process: processData,
+                minutes: input.minutes,
+                hours: input.hours,
+                days: input.days,
+                process: input.process,
                 hardware: hardware
             )
 

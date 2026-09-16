@@ -24,12 +24,12 @@ enum ReportWindowPresenter {
     private static let contentRect = NSRect(x: 0, y: 0, width: 1380, height: 880)
     private static let windowStyleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
 
-    /// 打开原生硬件报表窗口；带 anchor 时加载完成后定位对应板块。
+    /// 打开原生硬件报表窗口；窗口先显示,数据快照在后台加载完成后更新内容。
     static func open(recorder: StatisticsRecorder, anchor: StatisticsReportAnchor? = nil) {
         let win = ensureWindow(recorder: recorder)
         win.appearance = AppDelegate.shared?.store.settings.themePreference.appearance
-        viewModel?.load(anchor: anchor)
         focus(win)
+        viewModel?.load(anchor: anchor)
         windowDelegate?.refreshVisibility()
     }
 
@@ -227,6 +227,21 @@ enum ReportWindowPresenter {
     }
 }
 
+/// 自动管理多个 NotificationCenter 观察者生命周期的包装器。
+/// 安全不变式：在 deinit 时自动注销所有观察者，避免在 MainActor 隔离类的 deinit 中访问非 Sendable 数组。
+nonisolated private final class NotificationObserversBox: @unchecked Sendable {
+    private var observers: [any NSObjectProtocol] = []
+
+    func add(_ observer: any NSObjectProtocol) {
+        observers.append(observer)
+    }
+
+    deinit {
+        let center = NotificationCenter.default
+        observers.forEach(center.removeObserver)
+    }
+}
+
 /// 报表窗口代理：负责尺寸限制、关窗清理与可见性状态门控。
 @MainActor
 final class ReportWindowDelegate: NSObject, NSWindowDelegate {
@@ -235,7 +250,7 @@ final class ReportWindowDelegate: NSObject, NSWindowDelegate {
     private let onClose: () -> Void
     private let onVisibilityChange: ((Bool) -> Void)?
     private weak var window: NSWindow?
-    private var applicationObservers: [NSObjectProtocol] = []
+    private let observersBox = NotificationObserversBox()
     private var lastVisibility = false
 
     init(
@@ -251,7 +266,7 @@ final class ReportWindowDelegate: NSObject, NSWindowDelegate {
         super.init()
         let center = NotificationCenter.default
         for name in [NSApplication.didHideNotification, NSApplication.didUnhideNotification] {
-            applicationObservers.append(center.addObserver(
+            observersBox.add(center.addObserver(
                 forName: name,
                 object: NSApp,
                 queue: .main
@@ -261,11 +276,6 @@ final class ReportWindowDelegate: NSObject, NSWindowDelegate {
                 }
             })
         }
-    }
-
-    deinit {
-        let center = NotificationCenter.default
-        applicationObservers.forEach(center.removeObserver)
     }
 
     func attach(to window: NSWindow) {

@@ -10,7 +10,7 @@ import Metal
 /// **传感器一类的渠道差异**:温度与风扇走 SMC,沙盒渠道 `IOServiceOpen(AppleSMC)`
 /// 被拒(SMCReader 的 init 直接返 nil),因此本类在 App Store 版自然为空、
 /// 整个分类不会出现在菜单里;直连版才看得到。这是有意为之,不是漏做。
-extension HardwareInventoryReader {
+nonisolated extension HardwareInventoryReader {
 
     // MARK: - GPU
 
@@ -83,10 +83,14 @@ extension HardwareInventoryReader {
 
     // MARK: - 显示器
 
-    /// 显示器规格直接用项目已有的 `DisplaySection.collectDisplays()`
+    /// 显示器规格直接用项目已有的 `DisplaySection.collectDisplays(screenSnapshots:)`
     /// (它已经处理了 EDID 解析、位深链路、色域、HDR 能力、制造日期这些细节),
+    /// 由调用方在 MainActor 轻量复制 NSScreen 值后传入,重型探针保持在后台执行。
     /// 不再自己去解 `spdisplays_ndrvs`——实测那条路上的制造日期是 0、像素分辨率是个丑值。
-    func displayCategory(_ displays: [[String: Any]]?) -> HardwareCategory {
+    func displayCategory(
+        _ displays: [[String: Any]]?,
+        screenSnapshots: [DisplayScreenSnapshot] = []
+    ) -> HardwareCategory {
         let gpu = displays?.first
         let chip = HardwareFactGroup(id: "chipset", name: .key("hwGroupChipset"), facts: [
             HardwareFact(label: .key("hwLabelChipsetModel"), value: text(gpu, "sppci_model")),
@@ -95,7 +99,8 @@ extension HardwareInventoryReader {
             HardwareFact(label: .key("hwLabelMetalSupport"), value: metalFamily(text(gpu, "spdisplays_mtlgpufamilysupport"))),
         ])
 
-        let screens = DisplaySection.collectDisplays().map { display -> HardwareFactGroup in
+        let rawScreens = DisplaySection.collectDisplays(screenSnapshots: screenSnapshots)
+        let screens = rawScreens.map { display -> HardwareFactGroup in
             var facts: [HardwareFact] = [
                 HardwareFact(label: .key("hwLabelName"), value: display.name),
                 HardwareFact(label: .key("hwLabelType"), value: display.isBuiltIn ? hwText("hwValueBuiltin") : hwText("hwValueExternal")),
@@ -475,7 +480,7 @@ extension HardwareInventoryReader {
 
 // MARK: - 传感器（仅直连渠道）
 
-extension HardwareInventoryReader {
+nonisolated extension HardwareInventoryReader {
     /// 温度域 + 风扇。**沙盒渠道 `SMCReader()` 直接返 nil**,整类不出现——
     /// 温度与风扇在 App Store 版没有公开替代源(热压力走 ProcessInfo.thermalState,
     /// 不属于硬件规格),这一点在数据源文档里已确认过。

@@ -2,27 +2,32 @@ import AppKit
 import Charts
 import SwiftUI
 
+/// 线程安全的 DateFormatter 包装器。
+/// 安全不变式：通过内部私有 NSLock 互斥保护底层 DateFormatter 的并发格式化调用。
+nonisolated private final class ThreadSafeDateFormatter: @unchecked Sendable {
+    private let lock = NSLock()
+    private let formatter: DateFormatter
+
+    init(dateFormat: String) {
+        let df = DateFormatter()
+        df.dateFormat = dateFormat
+        self.formatter = df
+    }
+
+    func string(from date: Date) -> String {
+        lock.lock()
+        defer { lock.unlock() }
+        return formatter.string(from: date)
+    }
+}
+
 /// 报表通用 UI 辅助组件与格式化工具。
 enum ReportUIHelper {
     // MARK: - 静态格式化器缓存（线程安全，消除每秒重复构造开销）
 
-    private static let shortDateFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.dateFormat = "MM-dd"
-        return df
-    }()
-
-    private static let dateTimeFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.dateFormat = "MM-dd HH:mm"
-        return df
-    }()
-
-    private static let timeOnlyFormatter: DateFormatter = {
-        let df = DateFormatter()
-        df.dateFormat = "HH:mm"
-        return df
-    }()
+    nonisolated private static let shortDateFormatter = ThreadSafeDateFormatter(dateFormat: "MM-dd")
+    nonisolated private static let dateTimeFormatter = ThreadSafeDateFormatter(dateFormat: "MM-dd HH:mm")
+    nonisolated private static let timeOnlyFormatter = ThreadSafeDateFormatter(dateFormat: "HH:mm")
 
     // MARK: - 通用配色（对齐 MonitorPalette 语义）
 
@@ -41,19 +46,19 @@ enum ReportUIHelper {
 
     // MARK: - 格式化函数
 
-    static func formatDateShort(_ date: Date) -> String {
+    nonisolated static func formatDateShort(_ date: Date) -> String {
         shortDateFormatter.string(from: date)
     }
 
-    static func formatDateTime(_ date: Date) -> String {
+    nonisolated static func formatDateTime(_ date: Date) -> String {
         dateTimeFormatter.string(from: date)
     }
 
-    static func formatTimeOnly(_ date: Date) -> String {
+    nonisolated static func formatTimeOnly(_ date: Date) -> String {
         timeOnlyFormatter.string(from: date)
     }
 
-    static func formatBytesRate(_ bytesPerSec: Double) -> String {
+    nonisolated static func formatBytesRate(_ bytesPerSec: Double) -> String {
         guard bytesPerSec > 0 else { return "0 B/s" }
         let mbs = bytesPerSec / (1024 * 1024)
         if mbs >= 1024 {
@@ -70,7 +75,7 @@ enum ReportUIHelper {
         }
     }
 
-    static func formatBytes(_ bytes: Double) -> String {
+    nonisolated static func formatBytes(_ bytes: Double) -> String {
         guard bytes > 0 else { return "0 B" }
         let gb = bytes / (1024 * 1024 * 1024)
         if gb >= 1024 {
@@ -87,7 +92,7 @@ enum ReportUIHelper {
         }
     }
 
-    static func formatHours(_ seconds: Double) -> String {
+    nonisolated static func formatHours(_ seconds: Double) -> String {
         let h = seconds / 3600.0
         if h >= 1.0 {
             return String(format: "%.1fh", h)

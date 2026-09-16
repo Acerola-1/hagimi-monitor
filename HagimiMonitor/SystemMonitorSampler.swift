@@ -1,11 +1,11 @@
 import Foundation
 import OSLog
 
-struct SystemMonitorSnapshot {
+struct SystemMonitorSnapshot: Sendable {
     var modules: [MonitorModule]
 }
 
-final class SystemMonitorSampler {
+nonisolated final class SystemMonitorSampler: Sendable {
     private let samplers: [MonitorKind: MonitorSampler] = [
         .cpu: CPUSampler(),
         .gpu: GPUSampler(),
@@ -68,12 +68,12 @@ final class SystemMonitorSampler {
         kinds: Set<MonitorKind>,
         previousModules: [MonitorModule],
         on queue: DispatchQueue,
-        completion: @escaping (Result<SystemMonitorSnapshot, SamplingError>) -> Void
+        completion: @escaping @MainActor @Sendable (Result<SystemMonitorSnapshot, SamplingError>) -> Void
     ) {
         queue.async { [weak self] in
             guard let self else { return }
             let result = self.sample(kinds: kinds, previousModules: previousModules)
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 completion(result)
             }
         }

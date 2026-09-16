@@ -461,7 +461,7 @@ struct PowerFlowDiagram: View {
 
 /// 充电上限旗标形状:顶端倒三角旗头(底边在上、尖朝下) + 自旗头尖端下探的
 /// 细圆头竖线,单一填充色整形绘制。
-private struct LimitFlagShape: Shape {
+nonisolated private struct LimitFlagShape: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
         let headHeight: CGFloat = 5

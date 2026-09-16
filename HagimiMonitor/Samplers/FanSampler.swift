@@ -4,7 +4,7 @@ import OSLog
 
 /// 风扇 SMC 读取协议:抽象出 FanSampler 依赖的最小接口,便于单元测试注入 mock。
 /// SMCReader 已符合此协议(fanCount / allFans 签名匹配)。
-protocol FanSMCReading: AnyObject {
+nonisolated protocol FanSMCReading: AnyObject, Sendable {
     /// 读 SMC key `FNum`,返回机器物理风扇数;无风扇或读取失败返回 nil。
     func fanCount() -> Int?
     /// 读取所有风扇的当前 RPM 与 min/max 范围。返回数组长度 = fanCount。

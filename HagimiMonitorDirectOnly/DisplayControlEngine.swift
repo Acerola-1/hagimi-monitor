@@ -2,7 +2,7 @@ import CoreGraphics
 import Foundation
 import OSLog
 
-private let engineLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "DisplayEngine")
+private nonisolated let engineLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "DisplayEngine")
 
 /// 显示器控制编排引擎(D1/D2/D3/D4 的执行基座)。
 ///
@@ -11,8 +11,8 @@ private let engineLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", c
 /// 全局单 in-flight transaction 使底层请求有界,门禁抑制的目标留在调度器槽内并在恢复后重放;
 /// 传输、时钟均可注入,测试不触碰真实显示器。
 ///
-/// 线程模型:引擎状态由单串行队列独占;快照发布走主线程外的主消费方。
-nonisolated final class DisplayControlEngine {
+/// 线程模型:引擎内部所有状态完全由单串行队列 `queue` 独占保护，对外提供异步线程安全接口。
+nonisolated final class DisplayControlEngine: @unchecked Sendable {
     let clock: MonotonicClock
     private let transport: DDCTransport
     private let queue = DispatchQueue(label: "hagimi.ddc.engine")
@@ -65,9 +65,9 @@ nonisolated final class DisplayControlEngine {
         var channelStalled = false
     }
 
-    private var onSnapshot: ((Snapshot) -> Void)?
+    private var onSnapshot: (@Sendable (Snapshot) -> Void)?
 
-    func setSnapshotHandler(_ handler: @escaping (Snapshot) -> Void) {
+    func setSnapshotHandler(_ handler: @escaping @Sendable (Snapshot) -> Void) {
         queue.async {
             self.onSnapshot = handler
         }
@@ -147,8 +147,8 @@ nonisolated final class DisplayControlEngine {
     func enqueueWrite(token: UUID, control: DisplayControlKind, value: Double, final: Bool) {
         guard value.isFinite else { return }
         let clamped = min(100, Swift.max(0, value))
-        queue.async {
-            guard self.connections[token] != nil else { return }
+        queue.async { [weak self] in
+            guard let self, self.connections[token] != nil else { return }
             self.nextRequestID += 1
             let requestID = self.nextRequestID
             self.pendingWrites[token, default: [:]][control] = PendingWrite(value: clamped)
@@ -203,10 +203,10 @@ nonisolated final class DisplayControlEngine {
 
     // MARK: - 门禁(D4/5.x)
 
-    private var gateProvider: (() -> Bool)?
-    func setGateProvider(_ provider: @escaping () -> Bool) {
-        queue.async {
-            self.gateProvider = provider
+    private var gateProvider: (@Sendable () -> Bool)?
+    func setGateProvider(_ provider: @escaping @Sendable () -> Bool) {
+        queue.async { [weak self] in
+            self?.gateProvider = provider
         }
     }
 

@@ -2,21 +2,48 @@ import AppKit
 import Combine
 import SwiftUI
 
+/// 自动管理 Timer 生命周期的包装器。
+/// 安全不变式：在 deinit 时确保底层 Timer 在主线程安全完成 invalidate，避免内存泄漏与并发冲突。
+nonisolated private final class ScheduledTimerBox: @unchecked Sendable {
+    private var timer: Timer?
+
+    init(_ timer: Timer) {
+        self.timer = timer
+    }
+
+    func invalidate() {
+        timer?.invalidate()
+        timer = nil
+    }
+
+    deinit {
+        let t = timer
+        if let t {
+            if Thread.isMainThread {
+                t.invalidate()
+            } else {
+                DispatchQueue.main.async {
+                    t.invalidate()
+                }
+            }
+        }
+    }
+}
+
 /// 面板 header 小猫「客串」彩蛋的状态机（致敬 RunCat）。
 ///
 /// 每次面板由隐藏变为可见时，以 `spawnProbability` 概率让一只小猫在 header 空白区滑入、
 /// 原地跑步（固定待机帧率）。点一下即弹 RunCat 致谢卡片。小猫不定时退场、
 /// 也不因看完弹窗而退场——一直保持到面板关闭时（`panelDidDisappear`）才消失。
 ///
-/// 不标 `@MainActor`：与 `MenuBarLoadAnimator` 一致，所有 Timer 都排在 `RunLoop.main`、
-/// 在主线程推进 `@Published`，避免 Swift 并发隔离对 Timer 闭包的额外约束。
+/// 模型由主线程持有；Timer 固定排在 `RunLoop.main`，回调直接在 MainActor 上推进状态。
 final class HeaderCatCameoModel: ObservableObject {
     @Published private(set) var isVisible = false
     @Published private(set) var frameIndex = 0
     /// 致谢卡片是否展示。由视图层双向绑定（点击关闭按钮置回 false）。
     @Published var showThanks = false
 
-    private var frameTimer: Timer?
+    private var frameTimerBox: ScheduledTimerBox?
 
     /// 每次面板打开时的客串触发概率（设计定稿值）。
     static let spawnProbability = 0.05
@@ -53,22 +80,20 @@ final class HeaderCatCameoModel: ObservableObject {
     private func retire() {
         isVisible = false
         frameIndex = 0
-        frameTimer?.invalidate()
-        frameTimer = nil
+        frameTimerBox?.invalidate()
+        frameTimerBox = nil
     }
 
     private func startFrameTimer() {
-        frameTimer?.invalidate()
+        frameTimerBox?.invalidate()
         let timer = Timer(timeInterval: Self.idleFrameInterval, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.frameIndex = (self.frameIndex + 1) % MenuBarCatIcon.frameCount
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.frameIndex = (self.frameIndex + 1) % MenuBarCatIcon.frameCount
+            }
         }
         RunLoop.main.add(timer, forMode: .common)
-        frameTimer = timer
-    }
-
-    deinit {
-        frameTimer?.invalidate()
+        frameTimerBox = ScheduledTimerBox(timer)
     }
 }
 

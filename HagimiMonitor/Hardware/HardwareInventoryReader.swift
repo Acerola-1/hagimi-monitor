@@ -10,7 +10,7 @@ import Foundation
 /// (Metal、NVMe、CoreWLAN 等),传感器走 SMC 且**仅直连版可读**,分后续增量补。
 ///
 /// 缺失一律写 nil,由渲染端显示 `—`。
-final class HardwareInventoryReader {
+nonisolated final class HardwareInventoryReader {
     /// 共享执行器:缓存跨报表生成复用(见 `SystemProfilerRunner.shared`)。
     private let profiler = SystemProfilerRunner.shared
 
@@ -63,15 +63,16 @@ final class HardwareInventoryReader {
     }
 
     /// 分类顺序即报表「本机」菜单的顺序,与左栏模块顺序对齐。
-    func capture() -> HardwareInventory {
+    func capture(screenSnapshots: [DisplayScreenSnapshot]? = nil) -> HardwareInventory {
         let items = profiler.capture(Self.dataTypes)
+        let snapshots = screenSnapshots ?? Self.screenSnapshotsForCurrentThread()
         var categories: [HardwareCategory] = [
             thisMac(items["SPHardwareDataType"]?.first),
             cpu(),
             gpuCategory(items["SPDisplaysDataType"]),
             memory(items["SPMemoryDataType"]?.first),
             storageCategory(items),
-            displayCategory(items["SPDisplaysDataType"]),
+            displayCategory(items["SPDisplaysDataType"], screenSnapshots: snapshots),
             powerCategory(items),
             connectivityCategory(items),
             system(items["SPSoftwareDataType"]?.first,
@@ -89,6 +90,13 @@ final class HardwareInventoryReader {
         return HardwareInventory(categories: categories,
                                  rails: rails(from: categories),
                                  capturedAt: Date())
+    }
+
+    /// 兼容直接调用方(主要是硬件测试):只有当前已在主线程时才读取 NSScreen;
+    /// 后台生产路径由报表入口预先传入快照,绝不同步等待 MainActor。
+    private static func screenSnapshotsForCurrentThread() -> [DisplayScreenSnapshot] {
+        guard Thread.isMainThread else { return [] }
+        return MainActor.assumeIsolated { DisplaySection.captureScreenSnapshots() }
     }
 
     // MARK: - 本机

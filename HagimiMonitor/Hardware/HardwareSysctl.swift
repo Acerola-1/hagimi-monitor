@@ -7,7 +7,7 @@ import Foundation
 /// UsageReporter),这里抽一份共用的,新代码不再各写一套。
 ///
 /// 语义:读不到一律返 nil,由调用方按「缺失」显示,不用 0 或默认值兜底。
-enum HardwareSysctl {
+nonisolated enum HardwareSysctl {
     /// 字符串型(如 `machdep.cpu.brand_string` / `hw.model`)。
     static func string(_ name: String) -> String? {
         var size = 0

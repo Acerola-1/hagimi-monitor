@@ -3,7 +3,8 @@ import IOKit
 import DiskArbitration
 import OSLog
 
-final class StorageSampler: MonitorSampler {
+/// 采样器由 SystemMonitorSampler 持有并在串行采样循环中调用，内部状态单线程顺序更新。
+nonisolated final class StorageSampler: MonitorSampler, @unchecked Sendable {
     var kind: MonitorKind { .storage }
 
     private var previousDiskIO: (bytesRead: Int64, bytesWritten: Int64, timestamp: Date)?

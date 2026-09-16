@@ -5,25 +5,30 @@ import Foundation
 /// 挂到门禁上,并在停止/析构时摘除。回调由门禁在主线程、且在抑制窗口结束后触发。
 @MainActor
 final class DisplayChangeObserver {
-    // deinit 为非隔离上下文,需在其中摘除订阅;token 仅在主线程读写,
-    // 标 nonisolated(unsafe) 以规避 Swift 6 严格并发告警(摘除操作本身线程安全)。
-    private nonisolated(unsafe) var token: UUID?
+    private let cleanupBox = DisplayChangeObserverCleanupBox()
 
-    func start(onChange: @escaping () -> Void) {
-        guard token == nil else { return }
-        token = DDCEnvironmentGate.shared.addChangeHandler(onChange)
+    func start(onChange: @escaping @Sendable () -> Void) {
+        guard cleanupBox.token == nil else { return }
+        cleanupBox.token = DDCEnvironmentGate.shared.addChangeHandler(onChange)
     }
 
     func stop() {
+        cleanupBox.cleanup()
+    }
+}
+
+/// 线程安全清理容器：在 deinit 阶段注销 DDCEnvironmentGate 的变更监听。
+private nonisolated final class DisplayChangeObserverCleanupBox: @unchecked Sendable {
+    var token: UUID?
+
+    nonisolated func cleanup() {
         if let token {
             DDCEnvironmentGate.shared.removeChangeHandler(token)
         }
-        token = nil
+        self.token = nil
     }
 
     deinit {
-        if let token {
-            DDCEnvironmentGate.shared.removeChangeHandler(token)
-        }
+        cleanup()
     }
 }

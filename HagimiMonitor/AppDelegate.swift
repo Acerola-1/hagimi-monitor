@@ -121,7 +121,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSApplication.willTerminateNotification,
             object: nil,
             queue: .main
-        ) { [weak self] _ in
+        ) { _ in
             MainActor.assumeIsolated {
                 AppLaunchStateTracker.shared.markCleanExit()
                 AppLogStore.shared.flush()

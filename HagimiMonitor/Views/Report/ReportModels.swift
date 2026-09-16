@@ -4,7 +4,7 @@ import SwiftUI
 // MARK: - 时间与粒度
 
 /// 报表时间范围预设
-enum ReportTimeRange: Sendable, Hashable {
+nonisolated enum ReportTimeRange: Sendable, Hashable {
     case today
     case week
     case month
@@ -43,7 +43,7 @@ enum ReportTimeRange: Sendable, Hashable {
 }
 
 /// 报表数据源粒度
-enum ReportSourceGranularity: String, Sendable, Equatable {
+nonisolated enum ReportSourceGranularity: String, Sendable, Equatable {
     case minutes
     case hours
     case days
@@ -68,7 +68,7 @@ enum ReportSourceGranularity: String, Sendable, Equatable {
 // MARK: - 基础快照
 
 /// 报表元信息
-struct ReportMeta: Sendable, Equatable {
+nonisolated struct ReportMeta: Sendable, Equatable {
     let deviceName: String
     let modelName: String
     let osVersion: String
@@ -78,14 +78,14 @@ struct ReportMeta: Sendable, Equatable {
 }
 
 /// 应用标识与图标数据
-struct ReportAppIdentity: Sendable, Equatable {
+nonisolated struct ReportAppIdentity: Sendable, Equatable {
     let appKey: String
     let name: String
     let iconPNG: Data?
 }
 
 /// 进程统计与告警快照
-struct ReportProcessData: Sendable {
+nonisolated struct ReportProcessData: Sendable {
     let identities: [String: ReportAppIdentity]
     let dailyRows: [StatisticsProcessStore.DailyAppRow]
     let batteryHistory: [StatisticsProcessStore.BatteryPoint]
@@ -93,7 +93,7 @@ struct ReportProcessData: Sendable {
 }
 
 /// 打开报表时一次性后台拉取的完整快照
-struct ReportSnapshot: Sendable {
+nonisolated struct ReportSnapshot: Sendable {
     let capturedAt: Date
     let meta: ReportMeta
     let minutes: [StatisticsRow]
@@ -106,7 +106,7 @@ struct ReportSnapshot: Sendable {
 // MARK: - 聚合展示模型
 
 /// 负载分布统计（5 个档位）
-struct ReportDistribution: Sendable, Equatable {
+nonisolated struct ReportDistribution: Sendable, Equatable {
     struct Bucket: Sendable, Equatable {
         let index: Int
         let label: String
@@ -122,7 +122,7 @@ struct ReportDistribution: Sendable, Equatable {
 }
 
 /// 带断点支持的时间序列点
-struct ReportTimeSeriesPoint: Sendable, Equatable, Identifiable {
+nonisolated struct ReportTimeSeriesPoint: Sendable, Equatable, Identifiable {
     let id: String
     let date: Date
     let seriesID: String
@@ -131,7 +131,7 @@ struct ReportTimeSeriesPoint: Sendable, Equatable, Identifiable {
 }
 
 /// CPU 模块指标
-struct ReportCpuMetrics: Sendable, Equatable {
+nonisolated struct ReportCpuMetrics: Sendable, Equatable {
     let avgUsage: Double?
     let peakUsage: Double?
     let peakTime: Date?
@@ -144,7 +144,7 @@ struct ReportCpuMetrics: Sendable, Equatable {
 }
 
 /// GPU 模块指标
-struct ReportGpuMetrics: Sendable, Equatable {
+nonisolated struct ReportGpuMetrics: Sendable, Equatable {
     let avgUsage: Double?
     let peakUsage: Double?
     let memUsedAvg: Double?
@@ -154,7 +154,7 @@ struct ReportGpuMetrics: Sendable, Equatable {
 }
 
 /// 内存模块指标
-struct ReportMemoryMetrics: Sendable, Equatable {
+nonisolated struct ReportMemoryMetrics: Sendable, Equatable {
     let usedAvgBytes: Double?
     let compressedAvgBytes: Double?
     let swapAvgBytes: Double?
@@ -165,7 +165,7 @@ struct ReportMemoryMetrics: Sendable, Equatable {
 }
 
 /// 网络模块指标
-struct ReportNetworkMetrics: Sendable, Equatable {
+nonisolated struct ReportNetworkMetrics: Sendable, Equatable {
     struct DailyBar: Sendable, Equatable, Identifiable {
         let id: String
         let date: Date
@@ -182,7 +182,7 @@ struct ReportNetworkMetrics: Sendable, Equatable {
 }
 
 /// 磁盘模块指标
-struct ReportDiskMetrics: Sendable, Equatable {
+nonisolated struct ReportDiskMetrics: Sendable, Equatable {
     struct DailyBar: Sendable, Equatable, Identifiable {
         let id: String
         let date: Date
@@ -199,13 +199,13 @@ struct ReportDiskMetrics: Sendable, Equatable {
 }
 
 /// 电源与功耗指标
-struct ReportPowerMetrics: Sendable, Equatable {
+nonisolated struct ReportPowerMetrics: Sendable, Equatable {
     let avgPowerWatts: Double?
     let peakPowerWatts: Double?
 }
 
 /// 电池与健康指标
-struct ReportBatteryMetrics: Sendable, Equatable {
+nonisolated struct ReportBatteryMetrics: Sendable, Equatable {
     struct DailyHealth: Sendable, Equatable, Identifiable {
         let id: Int64
         let day: Int64
@@ -224,7 +224,7 @@ struct ReportBatteryMetrics: Sendable, Equatable {
 }
 
 /// 热压力与风扇指标
-struct ReportThermalMetrics: Sendable, Equatable {
+nonisolated struct ReportThermalMetrics: Sendable, Equatable {
     let cpuThermalAvg: Double?
     let cpuTempAvg: Double?
     let fanAvgRPM: Double?
@@ -234,7 +234,7 @@ struct ReportThermalMetrics: Sendable, Equatable {
 }
 
 /// 单个应用聚合排行条目
-struct ReportAppRankingItem: Sendable, Equatable, Identifiable {
+nonisolated struct ReportAppRankingItem: Sendable, Equatable, Identifiable {
     let id: String
     let appKey: String
     let name: String
@@ -245,7 +245,7 @@ struct ReportAppRankingItem: Sendable, Equatable, Identifiable {
 }
 
 /// 各类应用排行聚合
-struct ReportAppRankings: Sendable, Equatable {
+nonisolated struct ReportAppRankings: Sendable, Equatable {
     let cpuList: [ReportAppRankingItem]
     let memList: [ReportAppRankingItem]
     let gpuList: [ReportAppRankingItem]
@@ -258,7 +258,7 @@ struct ReportAppRankings: Sendable, Equatable {
 }
 
 /// 高负载告警按应用聚合组
-struct ReportHighLoadAppGroup: Sendable, Equatable, Identifiable {
+nonisolated struct ReportHighLoadAppGroup: Sendable, Equatable, Identifiable {
     let id: String
     let appKey: String
     let name: String
@@ -270,8 +270,8 @@ struct ReportHighLoadAppGroup: Sendable, Equatable, Identifiable {
 }
 
 /// 异常事件条目
-struct ReportEventItem: Sendable, Equatable, Identifiable {
-    enum Kind: Sendable, Equatable {
+nonisolated struct ReportEventItem: Sendable, Equatable, Identifiable {
+    nonisolated enum Kind: Sendable, Equatable {
         case memory
         case thermal
 
@@ -290,7 +290,7 @@ struct ReportEventItem: Sendable, Equatable, Identifiable {
         }
     }
 
-    enum State: Sendable, Equatable {
+    nonisolated enum State: Sendable, Equatable {
         case ongoing
         case interrupted
         case recovered
@@ -315,7 +315,7 @@ struct ReportEventItem: Sendable, Equatable, Identifiable {
 }
 
 /// 智能洞察条目
-struct ReportInsightItem: Sendable, Equatable, Identifiable {
+nonisolated struct ReportInsightItem: Sendable, Equatable, Identifiable {
     let id: String
     let systemIcon: String
     let colorName: String
@@ -324,7 +324,7 @@ struct ReportInsightItem: Sendable, Equatable, Identifiable {
 }
 
 /// 7x24 活动热力图单元格
-struct ReportHeatmapCell: Sendable, Equatable, Identifiable {
+nonisolated struct ReportHeatmapCell: Sendable, Equatable, Identifiable {
     let id: String
     let weekday: Int // 0=Sun, 1=Mon, ..., 6=Sat
     let hour: Int // 0..23
@@ -334,12 +334,12 @@ struct ReportHeatmapCell: Sendable, Equatable, Identifiable {
 }
 
 /// 活动热力图数据
-struct ReportHeatmapData: Sendable, Equatable {
+nonisolated struct ReportHeatmapData: Sendable, Equatable {
     let cells: [ReportHeatmapCell]
 }
 
 /// 每日汇总聚合表条目
-struct ReportDailySummaryRow: Sendable, Equatable, Identifiable {
+nonisolated struct ReportDailySummaryRow: Sendable, Equatable, Identifiable {
     let id: Int64
     let date: Date
     let dayKey: String
@@ -357,7 +357,7 @@ struct ReportDailySummaryRow: Sendable, Equatable, Identifiable {
 }
 
 /// 当前激活范围的完整聚合视图模型（纯数据，不可变）
-struct ReportActiveRangeModel: Sendable, Equatable {
+nonisolated struct ReportActiveRangeModel: Sendable, Equatable {
     let range: ReportTimeRange
     let granularity: ReportSourceGranularity
     let from: Date
@@ -388,6 +388,6 @@ struct ReportActiveRangeModel: Sendable, Equatable {
     var hasData: Bool { !rows.isEmpty }
 }
 
-extension StatisticsRow: Identifiable {
+nonisolated extension StatisticsRow: Identifiable {
     public var id: Int64 { t }
 }

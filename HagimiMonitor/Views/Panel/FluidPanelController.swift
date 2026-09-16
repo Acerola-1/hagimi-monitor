@@ -17,6 +17,58 @@ import SwiftUI
 ///
 /// 动态图标:把 `MenuBarStatusLabel` 用 `ImageRenderer` 快照成 `NSImage` 赋给标准
 /// `NSStatusItem.button.image`(负载/采样变化时重刷)。走标准图路径而非子视图,是为了
+/// 自动管理 FluidPanelController 外部资源生命周期的包装器。
+/// 安全不变式：在 deinit 时自动在主线程失效 Timer/帧探针、注销 NSEvent 监视器以及移除 NSStatusItem。
+nonisolated private final class PanelCleanupBox: @unchecked Sendable {
+    private var autoTestTimer: Timer?
+    private var frameProbeTimer: DispatchSourceTimer?
+    private var localEventMonitor: Any?
+    private var globalEventMonitor: Any?
+    private var statusItem: NSStatusItem?
+
+    func setAutoTestTimer(_ timer: Timer?) {
+        autoTestTimer = timer
+    }
+
+    func setFrameProbeTimer(_ timer: DispatchSourceTimer?) {
+        frameProbeTimer?.cancel()
+        frameProbeTimer = timer
+    }
+
+    func setMonitors(local: Any?, global: Any?) {
+        localEventMonitor = local
+        globalEventMonitor = global
+    }
+
+    func setStatusItem(_ item: NSStatusItem) {
+        statusItem = item
+    }
+
+    deinit {
+        let timer = autoTestTimer
+        let frameProbe = frameProbeTimer
+        let local = localEventMonitor
+        let global = globalEventMonitor
+        let item = statusItem
+
+        if Thread.isMainThread {
+            timer?.invalidate()
+            frameProbe?.cancel()
+            if let local { NSEvent.removeMonitor(local) }
+            if let global { NSEvent.removeMonitor(global) }
+            if let item { NSStatusBar.system.removeStatusItem(item) }
+        } else {
+            DispatchQueue.main.async {
+                timer?.invalidate()
+                frameProbe?.cancel()
+                if let local { NSEvent.removeMonitor(local) }
+                if let global { NSEvent.removeMonitor(global) }
+                if let item { NSStatusBar.system.removeStatusItem(item) }
+            }
+        }
+    }
+}
+
 /// 让系统对「非活跃屏幕」自动变淡(与原生 app 一致);子视图路径拿不到逐屏 dimming。
 @MainActor
 final class FluidPanelController: NSObject, NSWindowDelegate {
@@ -24,7 +76,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private var awaitingGeometry = false
     private let store: MonitorStore
     /// 打开设置窗口的闭包。由外部注入,因为 `OpenSettingsAction` 只能在 SwiftUI 视图层获取。
-    private let openSettingsAction: () -> Void
+    private let openSettingsAction: @MainActor @Sendable () -> Void
 
     private let statusItem: NSStatusItem
     private let panel: NSPanel
@@ -34,14 +86,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
     private let panelRefreshGate: PanelRefreshGate
 
-    private var localEventMonitor: Any?
-    private var globalEventMonitor: Any?
+    private let cleanupBox = PanelCleanupBox()
     private var cancellables: Set<AnyCancellable> = []
-
-    /// 调试自动测试:环境变量 `HAGIMI_PANEL_AUTOTEST="<间隔秒>:<次数>"`(如 "2:12")
-    /// 时,启动后每间隔秒自动 toggle 一次面板,共次数次,用于内存/动画回归实测。
-    /// 未设置时零开销。
-    private var autoTestTimer: Timer?
 
     /// 内容侧最近一次上报的自然尺寸(未经封顶)。showPanel 用它定位首帧:
     /// hosting 的 sizingOptions 为空,intrinsicContentSize 不可靠,
@@ -83,7 +129,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     init(
         store: MonitorStore,
-        openSettings: @escaping () -> Void
+        openSettings: @escaping @MainActor @Sendable () -> Void
     ) {
         self.store = store
         self.openSettingsAction = openSettings
@@ -105,9 +151,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         configurePanel()
         configureStatusItem()
+        cleanupBox.setStatusItem(statusItem)
         installEventMonitors()
         startAutoTestIfNeeded()
     }
+
+    private var autoTestRemaining = 0
 
     private func startAutoTestIfNeeded() {
         guard let spec = ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] else { return }
@@ -115,21 +164,31 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         guard parts.count == 2,
               let interval = TimeInterval(parts[0]), interval > 0.5,
               let count = Int(parts[1]), count > 0 else { return }
-        var remaining = count
-        autoTestTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            remaining -= 1
-            if remaining <= 0 { timer.invalidate() }
-            self.togglePanel()
+        autoTestRemaining = count
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
+            var shouldStop = false
+            MainActor.assumeIsolated {
+                guard let self else {
+                    shouldStop = true
+                    return
+                }
+                self.autoTestRemaining -= 1
+                if self.autoTestRemaining <= 0 {
+                    shouldStop = true
+                }
+                self.togglePanel()
+            }
+            if shouldStop {
+                timer.invalidate()
+            }
         }
+        cleanupBox.setAutoTestTimer(timer)
         startFrameProbe()
     }
 
     /// 调试帧探针:主线程上以 4ms 目标间隔持续打卡,记录实际间隔。
     /// 展开动画(0.15s)期间若主线程被重绘/布局拖住,打卡间隔会显著拉大,
     /// 交给 `AutotestPerfMeter` 在度量窗口内累计为 slowframes 并逐帧打印。
-    private var frameProbeTimer: DispatchSourceTimer?
-
     private func startFrameProbe() {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now(), repeating: .milliseconds(4), leeway: .milliseconds(1))
@@ -146,19 +205,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             }
         }
         timer.resume()
-        frameProbeTimer = timer
-    }
-
-    deinit {
-        autoTestTimer?.invalidate()
-        frameProbeTimer?.cancel()
-        if let localEventMonitor {
-            NSEvent.removeMonitor(localEventMonitor)
-        }
-        if let globalEventMonitor {
-            NSEvent.removeMonitor(globalEventMonitor)
-        }
-        NSStatusBar.system.removeStatusItem(statusItem)
+        cleanupBox.setFrameProbeTimer(timer)
     }
 
     // MARK: - Setup
@@ -208,7 +255,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // hosting 也做圆角裁剪,否则 SwiftUI 内容(含 panelBackgroundColor 矩形)方角会溢出圆角。
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
-        hosting.layer?.cornerCurve = .continuous
+        hosting.layer?.cornerCurve = CALayerCornerCurve.continuous
         hosting.layer?.masksToBounds = true
         glassHost.setHostingView(hosting)
 
@@ -299,7 +346,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     private func installEventMonitors() {
         // 左键单击即时切换面板;右键弹出上下文菜单(含设置与退出)。
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+        let local = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self,
                   let button = self.statusItem.button,
                   event.window == button.window else {
@@ -326,11 +373,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         // 面板打开时点击外部区域:关闭面板。
-        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+        let global = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             guard let self, self.panel.isVisible || self.awaitingGeometry else { return }
             guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] == nil else { return }
             self.dismissPanel()
         }
+        cleanupBox.setMonitors(local: local, global: global)
     }
 
     // MARK: - Show / Hide
@@ -469,16 +517,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            guard let self, generation == self.dismissGeneration else { return }
-            self.panel.orderOut(nil)
-            self.panelMotion?.resetForHiddenPanel?()
-            self.panel.alphaValue = 1
-            self.statusItem.button?.highlight(false)
-            self.store.panelDidDisappear()
-            // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
-            // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
-            self.panelRefreshGate.close()
-            self.reclaimHiddenPanelResources()
+            MainActor.assumeIsolated {
+                guard let self, generation == self.dismissGeneration else { return }
+                self.panel.orderOut(nil)
+                self.panelMotion?.resetForHiddenPanel?()
+                self.panel.alphaValue = 1
+                self.statusItem.button?.highlight(false)
+                self.store.panelDidDisappear()
+                // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
+                // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
+                self.panelRefreshGate.close()
+                self.reclaimHiddenPanelResources()
+            }
         }
     }
 
@@ -884,13 +934,13 @@ extension EnvironmentValues {
 /// 因此用自定义环境键传递闭包,在 MonitorPanelView 中读取并调用。
 enum OpenSettingsActionKey: EnvironmentKey {
     struct Action: Sendable {
-        let action: @Sendable () -> Void
+        let action: @MainActor () -> Void
 
-        init(_ action: @escaping @Sendable () -> Void) {
+        init(_ action: @escaping @MainActor () -> Void) {
             self.action = action
         }
 
-        func callAsFunction() {
+        @MainActor func callAsFunction() {
             action()
         }
     }

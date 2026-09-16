@@ -1,7 +1,7 @@
 import AppKit
 
 /// 逐格内衬网格的度量常量。
-enum MetricGridMetrics {
+nonisolated enum MetricGridMetrics: Sendable {
     /// 逐格内衬网格的列间距。
     static let columnSpacing: CGFloat = 8
     /// 逐格内衬网格的行间距:小于列距——行高本身已含格内上下内衬,

@@ -6,7 +6,7 @@ import Foundation
 /// CPU/GPU 使用率是工作强度,内存占用与温度是解释项:都不参与评分,满载不扣分。
 /// 升级前历史没有档位秒数,整段按旧应力口径呈现(近似),不与新口径混合。
 /// 电池健康度不纳入:它是硬件属性而非窗口内状态,由报表电池区与洞察单独呈现。
-enum StatisticsHealthScore {
+nonisolated enum StatisticsHealthScore: Sendable {
     /// 两项负担的权重(和为 1):内存压力是 macOS 最真实的健康信号,热次之。
     nonisolated static let memWeight = 0.6
     nonisolated static let thermalWeight = 0.4

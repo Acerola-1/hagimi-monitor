@@ -3,7 +3,9 @@ import Darwin
 import Foundation
 import os
 
-struct TopMemoryProcess: Identifiable, Equatable {
+/// TopMemoryProcess 仅持有不可变的只读属性；所持有的 NSImage 为 ProcessIconCache 生成的固定位图，
+/// 跨线程传递用于视图绑定，不进行并发修改。
+struct TopMemoryProcess: Identifiable, Equatable, @unchecked Sendable {
     /// 归属进程的 pid(responsible pid)。同一 App 的多个子进程合并后,以宿主进程 pid 为准。
     let pid: pid_t
     let name: String
@@ -24,7 +26,7 @@ struct TopMemoryProcess: Identifiable, Equatable {
 
 /// 系统进程的可执行文件所在路径前缀。匹配这些前缀的视为系统进程,
 /// 在用户关闭"显示系统进程"时过滤掉。参考活动监视器的进程分类。
-let systemProcessPathPrefixes: [String] = [
+nonisolated let systemProcessPathPrefixes: [String] = [
     "/System/",
     "/usr/",
     "/sbin/",
@@ -37,7 +39,7 @@ let systemProcessPathPrefixes: [String] = [
 /// 系统进程判定:常驻白名单(alwaysVisibleSystemAppMarkers)放行,否则系统路径排除。
 /// 五类 TOP 采样(CPU/内存/GPU/磁盘/网络)共用,避免口径分叉——路径空表示
 /// 宿主已退出的孤儿分组,也视为系统进程。
-func isSystemProcessPath(_ path: String, includeSystemProcesses: Bool) -> Bool {
+nonisolated func isSystemProcessPath(_ path: String, includeSystemProcesses: Bool) -> Bool {
     if includeSystemProcesses { return false }
     let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { path.contains($0) }
     if isAlwaysVisible { return false }
@@ -50,7 +52,7 @@ func isSystemProcessPath(_ path: String, includeSystemProcesses: Bool) -> Bool {
 /// 此处刻意只放行 Safari,而非用 activationPolicy 放行所有 .regular App——否则 Finder、
 /// SystemUIServer 等系统自带 GUI 也会涌入列表,这不符合产品意图(它们仍应受"显示系统
 /// 进程"开关控制)。新增白名单需求时在此追加路径片段即可。
-let alwaysVisibleSystemAppMarkers: [String] = [
+nonisolated let alwaysVisibleSystemAppMarkers: [String] = [
     "/Safari.app/Contents/MacOS/",
 ]
 
@@ -61,7 +63,7 @@ typealias ResponsiblePidFunction = @convention(c) (Int32) -> Int32
 
 /// 进程 -> 负责进程 pid 的解析器。dlsym 拿不到符号时回退为「返回自身」,
 /// 退化成不合并的行为,保证功能不崩。
-let responsiblePidResolver: ResponsiblePidFunction = {
+nonisolated let responsiblePidResolver: ResponsiblePidFunction = {
     guard let handle = dlopen(nil, RTLD_NOW),
           let symbol = dlsym(handle, "responsibility_get_pid_responsible_for_pid")
     else {
@@ -72,7 +74,7 @@ let responsiblePidResolver: ResponsiblePidFunction = {
 }()
 
 /// 读取进程可执行文件路径。失败返回空串。
-func executablePath(for pid: pid_t) -> String {
+nonisolated func executablePath(for pid: pid_t) -> String {
     var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
     let length = proc_pidpath(pid, &buffer, UInt32(MAXPATHLEN))
     return length > 0 ? String(cString: buffer) : ""
@@ -83,7 +85,7 @@ func executablePath(for pid: pid_t) -> String {
 /// 沙盒版跨进程 proc_pid_rusage 被策略拒绝,退而取 TASKINFO 的驻留内存
 /// (resident size,不含压缩/置换)。两者均为物理内存占用口径,
 /// 仅压缩/置换的计入方式不同。失败返回 nil。
-private func processMemoryUsage(for pid: pid_t) -> UInt64? {
+nonisolated private func processMemoryUsage(for pid: pid_t) -> UInt64? {
     #if DIRECT_DISTRIBUTION
     var rusage = rusage_info_current()
     let result = withUnsafeMutablePointer(to: &rusage) { structPtr -> Int32 in
@@ -105,7 +107,7 @@ private func processMemoryUsage(for pid: pid_t) -> UInt64? {
 /// sysctl(KERN_PROC_ALL) 双渠道均放行;沙盒下 proc_listallpids 依赖的
 /// process-info 操作被策略拒绝,故统一走 sysctl。传 nil 首查拿所需缓冲区大小,
 /// 两次调用间进程数可能波动,填入时以实际返回的 size 为准。
-private func allProcessIds() -> [pid_t] {
+nonisolated private func allProcessIds() -> [pid_t] {
     var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0]
     var size = 0
     guard sysctl(&mib, 4, nil, &size, nil, 0) == 0, size > 0 else { return [] }
@@ -138,7 +140,7 @@ private struct ProcessGroup {
 
 /// 后台采样阶段的中间结果:只含纯 syscall 能拿到的信息(pid/路径/路径名/内存)。
 /// 不含图标和本地化名——那些依赖 NSWorkspace,须在主线程 enrich(见 enrich(_:))。
-struct RawMemoryProcess {
+struct RawMemoryProcess: Sendable {
     let pid: pid_t
     let path: String
     /// 路径末尾组件做的兜底名,主线程会尝试用本地化名覆盖。
@@ -157,7 +159,7 @@ struct RawMemoryProcess {
 /// Safari 的 WebContent、Chrome 的 Helper 等子进程的 ppid 是 launchd(1),无法靠父子链
 /// 归属,但 responsible pid 能正确指向宿主 App。各分组内内存求和,即该 App
 /// 的总内存占用,与活动监视器分组口径一致。
-func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawMemoryProcess] {
+nonisolated func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawMemoryProcess] {
     let pids = allProcessIds()
     guard !pids.isEmpty else { return [] }
 
@@ -211,7 +213,7 @@ func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses: Bool = fal
 
 /// 用 NSRunningApplication(pid:) 为采样结果补齐本地化名与 App 图标。
 /// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
-func enrich(_ rawProcesses: [RawMemoryProcess]) -> [TopMemoryProcess] {
+nonisolated func enrich(_ rawProcesses: [RawMemoryProcess]) -> [TopMemoryProcess] {
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 

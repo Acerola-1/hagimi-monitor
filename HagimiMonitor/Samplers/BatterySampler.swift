@@ -4,7 +4,8 @@ import IOKit
 import IOKit.ps
 import OSLog
 
-final class BatterySampler: MonitorSampler {
+/// 采样器由 SystemMonitorSampler 持有并在串行采样循环中调用，内部状态单线程顺序更新。
+nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
     var kind: MonitorKind { .battery }
 
     private var powerTelemetryService: io_service_t = IO_OBJECT_NULL
@@ -743,7 +744,7 @@ final class BatterySampler: MonitorSampler {
 }
 
 /// 递归收集 AppleSmartBattery 子树中所有 BatteryData 字典的并集与电芯诊断数据。
-private struct BatteryDataScan {
+nonisolated private struct BatteryDataScan {
     var merged: [String: Any] = [:]
     var cellVoltages: [Int] = []
     var cellQmax: [Int] = []
@@ -753,7 +754,7 @@ private struct BatteryDataScan {
 }
 
 /// 递归收集整棵 AppleSmartBattery 子树中的 BatteryData 并集、独立电芯读数与底层健康诊断。
-private func collectBatteryDataAndCellVoltages(_ root: io_registry_entry_t) -> BatteryDataScan {
+nonisolated private func collectBatteryDataAndCellVoltages(_ root: io_registry_entry_t) -> BatteryDataScan {
     var scan = BatteryDataScan()
 
     func walk(_ entry: io_registry_entry_t) {
@@ -802,7 +803,7 @@ private func collectBatteryDataAndCellVoltages(_ root: io_registry_entry_t) -> B
     return scan
 }
 
-private struct SmartBatteryInfo {
+nonisolated private struct SmartBatteryInfo {
     var cycleCount: Int?
     var designCycleCount: Int?
     var healthPercent: Double?

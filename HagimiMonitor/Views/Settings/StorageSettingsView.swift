@@ -263,10 +263,12 @@ struct StorageSettingsView: View {
     // MARK: - 动作
 
     /// 统一 busy 包装:后台删除完成后回主线程刷新。
-    private func run(_ operation: (@escaping () -> Void) -> Void) {
+    private func run(_ operation: (@escaping @Sendable () -> Void) -> Void) {
         busy = true
         operation {
-            busy = false
+            Task { @MainActor in
+                busy = false
+            }
         }
     }
 

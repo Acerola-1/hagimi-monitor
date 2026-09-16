@@ -15,8 +15,9 @@ import SystemConfiguration
 ///
 /// 全部结果短窗口缓存:CoreWLAN 调用与 socket 探测都不便宜,
 /// 不能随每秒采样无脑触发。
-final class WiFiProbe {
-    struct Snapshot {
+/// 由 NetworkSampler 持有并在串行采样循环中调用，内部状态单线程顺序更新。
+nonisolated final class WiFiProbe: @unchecked Sendable {
+    struct Snapshot: Sendable {
         var ssid: String?
         var rssi: Int?
         var gatewayLatencyMs: Int?
@@ -29,7 +30,7 @@ final class WiFiProbe {
     private var latencyCache: (ms: Int?, timestamp: Date)?
 
     // SCDynamicStore 会话进程内只建一次(与 NetworkSampler 同理)。
-    private lazy var dynamicStore: SCDynamicStore? =
+    private let dynamicStore: SCDynamicStore? =
         SCDynamicStoreCreate(nil, "HagimiMonitor.WiFiProbe" as CFString, nil, nil)
 
     func snapshot() -> Snapshot {

@@ -3,7 +3,7 @@ import Foundation
 /// 蓝牙设备类别,用于面板图标映射。来源优先级:CoD(IOBluetooth)>
 /// device_minorType(system_profiler)>GAP Appearance(GATT 自报)>
 /// 名称关键词推断;均未知归 other,不猜测设备形态。
-enum BluetoothDeviceType: Equatable, Sendable {
+nonisolated enum BluetoothDeviceType: Equatable, Sendable {
     case mouse
     case keyboard
     case headphones
@@ -116,7 +116,7 @@ enum BluetoothDeviceType: Equatable, Sendable {
 
 /// 单台已连接蓝牙设备。batteryLevel 为 nil 表示设备未上报电量
 /// (走厂商私有协议,macOS 蓝牙栈收不到),不伪造读数。
-struct BluetoothDeviceInfo: Identifiable, Equatable {
+nonisolated struct BluetoothDeviceInfo: Identifiable, Equatable, Sendable {
     /// 归一化 MAC(去分隔符小写)或 "ble-UUID"。跨数据源身份关联的锚点。
     let address: String
     let name: String
@@ -132,7 +132,7 @@ struct BluetoothDeviceInfo: Identifiable, Equatable {
 /// system_profiler 探针执行结果:区分「成功空清单」与「执行失败」。
 /// 超时 / 启动失败 / 异常 JSON / 沙盒空骨架均为 failure,调用方保留
 /// 最近一次成功快照;成功返回空清单时才允许清空 profiler 设备。
-enum ProbeOutcome: Equatable {
+nonisolated enum ProbeOutcome: Equatable, Sendable {
     case success(controllerOn: Bool?, devices: [BluetoothDeviceInfo])
     case failure
 }
@@ -141,7 +141,7 @@ enum ProbeOutcome: Equatable {
 /// version 预留用于未来冲突检测(同一 MAC 匹配到不同 UUID 时递增);
 /// lastSeenAt 用于失效判定:长期未在 BLE 快照中召回则移除绑定,
 /// 避免废弃绑定永久残留。临时离线(如设备存放、出差)不触发移除。
-struct BindingRecord: Codable, Equatable {
+nonisolated struct BindingRecord: Codable, Equatable, Sendable {
     let uuid: String
     var version: Int
     var lastSeenAt: Date
@@ -153,7 +153,7 @@ struct BindingRecord: Codable, Equatable {
 /// - macOS 26 起 JSON 键为 device_batteryLevelMain,旧版为 device_batteryLevel,
 ///   多单体耳机另有 Left/Right/Case 分量——调用方把全部变体拼接后交本解析器。
 /// 优先取带 % 后缀的数字(排除固件号等无关数字);无法解析返回 nil。
-enum BluetoothBatteryParser {
+nonisolated enum BluetoothBatteryParser: Sendable {
     static func batteryLevel(from raw: String?) -> Int? {
         guard let raw, !raw.isEmpty else { return nil }
         let tokens = numericTokens(in: raw)

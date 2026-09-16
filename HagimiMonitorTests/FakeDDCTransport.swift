@@ -90,3 +90,18 @@ final class FakeDDCTransport: DDCTransport, @unchecked Sendable {
         lock.unlock()
     }
 }
+
+/// 测试用线程安全值容器，用于在并发或异步测试闭包中安全读写变量。
+nonisolated final class TestBox<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _value: T
+
+    init(_ value: T) {
+        self._value = value
+    }
+
+    var value: T {
+        get { lock.lock(); defer { lock.unlock() }; return _value }
+        set { lock.lock(); defer { lock.unlock() }; _value = newValue }
+    }
+}

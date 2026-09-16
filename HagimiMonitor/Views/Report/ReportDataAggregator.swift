@@ -2,7 +2,7 @@ import Foundation
 
 /// 纯 Swift 统计报表数据聚合器。
 /// 严格遵循既有统计口径，执行范围筛选、粒度决策、加权平均、分布桶、事件流与洞察计算。
-enum ReportDataAggregator {
+nonisolated enum ReportDataAggregator: Sendable {
 
     // MARK: - 粒度决策与行过滤
 

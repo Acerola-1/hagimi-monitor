@@ -29,6 +29,15 @@ private func recentMinuteBase(_ secondsAgo: TimeInterval = 600) -> Date {
     Date(timeIntervalSince1970: floor(Date().timeIntervalSince1970 / 60) * 60 - secondsAgo)
 }
 
+/// 通过生产报表 provider 读取指标行,确保测试与真实报表共用同一查询口径。
+@MainActor
+private func reportMetricRows(
+    _ recorder: StatisticsRecorder,
+    now: Date
+) -> (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow])? {
+    recorder.reportDataProvider().loadMetricRows(now: now)
+}
+
 /// 记录一帧;测试里传入的模块都视为本帧新鲜采样。
 @MainActor
 private func recordFrame(_ recorder: StatisticsRecorder, _ modules: [MonitorModule], fans: [FanInfo] = [], at date: Date) {
@@ -235,7 +244,7 @@ struct StatisticsRecorderTests {
         recordFrame(recorder, [idleCPU, fasterNetwork], at: base.addingTimeInterval(10))
         recorder.sealCompletedMinuteForTesting()
 
-        let minutes = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes ?? []
+        let minutes = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes ?? []
         #expect(minutes.count == 1)
         let row = minutes[0]
         #expect(row.n == 2)
@@ -260,7 +269,7 @@ struct StatisticsRecorderTests {
         recordFrame(recorder, [network], at: base.addingTimeInterval(3600))
         recorder.sealCompletedMinuteForTesting()
 
-        let minutes = recorder.reportSnapshot(now: base.addingTimeInterval(7200))?.minutes ?? []
+        let minutes = reportMetricRows(recorder, now: base.addingTimeInterval(7200))?.minutes ?? []
         #expect(minutes.count == 2) // 两个不同分钟各封一行
         let total = minutes.reduce(0.0) { $0 + ($1.netDown ?? 0) }
         #expect(total == 0)
@@ -284,7 +293,7 @@ struct StatisticsRecorderTests {
         recordFrame(recorder, [battery("on-battery")], at: base.addingTimeInterval(3))
         recorder.sealCompletedMinuteForTesting()
 
-        let row = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes.first
+        let row = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes.first
         #expect(abs((row?.acFrac ?? 0) - 0.75) < 0.001)
         #expect(abs((row?.chargingFrac ?? 0) - 0.5) < 0.001)
         #expect(row?.battLevelAvg == 80)
@@ -304,7 +313,7 @@ struct StatisticsRecorderTests {
         recordFrame(recorder, [acModule], at: base)
         recorder.sealCompletedMinuteForTesting()
 
-        let row = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes.first
+        let row = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes.first
         #expect(row?.acFrac == 1)
         #expect(row?.battLevelAvg == nil, "桌面 ac-power 模块不得产出电量历史")
         #expect(row?.powerAvg == 28)
@@ -325,7 +334,7 @@ struct StatisticsRecorderTests {
         recorder.sealCompletedMinuteForTesting()
 
         // 关闭期间帧不积累:进行中的分钟在 suspend 时已丢弃,封口无行可落。
-        var minutes = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes ?? []
+        var minutes = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes ?? []
         #expect(minutes.isEmpty)
 
         // 恢复后正常记录;速率游标已在 suspend 清零:若未清零,base 到恢复后首帧的 2s 会
@@ -335,7 +344,7 @@ struct StatisticsRecorderTests {
         recordFrame(recorder, [cpu, network], at: base.addingTimeInterval(3))
         recorder.sealCompletedMinuteForTesting()
 
-        minutes = recorder.reportSnapshot(now: base.addingTimeInterval(300))?.minutes ?? []
+        minutes = reportMetricRows(recorder, now: base.addingTimeInterval(300))?.minutes ?? []
         #expect(minutes.count == 1)
         #expect(minutes[0].cpuAvg == 40)
         #expect((minutes[0].netDown ?? 0) == 1_000_000)
@@ -367,7 +376,7 @@ struct StatisticsSecondsTests {
         }
         recorder.sealCompletedMinuteForTesting()
 
-        let row = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes.first
+        let row = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes.first
         // 区间归给前一次观测:4 帧覆盖 3 秒
         #expect(row?.validCpuS == 3)
         #expect(row?.cpuHighS == 3)
@@ -396,7 +405,7 @@ struct StatisticsSecondsTests {
         recordFrame(recorder, frame(cpu: 42, gpu: 10, memLevel: 1, thermal: 0), at: base.addingTimeInterval(3))
         recorder.sealCompletedMinuteForTesting()
 
-        let row = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes.first
+        let row = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes.first
         #expect(row?.validMemS == 3)
         #expect(row?.memNormalS == 3)
         #expect(row?.memWarnS == nil, "缓存回读不得把区间记给未观测到的档位")
@@ -410,7 +419,7 @@ struct StatisticsSecondsTests {
         recordFrame(recorder, frame(cpu: 90, gpu: 95, memLevel: 1, thermal: 2), at: base.addingTimeInterval(30))
         recorder.sealCompletedMinuteForTesting()
 
-        let row = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes.first
+        let row = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes.first
         #expect(row?.validCpuS == nil)
         #expect(row?.validMemS == nil)
         #expect(row?.validMemThermalS == nil, "中断区间不得计入交集")
@@ -426,7 +435,7 @@ struct StatisticsSecondsTests {
         recordFrame(recorder, frame(cpu: 40, gpu: 10, memLevel: 0, thermal: 0), at: base.addingTimeInterval(3))
         recorder.sealCompletedMinuteForTesting()
 
-        let row = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes.first
+        let row = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes.first
         #expect(row?.memWarnS == 1)
         #expect(row?.memNormalS == 1)
         #expect(row?.validMemS == 2)
@@ -445,7 +454,7 @@ struct StatisticsSecondsTests {
         recordFrame(recorder, frame(cpu: 40, gpu: 10, memLevel: 1, thermal: 0), at: base.addingTimeInterval(4))
         recorder.sealCompletedMinuteForTesting()
 
-        let row = recorder.reportSnapshot(now: base.addingTimeInterval(120))?.minutes.first
+        let row = reportMetricRows(recorder, now: base.addingTimeInterval(120))?.minutes.first
         // 内存每段都有效;热在+2→+3 未知段不计;交集只在两段已知区间累计。
         #expect(row?.validMemS == 4)
         #expect(row?.validThermalS == 3)

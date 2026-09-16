@@ -4,7 +4,7 @@ import Foundation
 // ControlKey 是纯值类型,作为 DDC 能力表与写入去重的字典 key,在后台队列上使用;
 // 标 nonisolated 以脱离 MainActor 默认隔离,避免 Swift 6 严格并发下 Hashable
 // conformance 跨上下文使用的告警/错误。
-nonisolated struct ControlKey: Hashable {
+nonisolated struct ControlKey: Hashable, Sendable {
     let displayID: CGDirectDisplayID
     let control: DisplayControlKind
 }
@@ -17,7 +17,7 @@ nonisolated struct ControlKey: Hashable {
 ///   确定性负例——因为它来自显示器自己的应答,不是我们的猜测。
 /// - unknown:没有收到任何有效应答。可能是只写型显示器、暂时性丢包或不可读但可写。
 ///   此时保持**乐观**:仍显示控制、仍允许写入,绝不据此置灰。
-nonisolated enum DDCCapability {
+nonisolated enum DDCCapability: Sendable {
     case supported
     case unsupported
     case unknown
@@ -27,8 +27,8 @@ nonisolated enum DDCCapability {
 /// (那会把正常的瞬时丢包升级成控制锁死)。能力只在检测/探测阶段写入,并在
 /// 重配置/唤醒/面板打开时重新探测刷新。
 ///
-/// 线程安全由内部 NSLock 保证,不依赖 actor 隔离。
-nonisolated final class DDCCapabilityStore {
+/// 线程安全由内部 NSLock 保证,满足并发读写要求。
+nonisolated final class DDCCapabilityStore: @unchecked Sendable {
     private var capabilities: [ControlKey: DDCCapability] = [:]
     private let lock = NSLock()
 

@@ -6,9 +6,10 @@ import Foundation
 /// - 独立 v2 命名空间 `displayControl2.<stableKey>.<field>`,与 v1 key 分开;
 /// - 迁移仅在 v1 身份唯一匹配时复制历史值,标为 historical/unverified;零序列号碰撞
 ///   不复制到两屏;不据 v1 key 推断软件模式;v1 仅迁移读取,不双写;
-/// - 保存 backendPreference、readPolicy、timingProfile、rangeOverride、软件成功因子
-///   及音量恢复值;请求队列/临时故障/generation 不持久化。
-nonisolated final class DisplayPersistence {
+/// 保存 backendPreference、readPolicy、timingProfile、rangeOverride、软件成功因子
+/// 及音量恢复值;请求队列/临时故障/generation 不持久化。
+/// 线程安全不变量：底层依赖的 UserDefaults 本身具备线程安全特性，内部无易变状态。
+nonisolated final class DisplayPersistence: @unchecked Sendable {
     static let shared = DisplayPersistence()
     private let defaults: UserDefaults
 

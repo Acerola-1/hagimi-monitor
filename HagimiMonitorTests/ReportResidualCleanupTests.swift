@@ -3,6 +3,15 @@ import Foundation
 import Testing
 @testable import HagimiMonitorDirect
 
+@MainActor
+private final class ReportReadingsBox {
+    var value: [String: String]
+
+    init(value: [String: String]) {
+        self.value = value
+    }
+}
+
 @Suite("报表实时源门控")
 @MainActor
 struct ReportLiveHardwareSourceTests {
@@ -35,9 +44,9 @@ struct ReportLiveHardwareSourceTests {
     }
 
     @Test func unchangedSnapshotsAreNotPublishedAndResumeRefreshesImmediately() {
-        var readings = ["value": "1"]
+        let readings = ReportReadingsBox(value: ["value": "1"])
         var publications = 0
-        let source = ReportLiveHardwareSource(readingsProvider: { _ in readings })
+        let source = ReportLiveHardwareSource(readingsProvider: { _ in readings.value })
         let cancellable = source.$liveReadings.sink { _ in publications += 1 }
         defer { cancellable.cancel(); source.stop() }
 
@@ -50,7 +59,7 @@ struct ReportLiveHardwareSourceTests {
         source.resume()
         #expect(publications == afterFirstSnapshot)
 
-        readings = ["value": "2"]
+        readings.value = ["value": "2"]
         source.pause()
         source.resume()
         #expect(source.liveReadings == ["value": "2"])

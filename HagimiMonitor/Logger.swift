@@ -1,7 +1,7 @@
 import Foundation
 import OSLog
 
-enum AppLogger {
+nonisolated enum AppLogger {
     static let subsystem = "com.acerola.hagimi-monitor"
 
     static let sampler = Logger(subsystem: subsystem, category: "Sampler")

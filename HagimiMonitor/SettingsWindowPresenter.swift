@@ -11,8 +11,8 @@ import OSLog
 /// 容器承载(避免宿主反向改写窗口约束),宽度 min==max 钉死、高度上不封顶,
 /// 用户拖拽的最小高度由拉伸代理裁定。
 enum SettingsWindowPresenter {
-    static let routeChangeNotification = Notification.Name("SettingsWindowPresenter.routeChange")
-    static let tabUserInfoKey = "tab"
+    nonisolated static let routeChangeNotification = Notification.Name("SettingsWindowPresenter.routeChange")
+    nonisolated static let tabUserInfoKey = "tab"
 
     /// 窗口强持有:仅在窗口打开期间常驻,关闭时置空以释放 SwiftUI 视图树与相关图表资源。
     @MainActor

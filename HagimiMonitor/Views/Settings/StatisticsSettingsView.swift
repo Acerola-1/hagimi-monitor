@@ -1037,9 +1037,30 @@ private struct SettingsPageOnScreenReader: NSViewRepresentable {
     }
 }
 
+/// 自动管理多个 NotificationCenter 观察者生命周期的包装器。
+/// 安全不变式：在 deinit 时自动注销所有观察者，避免在 MainActor 隔离类的 deinit 中访问非 Sendable 数组。
+nonisolated private final class NotificationObserversBox: @unchecked Sendable {
+    private var observers: [any NSObjectProtocol] = []
+
+    func add(_ observer: any NSObjectProtocol) {
+        observers.append(observer)
+    }
+
+    func removeAll() {
+        let center = NotificationCenter.default
+        observers.forEach(center.removeObserver)
+        observers.removeAll()
+    }
+
+    deinit {
+        let center = NotificationCenter.default
+        observers.forEach(center.removeObserver)
+    }
+}
+
 private final class OnScreenObservingView: NSView {
     var onChange: ((Bool) -> Void)?
-    private var observers: [NSObjectProtocol] = []
+    private let observersBox = NotificationObserversBox()
 
     init(onChange: @escaping (Bool) -> Void) {
         self.onChange = onChange
@@ -1051,14 +1072,9 @@ private final class OnScreenObservingView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        observers.forEach(NotificationCenter.default.removeObserver)
-    }
-
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        observers.forEach(NotificationCenter.default.removeObserver)
-        observers = []
+        observersBox.removeAll()
 
         // 未挂到窗口时不订阅通知:report() 会把「不在屏」直接回传。
         guard window != nil else {
@@ -1074,10 +1090,14 @@ private final class OnScreenObservingView: NSView {
             NSApplication.didBecomeActiveNotification,
             NSApplication.didResignActiveNotification,
         ]
-        observers = names.map { name in
-            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                self?.report()
-            }
+        for name in names {
+            observersBox.add(
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.report()
+                    }
+                }
+            )
         }
         report()
     }

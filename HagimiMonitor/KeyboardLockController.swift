@@ -4,7 +4,7 @@ import Foundation
 /// CGEventType.systemDefined 的共享常量。kCGEventSystemDefined ==
 /// NX_SYSDEFINED == 14,该 case 在当前 SDK 对 Swift 不公开;
 /// 媒体键与键盘锁两个事件 tap 都拦截此通道,统一定义避免裸值漂移。
-enum SystemDefinedEventType {
+nonisolated enum SystemDefinedEventType {
     static let rawValue: UInt32 = 14
     static let maskBit: CGEventMask = 1 << rawValue
 }
@@ -19,7 +19,7 @@ enum SystemDefinedEventType {
 ///
 /// 线程模型:非隔离类,owner(`QuickToolsStore`,MainActor)在主线程
 /// 调用 start/stop;回调经 refcon 取回实例,无静态全局桥。
-final class KeyboardLockController {
+nonisolated final class KeyboardLockController {
     /// 防"锁了就忘"的自动解锁兜底:默认 20 分钟后解除拦截。
     static let autoUnlockInterval: TimeInterval = 20 * 60
 
@@ -79,7 +79,15 @@ final class KeyboardLockController {
         autoUnlockTimer = nil
     }
 
-    deinit { stop() }
+    deinit {
+        if let tap = eventTap {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = runLoopSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+        autoUnlockTimer?.cancel()
+    }
 
     // MARK: - 自动解锁
 

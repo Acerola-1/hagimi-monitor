@@ -2,7 +2,9 @@ import AppKit
 import Darwin
 import Foundation
 
-struct TopNetworkProcess: Identifiable, Equatable {
+/// TopNetworkProcess 仅持有不可变的只读属性；所持有的 NSImage 为 ProcessIconCache 生成的固定位图，
+/// 跨线程传递用于视图绑定，不进行并发修改。
+struct TopNetworkProcess: Identifiable, Equatable, @unchecked Sendable {
     let pid: pid_t
     let name: String
     /// 下载速率（字节/秒）。
@@ -19,7 +21,7 @@ struct TopNetworkProcess: Identifiable, Equatable {
     }
 }
 
-struct RawNetworkProcess {
+struct RawNetworkProcess: Sendable {
     let pid: pid_t
     let name: String
     /// 宿主可执行文件路径(采样时捕获,enrich 复用——避免每行重复 executablePath 系统调用,
@@ -38,11 +40,31 @@ private struct NetworkSnapshotEntry {
 
 /// nettop 子进程采样的超时阈值。nettop 在异常网络栈/僵尸状态下可能挂起不退出,
 /// 若无防护会永久堵死串行采样队列(面板/统计的网络 TOP 全部停摆)。
-private let nettopSampleTimeout: TimeInterval = 8
+nonisolated private let nettopSampleTimeout: TimeInterval = 8
+
+/// 线程安全的管道输出暂存器，内部由 NSLock 保护跨队列读写。
+nonisolated private final class OutputDataCaptureBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _data: Data?
+
+    var data: Data? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _data
+        }
+        set {
+            lock.lock()
+            defer { lock.unlock() }
+            _data = newValue
+        }
+    }
+}
 
 /// 网络差分游标:自持上拍字节快照,各使用方(面板 2s、统计 60s)各用独立游标,
-/// 互不截断对方的差分窗口。线程安全依赖每个游标只被 nettopQueue 一条串行队列读写。
-final class NetworkDeltaCursor {
+/// 互不截断对方的差分窗口。
+/// 安全不变式：内部状态仅在串行采样队列（nettopQueue）上读写，不存在跨线程并发修改。
+nonisolated final class NetworkDeltaCursor: @unchecked Sendable {
     private var previousSnapshot: [pid_t: NetworkSnapshotEntry] = [:]
     private var previousTime: Date?
 
@@ -72,10 +94,10 @@ final class NetworkDeltaCursor {
 
         inputPipe.fileHandleForWriting.closeFile()
         // 读输出放后台线程,信号量等待,超时终止进程并放弃本次结果(保留上一次列表)。
-        nonisolated(unsafe) var data: Data?
+        let box = OutputDataCaptureBox()
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
-            data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            box.data = outputPipe.fileHandleForReading.readDataToEndOfFile()
             done.signal()
         }
         if done.wait(timeout: .now() + nettopSampleTimeout) == .timedOut {
@@ -83,7 +105,7 @@ final class NetworkDeltaCursor {
             return []
         }
         task.waitUntilExit()
-        let outputData = data ?? Data()
+        let outputData = box.data ?? Data()
         outputPipe.fileHandleForReading.closeFile()
 
         guard task.terminationStatus == 0,
@@ -192,7 +214,7 @@ final class NetworkDeltaCursor {
 
 /// 用 NSRunningApplication(pid:) 为网络采样结果补齐本地化名与 App 图标。
 /// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
-func enrichNetwork(_ rawProcesses: [RawNetworkProcess]) -> [TopNetworkProcess] {
+nonisolated func enrichNetwork(_ rawProcesses: [RawNetworkProcess]) -> [TopNetworkProcess] {
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 

@@ -148,7 +148,7 @@ final class StatisticsOverviewDataSource: ObservableObject {
         rows[range] ?? nil
     }
 
-    func series(_ range: StatisticsOverviewRange, completion: @escaping ([StatisticsRow]) -> Void) {
+    func series(_ range: StatisticsOverviewRange, completion: @escaping @MainActor @Sendable ([StatisticsRow]) -> Void) {
         if let fixture {
             completion(fixture.series[range] ?? [])
             return
