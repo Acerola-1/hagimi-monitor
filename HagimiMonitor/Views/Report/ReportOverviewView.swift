@@ -184,48 +184,54 @@ struct ReportOverviewView: View {
                 Divider()
                     .frame(height: 42)
 
-                // 定宽内衬:第三块的起点不随百分比位数浮动,「事件」标签始终落在同一处。
                 coverageSummary
-                    .frame(minWidth: 190, alignment: .leading)
 
                 Divider()
                     .frame(height: 42)
 
-                // 第三块自带标签,否则一串计数胶囊悬着不知从何而来。三块自左依次排列,
-                // 胶囊增减只向右侧的空隙生长,标签位置不动;只有操作按钮贴右边缘。
-                HStack(spacing: 8) {
-                    Text(String(localized: "stats.r.eventsBlockLabel", defaultValue: "事件"))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                // 第三块:标签锚在左侧(紧接数据完整度),明细按钮锚在右边缘,两者位置都不随
+                // 范围切换移动;胶囊在中间生长,由后面的空隙吸收——既不留常驻空白,
+                // 也不会出现「胶囊一变多标签就乱跑」。
+                eventsBlockLabel
 
-                    if tally.isClear {
-                        Text("—")
-                            .font(.caption)
-                            .foregroundStyle(.tertiary)
-                    } else {
-                        alertChips(tally)
-                    }
+                if tally.isClear {
+                    Text("—")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                } else {
+                    alertChips(tally)
                 }
 
                 Spacer(minLength: 12)
 
                 if tally.pressureCount > 0 {
-                    Button { navigateTo(.events) } label: {
-                        HStack(spacing: 4) {
-                            Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
-                                .font(.system(size: 11, weight: .medium))
-                            Image(systemName: "arrow.right")
-                                .font(.system(size: 10, weight: .semibold))
-                        }
-                    }
-                    .buttonStyle(.bordered)
-                    .controlSize(.small)
-                    .help(String(localized: "stats.r.secEvents", defaultValue: "压力警告"))
+                    viewDetailsButton
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 56)
         }
+    }
+
+    private var eventsBlockLabel: some View {
+        Text(String(localized: "stats.r.eventsBlockLabel", defaultValue: "事件"))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .frame(minWidth: 28, alignment: .leading)
+    }
+
+    private var viewDetailsButton: some View {
+        Button { navigateTo(.events) } label: {
+            HStack(spacing: 4) {
+                Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
+                    .font(.system(size: 11, weight: .medium))
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 10, weight: .semibold))
+            }
+        }
+        .buttonStyle(.bordered)
+        .controlSize(.small)
+        .help(String(localized: "stats.r.secEvents", defaultValue: "压力警告"))
     }
 
     private func scoreSummary(result: StatisticsHealthScore.Result?) -> some View {
@@ -263,6 +269,8 @@ struct ReportOverviewView: View {
         }
     }
 
+    /// 数据完整度:进度条定宽,不再跟着标签文字一路拉长——这一块的宽度由文字决定,
+    /// 所以真正省宽度的是短标签(见 stats.r.coverageSummary),进度条只负责视觉比例。
     private var coverageSummary: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let coverage = viewModel.rangeModel?.coveragePercent {
@@ -273,6 +281,7 @@ struct ReportOverviewView: View {
                     .progressViewStyle(.linear)
                     .controlSize(.small)
                     .tint(.secondary)
+                    .frame(width: 64)
             } else {
                 Text(String(localized: "stats.r.coverageUnavailable", defaultValue: "数据完整度 —"))
                     .font(.callout.weight(.medium))

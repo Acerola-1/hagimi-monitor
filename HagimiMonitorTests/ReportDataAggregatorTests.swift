@@ -250,10 +250,13 @@ struct ReportDataAggregatorTests {
         let safariCpu = rankings.cpuList[0]
         // (30*10 + 60*20) / 100 = 1500 / 100 = 15.0 核·分
         #expect(safariCpu.value == 15.0)
-        #expect(safariCpu.valueText == "15 核·分")
-        #expect(safariCpu.tierHint?.contains("均值 50.0%") == true)
-        #expect(safariCpu.tierHint?.contains("峰值 85%") == true)
-        #expect(safariCpu.tierHint?.contains("满载: 1m") == true)
+        // 单位与词缀随语言变化,只断言数值与「没有漏出原始键」,不写死中文文案。
+        #expect(safariCpu.valueText.contains("15"))
+        #expect(safariCpu.valueText.contains("stats.r.") == false)
+        #expect(safariCpu.tierHint?.contains("50.0%") == true)
+        #expect(safariCpu.tierHint?.contains("85%") == true)
+        #expect(safariCpu.tierHint?.contains("1m") == true)
+        #expect(safariCpu.tierHint?.contains("stats.r.") == false)
         #expect(rankings.netList.count == 1)
         #expect(rankings.netList[0].value == 4500) // (1000+500) + (2000+1000)
         #expect(rankings.diskList.count == 1)

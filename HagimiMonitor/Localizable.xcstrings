@@ -19279,7 +19279,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Data completeness %.1f%%"
+            "value": "Coverage %.1f%%"
           }
         },
         "zh-Hans": {
