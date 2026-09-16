@@ -1,5 +1,4 @@
 import Foundation
-import SwiftUI
 
 // MARK: - 时间与粒度
 
@@ -17,7 +16,7 @@ nonisolated enum ReportTimeRange: Sendable, Hashable {
         case .week: return String(localized: "stats.r.rWeek")
         case .month: return String(localized: "stats.r.rMonth")
         case .year: return String(localized: "stats.r.rYear")
-        case .custom: return String(localized: "stats.r.selectRange")
+        case .custom: return String(localized: "stats.range.custom", defaultValue: "自定义")
         }
     }
 
@@ -39,6 +38,12 @@ nonisolated enum ReportTimeRange: Sendable, Hashable {
         case .custom(let from, let to):
             return (from, to)
         }
+    }
+
+    /// 判定该时间范围是否属于单日跨度
+    func isSingleDay(now: Date = Date(), calendar: Calendar = .current) -> Bool {
+        let (from, to) = bounds(now: now, calendar: calendar)
+        return ReportDataAggregator.isSingleDay(from: from, to: to, calendar: calendar)
     }
 }
 
@@ -179,6 +184,23 @@ nonisolated struct ReportNetworkMetrics: Sendable, Equatable {
     let peakDownRate: Double?
     let peakUpRate: Double?
     let dailyBars: [DailyBar]
+    let isHourly: Bool
+
+    init(
+        totalDownBytes: Double?,
+        totalUpBytes: Double?,
+        peakDownRate: Double?,
+        peakUpRate: Double?,
+        dailyBars: [DailyBar],
+        isHourly: Bool = false
+    ) {
+        self.totalDownBytes = totalDownBytes
+        self.totalUpBytes = totalUpBytes
+        self.peakDownRate = peakDownRate
+        self.peakUpRate = peakUpRate
+        self.dailyBars = dailyBars
+        self.isHourly = isHourly
+    }
 }
 
 /// 磁盘模块指标
@@ -196,6 +218,23 @@ nonisolated struct ReportDiskMetrics: Sendable, Equatable {
     let peakReadRate: Double?
     let peakWriteRate: Double?
     let dailyBars: [DailyBar]
+    let isHourly: Bool
+
+    init(
+        totalReadBytes: Double?,
+        totalWriteBytes: Double?,
+        peakReadRate: Double?,
+        peakWriteRate: Double?,
+        dailyBars: [DailyBar],
+        isHourly: Bool = false
+    ) {
+        self.totalReadBytes = totalReadBytes
+        self.totalWriteBytes = totalWriteBytes
+        self.peakReadRate = peakReadRate
+        self.peakWriteRate = peakWriteRate
+        self.dailyBars = dailyBars
+        self.isHourly = isHourly
+    }
 }
 
 /// 电源与功耗指标
@@ -242,6 +281,48 @@ nonisolated struct ReportAppRankingItem: Sendable, Equatable, Identifiable {
     let valueText: String
     let tierHint: String?
     let iconData: Data?
+
+    /// 判断是否为 macOS 系统应用或系统后台服务进程
+    var isSystemApp: Bool {
+        Self.isSystem(name: name)
+    }
+
+    private static let knownSystemNames: Set<String> = [
+        "windowserver", "kernel_task", "launchd", "logd", "fseventsd",
+        "mds", "mds_stores", "mdworker", "mdworker_shared",
+        "diskarbitrationd", "corebrightnessd", "powerd", "bluetoothd",
+        "distnoted", "cfprefsd", "tccd", "trustd", "syspolicyd",
+        "biometrickitd", "containermanagerd", "audioanalyticsd", "dasd",
+        "symptomsd", "spindump", "timed", "locationd", "cloudd",
+        "bird", "identityservicesd", "imagent", "apsd", "secinitd",
+        "opendirectoryd", "securityd", "syslogd", "notifyd", "configd",
+        "systemstats", "reportcrash", "diagnosticd", "deleted",
+        "finder", "访达", "dock", "controlcenter", "control center", "控制中心",
+        "systemuiserver", "spotlight", "聚焦", "notificationcenter", "notification center",
+        "通知中心", "system settings", "system preferences", "系统设置", "系统偏好设置",
+        "loginwindow", "airplayxpchelper", "screencapture",
+        "coreaudiod", "bluetoothaudiod", "nsurlsessiond", "sharingd",
+        "akd", "calaccessd", "assistantd", "callservicesd", "familycircled",
+        "passd", "accountsd", "commerce", "storeaccountd", "storeassetd",
+        "storedownloadd", "pkd", "contextstored", "rapportd", "amfid",
+        "runningboardd", "thermalmonitord", "usbd", "audiomxd", "coreauthd",
+        "corespeechd", "gamecontrollerd", "geod", "mediaremoteagent", "neagent",
+        "replayd", "rtcreportingd", "siriknowledged", "usernoted", "coreduetd",
+        "findmydeviced", "keybagd", "nearbyd", "mobileactivationd",
+        "networkserviceproxy", "wifianalyticsd", "remindd", "cloudphotod",
+        "photolibraryd", "photoanalysisd", "assetsd"
+    ]
+
+    /// 采集侧统一记录 NSRunningApplication.localizedName 或 fallbackName (lastPathComponent)，
+    /// 进程名恒为显示名或可执行文件基名，不存在 com.apple. 前缀或全路径。
+    static func isSystem(name: String) -> Bool {
+        knownSystemNames.contains(name.lowercased())
+    }
+
+    /// 双参数兼容重载（生产中 appKey 与 name 恒等）
+    static func isSystem(appKey: String, name: String) -> Bool {
+        isSystem(name: name) || isSystem(name: appKey)
+    }
 }
 
 /// 各类应用排行聚合
@@ -249,11 +330,24 @@ nonisolated struct ReportAppRankings: Sendable, Equatable {
     let cpuList: [ReportAppRankingItem]
     let memList: [ReportAppRankingItem]
     let gpuList: [ReportAppRankingItem]
+    let diskList: [ReportAppRankingItem]
     let netList: [ReportAppRankingItem]
     let highLoadAlerts: [ReportHighLoadAppGroup]
 
-    var isEmpty: Bool {
-        cpuList.isEmpty && memList.isEmpty && gpuList.isEmpty && netList.isEmpty && highLoadAlerts.isEmpty
+    init(
+        cpuList: [ReportAppRankingItem],
+        memList: [ReportAppRankingItem],
+        gpuList: [ReportAppRankingItem],
+        diskList: [ReportAppRankingItem],
+        netList: [ReportAppRankingItem],
+        highLoadAlerts: [ReportHighLoadAppGroup]
+    ) {
+        self.cpuList = cpuList
+        self.memList = memList
+        self.gpuList = gpuList
+        self.diskList = diskList
+        self.netList = netList
+        self.highLoadAlerts = highLoadAlerts
     }
 }
 
@@ -362,6 +456,7 @@ nonisolated struct ReportActiveRangeModel: Sendable, Equatable {
     let granularity: ReportSourceGranularity
     let from: Date
     let to: Date
+    let isSingleDay: Bool
     let rows: [StatisticsRow]
     /// 所选时间范围内的有效采样覆盖比例（0...1）；无有效范围或无样本时为 nil。
     let coverageRatio: Double?

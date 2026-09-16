@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 
 /// 异常事件报表视图：展示内存压力与热压力事件流，支持类型过滤与生命周期状态标记。
+/// 本页是事件流的索引，每行可点击直达事件来源模块。
 struct ReportEventsView: View {
     @ObservedObject var viewModel: NativeReportViewModel
     @State private var filterKind: EventFilterKind = .all
@@ -34,19 +35,24 @@ struct ReportEventsView: View {
         let events = filteredEvents
 
         return ReportCardView(
-            title: String(localized: "stats.r.secEvents", defaultValue: "系统压力与异常事件"),
+            title: String(localized: "stats.r.secEvents", defaultValue: "压力警告"),
             icon: "exclamationmark.triangle"
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                // 筛选过滤器
-                Picker("", selection: $filterKind) {
-                    ForEach(EventFilterKind.allCases) { filter in
-                        Text(filter.label).tag(filter)
+                HStack(spacing: 16) {
+                    // 分类切换选择器：与应用排行完全一致，嵌入卡片内部使用 ReportNavigationPicker
+                    ReportNavigationPicker(
+                        title: "",
+                        selection: $filterKind
+                    ) {
+                        ForEach(EventFilterKind.allCases) { filter in
+                            Text(filter.label).tag(filter)
+                        }
                     }
+                    .fixedSize()
+
+                    Spacer()
                 }
-                .labelsHidden()
-                .compatibleTabPickerStyle()
-                .frame(maxWidth: 300)
 
                 // R04: 中性空态，不臆断“系统稳定/运行良好”
                 if events.isEmpty {
@@ -54,7 +60,9 @@ struct ReportEventsView: View {
                 } else {
                     VStack(spacing: 10) {
                         ForEach(events) { event in
-                            eventCard(event: event)
+                            ReportEventRow(event: event) {
+                                navigateTo(event.kind == .memory ? .memory : .thermal)
+                            }
                         }
                     }
                 }
@@ -74,56 +82,83 @@ struct ReportEventsView: View {
         }
     }
 
-    private func eventCard(event: ReportEventItem) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // 事件类型图标
-            eventIcon(for: event.kind)
+    private func navigateTo(_ module: ReportNavigationModule) {
+        withAnimation(.easeInOut(duration: 0.15)) {
+            viewModel.selectedModule = module
+        }
+    }
+}
 
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(event.kind.title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(.primary)
+/// 单条压力事件行：整行可点击。事件流只说明「哪一类何时出了什么事」，
+/// 下一步入口必须在这一行上，否则用户得回侧栏自己再找一遍模块。
+private struct ReportEventRow: View {
+    let event: ReportEventItem
+    let onOpen: () -> Void
 
-                    statusBadge(for: event.state)
+    @State private var isHovered = false
 
-                    Spacer()
+    var body: some View {
+        Button(action: onOpen) {
+            HStack(alignment: .top, spacing: 12) {
+                eventIcon(for: event.kind)
 
-                    // 时间信息
-                    HStack(spacing: 4) {
-                        Text(ReportUIHelper.formatDateTime(event.start))
-                        Text("~")
-                        Text(ReportUIHelper.formatTimeOnly(event.end))
-                    }
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(.secondary)
-                }
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 8) {
+                        Text(event.kind.title)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(.primary)
 
-                // 持续时间与峰值描述
-                HStack(spacing: 12) {
-                    Text("持续时长: \(ReportUIHelper.formatHours(event.pressureSeconds))")
-                        .font(.system(size: 11))
+                        statusBadge(for: event.state)
+
+                        Spacer()
+
+                        // 时间信息
+                        HStack(spacing: 4) {
+                            Text(ReportUIHelper.formatDateTime(event.start))
+                            Text("~")
+                            Text(ReportUIHelper.formatTimeOnly(event.end))
+                        }
+                        .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
+                    }
 
-                    if !event.detailText.isEmpty {
-                        Text("•")
-                            .foregroundStyle(.tertiary)
-                        Text(event.detailText)
+                    // 持续时间与峰值描述
+                    HStack(spacing: 12) {
+                        Text("\(String(localized: "stats.r.prefixDuration", defaultValue: "持续时长:")) \(ReportUIHelper.formatHours(event.pressureSeconds))")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
+
+                        if !event.detailText.isEmpty {
+                            Text("•")
+                                .foregroundStyle(.tertiary)
+                            Text(event.detailText)
+                                .font(.system(size: 11))
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.tertiary)
+                    .padding(.top, 2)
             }
+            .padding(12)
+            .background {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.7 : 0.4))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .strokeBorder(Color.primary.opacity(isHovered ? 0.14 : 0.06), lineWidth: 1)
+            }
+            .contentShape(.rect(cornerRadius: 8))
         }
-        .padding(12)
-        .background {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.4))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        }
+        .buttonStyle(.plain)
+        .onHover { isHovered = $0 }
+        .accessibilityLabel(Text(event.kind.title))
+        .accessibilityHint(Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细")))
+        .help(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
     }
 
     private func eventIcon(for kind: ReportEventItem.Kind) -> some View {

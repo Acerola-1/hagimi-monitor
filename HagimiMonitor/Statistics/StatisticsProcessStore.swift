@@ -659,6 +659,8 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         let memSamples: Int
         let netDownBytes: Double
         let netUpBytes: Double
+        let diskReadBytes: Double
+        let diskWriteBytes: Double
         let cpuTier1: Int
         let cpuTier2: Int
         let cpuTier3: Int
@@ -691,6 +693,8 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
                     memSamples: row.memSamples,
                     netDownBytes: row.netDown,
                     netUpBytes: row.netUp,
+                    diskReadBytes: row.diskRead,
+                    diskWriteBytes: row.diskWrite,
                     cpuTier1: row.cpuTier1,
                     cpuTier2: row.cpuTier2,
                     cpuTier3: row.cpuTier3,

@@ -31,20 +31,40 @@ struct ReportTopBarView: View {
 
             Spacer()
 
+            // 时间范围一体化导航栏（方案 B：永久固定 5 个项，不动态增删格子）
             ReportNavigationPicker(
                 title: String(localized: "report.ui.timeRange"),
-                selection: Binding(get: { viewModel.selectedRange }, set: { viewModel.selectRange($0) })
+                selection: Binding(
+                    get: { selectedTab },
+                    set: { selectTab($0) }
+                )
             ) {
-                Text(ReportTimeRange.today.label).tag(ReportTimeRange.today)
-                Text(ReportTimeRange.week.label).tag(ReportTimeRange.week)
-                Text(ReportTimeRange.month.label).tag(ReportTimeRange.month)
-                Text(ReportTimeRange.year.label).tag(ReportTimeRange.year)
-                if case .custom = viewModel.selectedRange {
-                    Text(viewModel.selectedRange.label).tag(viewModel.selectedRange)
-                }
+                Text(ReportTimeRange.today.label).tag(TimeRangeTab.today)
+                Text(ReportTimeRange.week.label).tag(TimeRangeTab.week)
+                Text(ReportTimeRange.month.label).tag(TimeRangeTab.month)
+                Text(ReportTimeRange.year.label).tag(TimeRangeTab.year)
+                Text(String(localized: "stats.range.custom", defaultValue: "自定义")).tag(TimeRangeTab.custom)
             }
             .fixedSize()
-            customRangeButton
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    if selectedTab == .custom {
+                        showCalendarPopover = true
+                    }
+                }
+            )
+            .popover(isPresented: $showCalendarPopover) {
+                ReportCustomRangePicker(
+                    selectedRange: viewModel.selectedRange,
+                    isPresented: $showCalendarPopover,
+                    onApply: { from, to in
+                        viewModel.applyCustomRange(from: from, to: to)
+                    }
+                )
+            }
+
+            // 自定义范围激活时展示的具体起止日期徽章，点击可重新打开日历修改
+            customRangeBadge
 
             // 当前数据粒度指示徽章
             if let granularity = viewModel.rangeModel?.granularity {
@@ -102,26 +122,74 @@ struct ReportTopBarView: View {
         }
     }
 
-    private var customRangeButton: some View {
-        let isCustom: Bool = {
-            if case .custom = viewModel.selectedRange { return true }
-            return false
-        }()
-        return Button {
-            showCalendarPopover.toggle()
-        } label: {
-            Label(String(localized: "stats.r.selectRange"), systemImage: "calendar")
+    // MARK: - 内部辅助方法与状态映射
+
+    private enum TimeRangeTab: Hashable {
+        case today
+        case week
+        case month
+        case year
+        case custom
+    }
+
+    private var selectedTab: TimeRangeTab {
+        switch viewModel.selectedRange {
+        case .today: return .today
+        case .week: return .week
+        case .month: return .month
+        case .year: return .year
+        case .custom: return .custom
         }
-        .buttonStyle(.bordered)
-        .tint(isCustom ? .accentColor : nil)
-        .popover(isPresented: $showCalendarPopover) {
-            ReportCustomRangePicker(
-                selectedRange: viewModel.selectedRange,
-                isPresented: $showCalendarPopover,
-                onApply: { from, to in
-                    viewModel.applyCustomRange(from: from, to: to)
+    }
+
+    private func selectTab(_ tab: TimeRangeTab) {
+        switch tab {
+        case .today:
+            showCalendarPopover = false
+            viewModel.selectRange(.today)
+        case .week:
+            showCalendarPopover = false
+            viewModel.selectRange(.week)
+        case .month:
+            showCalendarPopover = false
+            viewModel.selectRange(.month)
+        case .year:
+            showCalendarPopover = false
+            viewModel.selectRange(.year)
+        case .custom:
+            showCalendarPopover = true
+        }
+    }
+
+    @ViewBuilder
+    private var customRangeBadge: some View {
+        if case .custom(let from, let to) = viewModel.selectedRange {
+            Button {
+                showCalendarPopover = true
+            } label: {
+                HStack(spacing: 4) {
+                    Image(systemName: "calendar")
+                        .font(.system(size: 10))
+                    Text(customRangeSummary(from: from, to: to))
+                        .font(.system(size: 10, weight: .medium))
+                        .monospacedDigit()
                 }
-            )
+                .foregroundStyle(Color.accentColor)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background {
+                    Capsule()
+                        .fill(Color.accentColor.opacity(0.12))
+                }
+            }
+            .buttonStyle(.plain)
+            .help(String(localized: "stats.r.selectRange"))
         }
+    }
+
+    private func customRangeSummary(from: Date, to: Date) -> String {
+        let calendar = Calendar.current
+        let inclusiveTo = calendar.date(byAdding: .day, value: -1, to: to) ?? to
+        return "\(from.formatted(.dateTime.month().day())) – \(inclusiveTo.formatted(.dateTime.month().day()))"
     }
 }

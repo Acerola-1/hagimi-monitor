@@ -5,7 +5,9 @@ import SwiftUI
 /// 热状态与风扇模块报表视图：包含热状态档位（0~3 档，杜绝乘 100 误读）、CPU 核心温度趋势、风扇转速，以及处理无风扇机型与沙盒传感器受限场景。
 struct ReportThermalView: View {
     @ObservedObject var viewModel: NativeReportViewModel
-    @State private var selectedDate: Date?
+    @State private var selectedTempDate: Date?
+    @State private var selectedThermalDate: Date?
+    @State private var selectedFanDate: Date?
 
     private let tempColor = ReportUIHelper.thermalColor
     private let peakColor = ReportUIHelper.peakColor
@@ -113,7 +115,7 @@ struct ReportThermalView: View {
 
                         Spacer()
 
-                        if let selectedDate, let row = ReportUIHelper.findClosestRow(to: selectedDate, in: rows), let t = row.cpuTempAvg {
+                        if let selectedTempDate, let row = ReportUIHelper.findClosestRow(to: selectedTempDate, in: rows), let t = row.cpuTempAvg {
                             Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): 温度 \(String(format: "%.1f°C", t))")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.primary)
@@ -133,8 +135,8 @@ struct ReportThermalView: View {
                             }
                         }
 
-                        if let selectedDate {
-                            RuleMark(x: .value("Selected", selectedDate))
+                        if let selectedTempDate {
+                            RuleMark(x: .value("Selected", selectedTempDate))
                                 .foregroundStyle(Color.secondary.opacity(0.4))
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
@@ -165,7 +167,7 @@ struct ReportThermalView: View {
                             }
                         }
                     }
-                    .chartXSelection(value: $selectedDate)
+                    .chartXSelection(value: $selectedTempDate)
                     .frame(height: 180)
                 }
             }
@@ -201,7 +203,7 @@ struct ReportThermalView: View {
 
                         Spacer()
 
-                        if let selectedDate, let row = ReportUIHelper.findClosestRow(to: selectedDate, in: rows), let lvl = row.cpuThermalAvg {
+                        if let selectedThermalDate, let row = ReportUIHelper.findClosestRow(to: selectedThermalDate, in: rows), let lvl = row.cpuThermalAvg {
                             Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): \(ReportUIHelper.formatThermalLevel(lvl))")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.primary)
@@ -235,8 +237,8 @@ struct ReportThermalView: View {
                             }
                         }
 
-                        if let selectedDate {
-                            RuleMark(x: .value("Selected", selectedDate))
+                        if let selectedThermalDate {
+                            RuleMark(x: .value("Selected", selectedThermalDate))
                                 .foregroundStyle(Color.secondary.opacity(0.4))
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
@@ -272,7 +274,7 @@ struct ReportThermalView: View {
                             }
                         }
                     }
-                    .chartXSelection(value: $selectedDate)
+                    .chartXSelection(value: $selectedThermalDate)
                     .frame(height: 160)
                 }
             }
@@ -319,7 +321,7 @@ struct ReportThermalView: View {
 
                         Spacer()
 
-                        if let selectedDate, let row = ReportUIHelper.findClosestRow(to: selectedDate, in: rows), let rpm = row.fanAvg {
+                        if let selectedFanDate, let row = ReportUIHelper.findClosestRow(to: selectedFanDate, in: rows), let rpm = row.fanAvg {
                             Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): \(String(format: "%.0f RPM", rpm))")
                                 .font(.system(size: 11, design: .monospaced))
                                 .foregroundStyle(.primary)
@@ -339,8 +341,8 @@ struct ReportThermalView: View {
                             }
                         }
 
-                        if let selectedDate {
-                            RuleMark(x: .value("Selected", selectedDate))
+                        if let selectedFanDate {
+                            RuleMark(x: .value("Selected", selectedFanDate))
                                 .foregroundStyle(Color.secondary.opacity(0.4))
                                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
                         }
@@ -371,7 +373,7 @@ struct ReportThermalView: View {
                             }
                         }
                     }
-                    .chartXSelection(value: $selectedDate)
+                    .chartXSelection(value: $selectedFanDate)
                     .frame(height: 180)
                 }
             }

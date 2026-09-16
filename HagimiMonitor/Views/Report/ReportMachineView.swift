@@ -9,8 +9,8 @@ struct ReportMachineView: View {
     var body: some View {
         let categories = viewModel.snapshot?.hardware?.categories ?? []
 
-        // R19: 本模块无 HardwareRail 契约，采用全宽布局
-        VStack(spacing: 16) {
+        // R19: 本模块无 HardwareRail 契约，采用全宽布局，默认锁定左侧对齐防跳动
+        VStack(alignment: .leading, spacing: 16) {
             if categories.isEmpty {
                 ReportCardView(
                     title: String(localized: "stats.r.kThisMac", defaultValue: "本机硬件全景规格"),
@@ -18,19 +18,18 @@ struct ReportMachineView: View {
                 ) {
                     ReportEmptyPlaceholder(text: String(localized: "stats.r.emptyHardware", defaultValue: "正在采集或当前环境限制无法读取硬件全景清单"))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-                VStack(alignment: .leading, spacing: 16) {
-                    // 分类横向滚动标签栏
-                    categorySelector(categories: categories)
+                // 分类标签栏：与报表顶部时间切换使用完全一致的导航选择器样式
+                categorySelector(categories: categories)
 
-                    // 当前选中分类的具体规格卡片组
-                    if let category = currentCategory(categories: categories) {
-                        categoryDetailsView(category: category)
-                    }
+                // 当前选中分类的具体规格卡片组
+                if let category = currentCategory(categories: categories) {
+                    categoryDetailsView(category: category)
                 }
             }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
             if selectedCategoryId.isEmpty, let first = categories.first {
                 selectedCategoryId = first.id
@@ -48,21 +47,18 @@ struct ReportMachineView: View {
     // MARK: - 分类选择栏
 
     private func categorySelector(categories: [HardwareCategory]) -> some View {
-        ScrollView(.horizontal) {
-            ReportNavigationPicker(
-                title: String(localized: "report.ui.hardwareCategory"),
-                selection: Binding(
-                    get: { currentCategory(categories: categories)?.id ?? "" },
-                    set: { selectedCategoryId = $0 }
-                )
-            ) {
-                ForEach(categories) { category in
-                    Text(category.id == "this-mac" ? String(localized: "report.ui.device") : hwText(category.nameKey)).tag(category.id)
-                }
+        ReportNavigationPicker(
+            title: String(localized: "report.ui.hardwareCategory"),
+            selection: Binding(
+                get: { currentCategory(categories: categories)?.id ?? "" },
+                set: { selectedCategoryId = $0 }
+            )
+        ) {
+            ForEach(categories) { category in
+                Text(category.id == "this-mac" ? String(localized: "report.ui.device") : hwText(category.nameKey)).tag(category.id)
             }
-            .fixedSize()
-            .padding(.vertical, 4)
         }
+        .fixedSize()
     }
 
     // MARK: - 分类详情卡片组
@@ -74,15 +70,11 @@ struct ReportMachineView: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 if category.id == "this-mac" {
+                    // 本机概览页在原生报表中特化仅呈现核心身份组（型号、芯片、系统版本等）。
+                    // 其余硬件分类（CPU、GPU、内存、显示、磁盘、电池）在原生报表中均已有独立的主题二级看板；
+                    // 完整的全部硬件事实与高级属性统一由 StandaloneHTML 独立导出报告完整承载。
                     ForEach(category.groups.filter { $0.id == "identity" }, id: \.id) { group in
                         hardwareGroup(group)
-                    }
-                    DisclosureGroup(String(localized: "report.ui.advancedHardware")) {
-                        VStack(alignment: .leading, spacing: 16) {
-                            ForEach(category.groups.filter { $0.id != "identity" }, id: \.id) { group in
-                                hardwareGroup(group)
-                            }
-                        }.padding(.top, 12)
                     }
                 } else {
                     ForEach(Array(category.groups.enumerated()), id: \.offset) { _, group in
@@ -91,6 +83,7 @@ struct ReportMachineView: View {
                 }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func hardwareGroup(_ group: HardwareFactGroup) -> some View {

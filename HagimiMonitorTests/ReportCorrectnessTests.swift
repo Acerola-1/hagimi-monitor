@@ -296,7 +296,7 @@ struct ReportCorrectnessTests {
 
         let metrics = ReportDataAggregator.computeNetworkMetrics(
             rows: [r2, r1], // 乱序输入
-            isToday: false,
+            isHourly: false,
             calendar: calendar
         )
 

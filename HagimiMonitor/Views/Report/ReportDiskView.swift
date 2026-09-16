@@ -20,8 +20,8 @@ struct ReportDiskView: View {
                 // 2. 磁盘读写速率趋势图
                 rateTrendCard
 
-                // 3. 每日 I/O 吞吐柱状图（跨天范围时显示）
-                if let daily = viewModel.rangeModel?.disk.dailyBars, daily.count > 1 {
+                // 3. I/O 吞吐柱状图（今日自适应每小时，跨天自适应每日）
+                if let daily = viewModel.rangeModel?.disk.dailyBars, !daily.isEmpty {
                     dailyThroughputCard(daily: daily)
                 }
             }
@@ -178,11 +178,16 @@ struct ReportDiskView: View {
         }
     }
 
-    // MARK: - 3. 每日 I/O 吞吐柱状图 (R01: 累计量单位为 GB，不带 /s)
+    // MARK: - 3. I/O 吞吐柱状图 (今日自适应每小时，跨天自适应每日)
 
     private func dailyThroughputCard(daily: [ReportDiskMetrics.DailyBar]) -> some View {
-        ReportCardView(
-            title: String(localized: "stats.r.dailyDiskTitle", defaultValue: "每日 I/O 读写量"),
+        let isHourly = viewModel.rangeModel?.disk.isHourly ?? viewModel.isSingleDaySelected
+        let title = isHourly
+            ? String(localized: "stats.r.hourlyDiskTitle", defaultValue: "每小时 I/O 读写量")
+            : String(localized: "stats.r.dailyDiskTitle", defaultValue: "每日 I/O 读写量")
+
+        return ReportCardView(
+            title: title,
             icon: "chart.bar.xaxis"
         ) {
             VStack(alignment: .leading, spacing: 8) {

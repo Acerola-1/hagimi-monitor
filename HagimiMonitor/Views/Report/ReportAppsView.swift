@@ -10,16 +10,22 @@ struct ReportAppsView: View {
         case cpu
         case memory
         case gpu
+        #if DIRECT_DISTRIBUTION
+        case disk
         case network
+        #endif
 
         var id: String { rawValue }
 
         var label: String {
             switch self {
-            case .cpu: return String(localized: "stats.r.kCpu", defaultValue: "CPU 占用")
+            case .cpu: return String(localized: "stats.r.kCpu", defaultValue: "CPU 消耗")
             case .memory: return String(localized: "stats.r.kMem", defaultValue: "内存占用")
-            case .gpu: return String(localized: "stats.r.kGpu", defaultValue: "GPU 占用")
+            case .gpu: return String(localized: "stats.r.kGpu", defaultValue: "GPU 消耗")
+            #if DIRECT_DISTRIBUTION
+            case .disk: return String(localized: "stats.r.tabDisk", defaultValue: "磁盘读写")
             case .network: return String(localized: "stats.r.railNet", defaultValue: "网络流量")
+            #endif
             }
         }
     }
@@ -42,32 +48,39 @@ struct ReportAppsView: View {
 
     private var rankingCard: some View {
         let entries = currentEntries
-        let isLongRange = (viewModel.selectedRange == .year)
 
         return ReportCardView(
             title: String(localized: "stats.r.secAppsTitle", defaultValue: "应用活动排行"),
             icon: "app.badge.checkmark"
         ) {
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    // 分类切换选择器
-                    Picker("", selection: $selectedTab) {
+                HStack(spacing: 16) {
+                    // 分类切换选择器：统一使用系统液态玻璃胶囊导航样式
+                    ReportNavigationPicker(
+                        title: "",
+                        selection: $selectedTab
+                    ) {
                         ForEach(AppRankingTab.allCases) { tab in
                             Text(tab.label).tag(tab)
                         }
                     }
-                    .labelsHidden()
-                    .compatibleTabPickerStyle()
-                    .frame(maxWidth: 360)
+                    .fixedSize()
 
                     Spacer()
 
-                    // R18: 数据作用域提示
-                    if isLongRange {
-                        Text(String(localized: "stats.r.appsScopeNotice", defaultValue: "注：应用历史保留最多近 60 天"))
-                            .font(.system(size: 11))
-                            .foregroundStyle(.tertiary)
+                    // R18: 数据作用域与聚合口径说明（自适应范围，今日不显示“整日聚合”）
+                    Text(scopeNoticeText)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.tertiary)
+
+                    // 包含系统应用开关（默认开启，靠右放置）
+                    Toggle(isOn: $viewModel.includeSystemApps) {
+                        Text(String(localized: "stats.report.includeSystemApps", defaultValue: "包含系统应用"))
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
                     }
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
                 }
 
                 if entries.isEmpty {
@@ -86,14 +99,34 @@ struct ReportAppsView: View {
         }
     }
 
+    private var scopeNoticeText: String {
+        if viewModel.selectedRange == .year {
+            return String(localized: "stats.r.appsScopeNotice", defaultValue: "注：应用历史保留最多近 60 天，按整日汇总")
+        } else if viewModel.isSingleDaySelected {
+            return viewModel.selectedRange == .today
+                ? String(localized: "stats.r.appsSampleNoticeToday", defaultValue: "注：数据源自每分钟前列采样，实时统计")
+                : String(localized: "stats.r.appsSampleNoticeSingleDay", defaultValue: "注：数据源自每分钟前列采样，单日统计")
+        } else {
+            return String(localized: "stats.r.appsSampleNotice", defaultValue: "注：数据源自每分钟前列采样，按日汇总")
+        }
+    }
+
     private var currentEntries: [ReportAppRankingItem] {
         guard let apps = viewModel.rangeModel?.apps else { return [] }
-        switch selectedTab {
-        case .cpu: return apps.cpuList
-        case .memory: return apps.memList
-        case .gpu: return apps.gpuList
-        case .network: return apps.netList
-        }
+        let rawList: [ReportAppRankingItem] = {
+            switch selectedTab {
+            case .cpu: return apps.cpuList
+            case .memory: return apps.memList
+            case .gpu: return apps.gpuList
+            #if DIRECT_DISTRIBUTION
+            case .disk: return apps.diskList
+            case .network: return apps.netList
+            #endif
+            }
+        }()
+
+        let filtered = viewModel.includeSystemApps ? rawList : rawList.filter { !$0.isSystemApp }
+        return Array(filtered.prefix(8))
     }
 
     private func appRow(index: Int, app: ReportAppRankingItem) -> some View {
@@ -178,7 +211,7 @@ struct ReportAppsView: View {
 
                         Spacer()
 
-                        Text("告警 \(alert.episodes.count) 次")
+                        Text(String(localized: "stats.r.alertCount \(alert.episodes.count)"))
                             .font(.system(size: 11, weight: .medium))
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
@@ -186,7 +219,7 @@ struct ReportAppsView: View {
                             .foregroundStyle(Color(hex: 0xFF9500))
                             .clipShape(Capsule())
 
-                        Text("持续至多 \(alert.maxDurationMinutes)m")
+                        Text(String(localized: "stats.r.alertMaxDuration \(alert.maxDurationMinutes)"))
                             .font(.system(size: 11, design: .monospaced))
                             .foregroundStyle(.secondary)
 

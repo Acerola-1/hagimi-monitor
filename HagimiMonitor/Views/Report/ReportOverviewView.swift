@@ -6,6 +6,7 @@ import SwiftUI
 struct ReportOverviewView: View {
     @ObservedObject var viewModel: NativeReportViewModel
     @State private var selectedDate: Date?
+    @State private var showScoreBasis = false
 
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
@@ -25,7 +26,6 @@ struct ReportOverviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             overviewHeading
-            if hasAlerts { alertBanner }
             healthScoreSummary
             resourceGrid(primary: true)
             compositeTrendCard
@@ -61,136 +61,118 @@ struct ReportOverviewView: View {
         }
     }
 
-    // MARK: - 0. 异常告警与高负载提醒条
+    // MARK: - 0. 压力告警分类计数
 
-    private var hasAlerts: Bool {
-        let events = viewModel.rangeModel?.events ?? []
-        let appAlerts = viewModel.rangeModel?.apps.highLoadAlerts ?? []
-        return !events.isEmpty || !appAlerts.isEmpty
+    /// 概览只做分类计数,不铺开具体事件:事件按「连续压力片段」逐条生成,长范围动辄几十条,
+    /// 铺开会把首屏撑成流水账。计数胶囊各自带跳转,单条事件的细节留在压力警告模块。
+    private struct AlertTally {
+        var memoryCount = 0
+        var memoryWorstLevel = 0
+        var memoryOngoing = false
+        var thermalCount = 0
+        var thermalWorstLevel = 0
+        var thermalOngoing = false
+        var appCount = 0
+        var appOngoing = false
+
+        var pressureCount: Int { memoryCount + thermalCount }
+        var isClear: Bool { memoryCount == 0 && thermalCount == 0 && appCount == 0 }
     }
 
-    private var alertBanner: some View {
-        let events = viewModel.rangeModel?.events ?? []
-        let appAlerts = viewModel.rangeModel?.apps.highLoadAlerts ?? []
-
-        let ongoingEvents = events.filter { $0.state == .ongoing }
-        let ongoingApps = appAlerts.filter { $0.isOngoing }
-        let isCritical = !ongoingEvents.isEmpty || !ongoingApps.isEmpty
-
-        let tintColor = isCritical ? palette.severityTint(for: .critical) : palette.severityTint(for: .warning)
-
-        return HStack(spacing: 12) {
-            Image(systemName: isCritical ? "exclamationmark.triangle.fill" : "exclamationmark.circle.fill")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(tintColor)
-
-            VStack(alignment: .leading, spacing: 2) {
-                if !events.isEmpty {
-                    let first = events[0]
-                    let levelStr: String? = {
-                        switch (first.kind, first.worstLevel) {
-                        case (.memory, 2): return String(localized: "report.ui.severe")
-                        case (.memory, 1): return String(localized: "report.ui.warning")
-                        case (.thermal, 3): return String(localized: "report.ui.critical")
-                        case (.thermal, 2): return String(localized: "report.ui.severe")
-                        case (.thermal, 1): return String(localized: "report.ui.mild")
-                        default: return nil
-                        }
-                    }()
-
-                    HStack(spacing: 6) {
-                        Text(first.kind.title)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(tintColor)
-
-                        if let levelStr {
-                            Text("·")
-                                .foregroundStyle(.secondary)
-                            Text(levelStr)
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(first.worstLevel >= 2 ? palette.severityTint(for: .critical) : palette.severityTint(for: .warning))
-                        }
-
-                        Text("·")
-                            .foregroundStyle(.secondary)
-
-                        Text(String(localized: "report.ui.duration") + StatisticsDisplayFormat.duration(first.pressureSeconds))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.primary)
-
-                        Text("·")
-                            .foregroundStyle(.secondary)
-
-                        Text(first.state.label)
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(first.state == .ongoing ? tintColor : (first.state == .recovered ? palette.severityTint(for: .calm) : Color.secondary))
-
-                        if events.count > 1 {
-                            Text(String(format: String(localized: "report.ui.eventCount"), events.count))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                } else if !appAlerts.isEmpty {
-                    let firstApp = appAlerts[0]
-                    HStack(spacing: 6) {
-                        Text(firstApp.name)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(tintColor)
-
-                        Text("·")
-                            .foregroundStyle(.secondary)
-
-                        Text(String(format: String(localized: "report.ui.highMinutes"), firstApp.maxDurationMinutes))
-                            .font(.system(size: 12))
-                            .foregroundStyle(.primary)
-
-                        if appAlerts.count > 1 {
-                            Text(String(format: String(localized: "report.ui.appCount"), appAlerts.count))
-                                .font(.system(size: 11))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-                }
+    private var alertTally: AlertTally {
+        var tally = AlertTally()
+        for event in viewModel.rangeModel?.events ?? [] {
+            let ongoing = event.state == .ongoing
+            switch event.kind {
+            case .memory:
+                tally.memoryCount += 1
+                tally.memoryWorstLevel = max(tally.memoryWorstLevel, event.worstLevel)
+                tally.memoryOngoing = tally.memoryOngoing || ongoing
+            case .thermal:
+                tally.thermalCount += 1
+                tally.thermalWorstLevel = max(tally.thermalWorstLevel, event.worstLevel)
+                tally.thermalOngoing = tally.thermalOngoing || ongoing
             }
-
-            Spacer()
-
-            Button {
-                if !events.isEmpty {
-                    switch events[0].kind {
-                    case .memory: navigateTo(.memory)
-                    case .thermal: navigateTo(.thermal)
-                    }
-                } else {
-                    navigateTo(.apps)
-                }
-            } label: {
-                HStack(spacing: 4) {
-                    Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
-                        .font(.system(size: 11, weight: .medium))
-                    Image(systemName: "arrow.right")
-                        .font(.system(size: 10, weight: .semibold))
-                }
-            }
-            .buttonStyle(.bordered)
-            .controlSize(.small)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(tintColor.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(tintColor.opacity(0.2), lineWidth: 1)
-        )
+        let appAlerts = viewModel.rangeModel?.apps.highLoadAlerts ?? []
+        tally.appCount = appAlerts.count
+        tally.appOngoing = appAlerts.contains { $0.isOngoing }
+        return tally
     }
 
-    /// 概览首屏的紧凑评分摘要。它只描述选定范围内的压力记录，不暗示硬件健康诊断。
+    /// 单类告警配色:进行中的越级告警用严重色,其余进行中用警告色,已恢复一律中性色。
+    private func alertTint(worstLevel: Int, isOngoing: Bool) -> Color {
+        guard isOngoing else { return palette.severityTint(for: .calm) }
+        return palette.severityTint(for: worstLevel >= 2 ? .critical : .warning)
+    }
+
+    private func alertChip(
+        icon: String,
+        label: String,
+        count: Int,
+        tint: Color,
+        destination: ReportNavigationModule
+    ) -> some View {
+        Button { navigateTo(destination) } label: {
+            HStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .semibold))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(tint)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(tint.opacity(0.12)))
+            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .help(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
+    }
+
+    @ViewBuilder
+    private func alertChips(_ tally: AlertTally) -> some View {
+        HStack(spacing: 6) {
+            if tally.memoryCount > 0 {
+                alertChip(
+                    icon: "memorychip",
+                    label: String(localized: "stats.r.kMem", defaultValue: "内存"),
+                    count: tally.memoryCount,
+                    tint: alertTint(worstLevel: tally.memoryWorstLevel, isOngoing: tally.memoryOngoing),
+                    destination: .memory
+                )
+            }
+            if tally.thermalCount > 0 {
+                alertChip(
+                    icon: "flame.fill",
+                    label: String(localized: "stats.r.alertThermal", defaultValue: "热压力"),
+                    count: tally.thermalCount,
+                    tint: alertTint(worstLevel: tally.thermalWorstLevel, isOngoing: tally.thermalOngoing),
+                    destination: .thermal
+                )
+            }
+            if tally.appCount > 0 {
+                alertChip(
+                    icon: "app.badge.checkmark",
+                    label: String(localized: "stats.r.kApps", defaultValue: "应用"),
+                    count: tally.appCount,
+                    tint: alertTint(worstLevel: 1, isOngoing: tally.appOngoing),
+                    destination: .apps
+                )
+            }
+        }
+    }
+
+    /// 概览首屏的紧凑评分摘要：左侧分数与数据完整度，右侧压力告警分类计数。
+    /// 它只描述选定范围内的压力记录，不暗示硬件健康诊断。整行固定高度——告警计数与
+    /// 分数可用性都不参与高度计算，切换时间范围不会推动下方内容。
     private var healthScoreSummary: some View {
         let result = viewModel.rangeModel?.healthScore
+        let tally = alertTally
+
         return ReportCardView(
             title: String(localized: "stats.r.healthScoreTitle"),
             icon: "gauge.medium",
@@ -198,22 +180,51 @@ struct ReportOverviewView: View {
         ) {
             HStack(alignment: .center, spacing: 16) {
                 scoreSummary(result: result)
-                    .frame(minWidth: 170, alignment: .leading)
 
                 Divider()
                     .frame(height: 42)
 
+                // 定宽内衬:第三块的起点不随百分比位数浮动,「事件」标签始终落在同一处。
                 coverageSummary
-                    .frame(minWidth: 190, maxWidth: 250, alignment: .leading)
+                    .frame(minWidth: 190, alignment: .leading)
 
                 Divider()
                     .frame(height: 42)
 
-                scoreBasis(result: result)
-                    .frame(minWidth: 270, maxWidth: .infinity, alignment: .leading)
-                    .layoutPriority(1)
+                // 第三块自带标签,否则一串计数胶囊悬着不知从何而来。三块自左依次排列,
+                // 胶囊增减只向右侧的空隙生长,标签位置不动;只有操作按钮贴右边缘。
+                HStack(spacing: 8) {
+                    Text(String(localized: "stats.r.eventsBlockLabel", defaultValue: "事件"))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    if tally.isClear {
+                        Text("—")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                    } else {
+                        alertChips(tally)
+                    }
+                }
+
+                Spacer(minLength: 12)
+
+                if tally.pressureCount > 0 {
+                    Button { navigateTo(.events) } label: {
+                        HStack(spacing: 4) {
+                            Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
+                                .font(.system(size: 11, weight: .medium))
+                            Image(systemName: "arrow.right")
+                                .font(.system(size: 10, weight: .semibold))
+                        }
+                    }
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
+                    .help(String(localized: "stats.r.secEvents", defaultValue: "压力警告"))
+                }
             }
-            .frame(maxWidth: .infinity, minHeight: 54, maxHeight: 60, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(height: 56)
         }
     }
 
@@ -231,6 +242,8 @@ struct ReportOverviewView: View {
                     Text(String(localized: "stats.r.pts", defaultValue: "分"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
+
+                    scoreBasisButton
                 }
 
                 if let result {
@@ -239,12 +252,12 @@ struct ReportOverviewView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else {
-                    Text(viewModel.rangeModel?.healthScoreNilReason
-                         ?? String(localized: "stats.r.healthScoreInsufficient"))
+                    // 固定行高容不下两行原因,溢出的部分交给悬停提示。
+                    Text(nilReasonText)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(1)
+                        .help(nilReasonText)
                 }
             }
         }
@@ -260,85 +273,52 @@ struct ReportOverviewView: View {
                     .progressViewStyle(.linear)
                     .controlSize(.small)
                     .tint(.secondary)
-                Text(String(localized: "stats.r.coverageHint", defaultValue: "所选时段有效采样覆盖"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
             } else {
                 Text(String(localized: "stats.r.coverageUnavailable", defaultValue: "数据完整度 —"))
                     .font(.callout.weight(.medium))
                 Text(String(localized: "stats.r.coverageNoData", defaultValue: "所选范围没有有效采样"))
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .lineLimit(2)
+                    .lineLimit(1)
             }
         }
     }
 
-    @ViewBuilder
-    private func scoreBasis(result: StatisticsHealthScore.Result?) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(String(localized: "stats.r.scoreBasis", defaultValue: "评分依据"))
-                .font(.caption.weight(.semibold))
-
-            if let result,
-               result.dimensions.count == 2,
-               let memory = result.dimensions.first(where: { $0.kind == .memory }),
-               let thermal = result.dimensions.first(where: { $0.kind == .thermal }) {
-                HStack(spacing: 10) {
-                    scoreBasisValue(
-                        label: String(localized: "stats.r.scoreBasisMemory", defaultValue: "内存压力"),
-                        value: memory.rawText,
-                        weight: "60%"
-                    )
-                    scoreBasisValue(
-                        label: String(localized: "stats.r.scoreBasisThermal", defaultValue: "热压力"),
-                        value: thermal.rawText,
-                        weight: "40%"
-                    )
-                }
-
-                Label {
-                    Text(String(localized: "stats.r.scoreFormula", defaultValue: "100 −（内存压力负担 × 60% + 热压力负担 × 40%）× 100"))
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "info.circle")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .help(String(localized: "stats.r.scoreFormula", defaultValue: "100 −（内存压力负担 × 60% + 热压力负担 × 40%）× 100"))
-            } else if let result, !result.dimensions.isEmpty {
-                Text(String(localized: "stats.r.historicalScoreBasis", defaultValue: "历史评分口径"))
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                Text(result.dimensions.map { "\($0.name) \($0.rawText)" }.joined(separator: " · "))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .help(result.dimensions.map { "\($0.name) \($0.rawText)" }.joined(separator: " · "))
-            } else {
-                Text(String(localized: "stats.r.scoreBasisUnavailable", defaultValue: "暂无可用评分依据"))
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(2)
-            }
-        }
+    private var nilReasonText: String {
+        viewModel.rangeModel?.healthScoreNilReason
+            ?? String(localized: "stats.r.healthScoreInsufficient")
     }
 
-    private func scoreBasisValue(label: String, value: String, weight: String) -> some View {
-        HStack(spacing: 4) {
-            Text(label)
-            Text(value)
-                .monospacedDigit()
-            Text("× \(weight)")
+    // MARK: - 评分依据按需弹出
+
+    /// 评分依据按需弹出:公式与权重是解释性内容,常驻会占用横向排版预算并与分数抢宽度,
+    /// 其换行还会把这一行撑高。
+    private var scoreBasisButton: some View {
+        Button { showScoreBasis.toggle() } label: {
+            Image(systemName: "info.circle")
+                .font(.caption)
                 .foregroundStyle(.secondary)
         }
-        .font(.caption2)
-        .lineLimit(1)
+        .buttonStyle(.plain)
+        .help(String(localized: "stats.r.scoreBasis", defaultValue: "评分依据"))
+        .accessibilityLabel(Text(String(localized: "stats.r.scoreBasis", defaultValue: "评分依据")))
+        .popover(isPresented: $showScoreBasis, arrowEdge: .bottom) {
+            scoreBasisPopover
+        }
+    }
+
+    private var scoreBasisPopover: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(String(localized: "stats.r.scoreBasis", defaultValue: "评分依据"))
+                .font(.system(size: 12, weight: .semibold))
+
+            Text(String(localized: "stats.r.scoreFormula", defaultValue: "100 −（内存压力负担 × 60% + 热压力负担 × 40%）× 100"))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(width: 260, alignment: .leading)
     }
 
     // MARK: - 1.2 核心用量与传输总览卡片 (直达各模块明细)

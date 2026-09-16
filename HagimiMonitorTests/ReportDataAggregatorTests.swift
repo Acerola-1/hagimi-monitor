@@ -207,6 +207,8 @@ struct ReportDataAggregatorTests {
             memSamples: 10,
             netDownBytes: 1000,
             netUpBytes: 500,
+            diskReadBytes: 2000,
+            diskWriteBytes: 1000,
             cpuTier1: 5, cpuTier2: 2, cpuTier3: 0,
             cpuPeak: 45.0,
             gpuTier1: 0, gpuTier2: 0, gpuTier3: 0,
@@ -226,6 +228,8 @@ struct ReportDataAggregatorTests {
             memSamples: 20,
             netDownBytes: 2000,
             netUpBytes: 1000,
+            diskReadBytes: 2000,
+            diskWriteBytes: 1000,
             cpuTier1: 10, cpuTier2: 5, cpuTier3: 1,
             cpuPeak: 85.0,
             gpuTier1: 0, gpuTier2: 0, gpuTier3: 0,
@@ -244,10 +248,123 @@ struct ReportDataAggregatorTests {
         let rankings = ReportDataAggregator.aggregateApps(processData: processData, from: from, to: to, isDirect: true)
         #expect(rankings.cpuList.count == 1)
         let safariCpu = rankings.cpuList[0]
-        // (30*10 + 60*20) / 30 = 1500 / 30 = 50.0
-        #expect(safariCpu.value == 50.0)
-        #expect(safariCpu.tierHint?.contains("30-50%: 15m") == true)
+        // (30*10 + 60*20) / 100 = 1500 / 100 = 15.0 核·分
+        #expect(safariCpu.value == 15.0)
+        #expect(safariCpu.valueText == "15 核·分")
+        #expect(safariCpu.tierHint?.contains("均值 50.0%") == true)
+        #expect(safariCpu.tierHint?.contains("峰值 85%") == true)
+        #expect(safariCpu.tierHint?.contains("满载: 1m") == true)
         #expect(rankings.netList.count == 1)
         #expect(rankings.netList[0].value == 4500) // (1000+500) + (2000+1000)
+        #expect(rankings.diskList.count == 1)
+        #expect(rankings.diskList[0].value == 6000) // (2000+1000) + (2000+1000)
+    }
+
+    // MARK: - 系统应用过滤判定与吞吐自适应
+
+    @Test func systemAppDetectionCorrectlyIdentifiesSystemProcesses() {
+        // 生产环境入库格式（localizedName 或 lastPathComponent）
+        #expect(ReportAppRankingItem.isSystem(name: "Finder"))
+        #expect(ReportAppRankingItem.isSystem(name: "访达"))
+        #expect(ReportAppRankingItem.isSystem(name: "Dock"))
+        #expect(ReportAppRankingItem.isSystem(name: "controlcenter"))
+        #expect(ReportAppRankingItem.isSystem(name: "Control Center"))
+        #expect(ReportAppRankingItem.isSystem(name: "控制中心"))
+        #expect(ReportAppRankingItem.isSystem(name: "notificationcenter"))
+        #expect(ReportAppRankingItem.isSystem(name: "Notification Center"))
+        #expect(ReportAppRankingItem.isSystem(name: "System Settings"))
+        #expect(ReportAppRankingItem.isSystem(name: "系统设置"))
+        #expect(ReportAppRankingItem.isSystem(name: "opendirectoryd"))
+        #expect(ReportAppRankingItem.isSystem(name: "windowserver"))
+        #expect(ReportAppRankingItem.isSystem(name: "kernel_task"))
+
+        // 兼容双参数接口验证
+        #expect(ReportAppRankingItem.isSystem(appKey: "Finder", name: "Finder"))
+
+        // 三方日常应用不应误判
+        #expect(!ReportAppRankingItem.isSystem(name: "Zed"))
+        #expect(!ReportAppRankingItem.isSystem(name: "Discord"))
+        #expect(!ReportAppRankingItem.isSystem(name: "Sublime Text"))
+    }
+
+    @Test func isSingleDayCorrectlyIdentifiesSingleDayRanges() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let day1Start = calendar.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 0, minute: 0, second: 0))!
+        let day1EndExclusive = calendar.date(from: DateComponents(year: 2026, month: 9, day: 17, hour: 0, minute: 0, second: 0))!
+        let day1Partial = calendar.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 15, minute: 30, second: 0))!
+        let day2EndExclusive = calendar.date(from: DateComponents(year: 2026, month: 9, day: 18, hour: 0, minute: 0, second: 0))!
+
+        // 完整单日（左闭右开）
+        #expect(ReportDataAggregator.isSingleDay(from: day1Start, to: day1EndExclusive, calendar: calendar))
+        // 单日内部分跨度（例如当天上午至下午）
+        #expect(ReportDataAggregator.isSingleDay(from: day1Start, to: day1Partial, calendar: calendar))
+        // 跨天（2 天）
+        #expect(!ReportDataAggregator.isSingleDay(from: day1Start, to: day2EndExclusive, calendar: calendar))
+        // 跨周（7 天）
+        let weekLater = day1Start.addingTimeInterval(7 * 86400)
+        #expect(!ReportDataAggregator.isSingleDay(from: day1Start, to: weekLater, calendar: calendar))
+        // 零跨度或反向
+        #expect(!ReportDataAggregator.isSingleDay(from: day1Start, to: day1Start, calendar: calendar))
+    }
+
+    @Test func hourlyThroughputCalculatesForSingleDay() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let baseDate = Date(timeIntervalSince1970: 1700000000) // Align to an hour
+        let hour0 = calendar.dateInterval(of: .hour, for: baseDate)!.start
+        let hour1 = hour0.addingTimeInterval(3600)
+
+        let r1 = makeRow(t: Int64(hour0.timeIntervalSince1970), netDown: 1024)
+        let r2 = makeRow(t: Int64(hour1.timeIntervalSince1970), netDown: 2048)
+
+        let hourlyNet = ReportDataAggregator.computeNetworkMetrics(
+            rows: [r1, r2],
+            isHourly: true,
+            calendar: calendar
+        )
+        #expect(hourlyNet.isHourly == true)
+        #expect(hourlyNet.dailyBars.count == 2)
+        #expect(hourlyNet.dailyBars[0].downBytes == 1024)
+        #expect(hourlyNet.dailyBars[1].downBytes == 2048)
+    }
+
+    @Test func customSingleDayRangeAggregatesToHourlyBars() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+
+        let from = calendar.date(from: DateComponents(year: 2026, month: 9, day: 16, hour: 0, minute: 0, second: 0))!
+        let to = calendar.date(from: DateComponents(year: 2026, month: 9, day: 17, hour: 0, minute: 0, second: 0))!
+
+        let mid = from.addingTimeInterval(3600 * 10)
+        let row = makeRow(t: Int64(mid.timeIntervalSince1970), netDown: 4096)
+
+        let snapshot = ReportSnapshot(
+            capturedAt: to,
+            meta: ReportMeta(deviceName: "Mac", modelName: "MacBookPro18,1", osVersion: "15.0", recordDays: 1, appVersion: "1.0", isDirect: true),
+            minutes: [row],
+            hours: [row],
+            days: [row],
+            process: nil,
+            hardware: nil
+        )
+
+        let model = ReportDataAggregator.aggregate(
+            snapshot: snapshot,
+            range: .custom(from: from, to: to),
+            now: to,
+            calendar: calendar,
+            hardwareHasBattery: false,
+            hardwareHasFans: false,
+            fanSensorAvailable: false
+        )
+
+        #expect(model.isSingleDay == true)
+        #expect(model.network.isHourly == true)
+        #expect(model.disk.isHourly == true)
+        #expect(model.network.dailyBars.count == 1)
+        #expect(model.network.dailyBars[0].dateText == "10:00")
+        #expect(model.network.dailyBars[0].downBytes == 4096)
     }
 }

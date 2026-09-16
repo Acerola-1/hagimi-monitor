@@ -69,142 +69,6 @@
         }
       }
     },
-    "report.ui.severe" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Serious"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "严重"
-          }
-        }
-      }
-    },
-    "report.ui.warning" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Warning"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "警告"
-          }
-        }
-      }
-    },
-    "report.ui.critical" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Critical"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "临界"
-          }
-        }
-      }
-    },
-    "report.ui.mild" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Mild"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "轻微"
-          }
-        }
-      }
-    },
-    "report.ui.duration" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Duration "
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "累计 "
-          }
-        }
-      }
-    },
-    "report.ui.eventCount" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d events in total"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等共 %d 起事件"
-          }
-        }
-      }
-    },
-    "report.ui.highMinutes" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "High load for %d minutes"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "持续高负荷运行 %d 分钟"
-          }
-        }
-      }
-    },
-    "report.ui.appCount" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%d apps in total"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "等 %d 个应用"
-          }
-        }
-      }
-    },
     "report.ui.peakPower" : {
       "extractionState": "manual",
       "localizations": {
@@ -426,19 +290,70 @@
         }
       }
     },
-    "report.ui.advancedHardware" : {
+    "stats.report.includeSystemApps" : {
       "extractionState": "manual",
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Advanced hardware properties"
+            "value": "Include System Apps"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "高级硬件属性"
+            "value": "包含系统应用"
+          }
+        }
+      }
+    },
+    "report.ui.days" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "days"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "天"
+          }
+        }
+      }
+    },
+    "report.ui.thisMonth" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Month"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本月"
+          }
+        }
+      }
+    },
+    "report.ui.yesterday" : {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Yesterday"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "昨天"
           }
         }
       }
@@ -528,40 +443,6 @@
         }
       }
     },
-    "report.ui.from" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "From"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "起始日期"
-          }
-        }
-      }
-    },
-    "report.ui.to" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "To"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "结束日期"
-          }
-        }
-      }
-    },
     "report.ui.apply" : {
       "extractionState": "manual",
       "localizations": {
@@ -592,23 +473,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "取消"
-          }
-        }
-      }
-    },
-    "report.ui.dateEndpoint" : {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Date endpoint"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "日期端点"
           }
         }
       }
@@ -9880,6 +9744,22 @@
         }
       }
     },
+    "stats.r.eventsBlockLabel": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Events"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "事件"
+          }
+        }
+      }
+    },
     "stats.r.hwCatConnectivity": {
       "extractionState": "manual",
       "localizations": {
@@ -14712,6 +14592,22 @@
         }
       }
     },
+    "stats.r.kApps": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Apps"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用"
+          }
+        }
+      }
+    },
     "stats.r.kCpu": {
       "localizations": {
         "en": {
@@ -15876,7 +15772,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "压力告警"
+            "value": "压力警告"
           }
         }
       }
@@ -18389,6 +18285,371 @@
         }
       }
     },
+    "stats.r.appsSampleNotice": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note: Based on per-minute top sampling, daily rollup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注：数据源自每分钟前列采样，按日汇总"
+          }
+        }
+      }
+    },
+    "stats.r.appsSampleNoticeToday": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note: Based on per-minute top sampling, real-time tracking"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注：数据源自每分钟前列采样，实时统计"
+          }
+        }
+      }
+    },
+    "stats.r.appsSampleNoticeSingleDay": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note: Based on per-minute top sampling, single-day tracking"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "注：数据源自每分钟前列采样，单日统计"
+          }
+        }
+      }
+    },
+    "stats.r.rangeEnd": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End date"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束日期"
+          }
+        }
+      }
+    },
+    "stats.r.rangeSelected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选"
+          }
+        }
+      }
+    },
+    "stats.r.rangeStart": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start date"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "起始日期"
+          }
+        }
+      }
+    },
+    "stats.r.alertCount %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld alerts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "告警 %lld 次"
+          }
+        }
+      }
+    },
+    "stats.r.alertMaxDuration %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to %lldm"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持续至多 %lldm"
+          }
+        }
+      }
+    },
+    "stats.r.appResidentAvg": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Resident avg"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常驻均值"
+          }
+        }
+      }
+    },
+    "stats.r.prefixAvg": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Avg"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "均值"
+          }
+        }
+      }
+    },
+    "stats.r.prefixDuration": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duration:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "持续时长:"
+          }
+        }
+      }
+    },
+    "stats.r.prefixFullLoad": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full load:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "满载:"
+          }
+        }
+      }
+    },
+    "stats.r.prefixHighLoad": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High load:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高载:"
+          }
+        }
+      }
+    },
+    "stats.r.prefixHighMem": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High memory:"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高水位:"
+          }
+        }
+      }
+    },
+    "stats.r.prefixPeak": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peak"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值"
+          }
+        }
+      }
+    },
+    "stats.r.prefixRead": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读"
+          }
+        }
+      }
+    },
+    "stats.r.prefixWrite": {
+      "comment": "原子级词缀键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "写"
+          }
+        }
+      }
+    },
+    "stats.r.unitCoreHours": {
+      "comment": "原子级单位键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "core·hrs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核·时"
+          }
+        }
+      }
+    },
+    "stats.r.unitCoreMin": {
+      "comment": "原子级单位键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "core·min"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "核·分"
+          }
+        }
+      }
+    },
+    "stats.r.unitGpuHours": {
+      "comment": "原子级单位键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU·hrs"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU·时"
+          }
+        }
+      }
+    },
+    "stats.r.unitGpuMin": {
+      "comment": "原子级单位键，值不得含格式化占位符（如 %@ / %d 等）",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU·min"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPU·分"
+          }
+        }
+      }
+    },
+    "stats.r.tabDisk": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disk I/O"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "磁盘读写"
+          }
+        }
+      }
+    },
     "stats.r.battHistorySubtitle": {
       "localizations": {
         "en": {
@@ -18997,22 +19258,6 @@
         }
       }
     },
-    "stats.r.coverageHint": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Effective sample coverage for selected period"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "所选时段有效采样覆盖"
-          }
-        }
-      }
-    },
     "stats.r.coverageNoData": {
       "localizations": {
         "en": {
@@ -19061,38 +19306,6 @@
         }
       }
     },
-    "stats.r.customRangePending": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Pending range"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "待应用范围"
-          }
-        }
-      }
-    },
-    "stats.r.historicalScoreBasis": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Historical scoring basis"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "历史评分口径"
-          }
-        }
-      }
-    },
     "stats.r.scoreBasis": {
       "localizations": {
         "en": {
@@ -19105,54 +19318,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "评分依据"
-          }
-        }
-      }
-    },
-    "stats.r.scoreBasisMemory": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Memory pressure"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "内存压力"
-          }
-        }
-      }
-    },
-    "stats.r.scoreBasisThermal": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Thermal pressure"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "热压力"
-          }
-        }
-      }
-    },
-    "stats.r.scoreBasisUnavailable": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No scoring basis available"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "暂无可用评分依据"
           }
         }
       }
@@ -19701,6 +19866,54 @@
         }
       }
     },
+    "stats.r.sHourlyNet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hourly Network Traffic"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每小时流量吞吐"
+          }
+        }
+      }
+    },
+    "stats.r.noThroughputData": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No throughput data in selected range"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选范围内暂无流量吞吐数据"
+          }
+        }
+      }
+    },
+    "stats.r.hourlyDiskTitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hourly Disk I/O"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每小时 I/O 读写量"
+          }
+        }
+      }
+    },
     "stats.r.sDownPeak": {
       "localizations": {
         "en": {
@@ -20017,22 +20230,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "采样明细"
-          }
-        }
-      }
-    },
-    "stats.r.singleDayNoBars": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Daily comparison bars are not applicable for a single day range"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "单日范围内无需跨日吞吐柱状对比"
           }
         }
       }

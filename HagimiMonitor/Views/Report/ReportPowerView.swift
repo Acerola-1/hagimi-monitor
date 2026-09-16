@@ -26,7 +26,7 @@ struct ReportPowerView: View {
                     if battery.isSupported {
                         if battery.hasHistoryInRange {
                             batteryLevelCard
-                            if !battery.dailyHistory.isEmpty {
+                            if viewModel.selectedRange != .today && !battery.dailyHistory.isEmpty {
                                 batteryHealthHistoryCard(history: battery.dailyHistory)
                             }
                         } else {

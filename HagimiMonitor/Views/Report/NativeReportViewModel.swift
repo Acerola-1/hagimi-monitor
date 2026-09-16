@@ -32,7 +32,7 @@ enum ReportNavigationModule: String, CaseIterable, Identifiable {
         case .power: return String(localized: "stats.r.railPower", defaultValue: "电源与电池")
         case .thermal: return String(localized: "stats.r.secThermal", defaultValue: "热压力")
         case .apps: return String(localized: "stats.r.secAppsTitle", defaultValue: "应用排行")
-        case .events: return String(localized: "stats.r.secEvents", defaultValue: "异常事件")
+        case .events: return String(localized: "stats.r.secEvents", defaultValue: "压力警告")
         case .details: return String(localized: "stats.r.rawRecords", defaultValue: "原始数据")
         case .insights: return String(localized: "stats.r.secInsights", defaultValue: "智能洞察")
         case .machine: return String(localized: "stats.r.kThisMac", defaultValue: "本机规格")
@@ -232,6 +232,13 @@ final class NativeReportViewModel: ObservableObject {
     @Published private(set) var rangeModel: ReportActiveRangeModel?
     @Published private(set) var isLoading: Bool = true
     @Published private(set) var isAggregating: Bool = false
+    /// 应用排行：是否包含系统应用（默认开启，跨模块切换保持）
+    @Published var includeSystemApps: Bool = true
+
+    /// 判定当前选定范围是否为单日跨度（优先取已算好的 rangeModel，加载期回退取 selectedRange 的起止计算）
+    var isSingleDaySelected: Bool {
+        rangeModel?.isSingleDay ?? selectedRange.isSingleDay()
+    }
 
     /// 独立的 1 秒实时更新源，供右栏硬件观察
     let liveSource = ReportLiveHardwareSource()

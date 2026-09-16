@@ -34,6 +34,15 @@ nonisolated enum ReportDataAggregator: Sendable {
         return .days
     }
 
+    /// 判定指定起止时间跨度是否属于单日（例如今天、昨天或自定义的单个自然日）。
+    /// 用于驱动吞吐图表自适应按小时分桶，以及文案自适应。
+    static func isSingleDay(from: Date, to: Date, calendar: Calendar = .current) -> Bool {
+        let span = to.timeIntervalSince(from)
+        guard span > 0 && span <= 86400 + 3600 else { return false }
+        let lastMoment = to.addingTimeInterval(-1)
+        return calendar.isDate(from, inSameDayAs: lastMoment)
+    }
+
     /// 过滤指定时间范围内的统计行（左闭右开 [from, to)）。
     static func filterRows(_ rows: [StatisticsRow], from: Date, to: Date) -> [StatisticsRow] {
         let fromTs = Int64(from.timeIntervalSince1970)
@@ -285,14 +294,35 @@ nonisolated enum ReportDataAggregator: Sendable {
         )
     }
 
-    static func computeNetworkMetrics(rows: [StatisticsRow], isToday: Bool, calendar: Calendar = .current) -> ReportNetworkMetrics {
+    static func computeNetworkMetrics(rows: [StatisticsRow], isHourly: Bool, calendar: Calendar = .current) -> ReportNetworkMetrics {
         let totalDown = total(of: rows, keyPath: \.netDown)
         let totalUp = total(of: rows, keyPath: \.netUp)
         let peakDown = maximum(of: rows, keyPath: \.netDownPeak)
         let peakUp = maximum(of: rows, keyPath: \.netUpPeak)
 
         var dailyBars: [ReportNetworkMetrics.DailyBar] = []
-        if !isToday {
+        if isHourly {
+            // 当日或单日自适应：按每小时 (Hour) 分组聚合流量吞吐 (R17)
+            let grouped = Dictionary(grouping: rows) { row -> Date in
+                let date = Date(timeIntervalSince1970: TimeInterval(row.t))
+                return calendar.dateInterval(of: .hour, for: date)?.start ?? date
+            }
+            let sortedHours = grouped.keys.sorted()
+            dailyBars = sortedHours.map { hourStart in
+                let hourRows = grouped[hourStart] ?? []
+                let down = hourRows.compactMap(\.netDown).reduce(0, +)
+                let up = hourRows.compactMap(\.netUp).reduce(0, +)
+                let hour = calendar.component(.hour, from: hourStart)
+                let key = String(format: "%02d:00", hour)
+                return ReportNetworkMetrics.DailyBar(
+                    id: "\(Int64(hourStart.timeIntervalSince1970))",
+                    date: hourStart,
+                    dateText: key,
+                    downBytes: down,
+                    upBytes: up
+                )
+            }
+        } else {
             // 按完整自然日 startOfDay 分组，避免跨年字符倒序与重复合并 (R17)
             let grouped = Dictionary(grouping: rows) { row -> Date in
                 let date = Date(timeIntervalSince1970: TimeInterval(row.t))
@@ -319,18 +349,40 @@ nonisolated enum ReportDataAggregator: Sendable {
             totalUpBytes: totalUp,
             peakDownRate: peakDown,
             peakUpRate: peakUp,
-            dailyBars: dailyBars
+            dailyBars: dailyBars,
+            isHourly: isHourly
         )
     }
 
-    static func computeDiskMetrics(rows: [StatisticsRow], isToday: Bool, calendar: Calendar = .current) -> ReportDiskMetrics {
+    static func computeDiskMetrics(rows: [StatisticsRow], isHourly: Bool, calendar: Calendar = .current) -> ReportDiskMetrics {
         let totalRead = total(of: rows, keyPath: \.diskRead)
         let totalWrite = total(of: rows, keyPath: \.diskWrite)
         let peakRead = maximum(of: rows, keyPath: \.diskReadPeak)
         let peakWrite = maximum(of: rows, keyPath: \.diskWritePeak)
 
         var dailyBars: [ReportDiskMetrics.DailyBar] = []
-        if !isToday {
+        if isHourly {
+            // 当日或单日自适应：按每小时 (Hour) 分组聚合磁盘 I/O 吞吐
+            let grouped = Dictionary(grouping: rows) { row -> Date in
+                let date = Date(timeIntervalSince1970: TimeInterval(row.t))
+                return calendar.dateInterval(of: .hour, for: date)?.start ?? date
+            }
+            let sortedHours = grouped.keys.sorted()
+            dailyBars = sortedHours.map { hourStart in
+                let hourRows = grouped[hourStart] ?? []
+                let r = hourRows.compactMap(\.diskRead).reduce(0, +)
+                let w = hourRows.compactMap(\.diskWrite).reduce(0, +)
+                let hour = calendar.component(.hour, from: hourStart)
+                let key = String(format: "%02d:00", hour)
+                return ReportDiskMetrics.DailyBar(
+                    id: "\(Int64(hourStart.timeIntervalSince1970))",
+                    date: hourStart,
+                    dateText: key,
+                    readBytes: r,
+                    writeBytes: w
+                )
+            }
+        } else {
             let grouped = Dictionary(grouping: rows) { row -> Date in
                 let date = Date(timeIntervalSince1970: TimeInterval(row.t))
                 return calendar.startOfDay(for: date)
@@ -356,7 +408,8 @@ nonisolated enum ReportDataAggregator: Sendable {
             totalWriteBytes: totalWrite,
             peakReadRate: peakRead,
             peakWriteRate: peakWrite,
-            dailyBars: dailyBars
+            dailyBars: dailyBars,
+            isHourly: isHourly
         )
     }
 
@@ -431,21 +484,25 @@ nonisolated enum ReportDataAggregator: Sendable {
         isDirect: Bool
     ) -> ReportAppRankings {
         guard let processData, !processData.dailyRows.isEmpty else {
-            return ReportAppRankings(cpuList: [], memList: [], gpuList: [], netList: [], highLoadAlerts: [])
+            return ReportAppRankings(cpuList: [], memList: [], gpuList: [], diskList: [], netList: [], highLoadAlerts: [])
         }
 
         let fromDay = StatisticsProcessStore.dayKey(from, calendar: .current)
         let toDay = StatisticsProcessStore.dayKey(to, calendar: .current)
 
-        var agg: [String: (
+        typealias AppAggEntry = (
             name: String,
             cpuSum: Double, cpuN: Int,
             gpuSum: Double, gpuN: Int,
             memSum: Double, memN: Int,
-            netBytes: Double,
+            netDownBytes: Double, netUpBytes: Double,
+            diskReadBytes: Double, diskWriteBytes: Double,
             cpuT1: Int, cpuT2: Int, cpuT3: Int, cpuPeak: Double,
-            gpuT1: Int, gpuT2: Int, gpuT3: Int, gpuPeak: Double
-        )] = [:]
+            gpuT1: Int, gpuT2: Int, gpuT3: Int, gpuPeak: Double,
+            memT1: Int, memT2: Int, memT3: Int, memPeak: Double
+        )
+
+        var agg: [String: AppAggEntry] = [:]
 
         for row in processData.dailyRows {
             if row.day < fromDay || row.day > toDay { continue }
@@ -455,9 +512,11 @@ nonisolated enum ReportDataAggregator: Sendable {
                 cpuSum: 0, cpuN: 0,
                 gpuSum: 0, gpuN: 0,
                 memSum: 0, memN: 0,
-                netBytes: 0,
+                netDownBytes: 0, netUpBytes: 0,
+                diskReadBytes: 0, diskWriteBytes: 0,
                 cpuT1: 0, cpuT2: 0, cpuT3: 0, cpuPeak: 0,
-                gpuT1: 0, gpuT2: 0, gpuT3: 0, gpuPeak: 0
+                gpuT1: 0, gpuT2: 0, gpuT3: 0, gpuPeak: 0,
+                memT1: 0, memT2: 0, memT3: 0, memPeak: 0
             )
 
             entry.cpuSum += row.cpuAvg * Double(row.cpuSamples)
@@ -466,7 +525,10 @@ nonisolated enum ReportDataAggregator: Sendable {
             entry.gpuN += row.gpuSamples
             entry.memSum += row.memAvgBytes * Double(row.memSamples)
             entry.memN += row.memSamples
-            entry.netBytes += row.netDownBytes + row.netUpBytes
+            entry.netDownBytes += row.netDownBytes
+            entry.netUpBytes += row.netUpBytes
+            entry.diskReadBytes += row.diskReadBytes
+            entry.diskWriteBytes += row.diskWriteBytes
 
             entry.cpuT1 += row.cpuTier1
             entry.cpuT2 += row.cpuTier2
@@ -478,34 +540,46 @@ nonisolated enum ReportDataAggregator: Sendable {
             entry.gpuT3 += row.gpuTier3
             if row.gpuPeak > entry.gpuPeak { entry.gpuPeak = row.gpuPeak }
 
+            entry.memT1 += row.memTier1
+            entry.memT2 += row.memTier2
+            entry.memT3 += row.memTier3
+            if row.memPeak > entry.memPeak { entry.memPeak = row.memPeak }
+
             agg[row.appKey] = entry
         }
 
+        // 约定：stats.r.prefix* 与 stats.r.unit* 为原子级词缀/单位键，xcstrings 中其值必须是无格式占位符（不得含 %@ / %d 等）的纯文本，由 Swift 插值拼接避免格式化参数不匹配风险。
+        func formatCoreMinutes(_ mins: Double, isGpu: Bool = false) -> String {
+            let unitMin = isGpu
+                ? String(localized: "stats.r.unitGpuMin", defaultValue: "GPU·分")
+                : String(localized: "stats.r.unitCoreMin", defaultValue: "核·分")
+            let unitHours = isGpu
+                ? String(localized: "stats.r.unitGpuHours", defaultValue: "GPU·时")
+                : String(localized: "stats.r.unitCoreHours", defaultValue: "核·时")
+
+            if mins < 1.0 {
+                return "< 1 \(unitMin)"
+            } else if mins < 60.0 {
+                return "\(Int(mins.rounded())) \(unitMin)"
+            } else {
+                return "\(String(format: "%.1f", mins / 60.0)) \(unitHours)"
+            }
+        }
+
         func makeList(
-            getValue: ((appKey: String, val: (
-                name: String,
-                cpuSum: Double, cpuN: Int,
-                gpuSum: Double, gpuN: Int,
-                memSum: Double, memN: Int,
-                netBytes: Double,
-                cpuT1: Int, cpuT2: Int, cpuT3: Int, cpuPeak: Double,
-                gpuT1: Int, gpuT2: Int, gpuT3: Int, gpuPeak: Double
-            ))) -> Double,
+            getValue: ((appKey: String, val: AppAggEntry)) -> Double,
             format: (Double) -> String,
-            tierKind: String? = nil
+            getTierHint: (((appKey: String, val: AppAggEntry, value: Double)) -> String?)? = nil,
+            minThreshold: Double = 0.05,
+            tag: String = "item"
         ) -> [ReportAppRankingItem] {
             agg.compactMap { (appKey, val) -> ReportAppRankingItem? in
                 let v = getValue((appKey, val))
-                guard v > 0.05 else { return nil }
-                var tierHint: String?
-                if tierKind == "cpu" && (val.cpuT1 + val.cpuT2 + val.cpuT3 > 0) {
-                    tierHint = "30-50%: \(val.cpuT1)m · 50-80%: \(val.cpuT2)m · 80%+: \(val.cpuT3)m"
-                } else if tierKind == "gpu" && (val.gpuT1 + val.gpuT2 + val.gpuT3 > 0) {
-                    tierHint = "20-40%: \(val.gpuT1)m · 40-70%: \(val.gpuT2)m · 70%+: \(val.gpuT3)m"
-                }
+                guard v >= minThreshold else { return nil }
+                let tierHint = getTierHint?((appKey, val, v))
                 let iconData = processData.identities[appKey]?.iconPNG
                 return ReportAppRankingItem(
-                    id: "\(tierKind ?? "item")-\(appKey)",
+                    id: "\(tag)-\(appKey)",
                     appKey: appKey,
                     name: val.name,
                     value: v,
@@ -515,32 +589,106 @@ nonisolated enum ReportDataAggregator: Sendable {
                 )
             }
             .sorted { $0.value > $1.value }
-            .prefix(8)
+            .prefix(25)
             .map { $0 }
         }
 
         let cpuList = makeList(
-            getValue: { $0.val.cpuN > 0 ? $0.val.cpuSum / Double($0.val.cpuN) : 0 },
-            format: { String(format: "%.1f%%", $0) },
-            tierKind: "cpu"
+            getValue: { $0.val.cpuSum / 100.0 },
+            format: { formatCoreMinutes($0, isGpu: false) },
+            getTierHint: { item in
+                let val = item.val
+                var parts: [String] = []
+                if val.cpuN > 0 {
+                    let avg = val.cpuSum / Double(val.cpuN)
+                    let avgPrefix = String(localized: "stats.r.prefixAvg", defaultValue: "均值")
+                    parts.append("\(avgPrefix) \(String(format: "%.1f%%", avg))")
+                }
+                if val.cpuPeak > 0 {
+                    let peakPrefix = String(localized: "stats.r.prefixPeak", defaultValue: "峰值")
+                    parts.append("\(peakPrefix) \(String(format: "%.0f%%", val.cpuPeak))")
+                }
+                if val.cpuT3 > 0 {
+                    let fullLoadPrefix = String(localized: "stats.r.prefixFullLoad", defaultValue: "满载:")
+                    parts.append("\(fullLoadPrefix) \(val.cpuT3)m")
+                } else if val.cpuT2 > 0 {
+                    let highLoadPrefix = String(localized: "stats.r.prefixHighLoad", defaultValue: "高载:")
+                    parts.append("\(highLoadPrefix) \(val.cpuT2)m")
+                }
+                return parts.joined(separator: " · ")
+            },
+            minThreshold: 0.05,
+            tag: "cpu"
         )
 
         let memList = makeList(
             getValue: { $0.val.memN > 0 ? $0.val.memSum / Double($0.val.memN) : 0 },
             format: { ReportUIHelper.formatBytes($0) },
-            tierKind: nil
+            getTierHint: { item in
+                let val = item.val
+                var parts: [String] = []
+                if val.memPeak > 0 {
+                    let peakPrefix = String(localized: "stats.r.prefixPeak", defaultValue: "峰值")
+                    parts.append("\(peakPrefix) \(ReportUIHelper.formatBytes(val.memPeak))")
+                }
+                let highMem = val.memT2 + val.memT3
+                if highMem > 0 {
+                    let highMemPrefix = String(localized: "stats.r.prefixHighMem", defaultValue: "高水位:")
+                    parts.append("\(highMemPrefix) \(highMem)m")
+                }
+                return parts.isEmpty ? String(localized: "stats.r.appResidentAvg", defaultValue: "常驻均值") : parts.joined(separator: " · ")
+            },
+            minThreshold: 1024 * 1024,
+            tag: "mem"
         )
 
         let gpuList = makeList(
-            getValue: { $0.val.gpuN > 0 ? $0.val.gpuSum / Double($0.val.gpuN) : 0 },
-            format: { String(format: "%.1f%%", $0) },
-            tierKind: "gpu"
+            getValue: { $0.val.gpuSum / 100.0 },
+            format: { formatCoreMinutes($0, isGpu: true) },
+            getTierHint: { item in
+                let val = item.val
+                var parts: [String] = []
+                if val.gpuN > 0 {
+                    let avg = val.gpuSum / Double(val.gpuN)
+                    let avgPrefix = String(localized: "stats.r.prefixAvg", defaultValue: "均值")
+                    parts.append("\(avgPrefix) \(String(format: "%.1f%%", avg))")
+                }
+                if val.gpuPeak > 0 {
+                    let peakPrefix = String(localized: "stats.r.prefixPeak", defaultValue: "峰值")
+                    parts.append("\(peakPrefix) \(String(format: "%.0f%%", val.gpuPeak))")
+                }
+                if val.gpuT3 > 0 {
+                    let fullLoadPrefix = String(localized: "stats.r.prefixFullLoad", defaultValue: "满载:")
+                    parts.append("\(fullLoadPrefix) \(val.gpuT3)m")
+                }
+                return parts.joined(separator: " · ")
+            },
+            minThreshold: 0.05,
+            tag: "gpu"
         )
 
-        let netList = isDirect ? makeList(
-            getValue: { $0.val.netBytes },
+        let diskList = isDirect ? makeList(
+            getValue: { $0.val.diskReadBytes + $0.val.diskWriteBytes },
             format: { ReportUIHelper.formatBytes($0) },
-            tierKind: nil
+            getTierHint: { item in
+                let val = item.val
+                let readPrefix = String(localized: "stats.r.prefixRead", defaultValue: "读")
+                let writePrefix = String(localized: "stats.r.prefixWrite", defaultValue: "写")
+                return "\(readPrefix) \(ReportUIHelper.formatBytes(val.diskReadBytes)) · \(writePrefix) \(ReportUIHelper.formatBytes(val.diskWriteBytes))"
+            },
+            minThreshold: 1024,
+            tag: "disk"
+        ) : []
+
+        let netList = isDirect ? makeList(
+            getValue: { $0.val.netDownBytes + $0.val.netUpBytes },
+            format: { ReportUIHelper.formatBytes($0) },
+            getTierHint: { item in
+                let val = item.val
+                return "↓ \(ReportUIHelper.formatBytes(val.netDownBytes)) · ↑ \(ReportUIHelper.formatBytes(val.netUpBytes))"
+            },
+            minThreshold: 1024,
+            tag: "net"
         ) : []
 
         // 高负载告警分组
@@ -574,6 +722,7 @@ nonisolated enum ReportDataAggregator: Sendable {
             cpuList: cpuList,
             memList: memList,
             gpuList: gpuList,
+            diskList: diskList,
             netList: netList,
             highLoadAlerts: highLoadItems
         )
@@ -1049,11 +1198,13 @@ nonisolated enum ReportDataAggregator: Sendable {
             }
         }()
 
+        let isSingleDay = Self.isSingleDay(from: from, to: to, calendar: calendar)
+
         let cpu = computeCpuMetrics(rows: filtered)
         let gpu = computeGpuMetrics(rows: filtered)
         let memory = computeMemoryMetrics(rows: filtered)
-        let network = computeNetworkMetrics(rows: filtered, isToday: range == .today, calendar: calendar)
-        let disk = computeDiskMetrics(rows: filtered, isToday: range == .today, calendar: calendar)
+        let network = computeNetworkMetrics(rows: filtered, isHourly: isSingleDay, calendar: calendar)
+        let disk = computeDiskMetrics(rows: filtered, isHourly: isSingleDay, calendar: calendar)
         let power = computePowerMetrics(rows: filtered)
         let battery = computeBatteryMetrics(
             rows: filtered,
@@ -1100,6 +1251,7 @@ nonisolated enum ReportDataAggregator: Sendable {
             granularity: granularity,
             from: from,
             to: to,
+            isSingleDay: isSingleDay,
             rows: filtered,
             coverageRatio: coverageRatioValue,
             healthScore: healthScore,

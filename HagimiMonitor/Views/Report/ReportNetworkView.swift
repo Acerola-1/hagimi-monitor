@@ -190,17 +190,21 @@ struct ReportNetworkView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - 3. 每日吞吐量柱状图 (累计量，单位为字节)
+    // MARK: - 3. 流量吞吐柱状图 (今日自适应每小时，跨天自适应每日)
 
     private var dailyThroughputCard: some View {
         let bars = viewModel.rangeModel?.network.dailyBars ?? []
+        let isHourly = viewModel.rangeModel?.network.isHourly ?? viewModel.isSingleDaySelected
+        let cardTitle = isHourly
+            ? String(localized: "stats.r.sHourlyNet", defaultValue: "每小时流量吞吐")
+            : String(localized: "stats.r.sDailyNet", defaultValue: "每日流量吞吐")
 
         return ReportCardView(
-            title: String(localized: "stats.r.sDailyNet", defaultValue: "每日流量吞吐"),
+            title: cardTitle,
             icon: "chart.bar.fill"
         ) {
             if bars.isEmpty {
-                ReportEmptyPlaceholder(text: String(localized: "stats.r.singleDayNoBars", defaultValue: "单日范围内无需跨日吞吐柱状对比"))
+                ReportEmptyPlaceholder(text: String(localized: "stats.r.noThroughputData", defaultValue: "所选范围内暂无流量吞吐数据"))
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 16) {
