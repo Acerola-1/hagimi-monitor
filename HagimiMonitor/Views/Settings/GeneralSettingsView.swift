@@ -746,10 +746,3 @@ struct UsageCheckinCard: View {
         return date.formatted(.dateTime.year().month().day())
     }
 }
-
-/// 打卡卡展开按钮的专属样式:按下时标签外观完全静止。
-private struct StaticPressButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-    }
-}

@@ -6819,6 +6819,22 @@
         }
       }
     },
+    "quicktools.keyboard-lock.locked-without-external": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No external keyboard detected — keyboard input is fully blocked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未连接外接键盘，键盘输入已全部拦截"
+          }
+        }
+      }
+    },
     "quicktools.permission.accessibility": {
       "localizations": {
         "en": {
@@ -6831,6 +6847,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要“辅助功能”授权"
+          }
+        }
+      }
+    },
+    "quicktools.permission.accessibility.guide-title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow Keyboard Lock"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许锁定键盘"
           }
         }
       }
@@ -8048,6 +8080,102 @@
           "stringUnit": {
             "state": "translated",
             "value": "工具"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.keyboard-lock.auto-unlock": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-Unlock"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动解锁"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.keyboard-lock.auto-unlock.minutes %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld min"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 分钟后"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.keyboard-lock.connected-external-keyboards": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接：%@"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.keyboard-lock.external": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "External Keyboard"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "外接键盘"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.keyboard-lock.no-built-in-keyboard": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No built-in keyboard on this Mac — turn this on to block keystrokes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机没有内置键盘，需要开启这一项才能拦截按键"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.keyboard-lock.no-external-keyboard": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No external keyboard detected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未检测到外接键盘"
           }
         }
       }

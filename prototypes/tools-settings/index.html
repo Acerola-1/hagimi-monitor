@@ -1,0 +1,828 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HagimiMonitor · 小工具设置方案 A 交互原型与架构解析</title>
+<style>
+  /* ====== 设计令牌：对齐 HagimiMonitor 真实设置页 ======
+     - 窗口 660pt（SettingsWindowPresenter.fixedWidth），侧栏 164pt，内容区约 495pt
+     - 页面内衬：上 34 / 左右 36 / 下 28，组间距 24（SettingsPage）
+     - 组标题：headline.semibold，组内边距 9；卡片 = .quaternary.opacity(0.42) + 圆角 13
+     - 行：左右 14、上下 12、图标格 32（SettingsRow 同类几何）
+     - 分隔线：.separator.opacity(0.48)，左缩进 14（SettingsDivider）
+  */
+  :root {
+    --win-bg: #ECECEC;
+    --card: rgba(0, 0, 0, 0.042);
+    --card-hover: rgba(0, 0, 0, 0.065);
+    --label: rgba(0, 0, 0, 0.85);
+    --label2: rgba(0, 0, 0, 0.50);
+    --label3: rgba(0, 0, 0, 0.28);
+    --sep: rgba(0, 0, 0, 0.06);
+    --accent: #007AFF;
+    --orange: #FF9500;
+    --green: #34C759;
+    --switch-track: rgba(0, 0, 0, 0.12);
+    --switch-knob: #FFFFFF;
+    --control-bg: rgba(0, 0, 0, 0.055);
+    --control-border: rgba(0, 0, 0, 0.10);
+    --tile-bg: rgba(0, 122, 255, 0.12);
+    --shadow: 0 20px 50px rgba(0, 0, 0, 0.16);
+    --popover-bg: rgba(255, 255, 255, 0.75);
+    --popover-border: rgba(0, 0, 0, 0.08);
+  }
+  html[data-appearance="dark"] {
+    --win-bg: #323232;
+    --card: rgba(255, 255, 255, 0.048);
+    --card-hover: rgba(255, 255, 255, 0.075);
+    --label: rgba(255, 255, 255, 0.92);
+    --label2: rgba(255, 255, 255, 0.55);
+    --label3: rgba(255, 255, 255, 0.28);
+    --sep: rgba(255, 255, 255, 0.065);
+    --accent: #0A84FF;
+    --orange: #FF9F0A;
+    --green: #30D158;
+    --switch-track: rgba(255, 255, 255, 0.18);
+    --control-bg: rgba(255, 255, 255, 0.08);
+    --control-border: rgba(255, 255, 255, 0.12);
+    --tile-bg: rgba(10, 132, 255, 0.20);
+    --shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+    --popover-bg: rgba(36, 38, 44, 0.82);
+    --popover-border: rgba(255, 255, 255, 0.14);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif;
+    background: linear-gradient(160deg, #f4f5f7 0%, #e7e9ee 55%, #dfe3ea 100%);
+    min-height: 100vh;
+    padding: 30px 20px 80px;
+    color: #1c1c1e;
+    -webkit-font-smoothing: antialiased;
+  }
+  html[data-appearance="dark"] body {
+    background: linear-gradient(160deg, #1c1f26 0%, #15171c 55%, #101216 100%);
+  }
+  .mono { font-family: "SF Mono", ui-monospace, Menlo, monospace; font-variant-numeric: tabular-nums; }
+  h1 { text-align: center; font-size: 20px; font-weight: 700; letter-spacing: 0.2px; color: #16181d; }
+  html[data-appearance="dark"] h1 { color: #f0f2f5; }
+  .sub { text-align: center; font-size: 13px; color: #5d626c; margin-top: 8px; line-height: 1.7; max-width: 820px; margin-left: auto; margin-right: auto; }
+  html[data-appearance="dark"] .sub { color: #9aa0ac; }
+  .sub b { color: #2c3038; font-weight: 600; }
+  html[data-appearance="dark"] .sub b { color: #e1e4ea; }
+
+  /* ====== 顶部控制条 ====== */
+  .controls { display: flex; justify-content: center; flex-wrap: wrap; gap: 16px 22px; margin-top: 20px; }
+  .ctl { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4c525c; }
+  html[data-appearance="dark"] .ctl { color: #abb1bd; }
+  .ctl .k { font-weight: 650; }
+  .seg { display: inline-flex; background: rgba(0, 0, 0, 0.06); border-radius: 7px; padding: 2.5px; gap: 2px; }
+  html[data-appearance="dark"] .seg { background: rgba(255, 255, 255, 0.08); }
+  .seg button {
+    border: 0; background: transparent; font: inherit; font-size: 11.5px; color: #4c525c;
+    padding: 4.5px 12px; border-radius: 5px; cursor: pointer; font-weight: 500; transition: all 0.15s;
+  }
+  html[data-appearance="dark"] .seg button { color: #abb1bd; }
+  .seg button[aria-pressed="true"] {
+    background: #fff; color: #16181d; box-shadow: 0 1px 3px rgba(0,0,0,0.15); font-weight: 600;
+  }
+  html[data-appearance="dark"] .seg button[aria-pressed="true"] {
+    background: rgba(255, 255, 255, 0.18); color: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  }
+
+  /* ====== 主展示舞台 ====== */
+  .stage {
+    display: flex; justify-content: center; align-items: flex-start;
+    gap: 28px; margin-top: 28px; flex-wrap: wrap;
+  }
+  .col { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .colhead {
+    font-size: 11.5px; font-weight: 650; color: #5d626c; letter-spacing: 0.5px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  html[data-appearance="dark"] .colhead { color: #9aa0ac; }
+  .colhead .tag {
+    font-size: 10px; padding: 1px 6px; border-radius: 4px; font-weight: 600;
+    background: rgba(0, 122, 255, 0.12); color: var(--accent);
+  }
+
+  /* ====== 设置窗口 ====== */
+  .window {
+    width: 620px;
+    background: var(--win-bg);
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+    border: 0.5px solid rgba(0, 0, 0, 0.14);
+    display: flex;
+    flex-direction: column;
+    min-height: 570px;
+    transition: all 0.2s;
+  }
+  html[data-appearance="dark"] .window {
+    border-color: rgba(255, 255, 255, 0.15);
+  }
+  .titlebar { height: 48px; flex: none; display: flex; align-items: center; padding: 0 14px; gap: 8px; border-bottom: 0.5px solid var(--sep); }
+  .lights { display: flex; gap: 7px; }
+  .lights i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .lights i:nth-child(1) { background: #FF5F57; }
+  .lights i:nth-child(2) { background: #FEBC2E; }
+  .lights i:nth-child(3) { background: #28C840; }
+  .wtitle { font-size: 12px; font-weight: 600; color: var(--label2); margin-left: 8px; }
+  .body { flex: 1; display: flex; min-height: 0; }
+  .sidebar {
+    width: 154px; flex: none; padding: 10px 8px 12px;
+    border-right: 0.5px solid var(--sep);
+  }
+  .nav { display: flex; flex-direction: column; gap: 1px; }
+  .nav .item {
+    font-size: 12px; color: var(--label); padding: 5px 8px; border-radius: 6px;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .nav .item.on { background: var(--accent); color: #fff; font-weight: 550; }
+  .content { flex: 1; min-width: 0; padding: 24px 28px; display: flex; flex-direction: column; gap: 18px; }
+  .group { display: flex; flex-direction: column; gap: 8px; }
+  .group > .gtitle { font-size: 12.5px; font-weight: 600; color: var(--label); padding: 0 2px; }
+
+  /* ====== 卡片与行 ====== */
+  .card {
+    background: var(--card); border-radius: 12px; overflow: hidden;
+    transition: background 0.18s ease;
+  }
+  .card.dimmed { opacity: 0.55; }
+  .card-header {
+    display: flex; align-items: center; gap: 12px; padding: 11px 14px;
+    cursor: pointer; user-select: none; min-height: 52px;
+  }
+  .card-header:hover { background: var(--card-hover); }
+  .tile {
+    width: 32px; height: 32px; border-radius: 8px; flex: none;
+    background: var(--tile-bg); color: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .tile svg { width: 17px; height: 17px; }
+  .headline { font-size: 13px; font-weight: 600; color: var(--label); }
+  .chev { color: var(--label3); display: flex; align-items: center; justify-content: center; transition: transform 0.2s ease-out; }
+  .chev svg { width: 10px; height: 10px; }
+  .card.open .chev { transform: rotate(180deg); }
+  .spacer { flex: 1; min-width: 8px; }
+  .divider { height: 1px; background: var(--sep); margin-left: 14px; }
+
+  .subrow {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px 10px 58px;
+    min-height: 44px;
+  }
+  .texts { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .title { font-size: 12.5px; font-weight: 550; color: var(--label); }
+  .subtitle { font-size: 11px; color: var(--label2); line-height: 1.4; }
+  .status-tag {
+    display: inline-flex; align-items: center; gap: 4px; font-size: 11px;
+    padding: 2px 7px; border-radius: 4px; font-weight: 550;
+  }
+  .status-tag.locked { background: rgba(255, 149, 0, 0.15); color: var(--orange); }
+  .status-tag.idle { background: rgba(52, 199, 89, 0.14); color: var(--green); }
+
+  /* 状态提示横条（锁定中） */
+  .live-status-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 14px 8px 58px; background: rgba(255, 149, 0, 0.09);
+  }
+  .btn-unlock {
+    border: 0; background: var(--orange); color: #fff; font-size: 11px;
+    padding: 3px 9px; border-radius: 5px; font-weight: 600; cursor: pointer;
+  }
+  .btn-unlock:hover { opacity: 0.9; }
+
+  /* 开关 */
+  .switch {
+    width: 32px; height: 19px; border-radius: 10px; flex: none;
+    background: var(--switch-track); position: relative; cursor: pointer;
+    transition: background 0.2s ease-out;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 1.5px; left: 1.5px;
+    width: 16px; height: 16px; border-radius: 50%; background: var(--switch-knob);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.28);
+    transition: transform 0.2s ease-out;
+  }
+  .switch.on { background: var(--accent); }
+  .switch.on::after { transform: translateX(13px); }
+  .switch.orange.on { background: var(--orange); }
+  .switch.disabled { opacity: 0.35; cursor: default; }
+
+  /* 下拉菜单 */
+  .menu {
+    display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px;
+    border-radius: 6px; background: var(--control-bg); border: 0.5px solid var(--control-border);
+    font-size: 11.5px; color: var(--label); cursor: pointer; user-select: none;
+  }
+  .menu svg { width: 9px; height: 9px; color: var(--label2); }
+
+  /* ====== 右侧：主面板浮层联动模拟 ====== */
+  .popover-container {
+    width: 300px;
+    background: var(--popover-bg);
+    backdrop-filter: blur(40px) saturate(1.4);
+    -webkit-backdrop-filter: blur(40px) saturate(1.4);
+    border-radius: 16px;
+    border: 0.5px solid var(--popover-border);
+    box-shadow: var(--shadow);
+    padding: 13px;
+    display: flex; flex-direction: column; gap: 9px;
+    transition: all 0.2s;
+  }
+  .p-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 2px 4px 6px; border-bottom: 0.5px solid var(--sep);
+  }
+  .p-title { font-size: 11px; font-weight: 650; color: var(--label2); letter-spacing: 0.3px; }
+  .p-badge { font-size: 10px; font-weight: 600; color: var(--accent); background: var(--tile-bg); padding: 1px 6px; border-radius: 4px; }
+
+  /* 磁贴 */
+  .tile-item {
+    display: flex; align-items: center; gap: 11px; padding: 10px 12px;
+    border-radius: 12px; background: var(--card); border: 0.5px solid transparent;
+    cursor: pointer; user-select: none; transition: all 0.2s ease;
+  }
+  .tile-item:hover { background: var(--card-hover); }
+  .tile-item.active {
+    background: rgba(255, 149, 0, 0.14);
+    border-color: rgba(255, 149, 0, 0.35);
+  }
+  .tile-item.active-blue {
+    background: rgba(0, 122, 255, 0.14);
+    border-color: rgba(0, 122, 255, 0.35);
+  }
+  .tile-circle {
+    width: 32px; height: 32px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: var(--control-bg); color: var(--label2);
+    transition: all 0.2s ease; flex: none;
+  }
+  .tile-item.active .tile-circle {
+    background: var(--orange); color: #fff;
+  }
+  .tile-item.active-blue .tile-circle {
+    background: var(--accent); color: #fff;
+  }
+  .tile-circle svg { width: 15px; height: 15px; }
+
+  .tile-texts { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+  .tile-name { font-size: 12.5px; font-weight: 600; color: var(--label); }
+  .tile-hint { font-size: 10.5px; color: var(--label2); line-height: 1.35; }
+  .tile-item.active .tile-hint { color: var(--orange); font-weight: 550; }
+
+  /* 空态提示 */
+  .empty-popover {
+    padding: 30px 10px; text-align: center; color: var(--label3); font-size: 12px;
+    line-height: 1.6;
+  }
+
+  /* ====== 底部对比与答疑区 ====== */
+  .doc-section {
+    max-width: 950px; margin: 40px auto 0;
+    background: #ffffff; border: 1px solid #dfe2e8; border-radius: 14px;
+    padding: 24px 28px; box-shadow: 0 4px 18px rgba(0,0,0,0.04);
+  }
+  html[data-appearance="dark"] .doc-section {
+    background: #23262d; border-color: rgba(255,255,255,0.12);
+  }
+  .doc-section h2 { font-size: 15px; font-weight: 700; color: #16181d; margin-bottom: 14px; }
+  html[data-appearance="dark"] .doc-section h2 { color: #f0f2f5; }
+  .qa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  @media (max-width: 860px) { .qa-grid { grid-template-columns: 1fr; } }
+  .qa-card {
+    background: rgba(0, 0, 0, 0.025); border-radius: 10px; padding: 16px 18px;
+    border: 1px solid rgba(0, 0, 0, 0.05); display: flex; flex-direction: column; gap: 8px;
+  }
+  html[data-appearance="dark"] .qa-card {
+    background: rgba(255, 255, 255, 0.04); border-color: rgba(255, 255, 255, 0.08);
+  }
+  .qa-title { font-size: 13px; font-weight: 700; color: var(--accent); }
+  .qa-desc { font-size: 12px; line-height: 1.7; color: #4c525c; }
+  html[data-appearance="dark"] .qa-desc { color: #a6adb9; }
+  .qa-desc b { color: #16181d; }
+  html[data-appearance="dark"] .qa-desc b { color: #f0f2f5; }
+  .qa-desc code { font-family: "SF Mono", monospace; font-size: 11px; background: rgba(0,0,0,0.06); padding: 1px 4px; border-radius: 4px; }
+  html[data-appearance="dark"] .qa-desc code { background: rgba(255,255,255,0.12); }
+</style>
+</head>
+<body>
+
+<h1>小工具设置 · 方案 A 原型与交互机制演示</h1>
+<p class="sub">
+  左侧为 <b>设置窗口（偏好与显隐配置）</b>，右侧为 <b>主面板快捷工具浮层（实时执行）</b>。<br>
+  在下方试着点击开关与磁贴，观察 <b>“是否锁定外接键盘”</b> 与 <b>“自动解锁时间”</b> 在方案 A 中的运行方式。
+</p>
+
+<div class="controls">
+  <div class="ctl">
+    <span class="k">架构方案</span>
+    <span class="seg" id="schemeSeg">
+      <button data-scheme="planA" aria-pressed="true">方案 A：显隐与配置分离（推荐）</button>
+      <button data-scheme="legacy" aria-pressed="false">旧方案：行尾即锁定总开关（产生困惑）</button>
+    </span>
+  </div>
+  <div class="ctl">
+    <span class="k">外观</span>
+    <span class="seg" id="appearanceSeg">
+      <button data-appearance="light" aria-pressed="true">浅色</button>
+      <button data-appearance="dark" aria-pressed="false">深色</button>
+    </span>
+  </div>
+  <div class="ctl">
+    <span class="k">外接设备模拟</span>
+    <span class="seg" id="deviceSeg">
+      <button data-device="connected" aria-pressed="true">已连接 Magic Keyboard</button>
+      <button data-device="none" aria-pressed="false">未连接外接键盘</button>
+      <button data-device="desktop" aria-pressed="false">Mac mini (无内置键盘)</button>
+    </span>
+  </div>
+</div>
+
+<div class="stage">
+  <!-- 左侧：设置窗口 -->
+  <div class="col">
+    <div class="colhead">
+      <span>设置窗口</span>
+      <span class="tag">MonitorSettings</span>
+    </div>
+    <div class="window" id="settingsWindow"></div>
+  </div>
+
+  <!-- 右侧：浮层联动 -->
+  <div class="col">
+    <div class="colhead">
+      <span>主面板工具浮层</span>
+      <span class="tag">QuickToolsPopover</span>
+    </div>
+    <div class="popover-container" id="popoverContainer"></div>
+  </div>
+</div>
+
+<!-- 答疑与解析卡片 -->
+<div class="doc-section">
+  <h2>方案 A 核心机制解答：为什么这样设计最自然？</h2>
+  <div class="qa-grid">
+    <div class="qa-card">
+      <div class="qa-title">1. 行尾开关的语义是什么？</div>
+      <div class="qa-desc">
+        在方案 A 中，卡片行尾的开关<b>统一代表「在主面板浮层中显示该工具」</b>。<br>
+        · <b>打开</b>：主面板浮层中出现该磁贴，功能可用；<br>
+        · <b>关闭</b>：主面板浮层中彻底隐藏此磁贴，参数区自动折叠。<br>
+        这样三张工具卡片（键盘锁定、防休眠、不息屏）的开关语义 100% 保持一致，符合 macOS 控制中心的系统直觉。
+      </div>
+    </div>
+
+    <div class="qa-card">
+      <div class="qa-title">2. 「是否锁定外接键盘」在方案 A 里怎么运作？</div>
+      <div class="qa-desc">
+        它升级成了<b>「锁定的预设偏好（Default Policy）」</b>，持久化保存。<br>
+        · <b>默认关闭</b>：只要用户在主面板点击锁定，<b>自动只锁定内置键盘</b>，外接键盘可随时打字（彻底解决外接键盘平放误触的问题）；<br>
+        · <b>手动开启</b>：用户希望做清洁或全防时，开启此项，锁定时便会拦截全部键盘。<br>
+        用户<b>不需要每次上锁都临时配一遍</b>，设置一次后，主面板一键落锁直接执行该偏好！
+      </div>
+    </div>
+
+    <div class="qa-card">
+      <div class="qa-title">3. 「自动解锁时间」在方案 A 里怎么生效？</div>
+      <div class="qa-desc">
+        同样是<b>「预设倒计时参数」</b>（如 20 分钟）。<br>
+        无论是在设置页测试锁定，还是在菜单栏浮层一键落锁，系统都会自动读取该时间，开始倒计时兜底（并在浮层磁贴右上角显示剩余时间）。<br>
+        当倒计时归零时自动解除拦截，避免用户因遗忘而锁死按键。
+      </div>
+    </div>
+
+    <div class="qa-card">
+      <div class="qa-title">4. 为什么旧方案会造成“没开却显示”的困惑？</div>
+      <div class="qa-desc">
+        在旧方案中，行尾开关被改成了 <code>store.keyboardLocked</code>（是否正在上锁）。平时未上锁时它必然显示为<b>“关”</b>。<br>
+        用户以为是“我关掉了这个工具”，但控制浮层显隐的 <code>isQuickToolVisible</code> 依然是 <code>true</code>，且设置页没有入口可以关掉它，因此浮层里依然常驻。<br>
+        方案 A 将<b>「挂载显隐」</b>与<b>「即时动作」</b>彻底解耦，彻底消除了这种认知错位。
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===== SF Symbol 图标 =====
+const ICONS = {
+  keyboard: '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M2.6 3.2h10.8c.8 0 1.4.6 1.4 1.4v6.8c0 .8-.6 1.4-1.4 1.4H2.6c-.8 0-1.4-.6-1.4-1.4V4.6c0-.8.6-1.4 1.4-1.4Zm.4 2v1.4h1.4V5.2H3Zm2.5 0v1.4h1.4V5.2H5.5Zm2.5 0v1.4h1.4V5.2H8Zm2.5 0v1.4h1.4V5.2H10.5Zm2.5 0v1.4H14.5V5.2H13ZM3 7.8v1.4h1.4V7.8H3Zm2.5 0v1.4h1.4V7.8H5.5Zm2.5 0v1.4h1.4V7.8H8Zm2.5 0v1.4h1.4V7.8H10.5Zm2.5 0v1.4H14.5V7.8H13ZM4.4 10.4v1.2h7.2v-1.2H4.4Z"/></svg>',
+  laptop:   '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M3 3.6h10c.6 0 1 .4 1 1v5.2c0 .6-.4 1-1 1H3c-.6 0-1-.4-1-1V4.6c0-.6.4-1 1-1Zm.5 1v4.2h9V4.6h-9Zm-2.1 7h13.2c.4 0 .6.3.5.7l-.3.7c-.1.3-.4.4-.7.4H2.9c-.3 0-.6-.1-.7-.4l-.3-.7c-.1-.4.1-.7.5-.7Z"/></svg>',
+  sun:      '<svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 4.4a3.6 3.6 0 1 0 0 7.2 3.6 3.6 0 0 0 0-7.2Zm0 1.4a2.2 2.2 0 1 1 0 4.4 2.2 2.2 0 0 1 0-4.4Z"/><path d="M7.3.9h1.4v2.2H7.3V.9Zm0 12h1.4v2.2H7.3v-2.2ZM.9 7.3h2.2v1.4H.9V7.3Zm12 0h2.2v1.4h-2.2V7.3ZM2.6 3.7l1-1 1.5 1.6-1 1L2.6 3.7Zm8.3 8.9 1-1 1.5 1.5-1 1-1.5-1.5Zm.2-9.9 1 1-1.5 1.6-1-1 1.5-1.6ZM3.6 11.6l1 1L3.1 14l-1-1 1.5-1.4Z"/></svg>',
+  chevron:  '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M2.2 4.4 6 8.2l3.8-3.8"/></svg>',
+  menusel:  '<svg viewBox="0 0 8 8" fill="currentColor"><path d="M1 2.4 4 5.6l3-3.2z"/></svg>'
+};
+
+// ===== 全局状态 =====
+const state = {
+  scheme: 'planA',         // planA | legacy
+  appearance: 'light',     // light | dark
+  device: 'connected',     // connected | none | desktop
+
+  // 设置页持久化配置
+  toolsInPanel: true,
+  visibleTools: {
+    keyboardLock: true,
+    systemAwake: true,
+    displayAwake: true
+  },
+  keyboardLockExpanded: true,
+  lockExternalKeyboards: false,   // 预设：是否同时锁定外接键盘
+  autoUnlockMinutes: 20,          // 预设：自动解锁分钟数
+
+  // 运行时状态 (QuickToolsStore)
+  isKeyboardLocked: false,
+  isSystemAwake: false,
+  isDisplayAwake: false
+};
+
+const AUTO_UNLOCK_OPTIONS = [10, 20, 30, 60];
+
+// ===== 渲染逻辑 =====
+function render() {
+  document.documentElement.dataset.appearance = state.appearance;
+
+  renderSettingsWindow();
+  renderPopover();
+}
+
+// 1. 渲染设置窗口
+function renderSettingsWindow() {
+  const win = document.getElementById('settingsWindow');
+  const isPlanA = state.scheme === 'planA';
+
+  // 键盘锁定行尾开关状态
+  const kbdTrailingOn = isPlanA
+    ? state.visibleTools.keyboardLock
+    : state.isKeyboardLocked; // 旧方案中绑定的是当前是否锁定
+
+  const kbdTrailingClass = 'switch' + (kbdTrailingOn ? ' on' : '');
+
+  // 外接键盘副标题文案
+  let extSubtitle = '';
+  if (state.device === 'desktop') {
+    extSubtitle = '本机没有内置键盘，开启此项才能拦截按键';
+  } else if (state.device === 'connected') {
+    extSubtitle = state.lockExternalKeyboards
+      ? '已连接 Magic Keyboard · 将同时拦截内置与外接输入'
+      : '已连接 Magic Keyboard · 锁定时仅拦截内置键盘，外接保持可用';
+  } else {
+    extSubtitle = '未检测到外接键盘 · 锁定时仅拦截笔记本内置键盘';
+  }
+
+  // 运行态横条（如果在方案 A 且键盘正被锁定）
+  const statusBar = (isPlanA && state.isKeyboardLocked) ? `
+    <div class="live-status-bar">
+      <span class="status-tag locked">● 当前键盘已处于锁定状态 (${state.lockExternalKeyboards ? '全量锁定' : '仅内置键盘'})</span>
+      <button class="btn-unlock" id="btnUnlockInSettings">立即解锁</button>
+    </div>
+  ` : '';
+
+  // 键盘锁定展开区
+  const kbdParams = (state.keyboardLockExpanded && (isPlanA ? state.visibleTools.keyboardLock : true)) ? `
+    <div class="divider"></div>
+    ${statusBar}
+    <div class="subrow">
+      <div class="texts">
+        <div class="title">同时锁定外接键盘</div>
+        <div class="subtitle">${extSubtitle}</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="switch ${state.lockExternalKeyboards ? 'on' : ''} ${(!isPlanA && !state.isKeyboardLocked) ? 'disabled' : ''}" id="extSwitch"></div>
+    </div>
+    <div class="divider"></div>
+    <div class="subrow">
+      <div class="texts">
+        <div class="title">自动解锁</div>
+        <div class="subtitle">超时后自动解除拦截，避免遗忘</div>
+      </div>
+      <div class="spacer"></div>
+      <div class="menu" id="autoUnlockMenu">
+        <span>${state.autoUnlockMinutes} 分钟后</span>
+        ${ICONS.menusel}
+      </div>
+    </div>
+  ` : '';
+
+  const kbdCardClass = 'card' +
+    (state.keyboardLockExpanded ? ' open' : '') +
+    (isPlanA && !state.visibleTools.keyboardLock ? ' dimmed' : '');
+
+  win.innerHTML = `
+    <div class="titlebar">
+      <div class="lights"><i></i><i></i><i></i></div>
+      <div class="wtitle">HagimiMonitor 设置</div>
+    </div>
+    <div class="body">
+      <div class="sidebar">
+        <div class="nav">
+          <div class="item">常规</div>
+          <div class="item">监控模块</div>
+          <div class="item">显示器</div>
+          <div class="item on">小工具</div>
+          <div class="item">数据统计</div>
+          <div class="item">关于</div>
+        </div>
+      </div>
+      <div class="content">
+        <div class="group">
+          <div class="card">
+            <div class="card-header" style="cursor:default;" id="toolsInPanelRow">
+              <div class="texts">
+                <div class="title">在面板中显示</div>
+                <div class="subtitle">在主监控面板底部显示快捷工具入口</div>
+              </div>
+              <div class="spacer"></div>
+              <div class="switch ${state.toolsInPanel ? 'on' : ''}" id="panelEntrySwitch"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="group">
+          <div class="gtitle">工具列表 (${isPlanA ? '行尾开关控制在浮层中显隐' : '注意：旧方案键盘开关即立即锁定'})</div>
+
+          <!-- 键盘锁定卡片 -->
+          <div class="${kbdCardClass}" id="kbdCard">
+            <div class="card-header" id="kbdHeader">
+              <div class="tile" style="color:var(--orange); background:rgba(255,149,0,0.14);">${ICONS.keyboard}</div>
+              <div class="headline">键盘锁定</div>
+              <div class="chev">${ICONS.chevron}</div>
+              <div class="spacer"></div>
+              <div class="${kbdTrailingClass}" id="kbdTrailingSwitch" title="${isPlanA ? '在浮层中显隐' : '立即执行锁定'}"></div>
+            </div>
+            ${kbdParams}
+          </div>
+
+          <!-- 系统防休眠卡片 -->
+          <div class="card ${isPlanA && !state.visibleTools.systemAwake ? 'dimmed' : ''}">
+            <div class="card-header" style="cursor:default;">
+              <div class="tile">${ICONS.laptop}</div>
+              <div class="headline">系统防休眠</div>
+              <div class="spacer"></div>
+              <div class="switch ${state.visibleTools.systemAwake ? 'on' : ''}" id="sysAwakeSwitch"></div>
+            </div>
+          </div>
+
+          <!-- 防显示器休眠卡片 -->
+          <div class="card ${isPlanA && !state.visibleTools.displayAwake ? 'dimmed' : ''}">
+            <div class="card-header" style="cursor:default;">
+              <div class="tile">${ICONS.sun}</div>
+              <div class="headline">防显示器休眠</div>
+              <div class="spacer"></div>
+              <div class="switch ${state.visibleTools.displayAwake ? 'on' : ''}" id="dispAwakeSwitch"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  bindSettingsEvents();
+}
+
+// 2. 渲染主面板浮层
+function renderPopover() {
+  const container = document.getElementById('popoverContainer');
+  const isPlanA = state.scheme === 'planA';
+
+  if (!state.toolsInPanel) {
+    container.innerHTML = `
+      <div class="p-header">
+        <span class="p-title">快捷工具 (已停用)</span>
+      </div>
+      <div class="empty-popover">设置中已关闭「在面板中显示」<br>主面板工具入口已隐藏</div>
+    `;
+    return;
+  }
+
+  // 过滤可见的磁贴
+  // 规则：isQuickToolVisible || isActive
+  const showKbd = isPlanA
+    ? (state.visibleTools.keyboardLock || state.isKeyboardLocked)
+    : true; // 旧方案中 visibleQuickTools 恒包含键盘锁定
+  const showSys = state.visibleTools.systemAwake || state.isSystemAwake;
+  const showDisp = state.visibleTools.displayAwake || state.isDisplayAwake;
+
+  let tilesHTML = '';
+
+  if (showKbd) {
+    let hint = '点按开始锁定';
+    if (state.isKeyboardLocked) {
+      hint = state.lockExternalKeyboards
+        ? '已锁定全部键盘 · 按住点击解锁'
+        : '已锁定内置键盘 · 外接键盘可正常打字';
+    }
+    tilesHTML += `
+      <div class="tile-item ${state.isKeyboardLocked ? 'active' : ''}" id="popKbdTile">
+        <div class="tile-circle">${ICONS.keyboard}</div>
+        <div class="tile-texts">
+          <div class="tile-name">键盘锁定</div>
+          <div class="tile-hint">${hint}</div>
+        </div>
+        <div class="switch orange ${state.isKeyboardLocked ? 'on' : ''}"></div>
+      </div>
+    `;
+  }
+
+  if (showSys) {
+    tilesHTML += `
+      <div class="tile-item ${state.isSystemAwake ? 'active-blue' : ''}" id="popSysTile">
+        <div class="tile-circle">${ICONS.laptop}</div>
+        <div class="tile-texts">
+          <div class="tile-name">系统防休眠</div>
+          <div class="tile-hint">${state.isSystemAwake ? '正在阻止系统进入闲置睡眠' : '点按开启'}</div>
+        </div>
+        <div class="switch ${state.isSystemAwake ? 'on' : ''}"></div>
+      </div>
+    `;
+  }
+
+  if (showDisp) {
+    tilesHTML += `
+      <div class="tile-item ${state.isDisplayAwake ? 'active-blue' : ''}" id="popDispTile">
+        <div class="tile-circle">${ICONS.sun}</div>
+        <div class="tile-texts">
+          <div class="tile-name">防显示器休眠</div>
+          <div class="tile-hint">${state.isDisplayAwake ? '保持屏幕常亮' : '点按开启'}</div>
+        </div>
+        <div class="switch ${state.isDisplayAwake ? 'on' : ''}"></div>
+      </div>
+    `;
+  }
+
+  if (!tilesHTML) {
+    tilesHTML = `<div class="empty-popover">所有小工具均已在设置中隐藏</div>`;
+  }
+
+  container.innerHTML = `
+    <div class="p-header">
+      <span class="p-title">快捷工具 (实时浮层)</span>
+      <span class="p-badge">${state.isKeyboardLocked ? '运行中: 键盘锁定' : '待命'}</span>
+    </div>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      ${tilesHTML}
+    </div>
+  `;
+
+  bindPopoverEvents();
+}
+
+// ===== 事件绑定 =====
+function bindSettingsEvents() {
+  // 总入口开关
+  const panelSwitch = document.getElementById('panelEntrySwitch');
+  if (panelSwitch) {
+    panelSwitch.onclick = (e) => {
+      e.stopPropagation();
+      state.toolsInPanel = !state.toolsInPanel;
+      render();
+    };
+  }
+
+  // 键盘锁定卡片折叠/展开
+  const kbdHeader = document.getElementById('kbdHeader');
+  if (kbdHeader) {
+    kbdHeader.onclick = (e) => {
+      if (e.target.closest('.switch')) return;
+      state.keyboardLockExpanded = !state.keyboardLockExpanded;
+      render();
+    };
+  }
+
+  // 键盘锁定行尾开关
+  const kbdTrailing = document.getElementById('kbdTrailingSwitch');
+  if (kbdTrailing) {
+    kbdTrailing.onclick = (e) => {
+      e.stopPropagation();
+      if (state.scheme === 'planA') {
+        // 方案 A：控制显隐
+        state.visibleTools.keyboardLock = !state.visibleTools.keyboardLock;
+        if (!state.visibleTools.keyboardLock) {
+          state.keyboardLockExpanded = false;
+        }
+      } else {
+        // 旧方案：直接控制锁定
+        state.isKeyboardLocked = !state.isKeyboardLocked;
+      }
+      render();
+    };
+  }
+
+  // 外接键盘偏好开关
+  const extSwitch = document.getElementById('extSwitch');
+  if (extSwitch) {
+    extSwitch.onclick = (e) => {
+      e.stopPropagation();
+      if (state.scheme === 'legacy' && !state.isKeyboardLocked) return;
+      state.lockExternalKeyboards = !state.lockExternalKeyboards;
+      render();
+    };
+  }
+
+  // 自动解锁时间菜单
+  const autoMenu = document.getElementById('autoUnlockMenu');
+  if (autoMenu) {
+    autoMenu.onclick = (e) => {
+      e.stopPropagation();
+      const idx = AUTO_UNLOCK_OPTIONS.indexOf(state.autoUnlockMinutes);
+      state.autoUnlockMinutes = AUTO_UNLOCK_OPTIONS[(idx + 1) % AUTO_UNLOCK_OPTIONS.length];
+      render();
+    };
+  }
+
+  // 设置页解锁按钮
+  const unlockBtn = document.getElementById('btnUnlockInSettings');
+  if (unlockBtn) {
+    unlockBtn.onclick = (e) => {
+      e.stopPropagation();
+      state.isKeyboardLocked = false;
+      render();
+    };
+  }
+
+  // 系统防休眠开关
+  const sysSwitch = document.getElementById('sysAwakeSwitch');
+  if (sysSwitch) {
+    sysSwitch.onclick = (e) => {
+      e.stopPropagation();
+      state.visibleTools.systemAwake = !state.visibleTools.systemAwake;
+      render();
+    };
+  }
+
+  // 防显示器休眠开关
+  const dispSwitch = document.getElementById('dispAwakeSwitch');
+  if (dispSwitch) {
+    dispSwitch.onclick = (e) => {
+      e.stopPropagation();
+      state.visibleTools.displayAwake = !state.visibleTools.displayAwake;
+      render();
+    };
+  }
+}
+
+function bindPopoverEvents() {
+  const popKbd = document.getElementById('popKbdTile');
+  if (popKbd) {
+    popKbd.onclick = () => {
+      state.isKeyboardLocked = !state.isKeyboardLocked;
+      render();
+    };
+  }
+
+  const popSys = document.getElementById('popSysTile');
+  if (popSys) {
+    popSys.onclick = () => {
+      state.isSystemAwake = !state.isSystemAwake;
+      render();
+    };
+  }
+
+  const popDisp = document.getElementById('popDispTile');
+  if (popDisp) {
+    popDisp.onclick = () => {
+      state.isDisplayAwake = !state.isDisplayAwake;
+      render();
+    };
+  }
+}
+
+// 方案切换
+document.getElementById('schemeSeg').onclick = (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.scheme = btn.dataset.scheme;
+  for (const b of e.currentTarget.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b === btn));
+  }
+  render();
+};
+
+// 外观切换
+document.getElementById('appearanceSeg').onclick = (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.appearance = btn.dataset.appearance;
+  for (const b of e.currentTarget.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b === btn));
+  }
+  render();
+};
+
+// 外接键盘模拟
+document.getElementById('deviceSeg').onclick = (e) => {
+  const btn = e.target.closest('button');
+  if (!btn) return;
+  state.device = btn.dataset.device;
+  for (const b of e.currentTarget.querySelectorAll('button')) {
+    b.setAttribute('aria-pressed', String(b === btn));
+  }
+  render();
+};
+
+render();
+</script>
+</body>
+</html>

@@ -166,6 +166,11 @@ final class MonitorSettings: ObservableObject {
     @Published var alertNotificationsEnabled: Bool = false
     /// 小工具(快捷功能)入口是否在面板中显示。
     @Published var quickToolsVisible: Bool = true
+    /// 键盘锁定自动解锁时长(分钟),写入前约束在
+    /// `KeyboardLockController.autoUnlockMinuteOptions`。
+    @Published var keyboardLockAutoUnlockMinutes: Int = KeyboardLockController.defaultAutoUnlockMinutes
+    /// 键盘锁定是否同时拦截外接键盘(默认 false:仅拦截内置键盘,外接键盘保持可用)。
+    @Published var keyboardLockBlocksExternal: Bool = false
     /// 在工具浮层中显示的工具集合。集合由 QuickToolKind 驱动,新增工具只补枚举
     /// case 与本地化,存储/迁移/设置页/浮层自动跟随,无需逐处改动。
     @Published private(set) var visibleQuickTools: Set<QuickToolKind> = []
@@ -235,24 +240,22 @@ final class MonitorSettings: ObservableObject {
         statisticsEnabled = defaults.object(forKey: Keys.statisticsEnabled) as? Bool ?? true
         alertNotificationsEnabled = defaults.object(forKey: Keys.alertNotificationsEnabled) as? Bool ?? false
         quickToolsVisible = defaults.object(forKey: Keys.quickToolsVisible) as? Bool ?? true
+        let storedAutoUnlock = defaults.object(forKey: Keys.keyboardLockAutoUnlockMinutes) as? Int
+        keyboardLockAutoUnlockMinutes = KeyboardLockController.autoUnlockMinuteOptions.contains(storedAutoUnlock ?? -1)
+            ? storedAutoUnlock!
+            : KeyboardLockController.defaultAutoUnlockMinutes
+        keyboardLockBlocksExternal = defaults.object(forKey: Keys.keyboardLockBlocksExternal) as? Bool ?? false
         if let storedTools = defaults.array(forKey: Keys.visibleQuickTools) as? [String] {
-            let stored = Set(storedTools.compactMap { key in
+            var stored = Set(storedTools.compactMap { key in
                 QuickToolKind.allCases.first { $0.storageKey == key }
             })
-            // 一次性迁移:各版本新增的工具 case 不在老存量里,升级后会被当成
-            // 「用户已隐藏」。按引入版本登记(见 introducedByVersion),只补
-            // 新工具,不复活用户手动关掉的老工具;之后手动开关正常读写。
-            if !defaults.bool(forKey: Keys.quickToolsMigrated) {
-                let introducedByVersion: [QuickToolKind] = []
-                let merged = stored.union(introducedByVersion)
-                if merged != stored {
-                    visibleQuickTools = merged
-                    defaults.set(merged.map(\.storageKey), forKey: Keys.visibleQuickTools)
-                }
-                defaults.set(true, forKey: Keys.quickToolsMigrated)
-            } else {
-                visibleQuickTools = stored
+            // 一次性迁移:存量老配置补齐键盘锁定(此前 App Store 渠道未默认开启/遗漏登记)。
+            if !defaults.bool(forKey: Keys.keyboardLockVisibilityMigrated) {
+                stored.insert(.keyboardLock)
+                defaults.set(stored.map(\.storageKey), forKey: Keys.visibleQuickTools)
+                defaults.set(true, forKey: Keys.keyboardLockVisibilityMigrated)
             }
+            visibleQuickTools = stored
         } else {
             visibleQuickTools = Set(QuickToolKind.allCases)
         }
@@ -863,6 +866,26 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $keyboardLockAutoUnlockMinutes
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.keyboardLockAutoUnlockMinutes)
+                Task { @MainActor in
+                    QuickToolsStore.shared.setKeyboardLockAutoUnlockMinutes(newValue)
+                }
+            }
+            .store(in: &cancellables)
+
+        $keyboardLockBlocksExternal
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.keyboardLockBlocksExternal)
+                Task { @MainActor in
+                    QuickToolsStore.shared.setKeyboardLockScope(newValue ? .all : .internalOnly)
+                }
+            }
+            .store(in: &cancellables)
+
         $visibleQuickTools
             .dropFirst()
             .sink { [weak self] newValue in
@@ -982,10 +1005,16 @@ private enum Keys {
     static let statisticsEnabled = "settings.statistics.enabled"
     static let alertNotificationsEnabled = "settings.alerts.notificationsEnabled"
     static let quickToolsVisible = "settings.quickTools.visible"
+    /// 键盘锁定自动解锁时长的持久化键:与 QuickToolsStore 的启动恢复路径共用
+    /// 同一常量,避免两处字面量漂移。
+    static let keyboardLockAutoUnlockMinutes = QuickToolsStore.autoUnlockMinutesDefaultsKey
+    static let keyboardLockBlocksExternal = QuickToolsStore.blocksExternalDefaultsKey
     static let visibleQuickTools = "settings.quickTools.visibleKinds"
     /// 一次性迁移标记:小工具新增工具 case 时,把新工具并回老用户的已启用集合
     /// (语义同 fanVisibilityMigrated:缺省会补,用户手动关过的不复活)。
     static let quickToolsMigrated = "settings.quickToolsMigrated"
+    /// 一次性迁移标记:App Store 渠道引入键盘锁定,向存量设置补齐显示状态。
+    static let keyboardLockVisibilityMigrated = "settings.quickTools.keyboardLockVisibilityMigrated"
     static let visibleKinds = "settings.visibleKinds"
     /// 一次性迁移标记:风扇模块从「硬件自动门控」升级为「用户可开关」时,
     /// 给老用户的已存储可见列表补上 fan(否则会被当作「用户已隐藏」)。

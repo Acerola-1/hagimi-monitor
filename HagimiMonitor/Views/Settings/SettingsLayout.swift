@@ -44,23 +44,12 @@ struct SettingsGroup<Content: View, TitleAccessory: View>: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
             if let title {
-                HStack(alignment: .center) {
-                    Text(title)
-                        .font(.headline.weight(.semibold))
-                        .padding(.horizontal, 2)
-                    Spacer(minLength: 0)
-                    if let titleAccessory {
-                        titleAccessory
-                    }
-                }
+                SettingsGroupTitle(title) { titleAccessory }
             }
 
-            // 分组背景用平面浅色主题表面,不叠加玻璃:玻璃在切换外观/配色时整块重合成,
-            // 是组内控件闪烁的诱因(面板行级也因同一诱因降级,见 CompatibleGlassEffect 注释)。
-            VStack(spacing: 0) {
+            SettingsCard {
                 content
             }
-            .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
         }
     }
 }
@@ -69,6 +58,61 @@ extension SettingsGroup where TitleAccessory == EmptyView {
     /// 无标题挂件的便捷入口,保持旧调用写法不变。
     init(_ title: String? = nil, @ViewBuilder content: () -> Content) {
         self.init(title, titleAccessory: { EmptyView() }, content: content)
+    }
+}
+
+/// 分组标题行:与分组卡片配套的排版。单独抽出是因为「工具」这类条目要
+/// 标题 + 各自成卡的一排卡片,而不是标题 + 单张卡片。
+struct SettingsGroupTitle<Accessory: View>: View {
+    let title: String
+    let accessory: Accessory
+
+    init(_ title: String, @ViewBuilder accessory: () -> Accessory) {
+        self.title = title
+        self.accessory = accessory()
+    }
+
+    var body: some View {
+        HStack(alignment: .center) {
+            Text(title)
+                .font(.headline.weight(.semibold))
+                .padding(.horizontal, 2)
+            Spacer(minLength: 0)
+            accessory
+        }
+    }
+}
+
+extension SettingsGroupTitle where Accessory == EmptyView {
+    init(_ title: String) {
+        self.init(title, accessory: { EmptyView() })
+    }
+}
+
+/// 单张设置卡片表面。分组内默认只有一张(SettingsGroup 包住),条目各自成卡
+/// 时由调用方并排放多张。
+struct SettingsCard<Content: View>: View {
+    let content: Content
+
+    init(@ViewBuilder content: () -> Content) {
+        self.content = content()
+    }
+
+    var body: some View {
+        // 分组背景用平面浅色主题表面,不叠加玻璃:玻璃在切换外观/配色时整块重合成,
+        // 是组内控件闪烁的诱因(面板行级也因同一诱因降级,见 CompatibleGlassEffect 注释)。
+        VStack(spacing: 0) {
+            content
+        }
+        .background(.quaternary.opacity(0.42), in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+    }
+}
+
+/// 行/卡片行头按钮的通用样式:按压不做任何视觉变化(无变暗/无位移),
+/// 状态反馈交给各自的内容过渡或 hover。
+struct StaticPressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
     }
 }
 
