@@ -14,7 +14,8 @@ import Foundation
 ///
 /// 成本：全量 ~840 个 pid 的 rusage + 路径读取实测 <10 ms，随 BatterySampler 的既有
 /// 采样节奏执行，不新增定时器；基线需连续推进，故不随面板可见性启停。
-final class ProcessEnergySampler {
+/// 线程安全不变量：内部 baselines 和 smoothed 字典由 lock(NSLock) 互斥保护，支持跨线程安全调用 sample()。
+nonisolated final class ProcessEnergySampler: @unchecked Sendable {
     static let shared = ProcessEnergySampler()
 
     private struct Baseline {
@@ -95,10 +96,11 @@ final class ProcessEnergySampler {
             let share = entry.watts / total
             guard share > 0 else { continue }
             topWatts += entry.watts
+            let path = executablePath(for: pid)
             shares.append(ProcessEnergyShare(
                 pid: pid,
                 name: Self.displayName(for: pid),
-                icon: NSRunningApplication(processIdentifier: pid)?.icon,
+                icon: ProcessIconCache.icon(forPID: pid, path: path),
                 share: share,
                 watts: entry.watts
             ))

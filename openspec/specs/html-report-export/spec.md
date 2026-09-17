@@ -17,13 +17,13 @@ HTML 网页报表（`ReportTemplate.html`）SHALL 包含专用的 `@media print`
 - **AND** 关键图表与指标卡具有页面分页保护（`break-inside: avoid`），防止被截断在两页之间
 
 ### Requirement: 报表一键打印与导出 PDF 交互
-HTML 网页报表与内置报表窗口 SHALL 提供快捷直观的「打印 / 导出 PDF」能力，并支持在 App Store 沙盒环境与外部浏览器中正常运行。
+独立 HTML 报表与原生报表窗口 SHALL 提供快捷直观的「打印 / 导出 PDF」能力，并支持在 App Store 沙盒环境与外部浏览器中正常运行。
 
 #### Scenario: 内置报表窗口点击打印按钮
-- **WHEN** 用户在内置报表窗口点击顶部导航栏中的「打印 / 导出」按钮或工具栏打印图标
-- **THEN** 网页调用 `enterPrintMode()` 预热切换图表为浅色高对比模式
-- **AND** 通过 `window.webkit.messageHandlers.hagimiPrint` 向宿主发送消息，宿主唤起原生 `NSPrintOperation` 模态打印面板
-- **AND** 打印完成后调用 `exitPrintMode()` 还原图表色彩
+- **WHEN** 用户在原生报表窗口点击工具栏中的打印图标
+- **THEN** 应用为本次请求生成唯一临时 HTML，调用 `enterPrintMode()` 后由瞬时 WebKit 实例唤起原生 `NSPrintOperation` 模态打印面板
+- **AND** 打印完成、用户取消、导航/脚本失败、重复请求或父窗口关闭均汇入幂等 `TransientReportPrintSession.finish()`
+- **AND** session cleanup 停止加载、断开 delegate、清除关联对象、释放 `WKWebView` 引用并删除临时 HTML；不以系统 WebKit helper 的退出时间判定应用对象是否释放
 
 #### Scenario: 外部浏览器中点击打印按钮
 - **WHEN** 用户在外部浏览器中点击报表导航栏中的「打印 / 导出」按钮
@@ -35,10 +35,11 @@ HTML 网页报表与内置报表窗口 SHALL 提供快捷直观的「打印 / �
 
 #### Scenario: 打开详细报表
 - **WHEN** 用户在数据统计设置中点击「查看详细报表」
-- **THEN** 应用生成当前时段统计 HTML 并通过内置 `WKWebView` 窗口打开
-- **AND** 窗口提供 Unified 工具栏，包含刷新、打印、另存为 HTML 文件功能
+- **THEN** 应用直接打开 `NSWindow` + `NSHostingView<NativeReportView>` 原生报表窗口，不读取 HTML 模板或创建 `WKWebView`
+- **AND** 窗口提供原生工具栏，包含刷新、打印、另存为 HTML 文件功能
 
 #### Scenario: 另存为 HTML 文件
 - **WHEN** 用户在报表窗口工具栏点击「另存为 HTML」
-- **THEN** 弹出系统 `NSSavePanel` 供用户选择导出路径
+- **THEN** 弹出系统 `NSSavePanel` 供用户选择导出路径，并由 `StandaloneHTMLReportExporter` 直接写入该目标
+- **AND** 导出不创建或复用 Application Support 中的固定报表缓存
 - **AND** 若保存失败，以 Sheet 或模态框形式呈现原生 `NSAlert` 错误提示

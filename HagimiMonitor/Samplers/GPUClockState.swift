@@ -6,7 +6,7 @@ import Foundation
 /// 而是「区间内各状态各占多少 tick」。因此这里以原始 tick 为输入，只在产出
 /// 占比时按区间总 tick 归一化——脱离归一化的原始 tick 是自开机起的累计量，
 /// 直接读会得到一条几乎不动的曲线。
-struct GPUClockStateReadout: Equatable {
+nonisolated struct GPUClockStateReadout: Equatable, Sendable {
     /// 区间内驻留最大的非 OFF 时钟态（如 "P3"）。OFF 表示 GPU 时钟停摆，
     /// 是停机档而非工作档，故不作为时钟态上报。
     var dominantState: String?
@@ -20,7 +20,7 @@ struct GPUClockStateReadout: Equatable {
 
 /// 与渠道无关的纯计算，便于单测覆盖。IOReport 的实际读取在 Direct 版
 /// `IOReportPowerSampler`，本文件不引入任何私有 API。
-enum GPUClockStateMath {
+nonisolated enum GPUClockStateMath {
     /// 把各状态的原始 tick 换算成区间占比（合计 100）。区间内无 tick 时
     /// 全部为 0，由调用方按「无数据」处理。
     static func normalized(_ states: [(name: String, ticks: Int64)]) -> [(name: String, percent: Double)] {

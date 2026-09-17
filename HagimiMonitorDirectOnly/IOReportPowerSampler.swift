@@ -2,7 +2,7 @@ import CoreFoundation
 import Foundation
 
 /// Direct 版专用的分项硬件遥测读数。所有功率字段为平均功率(W)，内存带宽为字节率(Bytes/s)。
-struct IOReportPowerSample {
+nonisolated struct IOReportPowerSample: Sendable {
     var displayWatts: Double? = nil
     var cpuWatts: Double? = nil
     var gpuWatts: Double? = nil
@@ -22,7 +22,8 @@ struct IOReportPowerSample {
 ///   本计数净增速率与负载实际字节速率之比 ≈1.05，每次 Miss 对应 64B 的假设已被否定）。
 ///
 /// IOReport 为私有 API，因此本文件只属于未沙盒化的 Direct target。
-final class IOReportPowerSampler {
+/// 线程安全不变量：内部状态由 sampleLock(NSLock) 互斥保护，支持跨线程安全调用 sample()。
+nonisolated final class IOReportPowerSampler: @unchecked Sendable {
     static let shared = IOReportPowerSampler()
 
     private enum ChannelID: Hashable {
@@ -224,7 +225,8 @@ final class IOReportPowerSampler {
     }
 }
 
-private final class Subscription {
+/// 线程安全不变量：Subscription 仅由 IOReportPowerSampler 私有持有，并通过 sampleLock 互斥调用底层 IOReport C API。
+private nonisolated final class Subscription: @unchecked Sendable {
     struct ChannelValue {
         let value: Int64
         let unit: UInt64

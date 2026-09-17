@@ -11,10 +11,11 @@ import Darwin
 /// - 启动后台周期计时器，每隔 `checkInterval` 检查一次（`.periodic`），覆盖长期常驻后台、
 ///   不重启也不打开设置窗口的场景；同一个计时器也承担了失败重试的职责——只有成功发送后
 ///   才会把"今天已上报"落盘，失败的话下一次 tick 会自然重新尝试，不需要额外的重试队列。
-final class UsageReporter: @unchecked Sendable {
+/// 内部状态由串行队列 queue 独占保护，对外提供异步线程安全接口。
+nonisolated final class UsageReporter: @unchecked Sendable {
     static let shared = UsageReporter()
 
-    enum Trigger: String {
+    enum Trigger: String, Sendable {
         case launch
         case periodic
     }
@@ -56,11 +57,14 @@ final class UsageReporter: @unchecked Sendable {
 
     /// 启动后台周期检查计时器，应用生命周期内只需调用一次。
     func start() {
-        let timer = DispatchSource.makeTimerSource(queue: queue)
-        timer.schedule(deadline: .now() + Self.checkInterval, repeating: Self.checkInterval)
-        timer.setEventHandler { [weak self] in self?.reportIfNeeded(trigger: .periodic) }
-        timer.resume()
-        self.timer = timer
+        queue.async { [weak self] in
+            guard let self, self.timer == nil else { return }
+            let timer = DispatchSource.makeTimerSource(queue: self.queue)
+            timer.schedule(deadline: .now() + Self.checkInterval, repeating: Self.checkInterval)
+            timer.setEventHandler { [weak self] in self?.reportIfNeeded(trigger: .periodic) }
+            self.timer = timer
+            timer.resume()
+        }
     }
 
     /// 若今天还没成功上报过，异步发送一次心跳；失败时会重试几次，仍失败则放弃，
@@ -146,16 +150,12 @@ final class UsageReporter: @unchecked Sendable {
         return generated
     }
 
-    private static let dayFormatter: DateFormatter = {
+    private static func dateString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
         formatter.timeZone = TimeZone(identifier: "UTC")
         formatter.dateFormat = "yyyy-MM-dd"
-        return formatter
-    }()
-
-    private static func dateString(_ date: Date) -> String {
-        dayFormatter.string(from: date)
+        return formatter.string(from: date)
     }
 
     private static func osVersionString() -> String {
@@ -179,7 +179,7 @@ final class UsageReporter: @unchecked Sendable {
     }
 }
 
-private enum Keys {
+nonisolated private enum Keys {
     static let installID = "telemetry.installID"
     static let lastReportedDate = "telemetry.lastReportedDate"
     static let enabled = "telemetry.enabled"

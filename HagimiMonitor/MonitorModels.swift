@@ -4,7 +4,7 @@ import Combine
 import OSLog
 import IOKit.ps
 
-enum HaloRingSource: String, CaseIterable, Identifiable {
+nonisolated enum HaloRingSource: String, CaseIterable, Identifiable, Sendable {
     case combined
     case cpu
     case gpu
@@ -22,7 +22,7 @@ enum HaloRingSource: String, CaseIterable, Identifiable {
     }
 }
 
-enum MemoryPressureLevel: Int, Equatable {
+nonisolated enum MemoryPressureLevel: Int, Equatable, Sendable {
     case normal = 0
     case warning = 1
     case critical = 2
@@ -42,7 +42,7 @@ enum MemoryPressureLevel: Int, Equatable {
     }
 }
 
-enum MonitorSeverity {
+nonisolated enum MonitorSeverity: Sendable {
     case calm
     case warning
     case critical
@@ -59,7 +59,7 @@ enum MonitorSeverity {
     }
 }
 
-enum MonitorKind: String, CaseIterable, Identifiable {
+nonisolated enum MonitorKind: String, CaseIterable, Identifiable, Sendable {
     case cpu
     case gpu
     /// 风扇:独立于 SystemMonitorSampler,数据由 FanSampler 注入,仅 fanAvailable 时存在。
@@ -257,7 +257,7 @@ enum MonitorKind: String, CaseIterable, Identifiable {
     }
 }
 
-struct MetricSwitch: Identifiable, Hashable {
+nonisolated struct MetricSwitch: Identifiable, Hashable, Sendable {
     let id: String
     let title: String
     let isDefault: Bool
@@ -266,12 +266,12 @@ struct MetricSwitch: Identifiable, Hashable {
 }
 
 /// 面板来源类型,用于引用计数式可见性判定。
-enum PanelKind: Hashable {
+nonisolated enum PanelKind: Hashable, Sendable {
     case menuBar
     case pinned
 }
 
-struct MonitorMetric: Identifiable, Equatable {
+nonisolated struct MonitorMetric: Identifiable, Equatable, Sendable {
     let name: String
     let value: String
     var numericValue: Double?
@@ -285,7 +285,7 @@ struct MonitorMetric: Identifiable, Equatable {
 
 /// 风扇运行状态。基于 RPM 与 min/max 范围判断,用于告警门控与面板着色。
 /// 判断规则见 `FanInfo.status`。
-enum FanStatus: Equatable, Comparable {
+nonisolated enum FanStatus: Equatable, Comparable, Sendable {
     /// 正常:RPM > 0 且未接近最大值(< 85% maxRPM)。
     case normal
     /// 警告:RPM 接近最大值(>= 85% maxRPM),散热压力高。
@@ -330,7 +330,7 @@ enum FanStatus: Equatable, Comparable {
 
 /// 单个风扇读数。由 FanSampler 从 SMC F0Ac/F0Mn/F0Mx 等键读出。
 /// 面板展开区按此数组渲染多风扇列表;菜单栏只取 max(currentRPM)。
-struct FanInfo: Identifiable, Equatable {
+nonisolated struct FanInfo: Identifiable, Equatable, Sendable {
     let id: Int
     let name: String
     let currentRPM: Int
@@ -359,7 +359,7 @@ struct FanInfo: Identifiable, Equatable {
 }
 
 /// 单个逻辑 CPU 的瞬时负载,供展开区逐核环形图渲染。
-struct CPUCoreLoad: Identifiable, Equatable {
+nonisolated struct CPUCoreLoad: Identifiable, Equatable, Sendable {
     let index: Int
     /// 0-100 占用百分比。
     let usage: Double
@@ -372,13 +372,13 @@ struct CPUCoreLoad: Identifiable, Equatable {
 /// CPU 逐核负载与 P/E 分组占用(仅 CPU 模块有值):逐核环形图 +
 /// 分组占用两行展示的数据源。分组占用与 core-split 指标同口径
 /// (tick 差值聚合),独立存放供展开区直接渲染。
-struct CPUCoreDetail: Equatable {
+nonisolated struct CPUCoreDetail: Equatable, Sendable {
     let cores: [CPUCoreLoad]
     let performanceUsage: Double
     let efficiencyUsage: Double?
 }
 
-struct MonitorModule: Identifiable, Equatable {
+nonisolated struct MonitorModule: Identifiable, Equatable, Sendable {
     let kind: MonitorKind
     var context: String? = nil
     var value: Double
@@ -459,11 +459,43 @@ struct MonitorModule: Identifiable, Equatable {
 
 /// 采样指标 name 的跨文件契约键。采样器产出与消费方(severity 判定等)共享,
 /// 任一端改名编译器即报错,避免裸字符串断约后的静默降级(如电池交流供电判成 critical)。
-enum MonitorMetricKey {
+nonisolated enum MonitorMetricKey: Sendable {
     static let type = "type"
     static let acPower = "ac-power"
     /// 电池模块 type 的缺失态取值:IOPS 接口不可信,读数不参与 UI/统计消费。
     static let batteryUnavailable = "battery-unavailable"
+}
+
+/// 线程安全的进程采样暂存器，用于在后台采样队列和主线程分发之间暂存结果。
+/// 安全不变式：通过内部 NSLock 保证多条采样队列并发写入与主线程统一读取的互斥访问。
+nonisolated private final class ProcessSampleCollector: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _memoryProcesses: [TopMemoryProcess]?
+    private var _cpuProcesses: [TopCPUProcess]?
+    private var _gpuProcesses: [TopGPUProcess]?
+    private var _diskProcesses: [TopDiskProcess]?
+    private var _networkProcesses: [TopNetworkProcess]?
+
+    var memoryProcesses: [TopMemoryProcess]? {
+        get { lock.lock(); defer { lock.unlock() }; return _memoryProcesses }
+        set { lock.lock(); defer { lock.unlock() }; _memoryProcesses = newValue }
+    }
+    var cpuProcesses: [TopCPUProcess]? {
+        get { lock.lock(); defer { lock.unlock() }; return _cpuProcesses }
+        set { lock.lock(); defer { lock.unlock() }; _cpuProcesses = newValue }
+    }
+    var gpuProcesses: [TopGPUProcess]? {
+        get { lock.lock(); defer { lock.unlock() }; return _gpuProcesses }
+        set { lock.lock(); defer { lock.unlock() }; _gpuProcesses = newValue }
+    }
+    var diskProcesses: [TopDiskProcess]? {
+        get { lock.lock(); defer { lock.unlock() }; return _diskProcesses }
+        set { lock.lock(); defer { lock.unlock() }; _diskProcesses = newValue }
+    }
+    var networkProcesses: [TopNetworkProcess]? {
+        get { lock.lock(); defer { lock.unlock() }; return _networkProcesses }
+        set { lock.lock(); defer { lock.unlock() }; _networkProcesses = newValue }
+    }
 }
 
 final class MonitorStore: ObservableObject {
@@ -495,6 +527,9 @@ final class MonitorStore: ObservableObject {
 
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
+    /// 面板进程采样代次。最后一个面板消失时推进，令关闭前已在途的采样结果失效；
+    /// 仅检查“当前可见”不足以覆盖关闭后立即重开的场景。
+    private var processSampleGeneration: UInt64 = 0
 
     /// 展开/收起动画截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
     /// 由 `beginExpansionAnimation` 在每次展开/收起起点置位。
@@ -502,11 +537,23 @@ final class MonitorStore: ObservableObject {
 
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
+/// 自动在 deinit 时从主 RunLoop 移除电源变化通知 source 的包装对象。
+/// 安全不变式：仅持有不可变的 CFRunLoopSource 引用，在 deinit 执行 CFRunLoopRemoveSource 保证资源安全释放。
+nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
+    private let source: CFRunLoopSource
+    init(_ source: CFRunLoopSource) {
+        self.source = source
+    }
+    deinit {
+        CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+    }
+}
+
     private var timerCancellable: AnyCancellable?
     private var procSampleTimer: AnyCancellable?
     /// 电源状态(交流/电池、充电与否)变化通知源。插拔电源时系统即时回调,
     /// 立刻重采电池模块,让菜单栏图标(充电闪电)与充电功率无需等下一个 2s 采样周期。
-    private var powerSourceRunLoopSource: CFRunLoopSource?
+    private var powerSourceRunLoopSource: PowerSourceRunLoopBox?
     private let sampler = SystemMonitorSampler()
     private let samplingQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.sampling", qos: .utility)
     private let procSampleQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.proc-sample", qos: .utility)
@@ -561,12 +608,8 @@ final class MonitorStore: ObservableObject {
 
         startPowerSourceMonitoring()
 
-        // 进程采样定时器自 init 常驻:TOP 列表在打开面板/展开行之前即绑好,
-        // 展开即刻落真实数据,无需等基线建立。统一为单个定时器串行驱动
-        // 各类目采样,避免多个独立定时器导致的密集触发;采样在后台串行队列,
-        // 沙盒版全程进程内读,直连版每周期另 spawn 一轮 ps/nettop。
-        startProcSampleTimer()
-        refreshProcesses(for: enabledProcessKinds(), allowClear: false)
+        // 进程采样按需驱动：初始 visiblePanelKinds 为空，定时器保持休眠。
+        // 仅当面板出现时（panelDidAppear）才启动 2 秒定时器并按需刷新，收起时（panelDidDisappear）休眠并清空列表。
 
         settings.$memoryShowSystemProcesses
             .dropFirst()
@@ -746,7 +789,6 @@ final class MonitorStore: ObservableObject {
     }
 
     private func sampleProcessesForStatistics() {
-        let recorder = statisticsRecorder
         let gpuCursor = statsGPUCursor
         #if DIRECT_DISTRIBUTION
         let diskCursor = statsDiskCursor
@@ -754,7 +796,7 @@ final class MonitorStore: ObservableObject {
         #else
         let cpuCursor = statsCPUCursor
         #endif
-        let sampleFast: () -> Void = {
+        let sampleFast: @Sendable () -> Void = { [weak self] in
             #if DIRECT_DISTRIBUTION
             // 直连版 CPU 来自 ps,无基线,与面板不存在共享问题。
             // 直连版 CPU 来自 ps,无基线,不与面板游标共享状态。
@@ -770,16 +812,20 @@ final class MonitorStore: ObservableObject {
             let disk: [TopDiskProcess] = []
             #endif
             DispatchQueue.main.async {
-                recorder.recordProcesses(cpu: cpu, memory: memory, gpu: gpu, network: [], disk: disk, at: Date())
+                MainActor.assumeIsolated {
+                    self?.statisticsRecorder.recordProcesses(cpu: cpu, memory: memory, gpu: gpu, network: [], disk: disk, at: Date())
+                }
             }
         }
         procSampleQueue.async(execute: sampleFast)
         #if DIRECT_DISTRIBUTION
         // nettop 独占 nettopQueue,单次实测数十~数百毫秒;速率为窗口均值,×60s 近似为分钟字节量
-        let sampleNetwork: () -> Void = {
+        let sampleNetwork: @Sendable () -> Void = { [weak self] in
             let network = enrichNetwork(networkCursor.sample(limit: 5, includeSystemProcesses: true))
             DispatchQueue.main.async {
-                recorder.recordProcesses(cpu: [], memory: [], gpu: [], network: network, disk: [], at: Date())
+                MainActor.assumeIsolated {
+                    self?.statisticsRecorder.recordProcesses(cpu: [], memory: [], gpu: [], network: network, disk: [], at: Date())
+                }
             }
         }
         nettopQueue.async(execute: sampleNetwork)
@@ -796,7 +842,7 @@ final class MonitorStore: ObservableObject {
         panelDidDisappear(.menuBar)
     }
 
-    /// 面板出现时调用:记录来源。进程采样自 init 常驻,不随面板可见性启停。
+    /// 面板出现时调用:记录来源。当首个面板出现时启动 2 秒进程采样定时器并立即刷新。
     func panelDidAppear(_ kind: PanelKind) {
         let wasEmpty = visiblePanelKinds.isEmpty
         visiblePanelKinds.insert(kind)
@@ -806,16 +852,20 @@ final class MonitorStore: ObservableObject {
         if wasEmpty {
             loadAnimator.setPanelVisible(true)
             isPanelVisible = true
+            startProcSampleTimer()
+            refreshAllProcesses()
         }
     }
 
-    /// 面板消失时调用:移除来源。TOP 列表与采样常驻,隐藏期不清空、不停表,
-    /// 下次打开/展开即刻有数据。
+    /// 面板消失时调用:移除来源。当所有面板均收起时，暂停 2 秒高频定时器并清空 TOP 进程列表，切断后台开销。
     func panelDidDisappear(_ kind: PanelKind) {
         visiblePanelKinds.remove(kind)
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
             loadAnimator.setPanelVisible(false)
+            processSampleGeneration &+= 1
+            stopProcSampleTimer()
+            clearProcesses()
         }
     }
 
@@ -893,10 +943,23 @@ final class MonitorStore: ObservableObject {
             }
     }
 
+    private func stopProcSampleTimer() {
+        procSampleTimer?.cancel()
+        procSampleTimer = nil
+    }
+
+    /// 清空所有 TOP 进程列表，释放持有的进程模型与图标对象。
+    private func clearProcesses() {
+        topMemoryProcesses = []
+        topCPUProcesses = []
+        topGPUProcesses = []
+        topDiskProcesses = []
+        topNetworkProcesses = []
+    }
+
     /// 刷新设置里开启的进程列表(不论是否展开)。由 2 秒定时器驱动。
-    /// 定时周期拥有完整测量窗口,结果权威,允许用空结果清列表(真实空闲时列表
-    /// 应诚实变空);init 首采一次性禁用清空(见调用处)。
     private func refreshAllProcesses() {
+        guard !visiblePanelKinds.isEmpty else { return }
         refreshProcesses(for: enabledProcessKinds())
     }
 
@@ -904,11 +967,11 @@ final class MonitorStore: ObservableObject {
     /// 在 procSampleQueue、nettop 在 nettopQueue 各自串行执行(串行是各游标
     /// 快照无锁安全的前提),全部完成后回主线程更新 @Published 属性——命中
     /// 展开/收起动画窗口时推迟到弹簧收尾(见 deferUntilExpansionSettles)。
-    /// allowClear=false 时空结果不覆盖已有列表(init 首采用)。
     private func refreshProcesses(
-        for kinds: Set<MonitorKind>,
-        allowClear: Bool = true
+        for kinds: Set<MonitorKind>
     ) {
+        guard !visiblePanelKinds.isEmpty else { return }
+        let generation = processSampleGeneration
         let enabled = enabledProcessKinds()
 
         let active = Self.activeProcessKinds(expanded: kinds, enabled: enabled)
@@ -921,11 +984,13 @@ final class MonitorStore: ObservableObject {
         let networkIncludeSystem = settings.networkShowSystemProcesses
 
         let group = DispatchGroup()
-        var memoryProcesses: [TopMemoryProcess]?
-        var cpuProcesses: [TopCPUProcess]?
-        var gpuProcesses: [TopGPUProcess]?
-        var diskProcesses: [TopDiskProcess]?
-        var networkProcesses: [TopNetworkProcess]?
+        let collector = ProcessSampleCollector()
+        #if !DIRECT_DISTRIBUTION
+        let cpuCursor = panelCPUCursor
+        #endif
+        let gpuCursor = panelGPUCursor
+        let diskCursor = panelDiskCursor
+        let networkCursor = panelNetworkCursor
 
         // 采样设置里已开启的列表(不论是否展开)。注意:增量类目(磁盘/网络/GPU
         // 与沙盒 CPU)的 TOP 采样各自维护差分快照计算增量,快照按消费方分离为游标、每消费方各持
@@ -938,7 +1003,7 @@ final class MonitorStore: ObservableObject {
             procSampleQueue.async {
                 let raw = sampleTopMemoryProcesses(includeSystemProcesses: memoryIncludeSystem)
                 // enrich 使用 NSRunningApplication(pid:) 初始化,只读属性,后台线程安全。
-                memoryProcesses = enrich(raw)
+                collector.memoryProcesses = enrich(raw)
                 group.leave()
             }
         }
@@ -949,9 +1014,9 @@ final class MonitorStore: ObservableObject {
                 #if DIRECT_DISTRIBUTION
                 let raw = sampleTopCPUViaPS(limit: 5, includeSystemProcesses: cpuIncludeSystem)
                 #else
-                let raw = self.panelCPUCursor.sample(limit: 5, includeSystemProcesses: cpuIncludeSystem)
+                let raw = cpuCursor.sample(limit: 5, includeSystemProcesses: cpuIncludeSystem)
                 #endif
-                cpuProcesses = enrichCPU(raw)
+                collector.cpuProcesses = enrichCPU(raw)
                 group.leave()
             }
         }
@@ -959,8 +1024,8 @@ final class MonitorStore: ObservableObject {
         if active.contains(.gpu) {
             group.enter()
             procSampleQueue.async {
-                let raw = self.panelGPUCursor.sample(limit: 5, includeSystemProcesses: gpuIncludeSystem)
-                gpuProcesses = enrichGPU(raw)
+                let raw = gpuCursor.sample(limit: 5, includeSystemProcesses: gpuIncludeSystem)
+                collector.gpuProcesses = enrichGPU(raw)
                 group.leave()
             }
         }
@@ -968,8 +1033,8 @@ final class MonitorStore: ObservableObject {
         if active.contains(.storage) {
             group.enter()
             procSampleQueue.async {
-                let raw = self.panelDiskCursor.sampleTopDiskProcesses(limit: 5, includeSystemProcesses: diskIncludeSystem)
-                diskProcesses = enrichDisk(raw)
+                let raw = diskCursor.sampleTopDiskProcesses(limit: 5, includeSystemProcesses: diskIncludeSystem)
+                collector.diskProcesses = enrichDisk(raw)
                 group.leave()
             }
         }
@@ -977,45 +1042,56 @@ final class MonitorStore: ObservableObject {
         if active.contains(.network) {
             group.enter()
             nettopQueue.async {
-                let raw = self.panelNetworkCursor.sample(limit: 5, includeSystemProcesses: networkIncludeSystem)
-                networkProcesses = enrichNetwork(raw)
+                let raw = networkCursor.sample(limit: 5, includeSystemProcesses: networkIncludeSystem)
+                collector.networkProcesses = enrichNetwork(raw)
                 group.leave()
             }
         }
 
         // 全部采样完成后,在主线程更新 @Published 属性。命中展开/收起动画窗口时
         // 推迟到弹簧收尾(与模块采样同规则),避免整表替换撞动画帧、拖视图树重算。
+        // 若在此期间面板已收起，则直接丢弃采样结果，确保清空后的列表不被陈旧后台帧覆写。
         group.notify(queue: .main) { [weak self] in
-            guard let self else { return }
-            self.deferUntilExpansionSettles {
-                // 采样常驻:结果不论面板可见与否都发布,隐藏期列表也保持
-                // 鲜活,展开即刻渲染最近一期常驻结果。
-                func publish<T>(_ kind: MonitorKind, _ result: [T]?, assign: ([T]) -> Void) {
-                    guard let result else { return }
-                    if !result.isEmpty || allowClear { assign(result) }
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                guard Self.shouldPublishProcessSample(
+                    startedAt: generation,
+                    current: self.processSampleGeneration,
+                    hasVisiblePanel: !self.visiblePanelKinds.isEmpty
+                ) else { return }
+                self.deferUntilExpansionSettles {
+                    guard Self.shouldPublishProcessSample(
+                        startedAt: generation,
+                        current: self.processSampleGeneration,
+                        hasVisiblePanel: !self.visiblePanelKinds.isEmpty
+                    ) else { return }
+                    func publish<T>(_ result: [T]?, assign: ([T]) -> Void) {
+                        guard let result else { return }
+                        assign(result)
+                    }
+                    publish(collector.memoryProcesses) { self.topMemoryProcesses = $0 }
+                    publish(collector.cpuProcesses) { self.topCPUProcesses = $0 }
+                    publish(collector.gpuProcesses) { self.topGPUProcesses = $0 }
+                    publish(collector.diskProcesses) { self.topDiskProcesses = $0 }
+                    publish(collector.networkProcesses) { self.topNetworkProcesses = $0 }
                 }
-                publish(.memory, memoryProcesses) { self.topMemoryProcesses = $0 }
-                publish(.cpu, cpuProcesses) { self.topCPUProcesses = $0 }
-                publish(.gpu, gpuProcesses) { self.topGPUProcesses = $0 }
-                publish(.storage, diskProcesses) { self.topDiskProcesses = $0 }
-                publish(.network, networkProcesses) { self.topNetworkProcesses = $0 }
             }
         }
     }
 
-    /// 设置变化时立即重采一期;采样常驻,不受面板可见性限制。
-    private func refreshAllProcessesIfNeeded() {
-        refreshAllProcesses()
+    /// 采样结果仅能发布到启动它的同一轮面板会话。
+    static func shouldPublishProcessSample(
+        startedAt generation: UInt64,
+        current: UInt64,
+        hasVisiblePanel: Bool
+    ) -> Bool {
+        hasVisiblePanel && generation == current
     }
 
-    deinit {
-        timerCancellable?.cancel()
-        procSampleTimer?.cancel()
-        statsProcTimer?.cancel()
-        if let powerSourceRunLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), powerSourceRunLoopSource, .defaultMode)
-        }
-        cancellables.removeAll()
+    /// 设置变化时立即重采一期；仅在面板可见时执行。
+    private func refreshAllProcessesIfNeeded() {
+        guard !visiblePanelKinds.isEmpty else { return }
+        refreshAllProcesses()
     }
 
     /// 注册电源状态变化通知:插拔适配器/充电状态翻转时立即重采电池。
@@ -1031,7 +1107,7 @@ final class MonitorStore: ObservableObject {
             return
         }
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .defaultMode)
-        powerSourceRunLoopSource = source
+        powerSourceRunLoopSource = PowerSourceRunLoopBox(source)
     }
 
     /// 电源状态变化时立即重采电池,不影响其他模块的既定节奏。
@@ -1206,16 +1282,25 @@ final class MonitorStore: ObservableObject {
     /// 独立采样器(风扇/蓝牙)刷新同样排空,给逐帧动画让出主线程余量——主采样已按
     /// 同一 deadline 推迟,这里补齐剩余会拖动面板子树重算的指标,外接屏扩放渲染
     /// 负载时余量越少越易掉帧。
-    private func settleAfterExpansion(_ apply: @escaping () -> Void) {
+    private func settleAfterExpansion(_ apply: @escaping @MainActor @Sendable () -> Void) {
         let deadline = expansionAnimationDeadline
         if Date() < deadline {
             DispatchQueue.main.asyncAfter(deadline: .now() + deadline.timeIntervalSinceNow) { [weak self] in
-                guard let self else { apply(); return }
-                if Date() < self.expansionAnimationDeadline {
-                    let next = self.expansionAnimationDeadline.timeIntervalSinceNow
-                    DispatchQueue.main.asyncAfter(deadline: .now() + next, execute: apply)
-                } else {
-                    apply()
+                MainActor.assumeIsolated {
+                    guard let self else {
+                        apply()
+                        return
+                    }
+                    if Date() < self.expansionAnimationDeadline {
+                        let next = self.expansionAnimationDeadline.timeIntervalSinceNow
+                        DispatchQueue.main.asyncAfter(deadline: .now() + next) {
+                            MainActor.assumeIsolated {
+                                apply()
+                            }
+                        }
+                    } else {
+                        apply()
+                    }
                 }
             }
         } else {
@@ -1441,10 +1526,6 @@ final class MenuBarLoadAnimator: ObservableObject {
         if displayedComputeLoad != target {
             displayedComputeLoad = target
         }
-    }
-
-    deinit {
-        smoothingTimerCancellable?.cancel()
     }
 }
 

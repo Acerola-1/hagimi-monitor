@@ -1,8 +1,12 @@
 import Foundation
 import IOKit
 
-final class SMCReader: FanSMCReading {
-    private var conn: io_connect_t = 0
+/// SMC 只读访问器。
+/// 安全不变式：通过内部私有 NSLock 互斥保护底层 Mach 端口（io_connect_t）的 IOConnectCallStructMethod 调用，
+/// 对外提供线程安全的只读属性访问契约。
+nonisolated final class SMCReader: FanSMCReading, @unchecked Sendable {
+    private let lock = NSLock()
+    private let conn: io_connect_t
     private static let temperatureKeys = [
         "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"
     ]
@@ -17,9 +21,11 @@ final class SMCReader: FanSMCReading {
         IOObjectRelease(iterator)
         guard device != 0 else { return nil }
 
-        let openResult = IOServiceOpen(device, mach_task_self_, 0, &conn)
+        var connection: io_connect_t = 0
+        let openResult = IOServiceOpen(device, mach_task_self_, 0, &connection)
         IOObjectRelease(device)
         guard openResult == kIOReturnSuccess else { return nil }
+        self.conn = connection
     }
 
     deinit {
@@ -164,6 +170,8 @@ final class SMCReader: FanSMCReading {
     }
 
     private func call(_ index: UInt8, input: inout SMCKeyData_t, output: inout SMCKeyData_t) -> kern_return_t {
+        lock.lock()
+        defer { lock.unlock() }
         let inputSize = MemoryLayout<SMCKeyData_t>.stride
         var outputSize = MemoryLayout<SMCKeyData_t>.stride
         return IOConnectCallStructMethod(conn, UInt32(index), &input, inputSize, &output, &outputSize)
@@ -185,10 +193,10 @@ final class SMCReader: FanSMCReading {
 
 // MARK: - 全量温度枚举(硬件清单用)
 
-extension SMCReader {
+nonisolated extension SMCReader {
     /// 一个可读的温度键。`key` 是 SMC 的四字符键名,原样保留——
     /// 它既是稳定标识(不同机型的键集合不同,不能硬编码列表),也是详情里要展示的内容。
-    struct TemperatureReading {
+    struct TemperatureReading: Sendable {
         let key: String
         let celsius: Double
     }
@@ -199,7 +207,7 @@ extension SMCReader {
     ///
     /// 域名不内嵌在枚举里:`nameKey` 指向报表文案键(`stats.r.<key>`),
     /// 由展示层经 `hwText` 解析——枚举保持纯语义。
-    enum TemperatureDomain: CaseIterable {
+    enum TemperatureDomain: CaseIterable, Sendable {
         case cpuPerformance, cpuEfficiency, gpuCluster, storage, battery
         case airflow, chassis, wireless, voltageRail, other
 

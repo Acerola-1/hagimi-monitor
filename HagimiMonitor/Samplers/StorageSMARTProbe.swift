@@ -8,8 +8,8 @@ import Foundation
 ///
 /// 成本与缓存:system_profiler 启动约数百毫秒,绝不能随每秒采样拉起——
 /// 探针结果缓存 60s;调用发生在采样后台队列,不触主线程。
-/// 失败/无数据一律返 nil,UI 显"--"。
-final class StorageSMARTProbe {
+/// 内部通过 NSLock 保护 cache 元组，多线程并发查询安全。
+nonisolated final class StorageSMARTProbe: @unchecked Sendable {
     private static let cacheInterval: TimeInterval = 60
     /// system_profiler 正常数百毫秒返回,但个别存储控制器无响应时可能挂起;
     /// 超过此时长终止进程并返 nil,绝不让探针卡死串行采样队列。
@@ -50,10 +50,10 @@ final class StorageSMARTProbe {
 
         // readDataToEndOfFile 会阻塞到进程退出,若 system_profiler 挂起则永久不返。
         // 读输出放到后台线程,本线程用信号量等待,超时后终止进程并放弃本次结果。
-        nonisolated(unsafe) var output: Data?
+        let outputBox = SamplerProcessOutputBox()
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
-            output = pipe.fileHandleForReading.readDataToEndOfFile()
+            outputBox.data = pipe.fileHandleForReading.readDataToEndOfFile()
             done.signal()
         }
 
@@ -64,7 +64,7 @@ final class StorageSMARTProbe {
         task.waitUntilExit()
 
         guard task.terminationStatus == 0,
-              let output,
+              let output = outputBox.data,
               let root = (try? JSONSerialization.jsonObject(with: output)) as? [String: Any],
               let raw = findSmartStatus(in: root) else {
             return nil

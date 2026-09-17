@@ -5,15 +5,15 @@ import OSLog
 import UserNotifications
 
 /// 进程高负载事件模型。
-struct ProcessAlertEpisode: Identifiable, Equatable, Sendable {
-    enum Metric: String, Codable, Sendable {
+nonisolated struct ProcessAlertEpisode: Identifiable, Equatable, Sendable {
+    nonisolated enum Metric: String, Codable, Sendable {
         case cpu
         case gpu
         case memory
         case network
     }
 
-    enum State: String, Codable, Sendable {
+    nonisolated enum State: String, Codable, Sendable {
         case ongoing
         case recovered
         case interrupted
@@ -74,7 +74,7 @@ struct ProcessAlertEpisode: Identifiable, Equatable, Sendable {
 }
 
 /// 按应用合并的进程高负载聚合组模型（解决同一应用同时触发多项指标时的展示集中度）
-struct ProcessAppAlertGroup: Identifiable, Equatable, Sendable {
+nonisolated struct ProcessAppAlertGroup: Identifiable, Equatable, Sendable {
     var id: String { appKey }
     let appKey: String
     let name: String

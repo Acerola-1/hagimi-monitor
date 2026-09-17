@@ -16,17 +16,12 @@ import Foundation
 /// 但本项目用纯 CoreAudio C API,不引入第三方依赖。
 @MainActor
 final class AudioOutputChangeObserver {
-    private var callback: (() -> Void)?
-    private var debounceTimer: DispatchSourceTimer?
-    // `registered` 仅作"是否已注册 listener"的幂等性标志。读写本就只在
-    // @MainActor 方法里发生,但 deinit 在非隔离上下文执行,为避免 Swift 6
-    // 严格并发告警,标记为 nonisolated(unsafe);重复
-    // AudioObjectRemovePropertyListener 是安全的。
-    private nonisolated(unsafe) var registered = false
+    private var callback: (@Sendable () -> Void)?
+    private let cleanupBox = AudioOutputObserverCleanupBox()
 
-    func start(onChange: @escaping () -> Void) {
+    func start(onChange: @escaping @Sendable () -> Void) {
         callback = onChange
-        if !registered {
+        if !cleanupBox.registered {
             var address = AudioObjectPropertyAddress(
                 mSelector: kAudioHardwarePropertyDefaultOutputDevice,
                 mScope: kAudioObjectPropertyScopeGlobal,
@@ -39,13 +34,13 @@ final class AudioOutputChangeObserver {
                 Unmanaged.passUnretained(self).toOpaque()
             )
             if status == noErr {
-                registered = true
+                cleanupBox.registered = true
             }
         }
     }
 
     func stop() {
-        if registered {
+        if cleanupBox.registered {
             var address = AudioObjectPropertyAddress(
                 mSelector: kAudioHardwarePropertyDefaultOutputDevice,
                 mScope: kAudioObjectPropertyScopeGlobal,
@@ -57,15 +52,15 @@ final class AudioOutputChangeObserver {
                 Self.listenerProc,
                 Unmanaged.passUnretained(self).toOpaque()
             )
-            registered = false
+            cleanupBox.registered = false
         }
-        debounceTimer?.cancel()
-        debounceTimer = nil
+        cleanupBox.cancelTimer()
     }
 
     deinit {
+        cleanupBox.cancelTimer()
         // deinit 为非隔离上下文。listener 注销不依赖 actor 状态,且重复注销安全。
-        if registered {
+        if cleanupBox.registered {
             var address = AudioObjectPropertyAddress(
                 mSelector: kAudioHardwarePropertyDefaultOutputDevice,
                 mScope: kAudioObjectPropertyScopeGlobal,
@@ -82,13 +77,13 @@ final class AudioOutputChangeObserver {
 
     fileprivate func handleDefaultOutputChanged() {
         // 设备切换瞬间 CoreAudio 可能连续多次回调,防抖 1000ms 取最后一次。
-        debounceTimer?.cancel()
+        cleanupBox.cancelTimer()
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + .milliseconds(1000))
         timer.setEventHandler { [weak self] in
             self?.callback?()
         }
-        debounceTimer = timer
+        cleanupBox.debounceTimer = timer
         timer.resume()
     }
 
@@ -101,5 +96,16 @@ final class AudioOutputChangeObserver {
             observer.handleDefaultOutputChanged()
         }
         return noErr
+    }
+}
+
+/// 线程安全清理容器：管理 CoreAudio 属性监听注册状态与防抖定时器。
+private nonisolated final class AudioOutputObserverCleanupBox: @unchecked Sendable {
+    var registered = false
+    var debounceTimer: DispatchSourceTimer?
+
+    nonisolated func cancelTimer() {
+        debounceTimer?.cancel()
+        debounceTimer = nil
     }
 }

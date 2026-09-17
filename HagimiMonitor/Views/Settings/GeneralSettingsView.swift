@@ -41,7 +41,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: Self.segmentedPickerWidth)
                 }
 
@@ -54,7 +54,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: Self.segmentedPickerWidth)
                 }
 
@@ -67,7 +67,7 @@ struct GeneralSettingsView: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: Self.segmentedPickerWidth)
                 }
 
@@ -347,8 +347,8 @@ private struct MenuBarDisplaySettingsSection: View {
                     }
                 }
                 .labelsHidden()
-                .pickerStyle(.segmented)
-                .frame(width: 190)
+                .compatibleTabPickerStyle()
+                .frame(width: 220)
             }
 
             if settings.menuBarDisplayMode == .metrics {
@@ -361,7 +361,7 @@ private struct MenuBarDisplaySettingsSection: View {
                         }
                     }
                     .labelsHidden()
-                    .pickerStyle(.segmented)
+                    .compatibleTabPickerStyle()
                     .frame(width: 210)
                 }
 
@@ -369,30 +369,51 @@ private struct MenuBarDisplaySettingsSection: View {
 
                 SettingsRow(
                     title: String(localized: "menu-bar-display.metrics-title"),
-                    subtitle: String(localized: "menu-bar-display.metrics-limit")
+                    subtitle: String(localized: "menu-bar-display.metrics-minimum")
                 ) {
-                    Text("\(settings.menuBarMetricKinds.count)/\(MenuBarMetricKind.maximumSelectionCount)")
+                    Text("\(settings.menuBarMetricKinds.count)")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(.secondary)
                 }
 
                 SettingsDivider()
 
-                VStack(spacing: 0) {
-                    ForEach(orderedSelectableKinds) { kind in
-                        MenuBarMetricRow(
-                            kind: kind,
-                            isSelected: settings.isMenuBarMetricSelected(kind),
-                            isEnabled: settings.canSelectMenuBarMetric(kind),
-                            canMoveUp: settings.menuBarMetricKinds.first != kind,
-                            canMoveDown: settings.menuBarMetricKinds.last != kind,
-                            toggle: { settings.setMenuBarMetric(kind, selected: !settings.isMenuBarMetricSelected(kind)) },
-                            moveUp: { settings.moveMenuBarMetric(kind, direction: -1) },
-                            moveDown: { settings.moveMenuBarMetric(kind, direction: 1) }
-                        )
+                Text(String(localized: "menu-bar-display.metrics-selected"))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 14)
+                    .padding(.top, 10)
+                    .padding(.bottom, 4)
 
-                        if kind != orderedSelectableKinds.last {
-                            SettingsDivider()
+                selectedMetricsList(selectedMetricKinds)
+
+                if !availableMetricKinds.isEmpty {
+                    SettingsDivider()
+
+                    Text(String(localized: "menu-bar-display.metrics-available"))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 14)
+                        .padding(.top, 10)
+                        .padding(.bottom, 4)
+
+                    VStack(spacing: 0) {
+                        ForEach(availableMetricKinds) { kind in
+                            MenuBarMetricRow(
+                                kind: kind,
+                                isSelected: false,
+                                isEnabled: true,
+                                showsMoveButtons: false,
+                                canMoveUp: false,
+                                canMoveDown: false,
+                                toggle: { settings.setMenuBarMetric(kind, selected: true) },
+                                moveUp: {},
+                                moveDown: {}
+                            )
+
+                            if kind != availableMetricKinds.last {
+                                SettingsDivider()
+                            }
                         }
                     }
                 }
@@ -400,13 +421,85 @@ private struct MenuBarDisplaySettingsSection: View {
         }
     }
 
-    /// 单列表展示顺序:已勾选指标按菜单栏实际顺序靠前,未勾选指标按候选原序在后。
-    /// 勾选/取消即令条目在两组间移动;排序手柄只作用于已勾选条目。
-    private var orderedSelectableKinds: [MenuBarMetricKind] {
-        let all = MenuBarMetricKind.userSelectableCases(hasFan: store.fanAvailable)
-        let selected = settings.menuBarMetricKinds.filter { all.contains($0) }
-        let unselected = all.filter { !settings.menuBarMetricKinds.contains($0) }
-        return selected + unselected
+    private var selectableMetricKinds: [MenuBarMetricKind] {
+        MenuBarMetricKind.userSelectableCases(hasFan: store.fanAvailable)
+    }
+
+    private var selectedMetricKinds: [MenuBarMetricKind] {
+        settings.menuBarMetricKinds.filter { selectableMetricKinds.contains($0) }
+    }
+
+    private var availableMetricKinds: [MenuBarMetricKind] {
+        selectableMetricKinds.filter { !settings.menuBarMetricKinds.contains($0) }
+    }
+
+    @ViewBuilder
+    private func selectedMetricsList(_ kinds: [MenuBarMetricKind]) -> some View {
+        let content = VStack(spacing: 0) {
+            selectedMetricRows(kinds)
+        }
+
+        if #available(macOS 27.0, *) {
+            content.reorderContainer(
+                for: MenuBarMetricKind.self,
+                itemID: \.self,
+                isEnabled: kinds.count > 1
+            ) { difference in
+                reorderSelectedMetrics(difference)
+            }
+        } else {
+            content
+        }
+    }
+
+    @ViewBuilder
+    private func selectedMetricRows(_ kinds: [MenuBarMetricKind]) -> some View {
+        if #available(macOS 27.0, *) {
+            ForEach(kinds) { kind in
+                selectedMetricRow(kind, showsMoveButtons: false, kinds: kinds)
+            }
+            .reorderable()
+        } else {
+            ForEach(kinds) { kind in
+                selectedMetricRow(kind, showsMoveButtons: true, kinds: kinds)
+            }
+        }
+    }
+
+    private func selectedMetricRow(
+        _ kind: MenuBarMetricKind,
+        showsMoveButtons: Bool,
+        kinds: [MenuBarMetricKind]
+    ) -> some View {
+        VStack(spacing: 0) {
+            MenuBarMetricRow(
+                kind: kind,
+                isSelected: true,
+                isEnabled: kinds.count > 1,
+                showsMoveButtons: showsMoveButtons,
+                canMoveUp: kinds.first != kind,
+                canMoveDown: kinds.last != kind,
+                toggle: { settings.setMenuBarMetric(kind, selected: false) },
+                moveUp: { settings.moveMenuBarMetric(kind, direction: -1) },
+                moveDown: { settings.moveMenuBarMetric(kind, direction: 1) }
+            )
+
+            if kind != kinds.last {
+                SettingsDivider()
+            }
+        }
+    }
+
+    @available(macOS 27.0, *)
+    private func reorderSelectedMetrics(
+        _ difference: ReorderDifference<MenuBarMetricKind, ReorderableSingleCollectionIdentifier>
+    ) {
+        switch difference.destination.position {
+        case .before(let destination):
+            settings.reorderMenuBarMetrics(difference.sources, before: destination)
+        case .end:
+            settings.reorderMenuBarMetrics(difference.sources, before: nil)
+        }
     }
 
     @ViewBuilder
@@ -430,13 +523,15 @@ private struct MenuBarDisplaySettingsSection: View {
     }
 }
 
-/// 菜单栏指标单列表行:勾选态、图标、名称与(仅已勾选时)上下排序手柄同处一行。
-/// 左侧整块可点击切换勾选,右侧手柄调整菜单栏先后顺序,勾选与排序合为一张列表。
+/// 菜单栏指标行:勾选态、图标、名称与(legacy fallback 下的已选项)上下排序手柄同处一行。
+/// macOS 27 的已选项由容器级重排手势调整顺序,备选项只负责加入已选集合。
 private struct MenuBarMetricRow: View {
     let kind: MenuBarMetricKind
     let isSelected: Bool
-    /// 是否可切换:已勾选恒可取消,未勾选在选满上限时置灰。
+    /// 是否可切换:最后一个已选指标不可取消,备选指标始终可以加入。
     let isEnabled: Bool
+    /// macOS 27 使用容器级原生重排;旧系统显示上下按钮作为 fallback。
+    let showsMoveButtons: Bool
     let canMoveUp: Bool
     let canMoveDown: Bool
     let toggle: () -> Void
@@ -467,18 +562,21 @@ private struct MenuBarMetricRow: View {
             }
             .buttonStyle(.plain)
             .disabled(!isEnabled)
+            .accessibilityAddTraits(isSelected ? [.isSelected] : [])
 
-            if isSelected {
+            if isSelected, showsMoveButtons {
                 HStack(spacing: 6) {
                     Button(action: moveUp) {
                         Image(systemName: "chevron.up")
                     }
                     .disabled(!canMoveUp)
+                    .accessibilityLabel(String(localized: "menu-bar-metric.move-up"))
 
                     Button(action: moveDown) {
                         Image(systemName: "chevron.down")
                     }
                     .disabled(!canMoveDown)
+                    .accessibilityLabel(String(localized: "menu-bar-metric.move-down"))
                 }
                 .buttonStyle(.bordered)
             }
@@ -646,12 +744,5 @@ struct UsageCheckinCard: View {
         let components = DateComponents(year: Int(key / 10_000), month: Int(key % 10_000 / 100), day: Int(key % 100))
         guard let date = Calendar.current.date(from: components) else { return "" }
         return date.formatted(.dateTime.year().month().day())
-    }
-}
-
-/// 打卡卡展开按钮的专属样式:按下时标签外观完全静止。
-private struct StaticPressButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
     }
 }

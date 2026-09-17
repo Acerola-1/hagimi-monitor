@@ -39,7 +39,7 @@ enum MenuBarMetricLayoutStyle: String, CaseIterable, Identifiable {
     }
 }
 
-enum MenuBarMetricKind: String, CaseIterable, Identifiable {
+enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
     // CPU 组
     case cpuUsage
     case cpuTemperature
@@ -64,7 +64,7 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
     // 散热组
     case fanSpeed
 
-    /// 新用户默认勾选的菜单栏指标(最多 4 个)。
+    /// 新用户默认勾选的菜单栏指标。
     /// CPU 温度依赖 SMC(AppleSMC user client),沙盒版无法读取,故仅在
     /// DISPLAY_CONTROL(GitHub 直连版)下纳入默认;沙盒版退化为 3 项,
     /// 避免「勾选了但选项列表里不存在」的幽灵指标。
@@ -75,8 +75,6 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable {
         #endif
         return selection
     }()
-    static let maximumSelectionCount = 4
-
     /// 用户可选的菜单栏指标。温度与风扇均依赖 SMC(AppleSMC user client),
     /// App Store 沙盒版无法读取,故仅 DISPLAY_CONTROL(直连版)提供这两个选项。
     /// 风扇还需机器实际有风扇(FNum > 0),直连版运行时由 `hasFan` 参数门控,

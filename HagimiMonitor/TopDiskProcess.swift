@@ -2,7 +2,9 @@ import AppKit
 import Darwin
 import Foundation
 
-struct TopDiskProcess: Identifiable, Equatable {
+/// TopDiskProcess 仅持有不可变的只读属性；所持有的 NSImage 为 ProcessIconCache 生成的固定位图，
+/// 跨线程传递用于视图绑定，不进行并发修改。
+struct TopDiskProcess: Identifiable, Equatable, @unchecked Sendable {
     let pid: pid_t
     let name: String
     /// 自上次采样以来读取的字节增量。统计入库按窗口字节量累计,依赖该字段。
@@ -24,7 +26,7 @@ struct TopDiskProcess: Identifiable, Equatable {
     }
 }
 
-struct RawDiskProcess {
+struct RawDiskProcess: Sendable {
     let pid: pid_t
     let path: String
     let fallbackName: String
@@ -38,7 +40,8 @@ struct RawDiskProcess {
 /// 面板(2s)与统计(60s)各持一个实例——基线共享时统计窗口会被面板采样
 /// 截断成残量,×60s 外推入库即为失真数据。
 /// 游标同时记录快照时刻,把差分窗口时长随结果下发,供展示侧归一成速率。
-final class DiskSnapshotCursor {
+/// 安全不变式：内部状态仅在串行队列（procSampleQueue）上读写，不存在跨线程并发修改。
+nonisolated final class DiskSnapshotCursor: @unchecked Sendable {
     private var previous: [pid_t: (read: UInt64, write: UInt64)] = [:]
     private var previousTime: Date?
 
@@ -135,7 +138,7 @@ final class DiskSnapshotCursor {
 
 /// 用 NSRunningApplication(pid:) 为磁盘 I/O 采样结果补齐本地化名与 App 图标。
 /// 可在任意线程调用,不依赖 NSWorkspace.shared.runningApplications 遍历。
-func enrichDisk(_ rawProcesses: [RawDiskProcess]) -> [TopDiskProcess] {
+nonisolated func enrichDisk(_ rawProcesses: [RawDiskProcess]) -> [TopDiskProcess] {
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 

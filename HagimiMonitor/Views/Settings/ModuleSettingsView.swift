@@ -115,7 +115,7 @@ struct ModuleSettingsView: View {
                             }
                         }
                         .labelsHidden()
-                        .pickerStyle(.segmented)
+                        .compatibleTabPickerStyle()
                         .frame(width: 190)
                     }
 

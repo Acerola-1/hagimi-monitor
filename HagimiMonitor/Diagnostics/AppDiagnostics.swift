@@ -3,7 +3,7 @@ import OSLog
 
 // MARK: - Diagnostics Support
 
-enum DiagnosticsDirectories {
+nonisolated enum DiagnosticsDirectories {
     static var applicationSupport: URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -12,7 +12,7 @@ enum DiagnosticsDirectories {
 }
 
 extension JSONEncoder {
-    static var hagimiDiagnostics: JSONEncoder {
+    nonisolated static var hagimiDiagnostics: JSONEncoder {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -21,7 +21,7 @@ extension JSONEncoder {
 }
 
 extension JSONDecoder {
-    static var hagimiDiagnostics: JSONDecoder {
+    nonisolated static var hagimiDiagnostics: JSONDecoder {
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         return decoder
@@ -30,8 +30,11 @@ extension JSONDecoder {
 
 // MARK: - App Log Store
 
-final class AppLogStore {
-    enum Level: String {
+/// 应用程序日志持久化存储。
+/// 安全不变式：通过内部私有串行队列 queue 保护所有日志写入、日期格式化与文件轮转逻辑，
+/// 对外提供线程安全的并发调用契约。
+nonisolated final class AppLogStore: @unchecked Sendable {
+    nonisolated enum Level: String, Sendable {
         case info
         case warning
         case error
@@ -102,13 +105,14 @@ final class AppLogStore {
     }
 
     private func write(level: Level, category: String, message: String) {
-        let timestamp = formatter.string(from: dateProvider())
         let normalizedMessage = message
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\n", with: " ")
-        let line = "\(timestamp) [\(level.rawValue)] [\(category)] \(normalizedMessage)\n"
 
-        queue.async { [currentLogURL, logsDirectory, maxFileSize, rotatedLogURL] in
+        // ISO8601DateFormatter 不是并发格式化器;必须和文件轮转共用同一串行队列。
+        queue.async { [self, currentLogURL, logsDirectory, maxFileSize, rotatedLogURL] in
+            let timestamp = self.formatter.string(from: self.dateProvider())
+            let line = "\(timestamp) [\(level.rawValue)] [\(category)] \(normalizedMessage)\n"
             do {
                 try FileManager.default.createDirectory(at: logsDirectory, withIntermediateDirectories: true)
                 try AppLogStore.rotateIfNeeded(currentLogURL: currentLogURL, rotatedLogURL: rotatedLogURL, maxFileSize: maxFileSize)
@@ -148,10 +152,10 @@ final class AppLogStore {
 
 // MARK: - Crash Handler
 
-/// Global log file path, set once at launch.
-/// Must be a plain global so the signal/exception handlers (C function pointers) can access it.
-private var _crashLogPathCString: [CChar] = []
-private var _crashLogPath: String = ""
+/// 崩溃日志路径。在应用启动初始化阶段仅写入一次，后续由信号与未捕获异常处理程序（C 函数指针）只读访问。
+/// 信号处理上下文中无法获取锁或分配内存，使用 nonisolated(unsafe) 保障底层只读访问。
+nonisolated(unsafe) private var _crashLogPathCString: [CChar] = []
+nonisolated(unsafe) private var _crashLogPath: String = ""
 
 /// C function for signal handling — no Swift context capture allowed.
 ///
@@ -163,7 +167,7 @@ private var _crashLogPath: String = ""
 /// UI completely unresponsive, yet the process never dies). So after logging, restore the default
 /// disposition and re-raise: this lets the OS actually terminate the process, which is far better
 /// than a silent, unkillable hang.
-private func handleSignal(_ sig: Int32) {
+private nonisolated func handleSignal(_ sig: Int32) {
     defer {
         signal(sig, SIG_DFL)
         raise(sig)
@@ -256,14 +260,15 @@ enum CrashHandler {
 
 // MARK: - Launch State
 
-struct AppLaunchState: Codable {
+nonisolated struct AppLaunchState: Codable, Sendable {
     var launchID: String
     var launchDate: Date
     var lastCleanExitDate: Date?
     var previousRunEndedUnexpectedly: Bool
 }
 
-final class AppLaunchStateTracker {
+/// 安全不变式：通过内部私有串行队列 queue 保护所有状态读写，对外提供线程安全的并发调用契约。
+nonisolated final class AppLaunchStateTracker: @unchecked Sendable {
     static let shared = AppLaunchStateTracker()
 
     private let stateURL: URL
@@ -343,7 +348,8 @@ final class AppLaunchStateTracker {
 /// Periodically logs memory usage and main-thread responsiveness.
 /// Helps diagnose SIGKILL kills that leave no crash handler output
 /// (typically memory jetsam or watchdog timeout).
-final class HealthMonitor {
+/// 安全不变式：通过内部私有 utility 队列调度定时健康自检，非 MainActor 隔离，保障跨线程诊断安全。
+nonisolated final class HealthMonitor: @unchecked Sendable {
     static let shared = HealthMonitor()
 
     private var timer: DispatchSourceTimer?
@@ -353,7 +359,7 @@ final class HealthMonitor {
 
     /// Main-thread liveness ping — written by the main thread, read by the monitor.
     /// Note: intentionally accessed from two queues without lock (diagnostic flag, race is harmless).
-    private var mainThreadAlive: Bool = true
+    nonisolated(unsafe) private var mainThreadAlive: Bool = true
 
     init(interval: TimeInterval = 300) { // 5 minutes
         self.interval = interval

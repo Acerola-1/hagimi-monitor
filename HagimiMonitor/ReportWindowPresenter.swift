@@ -1,138 +1,36 @@
 import AppKit
 import Combine
-import WebKit
+import OSLog
+import SwiftUI
 import UniformTypeIdentifiers
+import WebKit
 
 /// 硬件全景报表独立窗口控制器。
 ///
-/// 报表以独立原生窗口内嵌 WKWebView 承载:规避 App Store 沙盒环境下
-/// Safari 等外部沙盒应用无法跨容器读取应用私有目录文件(NSURLErrorDomain -3001)的限制,
-/// 同时为用户提供沉浸式的软硬件规格查阅体验,支持系统打印、另存为与页面交互。
+/// 采用 macOS 原生窗口（AppKit + SwiftUI）承载：
+/// 日常查看报表直接消费强类型 Swift 数据模型与原生组件，不创建 WKWebView。
+/// 关窗时释放专用数据模型、图表状态与图标缓存，彻底避免内存残留。
+/// 导出 HTML 与打印作为独立服务，仅在用户明确触发时按需执行。
 @MainActor
 enum ReportWindowPresenter {
     private static var window: NSWindow?
-    private static var webView: WKWebView?
-    private static var currentURL: URL?
-    private static let toolbarDelegate = ReportToolbarDelegate()
-    /// 加载完成后要定位的板块;每次打开只定位一次,用户随后自行滚动不再干预。
-    private static var pendingAnchor: StatisticsReportAnchor?
-    private static let navigationDelegate = ReportNavigationDelegate()
-    /// 主题订阅:窗口长驻,用户切换深浅色后报表窗口立即跟随(与设置窗口同规则)。
+    private static var viewModel: NativeReportViewModel?
+    private static var windowDelegate: ReportWindowDelegate?
     private static var themeCancellable: AnyCancellable?
-    /// 报表窗口内容区:按内容最佳宽度给足(内容 1140 上限 + 侧栏 + 内边距 + 余量),
-    /// 打开即完整显示;宽度全程锁死(只能调纵向),纵向下限守双列可读。
+    private static var printSession: TransientReportPrintSession?
+    private static var printGenerationTask: Task<Void, Never>?
+    private static var printInFlight = false
+
     private static let contentRect = NSRect(x: 0, y: 0, width: 1380, height: 880)
     private static let windowStyleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
-    /// 拉伸代理需强持有:NSWindow.delegate 是弱引用,内联新实例赋值后会立刻释放,
-    /// windowWillResize/windowDidResize 将不再触发(与设置窗口同一范式)。
-    private static let resizeDelegate = ReportResizeDelegate(
-        fixedWidth: NSWindow.frameRect(forContentRect: contentRect, styleMask: windowStyleMask).width,
-        minHeight: 640
-    )
-    /// 实时刷新定时器:报表本体是打开时生成的快照,但右栏「运行状态」组要跟着走。
-    /// 只在窗口可见时跑(见 `pushLiveReadings`),窗口关闭时由 `closeObserver` 停掉。
-    private static var liveTimer: Timer?
-    /// 窗口关闭观察者。窗口常驻复用(`isReleasedWhenClosed = false`),不监听关闭事件
-    /// 的话关窗后 timer 会一直每秒空跑一次 Task+guard。
-    private static var closeObserver: NSObjectProtocol?
 
-    /// 打开或刷新硬件报表窗口;带 anchor 时加载完成后滚到对应板块。
-    static func open(url: URL, anchor: StatisticsReportAnchor? = nil) {
-        currentURL = url
-        pendingAnchor = anchor
-        let win = ensureWindow()
+    /// 打开原生硬件报表窗口；窗口先显示,数据快照在后台加载完成后更新内容。
+    static func open(recorder: StatisticsRecorder, anchor: StatisticsReportAnchor? = nil) {
+        let win = ensureWindow(recorder: recorder)
         win.appearance = AppDelegate.shared?.store.settings.themePreference.appearance
-        webView?.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
-        startLiveUpdates()
         focus(win)
-        if anchor != nil {
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 200_000_000)
-                if pendingAnchor != nil, let webView {
-                    scrollToPendingAnchor(in: webView)
-                }
-            }
-        }
-    }
-
-    /// 页面加载完成后定位板块;板块被当前范围隐藏或标题对不上时停在页首。
-    static func scrollToPendingAnchor(in webView: WKWebView) {
-        guard let anchor = pendingAnchor else { return }
-        pendingAnchor = nil
-        webView.evaluateJavaScript(anchorScrollScript(anchor: anchor), completionHandler: nil)
-    }
-
-    /// 优先定位目标元素（如高负载卡片或对应模块），其次按板块内任一 h2 标题做后备匹配。
-    private static func anchorScrollScript(anchor: StatisticsReportAnchor) -> String {
-        let titleLiteral = (try? JSONEncoder().encode(anchor.sectionTitle))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "\"\""
-        let preferredId: String = {
-            switch anchor {
-            case .memory: return "sec-mem"
-            case .thermal: return "sec-thermal"
-            case .apps: return "card-highload"
-            }
-        }()
-        return """
-        (function () {
-          const pref = document.getElementById('\(preferredId)');
-          if (pref && !pref.hidden && pref.offsetParent !== null) {
-            pref.scrollIntoView({ block: 'start', behavior: 'smooth' });
-            return true;
-          }
-          if ('\(preferredId)' === 'card-highload') {
-            const secApps = document.getElementById('sec-apps');
-            if (secApps && !secApps.hidden) {
-              secApps.scrollIntoView({ block: 'start', behavior: 'smooth' });
-              return true;
-            }
-          }
-          const title = \(titleLiteral);
-          const sections = Array.from(document.querySelectorAll('#content > section'));
-          const match = sections.find((sec) => {
-            if (sec.hidden) return false;
-            const h2s = Array.from(sec.querySelectorAll('h2'));
-            return h2s.some(h => ((h.textContent || '').trim() === title));
-          });
-          if (!match || match.hidden) return false;
-          match.scrollIntoView({ block: 'start', behavior: 'smooth' });
-          return true;
-        })();
-        """
-    }
-
-    // MARK: - 实时读数
-
-    /// 启动每秒推送。窗口常驻复用,重复打开不重复建定时器。
-    private static func startLiveUpdates() {
-        guard liveTimer == nil else { return }
-        liveTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { _ in
-            Task { @MainActor in pushLiveReadings() }
-        }
-    }
-
-    private static func stopLiveUpdates() {
-        liveTimer?.invalidate()
-        liveTimer = nil
-    }
-
-    /// 把 `MonitorStore` 的当前读数推给网页。
-    ///
-    /// 遮挡门控:窗口不可见(最小化、被完全遮挡、切到别的空间)时不推——
-    /// 每秒一次 `evaluateJavaScript` 对常驻窗口是白烧 CPU,而用户根本看不到。
-    private static func pushLiveReadings() {
-        guard let win = window, win.isVisible, win.occlusionState.contains(.visible),
-              let webView,
-              let store = AppDelegate.shared?.store else {
-            return
-        }
-        let readings = HardwareLiveReadings.snapshot(from: store)
-        guard !readings.isEmpty,
-              let data = try? JSONSerialization.data(withJSONObject: readings),
-              let json = String(data: data, encoding: .utf8) else {
-            return
-        }
-        webView.evaluateJavaScript("window.__HAGIMI_HARDWARE_LIVE__ && window.__HAGIMI_HARDWARE_LIVE__(\(json));")
+        viewModel?.load(anchor: anchor)
+        windowDelegate?.refreshVisibility()
     }
 
     /// 聚焦窗口并激活应用。
@@ -144,26 +42,37 @@ enum ReportWindowPresenter {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// 另存为导出独立 HTML 文件。
+    /// 重新加载当前报表数据快照
+    static func reloadCurrentReport() {
+        viewModel?.load()
+    }
+
+    /// 另存为导出独立 HTML 文件（按需生成）
     static func exportCurrentReport() {
-        guard let currentURL else { return }
+        guard let snapshot = viewModel?.snapshot else { return }
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.html]
         savePanel.nameFieldStringValue = "HagimiMonitor-Report.html"
         savePanel.title = String(localized: "stats.report.export.title", defaultValue: "导出硬件规格档案")
 
-        let performCopy: (URL) -> Void = { targetURL in
-            do {
-                if FileManager.default.fileExists(atPath: targetURL.path) {
-                    try FileManager.default.removeItem(at: targetURL)
-                }
-                try FileManager.default.copyItem(at: currentURL, to: targetURL)
-            } catch {
-                let alert = NSAlert(error: error)
-                if let window {
-                    alert.beginSheetModal(for: window, completionHandler: nil)
-                } else {
-                    alert.runModal()
+        let performExport: (URL) -> Void = { targetURL in
+            Task { @MainActor in
+                do {
+                    let didStartAccess = targetURL.startAccessingSecurityScopedResource()
+                    defer {
+                        if didStartAccess { targetURL.stopAccessingSecurityScopedResource() }
+                    }
+                    let generation = Task.detached(priority: .userInitiated) {
+                        try Self.writeHTML(snapshot: snapshot, to: targetURL)
+                    }
+                    _ = try await generation.value
+                } catch {
+                    let alert = NSAlert(error: error)
+                    if let window {
+                        alert.beginSheetModal(for: window, completionHandler: nil)
+                    } else {
+                        alert.runModal()
+                    }
                 }
             }
         }
@@ -171,97 +80,128 @@ enum ReportWindowPresenter {
         if let window {
             savePanel.beginSheetModal(for: window) { response in
                 guard response == .OK, let targetURL = savePanel.url else { return }
-                performCopy(targetURL)
+                performExport(targetURL)
             }
         } else if savePanel.runModal() == .OK, let targetURL = savePanel.url {
-            performCopy(targetURL)
+            performExport(targetURL)
         }
     }
 
-    /// 触发原生报表打印。先通知网页切换到打印浅色模式并完成重绘,
-    /// 随后调起 WKWebView 原生 NSPrintOperation,弹出系统打印面板或保存为 PDF。
+    /// 触发报表打印：按需临时创建 WebKit 打印操作，完成后立即销毁，日常查看无 WebKit 常驻。
     static func printCurrentReport() {
-        guard let webView else { return }
-        webView.evaluateJavaScript("enterPrintMode(); true") { _, _ in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
-                printInfo.topMargin = 28
-                printInfo.bottomMargin = 28
-                printInfo.leftMargin = 28
-                printInfo.rightMargin = 28
-                printInfo.isHorizontallyCentered = true
-                printInfo.isVerticallyCentered = false
-                let printOp = webView.printOperation(with: printInfo)
-                printOp.showsPrintPanel = true
-                printOp.showsProgressPanel = true
-                if let window = self.window {
-                    printOp.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
-                } else {
-                    printOp.run()
+        guard !printInFlight, let snapshot = viewModel?.snapshot else { return }
+        printInFlight = true
+        let generationTask = Task { @MainActor in
+            do {
+                let fileURL = try await Task.detached(priority: .userInitiated) {
+                    let fileURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent("HagimiMonitor-Report-\(UUID().uuidString).html")
+                    do {
+                        return try Self.writeHTML(snapshot: snapshot, to: fileURL)
+                    } catch {
+                        // 生成阶段也可能已经创建了部分文件,失败时不能把它留在临时目录。
+                        try? FileManager.default.removeItem(at: fileURL)
+                        throw error
+                    }
+                }.value
+
+                guard !Task.isCancelled, window != nil else {
+                    try? FileManager.default.removeItem(at: fileURL)
+                    printInFlight = false
+                    return
                 }
-                webView.evaluateJavaScript("exitPrintMode(); true", completionHandler: nil)
+                presentPrintSession(fileURL: fileURL)
+            } catch {
+                printInFlight = false
+                AppLogger.settings.error("Print generation failed: \(String(describing: error), privacy: .public)")
             }
+            printGenerationTask = nil
         }
+        printGenerationTask = generationTask
     }
 
-    /// 重新加载当前报表。
-    static func reloadCurrentReport() {
-        webView?.reload()
+    /// 组装导出或打印所需的单文件 HTML。调用方负责把它放到后台任务。
+    nonisolated private static func writeHTML(snapshot: ReportSnapshot, to outputURL: URL) throws -> URL {
+        let process = snapshot.process.flatMap { StandaloneHTMLReportExporter.processSnapshot(from: $0) }
+        return try StandaloneHTMLReportExporter.write(
+            to: outputURL,
+            snapshot: (minutes: snapshot.minutes, hours: snapshot.hours, days: snapshot.days),
+            meta: [
+                "device": snapshot.meta.deviceName,
+                "model": snapshot.meta.modelName,
+                "os": snapshot.meta.osVersion,
+                "days": snapshot.meta.recordDays,
+                "appVersion": snapshot.meta.appVersion,
+                "direct": snapshot.meta.isDirect
+            ],
+            process: process,
+            hardware: snapshot.hardware
+        )
     }
 
-    private static let scriptMessageHandler = ReportScriptMessageHandler()
+    /// 按需启动一次性临时 WebKit 打印流程并在结束后彻底销毁。
+    private static func presentPrintSession(fileURL: URL) {
+        guard printSession == nil else {
+            try? FileManager.default.removeItem(at: fileURL)
+            return
+        }
+        let session = TransientReportPrintSession(
+            fileURL: fileURL,
+            parentWindow: window,
+            onFinish: {
+                ReportWindowPresenter.printSession = nil
+                ReportWindowPresenter.printInFlight = false
+            }
+        )
+        printSession = session
+        session.start()
+    }
 
-    private static func ensureWindow() -> NSWindow {
-        if let window {
+    private static func ensureWindow(recorder: StatisticsRecorder) -> NSWindow {
+        if let window, viewModel != nil {
             return window
         }
 
-        let config = WKWebViewConfiguration()
-        #if DEBUG
-        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
-        #endif
-        config.userContentController.add(scriptMessageHandler, name: "hagimiPrint")
-        // 非持久数据存储:报表窗口每次加载都从磁盘读新文件,不带 WebKit 文件缓存,
-        // 避免重新生成后仍显示旧模板/旧图标。
-        config.websiteDataStore = WKWebsiteDataStore.nonPersistent()
+        let vm = NativeReportViewModel(recorder: recorder)
+        self.viewModel = vm
 
-        let view = WKWebView(frame: .zero, configuration: config)
-        view.underPageBackgroundColor = .clear
-        view.navigationDelegate = navigationDelegate
-        self.webView = view
+        let rootView = NativeReportView(
+            viewModel: vm,
+            onReload: { reloadCurrentReport() },
+            onPrint: { printCurrentReport() },
+            onExport: { exportCurrentReport() }
+        )
 
-        // 默认尺寸按内容最佳宽度给足,打开即完整显示,不让用户再手动拉宽。
-        let lockedFrameWidth = NSWindow.frameRect(forContentRect: contentRect, styleMask: windowStyleMask).width
+        let hostingView = NSHostingView(rootView: rootView)
         let win = NSWindow(
             contentRect: contentRect,
             styleMask: windowStyleMask,
             backing: .buffered,
             defer: false
         )
-        win.title = String(localized: "stats.report.window.title", defaultValue: "硬件规格档案 · HagimiMonitor")
+        win.title = String(localized: "report.ui.windowTitle")
+        win.autorecalculatesKeyViewLoop = true
         win.titleVisibility = .visible
-        win.minSize = NSSize(width: lockedFrameWidth, height: 640)
-        win.delegate = resizeDelegate
+        win.minSize = NSSize(width: 1100, height: 640)
+        win.contentView = hostingView
         win.isReleasedWhenClosed = false
-        win.contentView = view
 
-        let toolbar = NSToolbar(identifier: "ReportWindowToolbar")
-        toolbar.delegate = toolbarDelegate
-        toolbar.displayMode = .iconOnly
-        win.toolbar = toolbar
-        win.toolbarStyle = .unified
-
-        // 关窗即停推;重新打开时 startLiveUpdates() 会再起(它按 liveTimer == nil 去重)。
-        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
-        closeObserver = NotificationCenter.default.addObserver(
-            forName: NSWindow.willCloseNotification, object: win, queue: .main
-        ) { _ in
-            Task { @MainActor in stopLiveUpdates() }
-        }
-
+        let del = ReportWindowDelegate(
+            minWidth: 1100,
+            minHeight: 640,
+            onClose: {
+                handleWindowClose()
+            },
+            onVisibilityChange: { [weak vm] isVisible in
+                vm?.setWindowVisible(isVisible)
+            }
+        )
+        win.delegate = del
+        del.attach(to: win)
+        self.windowDelegate = del
         self.window = win
 
-        // 建窗即订阅:窗口常驻复用,不订阅的话改主题后只有重开才能跟上。
+        // 主题跟随订阅
         themeCancellable = AppDelegate.shared?.store.settings.$themePreference
             .receive(on: DispatchQueue.main)
             .sink { [weak win] preference in
@@ -270,127 +210,314 @@ enum ReportWindowPresenter {
 
         return win
     }
-}
 
-/// 报表加载完成回调:应用打开时携带的板块锚点。
-final class ReportNavigationDelegate: NSObject, WKNavigationDelegate {
-    func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
-        Task { @MainActor in
-            ReportWindowPresenter.scrollToPendingAnchor(in: webView)
-        }
+    /// 窗口关闭时的完全清理处理
+    private static func handleWindowClose() {
+        printGenerationTask?.cancel()
+        printGenerationTask = nil
+        printSession?.finish()
+        printSession = nil
+        printInFlight = false
+        viewModel?.teardown()
+        viewModel = nil
+        window = nil
+        windowDelegate = nil
+        themeCancellable?.cancel()
+        themeCancellable = nil
     }
 }
 
-/// 承接来自 WKWebView 内部的 JavaScript 打印桥接调用。
-final class ReportScriptMessageHandler: NSObject, WKScriptMessageHandler {
-    func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        if message.name == "hagimiPrint" {
-            Task { @MainActor in
-                ReportWindowPresenter.printCurrentReport()
-            }
-        }
+/// 自动管理多个 NotificationCenter 观察者生命周期的包装器。
+/// 安全不变式：在 deinit 时自动注销所有观察者，避免在 MainActor 隔离类的 deinit 中访问非 Sendable 数组。
+nonisolated private final class NotificationObserversBox: @unchecked Sendable {
+    private var observers: [any NSObjectProtocol] = []
+
+    func add(_ observer: any NSObjectProtocol) {
+        observers.append(observer)
+    }
+
+    deinit {
+        let center = NotificationCenter.default
+        observers.forEach(center.removeObserver)
     }
 }
 
-/// 报表窗口:宽度锁死、高度随意的伸缩裁定,与设置窗口同一套代理范式。
-/// 用户拖拽横边/对角时宽度一律回归固定值,只保留纵向伸缩。
+/// 报表窗口代理：负责尺寸限制、关窗清理与可见性状态门控。
 @MainActor
-private final class ReportResizeDelegate: NSObject, NSWindowDelegate {
-    private let fixedWidth: CGFloat
+final class ReportWindowDelegate: NSObject, NSWindowDelegate {
+    private let minWidth: CGFloat
     private let minHeight: CGFloat
-    private var liveResizeOriginX: CGFloat?
+    private let onClose: () -> Void
+    private let onVisibilityChange: ((Bool) -> Void)?
+    private weak var window: NSWindow?
+    private let observersBox = NotificationObserversBox()
+    private var lastVisibility = false
 
-    init(fixedWidth: CGFloat, minHeight: CGFloat) {
-        self.fixedWidth = fixedWidth
+    init(
+        minWidth: CGFloat,
+        minHeight: CGFloat,
+        onClose: @escaping () -> Void,
+        onVisibilityChange: ((Bool) -> Void)? = nil
+    ) {
+        self.minWidth = minWidth
         self.minHeight = minHeight
+        self.onClose = onClose
+        self.onVisibilityChange = onVisibilityChange
         super.init()
+        let center = NotificationCenter.default
+        for name in [NSApplication.didHideNotification, NSApplication.didUnhideNotification] {
+            observersBox.add(center.addObserver(
+                forName: name,
+                object: NSApp,
+                queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    self?.refreshVisibility()
+                }
+            })
+        }
+    }
+
+    func attach(to window: NSWindow) {
+        self.window = window
+        refreshVisibility()
+    }
+
+    func refreshVisibility() {
+        guard let window else {
+            updateVisibility(false)
+            return
+        }
+        let visible = window.isVisible
+            && !window.isMiniaturized
+            && window.occlusionState.contains(.visible)
+            && !NSApp.isHidden
+        updateVisibility(visible)
+    }
+
+    private func updateVisibility(_ visible: Bool) {
+        guard visible != lastVisibility else { return }
+        lastVisibility = visible
+        onVisibilityChange?(visible)
     }
 
     func windowWillResize(_ sender: NSWindow, to size: NSSize) -> NSSize {
-        NSSize(width: fixedWidth, height: max(size.height, minHeight))
+        NSSize(width: max(size.width, minWidth), height: max(size.height, minHeight))
     }
 
-    func windowWillStartLiveResize(_ notification: Notification) {
-        if let window = notification.object as? NSWindow {
-            liveResizeOriginX = window.frame.origin.x
-        }
+    func windowWillClose(_ notification: Notification) {
+        updateVisibility(false)
+        onClose()
     }
 
-    func windowDidResize(_ notification: Notification) {
-        guard let window = notification.object as? NSWindow,
-              window.inLiveResize,
-              let liveResizeOriginX else { return }
-        guard window.frame.origin.x != liveResizeOriginX else { return }
-        window.setFrameOrigin(NSPoint(x: liveResizeOriginX, y: window.frame.origin.y))
+    func windowDidMiniaturize(_ notification: Notification) {
+        refreshVisibility()
     }
 
-    func windowDidEndLiveResize(_ notification: Notification) {
-        liveResizeOriginX = nil
+    func windowDidDeminiaturize(_ notification: Notification) {
+        refreshVisibility()
+    }
+
+    func windowDidChangeOcclusionState(_ notification: Notification) {
+        refreshVisibility()
+    }
+
+    func windowDidBecomeKey(_ notification: Notification) {
+        refreshVisibility()
+    }
+
+    func windowDidResignKey(_ notification: Notification) {
+        refreshVisibility()
     }
 }
 
-/// 报表窗口顶部工具栏代理。
-final class ReportToolbarDelegate: NSObject, NSToolbarDelegate {
-    private static let exportItemID = NSToolbarItem.Identifier("ReportExportItem")
-    private static let printItemID = NSToolbarItem.Identifier("ReportPrintItem")
-    private static let reloadItemID = NSToolbarItem.Identifier("ReportReloadItem")
+private var transientPrintSessionAssociationKey: UInt8 = 0
 
-    func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, Self.reloadItemID, Self.printItemID, Self.exportItemID]
+/// 一次性 HTML 打印会话。
+///
+/// 每次打印拥有自己的 WebView、导航回调和临时文件。所有出口都汇入幂等的
+/// `finish()`：它只负责断开应用持有关系和删除临时文件，不把 WebKit helper
+/// 进程的退出时间当成同步生命周期信号。
+@MainActor
+final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
+    typealias WebViewFactory = @MainActor () -> WKWebView?
+
+    enum State: Equatable {
+        case idle
+        case loading
+        case printing
+        case finished
     }
 
-    func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [.flexibleSpace, Self.reloadItemID, Self.printItemID, Self.exportItemID]
+    private(set) var state: State = .idle
+    private(set) var webView: WKWebView?
+    private(set) var fileURL: URL?
+    private(set) var cleanupCount = 0
+
+    private weak var parentWindow: NSWindow?
+    private let onFinish: () -> Void
+    private let webViewFactory: WebViewFactory
+    private var printOperation: NSPrintOperation?
+    private var printDelayTask: Task<Void, Never>?
+
+    init(
+        fileURL: URL,
+        parentWindow: NSWindow?,
+        webViewFactory: @escaping WebViewFactory = {
+            let configuration = WKWebViewConfiguration()
+            configuration.websiteDataStore = WKWebsiteDataStore.nonPersistent()
+            return WKWebView(
+                frame: NSRect(x: 0, y: 0, width: 800, height: 600),
+                configuration: configuration
+            )
+        },
+        onFinish: @escaping () -> Void = {}
+    ) {
+        self.fileURL = fileURL
+        self.parentWindow = parentWindow
+        self.webViewFactory = webViewFactory
+        self.onFinish = onFinish
+        super.init()
     }
 
-    func toolbar(
-        _ toolbar: NSToolbar,
-        itemForItemIdentifier itemIdentifier: NSToolbarItem.Identifier,
-        willBeInsertedIntoToolbar flag: Bool
-    ) -> NSToolbarItem? {
-        let item = NSToolbarItem(itemIdentifier: itemIdentifier)
-        switch itemIdentifier {
-        case Self.exportItemID:
-            item.label = String(localized: "stats.report.toolbar.export", defaultValue: "导出")
-            item.toolTip = String(localized: "stats.report.toolbar.export.tooltip", defaultValue: "另存为 HTML 文件")
-            item.image = NSImage(systemSymbolName: "square.and.arrow.up", accessibilityDescription: "Export")
-            item.target = self
-            item.action = #selector(handleExport)
-            return item
-        case Self.printItemID:
-            item.label = String(localized: "stats.report.toolbar.print", defaultValue: "打印")
-            item.toolTip = String(localized: "stats.report.toolbar.print.tooltip", defaultValue: "打印或保存为 PDF")
-            item.image = NSImage(systemSymbolName: "printer", accessibilityDescription: "Print")
-            item.target = self
-            item.action = #selector(handlePrint)
-            return item
-        case Self.reloadItemID:
-            item.label = String(localized: "stats.report.toolbar.reload", defaultValue: "刷新")
-            item.toolTip = String(localized: "stats.report.toolbar.reload.tooltip", defaultValue: "重新载入报表")
-            item.image = NSImage(systemSymbolName: "arrow.clockwise", accessibilityDescription: "Reload")
-            item.target = self
-            item.action = #selector(handleReload)
-            return item
-        default:
-            return nil
+    func start() {
+        guard state == .idle, let fileURL, let webView = webViewFactory() else {
+            finish()
+            return
+        }
+        self.webView = webView
+        state = .loading
+        webView.navigationDelegate = self
+        objc_setAssociatedObject(
+            webView,
+            &transientPrintSessionAssociationKey,
+            self,
+            .OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        )
+        webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+    }
+
+    /// 可从成功、取消、导航/脚本失败以及父窗口关闭路径重复调用。
+    func finish() {
+        guard state != .finished else { return }
+        state = .finished
+        cleanupCount += 1
+        printDelayTask?.cancel()
+        printDelayTask = nil
+
+        if let webView {
+            webView.stopLoading()
+            webView.navigationDelegate = nil
+            objc_setAssociatedObject(
+                webView,
+                &transientPrintSessionAssociationKey,
+                nil,
+                .OBJC_ASSOCIATION_ASSIGN
+            )
+        }
+        printOperation = nil
+        webView = nil
+
+        if let fileURL {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+        self.fileURL = nil
+        onFinish()
+    }
+
+    nonisolated func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+        Task { @MainActor [weak self] in
+            self?.pageDidFinish()
         }
     }
 
-    @objc private func handleExport() {
-        Task { @MainActor in
-            ReportWindowPresenter.exportCurrentReport()
+    nonisolated func webView(
+        _ webView: WKWebView,
+        didFail navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        Task { @MainActor [weak self] in
+            self?.navigationFailed(error)
         }
     }
 
-    @objc private func handlePrint() {
-        Task { @MainActor in
-            ReportWindowPresenter.printCurrentReport()
+    nonisolated func webView(
+        _ webView: WKWebView,
+        didFailProvisionalNavigation navigation: WKNavigation!,
+        withError error: Error
+    ) {
+        Task { @MainActor [weak self] in
+            self?.navigationFailed(error)
         }
     }
 
-    @objc private func handleReload() {
-        Task { @MainActor in
-            ReportWindowPresenter.reloadCurrentReport()
+    nonisolated func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
+        Task { @MainActor [weak self] in
+            self?.finish()
         }
+    }
+
+    private func pageDidFinish() {
+        guard state == .loading, let webView else { return }
+        webView.evaluateJavaScript("enterPrintMode(); true") { [weak self] _, error in
+            Task { @MainActor [weak self] in
+                guard let self, self.state == .loading else { return }
+                if let error {
+                    self.scriptFailed(error)
+                } else {
+                    self.schedulePrint()
+                }
+            }
+        }
+    }
+
+    private func schedulePrint() {
+        printDelayTask?.cancel()
+        printDelayTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 150_000_000)
+            } catch {
+                return
+            }
+            guard let self, self.state == .loading else { return }
+            self.beginPrint()
+        }
+    }
+
+    private func beginPrint() {
+        guard state == .loading, let webView else {
+            finish()
+            return
+        }
+        state = .printing
+        let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
+        printInfo.topMargin = 28
+        printInfo.bottomMargin = 28
+        printInfo.leftMargin = 28
+        printInfo.rightMargin = 28
+        printInfo.isHorizontallyCentered = true
+        printInfo.isVerticallyCentered = false
+        let printOperation = webView.printOperation(with: printInfo)
+        printOperation.showsPrintPanel = true
+        printOperation.showsProgressPanel = true
+        self.printOperation = printOperation
+        defer { finish() }
+        if let parentWindow {
+            printOperation.runModal(for: parentWindow, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            printOperation.run()
+        }
+    }
+
+    private func navigationFailed(_ error: Error) {
+        guard state != .finished else { return }
+        AppLogger.settings.error("Transient print navigation failed: \(String(describing: error), privacy: .public)")
+        finish()
+    }
+
+    private func scriptFailed(_ error: Error) {
+        guard state != .finished else { return }
+        AppLogger.settings.error("Transient print script failed: \(String(describing: error), privacy: .public)")
+        finish()
     }
 }

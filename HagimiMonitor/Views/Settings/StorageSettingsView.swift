@@ -10,7 +10,6 @@ struct StorageSettingsView: View {
 
     @State private var pendingDeleteDays: Int?
     @State private var confirmClearAll = false
-    @State private var confirmClearReport = false
     @State private var confirmClearApps = false
     @State private var busy = false
 
@@ -53,22 +52,6 @@ struct StorageSettingsView: View {
                 ) {
                     Button(role: .destructive) {
                         confirmClearApps = true
-                    } label: {
-                        Text(String(localized: "stats.storage.clear"))
-                    }
-                    .fixedSize()
-                }
-
-                SettingsDivider()
-
-                categoryRow(
-                    title: String(localized: "stats.storage.report"),
-                    bytes: info?.reportBytes ?? 0,
-                    detail: String(localized: "stats.storage.category-report-desc"),
-                    disabled: (info?.reportBytes ?? 0) == 0
-                ) {
-                    Button(role: .destructive) {
-                        confirmClearReport = true
                     } label: {
                         Text(String(localized: "stats.storage.clear"))
                     }
@@ -141,20 +124,6 @@ struct StorageSettingsView: View {
             Text(String(localized: "stats.settings.cleanup-all-confirm"))
         }
         .confirmationDialog(
-            Text(String(localized: "stats.storage.clear-report")),
-            isPresented: $confirmClearReport,
-            titleVisibility: .visible
-        ) {
-            Button(role: .destructive) {
-                run { recorder.clearReportCache(completion: $0) }
-            } label: {
-                Text(String(localized: "stats.settings.cleanup-confirm-button"))
-            }
-            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "stats.storage.clear-report-confirm"))
-        }
-        .confirmationDialog(
             Text(String(localized: "stats.storage.clear-apps")),
             isPresented: $confirmClearApps,
             titleVisibility: .visible
@@ -189,12 +158,11 @@ struct StorageSettingsView: View {
 
     // MARK: - 环形构成图
 
-    private var ringColors: (metric: Color, app: Color, report: Color, system: Color) {
+    private var ringColors: (metric: Color, app: Color, system: Color) {
         let dark = colorScheme == .dark
         return (
             Color(hex: dark ? 0x38BDFF : 0x00A5EF),
             Color(hex: dark ? 0x34D399 : 0x059669),
-            Color(hex: dark ? 0xCA92F8 : 0xB066E8),
             Color(hex: dark ? 0x94A0AE : 0x9AA5B3)
         )
     }
@@ -205,7 +173,6 @@ struct StorageSettingsView: View {
         let segments: [StorageRing.Segment] = [
             StorageRing.Segment(id: "metric", bytes: info?.metricBytes ?? 0, color: colors.metric),
             StorageRing.Segment(id: "app", bytes: info?.appBytes ?? 0, color: colors.app),
-            StorageRing.Segment(id: "report", bytes: info?.reportBytes ?? 0, color: colors.report),
             StorageRing.Segment(id: "system", bytes: info?.systemBytes ?? 0, color: colors.system),
         ]
 
@@ -219,7 +186,6 @@ struct StorageSettingsView: View {
             HStack(spacing: 10) {
                 legend(dot: colors.metric, label: String(localized: "stats.storage.metric"), bytes: info?.metricBytes ?? 0)
                 legend(dot: colors.app, label: String(localized: "stats.storage.apps"), bytes: info?.appBytes ?? 0)
-                legend(dot: colors.report, label: String(localized: "stats.storage.report"), bytes: info?.reportBytes ?? 0)
                 legend(dot: colors.system, label: String(localized: "stats.storage.system"), bytes: info?.systemBytes ?? 0)
             }
         }
@@ -297,10 +263,12 @@ struct StorageSettingsView: View {
     // MARK: - 动作
 
     /// 统一 busy 包装:后台删除完成后回主线程刷新。
-    private func run(_ operation: (@escaping () -> Void) -> Void) {
+    private func run(_ operation: (@escaping @Sendable () -> Void) -> Void) {
         busy = true
         operation {
-            busy = false
+            Task { @MainActor in
+                busy = false
+            }
         }
     }
 

@@ -2,7 +2,7 @@ import Foundation
 import IOKit
 
 /// 充电端口的物理标识与同口并行通道。
-struct AdapterPortInfo: Equatable {
+nonisolated struct AdapterPortInfo: Equatable, Sendable {
     /// 物理端口标签,如 "USB-C 4";端口类型读不到时退化为号数,全缺为 nil。
     var portLabel: String?
     /// 同口活动的数据通道,如 "DP·USB2";只有功率协商通道时为 nil。
@@ -14,7 +14,7 @@ struct AdapterPortInfo: Equatable {
 ///   - `IOPortFeaturePowerSource`:随 PD 伙伴接入出现的供电源节点,携带所属端口;
 ///   - `IOAccessoryManagerUSBC`:该端口的链路状态,携带当前活动的传输通道。
 /// 先由前者定位「本轮胜出的供电口」,再到后者取该口的通道列表;定位不到返回 nil。
-enum AdapterPortReader {
+nonisolated enum AdapterPortReader {
     static func read() -> AdapterPortInfo? {
         guard let power = winningPowerSource() else { return nil }
         var info = AdapterPortInfo(portLabel: power.label)
@@ -26,7 +26,7 @@ enum AdapterPortReader {
 
     // MARK: - 胜出的供电口
 
-    private struct PowerSource {
+    private struct PowerSource: Sendable {
         var portNumber: Int?
         var label: String?
     }
@@ -89,7 +89,7 @@ enum AdapterPortReader {
     }
 
     /// 通道短名与固定显示序;未登记的通道名不展示(固件新增通道时宁缺勿猜)。
-    private static let transportNames: [(match: (String) -> Bool, short: String)] = [
+    private static let transportNames: [(match: @Sendable (String) -> Bool, short: String)] = [
         ({ $0.caseInsensitiveCompare("DisplayPort") == .orderedSame }, "DP"),
         ({ $0.uppercased().hasPrefix("USB3") }, "USB3"),
         ({ $0.uppercased().hasPrefix("USB2") }, "USB2"),

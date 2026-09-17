@@ -58,7 +58,7 @@ final class BluetoothBatterySampler: NSObject {
     private static let sampleInterval: TimeInterval = 10
     /// system_profiler 正常数百毫秒返回,个别蓝牙控制器无响应时可能挂起,
     /// 超过此时长终止进程并放弃本次结果。
-    private static let probeTimeout: DispatchTimeInterval = .seconds(8)
+    nonisolated private static let probeTimeout: DispatchTimeInterval = .seconds(8)
     /// 身份绑定表的持久化键:归一化 MAC -> BindingRecord(JSON 编码)。
     private static let bindingsDefaultsKey = "bluetooth.identityBindings"
     /// 绑定失效阈值:超过此时长未在 BLE 快照中召回则移除绑定。
@@ -500,7 +500,7 @@ final class BluetoothBatterySampler: NSObject {
 
     /// MAC 归一化:去冒号/横线、转小写。IOBluetooth 报横线小写格式,
     /// system_profiler 报冒号大写格式,归一化后才能跨源对齐。
-    static func normalizeMAC(_ raw: String) -> String {
+    nonisolated static func normalizeMAC(_ raw: String) -> String {
         raw.lowercased().filter(\.isHexDigit)
     }
 
@@ -778,7 +778,7 @@ final class BluetoothBatterySampler: NSObject {
     }
 
     /// 展示排序:有电量上报的设备排前(信息量大),同组内按名称排,列表顺序稳定不跳动。
-    static func displayOrder(_ devices: [BluetoothDeviceInfo]) -> [BluetoothDeviceInfo] {
+    nonisolated static func displayOrder(_ devices: [BluetoothDeviceInfo]) -> [BluetoothDeviceInfo] {
         devices.sorted { lhs, rhs in
             let lhsMissing = lhs.batteryLevel == nil
             let rhsMissing = rhs.batteryLevel == nil
@@ -787,7 +787,7 @@ final class BluetoothBatterySampler: NSObject {
         }
     }
 
-    private static func probe() -> ProbeOutcome {
+    private nonisolated static func probe() -> ProbeOutcome {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/sbin/system_profiler")
         task.arguments = ["SPBluetoothDataType", "-json"]
@@ -804,10 +804,26 @@ final class BluetoothBatterySampler: NSObject {
 
         // readDataToEndOfFile 会阻塞到进程退出,若 system_profiler 挂起则永久不返。
         // 读输出放到独立线程,本线程用信号量等待,超时后终止进程并放弃本次结果。
-        nonisolated(unsafe) var output: Data?
+        nonisolated final class OutputDataCaptureBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var data: Data?
+
+            func set(_ value: Data) {
+                lock.lock()
+                data = value
+                lock.unlock()
+            }
+
+            func get() -> Data? {
+                lock.lock()
+                defer { lock.unlock() }
+                return data
+            }
+        }
+        let box = OutputDataCaptureBox()
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
-            output = pipe.fileHandleForReading.readDataToEndOfFile()
+            box.set(pipe.fileHandleForReading.readDataToEndOfFile())
             done.signal()
         }
 
@@ -817,7 +833,7 @@ final class BluetoothBatterySampler: NSObject {
         }
         task.waitUntilExit()
 
-        guard task.terminationStatus == 0, let output else {
+        guard task.terminationStatus == 0, let output = box.get() else {
             return .failure
         }
         return parse(profilerJSON: output)
@@ -828,7 +844,7 @@ final class BluetoothBatterySampler: NSObject {
     /// (attrib_on 为开,其余值为关);JSON 失效、根字段缺失或沙盒空骨架
     /// (无 controller_state 且无 device_connected)返回 .failure,调用方保留
     /// 最近一次成功快照,不构成「蓝牙关闭」证据。
-    static func parse(profilerJSON data: Data) -> ProbeOutcome {
+    nonisolated static func parse(profilerJSON data: Data) -> ProbeOutcome {
         guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
               let entries = root["SPBluetoothDataType"] as? [[String: Any]],
               let entry = entries.first else {

@@ -40,6 +40,7 @@
 |---|---|
 | [`Xcode 27.txt`](./notes/Xcode%2027.txt) | Xcode 27 Beta Release Notes 原始发行日志备忘。 |
 | [`macos27.txt`](./notes/macos27.txt) | macOS 27 Beta 系统变化与 API 变更备忘。 |
+| [`macos-27-sdk-evaluation.md`](./notes/macos-27-sdk-evaluation.md) | macOS 27 SDK 特性适配与演化可行性评估报告。 |
 
 ---
 

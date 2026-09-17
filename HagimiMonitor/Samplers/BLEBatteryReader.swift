@@ -3,7 +3,7 @@ import Foundation
 import OSLog
 
 /// CoreBluetooth 侧单台已连接外设的快照。
-struct BLEDeviceSnapshot: Equatable {
+nonisolated struct BLEDeviceSnapshot: Equatable, Sendable {
     /// 系统按设备 MAC 派生的稳定标识:设备改名不变、跨重启稳定。
     /// CoreBluetooth 无公开 MAC 接口,此标识是与 system_profiler 地址
     /// 做身份关联的可靠锚点。
@@ -41,21 +41,27 @@ struct BLEDeviceSnapshot: Equatable {
 /// 身份绑定表已知设备按 identifier 直接召回兜底(覆盖无标准服务缓存的设备);
 /// 由本读取器主动连接后 discoverServices 强制完成 GATT 发现并读电量。
 /// 不通过长期无过滤扫描提高覆盖率(避免把附近未连接设备误认为已连接)。
-final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
-    private static let batteryServiceUUID = CBUUID(string: "180F")
-    private static let batteryLevelCharacteristicUUID = CBUUID(string: "2A19")
+///
+/// 内部所有状态与 CoreBluetooth 代理回调均由串行队列 queue 独占保护，对外提供异步线程安全接口。
+nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate, @unchecked Sendable {
+    // CBUUID 是 CoreBluetooth 的引用类型，不能作为跨隔离域共享的静态实例；按需
+    // 创建等价的不可变值，既避免共享对象别名，也不需要 `nonisolated(unsafe)`。
+    private nonisolated static var batteryServiceUUID: CBUUID { CBUUID(string: "180F") }
+    private nonisolated static var batteryLevelCharacteristicUUID: CBUUID { CBUUID(string: "2A19") }
     /// Appearance(2A01)在 GAP 服务(1800)下,是设备自报的形态类别声明,
     /// 也是无 CoD 的 BLE 设备在沙盒内唯一的形态数据源。
-    private static let gapServiceUUID = CBUUID(string: "1800")
-    private static let appearanceCharacteristicUUID = CBUUID(string: "2A01")
+    private nonisolated static var gapServiceUUID: CBUUID { CBUUID(string: "1800") }
+    private nonisolated static var appearanceCharacteristicUUID: CBUUID { CBUUID(string: "2A01") }
     /// 服务召回过滤:retrieveConnectedPeripherals 只返回系统已完成 GATT 缓存
     /// 且包含所列服务之一的已连接外设,空数组语义是「匹配零服务」返回空。
     /// 180A 几乎全 BLE 设备标配,1812 覆盖 HID 键鼠,与 180F 组合尽量扩大召回面。
-    private static let discoveryServiceUUIDs: [CBUUID] = [
-        CBUUID(string: "180F"),
-        CBUUID(string: "180A"),
-        CBUUID(string: "1812"),
-    ]
+    private nonisolated static var discoveryServiceUUIDs: [CBUUID] {
+        [
+            CBUUID(string: "180F"),
+            CBUUID(string: "180A"),
+            CBUUID(string: "1812"),
+        ]
+    }
     /// 周期性 retrieve:发现新连接设备、清理消失设备。新设备出现由
     /// sampler 的连断事件通知即时触发召回,此周期是事件遗漏时的兜底上限。
     private static let refreshInterval: TimeInterval = 10
@@ -96,9 +102,9 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
     private var knownIdentifiers: [UUID] = []
 
     /// 已连接外设快照(主线程,内容变化才发布)。
-    var onSnapshotsUpdate: (([BLEDeviceSnapshot]) -> Void)?
+    var onSnapshotsUpdate: (@MainActor @Sendable ([BLEDeviceSnapshot]) -> Void)?
     /// 控制器开关(poweredOn/poweredOff,主线程);授权中间态不发布。
-    var onControllerStateUpdate: ((Bool) -> Void)?
+    var onControllerStateUpdate: (@MainActor @Sendable (Bool) -> Void)?
 
     /// 更新 identifier 兜底召回名单(线程安全,串行队列写入)。
     func updateKnownIdentifiers(_ identifiers: [UUID]) {
@@ -160,7 +166,9 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
             self.lastPublishedSnapshots = []
             self.lastPublishedControllerState = nil
             DispatchQueue.main.async { [weak self] in
-                self?.onSnapshotsUpdate?([])
+                MainActor.assumeIsolated {
+                    self?.onSnapshotsUpdate?([])
+                }
             }
         }
     }
@@ -267,7 +275,9 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         guard snapshots != lastPublishedSnapshots else { return }
         lastPublishedSnapshots = snapshots
         DispatchQueue.main.async { [weak self] in
-            self?.onSnapshotsUpdate?(snapshots)
+            MainActor.assumeIsolated {
+                self?.onSnapshotsUpdate?(snapshots)
+            }
         }
     }
 
@@ -275,7 +285,9 @@ final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CBPeripheralDe
         guard lastPublishedControllerState != isOn else { return }
         lastPublishedControllerState = isOn
         DispatchQueue.main.async { [weak self] in
-            self?.onControllerStateUpdate?(isOn)
+            MainActor.assumeIsolated {
+                self?.onControllerStateUpdate?(isOn)
+            }
         }
     }
 

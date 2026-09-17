@@ -6,30 +6,30 @@ import Foundation
 /// CPU/GPU 使用率是工作强度,内存占用与温度是解释项:都不参与评分,满载不扣分。
 /// 升级前历史没有档位秒数,整段按旧应力口径呈现(近似),不与新口径混合。
 /// 电池健康度不纳入:它是硬件属性而非窗口内状态,由报表电池区与洞察单独呈现。
-enum StatisticsHealthScore {
+nonisolated enum StatisticsHealthScore: Sendable {
     /// 两项负担的权重(和为 1):内存压力是 macOS 最真实的健康信号,热次之。
-    static let memWeight = 0.6
-    static let thermalWeight = 0.4
+    nonisolated static let memWeight = 0.6
+    nonisolated static let thermalWeight = 0.4
 
     /// 档位权重(候选初始值,待真实记录回放校准,不是硬件安全标准):
     /// 内存 normal/warning/critical = 0/0.6/1;热 nominal/fair/serious/critical = 0/0.2/0.6/1。
-    static let memoryLevelWeights: [Double] = [0, 0.6, 1]
-    static let thermalLevelWeights: [Double] = [0, 0.2, 0.6, 1]
+    nonisolated static let memoryLevelWeights: [Double] = [0, 0.6, 1]
+    nonisolated static let thermalLevelWeights: [Double] = [0, 0.2, 0.6, 1]
 
     /// 工作强度阈值:CPU 85%、GPU 90% 起算高负载秒数(旧口径曲线同线起罚)。
-    static let cpuHighThreshold = 85.0
-    static let gpuHighThreshold = 90.0
+    nonisolated static let cpuHighThreshold = 85.0
+    nonisolated static let gpuHighThreshold = 90.0
 
     /// 最低交集观测时长与覆盖比例(模型 §6):交集不足 30 分钟、或不足监控应
     /// 覆盖时长的 90% 不出范围总分——样本太薄与缺失都不生成满分。
-    static let minIntersectionSeconds: TimeInterval = 30 * 60
-    static let minCoverageRatio = 0.9
+    nonisolated static let minIntersectionSeconds: TimeInterval = 30 * 60
+    nonisolated static let minCoverageRatio = 0.9
 
     /// 分数等级阈值(低/轻度/偏高):与 `Level(score:)` 同源,报表 JS 共用同一组
     /// 数字,避免两处各维护一套区间。
-    static let lowThreshold = 95.0
-    static let mildThreshold = 85.0
-    static let elevatedThreshold = 70.0
+    nonisolated static let lowThreshold = 95.0
+    nonisolated static let mildThreshold = 85.0
+    nonisolated static let elevatedThreshold = 70.0
 
     enum Level: String, CaseIterable {
         case low
@@ -57,9 +57,9 @@ enum StatisticsHealthScore {
         }
     }
 
-    struct Dimension: Identifiable {
+    struct Dimension: Identifiable, Equatable, Sendable {
         /// 维度类型:视图据此取模块配色,不依赖本地化后的名称。
-        enum Kind {
+        enum Kind: Equatable, Sendable {
             case cpu
             case gpu
             case memory
@@ -77,7 +77,7 @@ enum StatisticsHealthScore {
         var level: Level { levelForShare(stressShare) }
     }
 
-    struct Result {
+    struct Result: Equatable, Sendable {
         let score: Double
         let level: Level
         let dimensions: [Dimension]

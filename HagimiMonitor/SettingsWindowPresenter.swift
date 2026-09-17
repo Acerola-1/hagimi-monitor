@@ -11,13 +11,13 @@ import OSLog
 /// 容器承载(避免宿主反向改写窗口约束),宽度 min==max 钉死、高度上不封顶,
 /// 用户拖拽的最小高度由拉伸代理裁定。
 enum SettingsWindowPresenter {
-    static let routeChangeNotification = Notification.Name("SettingsWindowPresenter.routeChange")
-    static let tabUserInfoKey = "tab"
+    nonisolated static let routeChangeNotification = Notification.Name("SettingsWindowPresenter.routeChange")
+    nonisolated static let tabUserInfoKey = "tab"
 
-    /// 窗口强持有:关闭仅 orderOut,实例常驻,重开复用同一窗口与其中的 SwiftUI 状态。
+    /// 窗口强持有:仅在窗口打开期间常驻,关闭时置空以释放 SwiftUI 视图树与相关图表资源。
     @MainActor
-    private static var settingsWindow: NSWindow?
-    /// 主题订阅:窗口长驻,用户切换深浅色后设置窗口立即跟随。
+    private(set) static var settingsWindow: NSWindow?
+    /// 主题订阅:仅在窗口打开期间保持跟随。
     @MainActor
     private static var themeCancellable: AnyCancellable?
     @MainActor
@@ -27,9 +27,23 @@ enum SettingsWindowPresenter {
     /// 释放,代理方法将不再触发。
     @MainActor
     private static let resizeDelegate = SettingsResizeDelegate(
-        fixedWidth: fixedWidth,
-        minHeight: minHeight()
+        fixedWidth: fixedWidth
     )
+
+    /// 窗口关闭时的清理处理:置空静态持有的窗口与订阅,允许视图树与图表资源被释放回收。
+    @MainActor
+    static func handleWindowClose() {
+        themeCancellable?.cancel()
+        themeCancellable = nil
+        settingsWindow = nil
+        pendingTab = nil
+    }
+
+    /// 关闭设置窗口（若已打开）。
+    @MainActor
+    static func close() {
+        settingsWindow?.close()
+    }
 
     /// 打开设置窗口。菜单命令、面板按钮、深链 tab 等所有入口统一走这里。
     @MainActor
@@ -94,7 +108,7 @@ enum SettingsWindowPresenter {
     private static let minHeightWithoutFan: CGFloat = 533
 
     @MainActor
-    private static func minHeight() -> CGFloat {
+    fileprivate static func minHeight() -> CGFloat {
         let hasFan = AppDelegate.shared?.store.fanAvailable ?? false
         return hasFan ? minHeightWithFan : minHeightWithoutFan
     }
@@ -274,17 +288,19 @@ enum SettingsWindowPresenter {
 @MainActor
 private final class SettingsResizeDelegate: NSObject, NSWindowDelegate {
     private let fixedWidth: CGFloat
-    private let minHeight: CGFloat
     private var liveResizeOriginX: CGFloat?
 
-    init(fixedWidth: CGFloat, minHeight: CGFloat) {
+    init(fixedWidth: CGFloat) {
         self.fixedWidth = fixedWidth
-        self.minHeight = minHeight
         super.init()
     }
 
     func windowWillResize(_ sender: NSWindow, to size: NSSize) -> NSSize {
-        NSSize(width: fixedWidth, height: max(size.height, minHeight))
+        NSSize(width: fixedWidth, height: max(size.height, SettingsWindowPresenter.minHeight()))
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        SettingsWindowPresenter.handleWindowClose()
     }
 
     func windowWillStartLiveResize(_ notification: Notification) {

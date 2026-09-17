@@ -65,14 +65,14 @@ struct DisplayControlIntegrationTests {
         #expect(transport.writes.filter { $0.value == 50 }.count >= 1)
 
         // A 重配置抑制:设 40 被抑制。
-        var gateSuppressed = true
-        engine.setGateProvider { gateSuppressed }
+        let gateSuppressed = TestBox(true)
+        engine.setGateProvider { gateSuppressed.value }
         await settle(engine)
         await write(engine, clock: clock, token: tokenA, value: 40)
         let beforeReplay = transport.writeCount()
 
         // 门禁解除:重放最新目标 40。
-        gateSuppressed = false
+        gateSuppressed.value = false
         await settle(engine)
         engine.handleGateRecovery()
         await settle(engine)

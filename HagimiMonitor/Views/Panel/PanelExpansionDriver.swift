@@ -187,6 +187,34 @@ extension EnvironmentValues {
     }
 }
 
+/// 自动管理 CADisplayLink 生命周期的包装器。
+/// 安全不变式：在 deinit 时确保底层 CADisplayLink 在主线程安全完成 invalidate，避免内存泄漏。
+nonisolated private final class DisplayLinkBox: @unchecked Sendable {
+    private var link: CADisplayLink?
+
+    init(_ link: CADisplayLink) {
+        self.link = link
+    }
+
+    func invalidate() {
+        link?.invalidate()
+        link = nil
+    }
+
+    deinit {
+        let l = link
+        if let l {
+            if Thread.isMainThread {
+                l.invalidate()
+            } else {
+                DispatchQueue.main.async {
+                    l.invalidate()
+                }
+            }
+        }
+    }
+}
+
 /// 窗口高度弹簧跟随器:窗口 frame 以与内容侧完全相同的弹簧参数跟随内容高度。
 ///
 /// 内容高度的可见插值由 CoreAnimation 在合成器侧完成,布局模型在 toggle 时
@@ -200,7 +228,7 @@ final class PanelWindowSpring: NSObject {
     private let applyHeight: (CGFloat) -> Void
     private let currentScreen: () -> NSScreen?
 
-    private var displayLink: CADisplayLink?
+    private var displayLinkBox: DisplayLinkBox?
     private(set) var isAnimating = false
     private(set) var target: CGFloat = 0
     private var startPos: CGFloat = 0
@@ -216,10 +244,6 @@ final class PanelWindowSpring: NSObject {
     init(applyHeight: @escaping (CGFloat) -> Void, screen: @escaping () -> NSScreen?) {
         self.applyHeight = applyHeight
         self.currentScreen = screen
-    }
-
-    deinit {
-        displayLink?.invalidate()
     }
 
     /// 向新目标启动/续接弹簧。静止时从窗口当前高度出发;动画中重定向则取
@@ -261,12 +285,12 @@ final class PanelWindowSpring: NSObject {
 
     private func stop() {
         isAnimating = false
-        displayLink?.invalidate()
-        displayLink = nil
+        displayLinkBox?.invalidate()
+        displayLinkBox = nil
     }
 
     private func ensureDisplayLink() {
-        guard displayLink == nil else { return }
+        guard displayLinkBox == nil else { return }
         guard let screen = currentScreen() ?? NSScreen.main else {
             stop()
             applyHeight(target)
@@ -275,7 +299,7 @@ final class PanelWindowSpring: NSObject {
         }
         let link = screen.displayLink(target: self, selector: #selector(step(_:)))
         link.add(to: .main, forMode: .common)
-        displayLink = link
+        displayLinkBox = DisplayLinkBox(link)
     }
 
     @objc private func step(_ link: CADisplayLink) {

@@ -3,12 +3,12 @@ import CoreGraphics
 import Foundation
 import OSLog
 
-private let gammaLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "GammaDimming")
+private nonisolated let gammaLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "GammaDimming")
 
 /// 调光模式:标识某台显示器当前使用哪种方式控制亮度。
 /// - hardware: DDC/CI 或 DisplayServices 原生协议(真硬件背光,无损画质)
 /// - gamma: Gamma 传输表软件调光(压低像素值,不省电,损失暗部细节)
-enum DimmingMode {
+nonisolated enum DimmingMode: Sendable, Equatable {
     case hardware
     case gamma
 }
@@ -21,7 +21,7 @@ nonisolated enum GammaApplyResult: Equatable, Sendable {
 
 /// Gamma API 注入边界:生产实现调用 CGSetDisplayTransferByFormula,
 /// 测试注入 fake 验证"成功才更新 applied、失败不伪造"。
-nonisolated protocol GammaAPI: AnyObject {
+nonisolated protocol GammaAPI: AnyObject, Sendable {
     /// 获取当前传输表(基线)。失败返回 nil。
     func transferTables(for displayID: CGDirectDisplayID) -> GammaTransferTables?
     /// 应用线性压暗传输表(factor 0..1)。
@@ -43,7 +43,7 @@ nonisolated protocol GammaAPI: AnyObject {
     ) -> GammaApplyResult
 }
 
-extension GammaAPI {
+nonisolated extension GammaAPI {
     func applyDimming(
         factor: CGGammaValue,
         baseline: GammaTransferTables?,
@@ -74,8 +74,8 @@ nonisolated struct GammaTransferTables: Equatable, Sendable {
 
 }
 
-/// 生产 Gamma API:CGSetDisplayTransferByFormula 包装。
-nonisolated final class SystemGammaAPI: GammaAPI {
+/// 生产 Gamma API:CGSetDisplayTransferByFormula 包装。无内部易变状态，并发调用安全。
+nonisolated final class SystemGammaAPI: GammaAPI, Sendable {
     func transferTables(for displayID: CGDirectDisplayID) -> GammaTransferTables? {
         var rMin = CGGammaValue(0), rMax = CGGammaValue(0), rGamma = CGGammaValue(0)
         var gMin = CGGammaValue(0), gMax = CGGammaValue(0), gGamma = CGGammaValue(0)
@@ -145,7 +145,11 @@ nonisolated final class SystemGammaAPI: GammaAPI {
 /// - 会损失暗部细节(低位深度截断);
 /// - 与 Night Shift/f.lux 等 gamma 修改工具冲突(覆盖而非叠加);
 /// - 睡眠/唤醒后系统会重置 gamma 表,需在唤醒后重新施加。
-nonisolated final class GammaDimmingController {
+///
+/// 内部通过 NSLock 保护 dimLevels 和 baselines 字典，多线程并发调用安全。
+/// 对底层 Gamma 表的读-改-写操作另行串行化，避免用户拖动与睡眠唤醒重施加
+/// 交错时后发的状态被先发的系统调用覆盖。
+nonisolated final class GammaDimmingController: @unchecked Sendable {
     static let shared = GammaDimmingController()
 
     private let gammaAPI: GammaAPI
@@ -153,6 +157,7 @@ nonisolated final class GammaDimmingController {
     /// 每台显示器的基线传输表(首次启用前读取),绑定连接代次。
     private var baselines: [CGDirectDisplayID: GammaTransferTables] = [:]
     private let lock = NSLock()
+    private let operationLock = NSLock()
 
     init(gammaAPI: GammaAPI = SystemGammaAPI()) {
         self.gammaAPI = gammaAPI
@@ -168,6 +173,9 @@ nonisolated final class GammaDimmingController {
     /// - Returns: 结构化结果;失败不更新 applied 状态与成功值。
     @discardableResult
     func setDimming(percent: Double, for displayID: CGDirectDisplayID) -> GammaApplyResult {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+
         let clamped = min(100, max(0, percent))
         let factor = CGGammaValue(clamped / 100.0)
 
@@ -213,6 +221,9 @@ nonisolated final class GammaDimmingController {
     /// 仅当该显示器存在调光残留时才恢复,避免对从未调光过的显示器做无谓调用。
     @discardableResult
     func reset(displayID: CGDirectDisplayID) -> GammaApplyResult {
+        operationLock.lock()
+        defer { operationLock.unlock() }
+
         lock.lock()
         let hadState = dimLevels[displayID] != nil
         let baseline = baselines[displayID]

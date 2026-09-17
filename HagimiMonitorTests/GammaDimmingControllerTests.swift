@@ -4,7 +4,7 @@ import CoreGraphics
 import Foundation
 
 /// fake Gamma API:记录调用,可控成功/失败与基线。
-final class FakeGammaAPI: GammaAPI, @unchecked Sendable {
+nonisolated final class FakeGammaAPI: GammaAPI, @unchecked Sendable {
     private let lock = NSLock()
     private(set) var applyCalls: [(factor: CGGammaValue, displayID: CGDirectDisplayID)] = []
     private(set) var restoreCalls: [CGDirectDisplayID] = []

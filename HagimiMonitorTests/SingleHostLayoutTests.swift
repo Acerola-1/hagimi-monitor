@@ -123,7 +123,8 @@ struct SingleHostLayoutTests {
 
     /// 原生 hosting 内的叶子探针，记录实际经过布局系统的提议。
     struct ProposalProbeLayout: Layout {
-        final class ProbeBox {
+        /// Layout 要求可跨 SwiftUI 的隔离边界传递;测试只在 MainActor 访问该盒子。
+        final class ProbeBox: @unchecked Sendable {
             var proposals: [ProposedViewSize] = []
         }
         let box: ProbeBox

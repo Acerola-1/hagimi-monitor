@@ -2,6 +2,124 @@ import AppKit
 import Combine
 import SwiftUI
 
+/// 自动管理 FluidPanelController 外部资源生命周期的包装器。
+/// 安全不变式：在 deinit 时自动在主线程失效 Timer/帧探针、注销 NSEvent 监视器以及移除 NSStatusItem。
+nonisolated private final class PanelCleanupBox: @unchecked Sendable {
+    private var autoTestTimer: Timer?
+    private var frameProbeTimer: DispatchSourceTimer?
+    private var localEventMonitor: Any?
+    private var globalEventMonitor: Any?
+    private var statusItem: NSStatusItem?
+
+    func setAutoTestTimer(_ timer: Timer?) {
+        autoTestTimer = timer
+    }
+
+    func setFrameProbeTimer(_ timer: DispatchSourceTimer?) {
+        frameProbeTimer?.cancel()
+        frameProbeTimer = timer
+    }
+
+    func setMonitors(local: Any?, global: Any?) {
+        localEventMonitor = local
+        globalEventMonitor = global
+    }
+
+    func setStatusItem(_ item: NSStatusItem) {
+        statusItem = item
+    }
+
+    deinit {
+        let timer = autoTestTimer
+        let frameProbe = frameProbeTimer
+        let local = localEventMonitor
+        let global = globalEventMonitor
+        let item = statusItem
+
+        if Thread.isMainThread {
+            timer?.invalidate()
+            frameProbe?.cancel()
+            if let local { NSEvent.removeMonitor(local) }
+            if let global { NSEvent.removeMonitor(global) }
+            if let item { NSStatusBar.system.removeStatusItem(item) }
+        } else {
+            DispatchQueue.main.async {
+                timer?.invalidate()
+                frameProbe?.cancel()
+                if let local { NSEvent.removeMonitor(local) }
+                if let global { NSEvent.removeMonitor(global) }
+                if let item { NSStatusBar.system.removeStatusItem(item) }
+            }
+        }
+    }
+}
+
+/// 状态项输入在系统扩展会话与旧版兼容路径之间的纯路由决策。
+///
+/// macOS 27 由 AppKit 驱动左键和键盘展开,本地监视器只能继续处理右键菜单;
+/// macOS 15--26 则保留原来的左键切换。把这个分流留在无 UI 的值类型里,
+/// 让两条路径的边界可以在测试中稳定验证。
+enum FluidPanelStatusItemInput: Equatable, Sendable {
+    case leftMouseDown
+    case rightMouseDown
+}
+
+enum FluidPanelStatusItemRoute: Equatable, Sendable {
+    case systemExpandedInterface
+    case legacyToggle
+    case contextMenu
+    case commandDrag
+
+    static func route(
+        for input: FluidPanelStatusItemInput,
+        commandDown: Bool,
+        usesSystemExpandedInterface: Bool
+    ) -> Self {
+        if commandDown {
+            return .commandDrag
+        }
+
+        switch input {
+        case .leftMouseDown:
+            return usesSystemExpandedInterface ? .systemExpandedInterface : .legacyToggle
+        case .rightMouseDown:
+            return .contextMenu
+        }
+    }
+}
+
+enum FluidPanelDismissalSource: Equatable, Sendable {
+    case userAction
+    case systemEnd
+}
+
+struct FluidPanelDismissalDecision: Equatable, Sendable {
+    let shouldBegin: Bool
+    let shouldCancelExpandedInterfaceSession: Bool
+    let closesAwaitingGeometry: Bool
+
+    static func make(
+        panelIsVisible: Bool,
+        awaitingGeometry: Bool,
+        dismissalInProgress: Bool,
+        source: FluidPanelDismissalSource
+    ) -> Self {
+        guard !dismissalInProgress, panelIsVisible || awaitingGeometry else {
+            return Self(
+                shouldBegin: false,
+                shouldCancelExpandedInterfaceSession: false,
+                closesAwaitingGeometry: false
+            )
+        }
+
+        return Self(
+            shouldBegin: true,
+            shouldCancelExpandedInterfaceSession: source == .userAction,
+            closesAwaitingGeometry: awaitingGeometry
+        )
+    }
+}
+
 /// 自建的菜单栏面板控制器,替换系统 `MenuBarExtra(.window)`。
 ///
 /// 背景:SwiftUI 的 `MenuBarExtra(.window)` 在 macOS 15 及更早版本对宿主窗口的
@@ -24,7 +142,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private var awaitingGeometry = false
     private let store: MonitorStore
     /// 打开设置窗口的闭包。由外部注入,因为 `OpenSettingsAction` 只能在 SwiftUI 视图层获取。
-    private let openSettingsAction: () -> Void
+    private let openSettingsAction: @MainActor @Sendable () -> Void
 
     private let statusItem: NSStatusItem
     private let panel: NSPanel
@@ -34,14 +152,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
     private let panelRefreshGate: PanelRefreshGate
 
-    private var localEventMonitor: Any?
-    private var globalEventMonitor: Any?
+    private let cleanupBox = PanelCleanupBox()
     private var cancellables: Set<AnyCancellable> = []
-
-    /// 调试自动测试:环境变量 `HAGIMI_PANEL_AUTOTEST="<间隔秒>:<次数>"`(如 "2:12")
-    /// 时,启动后每间隔秒自动 toggle 一次面板,共次数次,用于内存/动画回归实测。
-    /// 未设置时零开销。
-    private var autoTestTimer: Timer?
 
     /// 内容侧最近一次上报的自然尺寸(未经封顶)。showPanel 用它定位首帧:
     /// hosting 的 sizingOptions 为空,intrinsicContentSize 不可靠,
@@ -83,7 +195,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     init(
         store: MonitorStore,
-        openSettings: @escaping () -> Void
+        openSettings: @escaping @MainActor @Sendable () -> Void
     ) {
         self.store = store
         self.openSettingsAction = openSettings
@@ -105,9 +217,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         configurePanel()
         configureStatusItem()
+        cleanupBox.setStatusItem(statusItem)
         installEventMonitors()
         startAutoTestIfNeeded()
     }
+
+    private var autoTestRemaining = 0
 
     private func startAutoTestIfNeeded() {
         guard let spec = ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] else { return }
@@ -115,21 +230,31 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         guard parts.count == 2,
               let interval = TimeInterval(parts[0]), interval > 0.5,
               let count = Int(parts[1]), count > 0 else { return }
-        var remaining = count
-        autoTestTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
-            guard let self else { timer.invalidate(); return }
-            remaining -= 1
-            if remaining <= 0 { timer.invalidate() }
-            self.togglePanel()
+        autoTestRemaining = count
+        let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
+            var shouldStop = false
+            MainActor.assumeIsolated {
+                guard let self else {
+                    shouldStop = true
+                    return
+                }
+                self.autoTestRemaining -= 1
+                if self.autoTestRemaining <= 0 {
+                    shouldStop = true
+                }
+                self.togglePanel()
+            }
+            if shouldStop {
+                timer.invalidate()
+            }
         }
+        cleanupBox.setAutoTestTimer(timer)
         startFrameProbe()
     }
 
     /// 调试帧探针:主线程上以 4ms 目标间隔持续打卡,记录实际间隔。
     /// 展开动画(0.15s)期间若主线程被重绘/布局拖住,打卡间隔会显著拉大,
     /// 交给 `AutotestPerfMeter` 在度量窗口内累计为 slowframes 并逐帧打印。
-    private var frameProbeTimer: DispatchSourceTimer?
-
     private func startFrameProbe() {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now(), repeating: .milliseconds(4), leeway: .milliseconds(1))
@@ -146,19 +271,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             }
         }
         timer.resume()
-        frameProbeTimer = timer
-    }
-
-    deinit {
-        autoTestTimer?.invalidate()
-        frameProbeTimer?.cancel()
-        if let localEventMonitor {
-            NSEvent.removeMonitor(localEventMonitor)
-        }
-        if let globalEventMonitor {
-            NSEvent.removeMonitor(globalEventMonitor)
-        }
-        NSStatusBar.system.removeStatusItem(statusItem)
+        cleanupBox.setFrameProbeTimer(timer)
     }
 
     // MARK: - Setup
@@ -208,7 +321,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // hosting 也做圆角裁剪,否则 SwiftUI 内容(含 panelBackgroundColor 矩形)方角会溢出圆角。
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
-        hosting.layer?.cornerCurve = .continuous
+        hosting.layer?.cornerCurve = CALayerCornerCurve.continuous
         hosting.layer?.masksToBounds = true
         glassHost.setHostingView(hosting)
 
@@ -232,6 +345,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     private func configureStatusItem() {
         guard let button = statusItem.button else { return }
+
+        if #available(macOS 27.0, *) {
+            // macOS 27 起由 AppKit 的 expanded-interface session 驱动左键、
+            // 键盘导航和系统结束回调;旧系统继续走本地兼容事件路径。
+            statusItem.expandedInterfaceDelegate = self
+        }
 
         // 关键:图标走标准的 `button.image` 路径(而非往 button 塞 NSHostingView 子视图)。
         // 只有标准状态项图会被菜单栏系统跨屏复制并在「非活跃屏幕」自动变淡,与原生 app
@@ -298,39 +417,62 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func installEventMonitors() {
-        // 左键单击即时切换面板;右键弹出上下文菜单(含设置与退出)。
-        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+        let usesSystemExpandedInterface: Bool
+        if #available(macOS 27.0, *) {
+            usesSystemExpandedInterface = true
+        } else {
+            usesSystemExpandedInterface = false
+        }
+
+        // macOS 27 的左键必须交给状态栏系统,否则 expanded-interface session
+        // 无法参与键盘导航和系统菜单跟踪;旧系统保留左键兼容路径。右键始终
+        // 留给应用的上下文菜单,Cmd 手势始终交回系统处理。
+        let localEventMask: NSEvent.EventTypeMask = usesSystemExpandedInterface
+            ? [.rightMouseDown]
+            : [.leftMouseDown, .rightMouseDown]
+        let local = NSEvent.addLocalMonitorForEvents(matching: localEventMask) { [weak self] event in
             guard let self,
                   let button = self.statusItem.button,
                   event.window == button.window else {
                 return event
             }
 
-            // 按住 Cmd 点击状态项是系统的图标拖动/重排手势。必须把事件交还系统,
-            // 否则菜单栏管理器拿不到它、无法进入拖动模式(macOS 15 上事件链靠前,
-            // 此处不放行会导致 Cmd+拖动完全失效;26/27 上系统更早消费,才没暴露)。
-            if event.modifierFlags.contains(.command) {
-                return event
-            }
-
+            let input: FluidPanelStatusItemInput?
             switch event.type {
             case .leftMouseDown:
-                self.handleStatusItemLeftClick(event)
+                input = .leftMouseDown
             case .rightMouseDown:
-                self.dismissPanel()
-                self.showStatusItemContextMenu(for: button, event: event)
+                input = .rightMouseDown
             default:
-                break
+                input = nil
             }
-            return nil
+            guard let input else { return event }
+
+            let route = FluidPanelStatusItemRoute.route(
+                for: input,
+                commandDown: event.modifierFlags.contains(.command),
+                usesSystemExpandedInterface: usesSystemExpandedInterface
+            )
+            switch route {
+            case .legacyToggle:
+                self.handleStatusItemLeftClick(event)
+                return nil
+            case .contextMenu:
+                self.dismissPanel(source: .userAction)
+                self.showStatusItemContextMenu(for: button, event: event)
+                return nil
+            case .systemExpandedInterface, .commandDrag:
+                return event
+            }
         }
 
         // 面板打开时点击外部区域:关闭面板。
-        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+        let global = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
             guard let self, self.panel.isVisible || self.awaitingGeometry else { return }
             guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] == nil else { return }
-            self.dismissPanel()
+            self.dismissPanel(source: .userAction)
         }
+        cleanupBox.setMonitors(local: local, global: global)
     }
 
     // MARK: - Show / Hide
@@ -392,6 +534,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 用户点开面板即视为看过菜单栏那处告警:只清这一处红点,
         // 面板统计入口与统计页的红点各有各的清除时机。
         PressureAlertCenter.shared.markRead(.menuBar)
+        // 先作废在途淡出并清除关闭锁。几何实验路径可能在首帧返回
+        // awaitingGeometry,也必须允许随后由系统 didEnd 正常收敛。
+        dismissGeneration += 1
+        dismissalInProgress = false
         // 恢复隐藏期间卸下的 contentView(见 reclaimHiddenPanelResources)。
         // 必须在布局/定位之前恢复,后续 layoutSubtreeIfNeeded 才能测到内容尺寸。
         if let savedContentView, panel.contentView == nil {
@@ -427,12 +573,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         setPanelFrame(size: size)
 
         store.panelDidAppear()
-        statusItem.button?.highlight(true)
-        // 作废在途的淡出回调(快速点击时淡出尚未完成),避免它随后把面板藏掉。
-        dismissGeneration += 1
+        if #unavailable(macOS 27.0) {
+            statusItem.button?.highlight(true)
+            // 旧系统在全屏模式下仍需要兼容通知;macOS 27 由官方 session 管理。
+            DistributedNotificationCenter.default().post(name: .beginMenuTracking, object: nil)
+        }
 
-        // 通知系统在全屏模式下保持菜单栏可见。
-        DistributedNotificationCenter.default().post(name: .beginMenuTracking, object: nil)
         // 淡入呼出:与 dismissPanel 的淡出对称,避免面板硬切出现的生硬感。
         // alpha 从 0 开始,先调零再上屏,避免闪现一帧全不透明。
         panel.alphaValue = 0
@@ -444,42 +590,86 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func dismissPanel() {
-        if awaitingGeometry {
+    private var dismissalInProgress = false
+
+    private func cancelExpandedInterfaceSessionIfNeeded() {
+        if #available(macOS 27.0, *) {
+            statusItem.expandedInterfaceSession?.cancel()
+        }
+    }
+
+    private func dismissPanel(
+        source: FluidPanelDismissalSource = .userAction,
+        animated: Bool = true
+    ) {
+        let decision = FluidPanelDismissalDecision.make(
+            panelIsVisible: panel.isVisible,
+            awaitingGeometry: awaitingGeometry,
+            dismissalInProgress: dismissalInProgress,
+            source: source
+        )
+        guard decision.shouldBegin else { return }
+
+        if decision.closesAwaitingGeometry {
             awaitingGeometry = false
             panelMotion?.suspend()
             panelRefreshGate.close()
+            if decision.shouldCancelExpandedInterfaceSession {
+                cancelExpandedInterfaceSessionIfNeeded()
+            }
             return
         }
-        guard panel.isVisible else { return }
+
+        // 先锁住关闭状态再 cancel:AppKit 可能同步发出 didEnd 回调,回调只需
+        // 观察到幂等状态并返回,避免递归 cancel/重复动画。
+        dismissalInProgress = true
+        if decision.shouldCancelExpandedInterfaceSession {
+            cancelExpandedInterfaceSessionIfNeeded()
+        }
         panelMotion?.suspend()
 
         // 工具浮层是面板的子窗口,面板隐藏前先显式收起,避免残留。
         QuickToolsStore.shared.popoverPresenter.dismiss()
 
-        DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
+        if #unavailable(macOS 27.0) {
+            DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
+        }
 
         // 代际令牌:淡出期间(0.18s)若被重开(showPanel 递增令牌),
         // 过期的 completionHandler 不再执行 orderOut/卸载,避免把刚呼出的面板藏掉。
         dismissGeneration += 1
         let generation = dismissGeneration
 
+        if !animated {
+            completePanelDismissal(generation: generation)
+            return
+        }
+
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.18
             context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
             panel.animator().alphaValue = 0
         } completionHandler: { [weak self] in
-            guard let self, generation == self.dismissGeneration else { return }
-            self.panel.orderOut(nil)
-            self.panelMotion?.resetForHiddenPanel?()
-            self.panel.alphaValue = 1
-            self.statusItem.button?.highlight(false)
-            self.store.panelDidDisappear()
-            // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
-            // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
-            self.panelRefreshGate.close()
-            self.reclaimHiddenPanelResources()
+            MainActor.assumeIsolated {
+                self?.completePanelDismissal(generation: generation)
+            }
         }
+    }
+
+    private func completePanelDismissal(generation: Int) {
+        guard generation == dismissGeneration else { return }
+        panel.orderOut(nil)
+        panelMotion?.resetForHiddenPanel?()
+        panel.alphaValue = 1
+        if #unavailable(macOS 27.0) {
+            statusItem.button?.highlight(false)
+        }
+        store.panelDidDisappear()
+        dismissalInProgress = false
+        // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
+        // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
+        panelRefreshGate.close()
+        reclaimHiddenPanelResources()
     }
 
     /// dismissPanel 代际令牌,showPanel 时递增使在途淡出回调失效。
@@ -774,15 +964,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 打开设置窗口前关闭面板(供 AppDelegate 的 openSettings 闭包调用)。
     /// 不直接调用 openSettingsAction,因为关闭面板和打开设置需要由外部协调。
     func dismissPanelForSettings() {
-        guard panel.isVisible else { return }
-        QuickToolsStore.shared.popoverPresenter.dismiss()
-        DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
-        panel.orderOut(nil)
-        panel.alphaValue = 1
-        statusItem.button?.highlight(false)
-        store.panelDidDisappear()
-        panelRefreshGate.close()
-        reclaimHiddenPanelResources()
+        guard panel.isVisible || awaitingGeometry else { return }
+        // 设置窗口需要立即接管焦点;沿用统一关闭状态机并跳过淡出。
+        // macOS 27 由 session.cancel() 结束官方 expanded-interface 会话,
+        // 旧系统的私有通知只在 dismissPanel 的 legacy availability 分支发送。
+        dismissPanel(source: .userAction, animated: false)
     }
 
     // MARK: - NSWindowDelegate
@@ -884,13 +1070,13 @@ extension EnvironmentValues {
 /// 因此用自定义环境键传递闭包,在 MonitorPanelView 中读取并调用。
 enum OpenSettingsActionKey: EnvironmentKey {
     struct Action: Sendable {
-        let action: @Sendable () -> Void
+        let action: @MainActor () -> Void
 
-        init(_ action: @escaping @Sendable () -> Void) {
+        init(_ action: @escaping @MainActor () -> Void) {
             self.action = action
         }
 
-        func callAsFunction() {
+        @MainActor func callAsFunction() {
             action()
         }
     }
@@ -910,6 +1096,19 @@ extension EnvironmentValues {
 private extension Notification.Name {
     static let beginMenuTracking = Notification.Name("com.apple.HIToolbox.beginMenuTrackingNotification")
     static let endMenuTracking = Notification.Name("com.apple.HIToolbox.endMenuTrackingNotification")
+}
+
+@available(macOS 27.0, *)
+extension FluidPanelController: NSStatusItemExpandedInterfaceDelegate {
+    func statusItem(_ statusItem: NSStatusItem, didBegin expandedInterfaceSession: NSStatusItemExpandedInterfaceSession) {
+        showPanel()
+    }
+
+    func statusItemDidEndExpandedInterfaceSession(_ statusItem: NSStatusItem, animated: Bool) {
+        // 系统已经清空 expandedInterfaceSession,这里不能再次 cancel;
+        // dismissPanel 的幂等状态同时覆盖主动 cancel 触发的重入回调。
+        dismissPanel(source: .systemEnd, animated: animated)
+    }
 }
 
 extension FluidPanelController: PanelWindowSubmissionAdapter {

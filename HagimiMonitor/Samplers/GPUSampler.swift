@@ -3,7 +3,7 @@ import Foundation
 import IOKit
 import OSLog
 
-final class GPUSampler: MonitorSampler {
+nonisolated final class GPUSampler: MonitorSampler, Sendable {
     var kind: MonitorKind { .gpu }
 
     func sample(previous: MonitorModule?) -> MonitorModule {

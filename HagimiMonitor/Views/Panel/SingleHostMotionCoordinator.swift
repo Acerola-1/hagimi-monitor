@@ -118,13 +118,41 @@ extension PanelWindowSubmissionAdapter {
     func completePresentationLayout() {}
 }
 
+/// 自动管理 CADisplayLink 生命周期的包装器。
+/// 安全不变式：在 deinit 时确保底层 CADisplayLink 在主线程安全完成 invalidate，避免内存泄漏。
+nonisolated private final class DisplayLinkBox: @unchecked Sendable {
+    private var link: CADisplayLink?
+
+    init(_ link: CADisplayLink) {
+        self.link = link
+    }
+
+    func invalidate() {
+        link?.invalidate()
+        link = nil
+    }
+
+    deinit {
+        let l = link
+        if let l {
+            if Thread.isMainThread {
+                l.invalidate()
+            } else {
+                DispatchQueue.main.async {
+                    l.invalidate()
+                }
+            }
+        }
+    }
+}
+
 /// 活动期的显示帧时钟共享一个几何样本。实际屏幕呈现由原生回归验证。
 @MainActor
 final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     @Published private(set) var currentFrame: PanelFrame?
     private(set) var tracks: [String: SectionMotionTrack] = [:]
     private let spring = DampedSpring()
-    private var displayLink: CADisplayLink?
+    private var displayLinkBox: DisplayLinkBox?
     private var displayScreen: NSScreen?
     @Published private(set) var isSuspended = false
     let hiddenPanelReset = PassthroughSubject<Void, Never>()
@@ -143,15 +171,13 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     var resetForHiddenPanel: (() -> Void)?
     var registry: PanelDimensionRegistry
     weak var submissionAdapter: PanelWindowSubmissionAdapter?
-    var isAnimating: Bool { displayLink != nil }
+    var isAnimating: Bool { displayLinkBox != nil }
 
     init(registry: PanelDimensionRegistry, adapter: PanelWindowSubmissionAdapter? = nil) {
         self.registry = registry
         submissionAdapter = adapter
         super.init()
     }
-
-    deinit { displayLink?.invalidate() }
 
     func presentation(for id: String) -> PanelDetailPresentation {
         if let value = presentations[id] { return value }
@@ -393,20 +419,20 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     }
 
     private func ensureDisplayLink() {
-        guard !isSuspended, displayLink == nil,
+        guard !isSuspended, displayLinkBox == nil,
               scrollTrack != nil || tracks.values.contains(where: { !$0.isSettled }) else { return }
         guard let screen = submissionAdapter?.currentScreen() ?? NSScreen.main else {
             return
         }
         let link = screen.displayLink(target: self, selector: #selector(handleDisplayFrame(_:)))
         link.add(to: .main, forMode: .common)
-        displayLink = link
+        displayLinkBox = DisplayLinkBox(link)
         displayScreen = screen
     }
 
     private func stopDisplayLink() {
-        displayLink?.invalidate()
-        displayLink = nil
+        displayLinkBox?.invalidate()
+        displayLinkBox = nil
         displayScreen = nil
     }
 

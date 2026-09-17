@@ -54,12 +54,16 @@ final class DisplayControlController: ObservableObject {
 
     init() {
         changeObserver.start { [weak self] in
-            self?.refreshAsync()
+            MainActor.assumeIsolated {
+                self?.refreshAsync()
+            }
         }
         // 默认音频输出设备变化(切 AirPods/内建扬声器/外接屏喇叭等)时,
         // 重新评估音量键接管策略。轻量刷新,不做全量 DDC 重扫。
         audioOutputObserver.start { [weak self] in
-            self?.mediaKeyController.refresh()
+            MainActor.assumeIsolated {
+                self?.mediaKeyController.refresh()
+            }
         }
     }
 
@@ -318,7 +322,8 @@ final class DisplayControlController: ObservableObject {
     }
 }
 
-private final class DisplayControlWorker {
+/// 内部状态完全由串行队列 queue 独占保护，对外提供异步线程安全接口。
+private nonisolated final class DisplayControlWorker: @unchecked Sendable {
     static let shared = DisplayControlWorker()
 
     private let queue = DispatchQueue(label: "hagimi.ddc.global", qos: .userInitiated)
@@ -326,7 +331,7 @@ private final class DisplayControlWorker {
     private var debounceTimers: [ControlKey: DispatchWorkItem] = [:]
     private let debounceInterval: DispatchTimeInterval = .milliseconds(150)
 
-    func refresh(service: DisplayControlService, completion: @escaping ([ControlledDisplay]) -> Void) {
+    func refresh(service: DisplayControlService, completion: @escaping @Sendable ([ControlledDisplay]) -> Void) {
         queue.async {
             completion(service.displays())
         }
@@ -337,7 +342,7 @@ private final class DisplayControlWorker {
         for key: ControlKey,
         display: ControlledDisplay,
         service: DisplayControlService,
-        completion: @escaping (DisplayWriteResult) -> Void
+        completion: @escaping @Sendable (DisplayWriteResult) -> Void
     ) {
         queue.async {
             self.pendingWrites[key] = value
@@ -363,6 +368,7 @@ private final class DisplayControlWorker {
                 self.pendingWrites.removeValue(forKey: key)
             }
             // 只取消该显示器的 debounce timer,避免误伤其它正在拖动的显示器。
+            // 先固定 key 快照,避免在遍历 Dictionary 时修改它。
             let keysToCancel = self.debounceTimers.keys.filter { $0.displayID == displayID }
             for key in keysToCancel {
                 self.debounceTimers[key]?.cancel()
@@ -372,7 +378,7 @@ private final class DisplayControlWorker {
     }
 }
 
-private nonisolated struct DisplayWriteResult {
+private nonisolated struct DisplayWriteResult: Sendable {
     let key: ControlKey
     let value: Double
     let outcome: DisplayWriteOutcome
@@ -384,7 +390,7 @@ private nonisolated struct DisplayWriteResult {
 ///   但**不**写入去重缓存/持久化,待窗口结束后的下一次写入真正落地。
 /// - busError:重试后报文仍无法上总线(极少数窗口外 hang / 无服务 / 明确不支持)。
 ///   瞬时总线错误**绝不**冒泡给用户、绝不翻转能力,只做日志。
-nonisolated enum DisplayWriteOutcome {
+nonisolated enum DisplayWriteOutcome: Sendable {
     case written
     case skipped
     case busError
@@ -394,7 +400,7 @@ nonisolated enum DisplayWriteOutcome {
     var didWrite: Bool { self == .written }
 }
 
-struct ControlledDisplay: Identifiable {
+nonisolated struct ControlledDisplay: Identifiable, Sendable {
     let id: CGDirectDisplayID
     /// 检测阶段一次性算出的显示器类型,缓存于模型中。避免每次写入都重新
     /// classify(会触发 CoreDisplay 字典创建 + 原生亮度探测)造成拖动时的重复开销。
@@ -479,11 +485,14 @@ struct ControlledDisplay: Identifiable {
     }
 }
 
-private final class DisplayControlService {    private let displayServices = DisplayServicesBridge()
+/// 内部通过 NSLock 保护 engineTokens 字典，底层 DDC 与 DisplayServices 桥均具备并发安全保障。
+private nonisolated final class DisplayControlService: @unchecked Sendable {
+    private let displayServices = DisplayServicesBridge()
     private let ddc = DisplayDDCBridge()
     private let classifier = DisplayClassifier()
     private let defaults = UserDefaults.standard
     private let persistence = DisplayPersistence.shared
+    private let lock = NSLock()
     private var engineTokens: [String: UUID] = [:]
 
     func makeEngineTransport() -> DDCTransport {
@@ -505,8 +514,14 @@ private final class DisplayControlService {    private let displayServices = Dis
                 isBuiltIn: display.isBuiltIn
             )
             let key = "(display.id).(handle.identity).(handle.chipAddress)"
-            let token = engineTokens[key] ?? UUID()
-            engineTokens[key] = token
+            let token = lock.withLock {
+                if let existing = engineTokens[key] {
+                    return existing
+                }
+                let new = UUID()
+                engineTokens[key] = new
+                return new
+            }
             return DisplayConnection(
                 token: token,
                 displayID: display.id,
@@ -702,7 +717,7 @@ private final class DisplayControlService {    private let displayServices = Dis
     }
 }
 
-private final class DisplayServicesBridge {
+private nonisolated final class DisplayServicesBridge: Sendable {
     func getBrightness(displayID: CGDirectDisplayID) -> Float? {
         var value: Float = -1
         let result = DisplayServicesGetBrightness(displayID, &value)

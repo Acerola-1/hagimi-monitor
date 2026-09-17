@@ -213,8 +213,8 @@ struct DisplayControlEngineTests {
         let engine = DisplayControlEngine(clock: clock, transport: transport)
         let token = UUID()
         engine.replaceConnections([makeConnection(token: token)])
-        var gateSuppressed = true
-        engine.setGateProvider { gateSuppressed }
+        let gateSuppressed = TestBox(true)
+        engine.setGateProvider { gateSuppressed.value }
         await settle(engine)
 
         // 抑制窗口内设 30、再设 60。
@@ -230,7 +230,7 @@ struct DisplayControlEngineTests {
         #expect(transport.writeCount() == 0, "抑制窗口内不得触达底层")
 
         // 门禁解除:恢复后只重放最新目标 60。
-        gateSuppressed = false
+        gateSuppressed.value = false
         engine.handleGateRecovery()
         clock.advance(by: 0.2)
         await settle(engine)
@@ -245,11 +245,11 @@ struct DisplayControlEngineTests {
         let engine = DisplayControlEngine(clock: clock, transport: transport)
         let token = UUID()
         engine.replaceConnections([makeConnection(token: token)])
-        var gateSuppressed = false
-        engine.setGateProvider { gateSuppressed }
+        let gateSuppressed = TestBox(false)
+        engine.setGateProvider { gateSuppressed.value }
         await settle(engine)
 
-        gateSuppressed = true
+        gateSuppressed.value = true
         await settle(engine)
         engine.enqueueWrite(token: token, control: .brightness, value: 40, final: true)
         await settle(engine)
@@ -257,7 +257,7 @@ struct DisplayControlEngineTests {
         await settle(engine)
         #expect(transport.writeCount() == 0)
 
-        gateSuppressed = false
+        gateSuppressed.value = false
         await settle(engine)
         engine.handleGateRecovery()
         await settle(engine)
@@ -276,15 +276,15 @@ struct DisplayControlEngineTests {
             reconfigureSettle: 0.1,
             reconfigureSafety: 0.2
         )
-        var recovered = false
-        let token = gate.addRecoveryHandler { recovered = true }
+        let recovered = TestBox(false)
+        let token = gate.addRecoveryHandler { recovered.value = true }
 
         gate.reconfigureStarted()
         #expect(gate.isSuppressed)
         // 只推进到 safety 到期(无完成回调),应自动解除并触发恢复。
         virtualClock.advance(by: 0.3)
         #expect(!gate.isSuppressed, "begin-only safety 到期必须自动解除")
-        #expect(recovered, "解除必须发出恢复事件(重放依赖)")
+        #expect(recovered.value, "解除必须发出恢复事件(重放依赖)")
         gate.removeRecoveryHandler(token)
     }
 

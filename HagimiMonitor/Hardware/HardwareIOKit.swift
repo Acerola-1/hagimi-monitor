@@ -8,7 +8,7 @@ import IOKit
 /// 机型标识/序列号/硬件 UUID/地区/制造商在 `IOPlatformExpertDevice`。
 ///
 /// 全部只读,不做任何写入。读不到一律返 nil。
-enum HardwareIOKit {
+nonisolated enum HardwareIOKit {
     /// `IODeviceTree:/product` 下的一项(键名见 Apple 设备树约定)。
     static func productProperty(_ key: String) -> Any? {
         registryProperty(path: "IODeviceTree:/product", key: key)

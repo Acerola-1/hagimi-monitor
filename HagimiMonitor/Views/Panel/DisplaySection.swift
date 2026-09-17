@@ -4,9 +4,29 @@ import CoreGraphics
 import IOKit
 import SwiftUI
 
+/// 串行承载显示器重采集的后台执行器。它不继承 MainActor,请求任务取消后
+/// 会在开始探针前丢弃过期请求,避免屏幕参数通知叠加无界 detached 工作。
+private actor DisplayCollectionExecutor {
+    static let shared = DisplayCollectionExecutor()
+
+    func collect(_ screenSnapshots: [DisplayScreenSnapshot]) -> [DisplayInfo] {
+        guard !Task.isCancelled else { return [] }
+        return DisplaySection.collectDisplays(screenSnapshots: screenSnapshots)
+    }
+}
+
+/// MainActor 读取的最小显示器系统快照。只保留 AppKit 提供的名称与 EDR 状态,
+/// 后续 CG/IOKit/EDID 探针均使用这个值类型,不把 NSScreen 跨线程传递。
+nonisolated struct DisplayScreenSnapshot: Sendable, Equatable {
+    let id: CGDirectDisplayID
+    let name: String
+    let hdrSupported: Bool?
+    let hdrActive: Bool?
+}
+
 /// 单台显示器的信息快照(B4)。
 /// 基础四项与档案数据全部来自公开 API + IORegistry 只读属性,双渠道一致。
-struct DisplayInfo: Identifiable, Equatable {
+struct DisplayInfo: Identifiable, Equatable, Sendable {
     let id: CGDirectDisplayID
     let name: String
     let isBuiltIn: Bool
@@ -87,6 +107,9 @@ struct DisplaySection: View {
     #else
     @State private var displays: [DisplayInfo] = []
     #endif
+    /// 低频显示器信息重采请求。任务本身由 SwiftUI 负责随 id 变化取消,
+    /// NSScreen 快照在主 actor 取得,其余 CoreGraphics/IOKit/EDID 工作在 utility 后台执行。
+    @State private var displayCollectionRequest = 0
 
     var body: some View {
         #if DISPLAY_CONTROL
@@ -102,12 +125,18 @@ struct DisplaySection: View {
                 controller.refreshAsync()
                 controller.setPolling(active: isExpanded)
             }
+            .task(id: displayCollectionRequest) {
+                await collectDisplayInfo()
+            }
         #else
         infoContent
             .onReceive(expansion.motion.hiddenPanelReset) {
                 guard PanelMotionExperiment.enabled else { return }
                 isExpanded = false
                 animate(Self.sectionKey, false, false)
+            }
+            .task(id: displayCollectionRequest) {
+                await collectDisplayInfo()
             }
         #endif
     }
@@ -144,7 +173,7 @@ struct DisplaySection: View {
             .onTapGesture {
                 guard !displays.isEmpty else { return }
                 if !isExpanded {
-                    displays = Self.collectDisplays()
+                    requestDisplayCollection()
                 }
                 withPanelExpansionState {
                     isExpanded.toggle()
@@ -184,13 +213,10 @@ struct DisplaySection: View {
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.palette.displayGlassFill
         }
-        .onAppear {
-            displays = Self.collectDisplays()
-        }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
             // 仅展开期间跟随插拔/分辨率变化;收起时不刷新,零额外开销。
             if isExpanded {
-                displays = Self.collectDisplays()
+                requestDisplayCollection()
             }
         }
     }
@@ -317,7 +343,7 @@ struct DisplaySection: View {
                 // 面板重开即重采只读信息:摘要行的 HDR 是状态量,关闭期间
                 // 系统设置里的开关变化在此补齐(缓存只对滑杆拖动等高频
                 // body 重算免疫,低频的用户动作时刻重采不违背其设计)。
-                resampleDisplayInfo()
+                requestDisplayCollection()
             } else {
                 // 面板隐藏后重置为「默认展开」设置:不可见期间无补间直接同步,
                 // 下次呼出即已是设定的初始状态,与 MonitorPanelView 的重置时机一致。
@@ -344,12 +370,12 @@ struct DisplaySection: View {
         .onChange(of: controller.displays.map(\.id)) { _, _ in
             // 显示器集合变化(插拔/首次探测完成)才重采只读信息。轮询回读或拖滑杆
             // 只改亮度值、id 集合不变,不会触发本重算。
-            resampleDisplayInfo()
+            requestDisplayCollection()
         }
         // 屏幕参数变化(HDR 开关/分辨率调整/插拔):摘要行的 HDR 是状态量,
         // 通知本身低频,不挂 5s 轮询,避免把 IORegistry 枚举开销加回常态。
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
-            resampleDisplayInfo()
+            requestDisplayCollection()
         }
         // 调试自动测试:延迟待面板自动呼出后,自动跑「展开分节 → 展开档案 →
         // 收起档案」三轮序列,供日志观察嵌套展开/收起期间的窗口贴合行为。
@@ -430,21 +456,53 @@ struct DisplaySection: View {
         return unitCount.isEmpty ? "\(displays.count)" : "\(displays.count) \(unitCount)"
     }
 
-    /// 重采只读信息缓存(按显示器 id 归并)。触发源均为低频用户动作:
+    #endif
+
+    /// 请求重采只读信息缓存(按显示器 id 归并)。触发源均为低频用户动作:
     /// 插拔/首次探测(id 集合变化)、面板重开、屏幕参数重配置;
     /// 滑杆拖动与轮询回读不触发,高频路径不触碰 IORegistry 枚举。
-    private func resampleDisplayInfo() {
+    private func requestDisplayCollection() {
+        displayCollectionRequest &+= 1
+    }
+
+    /// 先在 MainActor 复制 NSScreen 的轻量值,再让高成本显示器探针离开主线程。
+    /// SwiftUI 的 `.task(id:)` 会在新的低频请求到来时取消旧采集,避免过期结果覆盖新状态。
+    private func collectDisplayInfo() async {
+        let screenSnapshots = Self.captureScreenSnapshots()
+        let values = await DisplayCollectionExecutor.shared.collect(screenSnapshots)
+        guard !Task.isCancelled else { return }
+        #if DISPLAY_CONTROL
         displayInfoByID = Dictionary(
-            Self.collectDisplays().map { ($0.id, $0) },
+            values.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+        #else
+        displays = values
+        #endif
     }
-    #endif
 
     // MARK: 采集(两渠道共用)
 
-    /// 采集当前显示器信息快照,供信息行与直连渠道的控制组卡共用。
-    static func collectDisplays() -> [DisplayInfo] {
+    /// 在 MainActor 上快速复制 AppKit 显示器信息。NSScreen 不能跨线程传递,
+    /// 因此只把可发送的值带入后台探针。
+    static func captureScreenSnapshots() -> [DisplayScreenSnapshot] {
+        NSScreen.screens.compactMap { screen in
+            guard let number = (screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value else {
+                return nil
+            }
+            return DisplayScreenSnapshot(
+                id: number,
+                name: screen.localizedName,
+                hdrSupported: screen.maximumPotentialExtendedDynamicRangeColorComponentValue > 1.01,
+                hdrActive: screen.maximumExtendedDynamicRangeColorComponentValue > 1.01
+            )
+        }
+    }
+
+    /// 根据不可变屏幕快照采集显示器完整信息。此方法不触碰 AppKit,
+    /// 可从报表/硬件后台任务直接调用;CGDisplay、IORegistry、EDID 与模式枚举
+    /// 保持在后台,避免后台任务为整段采集同步等待 MainActor。
+    nonisolated static func collectDisplays(screenSnapshots: [DisplayScreenSnapshot]) -> [DisplayInfo] {
         var count: UInt32 = 0
         guard CGGetActiveDisplayList(0, nil, &count) == .success, count > 0 else {
             return []
@@ -454,15 +512,12 @@ struct DisplaySection: View {
             return []
         }
 
-        let screens = NSScreen.screens
         // 链路能力探针与面板档案探针整个采集各只读一次,再与各显示器对配。
         let linkHints = DisplayLinkCapabilities.hints()
         let archives = DisplayAttributesProbe.attributes()
         return ids.map { id in
             // 镜像显示器共享同一 NSScreen 条目,按屏幕号匹配取名称与 EDR 状态。
-            let screen = screens.first {
-                ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? NSNumber)?.uint32Value == id
-            }
+            let screen = screenSnapshots.first { $0.id == id }
             let builtIn = CGDisplayIsBuiltin(id) != 0
             let mode = CGDisplayCopyDisplayMode(id)
 
@@ -473,17 +528,13 @@ struct DisplaySection: View {
 
             // HDR 支持判定:NSScreen 的 maximumPotential EDR 分量 > 1 表示具备
             // EDR/HDR 硬件能力(与当前是否处于 HDR 增益态无关)。
-            let hdrSupported = screen.map {
-                $0.maximumPotentialExtendedDynamicRangeColorComponentValue > 1.01
-            }
+            let hdrSupported = screen?.hdrSupported
             // HDR 开启态判定:实际 EDR 增益 > 1,系统仅在 HDR 启用时抬高 headroom。
-            let hdrActive = screen.map {
-                $0.maximumExtendedDynamicRangeColorComponentValue > 1.01
-            }
+            let hdrActive = screen?.hdrActive
 
             let archive = Self.matchAttributes(
                 archives,
-                displayName: screen?.localizedName,
+                displayName: screen?.name,
                 width: mode?.pixelWidth ?? 0,
                 height: mode?.pixelHeight ?? 0
             )
@@ -532,7 +583,7 @@ struct DisplaySection: View {
 
             return DisplayInfo(
                 id: id,
-                name: screen?.localizedName ?? "Display \(id)",
+                name: screen?.name ?? "Display \(id)",
                 isBuiltIn: builtIn,
                 resolution: resolution,
                 refreshRate: refreshRate,
@@ -540,7 +591,7 @@ struct DisplaySection: View {
                 hdrActive: hdrActive,
                 colorDepth: Self.linkColorDepth(
                     hints: linkHints,
-                    displayName: screen?.localizedName,
+                    displayName: screen?.name,
                     width: mode?.pixelWidth ?? 0,
                     height: mode?.pixelHeight ?? 0
                 ),
@@ -564,7 +615,7 @@ struct DisplaySection: View {
     /// 链路位深对配:驱动节点给出的 hints(带 ProductName/MaxW/MaxH)与
     /// CG 侧显示器没有公共主键,按「原生分辨率精确匹配」为主、「产品名包含」
     /// 为辅对配;都配不上时,唯一 hints + 唯一外接屏也视为命中(单屏场景)。
-    private static func linkColorDepth(
+    nonisolated private static func linkColorDepth(
         hints: [DisplayLinkCapabilities.Hint],
         displayName: String?,
         width: Int,
@@ -582,7 +633,7 @@ struct DisplaySection: View {
     /// 面板档案对配:与位深探针同一策略——原生分辨率精确匹配为主,
     /// 产品名包含为辅。档案缺原生分辨率字段时由探针以节点级
     /// DisplayWidth/Height 补齐,保证内建屏也能命中。
-    private static func matchAttributes(
+    nonisolated private static func matchAttributes(
         _ archives: [DisplayAttributesProbe.Attributes],
         displayName: String?,
         width: Int,
@@ -598,7 +649,7 @@ struct DisplaySection: View {
     /// 厂商代码归一:EDID 三字母 PNP 码映射为品牌名(如 DEL → Dell);
     /// Apple 内建屏的厂商码为数字串("00-10-fa"),单独映射;未收录的
     /// 码优先取产品名首词(如 "DELL S2725QC" → "DELL"),兜底保留原码。
-    private static let manufacturerNames: [String: String] = [
+    nonisolated private static let manufacturerNames: [String: String] = [
         "DEL": "Dell", "APP": "Apple", "SAM": "Samsung", "GSM": "LG",
         "ACR": "Acer", "LEN": "Lenovo", "PHL": "Philips", "BNQ": "BenQ",
         "ASU": "ASUS", "VSC": "ViewSonic", "HWP": "HP", "SNY": "Sony",
@@ -606,7 +657,7 @@ struct DisplaySection: View {
         "CMN": "Innolux", "AUO": "AUO", "SHP": "Sharp", "BOE": "BOE"
     ]
 
-    private static func manufacturerName(from archive: DisplayAttributesProbe.Attributes?) -> String? {
+    nonisolated private static func manufacturerName(from archive: DisplayAttributesProbe.Attributes?) -> String? {
         guard let archive else { return nil }
         if archive.isAppleManufacturer {
             return "Apple"
@@ -1057,12 +1108,12 @@ enum DisplayLinkCapabilities {
         let maxH: Int
     }
 
-    private static let serviceClasses = [
+    nonisolated private static let serviceClasses = [
         "AppleATCDPAltModePort",      // USB-C DP AltMode 口
         "AppleDCPDPTXRemotePortUFP",  // DCP DP 发送器远端口
     ]
 
-    static func hints() -> [Hint] {
+    nonisolated static func hints() -> [Hint] {
         var result: [Hint] = []
         for className in serviceClasses {
             var iterator: io_iterator_t = 0
@@ -1114,7 +1165,7 @@ enum DisplayAttributesProbe {
         let defaultColorSpaceIsSRGB: Bool?
     }
 
-    static func attributes() -> [Attributes] {
+    nonisolated static func attributes() -> [Attributes] {
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(
             kIOMainPortDefault,
@@ -1172,7 +1223,7 @@ enum DisplayAttributesProbe {
         return result
     }
 
-    private static func intProperty(_ service: io_service_t, _ key: String) -> Int {
+    nonisolated private static func intProperty(_ service: io_service_t, _ key: String) -> Int {
         IORegistryEntryCreateCFProperty(service, key as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? Int ?? 0
     }

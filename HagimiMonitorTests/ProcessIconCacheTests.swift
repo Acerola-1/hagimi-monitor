@@ -70,4 +70,54 @@ struct MonitorStoreProcessGatingTests {
             MonitorStore.activeProcessKinds(expanded: [.storage], enabled: []).isEmpty
         )
     }
+
+    @MainActor
+    @Test("Panel hide/show toggles isPanelVisible and clears top processes on disappear")
+    func panelDisappearClearsTopProcesses() {
+        let store = MonitorStore()
+        #expect(!store.isPanelVisible)
+        #expect(store.topMemoryProcesses.isEmpty)
+        #expect(store.topCPUProcesses.isEmpty)
+
+        store.topCPUProcesses = [TopCPUProcess(pid: 123, name: "TestApp", cpuUsage: 50.0, icon: nil, translated: false)]
+        #expect(!store.topCPUProcesses.isEmpty)
+
+        store.panelDidAppear(.menuBar)
+        #expect(store.isPanelVisible)
+
+        store.panelDidAppear(.pinned)
+        #expect(store.isPanelVisible)
+
+        store.panelDidDisappear(.menuBar)
+        #expect(store.isPanelVisible)
+        #expect(!store.topCPUProcesses.isEmpty)
+
+        store.panelDidDisappear(.pinned)
+        #expect(!store.isPanelVisible)
+        #expect(store.topCPUProcesses.isEmpty)
+        #expect(store.topMemoryProcesses.isEmpty)
+        #expect(store.topGPUProcesses.isEmpty)
+        #expect(store.topDiskProcesses.isEmpty)
+        #expect(store.topNetworkProcesses.isEmpty)
+    }
+
+    @Test("A sample from a previous panel session cannot publish after reopen")
+    func stalePanelSessionCannotPublish() {
+        #expect(MonitorStore.shouldPublishProcessSample(
+            startedAt: 7,
+            current: 7,
+            hasVisiblePanel: true
+        ))
+        #expect(!MonitorStore.shouldPublishProcessSample(
+            startedAt: 7,
+            current: 8,
+            hasVisiblePanel: true
+        ))
+        #expect(!MonitorStore.shouldPublishProcessSample(
+            startedAt: 7,
+            current: 7,
+            hasVisiblePanel: false
+        ))
+    }
+
 }

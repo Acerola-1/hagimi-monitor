@@ -90,31 +90,39 @@ struct SettingsTests {
         #expect(settings.ringSource == .combined)
     }
 
-    @Test func menuBarMetricSelectionLimit() {
-        let defaults = UserDefaults(suiteName: "menuBarMetricSelectionLimit")!
-        defaults.removePersistentDomain(forName: "menuBarMetricSelectionLimit")
+    @Test func menuBarMetricSelectionHasNoMaximum() {
+        let defaults = UserDefaults(suiteName: "menuBarMetricSelectionHasNoMaximum")!
+        defaults.removePersistentDomain(forName: "menuBarMetricSelectionHasNoMaximum")
         let settings = MonitorSettings(defaults: defaults)
 
-        // 默认选择已占满上限(4 项),后续 set 全部被拒绝。
-        settings.setMenuBarMetric(.memoryUsage, selected: true)
-        settings.setMenuBarMetric(.batteryLevel, selected: true)
-        settings.setMenuBarMetric(.networkDownload, selected: true)
+        for kind in MenuBarMetricKind.allCases {
+            settings.setMenuBarMetric(kind, selected: true)
+        }
 
-        #expect(settings.menuBarMetricKinds == MenuBarMetricKind.defaultSelection)
-        #expect(!settings.canSelectMenuBarMetric(.networkDownload))
+        #expect(settings.menuBarMetricKinds.count == MenuBarMetricKind.allCases.count)
+        #expect(settings.menuBarMetricKinds.count > 4)
     }
 
     @Test func menuBarMetricSelectionCannotBecomeEmpty() {
         let defaults = UserDefaults(suiteName: "menuBarMetricSelectionCannotBecomeEmpty")!
         defaults.removePersistentDomain(forName: "menuBarMetricSelectionCannotBecomeEmpty")
+        defaults.set([MenuBarMetricKind.cpuUsage.rawValue], forKey: "settings.menuBar.metricKinds")
         let settings = MonitorSettings(defaults: defaults)
 
-        // 移除全部后回退到默认选择,选择集永不为空。
-        for kind in MenuBarMetricKind.defaultSelection {
-            settings.setMenuBarMetric(kind, selected: false)
-        }
+        settings.setMenuBarMetric(.cpuUsage, selected: false)
 
-        #expect(settings.menuBarMetricKinds == MenuBarMetricKind.defaultSelection)
+        #expect(settings.menuBarMetricKinds == [.cpuUsage])
+    }
+
+    @Test func menuBarMetricRestorePreservesMoreThanFourItems() {
+        let defaults = UserDefaults(suiteName: "menuBarMetricRestorePreservesMoreThanFourItems")!
+        defaults.removePersistentDomain(forName: "menuBarMetricRestorePreservesMoreThanFourItems")
+        let stored = Array(MenuBarMetricKind.allCases.prefix(6))
+        defaults.set(stored.map(\.rawValue), forKey: "settings.menuBar.metricKinds")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(settings.menuBarMetricKinds == stored)
     }
 
     @Test func menuBarMetricOrderCanMove() {
@@ -126,6 +134,18 @@ struct SettingsTests {
         settings.moveMenuBarMetric(.gpuUsage, direction: -1)
 
         #expect(settings.menuBarMetricKinds == [.cpuUsage, .gpuUsage, .cpuTemperature, .systemPower])
+    }
+
+    @Test func menuBarMetricNativeReorderKeepsSelectionAndOrder() {
+        let defaults = UserDefaults(suiteName: "menuBarMetricNativeReorderKeepsSelectionAndOrder")!
+        defaults.removePersistentDomain(forName: "menuBarMetricNativeReorderKeepsSelectionAndOrder")
+        let settings = MonitorSettings(defaults: defaults)
+        let originalCount = settings.menuBarMetricKinds.count
+
+        settings.reorderMenuBarMetrics([.systemPower], before: .cpuUsage)
+
+        #expect(settings.menuBarMetricKinds.first == .systemPower)
+        #expect(settings.menuBarMetricKinds.count == originalCount)
     }
 
     @Test func menuBarDisplaySettingsPersist() async throws {
@@ -221,5 +241,27 @@ struct SettingsTests {
         #expect(settings.isMetricEnabled("cell-balance", for: .battery))
         #expect(settings.isMetricEnabled("health", for: .battery))
         #expect(defaults.bool(forKey: "settings.batteryCellBalanceMigrated"))
+    }
+
+    @MainActor
+    @Test func settingsWindowLifecycleReleasesOnClose() {
+        let appDelegate = AppDelegate()
+        _ = appDelegate.store
+        #expect(SettingsWindowPresenter.settingsWindow == nil)
+
+        SettingsWindowPresenter.open()
+        let window1 = SettingsWindowPresenter.settingsWindow
+        #expect(window1 != nil)
+
+        SettingsWindowPresenter.close()
+        #expect(SettingsWindowPresenter.settingsWindow == nil)
+
+        SettingsWindowPresenter.open()
+        let window2 = SettingsWindowPresenter.settingsWindow
+        #expect(window2 != nil)
+        #expect(window2 !== window1)
+
+        SettingsWindowPresenter.close()
+        #expect(SettingsWindowPresenter.settingsWindow == nil)
     }
 }

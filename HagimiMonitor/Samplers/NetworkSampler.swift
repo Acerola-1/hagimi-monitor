@@ -3,7 +3,8 @@ import Foundation
 import OSLog
 import SystemConfiguration
 
-final class NetworkSampler: MonitorSampler {
+/// 采样器由 SystemMonitorSampler 持有并在串行采样循环中调用，内部状态单线程顺序更新。
+nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
     var kind: MonitorKind { .network }
 
     private var previousNetworkBytes: (input: UInt64, output: UInt64, timestamp: Date)?
@@ -16,7 +17,7 @@ final class NetworkSampler: MonitorSampler {
     private let interfaceTypeRefreshInterval: TimeInterval = 30
 
     // SCDynamicStore 会话:每秒重新 SCDynamicStoreCreate 是无谓开销,进程内只建一次。
-    private lazy var dynamicStore: SCDynamicStore? =
+    private let dynamicStore: SCDynamicStore? =
         SCDynamicStoreCreate(nil, "HagimiMonitor.NetworkSampler" as CFString, nil, nil)
 
     // Wi-Fi 信号/网关延迟探针:内部带缓存,RSSI 10s、延迟 5s,不随每秒采样无脑触发。

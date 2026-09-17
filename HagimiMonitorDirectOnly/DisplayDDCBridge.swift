@@ -7,15 +7,15 @@ import OSLog
 #error("Display DDC control is Apple Silicon only. Do not compile this Direct-only module for Intel Mac.")
 #endif
 
-private let displayDDCLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "DisplayDDC")
+private nonisolated let displayDDCLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "DisplayDDC")
 
 /// 探测结果:能力判定 +(若可读)当前百分比值。
-struct DDCProbeResult {
+nonisolated struct DDCProbeResult: Sendable {
     let capability: DDCCapability
     let value: Double?
 }
 
-final class DisplayDDCBridge: @unchecked Sendable {
+nonisolated final class DisplayDDCBridge: @unchecked Sendable {
     private var servicesByDisplayID: [CGDirectDisplayID: DDCService] = [:]
     private var maxValues: [ControlKey: UInt16] = [:]
     /// 每个控制"生效"过的 VCP 码缓存。检测阶段一旦确定,运行期只用该码读写,
@@ -213,7 +213,7 @@ final class DisplayDDCBridge: @unchecked Sendable {
 
 /// 将稳定编排引擎接到现有 IOAVService 桥。底层调用始终在独立线程执行,
 /// 引擎只接收结构化回调,不直接接触 IOKit 对象。
-final class DisplayDDCTransport: DDCTransport, @unchecked Sendable {
+nonisolated final class DisplayDDCTransport: DDCTransport, Sendable {
     private let bridge: DisplayDDCBridge
 
     init(bridge: DisplayDDCBridge) {
@@ -242,7 +242,7 @@ final class DisplayDDCTransport: DDCTransport, @unchecked Sendable {
     }
 }
 
-private enum DDCVCPCode: UInt8 {
+private nonisolated enum DDCVCPCode: UInt8, Sendable {
     case luminance = 0x10
     case contrast = 0x12
     case backlightControlLegacy = 0x13
@@ -268,10 +268,10 @@ private enum DDCVCPCode: UInt8 {
     }
 }
 
-private enum LegacyDDCPacketTransport {
+private nonisolated enum LegacyDDCPacketTransport {
     /// 结构上有效的「Get VCP Feature Reply」帧解析结果。resultCode 交给调用方判定:
     /// 0x00 = 支持, 0x01 = 不支持。current/max 仅在 resultCode==0x00 时有意义。
-    struct Reply {
+    nonisolated struct Reply: Sendable {
         let resultCode: UInt8
         let current: UInt16
         let max: UInt16
@@ -317,25 +317,41 @@ private enum LegacyDDCPacketTransport {
         return communicate(service: service, chipAddress: chipAddress, send: &send, reply: &reply, retries: retries)
     }
 
+    /// 线程安全不变量：DDCCommBox 仅在 communicate 单次同步调用生命周期内跨线程传递参数与结果，由信号量同步完成。
+    private final class DDCCommBox: @unchecked Sendable {
+        let service: IOAVService
+        let chipAddress: UInt8
+        let retries: Int
+        var send: [UInt8]
+        var reply: [UInt8]
+        var result: Bool = false
+
+        init(service: IOAVService, chipAddress: UInt8, retries: Int, send: [UInt8], reply: [UInt8]) {
+            self.service = service
+            self.chipAddress = chipAddress
+            self.retries = retries
+            self.send = send
+            self.reply = reply
+        }
+    }
+
     private static func communicate(service: IOAVService, chipAddress: UInt8, send: inout [UInt8], reply: inout [UInt8], retries: Int) -> Bool {
         // IOAVServiceReadI2C/WriteI2C 是阻塞内核调用,异常时可能长时间不返回。
         // 派到 serial ioQueue 执行 + semaphore 超时保护,超时仅放弃本次调用(返回 false),
-        // 不设任何跨调用状态,故不会级联。escaping 闭包不能捕获 inout,拷贝后异步、完成回写。
-        var sendCopy = send
-        var replyCopy = reply
+        // 不设任何跨调用状态,故不会级联。
+        let box = DDCCommBox(service: service, chipAddress: chipAddress, retries: retries, send: send, reply: reply)
         let semaphore = DispatchSemaphore(value: 0)
-        var result = false
         ioQueue.async {
-            result = communicateUnlocked(service: service, chipAddress: chipAddress, send: &sendCopy, reply: &replyCopy, retries: retries)
+            box.result = communicateUnlocked(service: box.service, chipAddress: box.chipAddress, send: &box.send, reply: &box.reply, retries: box.retries)
             semaphore.signal()
         }
         if semaphore.wait(timeout: .now() + callTimeout) == .timedOut {
             displayDDCLog.error("DDC call timed out; abandoning this call only (no global lockout)")
             return false
         }
-        send = sendCopy
-        reply = replyCopy
-        return result
+        send = box.send
+        reply = box.reply
+        return box.result
     }
 
     /// 底层 DDC/CI 报文收发。chipAddress 传给 IOAVService 内核调用,
@@ -414,7 +430,7 @@ private enum LegacyDDCPacketTransport {
     }
 }
 
-private final class Arm64DDCMatcher {
+private nonisolated final class Arm64DDCMatcher {
     private static let maxMatchScore = 20
 
     func matchedServices(for displayIDs: [CGDirectDisplayID]) -> [CGDirectDisplayID: DDCService] {
@@ -682,7 +698,8 @@ private final class Arm64DDCMatcher {
     }
 }
 
-private struct DDCService {
+/// 线程安全不变量：DDCService 为私有值类型，持有底层的 IOAVService 指针，在 DisplayDDCBridge 的锁保护或独立 I/O 线程中使用。
+private nonisolated struct DDCService: @unchecked Sendable {
     let displayID: CGDirectDisplayID
     let service: IOAVService
     let serviceLocation: Int
@@ -692,7 +709,8 @@ private struct DDCService {
     let chipAddress: UInt8
 }
 
-private struct RegistryService {
+/// 线程安全不变量：RegistryService 为匹配阶段临时值类型，单线程顺序构建。
+private nonisolated struct RegistryService: @unchecked Sendable {
     var edidUUID = ""
     var productName = ""
     var serialNumber: Int64 = 0

@@ -111,38 +111,50 @@ struct SettingsWindowTracker: NSViewRepresentable {
     }
 }
 
-private final class SettingsWindowTrackingView: NSView {
-    var onTabChanged: ((SettingsTab) -> Void)?
-    private var observer: NSObjectProtocol?
+/// 自动管理 NotificationCenter 观察者生命周期的包装器。
+/// 安全不变式：在 deinit 时自动注销观察者，避免在 Actor 隔离类的 deinit 中访问非 Sendable 属性。
+nonisolated private final class NotificationObserverBox: @unchecked Sendable {
+    private var observer: (any NSObjectProtocol)?
 
-    init(frame frameRect: NSRect, onTabChanged: @escaping (SettingsTab) -> Void) {
-        self.onTabChanged = onTabChanged
-        super.init(frame: frameRect)
-
-        observer = NotificationCenter.default.addObserver(
-            forName: SettingsWindowPresenter.routeChangeNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            guard let tabValue = note.userInfo?[SettingsWindowPresenter.tabUserInfoKey] as? String,
-                  let tab = SettingsTab(rawValue: tabValue) else { return }
-            self?.onTabChanged?(tab)
-            // 消费即清除:防止 settingsViewDidAppear 的补发广播重复路由同一标签页。
-            MainActor.assumeIsolated {
-                SettingsWindowPresenter.consumePendingTab()
-            }
-        }
-    }
-
-    @available(*, unavailable)
-    required init?(coder: NSCoder) {
-        fatalError("init(coder:) has not been implemented")
+    init(_ observer: any NSObjectProtocol) {
+        self.observer = observer
     }
 
     deinit {
         if let observer {
             NotificationCenter.default.removeObserver(observer)
         }
+    }
+}
+
+private final class SettingsWindowTrackingView: NSView {
+    var onTabChanged: ((SettingsTab) -> Void)?
+    private var observerBox: NotificationObserverBox?
+
+    init(frame frameRect: NSRect, onTabChanged: @escaping (SettingsTab) -> Void) {
+        self.onTabChanged = onTabChanged
+        super.init(frame: frameRect)
+
+        let obs = NotificationCenter.default.addObserver(
+            forName: SettingsWindowPresenter.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            let tabValue = note.userInfo?[SettingsWindowPresenter.tabUserInfoKey] as? String
+            MainActor.assumeIsolated {
+                guard let tabValue,
+                      let tab = SettingsTab(rawValue: tabValue) else { return }
+                self?.onTabChanged?(tab)
+                // 消费即清除:防止 settingsViewDidAppear 的补发广播重复路由同一标签页。
+                SettingsWindowPresenter.consumePendingTab()
+            }
+        }
+        observerBox = NotificationObserverBox(obs)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
     }
 
     override func viewDidMoveToWindow() {

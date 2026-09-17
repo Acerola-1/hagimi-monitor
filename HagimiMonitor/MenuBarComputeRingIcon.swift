@@ -6,6 +6,8 @@ enum MenuBarComputeRingIcon {
     /// 而不是压在环线上;环与轨道的几何不变,只多了这圈留白。
     private static let iconSize: CGFloat = 21
 
+    /// 内部锁，确保并发请求同一个 bucket 时只绘制一次并安全缓存
+    private static let lock = NSLock()
     private static let cache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
         // 桶组合上限 101(负载)×2(明暗)×4(等级)×2(告警红点)=1616,但菜单栏实际只在
@@ -31,9 +33,12 @@ enum MenuBarComputeRingIcon {
         let loadBucket = loadBucket(for: load)
         let canonicalLoad = Double(loadBucket)
         let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel, showsAlert: showsAlert)
+        lock.lock()
         if let cached = cache.object(forKey: key) {
+            lock.unlock()
             return cached
         }
+        lock.unlock()
 
         let image = NSImage(size: NSSize(width: Self.iconSize, height: Self.iconSize), flipped: false) { rect in
             NSGraphicsContext.current?.imageInterpolation = .high
@@ -57,9 +62,23 @@ enum MenuBarComputeRingIcon {
         }
         image.isTemplate = false
 
+        lock.lock()
+        if let existing = cache.object(forKey: key) {
+            lock.unlock()
+            return existing
+        }
         cache.setObject(image, forKey: key)
+        lock.unlock()
         return image
     }
+
+    #if DEBUG
+    static func clearCacheForTesting() {
+        lock.lock()
+        cache.removeAllObjects()
+        lock.unlock()
+    }
+    #endif
 
     private static func drawRing(style: MenuBarComputeRingImageStyle, center: NSPoint) {
         let ringRect = NSRect(
@@ -187,7 +206,7 @@ private struct MenuBarComputeRingImageStyle {
     }
 }
 
-enum MenuBarComputeLoadLevel {
+enum MenuBarComputeLoadLevel: Sendable {
     case idle
     case working
     case busy

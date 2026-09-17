@@ -78,4 +78,11 @@ struct AppDiagnosticsTests {
         #expect(FileManager.default.fileExists(atPath: url.appendingPathComponent("metadata.json").path))
         #expect(FileManager.default.fileExists(atPath: url.appendingPathComponent("logs/app.log").path))
     }
+
+    @Test("HealthMonitor can start and run on background queue without actor assertion failure")
+    func healthMonitorRunsOnBackgroundQueue() async throws {
+        let monitor = HealthMonitor(interval: 0.01)
+        monitor.start()
+        try await Task.sleep(nanoseconds: 50_000_000)
+    }
 }

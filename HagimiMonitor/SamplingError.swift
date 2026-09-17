@@ -1,6 +1,6 @@
 import Foundation
 
-enum SamplingError: Error, CustomStringConvertible {
+nonisolated enum SamplingError: Error, CustomStringConvertible, Sendable {
     case cpuUnavailable
     case gpuUnavailable
     case memoryUnavailable

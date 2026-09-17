@@ -36,6 +36,15 @@ enum QuickToolKind: CaseIterable {
         case .displayAwake: "sun.max"
         }
     }
+
+    /// 该工具是否带可调参数(决定设置页卡片给不给折叠箭头)。没有参数还折叠
+    /// 就是点开一个空面板,不如老实做单行开关。
+    var hasParameters: Bool {
+        switch self {
+        case .keyboardLock: true
+        case .systemAwake, .displayAwake: false
+        }
+    }
 }
 
 /// 每个入口按钮实例独享的锚点盒:面板每秒重渲染会重建视图树,@State
@@ -163,11 +172,17 @@ struct QuickToolsPopoverView: View {
     @ObservedObject var settings: MonitorSettings
     let theme: MonitorPanelTheme
 
+    /// 浮层展开时已在呈现的工具集合:只要浮层没关,中途关闭功能绝不能把卡片
+    /// 当场从用户眼前抹去,避免操作中途卡片骤然消失的恶劣体验。
+    @State private var retainedKinds: Set<QuickToolKind> = []
+
     /// 按设置页「小工具」的显隐开关过滤磁贴;激活中的工具豁免(见
     /// QuickToolsStore.isActive),保证运行中的工具永远有操作入口。
     /// 新增工具补 QuickToolKind case 即自动出现。
     private var visibleKinds: [QuickToolKind] {
-        QuickToolKind.allCases.filter { settings.isQuickToolVisible($0) || store.isActive($0) }
+        QuickToolKind.allCases.filter {
+            settings.isQuickToolVisible($0) || store.isActive($0) || retainedKinds.contains($0)
+        }
     }
 
     var body: some View {
@@ -180,7 +195,12 @@ struct QuickToolsPopoverView: View {
         // 浮层宽度按最长英文标题「Prevent Idle Sleep」预算:标题可用
         // 空间 = 宽 − 内外边距 − 徽章 32 − 间距 − 开关,290pt 时留有余量。
         .frame(width: 290)
-        .onAppear { store.refreshKeyboardLockPermission() }
+        .onAppear {
+            store.refreshKeyboardLockPermission()
+            retainedKinds = Set(QuickToolKind.allCases.filter {
+                settings.isQuickToolVisible($0) || store.isActive($0)
+            })
+        }
         // 浮层开着期间每 2s 校准一次键盘锁定授权状态(App Store 渠道撤销
         // 无事件通知,只能轮询);浮层关闭时 hostingController 释放,本视图
         // 随之下树,计时器随之停止,无空转。
@@ -190,7 +210,7 @@ struct QuickToolsPopoverView: View {
             store.refreshKeyboardLockPermission()
         }
         // 提示行出现/消失改变磁贴高度,同步浮层尺寸避免裁切或留白。
-        .onChange(of: store.keyboardLockPermissionHint) { _, _ in
+        .onChange(of: store.keyboardLockHint) { _, _ in
             store.popoverPresenter.refreshContentSize()
         }
     }
@@ -214,10 +234,11 @@ private struct QuickToolTile: View {
         }
     }
 
-    /// 键盘锁定且权限未授予:磁贴标题下方追加提示行,告知用户需到系统
-    /// 设置授予对应授权;授权通过/被撤销时随 isTrusted 发布变化。
-    private var permissionHint: String? {
-        kind == .keyboardLock ? store.keyboardLockPermissionHint : nil
+    /// 键盘锁定的提示行:只在"此刻会出问题"时出现——权限未授予,或
+    /// 「仅内置」锁定中却没有外接键盘(此时内置键盘被拦截且无处可输入)。
+    /// 范围本身不在此展示:它是设一次用很久的偏好,放在设置页。
+    private var hint: String? {
+        kind == .keyboardLock ? store.keyboardLockHint : nil
     }
 
     private var accent: Color {
@@ -225,62 +246,62 @@ private struct QuickToolTile: View {
     }
 
     var body: some View {
-        Button(action: toggle) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 10) {
-                    ZStack {
-                        Circle()
-                            .fill(isOn ? accent : theme.palette.trackFill)
-                        Image(systemName: kind.symbol)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(isOn ? Color.white : theme.secondaryText)
-                    }
-                    .frame(width: 32, height: 32)
-
-                    Text(String(localized: kind.titleKey))
-                        .font(.system(size: 12.5, weight: .semibold))
-                        .foregroundStyle(theme.primaryText)
-                        .lineLimit(1)
-
-                    Spacer(minLength: 6)
-
-                    // 系统标准开关:macOS 26+ 自动液态玻璃,tint 染强调色保留
-                    // 点亮质感。关闭命中,点击统一由整块磁贴承接,避免磁贴按钮
-                    // 与开关各触发一次造成双重切换。
-                    Toggle(String(localized: kind.titleKey), isOn: .constant(isOn))
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .tint(accent)
-                        .allowsHitTesting(false)
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(isOn ? accent : theme.palette.trackFill)
+                    Image(systemName: kind.symbol)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(isOn ? Color.white : theme.secondaryText)
                 }
+                .frame(width: 32, height: 32)
 
-                if let hint = permissionHint {
-                    Text(hint)
-                        .font(.system(size: 10.5))
-                        // 与标题同色而非强调色:小字承载体量与标题一致,深色模式下
-                        // 橙色低对比难读;灰色白承袭 primaryText,两行一体。
-                        .foregroundStyle(theme.primaryText)
-                        .lineLimit(2)
-                        // 与标题文字左对齐:磁贴水平 padding 10 + 徽章 32 + 间距 10。
-                        .padding(.leading, 42)
-                }
+                Text(String(localized: kind.titleKey))
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(1)
+
+                Spacer(minLength: 6)
+
+                // 系统标准开关:macOS 26+ 自动液态玻璃,tint 染强调色保留点亮质感。
+                // 绑定直接联动 toggle,支持原生的点击与拖动交互。
+                Toggle(String(localized: kind.titleKey), isOn: Binding(
+                    get: { isOn },
+                    set: { _ in toggle() }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .tint(accent)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-            .background(
-                RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
-                    .fill(isOn ? theme.palette.quickToolActiveFill : theme.palette.trackFill)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
-                    .strokeBorder(isOn ? accent.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 0.5)
-            )
-            .contentShape(RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+
+            if let hint {
+                Text(hint)
+                    .font(.system(size: 10.5))
+                    // 与标题同色而非强调色:小字承载体量与标题一致,深色模式下
+                    // 橙色低对比难读;灰色白承袭 primaryText,两行一体。
+                    .foregroundStyle(theme.primaryText)
+                    .lineLimit(2)
+                    // 与标题文字左对齐:磁贴水平 padding 10 + 徽章 32 + 间距 10。
+                    .padding(.leading, 42)
+            }
         }
-        // 磁贴按压反馈完全交给点亮态过渡,不用 .plain 默认的按压变暗。
-        .buttonStyle(QuickToolTileButtonStyle())
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
+                .fill(isOn ? theme.palette.quickToolActiveFill : theme.palette.trackFill)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
+                .strokeBorder(isOn ? accent.opacity(0.5) : Color.white.opacity(0.08), lineWidth: 0.5)
+        )
+        .contentShape(RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
+        .onTapGesture {
+            toggle()
+        }
         .animation(Self.toggleSpring, value: isOn)
-        .animation(Self.toggleSpring, value: permissionHint)
+        .animation(Self.toggleSpring, value: hint)
     }
 
     /// 状态切换统一包在同一条弹簧动画里:store 的 @Published 变化经
@@ -293,14 +314,6 @@ private struct QuickToolTile: View {
             case .displayAwake: store.toggleDisplayAwake()
             }
         }
-    }
-}
-
-/// 磁贴按钮样式:按压不做任何视觉变化(无变暗/无位移),
-/// 状态反馈完全由点亮/熔灭的整体过渡承担。
-private struct QuickToolTileButtonStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
     }
 }
 

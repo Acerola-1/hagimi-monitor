@@ -15,7 +15,7 @@ extension View {
 
 // MARK: - Layout Value Keys
 
-struct SectionIDLayoutKey: LayoutValueKey {
+nonisolated struct SectionIDLayoutKey: LayoutValueKey {
     static let defaultValue: String = ""
 }
 
@@ -29,7 +29,7 @@ extension View {
 
 /// 主体手风琴布局：读取 PanelFrame 中计算好的绝对卡片矩形并直接放置，
 /// 根尺寸等于 bodyDocumentHeight，不向上级反馈变化的自然尺寸。
-struct AccordionLayout: Layout {
+nonisolated struct AccordionLayout: Layout {
     // 外壳按顶部几何定位，内容基线不参与外层对齐。
     func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
                            subviews: Subviews, cache: inout Cache) -> CGFloat? { nil }
@@ -94,7 +94,7 @@ struct AccordionLayout: Layout {
 // MARK: - PanelChromeLayout
 
 /// 面板骨架布局：固定顶部 Header，并将主体 ScrollView 约束在视口高度内。
-struct PanelChromeLayout: Layout {
+nonisolated struct PanelChromeLayout: Layout {
     // 外壳按顶部几何定位，内容基线不参与外层对齐。
     func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
                            subviews: Subviews, cache: inout ()) -> CGFloat? { nil }
@@ -131,12 +131,12 @@ struct PanelChromeLayout: Layout {
     }
 }
 
-struct PanelRevealHeightKey: LayoutValueKey {
+nonisolated struct PanelRevealHeightKey: LayoutValueKey {
     static let defaultValue: CGFloat = 0
 }
 
 /// 行外壳返回可见高度，行头收到完整固定提议，明细视口独立决定自己的揭示高度。
-struct PanelCardLayout: Layout {
+nonisolated struct PanelCardLayout: Layout {
     // 外壳按顶部几何定位，内容基线不参与外层对齐。
     func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
                            subviews: Subviews, cache: inout Cache) -> CGFloat? { nil }
@@ -215,7 +215,7 @@ struct PanelMetricColumns<Content: View>: View {
     }
 }
 
-struct PanelMetricColumnsLayout: Layout {
+nonisolated struct PanelMetricColumnsLayout: Layout {
     let measurementKey: String
     struct Cache {
         var width: CGFloat?

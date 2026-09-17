@@ -3,7 +3,8 @@ import Foundation
 import OSLog
 import IOKit
 
-final class CPUSampler: MonitorSampler {
+/// 采样器由 SystemMonitorSampler 持有并在串行采样循环中调用，内部状态单线程顺序更新。
+nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
     var kind: MonitorKind { .cpu }
 
     // mach_host_self() 每次调用都会给当前 task 增加一个对 host port 的 send right，
@@ -261,7 +262,7 @@ final class CPUSampler: MonitorSampler {
 /// (Data,首字节 'P'/'E')与 cpu-id(Data,小端 UInt32 逻辑编号)。host_processor_info
 /// 数组索引即逻辑编号,但 P/E 核的编号顺序并非恒为 P 在前,故必须按每核
 /// cluster-type 归组而非切片。失败或 Intel 同构(无 P 簇)时返回空集合。
-private func readPerformanceCoreIndices() -> Set<Int> {
+nonisolated private func readPerformanceCoreIndices() -> Set<Int> {
     var indices = Set<Int>()
     var iterator: io_iterator_t = 0
     guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOPlatformDevice"), &iterator) == KERN_SUCCESS else {

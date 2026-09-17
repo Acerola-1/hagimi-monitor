@@ -7,7 +7,7 @@ import Foundation
 /// wakeUntil(唤醒沉降时限)、reconfigureUntil(重配置沉降时限)。
 /// 总抑制 = 任一原因生效。重配置完成可以缩短**自身** begin safety 期限,
 /// 但不能缩短唤醒期限——两种截止时间互不覆盖。
-nonisolated struct GateStateModel {
+nonisolated struct GateStateModel: Sendable {
     private var systemAsleep = false
     private var displayAsleep = false
     private var wakeUntil: MonotonicInstant?
@@ -81,12 +81,15 @@ nonisolated struct GateStateModel {
 
 /// 门禁运行时:持有状态模型与时钟,管理解除检测定时器。
 /// 到期后重新读取当前状态;如果仍有抑制原因,只重新安排下一次期限检查。
-nonisolated final class DDCGateRuntime {
+/// 内部状态由 NSLock 保护，支持跨线程并发读写与恢复回调调度。
+nonisolated final class DDCGateRuntime: @unchecked Sendable {
     private var model = GateStateModel()
     private let clock: MonotonicClock
     private let lock = NSLock()
     private var deadlineTimer: ScheduledWorkHandle?
-    private var recoveryHandlers: [UUID: () -> Void] = [:]
+    /// 每次重排/取消截止计时器都递增；迟到的旧 timer 只能自我丢弃，不能改写新状态。
+    private var deadlineGeneration: UInt64 = 0
+    private var recoveryHandlers: [UUID: @Sendable () -> Void] = [:]
     /// 配置时长。
     private let wakeSettle: TimeInterval
     private let reconfigureSettle: TimeInterval
@@ -109,7 +112,7 @@ nonisolated final class DDCGateRuntime {
         return model.isSuppressed(at: clock.now)
     }
 
-    func addRecoveryHandler(_ handler: @escaping () -> Void) -> UUID {
+    func addRecoveryHandler(_ handler: @escaping @Sendable () -> Void) -> UUID {
         let token = UUID()
         lock.lock()
         recoveryHandlers[token] = handler
@@ -170,17 +173,28 @@ nonisolated final class DDCGateRuntime {
 
     // MARK: 内部
 
-    /// 在锁外调用:读取下一截止时刻并安排定时器。
+    /// 读取下一截止时刻并安排定时器。计时器句柄和模型共用 generation 门控，
+    /// 避免睡眠/唤醒/重配置回调并发时旧计时器覆盖新计时器或重复发出恢复事件。
     private func armDeadlineTimer() {
-        lock.lock()
-        let next = model.nextDeadline()
-        lock.unlock()
+        let (generation, next, oldTimer): (UInt64, MonotonicInstant?, ScheduledWorkHandle?) = lock.withLock {
+            deadlineGeneration &+= 1
+            let generation = deadlineGeneration
+            let next = model.nextDeadline()
+            let oldTimer = deadlineTimer
+            deadlineTimer = nil
+            return (generation, next, oldTimer)
+        }
+        oldTimer?.cancel()
         guard let next else { return }
         let delay = clock.now.distance(to: next)
-        deadlineTimer?.cancel()
-        deadlineTimer = clock.schedule(after: Swift.max(delay, 0.01)) { [weak self] in
+        let timer = clock.schedule(after: Swift.max(delay, 0.01)) { [weak self] in
             guard let self else { return }
             self.lock.lock()
+            guard self.deadlineGeneration == generation else {
+                self.lock.unlock()
+                return
+            }
+            self.deadlineTimer = nil
             self.model.expireDeadlines(now: self.clock.now)
             let stillSuppressed = self.model.isSuppressed(at: self.clock.now)
             self.lock.unlock()
@@ -191,9 +205,18 @@ nonisolated final class DDCGateRuntime {
                 self.notifyRecovery()
             }
         }
+        lock.lock()
+        if deadlineGeneration == generation {
+            deadlineTimer = timer
+            lock.unlock()
+        } else {
+            lock.unlock()
+            timer.cancel()
+        }
     }
 
     private func cancelDeadlineTimerLocked() {
+        deadlineGeneration &+= 1
         deadlineTimer?.cancel()
         deadlineTimer = nil
     }

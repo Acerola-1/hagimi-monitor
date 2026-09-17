@@ -7,13 +7,13 @@ import Combine
 /// 该段丢弃——睡眠时段在报表里呈现为空隙而非补零。
 
 /// 设置页「数据统计」的概览范围:今日 / 近 7 日 / 近 30 日,整组卡片随范围切换。
-enum StatisticsOverviewRange: CaseIterable, Hashable {
+nonisolated enum StatisticsOverviewRange: CaseIterable, Hashable, Sendable {
     case today
     case week
     case month
 
     /// 聚合窗口起点(本地时区自然日对齐)。
-    func startOfDayWindow(from today: Date, calendar: Calendar) -> Date {
+    nonisolated func startOfDayWindow(from today: Date, calendar: Calendar) -> Date {
         switch self {
         case .today:
             return calendar.startOfDay(for: today)
@@ -25,6 +25,73 @@ enum StatisticsOverviewRange: CaseIterable, Hashable {
     }
 }
 
+/// 报表读取所需的值类型输入。数据库和进程存储本身各自通过专用串行队列保护,
+/// 因而这里只把它们作为后台读取器的共享只读句柄传递,不把 `StatisticsRecorder`
+/// 这个 MainActor 状态对象送入后台任务。
+nonisolated struct StatisticsReportSnapshotInput: Sendable {
+    let minutes: [StatisticsRow]
+    let hours: [StatisticsRow]
+    let days: [StatisticsRow]
+    let process: ReportProcessData?
+}
+
+/// 报表后台读取器。所有重查询和 SwiftData 水合都在调用方的后台任务中执行;
+/// 告警值由 MainActor 调用方先复制为 Sendable 数组后传入,这里不触碰 UI 状态。
+nonisolated struct StatisticsReportDataProvider: Sendable {
+    let database: StatisticsDatabase?
+    let processStore: StatisticsProcessStore?
+    let calendar: Calendar
+
+    /// 读取报表的三层指标行。测试也通过 provider 验证真实报表读取口径,
+    /// 避免在 `StatisticsRecorder` 上保留一套仅供测试使用的重复查询入口。
+    func loadMetricRows(now: Date) -> (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow])? {
+        guard let database else { return nil }
+
+        let minutesFrom = now.addingTimeInterval(-48 * 3600)
+        let hoursFrom = now.addingTimeInterval(-60 * 86400)
+        return (
+            database.minuteRows(from: minutesFrom, to: now.addingTimeInterval(120)),
+            database.hourRows(from: hoursFrom, to: now.addingTimeInterval(3600)),
+            database.dayRows(from: .distantPast, to: now.addingTimeInterval(86400))
+        )
+    }
+
+    func load(now: Date, alerts: [ProcessAlertEpisode]) -> StatisticsReportSnapshotInput? {
+        guard let rows = loadMetricRows(now: now) else { return nil }
+
+        // 先刷新进程累加器,再读取身份/日聚合/电池快照,保持原有报表时序。
+        processStore?.flush()
+        let processData: ReportProcessData? = {
+            guard let store = processStore else { return nil }
+            let fromDay = StatisticsProcessStore.dayKey(
+                now.addingTimeInterval(-59 * 86400), calendar: calendar)
+            let toDay = StatisticsProcessStore.dayKey(now, calendar: calendar)
+            let rawIdentities = store.identities()
+            var identities: [String: ReportAppIdentity] = [:]
+            for identity in rawIdentities {
+                identities[identity.appKey] = ReportAppIdentity(
+                    appKey: identity.appKey,
+                    name: identity.name,
+                    iconPNG: identity.iconPNG
+                )
+            }
+            return ReportProcessData(
+                identities: identities,
+                dailyRows: store.dailyRows(fromDay: fromDay, toDay: toDay),
+                batteryHistory: store.batteryHistory(),
+                alerts: alerts
+            )
+        }()
+
+        return StatisticsReportSnapshotInput(
+            minutes: rows.minutes,
+            hours: rows.hours,
+            days: rows.days,
+            process: processData
+        )
+    }
+}
+
 /// 速率积分的分段上限:超过视为采样中断,不把旧速率外推成长时段流量。
 final class StatisticsRecorder: ObservableObject {
     static let rateIntegrationCap: TimeInterval = 30
@@ -33,7 +100,7 @@ final class StatisticsRecorder: ObservableObject {
     @Published private(set) var rangeRows: [StatisticsOverviewRange: StatisticsRow?] = [:]
     /// 从最早一条记录至今的自然日数(0 = 尚无任何数据)。
     @Published private(set) var recordDays = 0
-    /// 本地存储占用快照(统计库/应用统计库/报表文件),随概览一起刷新。
+    /// 本地存储占用快照(统计库/应用统计库/系统开销),随概览一起刷新。
     @Published private(set) var storageInfo: StorageInfo?
     /// 本 App 使用打卡:累计活跃天数与截至今日的连续天数。
     @Published private(set) var usageTotalDays = 0
@@ -42,28 +109,26 @@ final class StatisticsRecorder: ObservableObject {
     @Published private(set) var usageFirstDay: Int64 = 0
     @Published private(set) var usageActiveDays: [Int64] = []
 
-    /// 本地存储产物的四分类占用分解与记录规模。
+    /// 本地存储产物的三分类占用分解与记录规模。
     /// - 硬件指标：统计库中的有效数据页与活跃写入；
     /// - 应用记录：应用统计库中的应用资源用量、图标缓存与电池历史；
-    /// - 报表缓存：独立离线硬件规格档案页面；
     /// - 系统开销：数据库表结构、待复用空闲空间、WAL 索引以及运行日志。
     struct StorageInfo: Equatable {
         var metricBytes: Int64
         var appBytes: Int64
-        var reportBytes: Int64
         var systemBytes: Int64
         var minuteCount: Int64
         var hourCount: Int64
         var dayCount: Int64
 
-        var totalBytes: Int64 { metricBytes + appBytes + reportBytes + systemBytes }
+        var totalBytes: Int64 { metricBytes + appBytes + systemBytes }
     }
 
     /// 进程/电池/打卡的 SwiftData 存储(图标随身份持久化,卸载应用不丢历史)。
-    let processStore: StatisticsProcessStore?
+    nonisolated let processStore: StatisticsProcessStore?
 
-    private let database: StatisticsDatabase?
-    private let calendar: Calendar
+    nonisolated private let database: StatisticsDatabase?
+    nonisolated private let calendar: Calendar
 
     /// 列名 → 列下标,与 StatisticsRow.columns 的顺序契约绑定。
     private static let columnIndex: [String: Int] = {
@@ -590,6 +655,8 @@ final class StatisticsRecorder: ObservableObject {
             savedBattery = (day, current.cycles, current.health)
             return current
         }
+        minuteSealCount += 1
+        let shouldFlush = (minuteSealCount % 10 == 0)
         maintenanceQueue.async { [weak self] in
             guard let self else { return }
             if let database = self.database {
@@ -606,8 +673,7 @@ final class StatisticsRecorder: ObservableObject {
                     calendar: self.calendar
                 )
             }
-            self.minuteSealCount += 1
-            if self.minuteSealCount % 10 == 0 {
+            if shouldFlush {
                 self.processStore?.flush()
             }
             self.refreshOverview()
@@ -631,8 +697,15 @@ final class StatisticsRecorder: ObservableObject {
     // MARK: - 概览(设置页数据)
 
     /// 后台重算各范围聚合行 + 元信息并回主线程发布。分钟一封口即刷新。
-    private func refreshOverview() {
-        guard let database else { return }
+    nonisolated private func refreshOverview(
+        completion: @escaping @MainActor @Sendable () -> Void = {}
+    ) {
+        guard let database else {
+            DispatchQueue.main.async {
+                completion()
+            }
+            return
+        }
         let now = Date()
         let todayStart = calendar.startOfDay(for: now)
 
@@ -677,29 +750,28 @@ final class StatisticsRecorder: ObservableObject {
         }
 
         DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            self.rangeRows = rows
-            self.storageInfo = storage
-            self.recordDays = recordDays
-            self.usageTotalDays = usageTotal
-            self.usageStreakDays = usageStreak
-            self.usageFirstDay = usageFirst
-            self.usageActiveDays = activeDaysList
+            if let self {
+                self.rangeRows = rows
+                self.storageInfo = storage
+                self.recordDays = recordDays
+                self.usageTotalDays = usageTotal
+                self.usageStreakDays = usageStreak
+                self.usageFirstDay = usageFirst
+                self.usageActiveDays = activeDaysList
+            }
+            completion()
         }
     }
 
-    /// 汇总四类存储产物的占用与记录规模(后台队列执行)。
-    private func currentStorageInfo(database: StatisticsDatabase) -> StorageInfo {
+    /// 汇总三类存储产物的占用与记录规模(后台队列执行)。
+    nonisolated private func currentStorageInfo(database: StatisticsDatabase) -> StorageInfo {
         let counts = database.rowCounts
-        let reportBytes = (try? FileManager.default
-            .attributesOfItem(atPath: StatisticsReportBuilder.outputURL.path))?[.size] as? Int64 ?? 0
         let stat = database.breakdown
         let app = processStore?.breakdown ?? .zero
         let logBytes = AppLogStore.totalLogsBytes()
         return StorageInfo(
             metricBytes: stat.dataBytes,
             appBytes: app.dataBytes,
-            reportBytes: reportBytes,
             systemBytes: stat.systemBytes + app.systemBytes + logBytes,
             minuteCount: counts.minute,
             hourCount: counts.hour,
@@ -710,7 +782,7 @@ final class StatisticsRecorder: ObservableObject {
     /// yyyymmdd 整数日键回退一天。必须走 Calendar 的日历日运算:
     /// 直接减 86400s 在夏令时切换日会落到 23:00/01:00,回推出错误日键,
     /// 轻则连续天数跳日,重则回游标不前进而挂死串行维护队列。
-    private func previousDayKey(_ key: Int64, calendar: Calendar) -> Int64 {
+    nonisolated private func previousDayKey(_ key: Int64, calendar: Calendar) -> Int64 {
         let components = DateComponents(year: Int(key / 10_000), month: Int(key % 10_000 / 100), day: Int(key % 100))
         if let day = calendar.date(from: components),
            let previous = calendar.date(byAdding: .day, value: -1, to: day) {
@@ -723,29 +795,22 @@ final class StatisticsRecorder: ObservableObject {
 
     // MARK: - 报表数据导出
 
-    /// 供报表生成器在后台拉取全量数据:近 48h 分钟行、近 60 天小时行、全部日行。
-    func reportSnapshot(now: Date) -> (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow])? {
-        guard let database else { return nil }
-        let minutesFrom = now.addingTimeInterval(-48 * 3600)
-        let hoursFrom = now.addingTimeInterval(-60 * 86400)
-        return (
-            database.minuteRows(from: minutesFrom, to: now.addingTimeInterval(120)),
-            database.hourRows(from: hoursFrom, to: now.addingTimeInterval(3600)),
-            database.dayRows(from: .distantPast, to: now.addingTimeInterval(86400))
-        )
+    /// 提供一个只包含后台安全句柄的报表读取器,避免把 MainActor 状态对象送进 detached task。
+    nonisolated func reportDataProvider() -> StatisticsReportDataProvider {
+        StatisticsReportDataProvider(database: database, processStore: processStore, calendar: calendar)
     }
 
     // MARK: - 存储管理
 
     /// 存储浏览粒度:日(含进行中的今天)/ 周 / 月。
-    enum StorageGranularity {
+    nonisolated enum StorageGranularity: Sendable {
         case day
         case week
         case month
     }
 
     /// 存储浏览中的一个时间桶:聚合行 + 桶起止时刻。
-    struct StorageBucket: Identifiable {
+    nonisolated struct StorageBucket: Identifiable, Sendable {
         let start: Date
         let end: Date
         let row: StatisticsRow
@@ -754,10 +819,12 @@ final class StatisticsRecorder: ObservableObject {
 
     /// 拉取指定范围的时间序列(后台执行,主线程回调),供「时段分析」按桶渲染:
     /// 今日优先分钟层(最细),周/月用小时层,与概览同源同窗口。
-    func rangeSeries(_ range: StatisticsOverviewRange, completion: @escaping ([StatisticsRow]) -> Void) {
+    func rangeSeries(_ range: StatisticsOverviewRange, completion: @escaping @MainActor @Sendable ([StatisticsRow]) -> Void) {
         maintenanceQueue.async { [weak self] in
             guard let self, let database = self.database else {
-                DispatchQueue.main.async { completion([]) }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { completion([]) }
+                }
                 return
             }
             let now = Date()
@@ -772,17 +839,21 @@ final class StatisticsRecorder: ObservableObject {
             case .week, .month:
                 rows = database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
             }
-            DispatchQueue.main.async { completion(rows) }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { completion(rows) }
+            }
         }
     }
 
     /// 最近一次分钟观测(概览页「当前状态」用):返回最新一行与其桶起点。
     /// 优先取有档位观测的行;只读,不改变采样与记录链路。
     /// 按需调用:摘要页暂未展示「当前状态」,调用方接入前不必轮询。
-    func latestObservation(completion: @escaping ((row: StatisticsRow, at: Date)?) -> Void) {
+    func latestObservation(completion: @escaping @MainActor @Sendable ((row: StatisticsRow, at: Date)?) -> Void) {
         maintenanceQueue.async { [weak self] in
             guard let self, let database = self.database else {
-                DispatchQueue.main.async { completion(nil) }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { completion(nil) }
+                }
                 return
             }
             let now = Date()
@@ -791,16 +862,20 @@ final class StatisticsRecorder: ObservableObject {
             let result: (row: StatisticsRow, at: Date)? = latest.map {
                 ($0, Date(timeIntervalSince1970: TimeInterval($0.t)))
             }
-            DispatchQueue.main.async { completion(result) }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { completion(result) }
+            }
         }
     }
 
     /// 拉取指定粒度的历史桶(后台执行,主线程回调),供设置页存储浏览。
     /// 日粒度 = 日层行 + 今日分钟行现算;周/月由日桶按本地时区归组。
-    func storageBuckets(_ granularity: StorageGranularity, completion: @escaping ([StorageBucket]) -> Void) {
+    func storageBuckets(_ granularity: StorageGranularity, completion: @escaping @MainActor @Sendable ([StorageBucket]) -> Void) {
         maintenanceQueue.async { [weak self] in
             guard let self, let database = self.database else {
-                DispatchQueue.main.async { completion([]) }
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated { completion([]) }
+                }
                 return
             }
             let now = Date()
@@ -831,65 +906,57 @@ final class StatisticsRecorder: ObservableObject {
                     )
                 }
             }
-            DispatchQueue.main.async { completion(buckets) }
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { completion(buckets) }
+            }
         }
     }
 
     /// 删除指定时刻之前的全部统计数据(统计库 + 应用统计),完成后刷新概览。
     /// 双库按自然日对齐边界:边界日要么两边都保留整天,要么都删整天,
     /// 避免「统计库删到当天时刻、应用库保留整天」的错位。
-    func deleteData(before date: Date, completion: @escaping () -> Void) {
+    func deleteData(before date: Date, completion: @escaping @Sendable () -> Void) {
         maintenanceQueue.async { [weak self] in
             if let self {
                 let dayStart = self.calendar.startOfDay(for: date)
                 self.database?.deleteBefore(dayStart)
                 self.processStore?.deleteBefore(day: StatisticsProcessStore.dayKey(date, calendar: self.calendar))
-                self.refreshOverview()
+                // recorder 中途释放也必须回置调用方 busy 状态,否则按钮永久禁用
+                self.refreshOverview(completion: completion)
+            } else {
+                Task { @MainActor in completion() }
             }
-            // recorder 中途释放也必须回置调用方 busy 状态,否则按钮永久禁用
-            DispatchQueue.main.async { completion() }
         }
     }
 
     /// 删除单个浏览桶(统计库三层区间 + 应用统计对应日区间),完成后刷新概览。
-    /// 报表缓存不在此列,由存储页独立入口清理。
     /// 清空应用统计(进程聚合/身份图标/电池快照,使用打卡保留),完成后刷新概览。
-    func clearAppStats(completion: @escaping () -> Void) {
+    func clearAppStats(completion: @escaping @Sendable () -> Void) {
         maintenanceQueue.async { [weak self] in
             if let self {
                 self.processStore?.deleteAll()
-                self.refreshOverview()
+                self.refreshOverview(completion: completion)
+            } else {
+                Task { @MainActor in completion() }
             }
-            DispatchQueue.main.async { completion() }
         }
     }
 
-    /// 删除报表缓存文件,完成后刷新概览。
-    func clearReportCache(completion: @escaping () -> Void) {
-        maintenanceQueue.async { [weak self] in
-            if let self {
-                try? FileManager.default.removeItem(at: StatisticsReportBuilder.outputURL)
-                self.refreshOverview()
-            }
-            DispatchQueue.main.async { completion() }
-        }
-    }
-
-    /// 清空全部统计数据(统计库 + 应用统计 + 报表文件),完成后刷新概览。
-    func deleteAllData(completion: @escaping () -> Void) {
+    /// 清空全部统计数据(统计库 + 应用统计),完成后刷新概览。
+    func deleteAllData(completion: @escaping @Sendable () -> Void) {
         maintenanceQueue.async { [weak self] in
             if let self {
                 self.database?.deleteAll()
                 self.processStore?.deleteAll()
-                try? FileManager.default.removeItem(at: StatisticsReportBuilder.outputURL)
-                self.refreshOverview()
+                self.refreshOverview(completion: completion)
+            } else {
+                Task { @MainActor in completion() }
             }
-            DispatchQueue.main.async { completion() }
         }
     }
 
     /// 日桶:日层历史 + 今日由分钟层现算(日层仅在翻日后落库)。
-    private func dayBuckets(database: StatisticsDatabase, now: Date) -> [StorageBucket] {
+    nonisolated private func dayBuckets(database: StatisticsDatabase, now: Date) -> [StorageBucket] {
         let todayStart = calendar.startOfDay(for: now)
         var rows = database.dayRows(from: .distantPast, to: now.addingTimeInterval(86400))
         let todayKey = Int64(todayStart.timeIntervalSince1970)

@@ -14,9 +14,21 @@ import SwiftUI
 final class QuickToolsStore: ObservableObject {
     static let shared = QuickToolsStore()
 
+    /// 自动解锁时长的持久化键:设置页写入,本 store 启动时据此恢复一次。
+    static let autoUnlockMinutesDefaultsKey = "settings.quickTools.keyboardLockAutoUnlockMinutes"
+    /// 键盘锁定是否同时拦截外接键盘的持久化键:设置页写入,默认只拦截内置键盘。
+    static let blocksExternalDefaultsKey = "settings.quickTools.keyboardLockBlocksExternal"
+
     /// 键盘锁定激活中:键盘事件被 tap 拦截,鼠标不受影响;解锁入口
     /// 为本功能开关(快捷键会被 tap 一并吞掉)。
     @Published private(set) var keyboardLocked = false
+    /// 键盘锁定范围:默认只拦截内置键盘,依用户在设置中的偏好持久化。
+    @Published private(set) var keyboardLockScope: KeyboardLockScope = .internalOnly
+    /// 本轮锁定的自动解锁时长(分钟),取设置页的档位。
+    @Published private(set) var keyboardLockAutoUnlockMinutes = KeyboardLockController.defaultAutoUnlockMinutes
+    /// 键盘拓扑:已连接外接键盘名称与本机是否存在内置键盘。
+    /// 未锁定时 controller 不持有 HID 监听,插拔回调不活跃,由调用方主动刷新。
+    @Published private(set) var keyboardTopology = KeyboardLockController.KeyboardTopology()
     /// 本轮锁定的自动解锁截止时刻,未锁定为 nil。header 倒计时徽章
     /// 据此逐秒刷新,与 KeyboardLockController 的兜底计时器同源。
     @Published private(set) var keyboardLockAutoUnlockDate: Date?
@@ -24,6 +36,18 @@ final class QuickToolsStore: ObservableObject {
     /// 已授权为 nil。浮层磁贴据此显示"需要什么授权"的小字;授权即隐、
     /// 撤销复现,与键盘锁定联动同拍发布。
     @Published private(set) var keyboardLockPermissionHint: String?
+
+    /// 浮层磁贴的提示行文案:常态为 nil,只在"此刻会出问题"的状态下出现。
+    /// 两种来源互斥——未授权时不可能处于已锁定态,故直接取先到者。
+    var keyboardLockHint: String? {
+        // 「仅内置」锁定中却没有外接键盘:内置键盘已被拦截,而机器上再没有
+        // 别的输入源,用户会以为键盘坏了。
+        if keyboardLocked, keyboardLockScope == .internalOnly, !hasExternalKeyboard {
+            return String(localized: "quicktools.keyboard-lock.locked-without-external")
+        }
+        return keyboardLockPermissionHint
+    }
+
     /// 系统防休眠激活中:阻止空闲引发的系统休眠(屏幕可正常熄灭;
     /// 合盖是否休眠由硬件/外接条件决定,断言不参与)。
     @Published private(set) var systemSleepPrevented = false
@@ -56,30 +80,72 @@ final class QuickToolsStore: ObservableObject {
 
     private var displayAssertionID: IOPMAssertionID?
     private var systemAssertionID: IOPMAssertionID?
-    #if DIRECT_DISTRIBUTION
-    private typealias KeyboardLockPermission = AccessibilityPermissionService
-    #else
-    private typealias KeyboardLockPermission = InputMonitoringPermissionService
-    #endif
     private let keyboardLock = KeyboardLockController()
-    private let keyboardLockPermission = KeyboardLockPermission.shared
+    private let keyboardLockPermission = AccessibilityPermissionService.shared
     /// 挂起标记:已表达上锁意图、等待授权通过或 tap 可建立;
     /// 挂起期间再次点击开关视为撤销意图。
     private var pendingKeyboardLock = false
     private var permissionCancellable: AnyCancellable?
-    #if !DIRECT_DISTRIBUTION
-    /// 授权通过后事件 tap 侧信任缓存存在传播延迟(实测约 40 秒),
-    /// 期间 tapCreate 失败,挂起态按固定间隔重试直到成功。
-    private var tapRetryTimer: DispatchSourceTimer?
-    private static let tapRetryInterval: TimeInterval = 5
-    #endif
 
     private init() {
+        let storedAutoUnlock = UserDefaults.standard.object(forKey: Self.autoUnlockMinutesDefaultsKey) as? Int
+        if let storedAutoUnlock, KeyboardLockController.autoUnlockMinuteOptions.contains(storedAutoUnlock) {
+            keyboardLockAutoUnlockMinutes = storedAutoUnlock
+        }
+        let storedBlocksExternal = UserDefaults.standard.bool(forKey: Self.blocksExternalDefaultsKey)
+        keyboardLockScope = storedBlocksExternal ? .all : .internalOnly
+
         keyboardLock.onAutoUnlock = { [weak self] in
             // controller 到点已自行 stop,此处只同步发布态(倒计时随之清空)。
-            self?.setKeyboardLocked(false)
+            Task { @MainActor [weak self] in
+                self?.setKeyboardLocked(false)
+            }
+        }
+        keyboardLock.onExternalKeyboardDisconnected = { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                if self.keyboardLocked && self.keyboardLockScope == .internalOnly {
+                    self.keyboardLock.stop()
+                    self.setKeyboardLocked(false)
+                }
+                self.refreshKeyboardTopology()
+            }
+        }
+        keyboardLock.onExternalKeyboardsChanged = { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.refreshKeyboardTopology()
+            }
         }
         observeKeyboardLockPermission()
+        refreshKeyboardTopology()
+    }
+
+    /// 已连接的外接键盘名称;空数组即没有外接键盘。
+    var externalKeyboardNames: [String] { keyboardTopology.externalNames }
+    var hasExternalKeyboard: Bool { !keyboardTopology.externalNames.isEmpty }
+    var hasBuiltInKeyboard: Bool { keyboardTopology.hasBuiltIn }
+
+    /// 刷新键盘拓扑。范围设为「仅内置」时,它决定锁定后还有没有可用输入,
+    /// 因此设置页每次出现与每次落锁前都重新扫一次。
+    func refreshKeyboardTopology() {
+        keyboardTopology = KeyboardLockController.scanKeyboardTopology()
+    }
+
+    /// 切换锁定范围(设置页「外接键盘」子开关);锁定中则平滑热切换新范围。
+    func setKeyboardLockScope(_ scope: KeyboardLockScope) {
+        guard keyboardLockScope != scope else { return }
+        keyboardLockScope = scope
+        UserDefaults.standard.set(scope == .all, forKey: Self.blocksExternalDefaultsKey)
+        if keyboardLocked {
+            _ = keyboardLock.start(scope: scope, autoUnlockMinutes: keyboardLockAutoUnlockMinutes)
+        }
+    }
+
+    /// 设置页改动的自动解锁时长。下一轮锁定生效:本轮锁定中改档位不重排
+    /// 已有截止时刻,避免静默缩短正在生效的锁定。
+    func setKeyboardLockAutoUnlockMinutes(_ minutes: Int) {
+        guard KeyboardLockController.autoUnlockMinuteOptions.contains(minutes) else { return }
+        keyboardLockAutoUnlockMinutes = minutes
     }
 
     /// 键盘锁定的权限联动:授权通过且处于挂起态时自动上锁;
@@ -118,6 +184,10 @@ final class QuickToolsStore: ObservableObject {
     /// 发布,header 徽章不会出现「已解锁还挂着倒计时」的中间帧。
     private func setKeyboardLocked(_ locked: Bool) {
         keyboardLocked = locked
+        if !locked {
+            let storedBlocksExternal = UserDefaults.standard.bool(forKey: Self.blocksExternalDefaultsKey)
+            keyboardLockScope = storedBlocksExternal ? .all : .internalOnly
+        }
         keyboardLockAutoUnlockDate = keyboardLock.autoUnlockDeadline
     }
 
@@ -129,64 +199,36 @@ final class QuickToolsStore: ObservableObject {
             setKeyboardLocked(false)
             return
         }
+        guard keyboardLockPermission.isTrusted else {
+            pendingKeyboardLock = true
+            keyboardLockPermission.request(titleKey: "quicktools.permission.accessibility.guide-title")
+            return
+        }
         if pendingKeyboardLock {
             cancelPendingLock()
             return
         }
         pendingKeyboardLock = true
-        guard keyboardLockPermission.isTrusted else {
-            keyboardLockPermission.request()
-            return
-        }
         attemptPendingLock()
     }
 
-    /// 尝试落锁:tap 建立成功则点亮锁定态;失败时 App Store 渠道
-    /// 多处于授权后的信任缓存传播窗口,进入定时重试,Direct 渠道
-    /// 授权即生效,失败直接放弃本次意图。
+    /// 尝试落锁:tap 建立成功则点亮锁定态;失败直接放弃本次意图。
     private func attemptPendingLock() {
         guard pendingKeyboardLock, !keyboardLocked else { return }
-        if keyboardLock.start() {
+        refreshKeyboardTopology()
+        if keyboardLock.start(scope: keyboardLockScope, autoUnlockMinutes: keyboardLockAutoUnlockMinutes) {
             pendingKeyboardLock = false
             setKeyboardLocked(true)
-            #if !DIRECT_DISTRIBUTION
-            stopTapRetry()
-            #endif
         } else {
-            #if !DIRECT_DISTRIBUTION
-            startTapRetry()
-            #else
             pendingKeyboardLock = false
-            #endif
         }
     }
 
-    /// 撤销挂起的上锁意图。
+    /// 撤销挂起的上锁意图并关闭权限引导浮窗。
     private func cancelPendingLock() {
         pendingKeyboardLock = false
-        #if !DIRECT_DISTRIBUTION
-        stopTapRetry()
-        #endif
+        AccessibilityPermissionGuide.shared.dismiss()
     }
-
-    #if !DIRECT_DISTRIBUTION
-    /// 传播窗口内按固定间隔重试建 tap,直到成功或意图被撤销。
-    private func startTapRetry() {
-        guard tapRetryTimer == nil else { return }
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        timer.schedule(deadline: .now() + Self.tapRetryInterval, repeating: Self.tapRetryInterval)
-        timer.setEventHandler { [weak self] in
-            self?.attemptPendingLock()
-        }
-        tapRetryTimer = timer
-        timer.resume()
-    }
-
-    private func stopTapRetry() {
-        tapRetryTimer?.cancel()
-        tapRetryTimer = nil
-    }
-    #endif
 
     // MARK: - 系统防休眠
 

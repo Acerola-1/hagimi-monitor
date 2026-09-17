@@ -1,6 +1,6 @@
 import Foundation
 
-enum MonitorConstants {
+nonisolated enum MonitorConstants {
     // MARK: - Severity Thresholds
     static let criticalThreshold = 88.0
     static let warningThreshold = 72.0

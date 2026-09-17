@@ -9,8 +9,8 @@ import Foundation
 /// Terminated = 0 表示策略仍在执行。
 ///
 /// 成本与缓存:pmset 为常驻进程调用、毫秒级返回;结果缓存 60s,调用发生
-/// 在采样后台队列,不触主线程。失败/无数据一律返 nil,UI 显"--"。
-final class ChargeLimitProbe {
+/// 内部通过 NSLock 保护 cache 元组，多线程并发查询安全。
+nonisolated final class ChargeLimitProbe: @unchecked Sendable {
     private static let cacheInterval: TimeInterval = 60
     /// pmset 正常毫秒级返回;超时则终止进程并返 nil。
     private static let probeTimeout: DispatchTimeInterval = .seconds(4)
@@ -49,10 +49,10 @@ final class ChargeLimitProbe {
         }
 
         // 读输出放后台线程,信号量等待,超时终止进程并放弃本次结果。
-        nonisolated(unsafe) var output: Data?
+        let outputBox = SamplerProcessOutputBox()
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
-            output = pipe.fileHandleForReading.readDataToEndOfFile()
+            outputBox.data = pipe.fileHandleForReading.readDataToEndOfFile()
             done.signal()
         }
 
@@ -62,7 +62,7 @@ final class ChargeLimitProbe {
         }
         task.waitUntilExit()
 
-        guard task.terminationStatus == 0, let output,
+        guard task.terminationStatus == 0, let output = outputBox.data,
               let text = String(data: output, encoding: .utf8) else {
             return nil
         }

@@ -2,25 +2,25 @@ import AppKit
 import Foundation
 import OSLog
 
-private let mediaKeyLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "MediaKey")
+private nonisolated let mediaKeyLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "MediaKey")
 
-enum MediaKey {
+nonisolated enum MediaKey: Hashable, Sendable {
     case brightnessUp, brightnessDown
     case volumeUp, volumeDown, mute
 }
 
-struct MediaKeyEvent {
+nonisolated struct MediaKeyEvent: Sendable {
     let key: MediaKey
     let isPressed: Bool
     let isRepeat: Bool
     let modifiers: NSEvent.ModifierFlags
 }
 
-final class MediaKeyTapBridge {
-    typealias Handler = (MediaKeyEvent) -> Bool
+/// 线程安全不变量：MediaKeyTapBridge 仅由主线程 MediaKeyController 调用管理生命周期，底层 MachPort/RunLoop 由 cleanupBox 释放。
+nonisolated final class MediaKeyTapBridge: @unchecked Sendable {
+    typealias Handler = @MainActor (MediaKeyEvent) -> Bool
 
-    private var eventTap: CFMachPort?
-    private var runLoopSource: CFRunLoopSource?
+    private let cleanupBox = MediaKeyTapCleanupBox()
     private var handler: Handler?
     private var enabledKeys: Set<MediaKey> = []
 
@@ -47,37 +47,31 @@ final class MediaKeyTapBridge {
             return false
         }
 
-        let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0)
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, tap, 0) else {
+            CGEvent.tapEnable(tap: tap, enable: false)
+            mediaKeyLog.error("CFMachPortCreateRunLoopSource failed")
+            return false
+        }
         CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
         CGEvent.tapEnable(tap: tap, enable: true)
 
-        self.eventTap = tap
-        self.runLoopSource = source
+        cleanupBox.install(eventTap: tap, runLoopSource: source)
         mediaKeyLog.notice("MediaKeyTapBridge started with \(keys.count, privacy: .public) keys")
         return true
     }
 
     func stop() {
-        if let tap = eventTap {
-            CGEvent.tapEnable(tap: tap, enable: false)
-        }
-        if let source = runLoopSource {
-            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
-        }
-        eventTap = nil
-        runLoopSource = nil
+        cleanupBox.cleanup()
         handler = nil
         enabledKeys = []
     }
-
-    deinit { stop() }
 
     private static let tapCallback: CGEventTapCallBack = { _, type, cgEvent, refcon in
         guard let refcon else { return Unmanaged.passUnretained(cgEvent) }
         let bridge = Unmanaged<MediaKeyTapBridge>.fromOpaque(refcon).takeUnretainedValue()
 
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
-            if let tap = bridge.eventTap {
+            if let tap = bridge.cleanupBox.eventTap {
                 CGEvent.tapEnable(tap: tap, enable: true)
             }
             return Unmanaged.passUnretained(cgEvent)
@@ -129,9 +123,50 @@ final class MediaKeyTapBridge {
             modifiers: nsEvent.modifierFlags
         )
 
-        if bridge.handler?(event) == true {
+        let handled = MainActor.assumeIsolated {
+            bridge.handler?(event) == true
+        }
+
+        if handled {
             return nil
         }
         return Unmanaged.passUnretained(cgEvent)
+    }
+}
+
+/// 线程安全清理容器：在 deinit 阶段释放底层 MachPort 与 RunLoopSource。
+private nonisolated final class MediaKeyTapCleanupBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedEventTap: CFMachPort?
+    private var storedRunLoopSource: CFRunLoopSource?
+
+    var eventTap: CFMachPort? {
+        lock.withLock { storedEventTap }
+    }
+
+    func install(eventTap: CFMachPort, runLoopSource: CFRunLoopSource) {
+        lock.withLock {
+            storedEventTap = eventTap
+            storedRunLoopSource = runLoopSource
+        }
+    }
+
+    nonisolated func cleanup() {
+        let resources: (CFMachPort?, CFRunLoopSource?) = lock.withLock {
+            let resources = (storedEventTap, storedRunLoopSource)
+            storedEventTap = nil
+            storedRunLoopSource = nil
+            return resources
+        }
+        if let tap = resources.0 {
+            CGEvent.tapEnable(tap: tap, enable: false)
+        }
+        if let source = resources.1 {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
+        }
+    }
+
+    deinit {
+        cleanup()
     }
 }

@@ -2648,7 +2648,7 @@ private struct TopProcessRowData {
     let translated: Bool
 }
 
-/// 通用 TOP 进程列表:分隔线 + 固定 5 行 + 可选 Rosetta 横幅。
+/// 通用 TOP 进程列表:可选分隔线 + 固定 5 行 + 可选 Rosetta 横幅。
 /// 内存/CPU/GPU 三列表主体完全一致,差异(值格式/角标/横幅)收敛为参数,
 /// 避免三份近逐字重复的视图各自漂移。
 private struct TopProcessList: View {
@@ -2657,6 +2657,10 @@ private struct TopProcessList: View {
     let theme: MonitorPanelTheme
     /// CPU 列表在存在转译进程时展示汇总横幅;其余列表传 false。
     let showRosettaBanner: Bool
+    /// 是否在顶部绘制贯穿分隔线(分隔线与列表行的间距随之省略)。
+    /// 列表上方是同级指标格子时开启,把格子与列表分成两段;直接挂在分区头
+    /// 下方的场景传 false——分区头自带贯穿分隔线,再画一条只是叠在同一处。
+    var showsSeparator: Bool = true
 
     /// 固定展示 top 5 个位置:真实数据从上往下填,空位显“—”占位。
     private static let rowCount = 5
@@ -2665,9 +2669,11 @@ private struct TopProcessList: View {
         let translatedCount = rows.filter(\.translated).count
 
         VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: kind))
-                .frame(height: 1)
+            if showsSeparator {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: kind))
+                    .frame(height: 1)
+            }
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
@@ -2748,7 +2754,8 @@ private struct MemoryProcessList: View {
 // MARK: - 电源排名列表
 
 /// 电源排名页（拓扑 / 健康 / 排名 / 供电 的第三页）：逐进程能耗实测的前 5 名应用。
-/// 视觉沿用 CPU/内存/GPU 共用的 `TopProcessList`——分隔线、5 行、图标 + 名称 + 右对齐数值。
+/// 视觉沿用 CPU/内存/GPU 共用的 `TopProcessList`——5 行、图标 + 名称 + 右对齐数值。
+/// 顶部不画分隔线：本页整块内容直接挂在分区头下方，分区头已自带贯穿分隔线。
 /// 数值为该应用的实测平均功率（瓦），保留两位小数以免轻载应用被四舍五入成 0.0 W。
 /// 口径仍是同用户可读进程（系统进程读不到，不在榜单内）。
 /// 设置页预览也复用本视图，故不加 private。
@@ -2769,7 +2776,8 @@ struct PowerAppRankingList: View {
                 )
             },
             theme: theme,
-            showRosettaBanner: false
+            showRosettaBanner: false,
+            showsSeparator: false
         )
     }
 }

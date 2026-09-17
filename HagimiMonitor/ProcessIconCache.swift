@@ -15,19 +15,31 @@ import ImageIO
 ///
 /// 线程安全:使用 `CGImage` + `CGContext` 完成缩放(不触碰 `NSGraphicsContext.current`
 /// 或 `lockFocus`),可在后台采样队列安全调用,与既有 `enrich*` 的后台线程约定一致。
-enum ProcessIconCache {
+nonisolated enum ProcessIconCache {
     /// 展示尺寸(pt)。面板内所有进程图标均以 16pt 显示。
     private static let side: CGFloat = 16
     /// 位图倍率:@2x 足够在 Retina 上清晰,又把单张位图控制在 ~4KB。
     private static let scale: CGFloat = 2
 
-    private static let cache: NSCache<NSString, NSImage> = {
-        let cache = NSCache<NSString, NSImage>()
-        // 面板 4 个列表各最多 5 行,去重后同时可见的不同进程远不足 64;留足余量覆盖
-        // 采样间进程增减,又不会让历史项无限常驻。
-        cache.countLimit = 64
-        return cache
-    }()
+    /// NSCache 自身在 Foundation 中具备全线程安全保证（内部有锁保护其并发存取）。
+    /// 安全不变式：委托 NSCache 自身的线程安全机制，向外部提供线程安全读写。
+    nonisolated private final class ThreadSafeIconCache: @unchecked Sendable {
+        private let cache: NSCache<NSString, NSImage> = {
+            let cache = NSCache<NSString, NSImage>()
+            cache.countLimit = 64
+            return cache
+        }()
+
+        func object(forKey key: NSString) -> NSImage? {
+            cache.object(forKey: key)
+        }
+
+        func setObject(_ obj: NSImage, forKey key: NSString) {
+            cache.setObject(obj, forKey: key)
+        }
+    }
+
+    private static let cache = ThreadSafeIconCache()
 
     /// 取一张已降采样的小图标。可在任意线程调用;取不到图标时返回 nil,视图侧回退到占位图标。
     /// - Parameters:

@@ -1,5 +1,5 @@
 /* 硬件模块块:把每个监控模块收进「主列 + 右栏规格」,并追加「本机」模块。
-   由 StatisticsReportBuilder 内联进报表主脚本,因此可以直接用模板里的
+   由 StandaloneHTMLReportExporter 内联进报表主脚本,因此可以直接用模板里的
    $ / el / sf / I / DATA 与 reduceMotion,不需要另建通信层。 */
 
 /* 模块 → 右栏规格:anchor 是要收进主列的板块 id,groups 是该模块要展示的硬件分组。
@@ -33,62 +33,35 @@ function hwEsc(text) {
     .replace(/"/g, "&quot;");
 }
 
-/* 规格行:标签左、值右;缺失值走 .missing 显示 “—”。
-   scope + dataLabel 供实时推送按 (分类, 行键) 定位到具体一行;
-   dataLabel 缺省时与显示文本相同(静态规格行就是文本,live 行是短键)。 */
-function hwRow(scope, label, value, dataLabel) {
+/* 规格行:标签左、值右;缺失值走 .missing 显示 “—”。 */
+function hwRow(label, value) {
   var missing = value == null || value === "";
-  var key = dataLabel || label;
-  return '<div class="hw-row" data-hw-scope="' + hwEsc(scope) + '" data-hw-label="' + hwEsc(key) + '">' +
+  return '<div class="hw-row">' +
     '<span class="k">' + hwEsc(label) + "</span>" +
     '<span class="v' + (missing ? " missing" : "") + '">' + (missing ? "—" : hwEsc(value)) + "</span></div>";
 }
 
-function hwGroupBlock(scope, group) {
+function hwGroupBlock(group) {
   return '<div class="hw-group"><div class="hw-group-name">' + hwEsc(group.name) + "</div>" +
     '<div class="hw-rows">' +
-    group.facts.map(function (f) { return hwRow(scope, f.label, f.value); }).join("") +
+    group.facts.map(function (f) { return hwRow(f.label, f.value); }).join("") +
     "</div></div>";
 }
-
-/* 每个模块右栏的「运行状态」组:这些行的值由 Swift 侧每秒推送(见
-   window.__HAGIMI_HARDWARE_LIVE__)。数组元素是文案短键(stats.r.hwLive*),
-   显示时经 t() 解析,data-hw-label 也存短键——推送与匹配走 key,不走显示文本,
-   两种语言的界面上都能对上行。初始一律显示 “—”,等第一帧推送填上——
-   宁可先空着,也不要拿快照的历史均值冒充实时读数。 */
-var HW_LIVE_ROWS = {
-  cpu: ["hwLiveCpuUsage", "hwLiveThermal", "hwLiveProcessCount", "hwLiveIdle"],
-  gpu: ["hwLiveGpuUsage", "hwLiveGpuMemory", "hwLiveRenderer", "hwLiveTiler"],
-  memory: ["hwLiveMemUsed", "hwLiveCompressed", "hwLiveSwap", "hwLivePressure"],
-  network: ["hwLiveDownload", "hwLiveUpload", "hwLiveSignal"],
-  disk: ["hwLiveDiskUsed", "hwLiveDiskFree", "hwLiveDiskRead", "hwLiveDiskWrite"],
-  power: ["hwLiveBatteryLevel", "hwLiveBatteryState", "hwLiveBatteryTemp"]
-};
 
 function hwRailCard(spec) {
   // 分组由 App 侧选好随载荷下发(见 HardwareInventory.rails):报表不按名字猜,
   // 两侧改名不会再静默断链。
   var groups = ((DATA.hardware && DATA.hardware.rails) || {})[spec.id] || [];
   var card = el("aside", "hw-card");
-  card.setAttribute("data-hw-scope", spec.id);
 
-  var blocks = groups.map(function (g) { return hwGroupBlock(spec.id, g); });
-  var liveLabels = HW_LIVE_ROWS[spec.id] || [];
-  if (liveLabels.length) {
-    blocks.push(
-      '<div class="hw-group"><div class="hw-group-name">' + hwEsc(t("hwLiveGroup")) +
-      '<span class="rt"><span class="dot"></span>' + hwEsc(t("hwLiveTag")) + "</span></div>" +
-      '<div class="hw-rows">' +
-      liveLabels.map(function (key) { return hwRow(spec.id, t(key), null, key); }).join("") +
-      "</div></div>");
-  }
+  var blocks = groups.map(function (g) { return hwGroupBlock(g); });
 
   card.innerHTML =
     '<div class="hw-card-head"><span class="t">' + hwEsc(t("hwCardTitle")) + "</span>" +
     '<span class="src">' + hwEsc((DATA.meta && DATA.meta.device) || "") + "</span></div>" +
     (blocks.length
       ? blocks.join("")
-      : '<div class="hw-group"><div class="hw-rows">' + hwRow(spec.id, t("hwNoData"), null) + "</div></div>");
+      : '<div class="hw-group"><div class="hw-rows">' + hwRow(t("hwNoData"), null) + "</div></div>");
   return card;
 }
 
@@ -154,7 +127,7 @@ function hwPane(category) {
     category.groups.map(function (group) {
       return '<div class="hw-pane-group"><h4>' + hwEsc(group.name) + "</h4>" +
         '<div class="hw-rows">' +
-        group.facts.map(function (f) { return hwRow(category.id, f.label, f.value); }).join("") +
+        group.facts.map(function (f) { return hwRow(f.label, f.value); }).join("") +
         "</div></div>";
     }).join("") + "</div>";
   // 渲染后同步测量并抬高固定高度(强制布局一次,切换频率低,开销可忽略)
@@ -233,24 +206,3 @@ function buildHardwareLayout() {
   });
   hwBuildMachine(++index);
 }
-
-/* ── 实时推送入口 ──────────────────────────────────────────
-   Swift 侧按 (作用域, 标签) 推送当前读数;作用域是模块 id 或本机分类 id。
-   只更新列在 values 里的行:静态规格不会被碰,所以「规格 vs 读数」的区分是数据驱动的。 */
-window.__HAGIMI_HARDWARE_LIVE__ = function (values) {
-  if (!values) return;
-  Object.keys(values).forEach(function (scope) {
-    var readings = values[scope] || {};
-    Object.keys(readings).forEach(function (label) {
-      var selector = '[data-hw-scope="' + CSS.escape(scope) + '"][data-hw-label="' + CSS.escape(label) + '"]';
-      document.querySelectorAll(selector).forEach(function (row) {
-        var value = row.querySelector(".v");
-        if (!value) return;
-        var text = readings[label];
-        var missing = text == null || text === "";
-        value.textContent = missing ? "—" : text;
-        value.classList.toggle("missing", missing);
-      });
-    });
-  });
-};

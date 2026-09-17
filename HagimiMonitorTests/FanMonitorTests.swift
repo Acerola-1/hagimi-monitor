@@ -8,8 +8,8 @@ import Testing
 /// 用于 FanSampler 的集成测试:注入预设的 fanCount / allFans 返回值,
 /// 验证采样逻辑(命名、状态判断、available 门控)无需真实硬件。
 final class MockFanSMCReader: FanSMCReading {
-    var fanCountResult: Int?
-    var allFansResult: [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)]
+    let fanCountResult: Int?
+    let allFansResult: [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)]
 
     init(fanCount: Int?, allFans: [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)]) {
         self.fanCountResult = fanCount

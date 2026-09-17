@@ -50,7 +50,8 @@ extension View {
 }
 
 /// 实验采集仅累计自有自然测量，关闭实验采集时不进入锁或输出日志。
-final class PanelLayoutCounters: @unchecked Sendable {
+/// 内部通过 NSLock 保护 counts 字典，多线程并发采集安全。
+nonisolated final class PanelLayoutCounters: @unchecked Sendable {
     static let shared = PanelLayoutCounters()
     private let enabled = ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] != nil
     private let lock = NSLock()

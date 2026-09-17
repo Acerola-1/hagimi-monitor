@@ -13,7 +13,8 @@ import Foundation
 /// 失败语义:进程异常退出、超时、JSON 解析失败都返 nil;「进程成功但返回空清单」
 /// 返空数组。两者必须区分——本机 `SPUSBDataType` / `SPSerialATADataType` /
 /// `SPEthernetDataType` 就是「成功但空」,那不是读取失败。
-final class SystemProfilerRunner {
+/// 内部通过 NSLock 保护 cache 字典，支持多线程并发查询与缓存。
+nonisolated final class SystemProfilerRunner: @unchecked Sendable {
     /// DataType → 原始条目。键名与 system_profiler 的 JSON 顶层键一致。
     typealias ItemsByType = [String: [[String: Any]]]
 
@@ -81,10 +82,10 @@ final class SystemProfilerRunner {
 
         // readDataToEndOfFile 会阻塞到进程退出:挂起时本线程会永久等待,
         // 所以读取放到后台队列,这里用信号量等,超时即终止进程并放弃本次结果。
-        nonisolated(unsafe) var output: Data?
+        let outputBox = SamplerProcessOutputBox()
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
-            output = pipe.fileHandleForReading.readDataToEndOfFile()
+            outputBox.data = pipe.fileHandleForReading.readDataToEndOfFile()
             done.signal()
         }
 
@@ -94,7 +95,7 @@ final class SystemProfilerRunner {
         }
         task.waitUntilExit()
 
-        guard task.terminationStatus == 0, let output else { return nil }
+        guard task.terminationStatus == 0, let output = outputBox.data else { return nil }
         guard let root = (try? JSONSerialization.jsonObject(with: output)) as? [String: Any],
               let items = root[dataType] as? [[String: Any]] else {
             return nil

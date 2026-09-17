@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-enum DisplayKind: Equatable {
+nonisolated enum DisplayKind: Equatable, Sendable {
     case builtIn
     case appleNative
     case externalDDC
@@ -10,10 +10,10 @@ enum DisplayKind: Equatable {
     case unsupported
 }
 
-struct DisplayClassifier {
-    let probeNativeBrightness: (CGDirectDisplayID) -> Bool
+nonisolated struct DisplayClassifier: Sendable {
+    let probeNativeBrightness: @Sendable (CGDirectDisplayID) -> Bool
 
-    init(probeNativeBrightness: @escaping (CGDirectDisplayID) -> Bool = DisplayClassifier.defaultProbe) {
+    init(probeNativeBrightness: @escaping @Sendable (CGDirectDisplayID) -> Bool = DisplayClassifier.defaultProbe) {
         self.probeNativeBrightness = probeNativeBrightness
     }
 

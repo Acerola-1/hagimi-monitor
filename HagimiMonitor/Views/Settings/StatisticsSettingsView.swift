@@ -22,7 +22,6 @@ struct StatisticsSettingsView: View {
     @State private var isPageOnScreen = false
     /// 是否展开所有高负载应用（默认只展示 1 个，保护下方核心用量在首屏可见）
     @State private var isAlertsExpanded = false
-    @State private var isExpandHovered = false
 
     init(
         recorder: StatisticsRecorder,
@@ -159,8 +158,8 @@ struct StatisticsSettingsView: View {
                 Text(String(localized: "stats.settings.range.week")).tag(StatisticsOverviewRange.week)
                 Text(String(localized: "stats.settings.range.month")).tag(StatisticsOverviewRange.month)
             }
-            .pickerStyle(.segmented)
             .labelsHidden()
+            .compatibleTabPickerStyle()
 
             Spacer()
         }
@@ -346,8 +345,15 @@ struct StatisticsSettingsView: View {
                     }
 
                     if groups.count > 1 {
-                        expandLineButton(groupsCount: groups.count)
-                            .padding(.top, 2)
+                        AlertExpandLineButton(
+                            isExpanded: isAlertsExpanded,
+                            groupsCount: groups.count
+                        ) {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isAlertsExpanded.toggle()
+                            }
+                        }
+                        .padding(.top, 2)
                     }
                 }
             }
@@ -375,50 +381,55 @@ struct StatisticsSettingsView: View {
         .controlSize(.small)
     }
 
-    private func expandLineButton(groupsCount: Int) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                isAlertsExpanded.toggle()
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Rectangle()
-                    .fill(Color.primary.opacity(isExpandHovered ? 0.18 : 0.10))
-                    .frame(height: 0.5)
+    /// 高负载应用展开/收起按钮：内部管理 hover 状态，避免顶层重新求值导致上方卡片闪烁。
+    private struct AlertExpandLineButton: View {
+        let isExpanded: Bool
+        let groupsCount: Int
+        let onToggle: () -> Void
 
-                HStack(spacing: 5) {
-                    Text(isAlertsExpanded
-                         ? String(localized: "stats.alerts.collapse", defaultValue: "收起高负载应用")
-                         : String(format: String(localized: "stats.alerts.expandOthers", defaultValue: "展开其余 %d 个高负载应用"), groupsCount - 1))
-                        .lineLimit(1)
-                    Image(systemName: isAlertsExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 8.5, weight: .semibold))
+        @State private var isHovered = false
+
+        var body: some View {
+            Button(action: onToggle) {
+                HStack(spacing: 8) {
+                    Rectangle()
+                        .fill(Color.primary.opacity(isHovered ? 0.18 : 0.10))
+                        .frame(height: 0.5)
+
+                    HStack(spacing: 5) {
+                        Text(isExpanded
+                             ? String(localized: "stats.alerts.collapse", defaultValue: "收起高负载应用")
+                             : String(format: String(localized: "stats.alerts.expandOthers", defaultValue: "展开其余 %d 个高负载应用"), groupsCount - 1))
+                            .lineLimit(1)
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8.5, weight: .semibold))
+                    }
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(isHovered ? Color.primary : Color.secondary)
+                    .fixedSize()
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 3.5)
+                    .background(
+                        Capsule()
+                            .fill(Color.primary.opacity(isHovered ? 0.07 : 0.035))
+                    )
+                    .overlay(
+                        Capsule()
+                            .strokeBorder(Color.primary.opacity(isHovered ? 0.14 : 0.07), lineWidth: 0.5)
+                    )
+
+                    Rectangle()
+                        .fill(Color.primary.opacity(isHovered ? 0.18 : 0.10))
+                        .frame(height: 0.5)
                 }
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(isExpandHovered ? Color.primary : Color.secondary)
-                .fixedSize()
-                .padding(.horizontal, 10)
-                .padding(.vertical, 3.5)
-                .background(
-                    Capsule()
-                        .fill(Color.primary.opacity(isExpandHovered ? 0.07 : 0.035))
-                )
-                .overlay(
-                    Capsule()
-                        .strokeBorder(Color.primary.opacity(isExpandHovered ? 0.14 : 0.07), lineWidth: 0.5)
-                )
-
-                Rectangle()
-                    .fill(Color.primary.opacity(isExpandHovered ? 0.18 : 0.10))
-                    .frame(height: 0.5)
+                .frame(maxWidth: .infinity)
+                .frame(height: 28)
+                .contentShape(Rectangle())
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 28)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .onHover { hovering in
-            isExpandHovered = hovering
+            .buttonStyle(.plain)
+            .onHover { hovering in
+                isHovered = hovering
+            }
         }
     }
 
@@ -1026,9 +1037,30 @@ private struct SettingsPageOnScreenReader: NSViewRepresentable {
     }
 }
 
+/// 自动管理多个 NotificationCenter 观察者生命周期的包装器。
+/// 安全不变式：在 deinit 时自动注销所有观察者，避免在 MainActor 隔离类的 deinit 中访问非 Sendable 数组。
+nonisolated private final class NotificationObserversBox: @unchecked Sendable {
+    private var observers: [any NSObjectProtocol] = []
+
+    func add(_ observer: any NSObjectProtocol) {
+        observers.append(observer)
+    }
+
+    func removeAll() {
+        let center = NotificationCenter.default
+        observers.forEach(center.removeObserver)
+        observers.removeAll()
+    }
+
+    deinit {
+        let center = NotificationCenter.default
+        observers.forEach(center.removeObserver)
+    }
+}
+
 private final class OnScreenObservingView: NSView {
     var onChange: ((Bool) -> Void)?
-    private var observers: [NSObjectProtocol] = []
+    private let observersBox = NotificationObserversBox()
 
     init(onChange: @escaping (Bool) -> Void) {
         self.onChange = onChange
@@ -1040,14 +1072,9 @@ private final class OnScreenObservingView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
-    deinit {
-        observers.forEach(NotificationCenter.default.removeObserver)
-    }
-
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        observers.forEach(NotificationCenter.default.removeObserver)
-        observers = []
+        observersBox.removeAll()
 
         // 未挂到窗口时不订阅通知:report() 会把「不在屏」直接回传。
         guard window != nil else {
@@ -1063,10 +1090,14 @@ private final class OnScreenObservingView: NSView {
             NSApplication.didBecomeActiveNotification,
             NSApplication.didResignActiveNotification,
         ]
-        observers = names.map { name in
-            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                self?.report()
-            }
+        for name in names {
+            observersBox.add(
+                NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.report()
+                    }
+                }
+            )
         }
         report()
     }
