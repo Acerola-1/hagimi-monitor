@@ -46,21 +46,27 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
     }
 
     /// 各分页归属的可勾指标名:面板展开区分栏渲染与设置页选项过滤同源。
-    /// 供电页为固定诊断视图、排名页为固定列表,均不含可勾指标,返回空。
+    /// 「功率流」是网格外可视化选项(无采样指标),归入承载流向图的分页:
+    /// 直连版在拓扑页、沙盒版在健康页。供电页为固定诊断视图、排名页为
+    /// 固定列表,均不含可勾指标,返回空。
     var metricNames: [String] {
         switch self {
         case .flow:
             #if DIRECT_DISTRIBUTION
-            return ["power", "display-power", "cpu-power", "gpu-power", "ane-power"]
+            return ["power", "display-power", "cpu-power", "gpu-power", "ane-power", "power-flow"]
             #else
             return ["power"]
             #endif
         case .health:
-            return [
+            var names = [
                 "health", "cycle-count", "temperature", "power-loss",
                 "voltage", "current", "cell-balance", "capacity",
                 "cell-qmax", "cell-resistance", "thermal-limit-seconds", "time-at-high-soc"
             ]
+            #if !DIRECT_DISTRIBUTION
+            names.append("power-flow")
+            #endif
+            return names
         case .ranking, .supply:
             return []
         }

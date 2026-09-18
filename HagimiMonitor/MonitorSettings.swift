@@ -156,8 +156,6 @@ final class MonitorSettings: ObservableObject {
     @Published var diskShowSystemProcesses: Bool = true
     @Published var showNetworkProcesses: Bool = true
     @Published var networkShowSystemProcesses: Bool = true
-    /// 功率流图开关(Beta):电源模块展开区的功率流可视化,默认开启,双渠道(含沙盒)均可用。
-    @Published var batteryShowPowerFlow: Bool = true
     /// 数据统计总开关:关闭后停止记录监控数据与使用打卡,历史数据保留。
     @Published var statisticsEnabled: Bool = true
     /// 通知总开关,**默认关**:关掉后菜单栏图标红点、系统通知与面板统计入口红点
@@ -236,7 +234,6 @@ final class MonitorSettings: ObservableObject {
         diskShowSystemProcesses = defaults.object(forKey: Keys.diskShowSystemProcesses) as? Bool ?? true
         showNetworkProcesses = defaults.object(forKey: Keys.showNetworkProcesses) as? Bool ?? true
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
-        batteryShowPowerFlow = defaults.object(forKey: Keys.batteryShowPowerFlow) as? Bool ?? true
         statisticsEnabled = defaults.object(forKey: Keys.statisticsEnabled) as? Bool ?? true
         alertNotificationsEnabled = defaults.object(forKey: Keys.alertNotificationsEnabled) as? Bool ?? false
         quickToolsVisible = defaults.object(forKey: Keys.quickToolsVisible) as? Bool ?? true
@@ -419,6 +416,23 @@ final class MonitorSettings: ObservableObject {
             defaults.set(true, forKey: Keys.gpuClockStateMetricsMigrated)
         }
         #endif
+        // 一次性迁移:功率流图从独立开关内化为分页可勾选项(双渠道),给
+        // 存量用户的电池指标列表补上该项;尊重用户历史关闭偏好(若旧开关显式为 false 则不补)。
+        if !defaults.bool(forKey: Keys.batteryPowerFlowMigrated) {
+            if var merged = loadedMetrics[.battery], !merged.isEmpty {
+                let previouslyEnabled = defaults.object(forKey: Keys.legacyBatteryShowPowerFlow) as? Bool ?? true
+                if previouslyEnabled {
+                    merged.insert("power-flow")
+                } else {
+                    merged.remove("power-flow")
+                }
+                if merged != loadedMetrics[.battery] {
+                    loadedMetrics[.battery] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.battery.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.batteryPowerFlowMigrated)
+        }
         enabledMetrics = loadedMetrics
 
         launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -838,13 +852,6 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $batteryShowPowerFlow
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.batteryShowPowerFlow)
-            }
-            .store(in: &cancellables)
-
         $statisticsEnabled
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1001,7 +1008,6 @@ private enum Keys {
     static let diskShowSystemProcesses = "settings.disk.showSystemProcesses"
     static let showNetworkProcesses = "settings.network.showProcesses"
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
-    static let batteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let statisticsEnabled = "settings.statistics.enabled"
     static let alertNotificationsEnabled = "settings.alerts.notificationsEnabled"
     static let quickToolsVisible = "settings.quickTools.visible"
@@ -1042,6 +1048,10 @@ private enum Keys {
     static let batteryEnergyRailsMigrated = "settings.batteryEnergyRailsMigrated"
     /// Direct 版新增 GPU 时钟态/限频/功耗上限时，给非空的 GPU 存量补齐一次。
     static let gpuClockStateMetricsMigrated = "settings.gpuClockStateMetricsMigrated"
+    /// 一次性迁移标记:功率流图内化为分页可勾选项时,给非空的电池存量补齐一次(双渠道)。
+    static let batteryPowerFlowMigrated = "settings.batteryPowerFlowMigrated"
+    /// 存量键:功率流独立开关(旧版偏好迁移用)。
+    static let legacyBatteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"

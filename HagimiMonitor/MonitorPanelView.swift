@@ -629,7 +629,7 @@ struct MonitorPanelView: View {
                 theme: theme,
                 details: enabledMetrics(for: module),
                 isExpanded: isExpanded,
-                showPowerFlow: store.settings.batteryShowPowerFlow,
+                showPowerFlow: store.settings.isMetricEnabled("power-flow", for: module.kind),
                 panelVisible: store.isPanelVisible,
                 powerFlowActive: !store.isExpansionAnimating
             ) {
@@ -1953,7 +1953,8 @@ private struct BatteryGlassRow: View, Equatable {
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
     var isExpanded = false
-    /// 功率流图开关(Beta,settings.battery.showPowerFlow):关闭后展开区仅保留指标网格。
+    /// 功率流图开关:设置页「功率流」选项(拓扑/健康页可勾项,无采样指标,
+    /// 不进 details,故独立传参)。
     var showPowerFlow = true
     /// 面板可见性:与 isExpanded 一起门控功率流的流光动画。
     var panelVisible = true

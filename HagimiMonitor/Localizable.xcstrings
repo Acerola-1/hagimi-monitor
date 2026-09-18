@@ -4865,6 +4865,22 @@
         }
       }
     },
+    "metric.battery.power-flow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power Flow"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功率流"
+          }
+        }
+      }
+    },
     "metric.battery.power-loss": {
       "localizations": {
         "en": {
@@ -6819,6 +6835,22 @@
         }
       }
     },
+    "quicktools.keyboard-lock.evidence-unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard source unavailable — all keys are blocked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法识别键盘来源，已按全部拦截处理"
+          }
+        }
+      }
+    },
     "quicktools.keyboard-lock.locked-without-external": {
       "localizations": {
         "en": {
@@ -6867,6 +6899,22 @@
         }
       }
     },
+    "quicktools.permission.accessibility.guide-subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add the app to Accessibility, then turn it on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将应用添加到辅助功能，打开旁边的开关即可。"
+          }
+        }
+      }
+    },
     "quicktools.permission.input-monitoring": {
       "localizations": {
         "en": {
@@ -6879,6 +6927,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要“输入监控”授权"
+          }
+        }
+      }
+    },
+    "quicktools.permission.input-monitoring.guide-subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add the app to Input Monitoring, then turn it on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将应用添加到输入监控，打开旁边的开关即可。"
           }
         }
       }
@@ -7506,38 +7570,6 @@
         }
       }
     },
-    "settings.battery.show-power-flow": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Power Flow"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "功率流"
-          }
-        }
-      }
-    },
-    "settings.battery.show-power-flow.subtitle": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Live adapter · battery · system power diagram"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "适配器 · 电池 · 系统实时功率流向图"
-          }
-        }
-      }
-    },
     "settings.battery.tab-no-metrics": {
       "localizations": {
         "en": {
@@ -8100,6 +8132,22 @@
         }
       }
     },
+    "settings.quick-tools.keyboard-lock.auto-unlock.never": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永不"
+          }
+        }
+      }
+    },
     "settings.quick-tools.keyboard-lock.auto-unlock.minutes %lld": {
       "localizations": {
         "en": {
@@ -8116,66 +8164,18 @@
         }
       }
     },
-    "settings.quick-tools.keyboard-lock.connected-external-keyboards": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected: %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已连接：%@"
-          }
-        }
-      }
-    },
     "settings.quick-tools.keyboard-lock.external": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "External Keyboard"
+            "value": "Also Lock External Keyboards"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "外接键盘"
-          }
-        }
-      }
-    },
-    "settings.quick-tools.keyboard-lock.no-built-in-keyboard": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No built-in keyboard on this Mac — turn this on to block keystrokes"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本机没有内置键盘，需要开启这一项才能拦截按键"
-          }
-        }
-      }
-    },
-    "settings.quick-tools.keyboard-lock.no-external-keyboard": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No external keyboard detected"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未检测到外接键盘"
+            "value": "同时锁定外接键盘"
           }
         }
       }
@@ -8320,22 +8320,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "关于"
-          }
-        }
-      }
-    },
-    "settings.sidebar.beta-badge": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beta"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beta"
           }
         }
       }

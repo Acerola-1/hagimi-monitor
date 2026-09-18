@@ -70,7 +70,6 @@ struct ModuleSettingsView: View {
                         kind: kind,
                         metrics: enabledMetrics,
                         memoryPressureMode: memoryPressureMode,
-                        showPowerFlow: kind == .battery && settings.batteryShowPowerFlow,
                         palette: palette,
                         batteryTab: $batteryTab
                     )
@@ -221,23 +220,9 @@ struct ModuleSettingsView: View {
             }
             #endif
 
-            // 功率流(Beta):双渠道均可用(数据源为 IORegistry 只读属性,沙盒允许),故不加 DIRECT_DISTRIBUTION 门控。
-            if kind == .battery {
-                SettingsGroup {
-                    SettingsRow(
-                        title: String(localized: "settings.battery.show-power-flow"),
-                        subtitle: String(localized: "settings.battery.show-power-flow.subtitle")
-                    ) {
-                        HStack(spacing: 6) {
-                            PowerFlowBetaBadge()
-                            Toggle("", isOn: $settings.batteryShowPowerFlow)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                        }
-                    }
-                }
-            }
-
+            // 功率流图没有独立开关:由分页选项里的「功率流」可勾项控制
+            // (直连版拓扑页、沙盒版健康页),与指标网格同一交互。
+            // 供电页为固定诊断视图、排名页为固定列表,均不含可勾指标,返回空。
             if #available(macOS 26, *) {
                 Button(String(localized: "settings.reset-defaults")) {
                     settings.resetMetrics(for: kind)
@@ -278,18 +263,6 @@ struct ModuleSettingsView: View {
                 ? MetricSwitch(id: metric.id, title: String(localized: "metric.memory.usage"), isDefault: metric.isDefault)
                 : metric
         }
-    }
-}
-
-/// 小号 Beta 胶囊徽章:用于标注实验性设置项(如功率流)。
-private struct PowerFlowBetaBadge: View {
-    var body: some View {
-        Text(String(localized: "settings.sidebar.beta-badge"))
-            .font(.system(size: 9, weight: .semibold))
-            .foregroundStyle(.secondary)
-            .padding(.horizontal, 5)
-            .padding(.vertical, 1)
-            .background(.secondary.opacity(0.15), in: Capsule())
     }
 }
 

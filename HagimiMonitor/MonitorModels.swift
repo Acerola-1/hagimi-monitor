@@ -234,6 +234,9 @@ nonisolated enum MonitorKind: String, CaseIterable, Identifiable, Sendable {
                 )
             ])
             #endif
+            // 功率流图没有对应采样指标,作为分页选项内化(直连版在拓扑页,沙盒版在健康页):
+            // 勾选即在该页尾部渲染流向图(适配器/系统负载/电池),取代原独立 Beta 开关。
+            metrics.append(MetricSwitch(id: "power-flow", title: String(localized: "metric.battery.power-flow"), isDefault: true))
             metrics.append(contentsOf: [
                 MetricSwitch(id: "voltage", title: String(localized: "metric.battery.voltage"), isDefault: true),
                 MetricSwitch(id: "current", title: String(localized: "metric.battery.current"), isDefault: true),
