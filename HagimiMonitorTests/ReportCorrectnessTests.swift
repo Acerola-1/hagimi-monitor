@@ -188,7 +188,7 @@ struct ReportCorrectnessTests {
 
     // MARK: - R07: 采样缺口与曲线断开
 
-    @Test func r07GapDetectionInsertsBreakpoints() {
+    @Test func r07GapDetectionInsertsBreakpoints() throws {
         let baseT: Int64 = 1_700_000_000
         let rows = [
             makeRow(t: baseT, cpuAvg: 20.0),
@@ -206,7 +206,7 @@ struct ReportCorrectnessTests {
         )
 
         // 应该分为两个不同的 segmentID，从而在图表中自然断开，不跨睡眠连线
-        #expect(series.count == 4)
+        try #require(series.count == 4)
         #expect(series[0].segmentID == series[1].segmentID)
         #expect(series[2].segmentID == series[3].segmentID)
         #expect(series[1].segmentID != series[2].segmentID)
@@ -214,7 +214,7 @@ struct ReportCorrectnessTests {
 
     // MARK: - R08: 压力事件恢复依据专属维度观测
 
-    @Test func r08PressureEventRecoveryRequiresDomainSpecificObservation() {
+    @Test func r08PressureEventRecoveryRequiresDomainSpecificObservation() throws {
         let baseT: Int64 = 1_700_000_000
         let now = Date(timeIntervalSince1970: TimeInterval(baseT + 3600))
 
@@ -229,7 +229,7 @@ struct ReportCorrectnessTests {
             source: .minutes,
             now: now
         )
-        #expect(eventsInterrupted.count == 1)
+        try #require(eventsInterrupted.count == 1)
         // 没有内存维度的有效观测，绝不能宣告 recovered！
         #expect(eventsInterrupted[0].state != .recovered)
 
@@ -240,7 +240,7 @@ struct ReportCorrectnessTests {
             source: .minutes,
             now: now
         )
-        #expect(eventsRecovered.count == 1)
+        try #require(eventsRecovered.count == 1)
         #expect(eventsRecovered[0].state == .recovered)
     }
 
@@ -255,7 +255,7 @@ struct ReportCorrectnessTests {
 
     // MARK: - R15: 每日汇总聚合
 
-    @Test func r15DailySummaryAggregatesMultipleRowsIntoSingleDay() {
+    @Test func r15DailySummaryAggregatesMultipleRowsIntoSingleDay() throws {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let t1 = Int64(today.timeIntervalSince1970) + 3600
@@ -270,11 +270,15 @@ struct ReportCorrectnessTests {
             days: [],
             from: today,
             to: today.addingTimeInterval(86400),
-            calendar: calendar
+            calendar: calendar,
+            // 今日桶只聚合到 now(不把未发生的采样算进去)。夹具行落在今天
+            // 01:00/02:00,now 注入当天 03:00——行恒在已采样区间,测试不再
+            // 随真实时钟漂移(0~2 点运行时夹具行会落在"未来"而被截掉)。
+            now: today.addingTimeInterval(3 * 3600)
         )
 
         #expect(dailyRows.count == 1)
-        let d = dailyRows[0]
+        let d = try #require(dailyRows.first)
         #expect(d.cpuAvg == 30.0)      // (20+40)/2
         #expect(d.cpuPeak == 60.0)     // max(30, 60)
         #expect(d.netDownTotal == 3000) // 1000 + 2000 (累计量，非速率)
@@ -283,7 +287,7 @@ struct ReportCorrectnessTests {
 
     // MARK: - R17: 日历分组按时间排序，避免跨年倒序
 
-    @Test func r17DailyBarsSortedChronologicallyAcrossYears() {
+    @Test func r17DailyBarsSortedChronologicallyAcrossYears() throws {
         let calendar = Calendar.current
         // 构造 2025-12-31 与 2026-01-01 两行
         var comp1 = DateComponents(); comp1.year = 2025; comp1.month = 12; comp1.day = 31
@@ -300,7 +304,7 @@ struct ReportCorrectnessTests {
             calendar: calendar
         )
 
-        #expect(metrics.dailyBars.count == 2)
+        try #require(metrics.dailyBars.count == 2)
         // 第一项必须是 2025-12-31，第二项必须是 2026-01-01
         #expect(metrics.dailyBars[0].date < metrics.dailyBars[1].date)
         #expect(metrics.dailyBars[0].downBytes == 1000)

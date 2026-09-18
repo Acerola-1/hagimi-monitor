@@ -9,8 +9,6 @@ struct ModuleRowPreview: View {
     /// 已勾选指标(含压力模式下的标题替换)。
     let metrics: [MetricSwitch]
     let memoryPressureMode: Bool
-    /// 功率流开关(仅电池模块消费,与面板 batteryShowPowerFlow 门控同源)。
-    let showPowerFlow: Bool
     let palette: MonitorPalette
     /// 电池模块分页选择(拓扑/健康/排名/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
@@ -259,7 +257,7 @@ struct ModuleRowPreview: View {
                 if !flowMetrics.isEmpty {
                     previewGrid(flowMetrics)
                 }
-                if showPowerFlow {
+                if showsPowerFlow {
                     PowerFlowDiagram(
                         module: MetricSampleCatalog.powerFlowModule,
                         theme: theme,
@@ -273,7 +271,7 @@ struct ModuleRowPreview: View {
                 }
                 #if !DIRECT_DISTRIBUTION
                 // 沙盒版流向图随面板迁入健康页,预览同构(示例数据)。
-                if showPowerFlow {
+                if showsPowerFlow {
                     PowerFlowDiagram(
                         module: MetricSampleCatalog.powerFlowModule,
                         theme: theme,
@@ -296,16 +294,23 @@ struct ModuleRowPreview: View {
         }
     }
 
-    /// 拓扑页已勾分项功耗(整机/屏幕/GPU),随分页联动。
-    private var flowMetrics: [MetricSwitch] {
-        let names = BatteryPageTab.flow.metricNames
-        return renderMetrics.filter { names.contains($0.id) }
+    /// 功率流图显隐:与面板 BatteryGlassRow 同源,由「功率流」选项勾选控制。
+    private var showsPowerFlow: Bool {
+        metrics.contains { $0.id == "power-flow" }
     }
 
-    /// 健康页已勾指标(健康度/循环/温度/电芯等),随分页联动。
+    /// 拓扑页已勾分项功耗(整机/屏幕/GPU),随分页联动。功率流归属本页但
+    /// 是网格外可视化,不进网格,由 showsPowerFlow 单独渲染。
+    private var flowMetrics: [MetricSwitch] {
+        let names = BatteryPageTab.flow.metricNames
+        return renderMetrics.filter { names.contains($0.id) && $0.id != "power-flow" }
+    }
+
+    /// 健康页已勾指标(健康度/循环/温度/电芯等),随分页联动;沙盒版剔除
+    /// 网格外的功率流选项(流向图在网格尾部单独渲染)。
     private var healthMetrics: [MetricSwitch] {
         let names = BatteryPageTab.health.metricNames
-        return renderMetrics.filter { names.contains($0.id) }
+        return renderMetrics.filter { names.contains($0.id) && $0.id != "power-flow" }
     }
 
     /// 半行两列 + 整行沉底的示例网格(电池分页用;不含 CPU 逐核/热压力等网格外特殊形态)。

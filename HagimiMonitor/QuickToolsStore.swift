@@ -159,10 +159,9 @@ final class QuickToolsStore: ObservableObject {
         refreshKeyboardTopology()
     }
 
-    /// 已连接的外接键盘名称;空数组即没有外接键盘。
-    var externalKeyboardNames: [String] { keyboardTopology.externalNames }
+    /// 已连接的外接键盘名称;空数组即没有外接键盘(浮层「仅内置」锁定中的
+    /// 防呆提示据此判断还有没有可用输入)。
     var hasExternalKeyboard: Bool { !keyboardTopology.externalNames.isEmpty }
-    var hasBuiltInKeyboard: Bool { keyboardTopology.hasBuiltIn }
 
     /// 刷新键盘拓扑。范围设为「仅内置」时,它决定锁定后还有没有可用输入,
     /// 因此设置页每次出现与每次落锁前都重新扫一次。
@@ -276,6 +275,11 @@ final class QuickToolsStore: ObservableObject {
             setKeyboardLocked(false)
             return
         }
+        // 授权撤销没有事件通知(输入监控只能轮询,且只有浮层可见期间在轮询),
+        // isTrusted 可能停留在陈旧的已授权态。点击落锁是用户主动操作时刻,
+        // 先同步校准一次授权状态再决定走引导还是落锁——否则撤销后点击会被
+        // 陈旧判定吞进静默落锁流程,不弹引导、磁贴无任何反馈。
+        refreshKeyboardLockPermission()
         guard keyboardLockPermissionsReady else {
             pendingKeyboardLock = true
             requestMissingKeyboardLockPermission()

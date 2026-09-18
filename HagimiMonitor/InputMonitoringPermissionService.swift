@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import CoreGraphics
 import Foundation
+import IOKit.hid
 
 /// 「输入监控」授权服务。
 ///
@@ -14,7 +15,9 @@ import Foundation
 final class InputMonitoringPermissionService: ObservableObject {
     @MainActor static let shared = InputMonitoringPermissionService()
 
-    @Published private(set) var isTrusted: Bool = CGPreflightListenEventAccess()
+    /// 以 IOHIDCheckAccess 的 granted 为准:CGPreflightListenEventAccess 对
+    /// 「从未询问」也返回 true,未决态会被误判为已授权,链式引导提前终止。
+    @Published private(set) var isTrusted: Bool = KeyboardLockController.isListenEventAccessGranted
 
     /// 轮询最大时长(秒)。授权通过或用户拒绝/忽略均在此窗口内定案;
     /// 超时仍未授权即停止轮询(浮层展示期间的 refresh 仍在兜底校准)。
@@ -28,10 +31,12 @@ final class InputMonitoringPermissionService: ObservableObject {
     var permissionHintKey: String.LocalizationValue { "quicktools.permission.input-monitoring" }
 
     func refresh() {
-        let trusted = CGPreflightListenEventAccess()
+        let trusted = KeyboardLockController.isListenEventAccessGranted
         if trusted != isTrusted { isTrusted = trusted }
+        // 只关本域的引导浮窗:辅助功能授权服务同样会在感知回调里关引导,
+        // 不按域匹配会互相误杀链式引导衔接出的浮窗。
         if trusted {
-            AccessibilityPermissionGuide.shared.dismiss()
+            AccessibilityPermissionGuide.shared.dismiss(domain: .inputMonitoring)
         }
     }
 
@@ -44,7 +49,7 @@ final class InputMonitoringPermissionService: ObservableObject {
         // 引导浮窗使用专用副标题指出需要在「输入监控」中开启。
         _ = CGRequestListenEventAccess()
         openSystemSettings()
-        AccessibilityPermissionGuide.shared.present(titleKey: titleKey, subtitleKey: subtitleKey)
+        AccessibilityPermissionGuide.shared.present(domain: .inputMonitoring, titleKey: titleKey, subtitleKey: subtitleKey)
         startPollingUntilGranted()
     }
 

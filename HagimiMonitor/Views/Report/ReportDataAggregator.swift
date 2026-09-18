@@ -1080,7 +1080,8 @@ nonisolated enum ReportDataAggregator: Sendable {
         days: [StatisticsRow],
         from: Date,
         to: Date,
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        now: Date = Date()
     ) -> [ReportDailySummaryRow] {
         var dayMap: [Date: StatisticsRow] = [:]
         for r in days {
@@ -1091,7 +1092,9 @@ nonisolated enum ReportDataAggregator: Sendable {
         var results: [ReportDailySummaryRow] = []
         var currentDay = calendar.startOfDay(for: from)
         let endDay = calendar.startOfDay(for: to)
-        let today = calendar.startOfDay(for: Date())
+        // 「今日」桶的实时聚合上界:今天还没过完,只聚合已发生的采样。
+        // now 可注入,报表页用真实时钟,测试注入固定时刻保证确定性。
+        let today = calendar.startOfDay(for: now)
 
         while currentDay <= endDay {
             let nextDay = calendar.date(byAdding: .day, value: 1, to: currentDay) ?? currentDay.addingTimeInterval(86400)
@@ -1099,7 +1102,7 @@ nonisolated enum ReportDataAggregator: Sendable {
 
             if targetRow == nil && currentDay == today {
                 // 今日用分钟数据实时聚合
-                let dayMinutes = filterRows(minutes, from: currentDay, to: min(nextDay, Date()))
+                let dayMinutes = filterRows(minutes, from: currentDay, to: min(nextDay, now))
                 if !dayMinutes.isEmpty {
                     targetRow = aggregateRows(dayMinutes, timestamp: Int64(currentDay.timeIntervalSince1970))
                 }

@@ -4865,6 +4865,22 @@
         }
       }
     },
+    "metric.battery.power-flow": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power Flow"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功率流"
+          }
+        }
+      }
+    },
     "metric.battery.power-loss": {
       "localizations": {
         "en": {
@@ -7554,38 +7570,6 @@
         }
       }
     },
-    "settings.battery.show-power-flow": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Power Flow"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "功率流"
-          }
-        }
-      }
-    },
-    "settings.battery.show-power-flow.subtitle": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Live adapter · battery · system power diagram"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "适配器 · 电池 · 系统实时功率流向图"
-          }
-        }
-      }
-    },
     "settings.battery.tab-no-metrics": {
       "localizations": {
         "en": {
@@ -8180,66 +8164,18 @@
         }
       }
     },
-    "settings.quick-tools.keyboard-lock.connected-external-keyboards": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Connected: %@"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已连接：%@"
-          }
-        }
-      }
-    },
     "settings.quick-tools.keyboard-lock.external": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "External Keyboard"
+            "value": "Also Lock External Keyboards"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "外接键盘"
-          }
-        }
-      }
-    },
-    "settings.quick-tools.keyboard-lock.no-built-in-keyboard": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No built-in keyboard on this Mac — turn this on to block keystrokes"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "本机没有内置键盘，需要开启这一项才能拦截按键"
-          }
-        }
-      }
-    },
-    "settings.quick-tools.keyboard-lock.no-external-keyboard": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No external keyboard detected"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未检测到外接键盘"
+            "value": "同时锁定外接键盘"
           }
         }
       }
@@ -8384,22 +8320,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "关于"
-          }
-        }
-      }
-    },
-    "settings.sidebar.beta-badge": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beta"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Beta"
           }
         }
       }

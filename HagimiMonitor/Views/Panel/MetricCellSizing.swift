@@ -205,6 +205,9 @@ extension StaticMetricSizing {
         // Apple Silicon 便携式设备的整机/CPU/GPU 按三位瓦数、内建屏与
         // ANE 按两位瓦数上界登记；覆盖硬件范围并保持最窄半格可读。
         AuditEntry(kind: .battery, name: "power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
+        // 功率流是网格外可视化(无采样指标,不产生格子),登记仅为锁定
+        // 两语标签文案与形态归属。
+        AuditEntry(kind: .battery, name: "power-flow", layout: .specialForm),
         AuditEntry(kind: .battery, name: "display-power", layout: .measured(WorstValue(number: "88.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "cpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),
         AuditEntry(kind: .battery, name: "gpu-power", layout: .measured(WorstValue(number: "188.8", unit: "W"))),

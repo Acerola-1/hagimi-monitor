@@ -30,17 +30,20 @@ public enum KeyboardLockScope: String, CaseIterable, Codable, Sendable {
 /// 2. **时间窗**:最近 100ms 内哪一侧 HID 有活动、且更近者胜。HID 报告先于
 ///    对应 CG 事件到达,新按下几乎总能在此命中真实来源;两侧同窗打平时判
 ///    外接——归因存疑时放行外接,代价小于吞掉正常打字。
-/// 3. **按下态兜底**:两窗皆陈旧时,哪一侧仍有键按着判哪一侧(覆盖长按
-///    修饰键的组合输入、tap 启用前已按下的键)。仅用于新按下/抬起——
-///    自动重复的兜底不走按下集合:长按键自身不产生新 HID 报告,"另一侧
-///    有键按着"与本次重复无关,按集合兜底会把内置长按的重复混进外接
-///    打字流。
-/// 4. 默认判内置(拦截)。归因存疑时宁可拦截:放行即锁定失效,而误拦
+/// 3. **按下态兜底**:两窗皆陈旧时看按下态,内置优先——「外接压在内置上」
+///    的主场景里外接侧几乎总有键按着,外接优先会把窗口外的内置按下(尤其
+///    无 HID 报告的顶排/功能键)整体放行;两侧同时按住判内置,误拦在抬起
+///    自愈。仅用于新按下/抬起——自动重复的兜底不走按下集合:长按键自身
+///    不产生新 HID 报告,"另一侧有键按着"与本次重复无关,按集合兜底会把
+///    内置长按的重复混进外接打字流。
+/// 4. **媒体键连发惯性**:顶排键长按由系统连发,流内沿用首次结论,不被
+///    另一侧打字活动逐个翻转为放行;流间隔超阈值视为新按压。
+/// 5. 默认判内置(拦截)。归因存疑时宁可拦截:放行即锁定失效,而误拦
 ///    在下一次按键自愈。
 ///
-/// 修饰键(flagsChanged)与媒体键(systemDefined)不走记账:前者的 HID
-/// 报告刚刷新过对应侧时间戳,时间窗足够;后者键码字段是 NX 子系统私有
-/// 载荷,不可作键码记账。
+/// 修饰键(flagsChanged)不走记账:其 HID 报告刚刷新过对应侧时间戳,
+/// 时间窗足够。媒体键(systemDefined)键码字段是 NX 子系统私有载荷,
+/// 不可作键码记账,靠连发流惯性保持长按结论稳定。
 ///
 /// 线程模型:HID 回调(hidQueue)与 tap 回调(主线程)并发访问,内部
 /// os_unfair_lock 串行化,锁内只做集合/字典增删与时间戳写入。
@@ -63,8 +66,15 @@ nonisolated final class KeyboardEventAttribution {
     /// 按键级结论记账:CG 键码 → 按下时的归属。抬起即销账。
     /// CG 键码字段是 Int64,直接用其类型避免转换;不同键码不同键,互不干扰。
     private var verdicts: [Int64: Side] = [:]
+    /// 媒体键连发流的首次结论:顶排键长按由系统连发,流内沿用首次判定,
+    /// 防止连发被另一侧打字活动逐个翻转为放行(见 decide 的 systemDefined 分支)。
+    private var lastSystemDefined: (side: Side, at: UInt64)?
 
     private let ticksPerMillisecond: UInt64
+
+    /// 媒体键连发流的沿用间隔(毫秒):系统连发约 100~150ms 一发,取数倍
+    /// 余量;间隔超过阈值视为新的一次按压,重新走证据链。
+    static let systemDefinedStreamMilliseconds: UInt64 = 500
 
     /// 测试可注入固定时间基准;缺省用真实 mach 绝对时间刻度。
     init(ticksPerMillisecond: UInt64? = nil) {
@@ -117,8 +127,21 @@ nonisolated final class KeyboardEventAttribution {
             let side = verdicts[keyCode] ?? resolveByEvidence(now: now)
             verdicts[keyCode] = nil
             return side
-        case .flagsChanged, .systemDefined:
+        case .flagsChanged:
             return resolveByWindow(now: now) ?? .builtIn
+        case .systemDefined:
+            // 连发流内沿用首次结论:长按顶排键会产生约 100~150ms 一发的
+            // systemDefined 流,流内任何一次重判都可能被另一侧的打字活动
+            // 翻转成长按穿透;流间隔超阈值即为新按压,重新走证据链。
+            // 沿用期间同步刷新时间戳,保证按住持续连发时滑动窗口不断档。
+            if let last = lastSystemDefined,
+               now - last.at <= Self.systemDefinedStreamMilliseconds * ticksPerMillisecond {
+                lastSystemDefined = (last.side, now)
+                return last.side
+            }
+            let side = resolveByWindow(now: now) ?? .builtIn
+            lastSystemDefined = (side, now)
+            return side
         }
     }
 
@@ -131,14 +154,21 @@ nonisolated final class KeyboardEventAttribution {
         lastExternalActivity = 0
         lastBuiltInActivity = 0
         verdicts.removeAll()
+        lastSystemDefined = nil
         os_unfair_lock_unlock(&lock)
     }
 
-    /// 新按下/抬起的兜底归因:时间窗优先,再看按下态,默认判内置。
+    /// 新按下/抬起的兜底归因:时间窗优先;窗口皆陈旧时看按下态——
+    /// 内置优先(理由见分支注释),最后默认判内置。
     private func resolveByEvidence(now: UInt64) -> Side {
         if let side = resolveByWindow(now: now) { return side }
-        if !externalKeysDown.isEmpty { return .external }
+        // 「外接压在内置上」的主场景中,外接侧几乎总有键处于按下态;若外接
+        // 优先,窗口皆陈旧时按下的键(尤其无 HID 报告的顶排/功能键)会被
+        // 整体放行成长按穿透。两侧同时各有键按着时判内置:此刻外接侧按住的
+        // 是长按/压住的键(其新击键必然命中时间窗,不会落到这里),误拦在
+        // 抬起自愈;外接独占按下仍判外接,不吞外接长按。
         if !builtInKeysDown.isEmpty { return .builtIn }
+        if !externalKeysDown.isEmpty { return .external }
         return .builtIn
     }
 
@@ -304,6 +334,13 @@ nonisolated final class KeyboardLockController {
 
     private func setupHIDMonitoring() {
         guard hidManager == nil else { return }
+        // 与 scanKeyboardTopology 同口径:仅在真实已授权时打开受限键盘设备。
+        // 正常落锁路径都有 keyboardLockPermissionsReady 守卫,此处不建监听
+        // 并把健康标记置 false,让降级提示接管而不是弹窗。
+        guard Self.isListenEventAccessGranted else {
+            hidMonitoringHealthy = false
+            return
+        }
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         let matchDict: [String: Any] = [
             kIOHIDDeviceUsagePageKey as String: kHIDPage_GenericDesktop,
@@ -324,6 +361,10 @@ nonisolated final class KeyboardLockController {
     }
 
     private func teardownHIDMonitoring() {
+        // 未监听即是干净基线:健康标记无条件复位。不能只在 manager 存在时
+        // 复位——setup 早退(preflight 未过)时 hidManager 为 nil,提前
+        // return 会把 false 残留到下一轮 setup 成功之前。
+        defer { hidMonitoringHealthy = true }
         guard let manager = hidManager else { return }
         IOHIDManagerRegisterInputValueCallback(manager, nil, nil)
         IOHIDManagerRegisterDeviceMatchingCallback(manager, nil, nil)
@@ -331,7 +372,6 @@ nonisolated final class KeyboardLockController {
         IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         hidManager = nil
-        hidMonitoringHealthy = true
     }
 
     /// 重建 HID 监听(仅「仅内置」范围持有监听)。权限状态变化后调用:
@@ -367,8 +407,24 @@ nonisolated final class KeyboardLockController {
         var hasBuiltIn = false
     }
 
+    /// 「输入监控」是否真实处于已授权状态。
+    ///
+    /// 不能用 CGPreflightListenEventAccess 判定:它对「从未询问」的进程也
+    /// 返回 true(系统把首次使用设计为用时弹窗,只有明确拒绝才返回 false),
+    /// 未决态会被误判为已授权——双授权链式引导因此提前终止,落锁后受限
+    /// 键盘设备仍打不开、按键事件不投递,锁定实际残缺。IOHIDCheckAccess
+    /// 能区分 granted / denied / unknown(从未询问),以 granted 为准。
+    static var isListenEventAccessGranted: Bool {
+        IOHIDCheckAccess(kIOHIDRequestTypeListenEvent) == kIOHIDAccessTypeGranted
+    }
+
     /// 扫描当前连接的键盘拓扑(供 UI 与防呆检查使用)。
     static func scanKeyboardTopology() -> KeyboardTopology {
+        // 仅在「输入监控」真实已授权时打开键盘类受限设备。未决/拒绝态下
+        // IOHIDManagerOpen 要么触发系统授权弹窗、要么空手而归,扫描只是
+        // 拓扑防呆信息,绝不能变成索权入口;授权引导由 QuickToolsStore 的
+        // request 流程在用户主动操作键盘锁时承担。
+        guard isListenEventAccessGranted else { return KeyboardTopology() }
         let manager = IOHIDManagerCreate(kCFAllocatorDefault, IOOptionBits(kIOHIDOptionsTypeNone))
         let matchDicts: [[String: Any]] = [
             [

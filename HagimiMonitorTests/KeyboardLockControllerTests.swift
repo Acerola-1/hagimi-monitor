@@ -164,6 +164,60 @@ struct KeyboardLockControllerTests {
         #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_000) == .builtIn)
     }
 
+    /// 媒体键长按由系统连发,流内沿用首次结论:内置媒体键首判拦截后,即使
+    /// 外接侧在连发期间有打字活动,后续连发也不得被逐个翻转成长按穿透。
+    @Test func systemDefinedStreamKeepsVerdictAgainstForeignActivity() {
+        let a = makeAttribution()
+        a.recordHIDReport(usage: 0x2C, isDown: true, side: .builtIn, now: 1_000)
+        // 首个媒体键事件:内置活动在窗,判内置拦截。
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_100) == .builtIn)
+
+        // 连发期间外接打字,HID 活动更近;流内仍必须沿用拦截结论。
+        a.recordHIDReport(usage: 0x04, isDown: true, side: .external, now: 1_300)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_350) == .builtIn)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_550) == .builtIn)
+
+        // 超过流间隔视为新按压,重新走证据链:外接近窗活动 → 放行。
+        a.recordHIDReport(usage: 0x04, isDown: true, side: .external, now: 2_100)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 2_200) == .external)
+    }
+
+    /// 外接媒体键连发同样受益于流惯性:首判放行后,内置侧活动不得逐个吞掉连发。
+    /// 且连发滑动窗口随事件刷新,长按超过 500ms(如长按 1~2 秒调音量)仍持续放行。
+    @Test func externalSystemDefinedStreamSurvivesBuiltInActivity() {
+        let a = makeAttribution()
+        a.recordHIDReport(usage: 0x04, isDown: true, side: .external, now: 1_000)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_050) == .external)
+
+        a.recordHIDReport(usage: 0x2C, isDown: true, side: .builtIn, now: 1_200)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_250) == .external)
+
+        // 连发持续进行(每 150ms 一发):累计时长超过初始 500ms(达到 1_700, 距首发 650ms),
+        // 只要各发间隔在 500ms 内,滑动窗口持续续期,不被误判为内置而截断。
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_400) == .external)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_550) == .external)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 1_700) == .external)
+
+        // 连发停止且静默超过 500ms 后,视为新按压;此时内置活动更近 → 判内置拦截。
+        a.recordHIDReport(usage: 0x2C, isDown: true, side: .builtIn, now: 2_300)
+        #expect(a.decide(kind: .systemDefined, keyCode: 0, now: 2_350) == .builtIn)
+    }
+
+    /// 按下态兜底内置优先:窗口皆陈旧且两侧各有键按着时,新按下判内置拦截
+    /// (「外接压在内置上」场景外接按下态几乎恒真,外接优先会整体放行);
+    /// 外接独占按下仍判外接,不吞外接长按。
+    @Test func downSetFallbackPrefersBuiltInWhenBothSidesHeld() {
+        let a = makeAttribution()
+        a.recordHIDReport(usage: 0x04, isDown: true, side: .external, now: 1_000)
+        a.recordHIDReport(usage: 0x2C, isDown: true, side: .builtIn, now: 1_100)
+        // 两侧窗口皆陈旧(>100ms),两侧各有键按着:判内置拦截。
+        #expect(a.decide(kind: .keyDown, keyCode: 60, now: 5_000) == .builtIn)
+
+        let b = makeAttribution()
+        b.recordHIDReport(usage: 0x04, isDown: true, side: .external, now: 1_000)
+        #expect(b.decide(kind: .keyDown, keyCode: 60, now: 5_000) == .external)
+    }
+
     /// 抬起无记账时按常规证据归因(外接近窗即放行),并销账不留残留。
     @Test func keyUpWithoutVerdictUsesEvidenceAndClears() {
         let a = makeAttribution()

@@ -167,17 +167,11 @@ private struct QuickToolCard: View {
         autoUnlockRow
     }
 
-    /// 外接键盘预设偏好开关。副标题显示设备连接状态或「本机没有内置键盘」说明。
-    /// 默认只锁定内置键盘(开关为关),开启后将同时拦截外接键盘。
+    /// 外接键盘预设偏好开关:默认只锁定内置键盘(开关为关),开启后同时拦截外接键盘。
     private var externalKeyboardRow: some View {
         HStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(String(localized: "settings.quick-tools.keyboard-lock.external"))
-                    .font(.body)
-                Text(externalKeyboardDetail)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+            Text(String(localized: "settings.quick-tools.keyboard-lock.external"))
+                .font(.body)
             Spacer(minLength: 16)
             Toggle("", isOn: $settings.keyboardLockBlocksExternal)
                 .labelsHidden()
@@ -187,20 +181,6 @@ private struct QuickToolCard: View {
         .padding(.trailing, Self.rowPadding)
         .padding(.vertical, 10)
         .frame(minHeight: 44)
-    }
-
-    private var externalKeyboardDetail: String {
-        guard store.hasBuiltInKeyboard else {
-            return String(localized: "settings.quick-tools.keyboard-lock.no-built-in-keyboard")
-        }
-        let names = store.externalKeyboardNames
-        guard !names.isEmpty else {
-            return String(localized: "settings.quick-tools.keyboard-lock.no-external-keyboard")
-        }
-        return String(
-            format: String(localized: "settings.quick-tools.keyboard-lock.connected-external-keyboards"),
-            names.formatted(.list(type: .and))
-        )
     }
 
     private var autoUnlockRow: some View {

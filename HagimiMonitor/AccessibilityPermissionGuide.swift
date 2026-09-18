@@ -5,17 +5,34 @@ import SwiftUI
 final class AccessibilityPermissionGuide {
     static let shared = AccessibilityPermissionGuide()
 
+    /// 浮窗归属的权限域:辅助功能与输入监控共用这一个浮窗,两项权限的
+    /// 授权服务在各自 refresh() 里都会"已授权即关引导"——不按域匹配的话,
+    /// A 项授权后的感知回调会把链式引导刚弹出的 B 项浮窗误杀。
+    enum Domain {
+        case accessibility
+        case inputMonitoring
+    }
+
     private var panel: NSPanel?
+    private var domain: Domain?
+
     private let panelSize = CGSize(width: 320, height: 166)
 
     func present(
+        domain: Domain = .accessibility,
         titleKey: String.LocalizationValue = "mediaKey.permission.guide-title",
         subtitleKey: String.LocalizationValue = "mediaKey.permission.guide-subtitle"
     ) {
         if let panel {
-            panel.orderFrontRegardless()
-            return
+            if self.domain == domain {
+                panel.orderFrontRegardless()
+                return
+            }
+            // 链式引导衔接到下一项权限:旧浮窗内容已过时,重建。
+            panel.orderOut(nil)
+            self.panel = nil
         }
+        self.domain = domain
 
         let guide = AccessibilityPermissionGuideView(
             appURL: Bundle.main.bundleURL,
@@ -42,9 +59,19 @@ final class AccessibilityPermissionGuide {
         self.panel = panel
     }
 
+    /// 关闭指定域的浮窗:当前浮窗已归属另一项权限(链式引导已衔接)则不动。
+    func dismiss(domain: Domain) {
+        guard self.domain == domain else { return }
+        panel?.orderOut(nil)
+        panel = nil
+        self.domain = nil
+    }
+
+    /// 无条件关闭(撤销上锁意图等用户操作场景)。
     func dismiss() {
         panel?.orderOut(nil)
         panel = nil
+        domain = nil
     }
 
     private static func origin(for size: CGSize) -> NSPoint {

@@ -36,8 +36,10 @@ final class AccessibilityPermissionService: ObservableObject {
         // 等值守卫:浮层轮询期间同值不触发 objectWillChange,避免无意义的
         // 发布循环(本服务的撤销已有系统广播回调,流入的 refresh 多为同值)。
         if trusted != isTrusted { isTrusted = trusted }
+        // 只关本域的引导浮窗:链式引导衔接到输入监控后,本服务后续的感知
+        // 回调(广播兜底/轮询收尾)不得把那边刚弹出的浮窗误杀。
         if trusted {
-            AccessibilityPermissionGuide.shared.dismiss()
+            AccessibilityPermissionGuide.shared.dismiss(domain: .accessibility)
         }
     }
 
@@ -55,11 +57,11 @@ final class AccessibilityPermissionService: ObservableObject {
         _ = AXIsProcessTrustedWithOptions(options)
         openSystemSettings()
         if let titleKey, let subtitleKey {
-            AccessibilityPermissionGuide.shared.present(titleKey: titleKey, subtitleKey: subtitleKey)
+            AccessibilityPermissionGuide.shared.present(domain: .accessibility, titleKey: titleKey, subtitleKey: subtitleKey)
         } else if let titleKey {
-            AccessibilityPermissionGuide.shared.present(titleKey: titleKey)
+            AccessibilityPermissionGuide.shared.present(domain: .accessibility, titleKey: titleKey)
         } else {
-            AccessibilityPermissionGuide.shared.present()
+            AccessibilityPermissionGuide.shared.present(domain: .accessibility)
         }
         startPollingUntilGranted()
     }
