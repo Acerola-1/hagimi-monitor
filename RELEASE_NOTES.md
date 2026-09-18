@@ -18,6 +18,7 @@
 
 #### 修复
 
+- 修复开启「键盘锁定」并授予辅助功能权限后，点击面板概率性失焦、面板意外消失的问题。
 - 修复设置页高负载告警展开按钮悬停时，上方状态卡片产生微小闪烁刷新的问题。
 - 修复电源展开区两处连线在不同显示缩放下的对齐与透明度瑕疵。
 - 清理后台进程采样中的冗余上下文与废弃代码，进一步压降常驻内存占用。
@@ -39,6 +40,7 @@
 
 #### Fixes
 
+- Fixed a probabilistic issue where the panel could lose focus and dismiss unexpectedly on click after enabling Keyboard Lock with Accessibility permission granted.
 - Fixed a subtle flicker on the status card when hovering over the high-load alert expansion button in Settings.
 - Fixed line alignment and opacity artifacts in the power flow diagram across different display scaling factors.
 - Cleaned up obsolete process sampling parameters and dead contexts, reducing baseline idle memory footprint.
