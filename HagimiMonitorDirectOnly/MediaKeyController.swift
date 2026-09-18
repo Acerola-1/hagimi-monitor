@@ -33,18 +33,18 @@ final class MediaKeyController {
         // 两者同为 headInsert 且掩码在 systemDefined 上重叠,锁定期内重建会插到锁 tap 之前,
         // 让功能键绕过键盘锁;解锁后由锁定状态订阅触发的 refresh 恢复。
         guard !QuickToolsStore.shared.keyboardLocked else {
-            tap.stop()
+            apply(desired: [])
             return
         }
         let wantBrightness = settings.mediaKeyBrightnessEnabled
         let wantVolume = settings.mediaKeyVolumeEnabled
 
         guard wantBrightness || wantVolume else {
-            tap.stop()
+            apply(desired: [])
             return
         }
         guard permission.isTrusted else {
-            tap.stop()
+            apply(desired: [])
             return
         }
 
@@ -63,14 +63,31 @@ final class MediaKeyController {
             keys.formUnion([.volumeUp, .volumeDown, .mute])
         }
 
-        if keys.isEmpty {
-            tap.stop()
-            return
-        }
+        apply(desired: keys)
+    }
 
-        _ = tap.start(keys: keys) { [weak self] event in
-            guard let self else { return false }
-            return self.handle(event: event)
+    /// 按目标按键集合触碰 tap,但**只在目标与当前已安装状态不一致时**才重建。
+    ///
+    /// tap 装在 `.headInsertEventTap` 上、掩码覆盖整个 NX_SYSDEFINED 事件类,
+    /// 重建一次就是往系统事件流最前面插一次新拦截点;而本方法挂在显示器刷新
+    /// 链路的收尾上(轮询 5s 一次、外加每次展开/显示器变化),配置没变也重建
+    /// 没有必要,还可能扰动系统事件/焦点状态。因此这里以 tap 的实际安装状态
+    /// 为准做幂等:同集合直接返回,不碰 tap。
+    /// 授权、锁定、设置、音频路由、显示拓扑这些真正改变决策的输入各自有订阅,
+    /// 会在变化时再次进入本方法。
+    private func apply(desired: Set<MediaKey>) {
+        switch MediaKeyTapLifecycle.action(desired: desired, active: tap.activeKeys) {
+        case .keep:
+            return
+        case .stop:
+            tap.stop()
+        case .start(let keys):
+            // start 失败时 activeKeys 仍为 nil;下一次真正的输入变化可以重试,
+            // 不把失败请求缓存成已生效状态。
+            _ = tap.start(keys: keys) { [weak self] event in
+                guard let self else { return false }
+                return self.handle(event: event)
+            }
         }
     }
 

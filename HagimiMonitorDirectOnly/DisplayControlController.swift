@@ -52,6 +52,16 @@ final class DisplayControlController: ObservableObject {
     private var pollTimerCancellable: AnyCancellable?
     private static let pollInterval: TimeInterval = 5
 
+    /// 媒体键 tap 决策所依赖的显示侧输入:是否存在支持 DDC 亮度的外接屏、
+    /// 是否存在可控音量的外接屏。只有这两个量变化才需要重算接管策略——tap 装在
+    /// `.headInsertEventTap` 上,重建会扰动系统事件/焦点状态,不能挂在显示刷新的
+    /// 收尾上。具体的鼠标事件丢失因果仍需运行时复测,这里不把它当作已证实事实。
+    private struct MediaKeyPlanInputs: Equatable {
+        let hasExternalBrightnessDisplay: Bool
+        let hasExternalAudioDisplay: Bool
+    }
+    private var mediaKeyPlanInputs: MediaKeyPlanInputs?
+
     init() {
         changeObserver.start { [weak self] in
             MainActor.assumeIsolated {
@@ -107,6 +117,18 @@ final class DisplayControlController: ObservableObject {
             }
     }
 
+    /// 仅在显示侧输入变化时重算媒体键接管,避免每 5s 一次的刷新都去重建
+    /// headInsert tap。显示数值的周期回读与媒体键 tap 的生命周期没有直接因果。
+    private func refreshMediaKeyPlanIfInputsChanged(_ detectedDisplays: [ControlledDisplay]) {
+        let inputs = MediaKeyPlanInputs(
+            hasExternalBrightnessDisplay: detectedDisplays.contains { !$0.isBuiltIn && $0.supportsBrightness },
+            hasExternalAudioDisplay: detectedDisplays.contains { !$0.isBuiltIn && $0.supportsVolume }
+        )
+        guard inputs != mediaKeyPlanInputs else { return }
+        mediaKeyPlanInputs = inputs
+        mediaKeyController.refresh()
+    }
+
     func displayDiagnosticsExport() -> String {
         DisplayDiagnosticsExporter.export(
             appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "unknown",
@@ -147,7 +169,7 @@ final class DisplayControlController: ObservableObject {
                 }
                 // 抑制窗口已结束(change handler 在窗口结束后触发):补发被跳过的写入。
                 self.replaySuppressedWrites()
-                self.mediaKeyController.refresh()
+                self.refreshMediaKeyPlanIfInputsChanged(detectedDisplays)
             }
         }
     }

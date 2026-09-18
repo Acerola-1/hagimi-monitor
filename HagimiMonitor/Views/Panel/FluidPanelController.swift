@@ -975,9 +975,15 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     nonisolated func windowDidResignKey(_ notification: Notification) {
         MainActor.assumeIsolated {
-            // 基准采集保持窗口可见，焦点切换不取消尚未完成的操作序列。
+            // 基准采集保持窗口可见,焦点切换不取消尚未完成的操作序列。
             guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] == nil else { return }
-            dismissPanel()
+            // macOS 27 的 expanded-interface session 由 AppKit 管理生命周期。
+            // 面板在 session 内短暂失去 key 并不等于用户要求关闭;真正结束时
+            // 由 statusItemDidEndExpandedInterfaceSession 统一收口。
+            if #available(macOS 27.0, *), statusItem.expandedInterfaceSession != nil {
+                return
+            }
+            dismissPanel(source: .userAction)
         }
     }
 }
