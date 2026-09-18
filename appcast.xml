@@ -3,63 +3,36 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.6.0</title>
-            <pubDate>Fri, 18 Sep 2026 09:00:22 +0000</pubDate>
-            <sparkle:version>88</sparkle:version>
-            <sparkle:shortVersionString>1.6.0</sparkle:shortVersionString>
+            <title>1.6.1</title>
+            <pubDate>Fri, 18 Sep 2026 18:27:32 +0000</pubDate>
+            <sparkle:version>89</sparkle:version>
+            <sparkle:shortVersionString>1.6.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
+### 新功能
 
-### 中文
+- 键盘锁自动解锁时长新增「永不」选项，支持长期防误触与按需手动解锁
 
-#### 新功能
+### 修复
 
-- **统计报表迁移为 macOS 原生窗口**：彻底淘汰旧版 WebKit 网页视图，重构为轻盈顺滑的原生 SwiftUI 独立报表窗口，消除网页常驻进程与内存开销；支持系统明暗外观、原生侧边栏导航与窗口动态自适应；保留独立离线 HTML 导出能力。
-- **键盘锁定小工具重大升级**：支持外接键盘独立识别（「仅锁定内置键盘」可在清洁 MacBook 时保持外接打字，外接拔出安全自愈）、基于 IOHID 物理相对位移特征精确识别设备（彻底排除无线游戏鼠标侧键宏被误判为键盘）、支持 10-60 分钟自动解锁定时兜底、全键位与 F1-F12 亮度音量功能键完整拦截并提供一键授权引导。
+- 修复 macOS「输入监控」权限在系统未决态下被误判为已授权的问题，采用 IOHID 授权原语严密校验
+- 修复报表每日聚合跨午夜时段运行的基准时间漂移问题
 
-#### 优化与体验
+### 优化与体验
 
-- **Swift 6 严格并发适配**：全工程升级至 Swift 6 语言模式并完成严格并发（Strict Concurrency）重构，全面消除多线程数据竞态，提升多核架构稳定性。
-- **macOS 27 构建与运行适配**：优化系统诊断并发模型与优雅退出机制，保证最新系统下的无缝运行。
-- **报表时间导航与布局优化**：新增原生日期范围选择器（今日、近 7 天、近 30 天与自定义区间），重构总览评分栏与事件块的几何对齐。
-- **原生分段选择器**：新增遵循 macOS HIG 规范的实体槽位选择器，消除双层毛玻璃叠加产生的视觉冲突。
-- **浮层卡片常驻保护**：补齐存量设置数据迁移，修复小工具关闭时卡片因历史配置缺失而动态消失的问题。
-
-#### 修复
-
-- 修复开启「键盘锁定」并授予辅助功能权限后，点击面板概率性失焦、面板意外消失的问题。
-- 修复设置页高负载告警展开按钮悬停时，上方状态卡片产生微小闪烁刷新的问题。
-- 修复电源展开区两处连线在不同显示缩放下的对齐与透明度瑕疵。
-- 清理后台进程采样中的冗余上下文与废弃代码，进一步压降常驻内存占用。
-
-### English
-
-#### New Features
-
-- **Native Statistics Reports Window**: Completely replaced the legacy WebKit-based report with a responsive, full-native SwiftUI report window, eliminating WebKit runtime memory and CPU overhead while preserving standalone HTML export capability.
-- **Enhanced Keyboard Lock Utility**: Added external keyboard distinction (lock only built-in keyboard during cleaning with auto-unlock on disconnect), smart hardware classification (filtering out gaming mouse macro buttons via physical HID relative-axis heuristics), 10–60 min auto-unlock timers, and full suppression of standard and F1–F12 system media keys.
-
-#### Improvements
-
-- **Swift 6 Strict Concurrency**: Migrated the entire codebase to Swift 6 language mode with complete strict concurrency checks enabled, eliminating data races across background samplers.
-- **macOS 27 Environment Adaptation**: Refined diagnostic concurrency models and process lifecycle handling for seamless operation on macOS 27.
-- **Report Navigation & Overview Polish**: Added a native range selector (Today, Past 7 Days, Past 30 Days, Custom Range) and aligned the health score overview bar with event blocks.
-- **Native Segmented Controls**: Introduced HIG-compliant physical tab pickers, avoiding visual conflicts from layered vibrancy effects.
-- **Popover Tile Retention**: Fixed an issue where closing a tool in the popover caused its tile to dynamically disappear due to legacy preference migrations.
-
-#### Fixes
-
-- Fixed a probabilistic issue where the panel could lose focus and dismiss unexpectedly on click after enabling Keyboard Lock with Accessibility permission granted.
-- Fixed a subtle flicker on the status card when hovering over the high-load alert expansion button in Settings.
-- Fixed line alignment and opacity artifacts in the power flow diagram across different display scaling factors.
-- Cleaned up obsolete process sampling parameters and dead contexts, reducing baseline idle memory footprint.
+- 优化键盘锁按键归因流：完善媒体键连发流滑动时间窗，长按音量/亮度等顶排键持续平滑响应
+- 增强双授权链式引导体验：辅助功能与输入监控授权浮窗引入权限域生命周期隔离，彻底解决权限感知互杀导致的引导早闭问题
+- 改进键盘锁状态实时校准：主动操作落锁前同步检查授权状态，避免系统偏好设置撤销授权后静默失效
+- 内置与外接键盘叠放兜底优化：两侧按键均有受压且时间窗过期时优先判定为内置拦截，杜绝漏键穿透
+- 键盘拓扑被动扫描增加授权守护：仅在输入监控真实就绪时读取受限设备，杜绝设置页展示时意外唤起系统弹窗
+- 整合电池功率流向图设置：将原独立 Beta 开关内化为电池分页（直连版拓扑页 / 沙盒版健康页）可勾选项，存量迁移自动继承历史偏好
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.6.0/HagimiMonitor-v1.6.0.zip" length="5776710" type="application/octet-stream" sparkle:edSignature="10TrB7799H4F+UW3KgusihjXRSK2C+jYH0wSjtub0HwDeIbfwcV6lQlNQedpRmQlHrgNPHM/4YenCrswzOzhDA=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.6.1/HagimiMonitor-v1.6.1.zip" length="5779190" type="application/octet-stream" sparkle:edSignature="4qPXcKd0k1kUFE6tiuaP+s4aJ/mvm6glCqitW1usEM3Y2ayqhB7AQSv4Vk7HA61Qsne7vP/nP1uWGfJdaLkZDw=="/>
         </item>
     </channel>
 </rss>
