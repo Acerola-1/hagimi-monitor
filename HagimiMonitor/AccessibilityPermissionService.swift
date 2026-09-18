@@ -45,13 +45,18 @@ final class AccessibilityPermissionService: ObservableObject {
     /// 中用户需打开的授权项名称。
     var permissionHintKey: String.LocalizationValue { "quicktools.permission.accessibility" }
 
-    func request(titleKey: String.LocalizationValue? = nil) {
+    func request(
+        titleKey: String.LocalizationValue? = nil,
+        subtitleKey: String.LocalizationValue? = nil
+    ) {
         let options: NSDictionary = [
             "AXTrustedCheckOptionPrompt" as NSString: false
         ]
         _ = AXIsProcessTrustedWithOptions(options)
         openSystemSettings()
-        if let titleKey {
+        if let titleKey, let subtitleKey {
+            AccessibilityPermissionGuide.shared.present(titleKey: titleKey, subtitleKey: subtitleKey)
+        } else if let titleKey {
             AccessibilityPermissionGuide.shared.present(titleKey: titleKey)
         } else {
             AccessibilityPermissionGuide.shared.present()

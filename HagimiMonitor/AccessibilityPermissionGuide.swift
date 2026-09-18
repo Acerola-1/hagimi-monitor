@@ -8,7 +8,10 @@ final class AccessibilityPermissionGuide {
     private var panel: NSPanel?
     private let panelSize = CGSize(width: 320, height: 166)
 
-    func present(titleKey: String.LocalizationValue = "mediaKey.permission.guide-title") {
+    func present(
+        titleKey: String.LocalizationValue = "mediaKey.permission.guide-title",
+        subtitleKey: String.LocalizationValue = "mediaKey.permission.guide-subtitle"
+    ) {
         if let panel {
             panel.orderFrontRegardless()
             return
@@ -17,6 +20,7 @@ final class AccessibilityPermissionGuide {
         let guide = AccessibilityPermissionGuideView(
             appURL: Bundle.main.bundleURL,
             titleKey: titleKey,
+            subtitleKey: subtitleKey,
             onClose: { [weak self] in self?.dismiss() }
         )
         let panel = NSPanel(
@@ -56,6 +60,7 @@ final class AccessibilityPermissionGuide {
 private struct AccessibilityPermissionGuideView: View {
     let appURL: URL
     var titleKey: String.LocalizationValue = "mediaKey.permission.guide-title"
+    var subtitleKey: String.LocalizationValue = "mediaKey.permission.guide-subtitle"
     let onClose: () -> Void
 
     private var appName: String {
@@ -74,7 +79,7 @@ private struct AccessibilityPermissionGuideView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(String(localized: titleKey))
                         .font(.headline)
-                    Text(String(localized: "mediaKey.permission.guide-subtitle"))
+                    Text(String(localized: subtitleKey))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

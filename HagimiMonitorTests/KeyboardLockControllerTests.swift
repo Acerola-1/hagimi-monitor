@@ -9,10 +9,10 @@ struct KeyboardLockControllerTests {
         #expect(KeyboardLockScope.all.rawValue == "all")
     }
 
-    /// 自动解锁档位是「防锁了就忘」的兜底,必须有一档默认值、且不含"永不"
-    /// (永不等于关掉兜底,锁死后只能靠鼠标自救)。
+    /// 自动解锁档位是「防锁了就忘」的兜底,必须有一档默认值;0 表示"永不"
+    /// (不启动兜底计时,锁定持续到用户手动关闭)。
     @Test func autoUnlockMinuteOptionsAreBounded() {
-        #expect(KeyboardLockController.autoUnlockMinuteOptions == [10, 20, 30, 60])
+        #expect(KeyboardLockController.autoUnlockMinuteOptions == [10, 20, 30, 60, 0])
         #expect(KeyboardLockController.defaultAutoUnlockMinutes == 20)
         #expect(KeyboardLockController.autoUnlockMinuteOptions.contains(KeyboardLockController.defaultAutoUnlockMinutes))
     }
@@ -184,5 +184,28 @@ struct KeyboardLockControllerTests {
         #expect(a.decide(kind: .keyDown, keyCode: 4, isAutorepeat: true, now: 1_100) == .builtIn)
         // 按下集合也没了:新按下走时间窗,同样判内置。
         #expect(a.decide(kind: .keyDown, keyCode: 11, now: 1_150) == .builtIn)
+    }
+
+    // MARK: - HID 监控与健壮性状态
+
+    @Test func initialHidMonitoringHealthyIsTrue() {
+        let controller = KeyboardLockController()
+        #expect(controller.hidMonitoringHealthy == true)
+        #expect(controller.connectedExternalKeyboards.isEmpty)
+    }
+
+    @Test func refreshHIDMonitoringIsSafeWhenInactive() {
+        let controller = KeyboardLockController()
+        // 未启动拦截时不持有 tap 与 activeScope，refresh 必须安全短路
+        controller.refreshHIDMonitoring()
+        #expect(controller.hidMonitoringHealthy == true)
+    }
+
+    @Test func scanKeyboardTopologyProducesConsistentResults() {
+        let topology = KeyboardLockController.scanKeyboardTopology()
+        #expect(topology.externalNames.count >= 0)
+        // scanExternalKeyboards 与 scanKeyboardTopology().externalNames 必须等价
+        let external = KeyboardLockController.scanExternalKeyboards()
+        #expect(topology.externalNames == external)
     }
 }

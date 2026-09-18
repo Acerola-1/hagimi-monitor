@@ -157,13 +157,15 @@ nonisolated final class KeyboardEventAttribution {
 /// 键盘锁定引擎:
 /// - 纯用户态协同过滤:通过 IOHIDManager 监听底层物理输入源(区分内置 SPI/FIFO 键盘与外接 USB/蓝牙键盘),
 ///   结合会话级 CGEventTap 按锁定范围(全部锁定 / 仅锁定内置)精准拦截或放行。
-/// - 双渠道共用:Direct 凭辅助功能权限创建 tap;App Store 沙盒内凭输入监控权限创建。
+/// - 权限:辅助功能用于创建事件 tap;输入监控用于打开键盘类 HID 设备
+///   (macOS 27 起键盘 collection 带 RequiresTCCAuthorization)并接收键盘
+///   按键事件与 HID 输入值。Direct 双授权,App Store 沙盒走输入监控通道。
 /// - 线程模型:非隔离类,owner(`QuickToolsStore`,MainActor)在主线程调用 start/stop;
 ///   回调经 refcon 取回实例,无静态全局桥。
 nonisolated final class KeyboardLockController {
     /// 自动解锁可选档位(分钟):防"锁了就忘"的兜底时长,由用户在设置页选。
-    /// 不提供"永不"——那等于关掉兜底,锁死后只能靠鼠标点开关自救。
-    static let autoUnlockMinuteOptions: [Int] = [10, 20, 30, 60]
+    /// 0 表示"永不"——不启动兜底计时,锁定持续到用户手动关闭。
+    static let autoUnlockMinuteOptions: [Int] = [10, 20, 30, 60, 0]
 
     /// 自动解锁默认时长(分钟)。
     static let defaultAutoUnlockMinutes = 20
@@ -190,6 +192,11 @@ nonisolated final class KeyboardLockController {
 
     /// 当前检测到的已连接外接键盘名称列表。
     private(set) var connectedExternalKeyboards: [String] = []
+
+    /// HID 监听是否真的拿到了键盘设备(open 成功且有匹配设备)。置 false
+    /// 时来源归因无从建立,所有事件都会按"内置"兜底——owner 据此提示用户
+    /// 「仅内置」已退化为全拦,而不是让用户看到键盘无输入却毫无解释。
+    private(set) var hidMonitoringHealthy = true
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -254,8 +261,13 @@ nonisolated final class KeyboardLockController {
         eventTap = tap
         runLoopSource = source
         autoUnlockInterval = TimeInterval(autoUnlockMinutes * 60)
-        autoUnlockDeadline = Date().addingTimeInterval(autoUnlockInterval)
-        startAutoUnlockTimer()
+        if autoUnlockMinutes > 0 {
+            autoUnlockDeadline = Date().addingTimeInterval(autoUnlockInterval)
+            startAutoUnlockTimer()
+        } else {
+            // 「永不」:无兜底计时,deadline 保持 nil,UI 不显示倒计时。
+            autoUnlockDeadline = nil
+        }
         return true
     }
 
@@ -302,7 +314,12 @@ nonisolated final class KeyboardLockController {
         IOHIDManagerRegisterDeviceMatchingCallback(manager, Self.hidDeviceMatchingCallback, Unmanaged.passUnretained(self).toOpaque())
         IOHIDManagerRegisterDeviceRemovalCallback(manager, Self.hidDeviceRemovalCallback, Unmanaged.passUnretained(self).toOpaque())
         IOHIDManagerScheduleWithRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
-        IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        // 缺输入监控时受限键盘设备打不开(RequiresTCCAuthorization),open
+        // 会失败且设备集合为空;结果必须检查,否则证据链静默为空、锁会在
+        // 「仅内置」下错误地全拦,而用户没有任何可诊断的信号。
+        let openResult = IOHIDManagerOpen(manager, IOOptionBits(kIOHIDOptionsTypeNone))
+        let matchedCount = (IOHIDManagerCopyDevices(manager) as? Set<IOHIDDevice>)?.count ?? 0
+        hidMonitoringHealthy = openResult == KERN_SUCCESS && matchedCount > 0
         hidManager = manager
     }
 
@@ -314,6 +331,19 @@ nonisolated final class KeyboardLockController {
         IOHIDManagerUnscheduleFromRunLoop(manager, CFRunLoopGetMain(), CFRunLoopMode.commonModes.rawValue)
         IOHIDManagerClose(manager, IOOptionBits(kIOHIDOptionsTypeNone))
         hidManager = nil
+        hidMonitoringHealthy = true
+    }
+
+    /// 重建 HID 监听(仅「仅内置」范围持有监听)。权限状态变化后调用:
+    /// 受限设备在打开失败后不会自动重试,补授输入监控后重建才能拿到键盘
+    /// 设备与 HID 输入值,用户无需重启应用。重建同时清空归因证据——跨轮
+    /// 的按下态与结论不可复用。
+    func refreshHIDMonitoring() {
+        guard eventTap != nil, activeScope == .internalOnly else { return }
+        teardownHIDMonitoring()
+        setupHIDMonitoring()
+        refreshConnectedKeyboards()
+        resetTrackingState()
     }
 
     private func resetTrackingState() {

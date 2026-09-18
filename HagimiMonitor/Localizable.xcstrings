@@ -6819,6 +6819,22 @@
         }
       }
     },
+    "quicktools.keyboard-lock.evidence-unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard source unavailable — all keys are blocked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法识别键盘来源，已按全部拦截处理"
+          }
+        }
+      }
+    },
     "quicktools.keyboard-lock.locked-without-external": {
       "localizations": {
         "en": {
@@ -6867,6 +6883,22 @@
         }
       }
     },
+    "quicktools.permission.accessibility.guide-subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add the app to Accessibility, then turn it on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将应用添加到辅助功能，打开旁边的开关即可。"
+          }
+        }
+      }
+    },
     "quicktools.permission.input-monitoring": {
       "localizations": {
         "en": {
@@ -6879,6 +6911,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "需要“输入监控”授权"
+          }
+        }
+      }
+    },
+    "quicktools.permission.input-monitoring.guide-subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add the app to Input Monitoring, then turn it on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将应用添加到输入监控，打开旁边的开关即可。"
           }
         }
       }
@@ -8096,6 +8144,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "自动解锁"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.keyboard-lock.auto-unlock.never": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永不"
           }
         }
       }

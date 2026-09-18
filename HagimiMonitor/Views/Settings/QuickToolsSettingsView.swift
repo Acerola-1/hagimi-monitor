@@ -210,8 +210,13 @@ private struct QuickToolCard: View {
             Spacer(minLength: 16)
             Picker("", selection: $settings.keyboardLockAutoUnlockMinutes) {
                 ForEach(KeyboardLockController.autoUnlockMinuteOptions, id: \.self) { minutes in
-                    Text(String(localized: "settings.quick-tools.keyboard-lock.auto-unlock.minutes \(minutes)"))
-                        .tag(minutes)
+                    if minutes > 0 {
+                        Text(String(localized: "settings.quick-tools.keyboard-lock.auto-unlock.minutes \(minutes)"))
+                            .tag(minutes)
+                    } else {
+                        Text(String(localized: "settings.quick-tools.keyboard-lock.auto-unlock.never"))
+                            .tag(minutes)
+                    }
                 }
             }
             .labelsHidden()
