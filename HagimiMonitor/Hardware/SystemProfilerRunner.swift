@@ -1,3 +1,4 @@
+import Darwin
 import Foundation
 
 /// `system_profiler` 执行器:硬件清单的主力数据源。
@@ -91,6 +92,16 @@ nonisolated final class SystemProfilerRunner: @unchecked Sendable {
 
         if done.wait(timeout: .now() + Self.probeTimeout) == .timedOut {
             task.terminate()
+            // terminate 发的是 SIGTERM,system_profiler 挂死时可能不理会:
+            // 后台队列里兜一层升级 SIGKILL 并 waitUntilExit 收尸,避免僵尸进程
+            // 与读取线程泄漏。本路径立即返回 nil,不阻塞调用方。
+            DispatchQueue.global(qos: .utility).async {
+                if task.isRunning {
+                    kill(task.processIdentifier, SIGKILL)
+                }
+                task.waitUntilExit()
+                _ = pipe.fileHandleForReading.readDataToEndOfFile()
+            }
             return nil
         }
         task.waitUntilExit()

@@ -829,6 +829,13 @@ final class BluetoothBatterySampler: NSObject {
 
         if done.wait(timeout: .now() + probeTimeout) == .timedOut {
             task.terminate()
+            // SIGTERM 可能被挂死的 system_profiler 无视:后台兜一层升级 SIGKILL
+            // 并收尸,避免僵尸进程与读取线程泄漏;本路径立即返回,不阻塞调用方。
+            DispatchQueue.global(qos: .utility).async {
+                if task.isRunning { kill(task.processIdentifier, SIGKILL) }
+                task.waitUntilExit()
+                _ = pipe.fileHandleForReading.readDataToEndOfFile()
+            }
             return .failure
         }
         task.waitUntilExit()

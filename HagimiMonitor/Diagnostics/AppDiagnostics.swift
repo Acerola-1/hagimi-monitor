@@ -152,54 +152,9 @@ nonisolated final class AppLogStore: @unchecked Sendable {
 
 // MARK: - Crash Handler
 
-/// 崩溃日志路径。在应用启动初始化阶段仅写入一次，后续由信号与未捕获异常处理程序（C 函数指针）只读访问。
-/// 信号处理上下文中无法获取锁或分配内存，使用 nonisolated(unsafe) 保障底层只读访问。
-nonisolated(unsafe) private var _crashLogPathCString: [CChar] = []
+/// 崩溃日志路径。在应用启动初始化阶段仅写入一次，后续由未捕获异常处理程序只读访问。
+/// POSIX 信号路径由 CrashSignalHandler.c 持有固定缓冲，不进入 Swift runtime。
 nonisolated(unsafe) private var _crashLogPath: String = ""
-
-/// C function for signal handling — no Swift context capture allowed.
-///
-/// Critical: this handler MUST NOT return normally for trap-style signals (SIGTRAP/SIGILL/SIGFPE
-/// on arm64 are raised by a `brk`/trap instruction that does not advance past itself). If we just
-/// log and return, the CPU resumes at the very same faulting instruction and re-raises the same
-/// signal immediately — an infinite retrap loop that pegs the CPU and freezes the main thread
-/// forever without ever actually crashing (observed in the wild: millions of repeated log lines,
-/// UI completely unresponsive, yet the process never dies). So after logging, restore the default
-/// disposition and re-raise: this lets the OS actually terminate the process, which is far better
-/// than a silent, unkillable hang.
-private nonisolated func handleSignal(_ sig: Int32) {
-    defer {
-        signal(sig, SIG_DFL)
-        raise(sig)
-    }
-
-    guard !_crashLogPathCString.isEmpty else { return }
-
-    let sigName: String
-    switch sig {
-    case SIGABRT: sigName = "SIGABRT"
-    case SIGSEGV: sigName = "SIGSEGV"
-    case SIGBUS:  sigName = "SIGBUS"
-    case SIGILL:  sigName = "SIGILL"
-    case SIGFPE:  sigName = "SIGFPE"
-    case SIGTERM: sigName = "SIGTERM"
-    case SIGTRAP: sigName = "SIGTRAP"
-    default:      sigName = "UNKNOWN"
-    }
-
-    let prefix = "FATAL [crash] Caught signal: "
-    let suffix = "\n"
-
-    _crashLogPathCString.withUnsafeBufferPointer { pathBuf in
-        guard let pathPtr = pathBuf.baseAddress else { return }
-        let fd = open(pathPtr, O_WRONLY | O_APPEND | O_CREAT, 0o644)
-        guard fd >= 0 else { return }
-        _ = prefix.withCString { write(fd, $0, strlen($0)) }
-        _ = sigName.withCString { write(fd, $0, strlen($0)) }
-        _ = suffix.withCString { write(fd, $0, strlen($0)) }
-        close(fd)
-    }
-}
 
 /// Captures fatal signals and uncaught exceptions so that the crash reason
 /// appears in `app.log` even when `willTerminate` is never called.
@@ -217,21 +172,11 @@ enum CrashHandler {
 
     /// Install signal + exception handlers. Call once at app launch.
     static func install() {
-        // Cache the log path in globals so C function pointer handlers can access it.
         _crashLogPath = logPath
-        _crashLogPathCString = logPath.cString(using: .utf8) ?? []
-        installSignalHandlers()
-        installExceptionHandler()
-    }
-
-    // MARK: - Signal Handlers
-
-    private static let caughtSignals: [Int32] = [SIGABRT, SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGTERM, SIGTRAP]
-
-    private static func installSignalHandlers() {
-        for sig in caughtSignals {
-            _ = signal(sig, handleSignal)
+        logPath.withCString {
+            HagimiInstallCrashSignalHandlers($0)
         }
+        installExceptionHandler()
     }
 
     // MARK: - Uncaught Exception Handler

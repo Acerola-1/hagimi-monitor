@@ -341,15 +341,35 @@ nonisolated final class HardwareInventoryReader {
     }
 
     /// 「否」= 未注册管理(device MDM / manual MDM 的语义),不是「不支持」。
+    ///
+    /// system_profiler 的这类布尔字段值随系统语言本地化(实测 LC_ALL/环境变量
+    /// 无效,它读用户偏好),只能按已知变体穷举匹配;未收录语言的原始值原样
+    /// 透传,不臆造语义。
+    private static let localizedNegativeValues: Set<String> = [
+        "no",       // en / it / es
+        "否",       // zh-CN
+        "non",      // fr
+        "nein",     // de
+        "não",      // pt
+        "нет",      // ru
+        "いいえ",    // ja
+        "아니오",    // ko
+        "nie",      // pl / nl
+    ]
+
+    private static func isLocalizedNegative(_ raw: String) -> Bool {
+        localizedNegativeValues.contains(raw.lowercased())
+    }
+
     private func enrollState(_ raw: String?) -> String? {
         guard let raw else { return nil }
-        return raw == "否" || raw.lowercased() == "no" ? hwText("hwValueNotEnrolled") : raw
+        return Self.isLocalizedNegative(raw) ? hwText("hwValueNotEnrolled") : raw
     }
 
     /// 「否」= 没有任何用户批准的内核扩展。
     private func noneWhenNegative(_ raw: String?) -> String? {
         guard let raw else { return nil }
-        return raw == "否" || raw.lowercased() == "no" ? hwText("hwValueNone") : raw
+        return Self.isLocalizedNegative(raw) ? hwText("hwValueNone") : raw
     }
 
     /// `SPSoftwareDataType.boot_mode` 的值系统**不做本地化**(实测就是 `normal_boot`),

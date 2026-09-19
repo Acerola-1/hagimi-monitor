@@ -1046,6 +1046,13 @@
     if (kv) for (const k in kv) s = s.replaceAll("{" + k + "}", kv[k]);
     return s;
   }
+  // HTML 转义:进程名/告警名等 DATA 来源字符串拼进 innerHTML 前必须过这里,
+  // 否则名为 `<img src=x onerror=...>` 的进程会在报表(含导出/打印产物)里执行脚本。
+  function escHtml(s) {
+    return String(s).replace(/[&<>"']/g, (ch) => ({
+      "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+    })[ch]);
+  }
 
   const DAY = 86400 * 1000;
   // 生成时间为秒或毫秒自适应(历史产物两口径都有)
@@ -1464,7 +1471,7 @@
           tierHint = "20-40%: " + appAgg.gpuT1 + "m · 40-70%: " + appAgg.gpuT2 + "m · 70%+: " + appAgg.gpuT3 + "m";
         }
         row.innerHTML = iconHTML +
-          '<span class="app-name">' + (apps.names[entry.idx] || "?") + (tierHint ? '<span class="app-row-tier-hint" style="display:block;font-size:10px;color:var(--text-3)">' + tierHint + '</span>' : '') + '</span>' +
+          '<span class="app-name">' + escHtml(apps.names[entry.idx] || "?") + (tierHint ? '<span class="app-row-tier-hint" style="display:block;font-size:10px;color:var(--text-3)">' + escHtml(tierHint) + '</span>' : '') + '</span>' +
           '<span class="app-bar"><span class="app-bar-fill" style="width:' +
           Math.max(3, entry.v / max * 100).toFixed(1) + "%;background:linear-gradient(90deg," +
           color + "," + rgba(color, 0.45) + ')"></span></span>' +
@@ -1489,7 +1496,9 @@
     card.hidden = false;
     listHost.innerHTML = "";
 
-    const isZh = (I.sAvg === "平均" || !I.sAvg);
+    // 语言分支用生成时下发的语言标签判断,不再嗅探某条文案的翻译值
+    // (第三种语言下嗅探必然判错)。
+    const isZh = String(DATA.lang || "en").toLowerCase().startsWith("zh");
     const tTitle = $("t-apps-highload");
     if (tTitle && I.highLoadTitle) tTitle.textContent = I.highLoadTitle;
     const hSub = $("h-apps-highload");
@@ -1544,6 +1553,9 @@
         ? '<img src="data:image/png;base64,' + iconData + '" class="hl-icon" alt="">'
         : '<span class="app-icon-fallback hl-icon">' + (name === "WindowServer" ? sf("display") : sf("apps")) + '</span>';
 
+      // name 来自 DATA(进程名,外部可控),拼进 innerHTML 前先转义
+      const safeName = escHtml(name || "?");
+
       const sustainedWord = isZh ? "持续占用" : "Sustained";
       const avgWord = isZh ? "均值" : "avg";
       const peakWord = isZh ? "峰值" : "peak";
@@ -1551,7 +1563,7 @@
 
       let metricsHTML = "";
       episodes.forEach(alert => {
-        const metricLabel = alert.metric ? alert.metric.toUpperCase() : "LOAD";
+        const metricLabel = escHtml(alert.metric ? alert.metric.toUpperCase() : "LOAD");
         const usageStr = alert.metric === "memory" ? formatMem(alert.avgUsage) : alert.avgUsage + "%";
         const peakStr = alert.metric === "memory" ? formatMem(alert.peakUsage) : alert.peakUsage + "%";
 
@@ -1604,7 +1616,7 @@
           '<div class="hl-left">' +
             iconHTML +
             '<div>' +
-              '<div class="hl-name">' + (name || "?") + '</div>' +
+              '<div class="hl-name">' + safeName + '</div>' +
               '<div class="hl-sub" style="margin-top:1px;">' + headTimeSub + '</div>' +
             '</div>' +
           '</div>' +
@@ -2041,7 +2053,8 @@
     order.forEach((weekday, yi) => {
       for (let h = 0; h < 24; h++) {
         const c = cell[weekday + "-" + h];
-        if (!c || c.n === 0) return;
+        // 跳过当前小时:此处 return 会退出整个 forEach 回调,丢弃该星期几剩余全部格子
+        if (!c || c.n === 0) continue;
         const val = c.sum / c.n;
         maxCell = Math.max(maxCell, val);
         data.push([h, yi, val]);

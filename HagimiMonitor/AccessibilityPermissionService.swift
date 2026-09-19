@@ -77,13 +77,18 @@ final class AccessibilityPermissionService: ObservableObject {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + 1, repeating: 1)
         timer.setEventHandler { [weak self] in
-            guard let self else { return }
-            self.refresh()
-            self.polledSeconds += 1
-            // 授权通过或超过最长等待窗口(用户拒绝/忽略)即停止轮询。
-            if self.isTrusted || self.polledSeconds >= Self.maxPollingSeconds {
-                self.cleanupBox.pollTimer?.cancel()
-                self.cleanupBox.pollTimer = nil
+            // timer 建在 .main 队列上,handler 实际运行于主线程,但 DispatchSource
+            // 回调本身不具备 MainActor 隔离:显式 assumeIsolated 让编译器核验
+            // (Swift 6 strict concurrency 下否则直接报错),运行时也无额外开销。
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.refresh()
+                self.polledSeconds += 1
+                // 授权通过或超过最长等待窗口(用户拒绝/忽略)即停止轮询。
+                if self.isTrusted || self.polledSeconds >= Self.maxPollingSeconds {
+                    self.cleanupBox.pollTimer?.cancel()
+                    self.cleanupBox.pollTimer = nil
+                }
             }
         }
         cleanupBox.pollTimer = timer

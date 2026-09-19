@@ -344,14 +344,18 @@ final class QuickToolsStore: ObservableObject {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now() + Self.tapRetryInterval, repeating: Self.tapRetryInterval)
         timer.setEventHandler { [weak self] in
-            guard let self else { return }
-            self.tapRetryAttempts += 1
-            if self.tapRetryAttempts >= Self.maxTapRetryAttempts {
-                self.stopTapRetry()
-                self.pendingKeyboardLock = false
-                return
+            // timer 建在 .main 队列上,handler 实际运行于主线程,但 DispatchSource
+            // 回调本身不具备 MainActor 隔离:显式 assumeIsolated 让编译器核验。
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.tapRetryAttempts += 1
+                if self.tapRetryAttempts >= Self.maxTapRetryAttempts {
+                    self.stopTapRetry()
+                    self.pendingKeyboardLock = false
+                    return
+                }
+                self.attemptPendingLock()
             }
-            self.attemptPendingLock()
         }
         tapRetryTimer = timer
         timer.resume()

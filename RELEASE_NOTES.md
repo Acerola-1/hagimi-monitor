@@ -1,20 +1,28 @@
 ## 更新内容
 
-### 新功能
+### 中文
 
-- 键盘锁自动解锁时长新增「永不」选项，支持长期防误触与按需手动解锁
+#### 修复
 
-### 修复
+- 修复菜单栏数值格式化遇到 NaN / Infinity 传感器读数时崩溃闪退的问题
+- 修复钉选面板打开设置时误关悬浮面板、自身残留遮挡设置窗口的问题
 
-- 修复 macOS「输入监控」权限在系统未决态下被误判为已授权的问题，采用 IOHID 授权原语严密校验
-- 修复报表每日聚合跨午夜时段运行的基准时间漂移问题
+#### 优化与体验
 
-### 优化与体验
+- 重构崩溃信号处理为纯 C 实现，规避 Swift 运行时在信号上下文中堆分配引发的潜在陷阱
+- 增强发布脚本对 tag 名称的白名单校验，拦截非法字符注入与路径穿越，杜绝半成品发布
+- 为硬件探针子进程增加超时后的 SIGKILL 兜底清理，杜绝僵尸进程与采样线程泄漏
 
-- 优化键盘锁按键归因流：完善媒体键连发流滑动时间窗，长按音量/亮度等顶排键持续平滑响应
-- 增强双授权链式引导体验：辅助功能与输入监控授权浮窗引入权限域生命周期隔离，彻底解决权限感知互杀导致的引导早闭问题
-- 改进键盘锁状态实时校准：主动操作落锁前同步检查授权状态，避免系统偏好设置撤销授权后静默失效
-- 内置与外接键盘叠放兜底优化：两侧按键均有受压且时间窗过期时优先判定为内置拦截，杜绝漏键穿透
-- 键盘拓扑被动扫描增加授权守护：仅在输入监控真实就绪时读取受限设备，杜绝设置页展示时意外唤起系统弹窗
-- 整合电池功率流向图设置：将原独立 Beta 开关内化为电池分页（直连版拓扑页 / 沙盒版健康页）可勾选项，存量迁移自动继承历史偏好
+### English
+
+#### Fixes
+
+- Fixed a crash in menu bar metric formatting when sensor readings are NaN or Infinity.
+- Fixed the pinned panel failing to dismiss itself when opening Settings, which left it covering the settings window.
+
+#### Improvements
+
+- Refactored crash signal handling to a pure C implementation, avoiding Swift runtime allocation pitfalls inside signal contexts.
+- Hardened the release script with tag name whitelist validation against injection and path traversal.
+- Added SIGKILL fallback cleanup for timed-out hardware probe subprocesses, preventing zombie processes and sampler thread leaks.
 

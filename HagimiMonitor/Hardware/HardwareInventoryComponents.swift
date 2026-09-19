@@ -366,7 +366,9 @@ nonisolated extension HardwareInventoryReader {
 
         // USB 设备挂在**总线项**的 `_items` 里(macOS 26+ 用 SPUSBHostDataType,
         // 旧系统才是 SPUSBDataType);没有设备的总线不单列。
-        let buses = items["SPUSBHostDataType"] ?? []
+        // 两个 key 都要兜底:app 最低支持 macOS 15,旧系统上只有 SPUSBDataType,
+        // 缺 fallback 会让 USB 分组在旧系统上整组静默消失。
+        let buses = items["SPUSBHostDataType"] ?? items["SPUSBDataType"] ?? []
         var usbFacts: [HardwareFact] = []
         for bus in buses {
             let devices = bus["_items"] as? [[String: Any]] ?? []

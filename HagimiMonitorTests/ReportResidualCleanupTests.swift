@@ -92,6 +92,29 @@ struct TransientReportPrintSessionTests {
         #expect(session.webView == nil)
         #expect(session.fileURL == nil)
     }
+
+    @Test func stalledLoadingTimesOutAndReleasesSession() throws {
+        let url = URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("hagimi-print-timeout-test-\(UUID().uuidString).html")
+        try Data("<html></html>".utf8).write(to: url)
+        var finishCalls = 0
+        let session = TransientReportPrintSession(
+            fileURL: url,
+            parentWindow: nil,
+            pageLoader: { _, _ in },
+            onFinish: { finishCalls += 1 }
+        )
+
+        session.start()
+        session.handleLoadingTimeout()
+
+        #expect(session.state == .finished)
+        #expect(session.cleanupCount == 1)
+        #expect(finishCalls == 1)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        #expect(session.webView == nil)
+        #expect(session.fileURL == nil)
+    }
 }
 
 @Suite("独立 HTML 导出残留")

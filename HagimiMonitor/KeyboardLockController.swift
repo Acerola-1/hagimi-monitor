@@ -305,6 +305,9 @@ nonisolated final class KeyboardLockController {
     func stop() {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
+            // 只 disable 不 invalidate 会留下仍指向 userInfo(self) 的活动 port:
+            // 控制器释放后残留的 tap 回调若再触发就是对已释放对象的 use-after-free。
+            CFMachPortInvalidate(tap)
         }
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)
@@ -322,6 +325,7 @@ nonisolated final class KeyboardLockController {
     deinit {
         if let tap = eventTap {
             CGEvent.tapEnable(tap: tap, enable: false)
+            CFMachPortInvalidate(tap)
         }
         if let source = runLoopSource {
             CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .commonModes)

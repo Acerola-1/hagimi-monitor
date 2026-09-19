@@ -108,7 +108,11 @@ nonisolated enum StandaloneHTMLReportExporter {
         replace("/*__FLATPICKR_CSS__*/",
                 with: try String(contentsOf: flatpickrCSSURL, encoding: .utf8), in: &html)
 
-        // JSON 内联进 <script> 时,"</" 可能提前终结脚本标签,统一转义为合法的 "<\/"。
+        // JSON 内联进 <script> 时的脚本上下文逃逸防护,三层都要:
+        // - "</" 可能提前终结 <script> 标签 → "<\/";
+        // - "<!--" 在经典脚本里开启 HTML 注释语法,可改变解析走向;
+        // - U+2028/U+2029 是合法 JSON 但属 JS 行终止符,裸放字符串字面量会
+        //   SyntaxError。进程名/告警名等外部数据都会流进这段 JSON。
         // 编码失败(NaN/非 JSON 值混入 payload)抛错走统一的失败上报,不 trap 进程。
         let json: String
         do {
@@ -116,7 +120,11 @@ nonisolated enum StandaloneHTMLReportExporter {
         } catch {
             throw StatisticsReportError.encodingFailed(error)
         }
-        let escapedJSON = json.replacingOccurrences(of: "</", with: "<\\/")
+        var escapedJSON = json
+            .replacingOccurrences(of: "</", with: "<\\/")
+            .replacingOccurrences(of: "<!--", with: "<\\!--")
+            .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
+            .replacingOccurrences(of: "\u{2029}", with: "\\u2029")
         replace("/*__SYMBOL_CSS__*/", with: reportSymbolCSS, in: &html)
         replace("window.__DATA__ = /*__DATA__*/null;",
                 with: "window.__DATA__ = \(escapedJSON);", in: &html)
@@ -216,6 +224,7 @@ nonisolated enum StandaloneHTMLReportExporter {
         var payload: [String: Any] = [
             "generatedAt": Int(Date().timeIntervalSince1970),
             "meta": meta,
+            "lang": currentLanguageTag,
             // 评分常量随载荷下发:报表 JS 与 App 端 StatisticsHealthScore 共用同一组
             // 权重、门槛与等级区间,改口径只需改一处,不会两边各写一套数字。
             "scoreModel": [
@@ -365,6 +374,13 @@ nonisolated enum StandaloneHTMLReportExporter {
             strings[key] = Bundle.main.localizedString(forKey: "stats.r.\(key)", value: nil, table: nil)
         }
         return strings
+    }
+
+    /// 生成时刻的系统语言标签,随 DATA.meta 下发。
+    /// 报表 JS 里的中英文分支用语言标签判断,不再靠「某条文案是否等于某个
+    /// 翻译值」嗅探——那种写法在第三种语言下会全部判错。
+    static var currentLanguageTag: String {
+        Locale.preferredLanguages.first ?? "en"
     }
 
     /// 从进程存储拉取报表所需的进程/电池数据。
