@@ -204,6 +204,11 @@ fi
 # 更新 MARKETING_VERSION
 echo ">>> 更新 MARKETING_VERSION 为 ${VERSION}..."
 sed -i '' "s/MARKETING_VERSION = [^;]*;/MARKETING_VERSION = ${VERSION};/g" "$PBXPROJ"
+# sed 静默不匹配(行缺失/格式变化)会发布出版本号没变的 release,必须验证确实写进去了
+if ! grep -q "MARKETING_VERSION = ${VERSION};" "$PBXPROJ"; then
+  echo "错误: MARKETING_VERSION 未更新为 ${VERSION}(替换未匹配到任何行),发布中止" >&2
+  exit 1
+fi
 
 # ===== 组装发布说明 =====
 HAS_CONTENT=0
@@ -265,17 +270,25 @@ git push origin "$RELEASE_BRANCH"
 echo ">>> 创建 Pull Request..."
 PR_URL=$(create_pull_request)
 
+# 校验 PR URL:gh api 失败时(网络/认证/限流)这里可能是空串或 stderr 残留,
+# 拿垃圾值继续跑会在 merge/删分支时打到错误端点甚至错误 PR。
+if [[ ! "$PR_URL" =~ ^https://github\.com/.+/pull/[0-9]+$ ]]; then
+  echo "错误: 未能获取 PR URL(获取到: '${PR_URL}'),发布中止" >&2
+  echo "可手动检查分支 ${RELEASE_BRANCH} 是否需要删除,以及 PR 是否已创建" >&2
+  exit 1
+fi
+
 echo "PR 已创建: ${PR_URL}"
 
 # 合并 PR（squash，保持 main 线性历史）
 echo ">>> 合并 PR..."
 merge_pull_request "$PR_URL"
 
-# 拉取 main 并打 tag
+# 拉取 main 并打 tag。直接 tag 远端 main 的 FETCH_HEAD,不 checkout/pull 本地 main:
+# 本地 main 分叉或 checkout 失败会让发布停在"PR 已合并但没打 tag"的半完成态。
 echo ">>> 拉取 main 并打 tag..."
-git checkout main
-git pull origin main
-git tag "$TAG"
+git fetch origin main
+git tag "$TAG" FETCH_HEAD
 git push origin "$TAG"
 
 # 切回原分支并同步

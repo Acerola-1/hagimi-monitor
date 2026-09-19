@@ -542,13 +542,23 @@ final class MonitorStore: ObservableObject {
     private let refreshSchedule = MonitorRefreshSchedule()
 /// 自动在 deinit 时从主 RunLoop 移除电源变化通知 source 的包装对象。
 /// 安全不变式：仅持有不可变的 CFRunLoopSource 引用，在 deinit 执行 CFRunLoopRemoveSource 保证资源安全释放。
+///
+/// deinit 可能运行在任意线程(Apple 文档明确警告不要从非主线程操作主 RunLoop 的
+/// source,否则与正在派发回调的主 RunLoop 并发产生 use-after-free 窗口),
+/// 因此非主线程路径必须 hop 回主线程同步移除,移除完成前不释放 source。
 nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     private let source: CFRunLoopSource
     init(_ source: CFRunLoopSource) {
         self.source = source
     }
     deinit {
-        CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+        if Thread.isMainThread {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), source, .defaultMode)
+        } else {
+            DispatchQueue.main.sync {
+                CFRunLoopRemoveSource(CFRunLoopGetMain(), self.source, .defaultMode)
+            }
+        }
     }
 }
 

@@ -213,33 +213,41 @@ struct MenuBarMetricItem: Identifiable, Equatable {
 enum MenuBarMetricFormatter {
     static let unavailable = "--"
 
+    /// 传感器/派生读数可能出现 NaN 或 ±Infinity(读数异常、除零等),
+    /// `Int(Double)` 转换遇到非有限值会直接 trap 导致菜单栏崩溃,
+    /// 所有格式化入口先统一归一到 nil。
+    private static func finite(_ value: Double?) -> Double? {
+        guard let value, value.isFinite else { return nil }
+        return value
+    }
+
     static func percentage(_ value: Double?) -> String {
-        guard let value else { return unavailable }
+        guard let value = finite(value) else { return unavailable }
         return "\(Int(min(100, max(0, value)).rounded()))%"
     }
 
     static func fixedPercentage(_ value: Double?) -> String {
-        guard let value else { return " --%" }
+        guard let value = finite(value) else { return " --%" }
         return String(format: "%3d%%", Int(min(100, max(0, value)).rounded()))
     }
 
     static func temperature(_ value: Double?) -> String {
-        guard let value else { return " --°" }
+        guard let value = finite(value) else { return " --°" }
         return String(format: "%3d°", Int(value.rounded()))
     }
 
     static func throughput(_ value: Double?, direction: String) -> String {
-        guard let value else { return direction + leftPad(unavailable, to: 4) }
+        guard let value = finite(value) else { return direction + leftPad(unavailable, to: 4) }
         return direction + leftPad(compactRate(value), to: 4)
     }
 
     static func capacity(_ value: Double?) -> String {
-        guard let value else { return leftPad(unavailable, to: 4) }
+        guard let value = finite(value) else { return leftPad(unavailable, to: 4) }
         return leftPad(compactCapacity(value), to: 4)
     }
 
     static func power(_ value: Double?) -> String {
-        guard let value else { return leftPad(unavailable, to: 4) + "W" }
+        guard let value = finite(value) else { return leftPad(unavailable, to: 4) + "W" }
         return leftPad("\(Int(max(0, value).rounded()))", to: 3) + "W"
     }
 
@@ -252,17 +260,17 @@ enum MenuBarMetricFormatter {
     }
 
     static func refreshRate(_ value: Double?) -> String {
-        guard let value else { return leftPad(unavailable, to: 3) + "Hz" }
+        guard let value = finite(value) else { return leftPad(unavailable, to: 3) + "Hz" }
         return leftPad("\(Int(value.rounded()))", to: 3) + "Hz"
     }
 
     static func displayPower(_ value: Double?) -> String {
-        guard let value else { return leftPad(unavailable, to: 3) + "W" }
+        guard let value = finite(value) else { return leftPad(unavailable, to: 3) + "W" }
         return String(format: "%3.1fW", max(0, value))
     }
 
     static func bandwidth(_ value: Double?) -> String {
-        guard let value else { return leftPad(unavailable, to: 3) + "G" }
+        guard let value = finite(value) else { return leftPad(unavailable, to: 3) + "G" }
         if value >= 10 {
             return leftPad("\(Int(value.rounded()))", to: 3) + "G"
         }

@@ -36,7 +36,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private(set) lazy var pinnedPanelController: PinnedPanelController = {
         PinnedPanelController(store: store, openSettings: { [weak self] in
-            self?.fluidPanelController.dismissPanelForSettings()
+            // 打开设置时收起的是钉选面板自身;原先误调成 fluid 面板的 dismiss,
+            // 导致钉选面板留在屏幕上遮挡设置窗口。
+            self?.pinnedPanelController.hide()
             SettingsWindowPresenter.open()
         })
     }()

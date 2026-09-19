@@ -60,6 +60,9 @@ mkdir -p "$BUILD_DIR/$BRANCH"
 if [ "$BRANCH" != "$CURRENT" ]; then
     echo "切换分支: $CURRENT → $BRANCH"
     git checkout "$BRANCH"
+    # 任何退出路径(构建失败、产物缺失、set -e 中断)都切回原分支,
+    # 避免把仓库遗留在非预期的检出状态。
+    trap 'if [ -n "$CURRENT" ] && [ "$(git branch --show-current)" = "$BRANCH" ]; then git checkout "$CURRENT" >/dev/null 2>&1; fi' EXIT
 fi
 
 # 构建
@@ -81,10 +84,14 @@ fi
 BUILT_APP="$DERIVED_DATA_DIR/Build/Products/Debug/$APP_NAME.app"
 APP_PATH="$BUILD_DIR/$BRANCH/$APP_NAME.app"
 
-if [ -d "$BUILT_APP" ]; then
-    rm -rf "$APP_PATH"
-    ditto "$BUILT_APP" "$APP_PATH"
+# 产物缺失立即报错:静默跳过复制会接着检查 APP_PATH,把上一次的旧构建
+# 当成新构建启动,排查问题时极具迷惑性。
+if [ ! -d "$BUILT_APP" ]; then
+    echo "错误: 构建产物不存在: $BUILT_APP"
+    exit 1
 fi
+rm -rf "$APP_PATH"
+ditto "$BUILT_APP" "$APP_PATH"
 
 # 启动
 if [ -d "$APP_PATH" ]; then
@@ -126,17 +133,19 @@ else
     exit 1
 fi
 
-# 切回原分支
+# 切回原分支(此后 trap 不再重复切换,见下)
 if [ "$BRANCH" != "$CURRENT" ]; then
     git checkout "$CURRENT"
     echo "已切回 $CURRENT"
+    trap - EXIT
 fi
 
 # 异步打包到 build/ 目录
 if $PACKAGE; then
     (
         mkdir -p "$PACKAGE_DIR"
-        ZIP_NAME="HagimiMonitor-$(git branch --show-current)-$(date +%Y%m%d%H%M%S).zip"
+        # 用 $BRANCH 而不是现查 git:此时已切回 $CURRENT,现查会抓错分支名。
+        ZIP_NAME="HagimiMonitor-$BRANCH-$(date +%Y%m%d%H%M%S).zip"
         ZIP_PATH="$PACKAGE_DIR/$ZIP_NAME"
         cd "$BUILD_DIR/$BRANCH"
         zip -r -q "$ZIP_PATH" "$APP_NAME.app"

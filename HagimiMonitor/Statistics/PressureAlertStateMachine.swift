@@ -134,7 +134,14 @@ struct PressureAlertStateMachine {
             state.severeSince = date
         }
 
-        guard Self.isSevere(level: level) else {
+        if Self.isSevere(level: level) {
+            // 同一 episode 内短暂跌出 severe 再回升时(peak 不再增长、
+            // resumesAfterBreak 也不触发),必须重启持续计时,否则
+            // severeSince 恒为 nil,本 episode 内通知永远不会再发。
+            if state.severeSince == nil {
+                state.severeSince = date
+            }
+        } else {
             state.severeSince = nil
             return
         }

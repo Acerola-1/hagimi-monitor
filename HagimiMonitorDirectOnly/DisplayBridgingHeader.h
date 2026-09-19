@@ -2,6 +2,7 @@
 #import <IOKit/i2c/IOI2CInterface.h>
 #import <IOKit/hidsystem/ev_keymap.h>
 #import <CoreGraphics/CoreGraphics.h>
+#import "../HagimiMonitor/CrashSignalHandler.h"
 
 typedef CFTypeRef IOAVService;
 extern IOAVService IOAVServiceCreate(CFAllocatorRef allocator);

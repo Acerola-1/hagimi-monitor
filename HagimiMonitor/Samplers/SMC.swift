@@ -131,7 +131,9 @@ nonisolated final class SMCReader: FanSMCReading, @unchecked Sendable {
 
         switch typeString {
         case "sp78":
-            let intValue = Int(byteArray[0]) * 256 + Int(byteArray[1])
+            // sp78 是有符号定点:高字节按 Int8 取符号位,否则负温度(如 -5°C)
+            // 会被错读成 65231/256 ≈ 254.8°C 之类的巨大正值。
+            let intValue = Int(Int8(bitPattern: byteArray[0])) * 256 + Int(byteArray[1])
             return Double(intValue) / 256.0
         case "sp87":
             let intValue = Int(byteArray[0]) * 256 + Int(byteArray[1])

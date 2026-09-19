@@ -18,7 +18,10 @@ import Foundation
 /// 后续睡眠状态不会被过期的定时任务解除。
 ///
 /// 线程安全:状态由 NSLock 保护,`isSuppressed` 可在任意 DDC 后台队列安全读取。
-nonisolated final class DDCEnvironmentGate: @unchecked Sendable {
+///
+/// 继承 NSObject 是硬性要求:selector 式 NSWorkspace 通知派发走 objc_msgSend,
+/// 纯 Swift 类不是合法的 Objective-C 对象,睡眠/唤醒通知触发时会派发失败。
+nonisolated final class DDCEnvironmentGate: NSObject, @unchecked Sendable {
     static let shared = DDCEnvironmentGate()
 
     private let lock = NSLock()
@@ -35,12 +38,14 @@ nonisolated final class DDCEnvironmentGate: @unchecked Sendable {
         registerSystemObservers: Bool = true,
         clock: MonotonicClock = DispatchMonotonicClock()
     ) {
+        // 先初始化自身存储,再 super.init(),之后才能把 self 交给通知中心。
         self.runtime = DDCGateRuntime(
             clock: clock,
             wakeSettle: wakeSuppressSeconds,
             reconfigureSettle: reconfigureSettleSeconds,
             reconfigureSafety: reconfigureSafetySeconds
         )
+        super.init()
         _ = runtime.addRecoveryHandler { [weak self] in
             DispatchQueue.main.async {
                 self?.fireChangeHandlers()

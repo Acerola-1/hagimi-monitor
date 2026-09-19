@@ -143,6 +143,16 @@ enum ReportDataExporter {
 
     // MARK: - HTML 导出
 
+    /// meta 是调用方提供的自由文本(时间跨度等),写进 HTML 前转义,
+    /// 防止含 `<`/`>`/`&` 的值破坏标记或被注入脚本。
+    private static func escapeHTML(_ text: String) -> String {
+        text.replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&#39;")
+    }
+
     static func generateHTML(rows: [StatisticsRow], bucketSeconds: Double, meta: String) -> String {
         let exportTime = dateFormatter.string(from: Date())
         var html = """
@@ -212,7 +222,7 @@ enum ReportDataExporter {
         <body>
           <header>
             <h1>HagimiMonitor 采样原始数据</h1>
-            <div class="meta">导出时间: \(exportTime) | 记录总数: \(rows.count) 条 | 时间跨度: \(meta)</div>
+            <div class="meta">导出时间: \(escapeHTML(exportTime)) | 记录总数: \(rows.count) 条 | 时间跨度: \(escapeHTML(meta))</div>
           </header>
           <div class="table-container">
             <table>

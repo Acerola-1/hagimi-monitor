@@ -18,8 +18,9 @@ enum ReportWindowPresenter {
     private static var windowDelegate: ReportWindowDelegate?
     private static var themeCancellable: AnyCancellable?
     private static var printSession: TransientReportPrintSession?
+    private static var printSessionID: UUID?
     private static var printGenerationTask: Task<Void, Never>?
-    private static var printInFlight = false
+    private static var printGenerationID: UUID?
 
     private static let contentRect = NSRect(x: 0, y: 0, width: 1380, height: 880)
     private static let windowStyleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
@@ -89,9 +90,17 @@ enum ReportWindowPresenter {
 
     /// 触发报表打印：按需临时创建 WebKit 打印操作，完成后立即销毁，日常查看无 WebKit 常驻。
     static func printCurrentReport() {
-        guard !printInFlight, let snapshot = viewModel?.snapshot else { return }
-        printInFlight = true
+        guard printGenerationTask == nil, printSession == nil,
+              let snapshot = viewModel?.snapshot else { return }
+        let generationID = UUID()
+        printGenerationID = generationID
         let generationTask = Task { @MainActor in
+            defer {
+                if printGenerationID == generationID {
+                    printGenerationTask = nil
+                    printGenerationID = nil
+                }
+            }
             do {
                 let fileURL = try await Task.detached(priority: .userInitiated) {
                     let fileURL = FileManager.default.temporaryDirectory
@@ -107,15 +116,12 @@ enum ReportWindowPresenter {
 
                 guard !Task.isCancelled, window != nil else {
                     try? FileManager.default.removeItem(at: fileURL)
-                    printInFlight = false
                     return
                 }
                 presentPrintSession(fileURL: fileURL)
             } catch {
-                printInFlight = false
                 AppLogger.settings.error("Print generation failed: \(String(describing: error), privacy: .public)")
             }
-            printGenerationTask = nil
         }
         printGenerationTask = generationTask
     }
@@ -141,16 +147,22 @@ enum ReportWindowPresenter {
 
     /// 按需启动一次性临时 WebKit 打印流程并在结束后彻底销毁。
     private static func presentPrintSession(fileURL: URL) {
+        if let staleSession = printSession {
+            staleSession.finish()
+        }
         guard printSession == nil else {
             try? FileManager.default.removeItem(at: fileURL)
             return
         }
+        let sessionID = UUID()
+        printSessionID = sessionID
         let session = TransientReportPrintSession(
             fileURL: fileURL,
             parentWindow: window,
             onFinish: {
+                guard ReportWindowPresenter.printSessionID == sessionID else { return }
                 ReportWindowPresenter.printSession = nil
-                ReportWindowPresenter.printInFlight = false
+                ReportWindowPresenter.printSessionID = nil
             }
         )
         printSession = session
@@ -215,9 +227,10 @@ enum ReportWindowPresenter {
     private static func handleWindowClose() {
         printGenerationTask?.cancel()
         printGenerationTask = nil
+        printGenerationID = nil
         printSession?.finish()
         printSession = nil
-        printInFlight = false
+        printSessionID = nil
         viewModel?.teardown()
         viewModel = nil
         window = nil
@@ -341,6 +354,7 @@ private var transientPrintSessionAssociationKey: UInt8 = 0
 @MainActor
 final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
     typealias WebViewFactory = @MainActor () -> WKWebView?
+    typealias PageLoader = @MainActor (WKWebView, URL) -> Void
 
     enum State: Equatable {
         case idle
@@ -357,8 +371,10 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
     private weak var parentWindow: NSWindow?
     private let onFinish: () -> Void
     private let webViewFactory: WebViewFactory
+    private let pageLoader: PageLoader
     private var printOperation: NSPrintOperation?
     private var printDelayTask: Task<Void, Never>?
+    private var loadingTimeoutTask: Task<Void, Never>?
 
     init(
         fileURL: URL,
@@ -371,11 +387,15 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
                 configuration: configuration
             )
         },
+        pageLoader: @escaping PageLoader = { webView, fileURL in
+            webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+        },
         onFinish: @escaping () -> Void = {}
     ) {
         self.fileURL = fileURL
         self.parentWindow = parentWindow
         self.webViewFactory = webViewFactory
+        self.pageLoader = pageLoader
         self.onFinish = onFinish
         super.init()
     }
@@ -394,7 +414,8 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
             self,
             .OBJC_ASSOCIATION_RETAIN_NONATOMIC
         )
-        webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
+        scheduleLoadingTimeout()
+        pageLoader(webView, fileURL)
     }
 
     /// 可从成功、取消、导航/脚本失败以及父窗口关闭路径重复调用。
@@ -404,6 +425,8 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
         cleanupCount += 1
         printDelayTask?.cancel()
         printDelayTask = nil
+        loadingTimeoutTask?.cancel()
+        loadingTimeoutTask = nil
 
         if let webView {
             webView.stopLoading()
@@ -490,6 +513,8 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
             return
         }
         state = .printing
+        loadingTimeoutTask?.cancel()
+        loadingTimeoutTask = nil
         let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
         printInfo.topMargin = 28
         printInfo.bottomMargin = 28
@@ -518,6 +543,25 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
     private func scriptFailed(_ error: Error) {
         guard state != .finished else { return }
         AppLogger.settings.error("Transient print script failed: \(String(describing: error), privacy: .public)")
+        finish()
+    }
+
+    private func scheduleLoadingTimeout() {
+        loadingTimeoutTask?.cancel()
+        loadingTimeoutTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 30_000_000_000)
+            } catch {
+                return
+            }
+            self?.handleLoadingTimeout()
+        }
+    }
+
+    /// 计时器与测试共用同一条超时出口，确保只清理仍停在加载阶段的会话。
+    func handleLoadingTimeout() {
+        guard state == .loading else { return }
+        AppLogger.settings.error("Transient print loading timed out")
         finish()
     }
 }

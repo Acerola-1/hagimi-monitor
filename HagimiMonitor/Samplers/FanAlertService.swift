@@ -106,7 +106,10 @@ final class FanAlertService {
         case .fault:
             content.title = String(localized: "fan.alert.fault.title")
             content.body = String(localized: "fan.alert.fault.body \(maxRPM)")
-            content.sound = .defaultCritical
+            // .defaultCritical 需要极难获批的 critical-alerts entitlement,
+            // 未授权时该通知会被整体拒绝,最高级别风扇故障反而无声无息;
+            // 降级为普通铃声保证告警必达。
+            content.sound = .default
         case .warning:
             content.title = String(localized: "fan.alert.warning.title")
             content.body = String(localized: "fan.alert.warning.body \(maxRPM)")
