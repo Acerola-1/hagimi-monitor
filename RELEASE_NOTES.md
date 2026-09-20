@@ -1,28 +1,17 @@
 ## 更新内容
 
-### 中文
+### 修复
 
-#### 修复
+- 修复启动即死循环(IOBluetooth 连接回调触发 SIGTRAP 后崩溃处理器无限重入):trap 类信号改为显式恢复默认处置,不再依赖 SA_RESETHAND
+- 修复蓝牙设备连断通知在后台线程触发 MainActor 隔离校验导致 SIGTRAP:回调改为 nonisolated 收下后跳回主线程处理
 
-- 修复菜单栏数值格式化遇到 NaN / Infinity 传感器读数时崩溃闪退的问题
-- 修复钉选面板打开设置时误关悬浮面板、自身残留遮挡设置窗口的问题
+### 优化与体验
 
-#### 优化与体验
+- 取消勾选蓝牙模块瞬间的迟到连断事件不再重排已停止的电量重试链
 
-- 重构崩溃信号处理为纯 C 实现，规避 Swift 运行时在信号上下文中堆分配引发的潜在陷阱
-- 增强发布脚本对 tag 名称的白名单校验，拦截非法字符注入与路径穿越，杜绝半成品发布
-- 为硬件探针子进程增加超时后的 SIGKILL 兜底清理，杜绝僵尸进程与采样线程泄漏
+### 代码质量
 
-### English
+- 新增崩溃处理器与 IOBluetooth 回调隔离回归测试(467 项全部通过)
 
-#### Fixes
-
-- Fixed a crash in menu bar metric formatting when sensor readings are NaN or Infinity.
-- Fixed the pinned panel failing to dismiss itself when opening Settings, which left it covering the settings window.
-
-#### Improvements
-
-- Refactored crash signal handling to a pure C implementation, avoiding Swift runtime allocation pitfalls inside signal contexts.
-- Hardened the release script with tag name whitelist validation against injection and path traversal.
-- Added SIGKILL fallback cleanup for timed-out hardware probe subprocesses, preventing zombie processes and sampler thread leaks.
+感谢 @gaojingyaodl-ops 在 #120 报告并提供关键复现线索(关闭蓝牙权限即恢复),帮助快速定位到 trap 类信号重入与回调线程隔离两个根因。
 
