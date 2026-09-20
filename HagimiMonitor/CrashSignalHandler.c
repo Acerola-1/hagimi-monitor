@@ -66,11 +66,14 @@ static void handleCrashSignal(int signalNumber) {
         }
     }
 
-    // SA_RESETHAND has already restored the default disposition. Re-raising
-    // preserves the original crash semantics instead of returning to a trap.
-    if (raise(signalNumber) != 0) {
-        _exit(128 + signalNumber);
-    }
+    // Darwin 对 SIGILL、SIGTRAP 不执行 SA_RESETHAND 自动复位,
+    // 与信号由指令异常还是 raise 产生无关,因此显式恢复默认处置。
+    signal(signalNumber, SIG_DFL);
+    // 当前信号在处理器执行期间被屏蔽,raise 将其置为待处理;
+    // 返回并恢复原信号掩码后,按默认处置终止进程。
+    // 同步异常若再次执行故障指令,也会按默认处置终止,不再重入本处理器。
+    // 保留信号终止语义,不以 _exit 的普通退出码替代。
+    raise(signalNumber);
 }
 
 void HagimiInstallCrashSignalHandlers(const char *logPath) {
@@ -88,7 +91,7 @@ void HagimiInstallCrashSignalHandlers(const char *logPath) {
     struct sigaction action;
     memset(&action, 0, sizeof(action));
     action.sa_handler = handleCrashSignal;
-    action.sa_flags = SA_RESETHAND;
+    // 由处理器显式恢复默认处置,避免依赖对 SIGILL、SIGTRAP 无效的 SA_RESETHAND。
     sigemptyset(&action.sa_mask);
 
     const int caughtSignals[] = {
