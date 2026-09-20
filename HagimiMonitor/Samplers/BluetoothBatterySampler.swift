@@ -317,18 +317,26 @@ final class BluetoothBatterySampler: NSObject {
 
     // MARK: - 事件驱动(连断通知)
 
-    /// 设备连接通知回调(注册线程即主线程 runloop)。
-    @objc private func ioDeviceDidConnect(
+    /// 设备连接通知回调。IOBluetooth 的回调派发线程不保证是注册线程
+    /// (实测在非主线程触发);工程默认 MainActor 隔离下,带 @objc 入口的
+    /// 隔离校验会在非主线程直接 trap,故必须 nonisolated 收下,再跳回主线程
+    /// 进入防抖(状态均为 MainActor 镜像)。
+    @objc nonisolated private func ioDeviceDidConnect(
         _ notification: IOBluetoothUserNotification, device: IOBluetoothDevice
     ) {
-        scheduleEventRefresh(retries: true)
+        DispatchQueue.main.async { [weak self] in
+            self?.scheduleEventRefresh(retries: true)
+        }
     }
 
     /// 设备断开通知回调(随清单注册,断开的设备从下一轮清单消失)。
-    @objc private func ioDeviceDidDisconnect(
+    /// 派发线程契约同连接通知,见 ioDeviceDidConnect。
+    @objc nonisolated private func ioDeviceDidDisconnect(
         _ notification: IOBluetoothUserNotification, device: IOBluetoothDevice
     ) {
-        scheduleEventRefresh(retries: false)
+        DispatchQueue.main.async { [weak self] in
+            self?.scheduleEventRefresh(retries: false)
+        }
     }
 
     /// 连断事件防抖:一次连断常伴随多条链路事件(ACL/HFP/A2DP 分链路),
@@ -336,6 +344,11 @@ final class BluetoothBatterySampler: NSObject {
     /// 窗口内只要出现过连接事件,刷新后就安排电量重试——不被夹在
     /// 中间的其他设备断开事件取消。
     private func scheduleEventRefresh(retries: Bool) {
+        // stop() 后丢弃迟到的连断事件:事件在 IOBluetooth 队列上发出后跳
+        // 主线程执行,此刻采样器可能已停止。停止后 generation 守卫反而放行
+        // (排延时捕获的是新 generation),只能在入口按启停标记拦截;
+        // timer 非 nil 即运行中。
+        guard timer != nil else { return }
         eventRefreshWork?.cancel()
         pendingConnectEvent = pendingConnectEvent || retries
         let shouldRetry = pendingConnectEvent

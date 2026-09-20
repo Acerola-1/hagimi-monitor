@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import IOBluetooth
 @testable import HagimiMonitorDirect
 
 struct BluetoothBatteryParserTests {
@@ -670,6 +671,53 @@ struct BluetoothAcceptanceMatrixTests {
         // 手柄：Joystick 0x01, Gamepad 0x02
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x01) == .gamepad)
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x02) == .gamepad)
+    }
+}
+
+/// IOBluetooth 连断通知回调的线程隔离回归测试(#120)。
+/// IOBluetooth 不经注册线程的 runloop 派发通知,而是在自有协调队列上同步调用
+/// selector;工程默认 MainActor 隔离下,若回调未标 nonisolated,隔离校验会在
+/// 该后台线程直接 SIGTRAP。修复后回调在任意线程收下并跳回主线程,防抖刷新
+/// 只在主线程执行。测试不启动采样器管线(start 会注册真实系统通知),仅从
+/// 后台线程以与生产一致的 ObjC 派发路径调用回调。
+struct BluetoothCallbackIsolationTests {
+    /// 后台线程同步派发连接 selector:进程不 trap、派发正常返回。
+    /// 回调为 private,经 NSObjectProtocol 的 responds/perform 通用入口派发,
+    /// 与 IOBluetooth 经 objc_msgSend 调用 selector 的方式同构。
+    @Test("IOBluetooth 回调在后台线程派发不触发隔离 trap")
+    func connectCallbackDispatchesFromBackgroundThreadWithoutTrap() throws {
+        let sampler = BluetoothBatterySampler()
+        let object: NSObjectProtocol = sampler
+        #expect(object.responds(to: NSSelectorFromString("ioDeviceDidConnect:device:")),
+                "生产 selector 必须存在,否则 IOBluetooth 注册是空挂")
+
+        let dispatched = DispatchSemaphore(value: 0)
+        let thread = Thread {
+            // 直接 objc 派发;若回调仍带 MainActor 校验,此处 SIGTRAP 杀死测试进程。
+            sampler.perform(NSSelectorFromString("ioDeviceDidConnect:device:"), with: nil, with: nil)
+            dispatched.signal()
+        }
+        thread.name = "io-bluetooth-coordination-queue"
+        thread.start()
+        #expect(dispatched.wait(timeout: .now() + 5) == .success,
+                "回调派发必须返回;隔离 trap 会直接杀死进程,信号量永不触发")
+    }
+
+    /// 断开回调同样从后台线程派发不 trap。
+    @Test("IOBluetooth 断开回调在后台线程派发不触发隔离 trap")
+    func disconnectCallbackDispatchesFromBackgroundThreadWithoutTrap() throws {
+        let sampler = BluetoothBatterySampler()
+        let object: NSObjectProtocol = sampler
+        #expect(object.responds(to: NSSelectorFromString("ioDeviceDidDisconnect:device:")))
+
+        let dispatched = DispatchSemaphore(value: 0)
+        let thread = Thread {
+            sampler.perform(NSSelectorFromString("ioDeviceDidDisconnect:device:"), with: nil, with: nil)
+            dispatched.signal()
+        }
+        thread.name = "io-bluetooth-coordination-queue"
+        thread.start()
+        #expect(dispatched.wait(timeout: .now() + 5) == .success)
     }
 }
 
