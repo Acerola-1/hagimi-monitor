@@ -106,6 +106,7 @@ nonisolated struct ReportSnapshot: Sendable {
     let days: [StatisticsRow]
     let process: ReportProcessData?
     let hardware: HardwareInventory?
+    var systemSleepIntervals: [SystemSleepInterval] = []
 }
 
 // MARK: - 聚合展示模型

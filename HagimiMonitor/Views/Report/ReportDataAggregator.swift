@@ -55,22 +55,46 @@ nonisolated enum ReportDataAggregator: Sendable {
         row.coverS ?? Double(row.n)
     }
 
-    /// 选定范围内的有效采样覆盖比例。无行、无效范围或没有有效覆盖时返回 nil，
-    /// 避免把“没有采样”误报成 0%。覆盖量允许跨桶累计，但最终封顶到 100%。
+    /// 有效采样量除以整机清醒时长。只扣除系统明确报告的休眠区间；
+    /// 应用退出或采样失败形成的空档仍计入分母。
     static func coverageRatio(
         rows: [StatisticsRow],
         from: Date,
-        to: Date
+        to: Date,
+        systemSleepIntervals: [SystemSleepInterval] = []
     ) -> Double? {
         guard !rows.isEmpty else { return nil }
         let span = to.timeIntervalSince(from)
         guard span.isFinite, span > 0 else { return nil }
 
+        let awakeSpan = span - sleepSeconds(in: systemSleepIntervals, from: from, to: to)
+        guard awakeSpan > 0 else { return nil }
         let covered = rows.reduce(0.0) { partial, row in
             partial + max(0, coverSeconds(for: row))
         }
         guard covered > 0 else { return nil }
-        return min(1, max(0, covered / span))
+        return min(1, max(0, covered / awakeSpan))
+    }
+
+    /// 先裁剪再合并区间，避免重复通知或跨范围休眠造成分母重复扣除。
+    static func sleepSeconds(in intervals: [SystemSleepInterval], from: Date, to: Date) -> TimeInterval {
+        let clipped = intervals.compactMap { interval -> (Date, Date)? in
+            let start = max(from, interval.start)
+            let end = min(to, interval.end)
+            return end > start ? (start, end) : nil
+        }.sorted { $0.0 < $1.0 }
+        var total: TimeInterval = 0
+        var current: (Date, Date)?
+        for interval in clipped {
+            if let segment = current, interval.0 <= segment.1 {
+                current = (segment.0, max(segment.1, interval.1))
+            } else {
+                if let segment = current { total += segment.1.timeIntervalSince(segment.0) }
+                current = interval
+            }
+        }
+        if let segment = current { total += segment.1.timeIntervalSince(segment.0) }
+        return total
     }
 
     // MARK: - 基础统计计算
@@ -908,7 +932,8 @@ nonisolated enum ReportDataAggregator: Sendable {
         hourlyRows: [StatisticsRow],
         source: ReportSourceGranularity,
         from: Date,
-        to: Date
+        to: Date,
+        systemSleepIntervals: [SystemSleepInterval] = []
     ) -> [ReportInsightItem] {
         var insights: [ReportInsightItem] = []
 
@@ -1062,10 +1087,10 @@ nonisolated enum ReportDataAggregator: Sendable {
         }
 
         // 10. 监测覆盖率
-        if let coverageRatio = coverageRatio(rows: rows, from: from, to: to) {
+        if let coverageRatio = coverageRatio(rows: rows, from: from, to: to, systemSleepIntervals: systemSleepIntervals) {
             let totalCover = rows.reduce(0.0) { $0 + max(0, coverSeconds(for: $1)) }
             let percentage = coverageRatio * 100
-            let detail = "所选时段累计有效采样 \(ReportUIHelper.formatHours(totalCover))，数据覆盖率达 \(String(format: "%.1f%%", percentage))"
+            let detail = String(format: String(localized: "stats.r.coverageInsight", defaultValue: "所选时段累计有效采样 %@，清醒时间覆盖率 %.1f%%（已排除系统确认的休眠）"), ReportUIHelper.formatHours(totalCover), percentage)
             insights.append(ReportInsightItem(id: "coverage", systemIcon: "checkmark.seal.fill", colorName: "gray", title: "数据覆盖度", detail: detail))
         }
 
@@ -1188,7 +1213,7 @@ nonisolated enum ReportDataAggregator: Sendable {
 
         let filtered = filterRows(sourceRows, from: from, to: to)
         let hourlyFiltered = filterRows(snapshot.hours, from: from, to: to)
-        let coverageRatioValue = coverageRatio(rows: filtered, from: from, to: to)
+        let coverageRatioValue = coverageRatio(rows: filtered, from: from, to: to, systemSleepIntervals: snapshot.systemSleepIntervals)
 
         // 健康评分计算
         let healthScore = StatisticsHealthScore.evaluate(rows: filtered)
@@ -1233,7 +1258,8 @@ nonisolated enum ReportDataAggregator: Sendable {
             hourlyRows: hourlyFiltered,
             source: granularity,
             from: from,
-            to: to
+            to: to,
+            systemSleepIntervals: snapshot.systemSleepIntervals
         )
 
         // R06: 7x24 热力图始终使用小时数据输入

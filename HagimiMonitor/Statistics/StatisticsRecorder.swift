@@ -1,5 +1,20 @@
 import Foundation
 import Combine
+import AppKit
+
+/// NSWorkspace 通知观察者随记录器释放；包装非 Sendable 令牌，避免跨 actor 析构访问。
+nonisolated private final class WorkspaceSleepObserversBox: @unchecked Sendable {
+    private let center: NotificationCenter
+    private var observers: [any NSObjectProtocol] = []
+
+    init(center: NotificationCenter) { self.center = center }
+
+    func add(_ observer: any NSObjectProtocol) { observers.append(observer) }
+
+    deinit {
+        for observer in observers { center.removeObserver(observer) }
+    }
+}
 
 /// 统计记录器:把 MonitorStore 每秒发布的模块帧在主线程做轻量累加(纯内存),
 /// 分钟封口后交后台串行队列落库并维护汇总表。速率型指标(网络/磁盘)以
@@ -33,6 +48,7 @@ nonisolated struct StatisticsReportSnapshotInput: Sendable {
     let hours: [StatisticsRow]
     let days: [StatisticsRow]
     let process: ReportProcessData?
+    let systemSleepIntervals: [SystemSleepInterval]
 }
 
 /// 报表后台读取器。所有重查询和 SwiftData 水合都在调用方的后台任务中执行;
@@ -87,7 +103,8 @@ nonisolated struct StatisticsReportDataProvider: Sendable {
             minutes: rows.minutes,
             hours: rows.hours,
             days: rows.days,
-            process: processData
+            process: processData,
+            systemSleepIntervals: database?.systemSleepIntervals(from: .distantPast, to: now) ?? []
         )
     }
 }
@@ -224,9 +241,11 @@ final class StatisticsRecorder: ObservableObject {
 
     /// 统计开关状态:关闭期间 record 直返,不积累分钟累加器。
     private var recordingActive = true
+    private var systemAsleep = false
 
     /// 概览/落库共用的后台队列;数据库自身另有串行队列,这里只避免主线程做 IO。
     private let maintenanceQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.statistics-maintenance", qos: .utility)
+    private let sleepObservers = WorkspaceSleepObserversBox(center: NSWorkspace.shared.notificationCenter)
 
     init(databaseURL: URL? = nil, calendar: Calendar = .current) {
         self.calendar = calendar
@@ -245,6 +264,34 @@ final class StatisticsRecorder: ObservableObject {
         } else {
             database = nil
         }
+        let center = NSWorkspace.shared.notificationCenter
+        sleepObservers.add(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleSystemWillSleep(at: Date())
+            }
+        })
+        sleepObservers.add(center.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.handleSystemDidWake(at: Date())
+            }
+        })
+    }
+
+    private func handleSystemWillSleep(at date: Date) {
+        systemAsleep = true
+        lastFrameAt = nil
+        lastNetDown = nil
+        lastNetUp = nil
+        lastDiskRead = nil
+        lastDiskWrite = nil
+        lastObservation = [:]
+        lastIntersection = nil
+        database?.beginSystemSleep(at: date)
+    }
+
+    private func handleSystemDidWake(at date: Date) {
+        database?.endSystemSleep(at: date)
+        systemAsleep = false
     }
 
     /// 一帧进程采样的直通入口(MonitorStore 统计定时器调用,主线程)。
@@ -258,7 +305,7 @@ final class StatisticsRecorder: ObservableObject {
         disk: [TopDiskProcess],
         at date: Date
     ) {
-        guard recordingActive else { return }
+        guard recordingActive, !systemAsleep else { return }
         let cpuEntries = cpu.map { (name: $0.name, pid: $0.pid, usage: $0.cpuUsage) }
         let memEntries = memory.map { (name: $0.name, pid: $0.pid, bytes: Double($0.memoryUsage)) }
         let gpuEntries = gpu.map { (name: $0.name, pid: $0.pid, usage: $0.gpuUsage) }
@@ -322,7 +369,7 @@ final class StatisticsRecorder: ObservableObject {
     /// 缓存回读不当作一次新观测(秒数口径与连续性都据此判定)。
     /// 统计开关关闭期间直返,不积累任何分钟数据。
     func record(modules: [MonitorModule], fans: [FanInfo], freshKinds: Set<MonitorKind>, at date: Date) {
-        guard recordingActive else { return }
+        guard recordingActive, !systemAsleep else { return }
         let minuteStart = Int64((date.timeIntervalSince1970 / 60).rounded(.down) * 60)
         if minuteStart != currentMinuteStart {
             sealCompletedMinute()
