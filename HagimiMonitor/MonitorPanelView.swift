@@ -934,7 +934,7 @@ private struct MetricGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let detail: String
-    /// 行头状态词的状态色(如内存压力等级):着色于词前小圆点,正文恒为
+    /// 行头状态词的状态色(如内存压力等级):着色于词后小圆点,正文恒为
     /// valueText——状态色不与行玻璃底色叠加,避免两套色彩语义互相稀释。
     var statusTint: Color? = nil
     var samples: [Double] = []
@@ -1020,15 +1020,15 @@ private struct MetricGlassRow: View, Equatable {
                     .lineLimit(1)
 
                 HStack(spacing: 5) {
+                    Text(detail)
+                        .monitorPanelMonoFont(weight: .semibold)
+                        .foregroundStyle(theme.valueText)
+                        .lineLimit(1)
                     if let statusTint {
                         Circle()
                             .fill(statusTint)
                             .frame(width: 6, height: 6)
                     }
-                    Text(detail)
-                        .monitorPanelMonoFont(weight: .semibold)
-                        .foregroundStyle(theme.valueText)
-                        .lineLimit(1)
                 }
 
                 Spacer(minLength: 8)
@@ -1864,7 +1864,7 @@ private struct NetworkGlassRow: View, Equatable {
                     .frame(width: 18)
 
                 HStack(spacing: 6) {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 10) {
                         Text(String(localized: "kind.network") + ":")
                             .monitorPanelMetricLabelFont()
                             .foregroundStyle(theme.primaryText)
