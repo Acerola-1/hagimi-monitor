@@ -3,33 +3,46 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.6.3</title>
-            <pubDate>Sun, 20 Sep 2026 17:40:27 +0000</pubDate>
-            <sparkle:version>91</sparkle:version>
-            <sparkle:shortVersionString>1.6.3</sparkle:shortVersionString>
+            <title>1.6.4</title>
+            <pubDate>Thu, 24 Sep 2026 11:33:16 +0000</pubDate>
+            <sparkle:version>92</sparkle:version>
+            <sparkle:shortVersionString>1.6.4</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 修复
+## 更新内容
 
-- 修复启动即死循环(IOBluetooth 连接回调触发 SIGTRAP 后崩溃处理器无限重入):trap 类信号改为显式恢复默认处置,不再依赖 SA_RESETHAND
-- 修复蓝牙设备连断通知在后台线程触发 MainActor 隔离校验导致 SIGTRAP:回调改为 nonisolated 收下后跳回主线程处理
+### 中文
 
-### 优化与体验
+#### 新功能
 
-- 取消勾选蓝牙模块瞬间的迟到连断事件不再重排已停止的电量重试链
+- 面板长按拖动排序：所有模块行与指标格支持长按拖动换位，拖起时浮起预览、落点实时归位；右键（触控板双指轻点）呼出菜单可上下左右逐格移动，并支持一键恢复模块指标默认顺序
+- CPU 核心拓扑自适应识别：按 IORegistry 簇字母归类核心，M5 Pro/Max 等三类核芯片自动呈现超核/性能核/能效核 S/P/E 三组拆分，其余机型维持 P/E 两组视图
 
-### 代码质量
+#### 优化与体验
 
-- 新增崩溃处理器与 IOBluetooth 回调隔离回归测试(467 项全部通过)
+- 三组核型并存的圆环配色：超核沿用强调红、性能核改用冷蓝、能效核保持绿色，明暗主题分别调校
 
-感谢 @gaojingyaodl-ops 在 #120 报告并提供关键复现线索(关闭蓝牙权限即恢复),帮助快速定位到 trap 类信号重入与回调线程隔离两个根因。
+感谢 @singularitti 在 #115 提出面板模块排序的功能建议，本版本已引入该能力。
+
+### English
+
+#### New Features
+
+- Panel long-press reordering: every module row and metric cell can be reordered by long-press drag, with a floating preview while dragging and live drop placement. Right-click (two-finger click on trackpads) opens a menu to move items step by step in any direction, with one click to restore the default metric order.
+- Adaptive CPU core topology recognition: cores are grouped by IORegistry cluster letters, so chips with three core types (M5 Pro/Max and later) automatically show the Super / Performance / Efficiency (S/P/E) split, while other models keep the P/E view.
+
+#### Improvements
+
+- New ring color scheme for three core groups: super cores keep the accent red, performance cores switch to a cold blue, and efficiency cores stay green, tuned separately for light and dark themes.
+
+Thanks to @singularitti for proposing panel module reordering in #115 — this release ships exactly that.
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.6.3/HagimiMonitor-v1.6.3.zip" length="5789609" type="application/octet-stream" sparkle:edSignature="MXrM1mOuGxVedH0FVwe3C9aVvUJ0xbXNvA2QHDC59JamL8rvjcaGnBLktfgcPuSOkfJht4F/iNUbB63QE6tECQ=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.6.4/HagimiMonitor-v1.6.4.zip" length="5876821" type="application/octet-stream" sparkle:edSignature="xbP7rfdY+O1Phx45ve8wGvZt0+1BG0RQF8iPUN4RLTTrlCCZbzkyWE3ahDrThuLghsRkq4j9TZKW60vloiUNBA=="/>
         </item>
     </channel>
 </rss>
