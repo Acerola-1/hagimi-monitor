@@ -21,3 +21,9 @@
 |---|---|
 | `hagimi-promo-2880/` | 2880px 宣传海报五张(promo-01~05),原位于 docs/,官网未引用故归档 |
 | `xhs-cover/` | 小红书宣传封面图与配套 HTML 模板(xhs-cover-g.*),原位于 docs/,官网未引用故归档 |
+
+## website-ja/ — 日语官网(已停更)
+
+| 目录 | 说明 |
+|---|---|
+| `site/` | docs/ja/ 全量快照:index.html、privacy.html、stats.html。2026-09-24 起日语不再作为支持语言,官网收缩为中英双语;根跳转页与隐私页语言切换中的日语入口已同步移除,gh-pages 线上的 ja/ 目录一并撤下 |
