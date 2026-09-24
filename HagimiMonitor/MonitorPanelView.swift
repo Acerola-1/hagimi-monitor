@@ -10,6 +10,18 @@ private struct BodyScrollEdges: Equatable {
     let contentHeight: CGFloat
 }
 
+private enum PanelTopLevelItem: Identifiable {
+    case module(MonitorModule)
+    case display
+
+    var id: String {
+        switch self {
+        case .module(let module): module.kind.id
+        case .display: PanelOrderCatalog.displayID
+        }
+    }
+}
+
 struct MonitorPanelView: View {
     /// 只读引用:面板树的失效信号统一经 refreshGate 门控(隐藏期冻结),
     /// 直接观察 store 会让隐藏态面板随每次采样发布重算。
@@ -30,6 +42,8 @@ struct MonitorPanelView: View {
     @State private var benchmarkInputs: PanelBenchmarkInputs?
     /// header 实测高度,用于从内容总高上限换算主体 ScrollView 的 maxHeight。
     @State private var headerHeight: CGFloat = 0
+    @State private var preDragContentHeight: CGFloat = 0
+    @State private var scrollBodyFrame: CGRect = .zero
     /// 主体是否已向上滚动:控制顶部渐隐遮罩。仅滚动后启用,避免未滚动时
     /// 误伤第一张卡片的顶边。
     @State private var isBodyScrolled = false
@@ -42,6 +56,7 @@ struct MonitorPanelView: View {
     /// 经 environmentObject 注入子树;每个面板(菜单栏/钉住)各自持有,
     /// 展开动画互不牵动。
     @StateObject private var panelExpansion = PanelExpansionDriver()
+    @StateObject private var panelReorder = PanelReorderController()
     /// 显示器模块(包含内嵌档案)动画状态凭据:供 MonitorPanelView 在子区块动画时将整体布局并入 withAnimation 事务
     @State private var displaySectionMotionTicket: Int = 0
     /// 窗口层注入的贴合回调:driver 在 toggle 时把目标高度与是否动画下发给窗口层。
@@ -95,6 +110,13 @@ struct MonitorPanelView: View {
             })
     }
 
+    @ViewBuilder
+    private func reorderGhost(theme: MonitorPanelTheme) -> some View {
+        if let session = panelReorder.session {
+            PanelReorderGhost(session: session, pointer: panelReorder.pointer, theme: theme)
+        }
+    }
+
     var body: some View {
         let _ = displaySectionMotionTicket
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
@@ -107,17 +129,19 @@ struct MonitorPanelView: View {
         CompatibleGlassContainer(spacing: 8, isLiquidGlassEnabled: store.settings.liquidGlassEnabled) {
             if PanelMotionExperiment.enabled {
                 SingleHostPrototypeView(motion: panelExpansion.motion,
-                    ids: panelModules.map { $0.kind.id } + (store.settings.displayModuleVisible && !isPanelBenchmark ? ["display"] : []), cap: maxContentHeight) {
+                    ids: orderedTopLevelItems.map(\.id), cap: maxContentHeight) {
                     header(theme: theme)
                 } cards: {
-                    ForEach(panelModules) { module in
-                        compactRow(for: module, theme: theme)
-                            .sectionLayoutID(module.kind.id)
-                            .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
-                    }
-                    if store.settings.displayModuleVisible && !isPanelBenchmark {
-                        displaySection(theme: theme).sectionLayoutID("display")
-                            .compatibleGlassEffectID("display", in: glassNamespace)
+                    ForEach(orderedTopLevelItems) { item in
+                        switch item {
+                        case .module(let module):
+                            compactRow(for: module, theme: theme)
+                                .sectionLayoutID(module.kind.id)
+                                .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
+                        case .display:
+                            displaySection(theme: theme).sectionLayoutID("display")
+                                .compatibleGlassEffectID("display", in: glassNamespace)
+                        }
                     }
                     prototypeFooter(theme: theme)
                         .panelMeasure("__footer__")
@@ -144,17 +168,17 @@ struct MonitorPanelView: View {
                 ScrollViewReader { proxy in
                     ScrollView(.vertical) {
                         VStack(spacing: 6) {
-                            ForEach(panelModules) { module in
-                                compactRow(for: module, theme: theme)
-                                    .id(module.kind)
-                                    .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
-                            }
-
-                            // 显示器区块:两渠道单一实现(DisplaySection),
-                            // 沙盒渠道为只读信息行,直连渠道展开区并入 DDC 控制。
-                            if store.settings.displayModuleVisible && !isPanelBenchmark {
-                                displaySection(theme: theme)
-                                .compatibleGlassEffectID("display", in: glassNamespace)
+                            ForEach(orderedTopLevelItems) { item in
+                                switch item {
+                                case .module(let module):
+                                    compactRow(for: module, theme: theme)
+                                        .id(module.kind)
+                                        .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
+                                case .display:
+                                    displaySection(theme: theme)
+                                        .id(PanelOrderCatalog.displayID)
+                                        .compatibleGlassEffectID("display", in: glassNamespace)
+                                }
                             }
 
                             // 底部三按钮与行卡片同规格:同内边距/同字体/同间距,
@@ -192,8 +216,20 @@ struct MonitorPanelView: View {
                             .panelRowHeaderHeight()
 
                         }
+                        .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                           dampingFraction: MonitorConstants.panelExpansionSpringDamping),
+                                   value: orderedTopLevelItems.map(\.id))
                     }
                     .scrollBounceBehavior(.basedOnSize)
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                        scrollBodyFrame = frame
+                    }
+                    .overlay {
+                        PanelEdgeScrollObserver(pointer: panelReorder.pointer,
+                                                controller: panelReorder,
+                                                viewport: scrollBodyFrame,
+                                                proxy: proxy)
+                    }
                     // 隐藏滚动条:展开/收起时内容高度频繁变化,滚动条会随之闪现,观感差;
                     // 面板内容有限且封顶场景少见,不依赖滚动条提示位置。
                     .scrollIndicators(.never)
@@ -254,6 +290,8 @@ struct MonitorPanelView: View {
             .background(panelBackgroundColor)
             }
         }
+        .frame(height: panelReorder.session == nil || preDragContentHeight == 0
+               ? nil : preDragContentHeight, alignment: .top)
         .compatibleContainerBackground()
         .overlay {
             // 点一下后弹出的 RunCat 致谢卡片(面板内 overlay,避免系统 sheet 抢焦点关面板)。
@@ -262,12 +300,14 @@ struct MonitorPanelView: View {
                     .transition(.opacity)
             }
         }
+        .overlay { reorderGhost(theme: theme) }
         .animation(.easeInOut(duration: 0.2), value: cameoModel.showThanks)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
         .onChange(of: store.isPanelVisible) { _, visible in
             // 面板隐藏后重置为各模块的「默认展开」设置:不可见期间直接赋值(无动画),
             // 窗口在后台瞬时贴合新高度,下次呼出即已是设定的初始状态、无二次跳变。
             if !visible {
+                panelReorder.cancel()
                 applyDefaultExpansion()
             }
             // 面板由隐藏→可见:菜单栏面板摧骰子决定是否客串;隐藏时清理。
@@ -296,6 +336,10 @@ struct MonitorPanelView: View {
             applyDefaultExpansion()
         }
         .onAppear {
+            // 展开弹簧尚未收敛时不启动拖动，避免把过渡帧高度冻结为面板高度。
+            panelReorder.canBegin = { [weak store] in
+                store?.isExpansionAnimating == false
+            }
             // 桥接窗口层注入的贴合回调:动画路径下发预测终高,窗口以与内容
             // 同参数的弹簧跟随;同步路径(初始化/隐藏重置)直接贴合。
             panelExpansion.onWindowResize = windowResizeHandler
@@ -326,10 +370,13 @@ struct MonitorPanelView: View {
             GeometryReader { geometry in
                 Color.clear
                     .onAppear {
+                        if panelReorder.session == nil { preDragContentHeight = geometry.size.height }
                         panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
                         panelExpansion.reportMeasuredContentHeight(geometry.size.height)
                     }
                     .onChange(of: geometry.size.height) { _, newValue in
+                        guard panelReorder.session == nil else { return }
+                        preDragContentHeight = newValue
                         panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
                         panelExpansion.reportMeasuredContentHeight(newValue)
                     }
@@ -343,6 +390,10 @@ struct MonitorPanelView: View {
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
         .environmentObject(panelExpansion)
+        .environment(\.panelReorderController, panelReorder)
+        .environment(\.panelReorderSettings, store.settings)
+        .onExitCommand { panelReorder.cancel() }
+        .onDisappear { panelReorder.cancel() }
         .task {
             guard isPanelBenchmark, !showsQuickPanelControls else { return }
             try? await Task.sleep(for: .seconds(3))
@@ -384,7 +435,25 @@ struct MonitorPanelView: View {
     }
 
     private var panelModules: [MonitorModule] {
-        isPanelBenchmark ? prototypeModules : store.modules
+        let source = isPanelBenchmark ? prototypeModules : store.modules
+        #if DIRECT_DISTRIBUTION
+        return source
+        #else
+        return source.filter { $0.kind != .fan }
+        #endif
+    }
+
+    private var orderedTopLevelItems: [PanelTopLevelItem] {
+        let modulesByID = Dictionary(uniqueKeysWithValues: panelModules.map { ($0.kind.id, $0) })
+        let includesDisplay = store.settings.displayModuleVisible && !isPanelBenchmark
+        let available = panelModules.map { $0.kind.id }
+            + (includesDisplay ? [PanelOrderCatalog.displayID] : [])
+        let saved = store.settings.orderedPanelIDs(for: .modules, available: available)
+        return panelReorder.projected(saved, scope: .modules).compactMap { id in
+            if id == PanelOrderCatalog.displayID { return .display }
+            guard let module = modulesByID[id] else { return nil }
+            return .module(module)
+        }
     }
 
     private var prototypeModules: [MonitorModule] {
@@ -556,6 +625,7 @@ struct MonitorPanelView: View {
                 detail: module.summary,
                 samples: module.samples,
                 details: cpuDetails(for: module),
+                metricOrder: storedMetricOrder(for: .metrics(.cpu)),
                 isExpanded: isExpanded,
                 topCPUProcesses: benchmarkInputs?.cpu ?? store.topCPUProcesses,
                 showCPUProcesses: store.settings.showCPUProcesses
@@ -570,6 +640,7 @@ struct MonitorPanelView: View {
                 detail: module.summary,
                 samples: module.samples,
                 details: enabledMetrics(for: module),
+                metricOrder: storedMetricOrder(for: .metrics(.gpu)),
                 isExpanded: isExpanded,
                 topGPUProcesses: benchmarkInputs?.gpu ?? store.topGPUProcesses,
                 showGPUProcesses: store.settings.showGPUProcesses
@@ -589,6 +660,7 @@ struct MonitorPanelView: View {
                 // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
                 samples: pressureMode ? module.pressureSamples : [],
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
+                metricOrder: storedMetricOrder(for: .metrics(.memory)),
                 isExpanded: isExpanded,
                 topMemoryProcesses: benchmarkInputs?.memory ?? store.topMemoryProcesses,
                 showMemoryProcesses: store.settings.showMemoryProcesses
@@ -604,6 +676,7 @@ struct MonitorPanelView: View {
                 // 每秒采样累积使用率历史(采样器 seed 起步),行尾与 CPU/GPU 同款趋势。
                 samples: module.samples,
                 details: enabledMetrics(for: module),
+                metricOrder: storedMetricOrder(for: .metrics(.storage)),
                 isExpanded: isExpanded,
                 topDiskProcesses: store.topDiskProcesses,
                 showDiskProcesses: store.settings.showDiskProcesses
@@ -616,6 +689,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
+                metricOrder: storedMetricOrder(for: .metrics(.network)),
                 isExpanded: isExpanded,
                 topNetworkProcesses: store.topNetworkProcesses,
                 showNetworkProcesses: store.settings.showNetworkProcesses
@@ -628,6 +702,9 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
+                metricOrders: Dictionary(uniqueKeysWithValues: [BatteryPageTab.flow, .health, .supply].map {
+                    ($0, storedMetricOrder(for: .battery($0)))
+                }),
                 isExpanded: isExpanded,
                 showPowerFlow: store.settings.isMetricEnabled("power-flow", for: module.kind),
                 panelVisible: store.isPanelVisible,
@@ -663,6 +740,14 @@ struct MonitorPanelView: View {
     private func enabledMetrics(for module: MonitorModule) -> [MonitorMetric] {
         let enabledIds = store.settings.enabledMetrics[module.kind] ?? defaultMetricIds(for: module.kind)
         return module.metrics.filter { enabledIds.contains($0.name) }
+    }
+
+    private func storedMetricOrder(for scope: PanelOrderScope) -> [String] {
+        let saved = store.settings.panelOrders[scope.storageKey]
+        if panelReorder.session?.scope == scope {
+            return panelReorder.projected(store.settings.panelOrder(for: scope), scope: scope)
+        }
+        return saved ?? []
     }
 
     /// CPU 展开明细:热压力开关开启时把温度指标一并带给网格,供合并整行展示
@@ -939,6 +1024,7 @@ private struct MetricGlassRow: View, Equatable {
     var statusTint: Color? = nil
     var samples: [Double] = []
     var details: [MonitorMetric] = []
+    var metricOrder: [String] = []
     var isExpanded = false
     var topMemoryProcesses: [TopMemoryProcess] = []
     var showMemoryProcesses = true
@@ -966,6 +1052,7 @@ private struct MetricGlassRow: View, Equatable {
             return true
         }
         return lhs.details == rhs.details
+            && lhs.metricOrder == rhs.metricOrder
             && lhs.topMemoryProcesses == rhs.topMemoryProcesses
             && lhs.showMemoryProcesses == rhs.showMemoryProcesses
             && lhs.topCPUProcesses == rhs.topCPUProcesses
@@ -1055,6 +1142,7 @@ private struct MetricGlassRow: View, Equatable {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(detailAvailable ? .isButton : [])
+            .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -1070,6 +1158,7 @@ private struct MetricGlassRow: View, Equatable {
                                 metrics: details,
                                 kind: module.kind,
                                 theme: theme,
+                                metricOrder: metricOrder,
                                 cpuCoreDetail: showCPUCoresDetail ? module.cpuCoreDetail : nil
                             )
                             // CPU / 内存采样恒返回 top 5,故展开时无条件挂载列表(数据未到
@@ -1249,18 +1338,18 @@ struct CPUCoresDetail: View {
         }
     }
 
-    /// 分组占用格:与指标网格同款 trackFill 内衬色块;左侧色点标示
+    /// 分组占用格:与指标网格同款 trackFill 内衬色块;标签后的色点标示
     /// 圆环颜色归属,右侧百分比 mono 加粗。
     private func usageTile(label: String, tint: Color, value: Double) -> some View {
         HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-            Circle()
-                .fill(tint)
-                .frame(width: 5, height: 5)
             Text(label)
                 .monitorPanelCaptionFont(.footnote)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
                 .layoutPriority(1)
+            Circle()
+                .fill(tint)
+                .frame(width: 5, height: 5)
             Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
             Text("\(Int(value.rounded()))%")
                 .monitorPanelMonoFont(.footnote, weight: .bold)
@@ -1356,8 +1445,9 @@ struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
     let kind: MonitorKind
     let theme: MonitorPanelTheme
-    /// CPU 逐核数据:非 nil 时在网格顶部渲染 P/E 两行展示,
-    /// 并剔除 core-split 格子(同源数值不重复展示)。
+    var metricOrder: [String] = []
+    var orderScope: PanelOrderScope? = nil
+    /// CPU 逐核数据:非 nil 时以 core-split 的稳定身份替代普通指标格。
     var cpuCoreDetail: CPUCoreDetail? = nil
     /// 是否在顶部绘制贯穿分隔线。电源等已有专属分区头组件的场景可关闭。
     var showsSeparator: Bool = true
@@ -1372,27 +1462,35 @@ struct MetricDetailGrid: View {
         StaticMetricSizing.isFullRow(kind: kind, name: metric.name)
     }
 
-    private var shortMetrics: [MonitorMetric] {
-        metrics.filter { !isFullRow($0) && !isMergedThermalRow($0) && !isReplacedByCoreDetail($0) }
+    private struct Cell: Identifiable {
+        let id: String
+        let metric: MonitorMetric
+        let span: Int
+        let mergedThermal: Bool
     }
 
-    private var fullRowMetrics: [MonitorMetric] {
-        metrics.filter { isFullRow($0) && !isMergedThermalRow($0) }
-    }
-
-    /// core-split 被 P/E 两行展示取代时从格子列表剔除。
-    private func isReplacedByCoreDetail(_ metric: MonitorMetric) -> Bool {
-        cpuCoreDetail != nil && metric.name == "core-split"
-    }
-
-    /// 热压力与温度合并为整行渲染(温度并入热压力行;菜单栏温度选项独立)。
-    /// 温度指标仅直连版产出(SMC 在沙盒下不可读);无温度时不合并,
-    /// 热压力回落为普通半行档位格。
-    private func isMergedThermalRow(_ metric: MonitorMetric) -> Bool {
-        guard kind == .cpu, metrics.contains(where: { $0.name == "temperature" }) else {
-            return false
+    private var cells: [Cell] {
+        let hasTemperature = kind == .cpu && metrics.contains { $0.name == "temperature" }
+        let available = metrics.filter { !(hasTemperature && $0.name == "temperature") }.map { metric in
+            let merged = hasTemperature && metric.name == "thermal-pressure"
+            return Cell(id: PanelOrderCatalog.stableMetricID(kind: kind, displayedName: metric.name),
+                        metric: metric, span: merged || isCoreDetail(metric) || isFullRow(metric) ? 2 : 1,
+                        mergedThermal: merged)
         }
-        return metric.name == "thermal-pressure" || metric.name == "temperature"
+        let defaultCells = available.filter { kind == .cpu && $0.id == "core-split" }
+            + available.filter { $0.span == 1 && !(kind == .cpu && $0.id == "core-split") }
+            + available.filter(\.mergedThermal)
+            + available.filter { $0.span == 2 && !$0.mergedThermal
+                && !(kind == .cpu && $0.id == "core-split") }
+        guard !metricOrder.isEmpty else { return defaultCells }
+        let byID = Dictionary(uniqueKeysWithValues: defaultCells.map { ($0.id, $0) })
+        let order = PanelOrderList.reconciled(metricOrder, defaults: defaultCells.map(\.id))
+        return order.compactMap { byID[$0] }
+    }
+
+    /// 有逐核数据时，core-split 槽位渲染整个 P/E 展示。
+    private func isCoreDetail(_ metric: MonitorMetric) -> Bool {
+        cpuCoreDetail != nil && metric.name == "core-split"
     }
 
     var body: some View {
@@ -1411,31 +1509,41 @@ struct MetricDetailGrid: View {
 
     // 逐格内衬网格(stat tile 形态):每个指标独立 trackFill 圆角内衬色块,
     // 边界属于格子自己,不依赖行数;单元保持「标签左·数值右」,数值字重
-    // 提到 bold 强化存在感。半行两列网格在前,热压力合并行与整行指标
-    // 沉底——半行数量为奇数时空洞落在模块末尾,不打断中段节奏。
+    // 提到 bold 强化存在感。逐项按静态跨度排布,整行前的半格空位保留。
     private var content: some View {
         VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
-            if let cpuCoreDetail {
-                CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
-            }
-
-            if !shortMetrics.isEmpty {
-                PanelMetricColumns(measurementKey: shortMetrics.map(\.name).joined(separator: "|")) {
-                    ForEach(shortMetrics) { metric in
-                        metricCell(metric)
+            if !cells.isEmpty {
+                PanelMetricColumns(measurementKey: cells.map { "\($0.id):\($0.span)" }.joined(separator: "|")
+                    + "|cores:\(cpuCoreDetail?.cores.count ?? 0)") {
+                    ForEach(cells) { cell in
+                        if isCoreDetail(cell.metric), let cpuCoreDetail {
+                            CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
+                                .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2)
+                                .panelMetricSpan(2)
+                        } else if cell.mergedThermal,
+                           let temperature = metrics.first(where: { $0.name == "temperature" }) {
+                            thermalPressureCell(thermal: cell.metric, temperature: temperature)
+                                .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2)
+                                .panelMetricSpan(2)
+                        } else {
+                            metricCell(cell.metric)
+                                .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: cell.span)
+                                .panelMetricSpan(cell.span)
+                        }
                     }
                 }
-            }
-
-            if let thermal = metrics.first(where: { $0.name == "thermal-pressure" }),
-               let temperature = metrics.first(where: { $0.name == "temperature" }) {
-                thermalPressureCell(thermal: thermal, temperature: temperature)
-            }
-
-            ForEach(fullRowMetrics) { metric in
-                metricCell(metric)
+                .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
+                                   dampingFraction: MonitorConstants.panelExpansionSpringDamping),
+                           value: cells.map(\.id))
             }
         }
+    }
+
+    private var effectiveOrderScope: PanelOrderScope {
+        orderScope ?? .metrics(kind)
     }
 
     /// 指标格内衬容器:trackFill 圆角色块包裹,格与格靠 8pt 间隙 + 各自
@@ -1823,6 +1931,7 @@ private struct NetworkGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
+    var metricOrder: [String] = []
     var isExpanded = false
     var topNetworkProcesses: [TopNetworkProcess] = []
     var showNetworkProcesses = true
@@ -1837,6 +1946,7 @@ private struct NetworkGlassRow: View, Equatable {
             return true
         }
         return lhs.details == rhs.details
+            && lhs.metricOrder == rhs.metricOrder
             && lhs.topNetworkProcesses == rhs.topNetworkProcesses
             && lhs.showNetworkProcesses == rhs.showNetworkProcesses
     }
@@ -1892,6 +2002,10 @@ private struct NetworkGlassRow: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if hasExpandableContent { toggleExpansion?() }
+            }
             // 无障碍语义与其余行同款:行头单一元素 + 按钮语义 + 展开提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "kind.network"))
@@ -1900,13 +2014,15 @@ private struct NetworkGlassRow: View, Equatable {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(hasExpandableContent ? .isButton : [])
+            .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
 
             CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: hasExpandableContent) {
                 VStack(spacing: 9) {
                     if !detailMetrics.isEmpty {
-                        MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme)
+                        MetricDetailGrid(metrics: detailMetrics, kind: module.kind, theme: theme,
+                                         metricOrder: metricOrder)
                     }
                     // App Store 沙盒版无法采样网络他进程(nettop 被拒),隐藏网络 TOP 进程列表。
                     #if DIRECT_DISTRIBUTION
@@ -1917,12 +2033,6 @@ private struct NetworkGlassRow: View, Equatable {
                 }
                 .padding(.horizontal, 10)
                 .padding(.bottom, 9)
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if hasExpandableContent {
-                toggleExpansion?()
             }
         }
         .panelCardBrighten()
@@ -1952,6 +2062,7 @@ private struct BatteryGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
+    var metricOrders: [BatteryPageTab: [String]] = [:]
     var isExpanded = false
     /// 功率流图开关:设置页「功率流」选项(拓扑/健康页可勾项,无采样指标,
     /// 不进 details,故独立传参)。
@@ -1972,6 +2083,7 @@ private struct BatteryGlassRow: View, Equatable {
             return true
         }
         return lhs.details == rhs.details
+            && lhs.metricOrders == rhs.metricOrders
             && lhs.showPowerFlow == rhs.showPowerFlow
             && lhs.panelVisible == rhs.panelVisible
             && lhs.powerFlowActive == rhs.powerFlowActive
@@ -2053,6 +2165,7 @@ private struct BatteryGlassRow: View, Equatable {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(canExpand ? .isButton : [])
+            .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
 
@@ -2081,7 +2194,9 @@ private struct BatteryGlassRow: View, Equatable {
                     case .flow:
                         let flowMetrics = tabMetrics(for: .flow)
                         if !flowMetrics.isEmpty {
-                            MetricDetailGrid(metrics: flowMetrics, kind: module.kind, theme: theme, showsSeparator: false)
+                            MetricDetailGrid(metrics: flowMetrics, kind: module.kind, theme: theme,
+                                             metricOrder: metricOrders[.flow] ?? [], orderScope: .battery(.flow),
+                                             showsSeparator: false)
                         }
                         if showPowerFlow && numericValue("power") != nil {
                             // 与顶部同款小标题 + 贯穿分隔线：把监控参数与流向图明确分成两段
@@ -2096,7 +2211,9 @@ private struct BatteryGlassRow: View, Equatable {
                     case .health:
                         let healthMetrics = tabMetrics(for: .health)
                         if !healthMetrics.isEmpty {
-                            MetricDetailGrid(metrics: healthMetrics, kind: module.kind, theme: theme, showsSeparator: false)
+                            MetricDetailGrid(metrics: healthMetrics, kind: module.kind, theme: theme,
+                                             metricOrder: metricOrders[.health] ?? [], orderScope: .battery(.health),
+                                             showsSeparator: false)
                         }
                         #if !DIRECT_DISTRIBUTION
                         // 沙盒版已裁撤拓扑页:流向图整体迁入健康页尾部,
@@ -2121,7 +2238,8 @@ private struct BatteryGlassRow: View, Equatable {
                     case .supply:
                         PowerSupplyDiagnosticsView(
                             module: module,
-                            theme: theme
+                            theme: theme,
+                            metricOrder: metricOrders[.supply] ?? []
                         )
                     }
                 }
@@ -3124,6 +3242,7 @@ private struct BluetoothGlassRow: View, Equatable {
             .accessibilityValue(accessibilityValueForRow)
             .accessibilityHint(devices.isEmpty ? "" : accessibilityHintForRow)
             .accessibilityAddTraits(devices.isEmpty ? [] : .isButton)
+            .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
 

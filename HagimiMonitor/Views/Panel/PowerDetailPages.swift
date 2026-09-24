@@ -85,11 +85,7 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
 struct PowerSupplyDiagnosticsView: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
-
-    /// 固定行序：端口 → PD 协议 → 可协商档位 → 同口通道 → 适配器输入。
-    private static let rowOrder = [
-        "adapter-port", "pd-contract", "pd-tiers", "adapter-transports", "input-telemetry"
-    ]
+    var metricOrder: [String] = []
 
     var body: some View {
         if isUnavailable || !connected {
@@ -101,14 +97,16 @@ struct PowerSupplyDiagnosticsView: View {
                 metrics: supplyMetrics,
                 kind: .battery,
                 theme: theme,
+                metricOrder: metricOrder,
+                orderScope: .battery(.supply),
                 showsSeparator: false
             )
         }
     }
 
-    /// 本帧读到的诊断行，按固定行序排列；值为 "--" 的行不占位。
+    /// 本帧读到的诊断行先按默认行序取出，再由指标网格应用保存顺序；缺失行不占位。
     private var supplyMetrics: [MonitorMetric] {
-        Self.rowOrder.compactMap { name in
+        PanelOrderCatalog.supplyIDs.compactMap { name in
             guard let metric = module.metrics.first(where: { $0.name == name }),
                   metric.value != "--" else { return nil }
             return metric

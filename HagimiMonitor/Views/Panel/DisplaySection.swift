@@ -188,6 +188,8 @@ struct DisplaySection: View {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(!displays.isEmpty ? .isButton : [])
+            .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
+                              title: String(localized: "kind.display"))
 
             if PanelMotionExperiment.enabled {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
@@ -292,6 +294,8 @@ struct DisplaySection: View {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(!visibleDisplays.isEmpty ? .isButton : [])
+            .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
+                              title: String(localized: "kind.display"))
 
             if PanelMotionExperiment.enabled && hasControls && !visibleDisplays.isEmpty {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
