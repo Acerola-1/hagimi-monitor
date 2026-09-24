@@ -88,6 +88,22 @@ struct StatisticsRowTests {
 // MARK: - 数据库三层汇总与保留
 
 struct StatisticsDatabaseTests {
+    @Test func systemSleepIntervalsSurviveReopenAndExcludeUnconfirmedSleep() {
+        let url = tempDatabaseURL("sleep-interval")
+        let base = Date(timeIntervalSince1970: 2_000_000_000)
+        do {
+            let database = StatisticsDatabase(url: url)
+            database.beginSystemSleep(at: base)
+            database.endSystemSleep(at: base.addingTimeInterval(600))
+            database.beginSystemSleep(at: base.addingTimeInterval(900))
+        }
+        let database = StatisticsDatabase(url: url)
+        let intervals = database.systemSleepIntervals(
+            from: base.addingTimeInterval(300), to: base.addingTimeInterval(1_200)
+        )
+        #expect(intervals == [SystemSleepInterval(start: base, end: base.addingTimeInterval(600))])
+    }
+
     @Test func hourAndDayRollUpFromMinutes() {
         let database = StatisticsDatabase(url: tempDatabaseURL("rollup"))
         let calendar = Calendar(identifier: .gregorian)

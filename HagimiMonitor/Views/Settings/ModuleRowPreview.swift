@@ -10,6 +10,7 @@ struct ModuleRowPreview: View {
     let metrics: [MetricSwitch]
     let memoryPressureMode: Bool
     let palette: MonitorPalette
+    let metricOrders: [String: [String]]
     /// 电池模块分页选择(拓扑/健康/排名/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
 
@@ -21,8 +22,7 @@ struct ModuleRowPreview: View {
         palette.moduleTint(for: kind)
     }
 
-    /// 渲染入口指标:网络模块按面板 NetworkGlassRow 的固定顺序重排
-    /// (信号/延迟同排,SSID 长值,地址类殿后),其余模块保持设置列表顺序。
+    /// 网络模块先按面板默认顺序组织，再由预览网格应用用户保存的顺序。
     private var renderMetrics: [MetricSwitch] {
         guard kind == .network else { return metrics }
         let ordered = networkDetailMetricOrder.compactMap { name in
@@ -42,7 +42,7 @@ struct ModuleRowPreview: View {
     private var hasDetail: Bool {
         // 电池分页预览恒展示(供电页始终有诊断内容),其余模块按明细是否有内容判定。
         guard kind != .battery else { return true }
-        return !shortMetrics.isEmpty || thermalMetric != nil || !fullRowMetrics.isEmpty
+        return !renderMetrics.isEmpty
             || showsCoreDetail
     }
 
@@ -145,20 +145,10 @@ struct ModuleRowPreview: View {
 
     // MARK: 明细网格
 
-    /// 网格分组与面板 MetricDetailGrid 同构:逐核环形图在前,半行两列居中,
-    /// 热压力合并行、整行指标沉底。整行归属查同一静态登记表,预览与面板
-    /// 布局规则同源。
-    private var shortMetrics: [MetricSwitch] {
-        renderMetrics.filter { !isFullRow($0) && !isMergedThermalRow($0) && !(showsCoreDetail && $0.id == "core-split") }
-    }
-
-    private var fullRowMetrics: [MetricSwitch] {
-        renderMetrics.filter { isFullRow($0) && !isMergedThermalRow($0) }
-    }
-
-    private var thermalMetric: MetricSwitch? {
-        guard kind == .cpu, mergesThermalRow else { return nil }
-        return renderMetrics.first { $0.id == "thermal-pressure" }
+    private struct PreviewCell: Identifiable {
+        let metric: MetricSwitch
+        let span: Int
+        var id: String { metric.id }
     }
 
     /// 温度读数仅直连版产出(SMC 在沙盒下不可读);沙盒版预览里热压力同样
@@ -182,53 +172,9 @@ struct ModuleRowPreview: View {
         StaticMetricSizing.isFullRow(kind: kind, name: lookupName(metric))
     }
 
-    private func isMergedThermalRow(_ metric: MetricSwitch) -> Bool {
-        mergesThermalRow && kind == .cpu && metric.id == "thermal-pressure"
-    }
-
     private var detailGrid: some View {
         VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
-            if showsCoreDetail {
-                CPUCoresDetail(detail: MetricSampleCatalog.cpuCoreDetail, theme: theme)
-            }
-
-            if !shortMetrics.isEmpty {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),
-                              GridItem(.flexible())],
-                    spacing: MetricGridMetrics.gridRowGap
-                ) {
-                    ForEach(shortMetrics) { metric in
-                        MetricPreviewTile(
-                            kind: kind,
-                            id: metric.id,
-                            title: metric.title,
-                            memoryPressureMode: memoryPressureMode,
-                            palette: palette
-                        )
-                    }
-                }
-            }
-
-            if let thermal = thermalMetric {
-                MetricPreviewTile(
-                    kind: kind,
-                    id: thermal.id,
-                    title: thermal.title,
-                    memoryPressureMode: memoryPressureMode,
-                    palette: palette
-                )
-            }
-
-            ForEach(fullRowMetrics) { metric in
-                MetricPreviewTile(
-                    kind: kind,
-                    id: metric.id,
-                    title: metric.title,
-                    memoryPressureMode: memoryPressureMode,
-                    palette: palette
-                )
-            }
+            previewGrid(renderMetrics, order: metricOrders[PanelOrderScope.metrics(kind).storageKey] ?? [])
         }
     }
 
@@ -255,7 +201,7 @@ struct ModuleRowPreview: View {
             switch batteryTab {
             case .flow:
                 if !flowMetrics.isEmpty {
-                    previewGrid(flowMetrics)
+                    previewGrid(flowMetrics, order: metricOrders[PanelOrderScope.battery(.flow).storageKey] ?? [])
                 }
                 if showsPowerFlow {
                     PowerFlowDiagram(
@@ -267,7 +213,7 @@ struct ModuleRowPreview: View {
                 }
             case .health:
                 if !healthMetrics.isEmpty {
-                    previewGrid(healthMetrics)
+                    previewGrid(healthMetrics, order: metricOrders[PanelOrderScope.battery(.health).storageKey] ?? [])
                 }
                 #if !DIRECT_DISTRIBUTION
                 // 沙盒版流向图随面板迁入健康页,预览同构(示例数据)。
@@ -288,7 +234,8 @@ struct ModuleRowPreview: View {
             case .supply:
                 PowerSupplyDiagnosticsView(
                     module: MetricSampleCatalog.powerFlowModule,
-                    theme: theme
+                    theme: theme,
+                    metricOrder: metricOrders[PanelOrderScope.battery(.supply).storageKey] ?? []
                 )
             }
         }
@@ -313,38 +260,38 @@ struct ModuleRowPreview: View {
         return renderMetrics.filter { names.contains($0.id) && $0.id != "power-flow" }
     }
 
-    /// 半行两列 + 整行沉底的示例网格(电池分页用;不含 CPU 逐核/热压力等网格外特殊形态)。
+    /// 面板和预览共享静态跨度；拖动只改变位置，不改变指标宽度。
     @ViewBuilder
-    private func previewGrid(_ gridMetrics: [MetricSwitch]) -> some View {
-        let short = gridMetrics.filter { !isFullRow($0) }
-        let full = gridMetrics.filter { isFullRow($0) }
-        VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
-            if !short.isEmpty {
-                LazyVGrid(
-                    columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing),
-                              GridItem(.flexible())],
-                    spacing: MetricGridMetrics.gridRowGap
-                ) {
-                    ForEach(short) { metric in
-                        MetricPreviewTile(
-                            kind: kind,
-                            id: metric.id,
-                            title: metric.title,
-                            memoryPressureMode: memoryPressureMode,
-                            palette: palette
-                        )
-                    }
+    private func previewGrid(_ gridMetrics: [MetricSwitch], order: [String]) -> some View {
+        let visible = gridMetrics
+        let short = visible.filter { !isFullRow($0) && !(mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure") }
+        let thermal = visible.filter { mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure" }
+        let full = visible.filter {
+            isFullRow($0) && !(mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure")
+        }
+        let core = showsCoreDetail && kind == .cpu ? full.filter { $0.id == "core-split" } : []
+        let defaults = core + short + thermal + full.filter { $0.id != "core-split" || core.isEmpty }
+        let saved = PanelOrderList.reconciled(order.isEmpty ? nil : order, defaults: defaults.map(\.id))
+        let byID = Dictionary(uniqueKeysWithValues: defaults.map { ($0.id, $0) })
+        let cells = saved.compactMap { id -> PreviewCell? in
+            guard let metric = byID[id] else { return nil }
+            return PreviewCell(metric: metric, span: isFullRow(metric) || (showsCoreDetail && kind == .cpu && id == "core-split") || (mergesThermalRow && kind == .cpu && id == "thermal-pressure") ? 2 : 1)
+        }
+        PanelMetricColumns(measurementKey: cells.map(\.id).joined(separator: ",")) {
+            ForEach(cells) { cell in
+                if showsCoreDetail && kind == .cpu && cell.id == "core-split" {
+                    CPUCoresDetail(detail: MetricSampleCatalog.cpuCoreDetail, theme: theme)
+                        .panelMetricSpan(2)
+                } else {
+                    MetricPreviewTile(
+                        kind: kind,
+                        id: cell.metric.id,
+                        title: cell.metric.title,
+                        memoryPressureMode: memoryPressureMode,
+                        palette: palette
+                    )
+                    .panelMetricSpan(cell.span)
                 }
-            }
-
-            ForEach(full) { metric in
-                MetricPreviewTile(
-                    kind: kind,
-                    id: metric.id,
-                    title: metric.title,
-                    memoryPressureMode: memoryPressureMode,
-                    palette: palette
-                )
             }
         }
     }

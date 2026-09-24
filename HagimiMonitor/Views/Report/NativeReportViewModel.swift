@@ -316,7 +316,8 @@ final class NativeReportViewModel: ObservableObject {
                 hours: input.hours,
                 days: input.days,
                 process: input.process,
-                hardware: hardware
+                hardware: hardware,
+                systemSleepIntervals: input.systemSleepIntervals
             )
 
             // 硬件电池与物理风扇支持检测

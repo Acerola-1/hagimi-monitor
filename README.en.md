@@ -75,7 +75,7 @@ The dynamic ring icon reflects system load in real time, smoothly combining CPU 
 
 From the menu bar to the detailed panel, key metrics are always within reach:
 
-- **CPU**: system / user / idle usage, uptime, P/E split, thermal pressure; the direct edition adds temperature reading and per-core load rings
+- **CPU**: system / user / idle usage, uptime, core-group split, thermal pressure; the direct edition adds temperature reading and per-core load rings. Adaptive core topology recognition — chips with three core types (M6, M5 Pro/Max) automatically show S/P/E groups, others keep P/E
 - **GPU**: graphics load, render / tiler performance, VRAM info, process-level usage
 - **Memory**: usage rate, memory pressure, swap, compressed memory, pressure level changes
 - **Storage**: system disk, external volumes, read / write rates, SMART health
@@ -85,6 +85,15 @@ From the menu bar to the detailed panel, key metrics are always within reach:
 - **Display**: display info in both editions; brightness / volume / contrast control depends on DDC/CI support (direct edition only)
 
 > CPU temperature and fan speed rely on SMC (AppleSMC), which is inaccessible to the App Store sandbox, so they are only available in the direct edition.
+
+### Arrange the Panel Your Way
+
+Every module row and metric cell in the panel supports long-press drag to reorder, with a floating preview while dragging and live drop placement. A right-click (two-finger click on trackpads) opens a menu for step-by-step movement in all four directions, plus a reset action to restore module metric order.
+
+<p align="center">
+  <img src="docs/images/panel-reorder-drag.gif" width="340" alt="Long-press drag to swap rows">&nbsp;&nbsp;
+  <img src="docs/images/panel-reorder-menu.gif" width="340" alt="Move rows via context menu">
+</p>
 
 ### Glass UI and Unified Colors
 
@@ -124,6 +133,7 @@ HagimiMonitor offers two ways to get it, with the same core monitoring experienc
 | Statistics · Health score · Event detection (HTML report + storage management) | ✅ | ✅ |
 | Quick tools (keyboard lock / sleep prevention / display-awake) | ✅ | ✅ |
 | Dual themes · Glassmorphism · Multiple menu bar styles | ✅ | ✅ |
+| Panel long-press drag reorder · right-click directional move | ✅ | ✅ |
 | CPU top process list | ✅ | ✅ |
 | Memory top process list | ✅ | ✅ |
 | Storage / network top process list | ✅ | ❌ Sandbox limit |

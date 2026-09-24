@@ -291,6 +291,7 @@ struct ReportOverviewView: View {
                     .lineLimit(1)
             }
         }
+        .help(String(localized: "stats.r.coverageHelp", defaultValue: "有效采样时长占清醒时间的比例；系统确认的整机休眠不计入清醒时间。"))
     }
 
     private var nilReasonText: String {

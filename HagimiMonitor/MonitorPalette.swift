@@ -90,6 +90,17 @@ struct MonitorPalette {
         }
     }
 
+    /// S/P/E 三组并存时，P 核改用冷蓝；最强的 S 核占用原有红色，
+    /// 避开 CPU 模块自身的橙色底调，也与绿色 E 核拉开色相。
+    var secondaryPerformanceCoreTint: Color {
+        switch preference {
+        case .balanced:
+            Color(hex: 0x4E7FD9)
+        case .vibrant:
+            Color(hex: 0x4F83E8)
+        }
+    }
+
     /// 行玻璃填充:平衡为均布中性玻璃;活力为垂直衰减渐变——行头保持满浓度,
     /// 向下衰减至近中性,展开区小字不受模块色相干扰(参数见 MonitorConstants)。
     @ViewBuilder

@@ -71,6 +71,7 @@ struct ModuleSettingsView: View {
                         metrics: enabledMetrics,
                         memoryPressureMode: memoryPressureMode,
                         palette: palette,
+                        metricOrders: settings.panelOrders,
                         batteryTab: $batteryTab
                     )
                     .padding(.horizontal, 10)
@@ -223,6 +224,14 @@ struct ModuleSettingsView: View {
             // 功率流图没有独立开关:由分页选项里的「功率流」可勾项控制
             // (直连版拓扑页、沙盒版健康页),与指标网格同一交互。
             // 供电页为固定诊断视图、排名页为固定列表,均不含可勾指标,返回空。
+            if PanelOrderCatalog.scopes.contains(where: { $0.moduleKind == kind }) {
+                Button(String(localized: "settings.restore-metric-order")) {
+                    settings.restoreDefaultMetricOrder(for: kind)
+                }
+                .compatibleButtonStyle()
+                .disabled(!settings.hasCustomMetricOrder(for: kind))
+            }
+
             if #available(macOS 26, *) {
                 Button(String(localized: "settings.reset-defaults")) {
                     settings.resetMetrics(for: kind)

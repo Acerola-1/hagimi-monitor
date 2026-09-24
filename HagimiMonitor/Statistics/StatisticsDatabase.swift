@@ -11,6 +11,12 @@ nonisolated struct StorageBreakdown: Equatable, Sendable {
     static let zero = StorageBreakdown()
 }
 
+/// 系统报告的整机休眠区间；时间为 Unix 秒，与统计桶使用同一墙钟。
+nonisolated struct SystemSleepInterval: Equatable, Sendable {
+    let start: Date
+    let end: Date
+}
+
 /// 数值列的跨粒度聚合方式:
 /// - weightedAverage: 上层均值 = Σ(下层均值×下层n) / Σn(占比型同此口径)
 /// - maximum:         取下层最大值(峰值)
@@ -317,6 +323,9 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
             // 增量汇总水位表:记录每个 source→target 上次汇总的 boundary,使 maintain
             // 只重算新封口的桶,而非从源表最早行全量重扫。
             execute("CREATE TABLE IF NOT EXISTS stats_meta (key TEXT PRIMARY KEY, value REAL)")
+            execute("CREATE TABLE IF NOT EXISTS stats_system_sleep (start REAL PRIMARY KEY, wake REAL)")
+            // 上次进程若在休眠中退出，无法确认唤醒时间；不把未知的后续时间视为休眠。
+            execute("DELETE FROM stats_system_sleep WHERE wake IS NULL")
             for table in ["minute", "hour", "day"] {
                 let columnSQL = StatisticsRow.columns.map { "\($0.name) REAL" }.joined(separator: ", ")
                 execute("CREATE TABLE IF NOT EXISTS stats_\(table) (t INTEGER PRIMARY KEY, \(columnSQL), n INTEGER NOT NULL DEFAULT 0)")
@@ -357,6 +366,40 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
             rollUp(source: "hour", target: "day", boundary: currentDay, bucketUnit: .day, watermarkKey: Self.watermarkHourDay)
             execute("DELETE FROM stats_minute WHERE t < \(Int64(nowInterval - Self.minuteRetention))")
             execute("DELETE FROM stats_hour WHERE t < \(Int64(nowInterval - Self.hourRetention))")
+            execute("DELETE FROM stats_system_sleep WHERE wake < \(nowInterval - Self.hourRetention)")
+        }
+    }
+
+    /// NSWorkspace 整机休眠/唤醒事件。写入量仅每次电源状态转换一次。
+    func beginSystemSleep(at date: Date) {
+        queue.sync {
+            execute("INSERT OR IGNORE INTO stats_system_sleep (start, wake) VALUES (\(date.timeIntervalSince1970), NULL)")
+        }
+    }
+
+    func endSystemSleep(at date: Date) {
+        queue.sync {
+            execute("UPDATE stats_system_sleep SET wake = \(date.timeIntervalSince1970) WHERE wake IS NULL AND start <= \(date.timeIntervalSince1970)")
+        }
+    }
+
+    func systemSleepIntervals(from: Date, to: Date) -> [SystemSleepInterval] {
+        queue.sync {
+            guard let handle else { return [] }
+            let sql = "SELECT start, wake FROM stats_system_sleep WHERE wake IS NOT NULL AND start < ? AND wake > ? ORDER BY start"
+            var statement: OpaquePointer?
+            guard sqlite3_prepare_v2(handle, sql, -1, &statement, nil) == SQLITE_OK, let statement else { return [] }
+            defer { sqlite3_finalize(statement) }
+            sqlite3_bind_double(statement, 1, to.timeIntervalSince1970)
+            sqlite3_bind_double(statement, 2, from.timeIntervalSince1970)
+            var result: [SystemSleepInterval] = []
+            while sqlite3_step(statement) == SQLITE_ROW {
+                result.append(SystemSleepInterval(
+                    start: Date(timeIntervalSince1970: sqlite3_column_double(statement, 0)),
+                    end: Date(timeIntervalSince1970: sqlite3_column_double(statement, 1))
+                ))
+            }
+            return result
         }
     }
 
@@ -482,6 +525,7 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
             execute("DELETE FROM stats_minute WHERE t < \(cutoff)")
             execute("DELETE FROM stats_hour WHERE t < \(cutoff)")
             execute("DELETE FROM stats_day WHERE t < \(cutoff)")
+            execute("DELETE FROM stats_system_sleep WHERE wake < \(date.timeIntervalSince1970)")
             execute("VACUUM")
             execute("PRAGMA wal_checkpoint(TRUNCATE)")
         }
@@ -493,6 +537,7 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
             execute("DELETE FROM stats_minute")
             execute("DELETE FROM stats_hour")
             execute("DELETE FROM stats_day")
+            execute("DELETE FROM stats_system_sleep")
             resetWatermarks()
             execute("VACUUM")
             execute("PRAGMA wal_checkpoint(TRUNCATE)")
@@ -507,6 +552,7 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
             for table in ["minute", "hour", "day"] {
                 execute("DELETE FROM stats_\(table) WHERE t >= \(lo) AND t < \(hi)")
             }
+            execute("DELETE FROM stats_system_sleep WHERE start < \(to.timeIntervalSince1970) AND wake > \(from.timeIntervalSince1970)")
             // 范围删除可能落在水位之后(会影响后续汇总),重置水位触发一次全量重算。
             resetWatermarks()
             execute("VACUUM")

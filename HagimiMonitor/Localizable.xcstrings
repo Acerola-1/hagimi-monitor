@@ -1,6 +1,142 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "panel.reorder.move-up": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move up"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上移"
+          }
+        }
+      }
+    },
+    "panel.reorder.move-down": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move down"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下移"
+          }
+        }
+      }
+    },
+    "panel.reorder.move-left": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move left"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左移"
+          }
+        }
+      }
+    },
+    "panel.reorder.move-right": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Move right"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右移"
+          }
+        }
+      }
+    },
+    "panel.reorder.no-moves": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No available move"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可移动方向"
+          }
+        }
+      }
+    },
+    "panel.reorder.long-press-hint": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Press and hold to reorder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长按并拖动以调整顺序"
+          }
+        }
+      }
+    },
+    "panel.reorder.invalid-drop": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to original position"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此处不可放置，将返回原位"
+          }
+        }
+      }
+    },
+    "settings.restore-metric-order": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore default metric order"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复本模块默认指标排列"
+          }
+        }
+      }
+    },
     "stats.r.navOverviewGroup" : {
       "extractionState": "manual",
       "localizations": {
@@ -1673,6 +1809,22 @@
         }
       }
     },
+    "cpu.detail.e-short": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E"
+          }
+        }
+      }
+    },
     "cpu.detail.p-cores": {
       "localizations": {
         "en": {
@@ -1685,6 +1837,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "性能核"
+          }
+        }
+      }
+    },
+    "cpu.detail.p-short": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P"
+          }
+        }
+      }
+    },
+    "cpu.detail.s-cores": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Super Core"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "超级核心"
+          }
+        }
+      }
+    },
+    "cpu.detail.s-short": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S"
           }
         }
       }
@@ -19382,6 +19582,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "所选范围没有有效采样"
+          }
+        }
+      }
+    },
+    "stats.r.coverageHelp": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share of awake time covered by valid samples. Confirmed system sleep is excluded."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有效采样时长占清醒时间的比例；系统确认的整机休眠不计入清醒时间。"
+          }
+        }
+      }
+    },
+    "stats.r.coverageInsight": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Valid samples total %@; awake-time coverage is %.1f%% (confirmed system sleep excluded)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选时段累计有效采样 %@，清醒时间覆盖率 %.1f%%（已排除系统确认的休眠）"
           }
         }
       }

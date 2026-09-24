@@ -143,6 +143,24 @@ struct ReportDataAggregatorTests {
         #expect(overRange == 1)
     }
 
+    @Test func coverageExcludesOnlyConfirmedSystemSleep() {
+        let from = Date(timeIntervalSince1970: 1_000)
+        let to = Date(timeIntervalSince1970: 2_000)
+        let intervals = [
+            SystemSleepInterval(start: Date(timeIntervalSince1970: 900), end: Date(timeIntervalSince1970: 1_300)),
+            SystemSleepInterval(start: Date(timeIntervalSince1970: 1_200), end: Date(timeIntervalSince1970: 1_500)),
+        ]
+        let ratio = ReportDataAggregator.coverageRatio(
+            rows: [makeRow(t: 1_500, coverS: 450)], from: from, to: to,
+            systemSleepIntervals: intervals
+        )
+        #expect(ratio == 0.9)
+        #expect(ReportDataAggregator.sleepSeconds(in: intervals, from: from, to: to) == 500)
+        #expect(ReportDataAggregator.coverageRatio(
+            rows: [makeRow(t: 1_500, coverS: 450)], from: from, to: to
+        ) == 0.45)
+    }
+
     // MARK: - 负载分布计算
 
     @Test func distributionPlacesValuesInCorrectBuckets() {

@@ -132,6 +132,8 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 }
 .shot img{display:block;width:100%;height:auto;}
 .shot.narrow{max-width:360px;}
+.reorder-shots{flex-direction:row;justify-content:center;flex-wrap:wrap;}
+@media (max-width:820px){.reorder-shots{flex-direction:column;align-items:center;}}
 .shot .shot-cap{padding:14px 18px 16px;font-size:13px;color:var(--muted);line-height:1.5;}
 .shot .shot-cap b{display:block;color:var(--ink);font-weight:600;font-size:15px;margin-bottom:2px;}
 
@@ -460,7 +462,24 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   </div>
 </section>
 
-
+<!-- Panel Reordering -->
+<section class="lightweight" id="reorder">
+  <div class="section-inner fade-in">
+    <div class="kicker">パネルレイアウト、自由に配置</div>
+    <h2>カスタム並べ替え</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">すべてのモジュール行と指標セルは長押しドラッグで並べ替え可能。ドラッグ中は浮遊プレビューを表示し、ドロップ位置に即時フィットします。右クリック（トラックパッドは二本指クリック）でメニューを呼び出し、上下左右へ一つずつ移動もでき、順序はいつでも復元できます。</p>
+    <div class="stack reorder-shots">
+      <div class="shot narrow">
+        <img src="../images/panel-reorder-drag.gif" alt="長押しドラッグで入れ替え">
+        <div class="shot-cap"><b>長押しドラッグ</b>浮遊プレビューでドラッグ、ドロップで即時配置。</div>
+      </div>
+      <div class="shot narrow">
+        <img src="../images/panel-reorder-menu.gif" alt="メニューで行を移動">
+        <div class="shot-cap"><b>メニューで並べ替え</b>右クリックで上下左右に一つずつ移動。</div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- Data Statistics -->
 <section class="lightweight" id="stats" style="background:#fff;">
@@ -512,6 +531,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
           <tr><td>履歴統計 · ヘルススコア · イベント検知（HTML レポート）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>クイックツール（キーボードロック / スリープ防止 / 画面消灯防止）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>2つのテーマ · 豊富なメニューバースタイル</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>パネル長押しドラッグ並べ替え · 右クリック方向移動</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>CPU / メモリ トッププロセス一覧</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>ストレージ / ネットワーク トッププロセス一覧</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
           <tr><td>温度センサーとファン回転数読み取り</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>

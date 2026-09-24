@@ -176,6 +176,8 @@ final class MonitorSettings: ObservableObject {
     /// 呼出面板时默认展开的模块集合(逐模块设置,非全局开关)。
     @Published private(set) var defaultExpandedKinds: Set<MonitorKind> = []
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
+    /// 排列偏好保存完整 ID，显隐或暂时缺失不修改顺序。
+    @Published private(set) var panelOrders: [String: [String]] = [:]
 
     /// 钉住面板窗口位置持久化。
     @Published var pinnedPanelOriginX: Double? = nil
@@ -434,6 +436,7 @@ final class MonitorSettings: ObservableObject {
             defaults.set(true, forKey: Keys.batteryPowerFlowMigrated)
         }
         enabledMetrics = loadedMetrics
+        panelOrders = (defaults.dictionary(forKey: Keys.panelOrders) ?? [:]).compactMapValues { $0 as? [String] }
 
         launchAtLogin = SMAppService.mainApp.status == .enabled
 
@@ -504,6 +507,41 @@ final class MonitorSettings: ObservableObject {
 
     func resetMetrics(for kind: MonitorKind) {
         enabledMetrics[kind] = defaultMetricIds(for: kind)
+    }
+
+    func panelOrder(for scope: PanelOrderScope) -> [String] {
+        PanelOrderList.reconciled(
+            panelOrders[scope.storageKey],
+            defaults: PanelOrderCatalog.defaultIDs(for: scope)
+        )
+    }
+
+    func orderedPanelIDs(for scope: PanelOrderScope, available: [String]) -> [String] {
+        PanelOrderList.visible(panelOrder(for: scope), available: available)
+    }
+
+    @discardableResult
+    func movePanelItem(_ id: String, in scope: PanelOrderScope, before target: String?, visible: [String]) -> Bool {
+        let order = panelOrder(for: scope)
+        guard let moved = PanelOrderList.moved(order, id: id, before: target, visible: visible) else {
+            return false
+        }
+        panelOrders[scope.storageKey] = moved
+        return true
+    }
+
+    func restoreDefaultMetricOrder(for kind: MonitorKind) {
+        let keys = PanelOrderCatalog.scopes.filter { $0.moduleKind == kind }.map(\.storageKey)
+        guard keys.contains(where: { panelOrders[$0] != nil }) else { return }
+        var reset = panelOrders
+        for key in keys { reset.removeValue(forKey: key) }
+        panelOrders = reset
+    }
+
+    func hasCustomMetricOrder(for kind: MonitorKind) -> Bool {
+        PanelOrderCatalog.scopes.contains {
+            $0.moduleKind == kind && panelOrders[$0.storageKey] != nil
+        }
     }
 
     func isMenuBarMetricSelected(_ kind: MenuBarMetricKind) -> Bool {
@@ -927,6 +965,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $panelOrders
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.panelOrders)
+            }
+            .store(in: &cancellables)
+
         $pinnedPanelOriginX
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1053,6 +1098,7 @@ private enum Keys {
     /// 存量键:功率流独立开关(旧版偏好迁移用)。
     static let legacyBatteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
+    static let panelOrders = "settings.panel.orders"
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"
 }
