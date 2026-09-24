@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Hagimi Monitor — Your Mac, at a Glance</title>
 <meta name="description" content="Hagimi Monitor is an elegant macOS menu bar system monitor that tracks CPU, GPU, memory, storage, network, battery, Bluetooth, and display in real-time, with built-in data statistics reports and quick tools like keyboard lock.">
-<link rel="icon" type="image/png" href="../images/icon-128.png" sizes="128x128">
+<link rel="icon" type="image/png" href="../images/favicon-128.png" sizes="128x128">
 <style>
 :root{
   --bg:#f5f5f7;
@@ -77,25 +77,23 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 /* ============ Hero ============ */
 .hero{
-  padding:120px 0 80px;
+  padding:142px 0 108px;
   display:flex;align-items:center;
+  background:radial-gradient(circle at 78% 43%,rgba(50,195,107,.12),transparent 34%),linear-gradient(180deg,var(--bg),#fff);
 }
 .hero .section-inner{
-  display:flex;align-items:center;gap:64px;
+  display:flex;align-items:center;gap:40px;
 }
-.hero-left{flex:1;display:flex;flex-direction:column;gap:22px;}
-.hero-actions{display:flex;gap:14px;margin-top:6px;align-items:center;justify-content:center;}
-.hero-actions-note{font-size:12px;color:var(--muted);margin-top:10px;text-align:center;}
-.hero-left h1{font-size:clamp(40px,5.5vw,56px);}
+.hero-left{flex:1;min-width:0;display:flex;flex-direction:column;gap:20px;}
+.hero-actions{display:flex;gap:14px;margin-top:10px;align-items:center;flex-wrap:wrap;}
+.hero-actions-note{font-size:12px;color:var(--muted);margin-top:0;}
+.hero-left h1{font-size:clamp(44px,5.5vw,64px);}
 .hero-left .lead{margin-top:4px;}
-.hero-chips{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:8px;}
-.chip{
-  display:flex;align-items:center;gap:9px;
-  border:1px solid var(--border);border-radius:9px;
-  padding:11px 14px;font-size:14px;font-weight:500;background:#fff;
-}
-.dot{width:9px;height:9px;border-radius:50%;flex:0 0 9px;}
-.hero-right{flex:0 0 520px;display:flex;justify-content:center;align-items:center;padding-left:40px;}
+.hero-highlights{display:flex;flex-wrap:wrap;gap:10px 0;margin-top:8px;color:#42464b;font-size:14px;font-weight:600;}
+.hero-highlights span{display:inline-flex;align-items:center;gap:9px;white-space:nowrap;}
+.hero-highlights span+span{margin-left:16px;padding-left:16px;border-left:1px solid #c7c9cb;}
+.hero-highlights span::before{content:"";width:6px;height:6px;border-radius:50%;background:#25c665;flex:none;}
+.hero-right{flex:0 0 520px;display:flex;justify-content:center;align-items:center;}
 .fan{position:relative;width:480px;height:460px;overflow:visible;}
 .fan img{
   position:absolute;width:340px;border-radius:20px;
@@ -132,8 +130,22 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 }
 .shot img{display:block;width:100%;height:auto;}
 .shot.narrow{max-width:360px;}
+.reorder-shots{flex-direction:row;justify-content:center;flex-wrap:wrap;}
+@media (max-width:820px){.reorder-shots{flex-direction:column;align-items:center;}}
 .shot .shot-cap{padding:14px 18px 16px;font-size:13px;color:var(--muted);line-height:1.5;}
 .shot .shot-cap b{display:block;color:var(--ink);font-weight:600;font-size:15px;margin-bottom:2px;}
+
+/* ============ Statistics showcase ============ */
+.stats-showcase{
+  background:radial-gradient(circle at 82% 12%,rgba(49,192,105,.13),transparent 30%),#202225;
+  color:#f5f5f7;
+  overflow:hidden;
+}
+.stats-showcase .kicker{color:#65dfa0;}
+.stats-showcase .lead{max-width:750px;color:#c5c9cd;margin-top:18px;}
+.stats-showcase h2{font-size:clamp(36px,5vw,54px);margin-top:14px;}
+.stats-showcase .shot{border-color:rgba(255,255,255,.16);box-shadow:0 24px 60px rgba(0,0,0,.2);}
+.stats-showcase .shot:last-child{max-width:660px;}
 
 /* ============ Themes ============ */
 .themes .section-inner{display:flex;flex-direction:column;gap:36px;}
@@ -277,6 +289,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 @media(max-width:900px){
   .hero .section-inner{flex-direction:column-reverse;text-align:center;gap:24px;}
   .hero-right{flex:none;width:100%;}
+  .hero-actions,.hero-highlights{justify-content:center;}
   .fan{width:320px;height:320px;margin:0 auto;}
   .fan img{width:200px;margin-left:-100px;margin-top:-150px;}
   .fan .back{transform:translate(-36px,20px) rotate(-9deg) scale(.86);}
@@ -285,7 +298,6 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   .fan:hover .back{transform:translate(-180px,-8px) rotate(0deg) scale(.84);}
   .fan:hover .mid{transform:translate(180px,-8px) rotate(0deg) scale(.84);}
   .fan:hover .front{transform:translate(0,-8px) rotate(0deg) scale(.84);}
-  .hero-chips{grid-template-columns:1fr 1fr;}
   .themes-stage{flex-direction:column;gap:32px;}
   .swap-icon{display:none;}
   .gallery-grid{grid-template-columns:repeat(2,1fr);}
@@ -297,11 +309,21 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 }
 @media(max-width:600px){
   .nav-links{display:none;}
-  .hero-chips{grid-template-columns:1fr;}
+  .hero{padding:100px 0 72px;}
+  .hero-highlights{justify-content:center;gap:6px 12px;}
+  .hero-highlights span+span{margin-left:0;padding-left:0;border-left:0;}
   .gallery-grid{grid-template-columns:1fr 1fr;}
   .gallery-cell.center{grid-column:1/3;}
   .bar-grid{grid-template-columns:1fr;}
   .download-actions{flex-direction:column;align-items:center;}
+}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto;}
+  .fade-in{opacity:1;transform:none;transition:none;}
+  .fan img,.btn-primary,.btn-store,.feedback-btn{transition:none;}
+  .fan:hover .front{transform:translate(0,0) rotate(0deg) scale(1);}
+  .fan:hover .back{transform:translate(-58px,30px) rotate(-9deg) scale(.88);opacity:.82;}
+  .fan:hover .mid{transform:translate(58px,30px) rotate(9deg) scale(.88);opacity:.82;}
 }
 </style>
 </head>
@@ -339,15 +361,8 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
       <div class="kicker">Eight monitoring modules, all in one view</div>
       <h1>Complete Monitoring<br>at a Glance</h1>
       <p class="lead">CPU, GPU, memory, storage, network, battery, Bluetooth, and display — a single click on the menu bar reveals a real-time panel with sparklines, usage bars, and top processes, plus built-in statistics reports and quick tools.</p>
-      <div class="hero-chips">
-        <div class="chip"><span class="dot" style="background:#d27a4a"></span>CPU · Real-time Chart</div>
-        <div class="chip"><span class="dot" style="background:#5d8cf0"></span>GPU · Load Trend</div>
-        <div class="chip"><span class="dot" style="background:#42a39a"></span>Memory · Pressure</div>
-        <div class="chip"><span class="dot" style="background:#9a865e"></span>Storage · Volume</div>
-        <div class="chip"><span class="dot" style="background:#43a6a0"></span>Network · Up/Down</div>
-        <div class="chip"><span class="dot" style="background:#65af52"></span>Battery · Health</div>
-        <div class="chip"><span class="dot" style="background:#4f7fd6"></span>Bluetooth · Battery</div>
-        <div class="chip"><span class="dot" style="background:#8f7ad8"></span>Display · Info</div>
+      <div class="hero-highlights" aria-label="Highlights">
+        <span>Eight live modules</span><span>Historical reports</span><span>One-click controls</span>
       </div>
       <div class="hero-actions">
         <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
@@ -398,7 +413,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   </div>
 </section>
 <script>
-(function(){var arc=document.getElementById('ringArc'),dot=document.getElementById('ringDot');if(!arc||!dot)return;var C=2*Math.PI*50,load=30,target=30,colors=[[0,'#148057'],[25,'#008c6b'],[50,'#cc700f'],[78,'#c71f1a']];function gc(l){for(var i=colors.length-1;i>=0;i--){if(l>=colors[i][0])return colors[i][1];}return colors[0][1];}function render(){arc.setAttribute('stroke-dasharray',C.toFixed(1));arc.setAttribute('stroke-dashoffset',(C-(load/100)*C).toFixed(1));dot.setAttribute('fill',gc(load));}function step(){var d=target-load;if(Math.abs(d)<.5){load=target;}else{load+=d*.12;}render();requestAnimationFrame(step);}function nt(){target=Math.random()*85+5;setTimeout(nt,2000+Math.random()*3000);}render();requestAnimationFrame(step);setTimeout(nt,1500);})();
+(function(){var arc=document.getElementById('ringArc'),dot=document.getElementById('ringDot');if(!arc||!dot)return;var C=2*Math.PI*50,load=30,target=30,colors=[[0,'#148057'],[25,'#008c6b'],[50,'#cc700f'],[78,'#c71f1a']];function gc(l){for(var i=colors.length-1;i>=0;i--){if(l>=colors[i][0])return colors[i][1];}return colors[0][1];}function render(){arc.setAttribute('stroke-dasharray',C.toFixed(1));arc.setAttribute('stroke-dashoffset',(C-(load/100)*C).toFixed(1));dot.setAttribute('fill',gc(load));}function step(){var d=target-load;if(Math.abs(d)<.5){load=target;}else{load+=d*.12;}render();requestAnimationFrame(step);}function nt(){target=Math.random()*85+5;setTimeout(nt,2000+Math.random()*3000);}render();if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){requestAnimationFrame(step);setTimeout(nt,1500);}})();
 </script>
 
 <!-- Lightweight -->
@@ -460,14 +475,31 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   </div>
 </section>
 
-
+<!-- Panel Reordering -->
+<section class="lightweight" id="reorder">
+  <div class="section-inner fade-in">
+    <div class="kicker">Arrange the Panel Your Way</div>
+    <h2>Custom Reordering</h2>
+    <p class="lead" style="text-align:center;max-width:720px;">Every module row and metric cell supports long-press drag to reorder, with a floating preview while dragging and live drop placement. A right-click (two-finger click on trackpads) opens a menu to move step by step in any direction — the order is always recoverable.</p>
+    <div class="stack reorder-shots">
+      <div class="shot narrow">
+        <img src="../images/panel-reorder-drag.gif" alt="Long-press drag to swap rows">
+        <div class="shot-cap"><b>Long-press drag</b>Floating preview while dragging, instant placement on drop.</div>
+      </div>
+      <div class="shot narrow">
+        <img src="../images/panel-reorder-menu.gif" alt="Move rows via context menu">
+        <div class="shot-cap"><b>Menu reordering</b>Right-click to move step by step in any direction.</div>
+      </div>
+    </div>
+  </div>
+</section>
 
 <!-- Data Statistics -->
-<section class="lightweight" id="stats" style="background:#fff;">
+<section class="stats-showcase" id="stats">
   <div class="section-inner fade-in">
     <div class="kicker">More Than Monitoring</div>
     <h2>Data Statistics</h2>
-    <p class="lead" style="text-align:center;max-width:720px;">Runtime data is aggregated into layers and stored, then presented in a native statistics report with trend curves, heatmaps, health scores, and history. Export a standalone HTML file when needed.</p>
+    <p class="lead">Runtime data is aggregated into layers and stored, then presented in a native statistics report with trend curves, heatmaps, health scores, and history. Export a standalone HTML file when needed.</p>
     <div class="stack">
       <div class="shot">
         <img src="../images/stats-report.png" alt="Native statistics report">
@@ -512,6 +544,7 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
           <tr><td>Statistics · Health score · Event detection (native report)</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>Quick tools (keyboard lock / sleep prevention / display-awake)</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>Two themes · Multiple menu bar styles</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
+          <tr><td>Panel long-press drag reorder · right-click directional move</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>CPU / Memory top process list</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
           <tr><td>Storage / Network top process list</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
           <tr><td>Temperature sensor and fan speed reading</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
