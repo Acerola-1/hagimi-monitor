@@ -1284,82 +1284,129 @@ private struct MetricGlassRow: View, Equatable {
 
 // MARK: - Detail Grid
 
-/// CPU 展开区 P/E 核两行展示:第一行逐核负载环形图(逐行铺满、多核
-/// 自动折行,E 核绿/P 核模块色,弧线长度=单核占用),第二行 P/E 分组
-/// 占用值(与 core-split 指标同口径,由采样侧同源产出)。嵌入网格内部,
+/// CPU 展开区核心详情:第一行逐核负载环形图(逐行铺满、多核
+/// 自动折行,按核心类别着色,弧线长度=单核占用),下方为分组占用值。
+/// 两行共用一块内衬底色,用细线区分逐核与分组两个层级。
+/// 分组值与 core-split 指标同口径,由采样侧同源产出。嵌入网格内部,
 /// 继承全宽对称内衬与分隔线;占用展示取代 core-split 格子避免重复。
 struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
 
-    /// E 核色:复用 severity calm 绿;P 核色:独立令牌(见 performanceCoreTint),
-    /// 与行 tint 保持对比,不引入调色板之外的颜色。
-    private var eTint: Color { theme.palette.severityTint(for: .calm) }
-    private var pTint: Color { theme.palette.performanceCoreTint }
+    private var displayedDetail: CPUCoreDetail {
+        #if DEBUG
+        let average = detail.cores.isEmpty
+            ? detail.performanceUsage
+            : detail.cores.map(\.usage).reduce(0, +) / Double(detail.cores.count)
+        return CPUCoreDemo.detail(overallUsage: average) ?? detail
+        #else
+        return detail
+        #endif
+    }
+
+    private func tint(for kind: CPUCoreKind) -> Color {
+        switch kind {
+        case .superCore: theme.palette.performanceCoreTint
+        case .performance: displayedDetail.superUsage == nil
+            ? theme.palette.performanceCoreTint : theme.palette.secondaryPerformanceCoreTint
+        case .efficiency: theme.palette.severityTint(for: .calm)
+        }
+    }
+
+    /// 圆环按 S、P、E 从强到弱排列，同类核心仍按原始编号排列。
+    private var orderedCores: [CPUCoreLoad] {
+        displayedDetail.cores.sorted { lhs, rhs in
+            let lhsRank = coreRank(lhs.kind)
+            let rhsRank = coreRank(rhs.kind)
+            return lhsRank == rhsRank ? lhs.index < rhs.index : lhsRank < rhsRank
+        }
+    }
+
+    private func coreRank(_ kind: CPUCoreKind) -> Int {
+        switch kind {
+        case .superCore: 0
+        case .performance: 1
+        case .efficiency: 2
+        }
+    }
 
     var body: some View {
-        VStack(spacing: 5) {
+        VStack(spacing: 0) {
             // 圆环逐行铺满:优先放满一行,放不下自动折行;每一行(含末行)
             // 按自身环数把间隙撑满整行,不留右侧空档。
             CoreRingFlowLayout() {
-                ForEach(detail.cores) { core in
+                ForEach(orderedCores) { core in
                     CoreLoadRing(
                         usage: core.usage,
-                        tint: core.isPerformance ? pTint : eTint,
+                        tint: tint(for: core.kind),
                         // 底环比内衬底色深一档(trackFill 叠 trackFill 会糊),
                         // 复用行分隔线令牌拉开层次。
                         track: theme.rowSeparator(for: .cpu)
                     )
                 }
             }
-            // 内衬背景与指标格同款 trackFill 色块;环底用行分隔线令牌
-            // (深一档),避免与底色糊成一片。
+            // 环底用行分隔线令牌(比共享内衬深一档),避免糊成一片。
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
-            .background(
-                RoundedRectangle(cornerRadius: 7)
-                    .fill(theme.palette.trackFill)
-            )
 
-            HStack(spacing: MetricGridMetrics.columnSpacing) {
-                if let efficiency = detail.efficiencyUsage {
-                    usageTile(
-                        label: String(localized: "cpu.detail.e-cores"),
-                        tint: eTint,
-                        value: efficiency
-                    )
+            Rectangle()
+                .fill(theme.captionText.opacity(0.16))
+                .frame(height: 1)
+                .padding(.horizontal, 8)
+
+            HStack(spacing: 0) {
+                ForEach(Array(displayedDetail.groups.enumerated()), id: \.element.id) { index, group in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(theme.captionText.opacity(0.22))
+                            .frame(width: 1, height: 13)
+                    }
+                    usageSegment(group)
                 }
-                usageTile(
-                    label: String(localized: "cpu.detail.p-cores"),
-                    tint: pTint,
-                    value: detail.performanceUsage
-                )
             }
+            .padding(.vertical, 6)
         }
+        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
     }
 
-    /// 分组占用格:与指标网格同款 trackFill 内衬色块;标签后的色点标示
-    /// 圆环颜色归属,右侧百分比 mono 加粗。
-    private func usageTile(label: String, tint: Color, value: Double) -> some View {
-        HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-            Text(label)
+    /// 单一底色内等分两段或三段;组内信息聚拢,细线标示相邻组的边界。
+    private func usageSegment(_ group: CPUCoreGroupUsage) -> some View {
+        let value = "\(Int(group.usage.rounded()))%"
+        return HStack(spacing: 4) {
+            Text(shortLabel(for: group.kind))
                 .monitorPanelCaptionFont(.footnote)
                 .foregroundStyle(theme.captionText)
                 .lineLimit(1)
-                .layoutPriority(1)
             Circle()
-                .fill(tint)
+                .fill(tint(for: group.kind))
                 .frame(width: 5, height: 5)
-            Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
-            Text("\(Int(value.rounded()))%")
+            Text(value)
                 .monitorPanelMonoFont(.footnote, weight: .bold)
                 .foregroundStyle(theme.valueText)
                 .lineLimit(1)
         }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+        .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity)
+        .help(fullLabel(for: group.kind))
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(fullLabel(for: group.kind))
+        .accessibilityValue(value)
+    }
+
+    private func shortLabel(for kind: CPUCoreKind) -> String {
+        switch kind {
+        case .superCore: String(localized: "cpu.detail.s-short")
+        case .performance: String(localized: "cpu.detail.p-short")
+        case .efficiency: String(localized: "cpu.detail.e-short")
+        }
+    }
+
+    private func fullLabel(for kind: CPUCoreKind) -> String {
+        switch kind {
+        case .superCore: String(localized: "cpu.detail.s-cores")
+        case .performance: String(localized: "cpu.detail.p-cores")
+        case .efficiency: String(localized: "cpu.detail.e-cores")
+        }
     }
 }
 

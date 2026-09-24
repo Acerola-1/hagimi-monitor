@@ -361,24 +361,60 @@ nonisolated struct FanInfo: Identifiable, Equatable, Sendable {
     }
 }
 
+/// 逐核类别用于圆环着色；与市场名称分开，避免把非 P 核一概当作 E 核。
+nonisolated enum CPUCoreKind: String, Codable, Sendable {
+    case superCore
+    case performance
+    case efficiency
+}
+
 /// 单个逻辑 CPU 的瞬时负载,供展开区逐核环形图渲染。
 nonisolated struct CPUCoreLoad: Identifiable, Equatable, Sendable {
     let index: Int
     /// 0-100 占用百分比。
     let usage: Double
-    /// true=性能核(P),false=能效核(E)。
-    let isPerformance: Bool
+    let kind: CPUCoreKind
+
+    init(index: Int, usage: Double, kind: CPUCoreKind) {
+        self.index = index
+        self.usage = usage
+        self.kind = kind
+    }
+
+    init(index: Int, usage: Double, isPerformance: Bool) {
+        self.init(index: index, usage: usage, kind: isPerformance ? .performance : .efficiency)
+    }
+
+    var isPerformance: Bool { kind == .performance }
 
     var id: Int { index }
 }
 
-/// CPU 逐核负载与 P/E 分组占用(仅 CPU 模块有值):逐核环形图 +
-/// 分组占用两行展示的数据源。分组占用与 core-split 指标同口径
-/// (tick 差值聚合),独立存放供展开区直接渲染。
+nonisolated struct CPUCoreGroupUsage: Identifiable, Equatable, Sendable {
+    let kind: CPUCoreKind
+    let usage: Double
+    var id: CPUCoreKind { kind }
+}
+
+/// CPU 逐核负载与分组占用(仅 CPU 模块有值)，供逐核圆环和分组占用行共享。
+/// 生产采样目前提供 P/E 两组；S 核只由显式调试预览提供。
 nonisolated struct CPUCoreDetail: Equatable, Sendable {
     let cores: [CPUCoreLoad]
     let performanceUsage: Double
     let efficiencyUsage: Double?
+    var superUsage: Double? = nil
+
+    var groups: [CPUCoreGroupUsage] {
+        var result: [CPUCoreGroupUsage] = []
+        if let superUsage {
+            result.append(CPUCoreGroupUsage(kind: .superCore, usage: superUsage))
+        }
+        result.append(CPUCoreGroupUsage(kind: .performance, usage: performanceUsage))
+        if let efficiencyUsage {
+            result.append(CPUCoreGroupUsage(kind: .efficiency, usage: efficiencyUsage))
+        }
+        return result
+    }
 }
 
 nonisolated struct MonitorModule: Identifiable, Equatable, Sendable {

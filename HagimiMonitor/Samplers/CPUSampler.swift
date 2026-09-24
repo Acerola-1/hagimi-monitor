@@ -14,12 +14,18 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
     private var previousCPUInfo: host_cpu_load_info?
     /// 逐核 tick 历史,用于计算 P/E 核分组占用(与整机占用同口径的差值法)。
     private var previousPerCoreTicks: [host_cpu_load_info]?
-    /// 性能核的逻辑 CPU 编号集合。来自 IODeviceTree 的 cpu 节点(每节点带
-    /// cluster-type 与 cpu-id),启动时读一次即可:核心拓扑运行期不变。
-    /// 不能按 hw.perflevelN.physicalcpu 切片——Apple Silicon 上 P/E 核的
-    /// 逻辑编号顺序并非恒为 P 在前(实测 M4: cpu0-5=E、cpu6-9=P)。
-    /// 读不到(Intel 同构/沙盒受限)时为空集合,此时不产出 core-split 指标。
-    private let performanceCoreIndices: Set<Int> = readPerformanceCoreIndices()
+    /// 按核心类别划分的逻辑 CPU 编号集合。来自 IODeviceTree 的 cpu 节点
+    /// (每节点带 cluster-type 与 cpu-id),启动时读一次即可:核心拓扑运行期不变。
+    /// 不能按 hw.perflevelN.physicalcpu 切片——Apple Silicon 上各核类别的
+    /// 逻辑编号顺序并非恒为高性能核在前(实测 M4: cpu0-5=E、cpu6-9=P)。
+    /// 读不到(Intel 同构/沙盒受限)时 super/performance 均为空集合,
+    /// 此时与旧契约一致:不产出 core-split 指标。
+    private let coreClusters: CPUCoreClusters = readCoreClusters()
+    /// 性能及更强的逻辑 CPU 编号集合(S+P 或仅 P):core-split 指标的
+    /// 高占用组判定与逐核类别着色共用。
+    private var performanceCoreIndices: Set<Int> {
+        coreClusters.superCore.union(coreClusters.performance)
+    }
     #if DISPLAY_CONTROL
     private let smcReader: SMCReader? = SMCReader()
     #endif
@@ -94,14 +100,24 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
         // 首帧无历史不出指标。
         if let perCore = perCoreLoadInfo() {
             if let previous = previousPerCoreTicks, previous.count == perCore.count {
-                let pIndices = performanceCoreIndices.filter { $0 < perCore.count }
-                if !pIndices.isEmpty,
-                   let perfUsage = groupUsage(pIndices, current: perCore, previous: previous) {
-                    let eIndices = Set(0..<perCore.count).subtracting(performanceCoreIndices)
+                // S/P/E 三组同帧聚合:超核组仅在拓扑真实标出独立簇时出现,
+                // 双类芯片(M1–M4 及仅两组的 M5/M6)维持 P/E 两组不变。
+                let pIndices = coreClusters.performance.filter { $0 < perCore.count }
+                let sIndices = coreClusters.superCore.filter { $0 < perCore.count }
+                let highIndices = pIndices.union(sIndices)
+                if !highIndices.isEmpty,
+                   let perfUsage = groupUsage(highIndices, current: perCore, previous: previous) {
+                    let eIndices = Set(0..<perCore.count).subtracting(highIndices)
                     let eUsage = eIndices.isEmpty
                         ? nil
                         : groupUsage(eIndices, current: perCore, previous: previous)
-                    let value = eUsage.map { "\(percent(perfUsage)) / \(percent($0))" } ?? percent(perfUsage)
+                    let superUsage = sIndices.isEmpty
+                        ? nil
+                        : groupUsage(sIndices, current: perCore, previous: previous)
+                    // core-split 值保持「高占用组在前,能效组在后」;三组并存时
+                    // 超核并入前段文本,逐核环形图与分组占用行再细看 S/P 差异。
+                    let highText = superUsage.map { "\(percent($0)) / \(percent(perfUsage))" } ?? percent(perfUsage)
+                    let value = eUsage.map { "\(highText) / \(percent($0))" } ?? highText
                     resultMetrics.append(MonitorMetric(name: "core-split", value: value, numericValue: perfUsage))
                     // 逐核负载与分组占用同帧产出:环形图与分组数值同源,
                     // 保证两行展示的口径一致。
@@ -109,13 +125,14 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
                         CPUCoreLoad(
                             index: index,
                             usage: coreUsage(at: index, current: perCore, previous: previous),
-                            isPerformance: pIndices.contains(index)
+                            kind: cpuCoreKind(at: index, clusters: coreClusters)
                         )
                     }
                     cpuCoreDetail = CPUCoreDetail(
                         cores: cores,
                         performanceUsage: perfUsage,
-                        efficiencyUsage: eUsage
+                        efficiencyUsage: eUsage,
+                        superUsage: superUsage
                     )
                 }
             }
@@ -258,15 +275,71 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
     }
 }
 
-/// 读取 IODeviceTree 的性能核逻辑 CPU 编号集合。每个 cpu 节点带 cluster-type
-/// (Data,首字节 'P'/'E')与 cpu-id(Data,小端 UInt32 逻辑编号)。host_processor_info
-/// 数组索引即逻辑编号,但 P/E 核的编号顺序并非恒为 P 在前,故必须按每核
-/// cluster-type 归组而非切片。失败或 Intel 同构(无 P 簇)时返回空集合。
-nonisolated private func readPerformanceCoreIndices() -> Set<Int> {
-    var indices = Set<Int>()
+/// 单个核心的类别判定:按所在簇的字母归类。
+nonisolated func cpuCoreKind(at index: Int, clusters: CPUCoreClusters) -> CPUCoreKind {
+    if clusters.superCore.contains(index) { return .superCore }
+    if clusters.performance.contains(index) { return .performance }
+    return .efficiency
+}
+
+/// IODeviceTree 簇字母 → 面板核心类别的归类规则。
+/// Apple 的 cluster-type 字母与市场名称不同步(实测随代际演变):
+/// M1–M4 为 P(性能)/E(能效)两类;M5 起顶级核在 IORegistry 标为
+/// 独立簇字母——M5 Pro/Max 实测为 P/M/E 三簇,P 为超核、M 为性能核
+/// (hwloc #839,Apple 开发者生态工程团队提交)。因此不能把任一字母
+/// 固定映射为"性能核",须按字母强弱序自适应(弱 → 强):
+/// E < M < P < S。
+/// - E → 能效核
+/// - M → 性能核(M5 代际性能簇,仅与 P 并存出现)
+/// - P → 无更强字母时为超核,与 S 并存时降为性能核
+/// - S → 超核(预留:若后续代际使用独立 S 簇)
+/// - 未知字母 → 归入高占用组,避免新字母把核误划进能效组拉低读数
+/// 归类仅依赖字母组合,不依赖芯片型号清单,新代际无需改码。
+nonisolated struct CPUCoreClusters: Sendable, Equatable {
+    var superCore: Set<Int> = []
+    var performance: Set<Int> = []
+    var efficiency: Set<Int> = []
+
+    /// 从「逻辑编号 → 簇字母」映射构建归类结果。
+    init(logicalClusters: [Int: Character]) {
+        let letters = Set(logicalClusters.values)
+        for (logical, letter) in logicalClusters {
+            switch letter {
+            case "E":
+                efficiency.insert(logical)
+            case "M":
+                performance.insert(logical)
+            case "S":
+                superCore.insert(logical)
+            case "P":
+                // M5 Pro/Max:P 簇与 M 簇并存,P 是超核、M 为性能核
+                // (hwloc #839);S 在场时 S 才是顶级,P 降入性能组;
+                // M1–M4 及双簇代际:M/S 均缺席,P 就是常规性能核。
+                if letters.contains("M") {
+                    superCore.insert(logical)
+                } else {
+                    performance.insert(logical)
+                }
+            default:
+                // 未知字母按 Apple 官方 perflevel 语义处理:非 E 即
+                // 归入高占用组,避免新字母把核误划进能效组拉低读数。
+                performance.insert(logical)
+            }
+        }
+    }
+
+    init() {}
+}
+
+/// 读取 IODeviceTree 全部 CPU 节点的簇归属。每个 cpu 节点带 cluster-type
+/// (Data,单字母)与 cpu-id(Data,小端 UInt32 逻辑编号),host_processor_info
+/// 数组索引即逻辑编号。失败或 Intel 同构(无簇标注)时返回空归类,
+/// 采样侧维持旧契约:不产出 core-split 指标。
+nonisolated func readCoreClusters() -> CPUCoreClusters {
+    var logicalClusters: [Int: Character] = [:]
     var iterator: io_iterator_t = 0
     guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IOPlatformDevice"), &iterator) == KERN_SUCCESS else {
-        return indices
+        return CPUCoreClusters()
     }
     defer { IOObjectRelease(iterator) }
     while true {
@@ -278,13 +351,13 @@ nonisolated private func readPerformanceCoreIndices() -> Set<Int> {
             .takeRetainedValue() as? Data,
             let cpuID = IORegistryEntryCreateCFProperty(service, "cpu-id" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? Data,
-            cluster.first == 0x50, // 'P'
+            let letter = cluster.first.map({ Character(Unicode.Scalar($0)) }),
             cpuID.count >= MemoryLayout<UInt32>.size else {
             continue
         }
         // cpu-id 为小端 UInt32 逻辑编号(实测 cpu0..9 依次 0x00..0x09 小端)。
         let logical = cpuID.withUnsafeBytes { $0.loadUnaligned(as: UInt32.self) }
-        indices.insert(Int(logical))
+        logicalClusters[Int(logical)] = letter
     }
-    return indices
+    return CPUCoreClusters(logicalClusters: logicalClusters)
 }

@@ -1809,6 +1809,22 @@
         }
       }
     },
+    "cpu.detail.e-short": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "E"
+          }
+        }
+      }
+    },
     "cpu.detail.p-cores": {
       "localizations": {
         "en": {
@@ -1821,6 +1837,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "性能核"
+          }
+        }
+      }
+    },
+    "cpu.detail.p-short": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "P"
+          }
+        }
+      }
+    },
+    "cpu.detail.s-cores": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Super Core"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "超级核心"
+          }
+        }
+      }
+    },
+    "cpu.detail.s-short": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "S"
           }
         }
       }
