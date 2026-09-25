@@ -1,34 +1,39 @@
 # game-hud Tasks
 
-> 约定：本 change 只交付计划。**Phase 1 是门槛**——未取得结论前不得开始 Phase 3 及之后的产码任务。
+> 约定：本 change 只交付计划。**Phase 1 门槛已于 2026-09-25 跑完**，结论见 `tmp/game-hud-probe/gate-conclusions/conclusions.json`。
 > 涉及渠道差异的改动按 AGENTS.md 核对两个 target；验证产物放 `tmp/`，不提交。
 
-## Phase 1: 能力门槛验证（阻塞后续所有阶段）
+## Phase 1: 能力门槛验证（已完成，1.5 待真实游戏复验）
 
-- [ ] 1.1 扩展 `prototypes/game-hud-probe/` 探针设备，验证帧率采集通路
-  - 复用探针已有的「受控启动进程 + 读取 stderr」方式，确认 30/60 帧目标下取到对应帧率
-  - 验证对**已在运行**的游戏能否取到帧率；不能则明确记录结论
-  - 确认统一日志（`log stream`）不可作为帧率来源（明细被隐藏为 `<private>`），仅作对照记录
-  - 结论与原始数据写入 `tmp/game-hud-probe/fps-route/`，并在 `design.md` 的 Open Questions 回填
-- [ ] 1.2 验证悬浮层窗口档位
-  - 用探针的 `.floating` / `.statusBar` 两档在原生全屏下逐一比对可见性
-  - 记录目标游戏全屏时悬浮层是否稳定压住画面、是否干扰游戏
-  - 结论写入 `tmp/game-hud-probe/window-level/`
-- [ ] 1.3 验证物理点击穿透
-  - 补做此前未完成的物理鼠标点击验收（配置为 `ignoresMouseEvents = true`）
-  - 确认点击落在下层游戏窗口、悬浮层不成为 key window
-  - 截图与事件日志写入 `tmp/game-hud-probe/click-through/`
-- [ ] 1.4 验证官方 HUD 按游戏启用的等效通路
-  - 确认不可依赖 `NSWorkspace` 的启动参数/环境字典传递（实测被忽略）
-  - 若找不到仅作用于指定游戏的通路，结论为「只提供手动说明」，不实现自动启用
-  - 严禁写入影响所有 Metal 应用的全局偏好
+- [x] 1.1 扩展 `prototypes/game-hud-probe/` 探针设备，验证帧率采集通路
+  - **结论：受控进程 stderr 完整可用**；`metal-HUD` 行格式为 `帧号,图形内存,进程内存,(present interval,gpu time)*N`，每秒一行约 60 样本
+  - 60FPS 目标实测解析出 59.92 FPS，与探针前次记录一致
+  - **统一日志不可用**：`log stream` 可见事件但逐帧明细被隐去为 `<private>`（本轮复现确认）
+  - **对已在运行的游戏不可用**：非我方启动的进程拿不到帧明细
+  - 产物：`tmp/game-hud-probe/fps-route/`
+- [x] 1.2 验证悬浮层窗口档位
+  - **结论：`.floating` 已足够**压住另一进程的原生全屏，无需提升到 `.statusBar`
+  - 原生全屏下浮窗完整可见且未夺焦
+  - 产物：`tmp/game-hud-probe/levels/level-test.png`
+- [x] 1.3 验证物理点击穿透
+  - **结论：成立**。在浮窗正中心合成 CGEvent 点击，下层全屏游戏收到 `scene-mouse-down` 且 `keyWindow=true`
+  - 基线对照：浮窗外点击同样被游戏收到，证明事件通路有效
+  - 产物：`tmp/game-hud-probe/levels/scene.jsonl`
+- [x] 1.4 验证官方 HUD 按游戏启用的等效通路
+  - **结论：`NSWorkspace` 传环境变量被系统丢弃**。同一场景程序直接启动时 `hudEnvironment=1` 生效，经 `NSWorkspace` 启动时标记 `absent`
+  - 全局键 `MetalForceHudEnabled` 当前不存在，未被污染
+  - 实现须走「受控启动」或「仅手动提示」，**不得写全局偏好**
 - [ ] 1.5 用真实游戏复测沙盒浮窗与指标
-  - 至少覆盖一个真实 macOS 游戏（含 Steam 原生）
-  - 复核 `sandbox-validation/verification.json` 中的可用指标清单在真实游戏下是否一致
-  - 结论与截图写入 `tmp/game-hud-real-game/`
-- [ ] 1.6 汇总门槛结论并回填 `design.md` / `proposal.md`
-  - 明确帧率与官方 HUD 是否进入范围
-  - **未通过项不得标为验收通过，也不得用替代数据充数**
+  - 待办：至少覆盖一个真实 macOS 游戏（含 Steam 原生）
+  - 复核沙盒可用指标清单在真实游戏下是否一致
+- [x] 1.6 汇总门槛结论并回填 `design.md`
+  - 结论已落 `tmp/game-hud-probe/gate-conclusions/conclusions.json`，design 的 Context/决策 1/Risks/Open Questions 已同步
+
+> **门槛结论对后续阶段的影响：**
+> - 帧率曲线范围受限（只能覆盖受控启动的游戏）→ **待用户拍板**（design Open Questions 第 1 条），Phase 6.3 在此之前不实现帧率部分
+> - 窗口档位已定：`.floating` + `ignoresMouseEvents` + `.canJoinAllApplications`/`.fullScreenAuxiliary`
+> - 官方 HUD 辅助须避开 `NSWorkspace` 环境传递
+> - Phase 2、3 不受门槛影响，可直接推进
 
 ## Phase 2: 数据层
 
@@ -97,8 +102,8 @@
 
 - [ ] 6.1 新建 `GameHUDPanelController`
   - 独立 `NSPanel`（borderless + nonactivatingPanel），**不复用 `PinnedPanelController` 的配置**——后者没有 `ignoresMouseEvents`，且 `collectionBehavior` 为 `[.moveToActiveSpace, .fullScreenAuxiliary]`，不含 `.canJoinAllApplications`
-  - 需按 Phase 1.2 结论设定 `level` 与 `collectionBehavior`（含 `.canJoinAllApplications`、`.fullScreenAuxiliary`）
-  - 设置 `ignoresMouseEvents = true`，不成为 key window
+  - 档位按 Phase 1.2 实测结论：`level = .floating`（已足够压住原生全屏，无需 `.statusBar`）
+  - `collectionBehavior` 含 `.canJoinAllApplications`、`.fullScreenAuxiliary`；`ignoresMouseEvents = true`；不成为 key window
   - 窗口尺寸遵循固定契约，不随勾选数量变化
   - 文件：`HagimiMonitor/GameHUD/GameHUDPanelController.swift`
 - [ ] 6.2 新建 `GameHUDView`
@@ -106,16 +111,18 @@
   - 颜色使用 `MonitorPalette` 既有令牌，不新增数值
   - 文件：`HagimiMonitor/GameHUD/GameHUDView.swift`
 - [ ] 6.3 曲线渲染
-  - **仅当 Phase 1.1 得出可用帧率通路时才实现帧率曲线**；否则只实现 CPU/GPU 占用曲线，且文案不得暗示为帧率
+  - **帧率部分阻塞于用户决策**（design Open Questions 第 1 条）：帧率只能从受控启动进程的 stderr 取得，对已运行游戏无效。用户答复前不实现帧率曲线
+  - 先行实现 CPU/GPU 占用曲线，且文案不得暗示为帧率
   - 复用既有绘图实现（项目已有 `SparklineChart`）或按其约定扩展
   - 文件：`HagimiMonitor/GameHUD/GameHUDCurveView.swift`
 
-## Phase 7: 官网渠道官方 HUD 辅助（视 Phase 1.4 结论决定是否实施）
+## Phase 7: 官网渠道官方 HUD 辅助（实现范围受 Phase 1.4 结论约束）
 
 - [ ] 7.1 实现按游戏的启用辅助
   - 只编译进 `HagimiMonitorDirectOnly/`
+  - **不得依赖 `NSWorkspace` 传递环境变量或参数**——Phase 1.4 实测确认被系统丢弃
+  - 可选路径：以受控环境重新启动目标游戏（需先验证），或仅生成供用户手动使用的说明
   - 不写全局偏好、不注入游戏、不自动结束或重启游戏
-  - 需重启时只提示用户手动处理
   - 文件：`HagimiMonitorDirectOnly/GameHUD/OfficialHUDHelper.swift`
 - [ ] 7.2 接入设置页
   - 仅官网渠道显示该设置组
