@@ -2,273 +2,176 @@
 
 ## Purpose
 
-Defines the game HUD's game identification, auto-display behavior, metric catalog, overlay layout, curve rendering, optional official HUD assistance, and lifecycle management.
+定义 Game HUD 的游戏识别、窗口内视觉定位、渠道能力、硬件指标、官网版受控启动与官方 HUD 协作、FPS 统计及生命周期。独立浮窗不成为第三方游戏窗口的子窗口。
 
 ## ADDED Requirements
 
-### Requirement: 游戏自动识别
-Game HUD SHALL 依据前台应用的 bundle ID 判定是否为游戏候选项，并允许用户手动添加或排除；判定 SHALL NOT 以「使用了 Metal/OpenGL」作为充分条件。
+### Requirement: 游戏识别与显示门槛
 
-#### Scenario: 自动识别候选游戏
-- **WHEN** 前台应用为内置候选名单中的原生 macOS 游戏（含 Steam 原生游戏）
-- **THEN** Game HUD 激活并显示悬浮层
-- **AND** 判定来源为前台应用的 bundle ID 与候选名单的匹配结果
+Game HUD SHALL 仅在总开关启用、前台应用的 bundle ID 命中保守的游戏候选或用户添加名单、未被用户排除，且可确认该游戏的可见目标窗口及屏幕矩形时显示。使用 Metal/OpenGL 本身 SHALL NOT 视作游戏判据。
 
-#### Scenario: 用户手动添加游戏
-- **WHEN** 用户在设置中用 bundle ID 添加一个应用
-- **THEN** 该应用进入前台时激活 Game HUD
+#### Scenario: 匹配游戏进入前台
+- **WHEN** 总开关开启，匹配游戏成为前台，且目标游戏窗口的边界与所属屏幕可确认
+- **THEN** 硬件 HUD 在目标窗口内的指定下角视觉显示
+- **AND** Steam 启动器、登录器或浏览器仅在其本身被明确作为目标游戏加入且窗口可确认时才可触发
 
-#### Scenario: 用户排除候选游戏
-- **WHEN** 用户在设置中排除一个已自动识别的游戏
-- **THEN** 该应用进入前台时不激活 Game HUD
-- **AND** 排除判定优先于候选名单
+#### Scenario: 候选、手动添加与排除
+- **WHEN** 前台 bundle ID 属于内置候选或用户添加名单
+- **THEN** 该应用成为游戏候选
+- **AND** 用户排除名单优先于候选及添加名单
+- **AND** 自动候选不持久化到用户设置
 
-#### Scenario: 图形 API 不作为游戏判据
-- **WHEN** 前台应用使用 Metal 或 OpenGL 但不在候选名单与用户名单中（如浏览器、视频播放器）
-- **THEN** Game HUD 保持隐藏
+#### Scenario: 没有可靠目标窗口
+- **WHEN** 游戏没有可见窗口、窗口边界无法确认、多个候选窗口无法明确选择，或目标窗口小到放不下 HUD
+- **THEN** 硬件 HUD 隐藏，不退回整块显示器的角落
+- **AND** 不要求录屏、辅助功能或输入监控授权来绕过此门槛
 
-#### Scenario: 非游戏应用前台
-- **WHEN** 前台应用既不在候选名单也不在用户添加列表中，且不在排除列表中
-- **THEN** Game HUD 保持隐藏
+#### Scenario: 游戏失焦、窗口关闭或退出
+- **WHEN** 匹配游戏失去前台、目标窗口不可见或关闭、最终游戏进程退出，或总开关关闭
+- **THEN** 硬件 HUD 立即隐藏，窗口对象可以保留以供下次显示
+- **AND** 不因启动器仍存活而继续显示已退出游戏的 HUD
 
-#### Scenario: 转译与虚拟化环境不承诺识别
-- **WHEN** 游戏运行在 CrossOver、Parallels 等转译或虚拟化宿主中
-- **THEN** 首版不承诺识别宿主内部的具体游戏
-- **AND** 用户可手动添加宿主应用；不显示针对该场景的特殊提示
+#### Scenario: 普通启动
+- **WHEN** 用户自行启动的游戏满足显示门槛
+- **THEN** 硬件 HUD 照常显示
+- **AND** 不声称已控制或已读取官方 HUD 的状态、位置及内容
 
-### Requirement: 显示状态机
-Game HUD SHALL 依据匹配游戏的前台状态切换悬浮层显示与隐藏，并保持总开关与实际显示状态可区分。
+#### Scenario: 转译和虚拟化
+- **WHEN** 游戏运行在 CrossOver、Parallels 等宿主内部
+- **THEN** 首版不承诺识别宿主内部具体游戏
+- **AND** 用户可手动加入宿主，但仍必须满足可确认目标窗口的显示门槛
 
-#### Scenario: 游戏进入前台
-- **WHEN** 匹配的游戏应用成为前台应用
-- **THEN** Game HUD 显示悬浮层
-- **AND** 悬浮层位于游戏所在屏幕的配置角落
+### Requirement: 窗口相对布局
 
-#### Scenario: 游戏失去前台
-- **WHEN** 匹配的游戏失去前台焦点
-- **THEN** Game HUD 隐藏悬浮层
-- **AND** 悬浮层窗口不被销毁，仅隐藏
+硬件 HUD SHALL 是独立、borderless、非激活且点击穿透的浮窗。它 SHALL 在已确认的目标游戏窗口矩形内按左下或右下布局，默认右下；窗口化、无边框与原生全屏都遵守这一门槛。
 
-#### Scenario: 游戏退出
-- **WHEN** 匹配的游戏完全退出
-- **THEN** Game HUD 隐藏悬浮层
-- **AND** 保持总开关启用状态，等待下次匹配游戏进入前台
-
-#### Scenario: 总开关启用但无匹配游戏
-- **WHEN** 用户启用 Game HUD 总开关但前台应用不是匹配游戏
-- **THEN** 不出现悬浮层
-- **AND** 该状态与「总开关已启用」在 UI 上可区分
-
-#### Scenario: 多显示器环境
-- **WHEN** 存在多个显示器且匹配游戏在非主显示器上
-- **THEN** 悬浮层显示在该游戏所在屏幕的配置角落
-
-### Requirement: 监控项目目录
-Game HUD SHALL 提供仅包含游戏相关指标的勾选目录；指标来源 SHALL 为既有采样通道的真实读数，且 SHALL NOT 伪造或换算为未采集的数值。
-
-#### Scenario: 目录不含与游戏无关的项目
-- **WHEN** 代码访问 Game HUD 的可用指标目录
-- **THEN** 目录不包含 IP 地址、SSID、公网 IP、网关延迟、蓝牙设备、电池健康、电池循环次数、电池电压/电流/容量、充电限制、剩余时间与一般电脑信息
-- **AND** 目录不包含完整进程表、历史报告与控制按钮
-
-#### Scenario: 候选指标与既有指标 ID 对齐
-- **WHEN** 实现者把指标接入 HUD
-- **THEN** 每项 SHALL 复用 `MonitorKind.availableMetrics` 中已存在的指标 ID，映射关系见下表
-- **AND** SHALL NOT 在 HUD 内新建与既有 ID 同义或近义的指标标识
-
-| HUD 展示项 | 模块 | 指标 ID | 数据性质 |
-|---|---|---|---|
-| CPU 占用 | `.cpu` | `system` / `user` | 整机聚合 |
-| GPU 占用 | `.gpu` | `render` | 整机聚合 |
-| 内存占用 | `.memory` | `used` | 整机 |
-| 压缩内存 | `.memory` | `compressed` | 整机 |
-| Swap 占用 | `.memory` | `swap-used` | 整机 |
-| 内存压力 | `.memory` | `pressure` | 整机 |
-| 系统功耗 | `.battery` | `power` | 整机遥测，非 CPU/GPU 分项 |
-| 热压力 | `.cpu` | `thermal-pressure` | 公开 API，双渠道可用 |
-| GPU 内存（驱动聚合） | `.gpu` | `gpu-memory` | 驱动聚合值，非游戏专属显存 |
-| GPU 内存分配（驱动聚合） | `.gpu` | `allocated` | 驱动聚合值，非游戏专属显存 |
-| CPU 温度 | `.cpu` | `temperature` | 沙盒下取值为空 |
-| 分项功耗（CPU/GPU/ANE/屏幕） | `.battery` | `cpu-power` / `gpu-power` / `ane-power` / `display-power` | 仅官网渠道 |
-
-#### Scenario: GPU 内存项的语义标注
-- **WHEN** 悬浮层渲染 `gpu-memory` 或 `allocated`
-- **THEN** 展示语义 SHALL 为「GPU 驱动聚合内存」，SHALL NOT 标注为「显存容量」「游戏显存占用」或「独立显存」
-- **AND** 该限制来自数据源本身：读数为 IOAccelerator 驱动聚合字节数
-
-#### Scenario: 沙盒渠道不出现的项目
-- **WHEN** App Store 渠道（沙盒环境）构建指标目录
-- **THEN** CPU 温度与分项功耗不出现于目录，也不以灰显或占位形式出现
-- **AND** 该过滤 SHALL 依据运行时可读性判定，而不是仅依据编译条件——SMC 代码在两个渠道均被编译，差异来自沙盒运行时的访问拒绝
-
-#### Scenario: 官网渠道追加项目
-- **WHEN** 官网渠道（非沙盒）构建指标目录
-- **THEN** 在基础目录上追加 CPU 温度与分项功耗
-- **AND** 这些项目可被用户勾选
-
-#### Scenario: 本机没有对应硬件的项目
-- **WHEN** 某项目在当前硬件上不存在（如无风扇机型的风扇转速）
-- **THEN** 该项目不出现在目录中
-
-#### Scenario: 已勾选项目暂时没有读数
-- **WHEN** 某已勾选项目在本次采样中取值失败或暂时不可用
-- **THEN** 悬浮层保留该行并把值显示为 `—`
-- **AND** 不隐藏该项目、不显示假零值、不改变整体布局高度
-
-### Requirement: 悬浮层布局
-Game HUD 悬浮层 SHALL 位于配置角落、始终点击穿透且不抢焦点。
-
-#### Scenario: 默认位置
-- **WHEN** Game HUD 首次激活
-- **THEN** 悬浮层位于游戏所在屏幕的右下角
-- **AND** 距屏幕边缘有默认偏移以避免被 Dock 遮挡
-
-#### Scenario: 角落与偏移配置
-- **WHEN** 用户在设置中更改角落或偏移量
-- **THEN** 悬浮层按新配置移动到对应角落
-- **AND** 该配置为全局配置，对所有游戏生效
+#### Scenario: 窗口移动、缩放和换屏
+- **WHEN** 目标游戏窗口移动、改变尺寸、从窗口化切到全屏或跨显示器移动
+- **THEN** 重新确认其边界、所属屏幕和可用区域，并更新硬件 HUD 位置
+- **AND** 几何或窗口身份暂时不确定时先隐藏，确认后再显示
+- **AND** 不在旧屏幕或旧 Space 留下浮窗
 
 #### Scenario: 点击穿透
-- **WHEN** 悬浮层显示时
-- **THEN** 鼠标事件穿透到下层游戏窗口
-- **AND** 用户无法点击或拖动悬浮层
-- **AND** 悬浮层不成为 key window、不夺取游戏焦点
+- **WHEN** 硬件 HUD 显示
+- **THEN** 鼠标事件穿透到游戏，浮窗不成为 key window，不夺焦
+- **AND** 用户不能直接点击或拖动 HUD；位置从设置页调整
 
-#### Scenario: 布局内容
-- **WHEN** 悬浮层渲染
-- **THEN** 只显示已勾选项目的当前值与单位
-- **AND** 布局为紧凑形式，不出现指标名称长标签
+#### Scenario: 可用区域不足
+- **WHEN** 所选下角与安全边距、Dock、菜单栏或窗口尺寸冲突
+- **THEN** 优先在目标窗口边界内按布局规则避让
+- **AND** 无法在目标窗口内完整放下时隐藏，而不裁掉内容、不盖到其他应用窗口
 
-#### Scenario: 选太多项目的溢出处理
-- **WHEN** 已勾选项目的数量超出悬浮层可容纳范围
-- **THEN** 悬浮层 SHALL 保持预先确定的尺寸契约，不随勾选数量逐次改变高度
-- **AND** 具体截断或滚动策略由 design.md 决定；本 spec 只约束「布局不抖动」
+#### Scenario: 内容稳定
+- **WHEN** 硬件读数暂时缺失或值变化
+- **THEN** 已启用的硬件行保持固定尺寸并以 `—` 表示暂时缺值
+- **AND** 用户勾选过多时遵守事先定义的内容容量与溢出规则，不随每个采样周期抖动高度
 
-### Requirement: 帧率与曲线
-Game HUD SHALL 在数据来源可用时展示帧率曲线；SHALL NOT 用屏幕刷新率、录屏帧率或采样频率冒充游戏帧率。
+### Requirement: 指标目录和数据语义
 
-#### Scenario: 曲线数据来源必须已验证
-- **WHEN** 实现者接入帧率曲线
-- **THEN** 数据来源 SHALL 为经过实机验证的通路
-- **AND** SHALL NOT 把统一日志（`log stream`）作为帧率来源——实测中其逐帧明细被系统隐藏为 `<private>`
-- **AND** SHALL NOT 在未验证的通路上先实现曲线 UI
+HUD SHALL 复用既有硬件采样结果和既有指标 ID，但其选择与主面板显隐独立。目录能力、会话能力与本次采样值 SHALL 分开判断；不得把临时缺值视为设备永久不支持。
 
-#### Scenario: 帧率来源不可用时
-- **WHEN** 当前游戏未提供已验证可用的帧率数据
-- **THEN** Game HUD 不显示帧率曲线
-- **AND** 不注入游戏、不拦截其渲染、不以其他频率数据替代
+#### Scenario: 基础目录
+- **WHEN** 两渠道构建硬件指标目录
+- **THEN** 提供整机 CPU 占用、GPU Render/Tiler 占用、整机内存已用量、GPU 驱动聚合内存
+- **AND** CPU 占用从现有 CPU 模块真实总值或 `system`+`user` 同口径取得，GPU Render/Tiler 分别读 `render`/`tiler`，内存读 `used`，GPU 内存读 `gpu-memory`
+- **AND** 缺少 Render 或 Tiler 分项时不伪造另一项或把某一项冒充整机 GPU 占用
 
-#### Scenario: 非帧率负载曲线
-- **WHEN** 悬浮层展示 CPU/GPU 占用曲线
-- **THEN** 该曲线语义 SHALL 为整机占用历史，SHALL NOT 标注为帧率或帧时间
+#### Scenario: 条件可用目录
+- **WHEN** 本机现有采样通道真实产出整机功耗
+- **THEN** 两渠道可提供可选的 `power`，标为整机功耗且不暗示 CPU/GPU 分项
+- **WHEN** 官网版运行时可读 CPU/GPU 分项功耗或 CPU 温度
+- **THEN** 对应 `cpu-power`、`gpu-power`、CPU `temperature` 可单独勾选
+- **AND** App Store 版不显示不可读的 CPU 温度和分项功耗
 
-### Requirement: 官方 Metal HUD 集成
-官网渠道 SHALL 可提供针对指定游戏的可选启用辅助；两个渠道 SHALL NOT 修改影响所有 Metal 应用的全局开关、不注入游戏、不自动结束或重启游戏。
+#### Scenario: 不进入首版目录
+- **WHEN** 用户查看游戏 HUD 指标目录
+- **THEN** 不出现 GPU 温度、风扇、0.1% Low、IP/SSID/网速、蓝牙、电池健康、磁盘、进程表及历史报告
+- **AND** 不把 GPU 驱动聚合内存命名为“显存”“游戏显存”或独立 VRAM 容量
 
-#### Scenario: 不修改全局开关
-- **WHEN** 用户启用官方 HUD 辅助
-- **THEN** 应用 SHALL NOT 写入影响所有 Metal 应用的全局偏好
-- **AND** 作用范围 SHALL 限于用户指定的目标游戏
+#### Scenario: 主面板独立性
+- **WHEN** 用户在主面板隐藏 CPU、GPU、内存或电源模块，但在游戏 HUD 勾选相应指标
+- **THEN** 游戏 HUD 仍从未经主面板显隐过滤的既有采样快照获取真实数据
+- **AND** 不另启硬件采样器或提高既有采样频率
 
-#### Scenario: 不自动重启游戏
-- **WHEN** 官方 HUD 需要重启游戏才能生效
-- **THEN** 应用只提示用户手动处理
-- **AND** SHALL NOT 自动结束或重启游戏进程
+#### Scenario: 暂时缺值
+- **WHEN** 已勾选且本机有能力的硬件指标某次采样失败
+- **THEN** 保留该行并显示 `—`，不填假零值
+- **AND** GPU 驱动字段缺失时不从其他内存数字推算
 
-#### Scenario: 环境变量按进程传递
-- **WHEN** 应用尝试为目标游戏启用官方 HUD
-- **THEN** SHALL NOT 依赖通过 `NSWorkspace` 启动参数或环境字典传递到已运行/已启动的游戏——实测中该环境与参数被忽略
-- **AND** 若实现依赖重新以受控环境启动游戏，SHALL 先验证该路径，否则只输出供用户手动使用的说明
+### Requirement: 渠道和受控启动
 
-#### Scenario: 启用失败不影响硬件 HUD
-- **WHEN** 官方 HUD 辅助启用失败或不可用
-- **THEN** 硬件指标悬浮层照常工作
+App Store 版 SHALL 只提供硬件 HUD。官网版 MAY 在用户主动选择的游戏上提供受控启动增强；受控启动不是硬件 HUD 显示的必要条件。
 
-#### Scenario: 沙盒渠道不承诺代开官方 HUD
-- **WHEN** App Store 渠道运行
-- **THEN** 不提供代开官方 HUD 的能力
-- **AND** 不因此隐藏 Game HUD 的其余功能
+#### Scenario: 官网版增强启动
+- **WHEN** 用户通过官网版入口启动指定游戏
+- **THEN** 仅对该启动会话设置官方 HUD 所需环境与固定指标预设
+- **AND** 不使用已实测丢弃环境与参数的 `NSWorkspace.OpenConfiguration` 作为该通路
+- **AND** 不写全局 `MetalForceHudEnabled`、不注入游戏、不自动结束或重启已有游戏
 
-### Requirement: 全局配置
-Game HUD SHALL 使用一套全局配置，不按游戏分别保存。
+#### Scenario: 官方 HUD 固定预设
+- **WHEN** 官网版受控启动通过真实游戏验证
+- **THEN** 官方 HUD 在所选左/右侧的上角显示渲染信息，硬件 HUD 在同一目标游戏窗口的同侧下角显示
+- **AND** 官方预设保留 FPS、帧间隔或帧率曲线、GPU 时间和 Metal layer 尺寸，移除设备头、内存及磁盘等重复项
+- **AND** 官方预设不受硬件指标勾选控制；MetalFX 瞬态显示由游戏和官方 HUD 决定
+- **AND** Metal layer 尺寸不标成游戏内部渲染分辨率
 
-#### Scenario: 指标选择全局生效
-- **WHEN** 用户勾选或取消勾选某项目
-- **THEN** 该选择对所有游戏生效
+#### Scenario: 配置运行中改变
+- **WHEN** 官网版受控会话正在运行且用户改变左右布局
+- **THEN** 当前会话的官方与硬件 HUD 均保持启动时一侧
+- **AND** 设置页说明新侧边在下一次由本应用启动该游戏时生效
+- **WHEN** 仅硬件 HUD 的普通会话改变左右布局
+- **THEN** 硬件 HUD 可在重新确认窗口边界后立即移动
 
-#### Scenario: 布局配置全局生效
-- **WHEN** 用户更改角落或偏移量
-- **THEN** 该配置对所有游戏生效
-- **AND** 游戏名单只决定「是否启用」，不承载指标与布局差异
+#### Scenario: 启动链未验证或失败
+- **WHEN** Steam 或其他启动器未证明最终游戏进程收到官方 HUD 配置和可读 stderr，或目标游戏已在运行
+- **THEN** 不承诺官方 HUD 代开及 FPS 统计
+- **AND** 满足游戏与窗口显示门槛时，硬件 HUD 继续工作
 
-### Requirement: 工具区入口
-主面板工具区 SHALL 提供 Game HUD 的快速开关，与设置页总开关同源。
+### Requirement: FPS 统计块
 
-#### Scenario: 按钮状态
-- **WHEN** 工具区渲染
-- **THEN** 显示 Game HUD 开关按钮，激活态反映总开关状态
+官网版 SHALL 仅对已确认最终游戏进程的有效逐帧 stderr 提供独立的 FPS 统计块。统一日志、屏幕刷新率和硬件采样频率 SHALL NOT 用作游戏帧率。
 
-#### Scenario: 按钮切换
-- **WHEN** 用户点击该按钮
-- **THEN** 切换与设置页相同的总开关
-- **AND** 不打开设置窗口
-- **AND** 切换后立即影响后续的游戏前台判定
+#### Scenario: 最近 60 秒统计
+- **WHEN** 当前受控会话积累了连续、有效且足量的最近 60 秒逐帧 present interval
+- **THEN** 展示同一 60 秒窗口的平均 FPS 与 1% Low，并标明窗口口径
+- **AND** 1% Low 的算法、有效样本最低数、焦点切换与日志缺口处理在实现前固定并以测试覆盖
+- **AND** 首版不展示 0.1% Low，不把 1% Low 称作官方 `Missed` 丢帧数
 
-#### Scenario: 状态反馈
-- **WHEN** 用户切换总开关
-- **THEN** 显示简短状态提示并在数秒后自动消失
+#### Scenario: 会话没有逐帧能力
+- **WHEN** 游戏非受控启动、最终游戏进程身份或 stderr 未确认，或日志断流使统计无效
+- **THEN** 整个 FPS 统计块隐藏，而不是永久显示 `—`
+- **AND** 硬件 HUD 不因此消失
 
-### Requirement: 生命周期与性能
-Game HUD SHALL 复用既有采样通道，不引入独立采样器或每帧硬件轮询。
+#### Scenario: 统计块出现或隐藏
+- **WHEN** 最近 60 秒统计从无效转为有效，或从有效转为无效
+- **THEN** 硬件指标区仍锚定目标窗口下角，不因统计块显隐移动
+- **AND** 统计块只向上占用目标窗口内的可用区域；高度不足时隐藏统计块，不裁切硬件读数
 
-#### Scenario: 复用既有采样数据
-- **WHEN** Game HUD 需要指标数据
-- **THEN** 从既有采样发布通道读取
-- **AND** 不启动独立的采样器或高频定时器
+### Requirement: 生命周期和性能
 
-#### Scenario: 隐藏时不渲染
-- **WHEN** 悬浮层隐藏
-- **THEN** 不执行渲染或重绘
+Game HUD SHALL 复用 MonitorStore 的采样与发布链路，并限制窗口追踪、stderr 解析及绘制的开销。
 
-#### Scenario: 数据刷新频率
-- **WHEN** 悬浮层显示
-- **THEN** 刷新频率与既有面板采样一致
-- **AND** 不因悬浮层显示而提高硬件查询频率
+#### Scenario: 隐藏与刷新
+- **WHEN** 硬件 HUD 隐藏
+- **THEN** 不重绘 HUD，不继续执行仅为 HUD 服务的窗口追踪与帧统计工作
+- **AND** 不改变现有监控主采样频率
 
-### Requirement: 设置界面
-设置窗口 SHALL 提供 Game HUD 配置页，包含总开关、项目勾选、应用名单与布局配置。
+#### Scenario: 双 HUD 性能验收
+- **WHEN** 官网版增强功能进入真实游戏验收
+- **THEN** 在同一游戏与场景下比较无 HUD、仅官方 HUD、双 HUD 与日志统计的帧率、1% Low、卡顿和资源开销
+- **AND** 未经真实游戏验证，不把探针通过或编译通过表述为性能验收通过
 
-#### Scenario: 设置页内容
-- **WHEN** 用户打开 Game HUD 设置页
-- **THEN** 页面包含总开关、监控项目勾选列表、应用名单与悬浮层布局配置
-- **AND** 官网渠道额外包含官方 HUD 辅助说明
+### Requirement: 设置与本地化
 
-#### Scenario: 项目勾选列表
-- **WHEN** 用户查看监控项目
-- **THEN** 列表只显示本渠道与当前硬件可用的项目
-- **AND** 勾选状态持久化
+设置页 SHALL 提供总开关、可用指标勾选、游戏候选/添加/排除名单、左/右布局与渠道对应的能力说明；主面板工具区 SHALL 控制同一总开关。所有用户可见文案 SHALL 接入 `Localizable.xcstrings` 的中英翻译。
 
-#### Scenario: 应用名单管理
-- **WHEN** 用户查看应用名单
-- **THEN** 可查看自动识别候选并排除其中项目
-- **AND** 可手动添加与移除应用
+#### Scenario: 总开关与状态
+- **WHEN** 总开关开启但没有匹配且窗口可确认的前台游戏
+- **THEN** HUD 隐藏，设置与工具区仍显示总开关已开启
+- **AND** 用户可区分“允许自动显示”与“当前正在显示”
 
-#### Scenario: 布局配置
-- **WHEN** 用户查看布局配置
-- **THEN** 可选择四角之一并调整偏移量
-
-### Requirement: 本地化
-Game HUD 的所有用户可见文案 SHALL 通过 `String(localized:)` 接入 `Localizable.xcstrings` 并补齐现有中英翻译。
-
-#### Scenario: 设置与提示文案
-- **WHEN** 系统语言为英文
-- **THEN** 设置页与状态提示显示英文
-
-#### Scenario: 悬浮层单位不翻译
-- **WHEN** 悬浮层显示数值与单位
-- **THEN** 单位符号（如 `%`、`W`、`°C`）不翻译
-
-#### Scenario: xcstrings 编辑方式
-- **WHEN** 实现者补充本地化
-- **THEN** SHALL 按 JSON 结构编辑 `HagimiMonitor/Localizable.xcstrings`
-- **AND** SHALL NOT 引入无关重排
+#### Scenario: 渠道说明
+- **WHEN** App Store 版显示设置页
+- **THEN** 不出现受控启动、官方 HUD 或 FPS 统计的操作入口
+- **WHEN** 官网版显示设置页
+- **THEN** 清楚区分普通硬件会话与已验证的受控增强会话，并标明运行中布局修改的下次启动生效规则
