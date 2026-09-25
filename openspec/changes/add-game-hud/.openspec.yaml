@@ -1,0 +1,19 @@
+schema: spec-driven
+created: 2026-09-25
+
+artifacts:
+  proposal:
+    status: done
+    path: proposal.md
+  specs:
+    status: done
+    paths:
+      - specs/game-hud/spec.md
+      - specs/settings-window/spec.md
+      - specs/monitor-panel/spec.md
+  design:
+    status: done
+    path: design.md
+  tasks:
+    status: done
+    path: tasks.md
