@@ -66,10 +66,14 @@ struct MonitorPalette {
         }
     }
 
+    /// 快捷功能统一强调色 Hex:全部工具共用一紫,激活状态一眼可辨,
+    /// 供 SwiftUI 与 AppKit (如 MenuBarHUDBadge) 统一定义单源真理。
+    static let quickToolTintHex: UInt32 = 0xA855F7
+
     /// 快捷功能统一强调色:全部工具共用一紫,激活状态一眼可辨,
     /// 不随主题切换漂移。
     var quickToolTint: Color {
-        Color(hex: 0xA855F7)
+        Color(hex: Self.quickToolTintHex)
     }
 
     /// 快捷功能磁贴点亮态底色:强调色低透明铺底,深色模式下稍亮

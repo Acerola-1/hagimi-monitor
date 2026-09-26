@@ -11,6 +11,8 @@ final class AccessibilityPermissionGuide {
     enum Domain {
         case accessibility
         case inputMonitoring
+        /// 屏幕录制(Game HUD 帧率统计):系统设置的「屏幕录制」列表。
+        case screenRecording
     }
 
     private var panel: NSPanel?

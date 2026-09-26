@@ -159,13 +159,14 @@ extension StaticMetricSizing {
         ])),
         AuditEntry(kind: .cpu, name: "core-split", layout: .specialForm),
         // GPU(bytes() 千进制两位小数,最宽形态在百 GB 内)
+        AuditEntry(kind: .gpu, name: "usage", layout: .measured(WorstValue(number: "100%", unit: nil))),
+        // 时钟态驻留是「档位 + 占比」的组合串,最宽形态 P15 100%;限频与功耗上限为百分比。
+        AuditEntry(kind: .gpu, name: "clock-state", layout: .measured(WorstValue(number: "P15 100%", unit: nil))),
         AuditEntry(kind: .gpu, name: "gpu-memory", layout: .measured(WorstValue(number: "99.99 GB", unit: nil))),
         AuditEntry(kind: .gpu, name: "allocated", layout: .measured(WorstValue(number: "99.9 GB", unit: nil))),
         AuditEntry(kind: .gpu, name: "render", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .gpu, name: "tiler", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .gpu, name: "temperature", layout: .measured(WorstValue(number: "100", unit: "°C"))),
-        // 时钟态驻留是「档位 + 占比」的组合串,最宽形态 P15 100%;限频与功耗上限为百分比。
-        AuditEntry(kind: .gpu, name: "clock-state", layout: .measured(WorstValue(number: "P15 100%", unit: nil))),
         AuditEntry(kind: .gpu, name: "throttle", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .gpu, name: "power-cap", layout: .measured(WorstValue(number: "100%", unit: nil))),
         // 内存(used/swap/compressed 为任意小数,契约覆盖 ≤128GB 常规内存;

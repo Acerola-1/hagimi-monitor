@@ -6,6 +6,7 @@ struct SettingsRootView: View {
     let store: MonitorStore
     @State private var selection: SettingsRoute = .general
 
+
     var body: some View {
         HStack(spacing: 0) {
             SettingsSidebar(selection: $selection, settings: settings, fanAvailable: store.fanAvailable)
@@ -49,6 +50,12 @@ struct SettingsRootView: View {
 
         case .quickTools:
             QuickToolsSettingsView(settings: settings)
+
+        #if DIRECT_DISTRIBUTION
+        case .gameHUD:
+            GameHUDSettingsView(settings: settings)
+        #endif
+
 
         case .statistics:
             StatisticsSettingsView(recorder: store.statisticsRecorder, settings: settings) {

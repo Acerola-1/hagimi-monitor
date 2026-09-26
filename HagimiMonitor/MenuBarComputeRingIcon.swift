@@ -25,14 +25,14 @@ enum MenuBarComputeRingIcon {
         Int(min(100.0, max(0.0, load)).rounded())
     }
 
-    private static func cacheKey(loadBucket: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool) -> NSString {
-        "\(loadBucket)|\(darkMode ? 1 : 0)|\(loadLevel.cacheIndex)|\(showsAlert ? 1 : 0)" as NSString
+    private static func cacheKey(loadBucket: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool, showsHUDBadge: Bool) -> NSString {
+        "\(loadBucket)|\(darkMode ? 1 : 0)|\(loadLevel.cacheIndex)|\(showsAlert ? 1 : 0)|\(showsHUDBadge ? 1 : 0)" as NSString
     }
 
-    static func image(load: Double, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool = false) -> NSImage {
+    static func image(load: Double, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool = false, showsHUDBadge: Bool = false) -> NSImage {
         let loadBucket = loadBucket(for: load)
         let canonicalLoad = Double(loadBucket)
-        let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel, showsAlert: showsAlert)
+        let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel, showsAlert: showsAlert, showsHUDBadge: showsHUDBadge)
         lock.lock()
         if let cached = cache.object(forKey: key) {
             lock.unlock()
@@ -57,6 +57,8 @@ enum MenuBarComputeRingIcon {
             drawRing(style: style, center: NSPoint(x: rect.midX, y: rect.midY))
             if showsAlert {
                 MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
+            } else if showsHUDBadge {
+                MenuBarHUDBadge.draw(in: rect, darkMode: isDark)
             }
             return true
         }

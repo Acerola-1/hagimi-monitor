@@ -862,6 +862,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
         let isDark = appearance.isDark
         let showsAlert = PressureAlertCenter.shared.menuBarUnread
+        // Game HUD 徽章:硬件浮窗显示中时点亮(与告警红点同位互斥,告警优先)。
+        // Game HUD 仅官网版提供,沙盒恒无徽章。
+        #if DIRECT_DISTRIBUTION
+        let showsHUDBadge = AppDelegate.shared?.gameHUDCoordinator.isShowing ?? false
+        #else
+        let showsHUDBadge = false
+        #endif
 
         // 环模式:MenuBarComputeRingIcon 已直接产出一张缓存好的 21×21 AppKit NSImage,
         // 无需再走 SwiftUI + ImageRenderer 二次光栅化。直接赋给 button.image,可绕开
@@ -877,7 +884,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
                 load: store.loadAnimator.displayedComputeLoad,
                 darkMode: isDark,
                 loadLevel: store.haloRingLoadLevel,
-                showsAlert: showsAlert
+                showsAlert: showsAlert,
+                showsHUDBadge: showsHUDBadge
             )
             // 负载未跨整数桶 / 外观未变时,image(...) 返回同一缓存 NSImage 对象。此时跳过
             // button.image 重新赋值:$modules 每秒 tick 都会触发本方法,重复赋同一张图会让

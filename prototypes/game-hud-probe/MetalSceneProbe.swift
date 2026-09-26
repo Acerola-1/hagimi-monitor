@@ -134,7 +134,8 @@ private final class SceneDelegate: NSObject, NSApplicationDelegate, NSWindowDele
         view.autoresizingMask = [.width, .height]
         view.colorPixelFormat = .bgra8Unorm
         view.clearColor = MTLClearColor(red: 0.025, green: 0.055, blue: 0.1, alpha: 1)
-        view.preferredFramesPerSecond = 60
+        let requestedFPS = Int(launchEnvironment["HAGIMI_FPS_TARGET"] ?? "") ?? 60
+        view.preferredFramesPerSecond = requestedFPS
         if noHUD {
             hudVisible = false
             (view.layer as? CAMetalLayer)?.developerHUDProperties = ["mode": "disabled", "logging": "disabled"]
@@ -191,6 +192,7 @@ private final class SceneDelegate: NSObject, NSApplicationDelegate, NSWindowDele
         case "b": toggleBorderless()
         case "1": view.preferredFramesPerSecond = 30
         case "2": view.preferredFramesPerSecond = 60
+        case "3": view.preferredFramesPerSecond = 120
         case "h":
             if !noHUD {
                 hudVisible.toggle()
@@ -232,7 +234,7 @@ private final class SceneDelegate: NSObject, NSApplicationDelegate, NSWindowDele
         let explicitlyEnabled = launchEnvironment["MTL_HUD_ENABLED"] == "1"
         let hudState = noHUD ? "OFF (forced)" : (explicitlyEnabled ? (hudVisible ? "enabled" : "hidden") : "system default")
         let marker = launchEnvironment["HAGIMI_ENV_PROBE"] ?? "absent"
-        status.stringValue = "METAL SCENE · \(mode) · Official HUD: \(hudState)\nF: full screen  B: borderless  A: activate  1/2: 30/60  Q: quit\nLaunch env marker: \(marker) · No telemetry sent to overlay\nClicks: \(clicks)   Keys: \(keys)   Target cap: \(view.preferredFramesPerSecond)   Last: \(lastInput)"
+        status.stringValue = "METAL SCENE · \(mode) · Official HUD: \(hudState)\nF: full screen  B: borderless  A: activate  1/2/3: 30/60/120  Q: quit\nLaunch env marker: \(marker) · No telemetry sent to overlay\nClicks: \(clicks)   Keys: \(keys)   Target cap: \(view.preferredFramesPerSecond)   Last: \(lastInput)"
     }
 
     func windowDidEnterFullScreen(_ notification: Notification) {
