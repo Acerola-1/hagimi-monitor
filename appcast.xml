@@ -3,46 +3,30 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.6.4</title>
-            <pubDate>Thu, 24 Sep 2026 11:33:16 +0000</pubDate>
-            <sparkle:version>92</sparkle:version>
-            <sparkle:shortVersionString>1.6.4</sparkle:shortVersionString>
+            <title>1.6.5</title>
+            <pubDate>Sat, 26 Sep 2026 18:47:19 +0000</pubDate>
+            <sparkle:version>93</sparkle:version>
+            <sparkle:shortVersionString>1.6.5</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
-## 更新内容
-
 ## 更新内容
 
 ### 中文
 
 #### 新功能
 
-- 面板长按拖动排序：所有模块行与指标格支持长按拖动换位，拖起时浮起预览、落点实时归位；右键（触控板双指轻点）呼出菜单可上下左右逐格移动，并支持一键恢复模块指标默认顺序
-- CPU 核心拓扑自适应识别：按 IORegistry 簇字母归类核心，M5 Pro/Max 等三类核芯片自动呈现超核/性能核/能效核 S/P/E 三组拆分，其余机型维持 P/E 两组视图
-
-#### 优化与体验
-
-- 三组核型并存的圆环配色：超核沿用强调红、性能核改用冷蓝、能效核保持绿色，明暗主题分别调校
-
-感谢 @singularitti 在 #115 提出面板模块排序的功能建议，本版本已引入该能力。
+- 新增游戏 HUD：当打开已识别的游戏时，屏幕上会自动显示硬件监控浮窗，实时显示 CPU 占用、CPU 温度、GPU 内存、内存与整机功耗。浮窗位于游戏窗口内侧下角，跟随游戏窗口移动与跨屏切换；游戏失焦或退出时自动隐藏。同时读取游戏帧率，支持 FPS、平均帧率、1% Low 与帧时间。已安装的游戏通过 Steam、Epic 与系统扫描自动识别，无需手动配置。监控项目、浮窗位置与游戏名单可在设置中调整；HUD 显示期间，面板与菜单栏图标会显示运行徽章。
 
 ### English
 
 #### New Features
 
-- Panel long-press reordering: every module row and metric cell can be reordered by long-press drag, with a floating preview while dragging and live drop placement. Right-click (two-finger click on trackpads) opens a menu to move items step by step in any direction, with one click to restore the default metric order.
-- Adaptive CPU core topology recognition: cores are grouped by IORegistry cluster letters, so chips with three core types (M5 Pro/Max and later) automatically show the Super / Performance / Efficiency (S/P/E) split, while other models keep the P/E view.
-
-#### Improvements
-
-- New ring color scheme for three core groups: super cores keep the accent red, performance cores switch to a cold blue, and efficiency cores stay green, tuned separately for light and dark themes.
-
-Thanks to @singularitti for proposing panel module reordering in #115 — this release ships exactly that.
+- New Game HUD: when a recognized game is opened, a hardware monitoring overlay is displayed automatically, showing live CPU usage, CPU temperature, GPU memory, system memory, and total system power. The overlay sits at the bottom corner inside the game window and follows window movement and display changes; it hides automatically when the game loses focus or quits. The game's frame rate is also read, supporting FPS, average FPS, 1% Low, and frame time. Installed games are detected automatically via Steam, Epic, and system-wide scanning, with no manual configuration required. Metrics, overlay placement, and the game list can be adjusted in Settings; while the HUD is active, the panel and menu bar icons show a running badge.
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.6.4/HagimiMonitor-v1.6.4.zip" length="5876821" type="application/octet-stream" sparkle:edSignature="xbP7rfdY+O1Phx45ve8wGvZt0+1BG0RQF8iPUN4RLTTrlCCZbzkyWE3ahDrThuLghsRkq4j9TZKW60vloiUNBA=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.6.5/HagimiMonitor-v1.6.5.zip" length="6017231" type="application/octet-stream" sparkle:edSignature="mPT5aIFPCxNbCtT0eaJ3d/d6yiwJitTBEzwifk0vkaQn1sTTOvnQirBX1c54YPBsKmDYTUWm5KzrW9Exn2YzDg=="/>
         </item>
     </channel>
 </rss>
