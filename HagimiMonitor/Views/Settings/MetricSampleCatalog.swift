@@ -49,6 +49,10 @@ enum MetricSampleCatalog {
             return MetricSample(parts: [MetricSamplePart(text: "82% / 35%")])
         case (.cpu, "process-count"):
             return MetricSample(parts: [MetricSamplePart(text: "412")])
+        case (.gpu, "usage"):
+            return MetricSample(parts: [MetricSamplePart(text: "35%")])
+        case (.gpu, "clock-state"):
+            return MetricSample(parts: [MetricSamplePart(text: "P3 77%")])
         case (.gpu, "gpu-memory"):
             return MetricSample(parts: [MetricSamplePart(text: "5.2 GB")])
         case (.gpu, "allocated"):
@@ -57,8 +61,6 @@ enum MetricSampleCatalog {
             return MetricSample(parts: [MetricSamplePart(text: "23%")])
         case (.gpu, "tiler"):
             return MetricSample(parts: [MetricSamplePart(text: "12%")])
-        case (.gpu, "clock-state"):
-            return MetricSample(parts: [MetricSamplePart(text: "P3 77%")])
         case (.gpu, "throttle"):
             return MetricSample(parts: [MetricSamplePart(text: "23%")])
         case (.gpu, "power-cap"):

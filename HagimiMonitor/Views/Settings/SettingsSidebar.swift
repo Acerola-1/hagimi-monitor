@@ -7,6 +7,11 @@ enum SettingsRoute: Hashable {
     case displayModule
     /// 小工具:面板中的快捷功能入口与各工具磁贴的显隐。
     case quickTools
+    #if DIRECT_DISTRIBUTION
+    /// Game HUD:游戏内硬件浮窗的总开关、名单与布局。依赖外部探针与
+    /// 跨进程窗口定位等非沙盒能力,仅官网版提供入口。
+    case gameHUD
+    #endif
     /// 数据统计:今日概览与网页报表入口。
     case statistics
     /// 存储管理:本地数据占用可视化与选择性清理。
@@ -67,10 +72,15 @@ struct SettingsSidebar: View {
                 Text(String(localized: "settings.sidebar.modules"))
             }
 
-            // 扩展:小工具与数据统计(数据存储管理作为数据统计的子页,不占侧栏条目)。
+            // 扩展:小工具、Game HUD 与数据统计(数据存储管理作为数据统计的子页,不占侧栏条目)。
             Section {
                 Label(String(localized: "settings.sidebar.quick-tools"), systemImage: "wrench.and.screwdriver")
                     .tag(SettingsRoute.quickTools)
+
+                #if DIRECT_DISTRIBUTION
+                Label(String(localized: "settings.sidebar.game-hud"), systemImage: "gauge.with.needle")
+                    .tag(SettingsRoute.gameHUD)
+                #endif
 
                 Label(String(localized: "settings.sidebar.statistics"), systemImage: "chart.bar.doc.horizontal")
                     .tag(SettingsRoute.statistics)

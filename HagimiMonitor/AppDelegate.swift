@@ -43,6 +43,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         })
     }()
 
+    /// Game HUD 总装配:会话判定与浮窗显隐。总开关关闭时轮询与浮窗都不活跃。
+    /// Game HUD 依赖 metalperftrace 外部探针、ScreenCaptureKit 窗口捕获与 CGWindowList 跨进程定位等非沙盒能力,
+    /// 仅官网版编译(DIRECT_DISTRIBUTION)。
+    #if DIRECT_DISTRIBUTION
+    private(set) lazy var gameHUDCoordinator = GameHUDCoordinator(settings: store.settings, store: store)
+    #endif
+
     /// 用户经 Finder/Spotlight 重新打开已运行的应用时(rapp 事件)的落脚点:
     /// 纯菜单栏应用无 Dock 图标、无主窗口可恢复,默认行为下重新打开毫无可见
     /// 反馈,这里优先呈现设置窗口。返回 false:reopen 意图已由设置窗口承接,
@@ -78,6 +85,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &startupCancellables)
         _ = fluidPanelController
+        #if DIRECT_DISTRIBUTION
+        // Game HUD 装配:总开关默认开,关闭态只有 settings 订阅在跑。
+        _ = gameHUDCoordinator
+        // 游戏扫描监听:受总开关门控驱动启动/停止。
+        store.settings.$gameHUDMasterEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { enabled in
+                if enabled {
+                    GameHUDGameScanner.shared.startMonitoring()
+                } else {
+                    GameHUDGameScanner.shared.stopMonitoring()
+                }
+            }
+            .store(in: &startupCancellables)
+        #endif
 
         // 验证夹具模式(HAGIMI_STATS_FIXTURE):启动即打开「数据统计」页,
         // 供摘要各状态在设置窗口实际宽度下逐项目测;正式运行不受影响。

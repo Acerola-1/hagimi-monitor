@@ -243,6 +243,25 @@ struct SettingsTests {
         #expect(defaults.bool(forKey: "settings.batteryCellBalanceMigrated"))
     }
 
+    @Test func gpuUsageAndClockStateOrderMigratesForExistingUsers() {
+        let suiteName = "gpuUsageAndClockStateOrderMigratesForExistingUsers"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let legacyMetrics = ["gpu-memory", "allocated", "render", "tiler", "clock-state"]
+        defaults.set(legacyMetrics, forKey: "settings.enabledMetrics.gpu")
+        defaults.set([
+            "metrics.gpu": ["gpu-memory", "allocated", "render", "tiler", "clock-state", "throttle", "power-cap"]
+        ], forKey: "settings.panel.orders")
+
+        let settings = MonitorSettings(defaults: defaults)
+
+        #expect(settings.isMetricEnabled("usage", for: .gpu))
+        #expect(settings.isMetricEnabled("clock-state", for: .gpu))
+        let order = settings.panelOrder(for: .metrics(.gpu))
+        #expect(order.prefix(2) == ["usage", "clock-state"])
+    }
+
     @MainActor
     @Test func settingsWindowLifecycleReleasesOnClose() {
         let appDelegate = AppDelegate()

@@ -164,14 +164,18 @@ nonisolated enum MonitorKind: String, CaseIterable, Identifiable, Sendable {
             ]
         case .gpu:
             var metrics = [
+                MetricSwitch(id: "usage", title: String(localized: "metric.gpu.usage"), isDefault: true),
+            ]
+            #if DIRECT_DISTRIBUTION
+            metrics.append(MetricSwitch(id: "clock-state", title: String(localized: "metric.gpu.clock-state"), isDefault: true))
+            #endif
+            metrics.append(contentsOf: [
                 MetricSwitch(id: "gpu-memory", title: String(localized: "metric.gpu.gpu-memory"), isDefault: true),
                 MetricSwitch(id: "allocated", title: String(localized: "metric.gpu.allocated"), isDefault: true),
                 MetricSwitch(id: "render", title: String(localized: "metric.gpu.render"), isDefault: true),
                 MetricSwitch(id: "tiler", title: String(localized: "metric.gpu.tiler"), isDefault: true),
-            ]
+            ])
             #if DIRECT_DISTRIBUTION
-            // 时钟态常驻;限频与功耗上限只在偏离常态时占格,故默认开也不扰布局。
-            metrics.append(MetricSwitch(id: "clock-state", title: String(localized: "metric.gpu.clock-state"), isDefault: true))
             metrics.append(MetricSwitch(id: "throttle", title: String(localized: "metric.gpu.throttle"), isDefault: true))
             metrics.append(MetricSwitch(id: "power-cap", title: String(localized: "metric.gpu.power-cap"), isDefault: true))
             #endif
@@ -564,6 +568,10 @@ final class MonitorStore: ObservableObject {
     /// 设置页「数据统计」与网页报表共用其数据。
     let statisticsRecorder = StatisticsRecorder()
 
+    /// Game HUD 的未过滤采样结果访问器。主面板行显隐由 `modules` 承担,
+    /// Game HUD 勾选与其独立,必须直接读全量模块;只读出、不绕过任何过滤。
+    var allModulesForHUD: [MonitorModule] { allModules }
+
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
     /// 面板进程采样代次。最后一个面板消失时推进，令关闭前已在途的采样结果失效；
@@ -576,6 +584,15 @@ final class MonitorStore: ObservableObject {
 
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
+
+    #if DIRECT_DISTRIBUTION
+    /// Game HUD 的硬件快照源:与采样管线同源,不新增采样器。
+    private lazy var gameHUDSnapshotProvider = GameHUDSnapshotProvider(store: self)
+
+    /// Game HUD 数据源访问器(设置页预览与 HUD 控制器共用)。
+    var gameHUDDataSource: GameHUDSnapshotProviding { gameHUDSnapshotProvider }
+    #endif
+
 /// 自动在 deinit 时从主 RunLoop 移除电源变化通知 source 的包装对象。
 /// 安全不变式：仅持有不可变的 CFRunLoopSource 引用，在 deinit 执行 CFRunLoopRemoveSource 保证资源安全释放。
 ///
@@ -1402,6 +1419,11 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         if statisticsSamplingActive {
             statisticsRecorder.record(modules: allModules, fans: fans, freshKinds: freshKinds, at: Date())
         }
+        #if DIRECT_DISTRIBUTION
+        // Game HUD 快照发布:由 provider 内部依据活跃订阅数与勾选短路,
+        // HUD 隐藏(无订阅)或无勾选时无下游开销。
+        gameHUDSnapshotProvider.publishIfChanged(enabledIDs: settings.gameHUDEnabledMetricIDs)
+        #endif
     }
 
 

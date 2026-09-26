@@ -147,6 +147,7 @@ struct SettingsRow<Accessory: View>: View {
         .padding(.horizontal, 14)
         .padding(.vertical, subtitle == nil ? 10 : 11)
         .frame(minHeight: subtitle == nil ? 44 : 58)
+        .frame(maxWidth: .infinity)
     }
 }
 

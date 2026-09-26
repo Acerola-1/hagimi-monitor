@@ -179,6 +179,23 @@ final class MonitorSettings: ObservableObject {
     /// 排列偏好保存完整 ID，显隐或暂时缺失不修改顺序。
     @Published private(set) var panelOrders: [String: [String]] = [:]
 
+    #if DIRECT_DISTRIBUTION
+    // MARK: - Game HUD
+
+    /// Game HUD 总开关:实际显示还需前台命中游戏名单且
+    /// 目标窗口可确认;开启不等于正在显示。
+    @Published var gameHUDMasterEnabled: Bool = true
+    /// Game HUD 硬件指标勾选。与主面板模块显隐(`visibleKinds`/`enabledMetrics`)
+    /// 完全独立:主面板隐藏 CPU 行不影响 HUD 读 CPU。
+    @Published private(set) var gameHUDEnabledMetricIDs: Set<GameHUDMetricID> = GameHUDMetricCatalog.defaultEnabledIDs()
+    /// Game HUD 用户添加的游戏 bundle ID。内置候选只读不持久化,
+    /// 用户名单可增删;排除名单优先级最高(见 GameHUDGameDirectory)。
+    @Published private(set) var gameHUDCustomGames: Set<String> = []
+    @Published private(set) var gameHUDExcludedGames: Set<String> = []
+    /// 硬件 HUD 在目标窗口的四象限(左上、右上、左下、右下，默认右下)。
+    @Published var gameHUDSidePreference: GameHUDSide = .bottomRight
+    #endif
+
     /// 钉住面板窗口位置持久化。
     @Published var pinnedPanelOriginX: Double? = nil
     @Published var pinnedPanelOriginY: Double? = nil
@@ -253,6 +270,10 @@ final class MonitorSettings: ObservableObject {
                 stored.insert(.keyboardLock)
                 defaults.set(stored.map(\.storageKey), forKey: Keys.visibleQuickTools)
                 defaults.set(true, forKey: Keys.keyboardLockVisibilityMigrated)
+            }
+            // 剥离 Game HUD: 存量中若有 "gameHUD"，已在 compactMap 中剔除，在此回写持久化
+            if storedTools.contains("gameHUD") {
+                defaults.set(stored.map(\.storageKey), forKey: Keys.visibleQuickTools)
             }
             visibleQuickTools = stored
         } else {
@@ -435,8 +456,87 @@ final class MonitorSettings: ObservableObject {
             }
             defaults.set(true, forKey: Keys.batteryPowerFlowMigrated)
         }
+        // 一次性迁移:GPU 模块新增整机占用默认开指标,给非空的 GPU 存量补齐一次,
+        // 不动全关状态,也不复活用户手动关过的其他指标。
+        if !defaults.bool(forKey: Keys.gpuUsageMetricMigrated) {
+            if var merged = loadedMetrics[.gpu], !merged.isEmpty {
+                merged.insert("usage")
+                if merged != loadedMetrics[.gpu] {
+                    loadedMetrics[.gpu] = merged
+                    defaults.set(Array(merged), forKey: Keys.enabledMetricsPrefix + MonitorKind.gpu.rawValue)
+                }
+            }
+            defaults.set(true, forKey: Keys.gpuUsageMetricMigrated)
+        }
         enabledMetrics = loadedMetrics
         panelOrders = (defaults.dictionary(forKey: Keys.panelOrders) ?? [:]).compactMapValues { $0 as? [String] }
+
+        #if DIRECT_DISTRIBUTION
+        // 一次性迁移:GPU 频率档调整为紧随 GPU 占用之后,调整已有顺序并将两项排在开头
+        if !defaults.bool(forKey: Keys.gpuClockStateOrderMigrated) {
+            let gpuScopeKey = PanelOrderScope.metrics(.gpu).storageKey
+            if var gpuOrder = panelOrders[gpuScopeKey] {
+                gpuOrder.removeAll { $0 == "clock-state" }
+                if let usageIndex = gpuOrder.firstIndex(of: "usage") {
+                    gpuOrder.insert("clock-state", at: usageIndex + 1)
+                } else {
+                    gpuOrder.insert("usage", at: 0)
+                    gpuOrder.insert("clock-state", at: 1)
+                }
+                panelOrders[gpuScopeKey] = gpuOrder
+                defaults.set(panelOrders, forKey: Keys.panelOrders)
+            }
+            defaults.set(true, forKey: Keys.gpuClockStateOrderMigrated)
+        }
+        #endif
+
+        #if DIRECT_DISTRIBUTION
+        if !defaults.bool(forKey: Keys.gameHUDMasterEnabledDefaultOnMigrated) {
+            gameHUDMasterEnabled = true
+            defaults.set(true, forKey: Keys.gameHUDMasterEnabled)
+            defaults.set(true, forKey: Keys.gameHUDMasterEnabledDefaultOnMigrated)
+        } else {
+            gameHUDMasterEnabled = defaults.object(forKey: Keys.gameHUDMasterEnabled) != nil ? defaults.bool(forKey: Keys.gameHUDMasterEnabled) : true
+        }
+        if let storedMetrics = defaults.array(forKey: Keys.gameHUDEnabledMetrics) as? [String] {
+            var restored = Set(storedMetrics.compactMap { GameHUDMetricID(rawValue: $0) })
+            if !defaults.bool(forKey: Keys.gameHUDFPSMigrated) {
+                if !storedMetrics.contains(GameHUDMetricID.fps.rawValue) && !storedMetrics.contains(GameHUDMetricID.onePercentLow.rawValue) {
+                    restored.insert(.fps)
+                    restored.insert(.averageFPS)
+                    restored.insert(.onePercentLow)
+                }
+                defaults.set(true, forKey: Keys.gameHUDFPSMigrated)
+            }
+            let isV2Migrated = defaults.bool(forKey: Keys.gameHUDNewMetricsV2Migrated) || defaults.bool(forKey: "gameHUDNewMetricsV2Migrated")
+            if !isV2Migrated {
+                if restored.contains(.fps) && !restored.contains(.averageFPS) {
+                    restored.insert(.averageFPS)
+                }
+                restored.insert(.frameTime)
+                restored.insert(.gpuPower)
+                restored.insert(.cpuPower)
+                restored.insert(.fanSpeed)
+                defaults.set(true, forKey: Keys.gameHUDNewMetricsV2Migrated)
+                defaults.set(Array(restored).map(\.rawValue), forKey: Keys.gameHUDEnabledMetrics)
+            }
+            gameHUDEnabledMetricIDs = restored
+        } else {
+            gameHUDEnabledMetricIDs = GameHUDMetricCatalog.defaultEnabledIDs()
+            defaults.set(true, forKey: Keys.gameHUDFPSMigrated)
+            defaults.set(true, forKey: Keys.gameHUDNewMetricsV2Migrated)
+        }
+        // 渠道不可读项不残留:目录跨渠道能力不同,存储里可能带着上一渠道
+        // (换装/迁移)写下的不可读 ID,读取时按当前目录过滤。
+        gameHUDEnabledMetricIDs = GameHUDMetricCatalog.readableIDs(from: gameHUDEnabledMetricIDs)
+        if let customGames = defaults.array(forKey: Keys.gameHUDCustomGames) as? [String] {
+            gameHUDCustomGames = Set(customGames)
+        }
+        if let excludedGames = defaults.array(forKey: Keys.gameHUDExcludedGames) as? [String] {
+            gameHUDExcludedGames = Set(excludedGames)
+        }
+        gameHUDSidePreference = GameHUDSide(fromStored: defaults.string(forKey: Keys.gameHUDSide) ?? "")
+        #endif
 
         launchAtLogin = SMAppService.mainApp.status == .enabled
 
@@ -508,6 +608,42 @@ final class MonitorSettings: ObservableObject {
     func resetMetrics(for kind: MonitorKind) {
         enabledMetrics[kind] = defaultMetricIds(for: kind)
     }
+
+    #if DIRECT_DISTRIBUTION
+    // MARK: - Game HUD 设置写入
+
+    /// 勾选/取消一个 HUD 硬件指标。
+    func setGameHUDMetric(_ id: GameHUDMetricID, enabled: Bool) {
+        var current = gameHUDEnabledMetricIDs
+        if enabled {
+            current.insert(id)
+        } else {
+            current.remove(id)
+        }
+        gameHUDEnabledMetricIDs = current
+    }
+
+    /// 添加用户自定义游戏 bundle ID。
+    func addGameHUDCustomGame(_ bundleID: String) {
+        let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        gameHUDCustomGames.insert(trimmed)
+        gameHUDExcludedGames.remove(trimmed)
+    }
+
+    func removeGameHUDCustomGame(_ bundleID: String) {
+        gameHUDCustomGames.remove(bundleID)
+    }
+
+    /// 排除一个候选(含内置自动候选与用户添加)。
+    func excludeGameHUDGame(_ bundleID: String) {
+        gameHUDExcludedGames.insert(bundleID)
+    }
+
+    func removeGameHUDExcludedGame(_ bundleID: String) {
+        gameHUDExcludedGames.remove(bundleID)
+    }
+    #endif
 
     func panelOrder(for scope: PanelOrderScope) -> [String] {
         PanelOrderList.reconciled(
@@ -630,8 +766,8 @@ final class MonitorSettings: ObservableObject {
                 ]
             case .gpu:
                 return [
-                    "GPU内存": "gpu-memory", "已分配": "allocated", "渲染": "render", "分块": "tiler", "温度": "temperature",
-                    "GPU Memory": "gpu-memory", "Allocated": "allocated", "Render": "render", "Tiler": "tiler", "Temperature": "temperature",
+                    "占用": "usage", "GPU占用": "usage", "GPU 占用": "usage", "频率档": "clock-state", "频率": "clock-state", "时钟态": "clock-state", "GPU内存": "gpu-memory", "已分配": "allocated", "渲染": "render", "分块": "tiler", "温度": "temperature",
+                    "Usage": "usage", "GPU Usage": "usage", "Clock": "clock-state", "GPU Clock": "clock-state", "GPU Memory": "gpu-memory", "Allocated": "allocated", "Render": "render", "Tiler": "tiler", "Temperature": "temperature",
                 ]
             case .memory:
                 return [
@@ -994,6 +1130,44 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        #if DIRECT_DISTRIBUTION
+        $gameHUDMasterEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.gameHUDMasterEnabled)
+            }
+            .store(in: &cancellables)
+
+        $gameHUDEnabledMetricIDs
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(Array(newValue).map(\.rawValue), forKey: Keys.gameHUDEnabledMetrics)
+            }
+            .store(in: &cancellables)
+
+        $gameHUDCustomGames
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(Array(newValue), forKey: Keys.gameHUDCustomGames)
+            }
+            .store(in: &cancellables)
+
+        $gameHUDExcludedGames
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(Array(newValue), forKey: Keys.gameHUDExcludedGames)
+            }
+            .store(in: &cancellables)
+
+        $gameHUDSidePreference
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.gameHUDSide)
+            }
+            .store(in: &cancellables)
+
+        #endif
+
     }
 
     private func persist<T>(_ value: T, forKey key: String) {
@@ -1093,6 +1267,12 @@ private enum Keys {
     static let batteryEnergyRailsMigrated = "settings.batteryEnergyRailsMigrated"
     /// Direct 版新增 GPU 时钟态/限频/功耗上限时，给非空的 GPU 存量补齐一次。
     static let gpuClockStateMetricsMigrated = "settings.gpuClockStateMetricsMigrated"
+    /// 一次性迁移标记:GPU 模块新增整机占用默认开指标时,给非空的 GPU 存量补齐一次。
+    static let gpuUsageMetricMigrated = "settings.gpuUsageMetricMigrated"
+    #if DIRECT_DISTRIBUTION
+    /// 一次性迁移标记:GPU 频率档默认排序调整至 GPU 占用之后。
+    static let gpuClockStateOrderMigrated = "settings.gpuClockStateOrderMigrated"
+    #endif
     /// 一次性迁移标记:功率流图内化为分页可勾选项时,给非空的电池存量补齐一次(双渠道)。
     static let batteryPowerFlowMigrated = "settings.batteryPowerFlowMigrated"
     /// 存量键:功率流独立开关(旧版偏好迁移用)。
@@ -1101,4 +1281,15 @@ private enum Keys {
     static let panelOrders = "settings.panel.orders"
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"
+    #if DIRECT_DISTRIBUTION
+    // MARK: Game HUD
+    static let gameHUDMasterEnabled = "settings.gameHUD.masterEnabled"
+    static let gameHUDMasterEnabledDefaultOnMigrated = "settings.gameHUD.masterEnabledDefaultOnMigrated"
+    static let gameHUDEnabledMetrics = "settings.gameHUD.enabledMetrics"
+    static let gameHUDCustomGames = "settings.gameHUD.customGames"
+    static let gameHUDExcludedGames = "settings.gameHUD.excludedGames"
+    static let gameHUDSide = "settings.gameHUD.side"
+    static let gameHUDFPSMigrated = "settings.gameHUD.fpsMigrated"
+    static let gameHUDNewMetricsV2Migrated = "settings.gameHUD.newMetricsV2Migrated"
+    #endif
 }

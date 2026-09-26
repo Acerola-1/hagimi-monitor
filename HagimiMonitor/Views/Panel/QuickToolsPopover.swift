@@ -180,8 +180,8 @@ struct QuickToolsPopoverView: View {
     /// QuickToolsStore.isActive),保证运行中的工具永远有操作入口。
     /// 新增工具补 QuickToolKind case 即自动出现。
     private var visibleKinds: [QuickToolKind] {
-        QuickToolKind.allCases.filter {
-            settings.isQuickToolVisible($0) || store.isActive($0) || retainedKinds.contains($0)
+        QuickToolKind.allCases.filter { kind in
+            settings.isQuickToolVisible(kind) || store.isActive(kind) || retainedKinds.contains(kind)
         }
     }
 
