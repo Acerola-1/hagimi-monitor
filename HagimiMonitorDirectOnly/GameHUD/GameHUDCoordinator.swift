@@ -27,11 +27,11 @@ final class GameHUDCoordinator {
     private var stateCancellable: AnyCancellable?
     private var rectCancellable: AnyCancellable?
     private var sideCancellable: AnyCancellable?
+    private var styleCancellable: AnyCancellable?
     /// 最近一次快照(显示中逐轮更新;隐藏时清空,配合历史重置)。
     private var latestSnapshot = GameHUDSnapshot.empty
     private var history = GameHUDSampleHistory()
-    /// SCK 窗口捕获测帧:对前台游戏窗口测实际呈现帧率(上屏口径),
-    /// 覆盖非 Metal 游戏;Metal 游戏与官方 HUD 并存互补。
+    /// 系统 Metal 呈现统计；无可信样本时 HUD 保留占位。
     private let frameMeter = GameHUDFrameMeter()
     private var frameStatsCancellable: AnyCancellable?
 
@@ -43,6 +43,13 @@ final class GameHUDCoordinator {
         observeSession()
         observeGameLaunches()
         observeSideChanges()
+        styleCancellable = settings.$gameHUDPresentationStyle
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.sessionController.targetRect != nil else { return }
+                self.presentDisplay()
+            }
         frameStatsCancellable = frameMeter.$stats
             .receive(on: DispatchQueue.main)
             .sink { [weak self] stats in
@@ -53,15 +60,9 @@ final class GameHUDCoordinator {
                 // 统计值变化时刷新内容(FPS 行出现/数值更新)。
                 guard self.sessionController.state == .hardwareVisible,
                       let rect = self.sessionController.targetRect else { return }
-                self.panelController.show(in: rect, reserveTop: false, fpsStats: stats, content: self.makeContentView())
+                self.panelController.show(in: rect, screen: self.sessionController.targetScreen,
+                                          reserveTop: false, fpsStats: stats, content: self.makeContentView())
             }
-        // 屏幕录制授权完成:若有显示中的游戏会话,立即补启测帧(不用等下次启动)。
-        ScreenCapturePermissionService.shared.onGranted = { [weak self] in
-            guard let self, self.sessionController.state == .hardwareVisible,
-                  let game = self.sessionController.foregroundGame,
-                  let running = NSRunningApplication(processIdentifier: game.processIdentifier) else { return }
-            self.frameMeter.start(target: running)
-        }
     }
 
     // MARK: - 会话驱动
@@ -92,9 +93,9 @@ final class GameHUDCoordinator {
             .dropFirst()
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in
-                guard let self, self.sessionController.targetRect != nil else { return }
+                guard let self, let rect = self.sessionController.targetRect else { return }
                 self.panelController.updateFrame(
-                    in: self.sessionController.targetRect!,
+                    in: rect,
                     reserveTop: false,
                     fpsStats: self.frameMeter.stats
                 )
@@ -123,6 +124,7 @@ final class GameHUDCoordinator {
         // 逐轮落位:窗口移动/缩放/换屏由 1s 轮询捕获,这里按最新矩形刷新。
         panelController.show(
             in: rect,
+            screen: sessionController.targetScreen,
             reserveTop: false,
             fpsStats: frameMeter.stats,
             content: makeContentView()
@@ -201,6 +203,7 @@ final class GameHUDCoordinator {
                 // 只刷新内容,不动 frame;几何变化走会话轮询路径。
                 self.panelController.show(
                     in: self.sessionController.targetRect ?? .zero,
+                    screen: self.sessionController.targetScreen,
                     reserveTop: false,
                     fpsStats: self.frameMeter.stats,
                     content: self.makeContentView()
@@ -210,7 +213,12 @@ final class GameHUDCoordinator {
 
     private func makeContentView() -> GameHUDContent {
         GameHUDContent(
-            view: AnyView(GameHUDView(
+            cardView: AnyView(GameHUDView(
+                snapshot: latestSnapshot,
+                fpsStats: frameMeter.stats,
+                enabledMetricIDs: settings.gameHUDEnabledMetricIDs
+            )),
+            topStripView: AnyView(GameHUDTopStripView(
                 snapshot: latestSnapshot,
                 fpsStats: frameMeter.stats,
                 enabledMetricIDs: settings.gameHUDEnabledMetricIDs

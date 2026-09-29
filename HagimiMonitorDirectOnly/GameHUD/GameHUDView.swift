@@ -19,19 +19,7 @@ nonisolated enum GameHUDViewContract {
     /// 卡片尺寸:宽度固定;高度 = 上下内边距 + 头部与各项指标行(含行内高度与间距) + 分割线。
     /// 高度精确自适应已勾选的指标项数，缺值显示 `—` 占位，绝不因数据就绪与否发生二次跳变。
     static func size(for enabledIDs: Set<GameHUDMetricID>, fpsStats: GameHUDFPSStats? = nil) -> CGSize {
-        let entries = GameHUDMetricCatalog.availableEntries().filter { enabledIDs.contains($0.id) }
-        let hardwareEntries = entries.filter { $0.id != .fps && $0.id != .averageFPS && $0.id != .onePercentLow && $0.id != .frameTime }
-
-        let showFPS = enabledIDs.contains(.fps)
-        let showAvg = enabledIDs.contains(.averageFPS)
-        let showLow = enabledIDs.contains(.onePercentLow)
-        let showFrameTime = enabledIDs.contains(.frameTime)
-
-        var rows = 1 + hardwareEntries.count // 头部 (chip/macOS) + 硬件指标行
-        if showFPS { rows += 1 }
-        if showAvg { rows += 1 }
-        if showLow { rows += 1 }
-        if showFrameTime { rows += 1 }
+        let rows = 1 + GameHUDMetricCatalog.displayEntries(enabledIDs: enabledIDs).count
 
         // 每行有效高度为 17pt，行间距 5pt。
         // R 行 + 间隔的总高度正好为 R * rowHeight (22pt)。
@@ -51,7 +39,7 @@ nonisolated enum GameHUDViewContract {
 /// 令牌值——黑底必须配浅色文字,不随系统外观切换,否则浅色模式黑底黑字。
 struct GameHUDView: View {
     let snapshot: GameHUDSnapshot
-    /// 帧率统计(系统探针或 SCK 测得);nil = 样本不足,显示 `—` 占位保证尺寸一次性初始化。
+    /// 帧率统计(系统 Metal 探针);nil = 数据不可用,显示 `—` 占位保证尺寸一次性初始化。
     var fpsStats: GameHUDFPSStats?
     /// 用户勾选的全部 HUD 指标集合(用于精确判断 FPS / AVG / 1% Low / 各硬件行显隐)。
     var enabledMetricIDs: Set<GameHUDMetricID> = GameHUDMetricCatalog.defaultEnabledIDs()
@@ -175,7 +163,7 @@ struct GameHUDView: View {
         guard let id = GameHUDMetricID(rawValue: reading.metricID) else {
             return reading.metricID
         }
-        let entry = GameHUDMetricCatalog.availableEntries().first { $0.id == id }
+        let entry = GameHUDMetricCatalog.displayEntries(enabledIDs: enabledMetricIDs).first { $0.id == id }
         return String(localized: entry?.titleKey ?? String.LocalizationValue(reading.metricID))
     }
 }

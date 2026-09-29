@@ -29,16 +29,23 @@ nonisolated enum GameHUDMetricID: String, CaseIterable, Sendable {
     case gpuMemory
     /// 风扇转速(官网版 SMC)。
     case fanSpeed
+    /// 系统内存压力百分比。
+    case memoryPressure
     /// 整机内存已用量。
     case memoryUsed
     /// 整机功耗;真实可读时才可选,不代表游戏进程独占功耗。
     case systemPower
+    /// 整机网络上下行速率的统一开关。
+    case networkRates
+    /// 展示用网络行 ID，不单独持久化为开关。
+    case networkUpload
+    case networkDownload
 }
 
 /// Game HUD 指标目录:渠道决定「本机有能力」,快照决定「本次有无值」。
 ///
 /// 目录顺序即 HUD 与设置页展示顺序:
-/// FPS 组(FPS → 平均帧 → 1% Low → 帧生成时间) → CPU 组(CPU 占用 → CPU 温度 → CPU 功耗) → GPU 组(GPU 功耗 → 显存占用) → 散热与整机(风扇转速 → 整机内存 → 整机功耗)。
+/// FPS 组 → CPU 组 → GPU 组 → 风扇与内存 → 整机功耗 → 网络速率。
 nonisolated enum GameHUDMetricCatalog {
 
     struct Entry: Identifiable, Equatable, Sendable {
@@ -48,7 +55,7 @@ nonisolated enum GameHUDMetricCatalog {
         let titleKey: String.LocalizationValue
     }
 
-    /// 当前渠道可用的条目,顺序即 HUD 展示顺序:FPS/AVG/1% Low/帧时间 → CPU 组 → GPU 组 → 散热与整机。
+    /// 当前渠道可用的设置条目，网络速率在 HUD 中展开为上行与下行。
     /// 沙盒(App Store):CPU 占用 + 内存 + GPU 内存;整机功耗真实产出时可选。
     /// 官网版追加 FPS、平均帧、1% Low、帧生成时间、SMC CPU 温度与风扇转速、IOReport CPU/GPU 分项功耗。
     static func availableEntries() -> [Entry] {
@@ -71,14 +78,16 @@ nonisolated enum GameHUDMetricCatalog {
         #if DIRECT_DISTRIBUTION
         entries.append(Entry(id: .fanSpeed, kind: .fan, titleKey: "gamehud.metric.fan-speed"))
         #endif
+        entries.append(Entry(id: .memoryPressure, kind: .memory, titleKey: "gamehud.metric.memory-pressure"))
         entries.append(Entry(id: .memoryUsed, kind: .memory, titleKey: "gamehud.metric.memory-used"))
         entries.append(Entry(id: .systemPower, kind: .battery, titleKey: "gamehud.metric.system-power"))
+        entries.append(Entry(id: .networkRates, kind: .network, titleKey: "gamehud.metric.network-rates"))
         return entries
     }
 
-    /// 默认勾选:FPS、平均帧、1% Low、帧时间、CPU/GPU 占用与内存。
+    /// 内存压力默认开启，网络速率默认关闭。
     static func defaultEnabledIDs() -> Set<GameHUDMetricID> {
-        var ids: Set<GameHUDMetricID> = [.cpuUsage, .memoryUsed, .gpuMemory]
+        var ids: Set<GameHUDMetricID> = [.cpuUsage, .memoryPressure, .memoryUsed, .gpuMemory]
         #if DIRECT_DISTRIBUTION
         ids.insert(.fps)
         ids.insert(.averageFPS)
@@ -88,6 +97,17 @@ nonisolated enum GameHUDMetricCatalog {
         ids.insert(.fanSpeed)
         #endif
         return ids
+    }
+
+    /// 设置中的网络速率单开关在 HUD 中展开为两条真实读数。
+    static func displayEntries(enabledIDs: Set<GameHUDMetricID>) -> [Entry] {
+        availableEntries().filter { enabledIDs.contains($0.id) }.flatMap { entry in
+            guard entry.id == .networkRates else { return [entry] }
+            return [
+                Entry(id: .networkUpload, kind: .network, titleKey: "gamehud.view.network-upload"),
+                Entry(id: .networkDownload, kind: .network, titleKey: "gamehud.view.network-download")
+            ]
+        }
     }
 
     /// 把已勾选 ID 过滤为当前渠道真实可读的集合。

@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// 传给浮窗的内容包装。
+/// 同一份快照的卡片与顶部横条视图，由设置与可用宽度选择其一。
 nonisolated struct GameHUDContent {
-    let view: AnyView
+    let cardView: AnyView
+    let topStripView: AnyView
 
-    var rootView: AnyView { view }
+    func rootView(for style: GameHUDPresentationStyle) -> AnyView {
+        style == .topStrip ? topStripView : cardView
+    }
 }

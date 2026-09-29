@@ -64,6 +64,48 @@ struct GameHUDFPSTests {
         #expect(abs((sample?.minMs ?? 0) - 15.1) < 0.01)
     }
 
+    @Test func presentedOnlySampleKeepsTimingUnavailable() {
+        let json = """
+        {"Layers":[{"Performance Stats":{"Presented Frame Stats":{"FPS":120.0,"Frame Count":120}}}]}
+        """
+        let sample = MetalPerfTraceMeter.parseSample(from: json)
+        #expect(sample?.fps == 120)
+        #expect(sample?.avgMs == nil)
+        guard let sample else { return }
+        let stats = MetalPerfTraceMeter.computeFPSStats(from: [sample])
+        #expect(stats?.currentFPS == 120)
+        #expect(stats?.averageFPS == 120)
+        #expect(stats?.onePercentLow == nil)
+        #expect(stats?.frameTimeMs == nil)
+    }
+
+    @Test func invalidPresentedSampleIsDiscarded() {
+        let zeroFPS = """
+        {"Layers":[{"Performance Stats":{"Presented Frame Stats":{"FPS":0,"Frame Count":60}}}]}
+        """
+        let missingCount = """
+        {"Layers":[{"Performance Stats":{"Presented Frame Stats":{"FPS":60}}}]}
+        """
+        #expect(MetalPerfTraceMeter.parseSample(from: zeroFPS) == nil)
+        #expect(MetalPerfTraceMeter.parseSample(from: missingCount) == nil)
+    }
+
+    @Test func latestPresentedOnlySampleDoesNotReuseOldTiming() {
+        let old = MetalPerfTraceMeter.SecondSample(
+            timestamp: 0, fps: 60, frameCount: 60,
+            avgMs: 16.66, stdDevMs: 0.8, maxMs: 18.5, minMs: 15, totalMs: 1000
+        )
+        let latest = MetalPerfTraceMeter.SecondSample(
+            timestamp: 1, fps: 120, frameCount: 120,
+            avgMs: nil, stdDevMs: nil, maxMs: nil, minMs: nil, totalMs: nil
+        )
+        let stats = MetalPerfTraceMeter.computeFPSStats(from: [old, latest])
+        #expect(stats?.currentFPS == 120)
+        #expect(stats?.averageFPS == 90)
+        #expect(stats?.onePercentLow == nil)
+        #expect(stats?.frameTimeMs == nil)
+    }
+
     // MARK: - 1% Low 算法验证
 
     @Test func onePercentLowReflectsSmoothFramerate() {
@@ -178,6 +220,67 @@ struct GameHUDFPSTests {
         #expect(sizeWithoutStats == sizeWithStats, "面板高度应一次性确定，无论数据是否就绪，不发生二次拉伸")
     }
 
+    @Test func topStripSitsBelowCameraSafeArea() {
+        let screen = CGRect(x: -1512, y: -404, width: 1512, height: 982)
+        let content = CGSize(width: 900, height: 30)
+        let frame = GameHUDTopStripPlacement.frame(
+            windowRect: screen, screenRect: screen, topSafeInset: 38,
+            contentSize: content, margin: 16
+        )
+        #expect(frame?.maxY == screen.maxY - 38)
+        #expect(frame?.midX == screen.midX)
+        let safeAreaWindow = CGRect(x: -1512, y: -404, width: 1512, height: 950)
+        #expect(GameHUDTopStripPlacement.frame(
+            windowRect: safeAreaWindow, screenRect: screen, topSafeInset: 32,
+            contentSize: content, margin: 16
+        )?.maxY == safeAreaWindow.maxY)
+        let slightlyInsetGame = CGRect(x: -1492, y: -380, width: 1472, height: 910)
+        #expect(GameHUDTopStripPlacement.frame(
+            windowRect: slightlyInsetGame, screenRect: screen, topSafeInset: 32,
+            contentSize: content, margin: 16
+        )?.maxY == screen.maxY - 32)
+    }
+
+    @MainActor
+    @Test func defaultTopStripFitsBuiltInScreenWidth() {
+        let content = GameHUDTopStripView(
+            snapshot: .empty, fpsStats: nil,
+            enabledMetricIDs: GameHUDMetricCatalog.defaultEnabledIDs()
+        )
+        let width = NSHostingView(rootView: content).fittingSize.width
+        #expect(width <= 1512 - 32, "默认指标在 1512pt 屏幕上应能保持单行")
+    }
+
+    @Test func topStripUsesWindowEdgeUntilGameFillsScreen() {
+        let screen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+        let content = CGSize(width: 900, height: 30)
+        let fullScreenFrame = GameHUDTopStripPlacement.frame(
+            windowRect: screen, screenRect: screen, topSafeInset: 0,
+            contentSize: content, margin: 16
+        )
+        #expect(fullScreenFrame?.maxY == screen.maxY)
+        let windowed = CGRect(x: 120, y: 80, width: 1200, height: 700)
+        let windowedFrame = GameHUDTopStripPlacement.frame(
+            windowRect: windowed,
+            screenRect: screen, topSafeInset: 0, contentSize: content, margin: 16
+        )
+        #expect(windowedFrame?.maxY == windowed.maxY)
+        #expect(windowedFrame?.midX == windowed.midX)
+        let maximized = CGRect(x: 0, y: 0, width: 1440, height: 876)
+        #expect(GameHUDTopStripPlacement.frame(
+            windowRect: maximized, screenRect: screen, topSafeInset: 0,
+            contentSize: content, margin: 16
+        )?.maxY == maximized.maxY)
+        #expect(GameHUDTopStripPlacement.frame(
+            windowRect: CGRect(x: 1500, y: 0, width: 800, height: 700),
+            screenRect: screen, topSafeInset: 0, contentSize: content, margin: 16
+        ) == nil)
+        #expect(GameHUDTopStripPlacement.frame(
+            windowRect: screen, screenRect: screen, topSafeInset: 0,
+            contentSize: CGSize(width: 1420, height: 30), margin: 16
+        ) == nil)
+    }
+
     // MARK: - Catalog 契约测试
 
     @Test func catalogContainsFPSAndOnePercentLowInDirect() {
@@ -189,12 +292,41 @@ struct GameHUDFPSTests {
         #expect(entries.contains(where: { $0.id == .fanSpeed }))
         #expect(entries.contains(where: { $0.id == .gpuPower }))
         #expect(entries.contains(where: { $0.id == .cpuPower }))
+        let pressureIndex = entries.firstIndex(where: { $0.id == .memoryPressure })
+        let memoryIndex = entries.firstIndex(where: { $0.id == .memoryUsed })
+        #expect(pressureIndex != nil && memoryIndex != nil)
+        if let pressureIndex, let memoryIndex {
+            #expect(pressureIndex < memoryIndex)
+        }
+        #expect(entries.last?.id == .networkRates)
 
         let defaults = GameHUDMetricCatalog.defaultEnabledIDs()
         #expect(defaults.contains(.fps))
         #expect(defaults.contains(.averageFPS))
         #expect(defaults.contains(.onePercentLow))
         #expect(defaults.contains(.frameTime))
+        #expect(defaults.contains(.memoryPressure))
+        #expect(!defaults.contains(.networkRates))
+    }
+
+    @Test func networkRateSwitchExpandsIntoTwoHUDReadings() {
+        let enabled: Set<GameHUDMetricID> = [.memoryPressure, .networkRates]
+        let displayIDs = GameHUDMetricCatalog.displayEntries(enabledIDs: enabled).map(\.id)
+        #expect(displayIDs == [.memoryPressure, .networkUpload, .networkDownload])
+
+        let memory = MonitorModule(kind: .memory, value: 30, summary: "30%", metrics: [], samples: [], pressureValue: 37)
+        let network = MonitorModule(
+            kind: .network, value: 0, summary: "Wi-Fi",
+            metrics: [MonitorMetric(name: "upload", value: "2 MB/s"),
+                      MonitorMetric(name: "download", value: "5 MB/s")], samples: []
+        )
+        let readings = GameHUDSnapshotProvider.readings(enabledIDs: enabled, in: [memory, network])
+        #expect(readings.map(\.metricID) == displayIDs.map(\.rawValue))
+        #expect(readings.map(\.value) == ["37%", "2 MB/s", "5 MB/s"])
+
+        let baseHeight = GameHUDViewContract.size(for: [.memoryPressure]).height
+        let networkHeight = GameHUDViewContract.size(for: enabled).height
+        #expect(networkHeight - baseHeight == 2 * GameHUDViewContract.Metrics.rowHeight)
     }
 
     // MARK: - 本地化完整性测试
@@ -215,6 +347,8 @@ struct GameHUDFPSTests {
             "gamehud.view.average-fps",
             "gamehud.view.one-percent-low",
             "gamehud.view.frame-time",
+            "gamehud.view.network-upload",
+            "gamehud.view.network-download",
             "gamehud.view.fps-unit %lld",
             "gamehud.view.fps-unit-decimal %@",
             "gamehud.metric.fps",
@@ -223,7 +357,9 @@ struct GameHUDFPSTests {
             "gamehud.metric.frame-time",
             "gamehud.metric.fan-speed",
             "gamehud.metric.cpu-power",
-            "gamehud.metric.gpu-power"
+            "gamehud.metric.gpu-power",
+            "gamehud.metric.memory-pressure",
+            "gamehud.metric.network-rates"
         ]
 
         for key in requiredKeys {
@@ -286,6 +422,8 @@ struct GameHUDFPSTests {
         #expect(defaults.bool(forKey: "settings.gameHUD.newMetricsV2Migrated") == true)
         #expect(settings1.gameHUDEnabledMetricIDs.contains(.averageFPS))
         #expect(settings1.gameHUDEnabledMetricIDs.contains(.frameTime))
+        #expect(settings1.gameHUDEnabledMetricIDs.contains(.memoryPressure))
+        #expect(!settings1.gameHUDEnabledMetricIDs.contains(.networkRates))
 
         // 2. 用户主动取消勾选 averageFPS 和 frameTime
         settings1.setGameHUDMetric(.averageFPS, enabled: false)
@@ -297,6 +435,21 @@ struct GameHUDFPSTests {
         let settings2 = MonitorSettings(defaults: defaults)
         #expect(!settings2.gameHUDEnabledMetricIDs.contains(.averageFPS), "重启后不应再次强制塞入 averageFPS")
         #expect(!settings2.gameHUDEnabledMetricIDs.contains(.frameTime), "重启后不应再次强制塞入 frameTime")
+    }
+
+    @Test func existingHUDSettingsEnableMemoryPressureOnce() {
+        let defaults = UserDefaults(suiteName: "test.hagimi.memory-pressure.\(UUID().uuidString)")!
+        defaults.set(["cpuUsage", "memoryUsed"], forKey: "settings.gameHUD.enabledMetrics")
+        defaults.set(true, forKey: "settings.gameHUD.fpsMigrated")
+        defaults.set(true, forKey: "settings.gameHUD.newMetricsV2Migrated")
+
+        let settings = MonitorSettings(defaults: defaults)
+        #expect(settings.gameHUDEnabledMetricIDs.contains(.memoryPressure))
+        #expect(!settings.gameHUDEnabledMetricIDs.contains(.networkRates))
+        settings.setGameHUDMetric(.memoryPressure, enabled: false)
+
+        let restored = MonitorSettings(defaults: defaults)
+        #expect(!restored.gameHUDEnabledMetricIDs.contains(.memoryPressure))
     }
 
     @Test func legacyV1StoreMigratesAverageFPSOnceAndRespectsUserRemoval() {
@@ -400,8 +553,6 @@ struct GameHUDFPSTests {
         let meter = MetalPerfTraceMeter()
         meter.stop()
         #expect(meter.currentPID == nil)
-        #expect(meter.hasReceivedValidSample == false)
         #expect(meter.stats == nil)
     }
 }
-

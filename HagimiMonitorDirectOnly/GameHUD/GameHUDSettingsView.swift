@@ -1,9 +1,8 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Game HUD 设置页:总开关 → 监控项目 → 游戏名单 → 左右布局。
-/// 状态区明确区分「允许自动显示」与「当前正在显示」,受控增强说明
-/// 仅官网版出现(spec:Game HUD 设置页)。
+/// Game HUD 设置页:总开关 → 呈现样式与卡片位置 → 监控项目 → 游戏名单。
+/// 仅官网版提供游戏 HUD 设置；帧率数据的适用范围在监控项目下说明。
 struct GameHUDSettingsView: View {
     @ObservedObject var settings: MonitorSettings
     /// 会话状态由 AppDelegate 持有的协调器提供(与浮窗同源)。
@@ -19,14 +18,10 @@ struct GameHUDSettingsView: View {
         }
         .onAppear {
             rescan()
-            screenCapturePermission.activatePolling()
-        }
-        .onDisappear {
-            screenCapturePermission.deactivatePolling()
         }
     }
 
-    // MARK: - 总开关、布局与老游戏测帧强化
+    // MARK: - 总开关与布局
 
     private var headerGroup: some View {
         SettingsGroup {
@@ -36,19 +31,29 @@ struct GameHUDSettingsView: View {
                     .labelsHidden()
             }
             SettingsDivider()
-            SettingsRow(title: String(localized: "gamehud.settings.layout")) {
-                Picker(String(localized: "gamehud.layout.side"), selection: $settings.gameHUDSidePreference) {
-                    Text(String(localized: "gamehud.layout.top-left")).tag(GameHUDSide.topLeft)
-                    Text(String(localized: "gamehud.layout.top-right")).tag(GameHUDSide.topRight)
-                    Text(String(localized: "gamehud.layout.bottom-left")).tag(GameHUDSide.bottomLeft)
-                    Text(String(localized: "gamehud.layout.bottom-right")).tag(GameHUDSide.bottomRight)
+            SettingsRow(title: String(localized: "gamehud.settings.presentation-style")) {
+                Picker(String(localized: "gamehud.settings.presentation-style"), selection: $settings.gameHUDPresentationStyle) {
+                    Text(String(localized: "gamehud.style.top-strip")).tag(GameHUDPresentationStyle.topStrip)
+                    Text(String(localized: "gamehud.style.card")).tag(GameHUDPresentationStyle.card)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
                 .frame(width: 220)
             }
-            SettingsDivider()
-            screenCapturePermissionRow
+            if settings.gameHUDPresentationStyle == .card {
+                SettingsDivider()
+                SettingsRow(title: String(localized: "gamehud.settings.layout")) {
+                    Picker(String(localized: "gamehud.layout.side"), selection: $settings.gameHUDSidePreference) {
+                        Text(String(localized: "gamehud.layout.top-left")).tag(GameHUDSide.topLeft)
+                        Text(String(localized: "gamehud.layout.top-right")).tag(GameHUDSide.topRight)
+                        Text(String(localized: "gamehud.layout.bottom-left")).tag(GameHUDSide.bottomLeft)
+                        Text(String(localized: "gamehud.layout.bottom-right")).tag(GameHUDSide.bottomRight)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    .frame(width: 220)
+                }
+            }
         }
     }
 
@@ -64,31 +69,19 @@ struct GameHUDSettingsView: View {
                             .labelsHidden()
                     }
                 }
-            }
-        }
-    }
-
-    /// 屏幕录制授权行(FPS/1% Low 数据源):未授权显示「去授权」按钮,
-    /// 已授权显示已完成状态。与键盘锁定的引导交互同型。
-    @ObservedObject private var screenCapturePermission = ScreenCapturePermissionService.shared
-
-    @ViewBuilder
-    private var screenCapturePermissionRow: some View {
-        if screenCapturePermission.isTrusted {
-            SettingsRow(
-                title: String(localized: "gamehud.permission.screencapture"),
-                subtitle: String(localized: "gamehud.permission.screencapture.granted")
-            ) {
-                EmptyView()
-            }
-        } else {
-            SettingsRow(
-                title: String(localized: "gamehud.permission.screencapture"),
-                subtitle: String(localized: "gamehud.permission.screencapture.hint")
-            ) {
-                Button(String(localized: "gamehud.permission.grant")) {
-                    screenCapturePermission.presentGuide()
+                SettingsDivider()
+                    .padding(.top, 6)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(String(localized: "gamehud.settings.fps-availability"))
+                    Text(String(localized: "gamehud.settings.cpu-power-availability"))
                 }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18)
+                    .padding(.top, 10)
+                    .padding(.bottom, 14)
             }
         }
     }

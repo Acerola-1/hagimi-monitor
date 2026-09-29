@@ -17,3 +17,13 @@ nonisolated enum GameHUDSide: String, CaseIterable, Sendable {
         }
     }
 }
+
+/// HUD 呈现样式。顶部横条在目标窗口内能放入一行时使用。
+nonisolated enum GameHUDPresentationStyle: String, CaseIterable, Sendable {
+    case card
+    case topStrip
+
+    init(fromStored string: String) {
+        self = GameHUDPresentationStyle(rawValue: string) ?? .topStrip
+    }
+}
