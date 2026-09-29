@@ -194,6 +194,8 @@ final class MonitorSettings: ObservableObject {
     @Published private(set) var gameHUDExcludedGames: Set<String> = []
     /// 硬件 HUD 在目标窗口的四象限(左上、右上、左下、右下，默认右下)。
     @Published var gameHUDSidePreference: GameHUDSide = .bottomRight
+    /// 默认使用顶部单行横条；放不下时回退卡片布局。
+    @Published var gameHUDPresentationStyle: GameHUDPresentationStyle = .topStrip
     #endif
 
     /// 钉住面板窗口位置持久化。
@@ -520,11 +522,17 @@ final class MonitorSettings: ObservableObject {
                 defaults.set(true, forKey: Keys.gameHUDNewMetricsV2Migrated)
                 defaults.set(Array(restored).map(\.rawValue), forKey: Keys.gameHUDEnabledMetrics)
             }
+            if !defaults.bool(forKey: Keys.gameHUDMemoryPressureMigrated) {
+                restored.insert(.memoryPressure)
+                defaults.set(restored.map(\.rawValue), forKey: Keys.gameHUDEnabledMetrics)
+                defaults.set(true, forKey: Keys.gameHUDMemoryPressureMigrated)
+            }
             gameHUDEnabledMetricIDs = restored
         } else {
             gameHUDEnabledMetricIDs = GameHUDMetricCatalog.defaultEnabledIDs()
             defaults.set(true, forKey: Keys.gameHUDFPSMigrated)
             defaults.set(true, forKey: Keys.gameHUDNewMetricsV2Migrated)
+            defaults.set(true, forKey: Keys.gameHUDMemoryPressureMigrated)
         }
         // 渠道不可读项不残留:目录跨渠道能力不同,存储里可能带着上一渠道
         // (换装/迁移)写下的不可读 ID,读取时按当前目录过滤。
@@ -536,6 +544,7 @@ final class MonitorSettings: ObservableObject {
             gameHUDExcludedGames = Set(excludedGames)
         }
         gameHUDSidePreference = GameHUDSide(fromStored: defaults.string(forKey: Keys.gameHUDSide) ?? "")
+        gameHUDPresentationStyle = GameHUDPresentationStyle(fromStored: defaults.string(forKey: Keys.gameHUDPresentationStyle) ?? "")
         #endif
 
         launchAtLogin = SMAppService.mainApp.status == .enabled
@@ -1166,6 +1175,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $gameHUDPresentationStyle
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue.rawValue, forKey: Keys.gameHUDPresentationStyle)
+            }
+            .store(in: &cancellables)
+
         #endif
 
     }
@@ -1289,7 +1305,9 @@ private enum Keys {
     static let gameHUDCustomGames = "settings.gameHUD.customGames"
     static let gameHUDExcludedGames = "settings.gameHUD.excludedGames"
     static let gameHUDSide = "settings.gameHUD.side"
+    static let gameHUDPresentationStyle = "settings.gameHUD.presentationStyle"
     static let gameHUDFPSMigrated = "settings.gameHUD.fpsMigrated"
     static let gameHUDNewMetricsV2Migrated = "settings.gameHUD.newMetricsV2Migrated"
+    static let gameHUDMemoryPressureMigrated = "settings.gameHUD.memoryPressureMigrated"
     #endif
 }

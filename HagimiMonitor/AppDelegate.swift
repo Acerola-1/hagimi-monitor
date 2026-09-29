@@ -44,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }()
 
     /// Game HUD 总装配:会话判定与浮窗显隐。总开关关闭时轮询与浮窗都不活跃。
-    /// Game HUD 依赖 metalperftrace 外部探针、ScreenCaptureKit 窗口捕获与 CGWindowList 跨进程定位等非沙盒能力,
+    /// Game HUD 依赖 metalperftrace 外部探针与 CGWindowList 跨进程定位等非沙盒能力,
     /// 仅官网版编译(DIRECT_DISTRIBUTION)。
     #if DIRECT_DISTRIBUTION
     private(set) lazy var gameHUDCoordinator = GameHUDCoordinator(settings: store.settings, store: store)

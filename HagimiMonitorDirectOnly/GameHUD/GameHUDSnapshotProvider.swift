@@ -119,8 +119,8 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
     /// 单条指标读取。找到模块但本次采样缺值 → value=nil(显示 —);
     /// 模块整个缺失(未采样过/采样失败占位)同样按缺值处理,不伪造成 0。
     nonisolated static func readings(enabledIDs: Set<GameHUDMetricID>, in modules: [MonitorModule]) -> [GameHUDReading] {
-        let ordered = GameHUDMetricCatalog.availableEntries()
-            .filter { enabledIDs.contains($0.id) && $0.id != .fps && $0.id != .averageFPS && $0.id != .onePercentLow && $0.id != .frameTime }
+        let ordered = GameHUDMetricCatalog.displayEntries(enabledIDs: enabledIDs)
+            .filter { $0.id != .fps && $0.id != .averageFPS && $0.id != .onePercentLow && $0.id != .frameTime }
         return ordered.map { entry in
             let module = modules.first { $0.kind == entry.kind }
             return GameHUDReading(
@@ -161,8 +161,16 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
             }
             let summary = module.summary
             return (summary.isEmpty || summary == "—") ? nil : summary
+        case .memoryPressure:
+            return module.pressureValue.map(percent)
         case .memoryUsed:
             return module.metrics.first { $0.name == "used" }?.value
+        case .networkUpload:
+            return availableMetricValue("upload", in: module)
+        case .networkDownload:
+            return availableMetricValue("download", in: module)
+        case .networkRates:
+            return nil
         case .gpuMemory:
             return module.metrics.first { $0.name == "gpu-memory" }?.value
         case .systemPower:
@@ -207,9 +215,15 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
             return module.metrics.first { $0.name == "render" }?.numericValue
         case .gpuTiler:
             return module.metrics.first { $0.name == "tiler" }?.numericValue
-        case .fps, .averageFPS, .onePercentLow, .frameTime, .memoryUsed, .gpuMemory, .systemPower, .cpuTemperature, .cpuPower, .gpuPower, .fanSpeed:
+        case .fps, .averageFPS, .onePercentLow, .frameTime, .memoryPressure, .memoryUsed, .gpuMemory, .systemPower, .cpuTemperature, .cpuPower, .gpuPower, .fanSpeed, .networkRates, .networkUpload, .networkDownload:
             return nil
         }
+    }
+
+    private nonisolated static func availableMetricValue(_ name: String, in module: MonitorModule) -> String? {
+        guard let value = module.metrics.first(where: { $0.name == name })?.value,
+              value != "--" else { return nil }
+        return value
     }
 
     private nonisolated static func modulePercentString(_ module: MonitorModule, _ name: String) -> String? {

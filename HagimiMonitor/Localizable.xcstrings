@@ -20946,6 +20946,40 @@
         }
       }
     },
+    "gamehud.settings.cpu-power-availability": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU power: A reading may be unavailable on some devices."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU 功耗：部分设备可能无法获取读数。"
+          }
+        }
+      }
+    },
+    "gamehud.settings.fps-availability": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FPS, average FPS, 1% low, and frame time are currently available only for Metal games recognized by the system probe; other games may not provide these readings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "帧率、平均帧率、1% Low 和帧时间：当前仅支持系统探针可识别的 Metal 游戏；其他游戏可能无法读取。"
+          }
+        }
+      }
+    },
     "gamehud.settings.metrics.footer": {
       "extractionState": "manual",
       "localizations": {
@@ -21146,6 +21180,57 @@
           "stringUnit": {
             "state": "translated",
             "value": "游戏监测"
+          }
+        }
+      }
+    },
+    "gamehud.settings.presentation-style": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Style"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示样式"
+          }
+        }
+      }
+    },
+    "gamehud.style.card": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片"
+          }
+        }
+      }
+    },
+    "gamehud.style.top-strip": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top Strip"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顶部横条"
           }
         }
       }
@@ -21422,6 +21507,40 @@
         }
       }
     },
+    "gamehud.metric.memory-pressure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory Pressure"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存压力"
+          }
+        }
+      }
+    },
+    "gamehud.metric.network-rates": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network Upload & Download"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络上下行速率"
+          }
+        }
+      }
+    },
     "gamehud.metric.memory-used": {
       "extractionState": "manual",
       "localizations": {
@@ -21537,6 +21656,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "帧生成时间"
+          }
+        }
+      }
+    },
+    "gamehud.view.network-upload": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network Upload"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络上行速率"
+          }
+        }
+      }
+    },
+    "gamehud.view.network-download": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Network Download"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络下行速率"
           }
         }
       }
@@ -22047,108 +22200,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "%1$lld FPS（1%% Low: %2$lld FPS）"
-          }
-        }
-      }
-    },
-    "gamehud.permission.screencapture": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enhanced FPS Monitoring"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "帧数监测强化"
-          }
-        }
-      }
-    },
-    "gamehud.permission.screencapture.granted": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enabled: Legacy game FPS measurement is active"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已开启：支持老旧游戏测帧"
-          }
-        }
-      }
-    },
-    "gamehud.permission.screencapture.hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uses Screen Recording permission to measure frame rate for legacy games"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "通过获取屏幕权限来测算一些老旧游戏的帧数"
-          }
-        }
-      }
-    },
-    "gamehud.permission.grant": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Grant"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "去授权"
-          }
-        }
-      }
-    },
-    "gamehud.permission.guide-title": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Enable Frame Stats"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "开启帧率统计"
-          }
-        }
-      }
-    },
-    "gamehud.permission.guide-subtitle": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Drag HagimiMonitor into the Screen Recording list to enable in-game FPS and 1% Low stats"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "把 HagimiMonitor 拖入「屏幕录制」列表，游戏窗口的 FPS 与 1% Low 统计即可生效"
           }
         }
       }
