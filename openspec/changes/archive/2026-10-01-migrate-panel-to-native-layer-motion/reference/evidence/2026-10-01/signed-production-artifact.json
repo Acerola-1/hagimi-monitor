@@ -1,0 +1,9 @@
+{
+  "shipping_app": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/dd-direct/Build/Products/Release/HagimiMonitorDirect.app",
+  "shipping_executable_sha256": "d17a993abfe7a603542285baa79becd108dd24f30fab6b00f30874bea2dc0ae3",
+  "smoke_app": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/panel-closeout-2026-10-01/SignedFinalDirectSmoke.app",
+  "smoke_executable_sha256": "42923b87f608626f90460dfbdebf3863ae40917aa6758c065507e2aef7c47164",
+  "hardened_runtime": true,
+  "team": "VTQ6S5M4K3",
+  "project_sha256": "7029ad58dd5e2568f8d63c7df66b75e0b6d3798e4ac650a85d5c416245dc86e2"
+}
