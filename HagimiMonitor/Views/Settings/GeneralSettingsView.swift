@@ -505,14 +505,7 @@ private struct MenuBarDisplaySettingsSection: View {
     @ViewBuilder
     private var preview: some View {
         if settings.menuBarDisplayMode == .ring {
-            Image(nsImage: MenuBarComputeRingIcon.image(
-                load: store.loadAnimator.displayedComputeLoad,
-                darkMode: NSApp.effectiveAppearance.isDark,
-                loadLevel: store.haloRingLoadLevel
-            ))
-            .resizable()
-            // 与菜单栏里的实际图标同尺寸(21pt 画布,环本体 18pt)。
-            .frame(width: 21, height: 21)
+            MenuBarLoadRingPreview(animator: store.loadAnimator, darkMode: NSApp.effectiveAppearance.isDark)
         } else {
             MenuBarMetricLabel(
                 items: store.previewMenuBarMetricItems(),

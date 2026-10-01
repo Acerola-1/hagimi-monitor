@@ -8,13 +8,7 @@ struct MenuBarStatusLabel: View {
     var body: some View {
         switch store.settings.menuBarDisplayMode {
         case .ring:
-            Image(nsImage: MenuBarComputeRingIcon.image(
-                load: store.loadAnimator.displayedComputeLoad,
-                darkMode: darkMode,
-                loadLevel: store.haloRingLoadLevel
-            ))
-            .resizable()
-            .frame(width: 18, height: 18)
+            MenuBarLoadRingPreview(animator: store.loadAnimator, darkMode: darkMode, side: 18)
             .help("HagimiMonitor")
         case .metrics:
             MenuBarMetricLabel(
@@ -23,6 +17,19 @@ struct MenuBarStatusLabel: View {
             )
             .help("HagimiMonitor")
         }
+    }
+}
+
+/// 高频订阅止于图标叶子；设置页和面板不因负载环动画重算整个内容树。
+struct MenuBarLoadRingPreview: View {
+    @ObservedObject var animator: MenuBarLoadAnimator
+    let darkMode: Bool
+    var side: CGFloat = 21
+
+    var body: some View {
+        Image(nsImage: MenuBarComputeRingIcon.image(load: animator.displayedComputeLoad, darkMode: darkMode))
+            .resizable()
+            .frame(width: side, height: side)
     }
 }
 

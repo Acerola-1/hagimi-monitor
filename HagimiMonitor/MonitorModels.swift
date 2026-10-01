@@ -552,9 +552,9 @@ final class MonitorStore: ObservableObject {
     @Published var topNetworkProcesses: [TopNetworkProcess] = []
     var selectedKind: MonitorKind = .cpu
 
-    /// 菜单栏负载环的 30fps 平滑动画状态,独立发布(而非 MonitorStore 自身的
+    /// 菜单栏负载环的平滑动画状态,独立发布(而非 MonitorStore 自身的
     /// @Published),避免 MonitorPanelView 等只用 `@ObservedObject` 订阅整个 store、
-    /// 却从不读取该值的视图,在负载爬升/回落期间被拖着以 30fps 重算整棵视图树。
+    /// 却从不读取该值的视图,在负载爬升/回落期间被拖着重算整棵视图树。
     let loadAnimator = MenuBarLoadAnimator()
 
     /// 展开动画的单一进度驱动器。独立 ObservableObject(与 loadAnimator 同思路):
@@ -581,6 +581,7 @@ final class MonitorStore: ObservableObject {
     /// 展开/收起动画截止时刻;窗口期内的采样结果推迟应用(见 applySamplingResult)。
     /// 由 `beginExpansionAnimation` 在每次展开/收起起点置位。
     private var expansionAnimationDeadline = Date.distantPast
+    private let panelPublications = PanelPublicationGate()
 
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
@@ -714,7 +715,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newFans in
                 guard let self else { return }
-                settleAfterExpansion { self.fans = newFans }
+                settleAfterExpansion(key: "fans") { [weak self] in self?.fans = newFans }
             }
             .store(in: &cancellables)
 
@@ -723,7 +724,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newStatus in
                 guard let self else { return }
-                settleAfterExpansion { self.fanStatus = newStatus }
+                settleAfterExpansion(key: "fan-status") { [weak self] in self?.fanStatus = newStatus }
             }
             .store(in: &cancellables)
 
@@ -739,7 +740,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newDevices in
                 guard let self else { return }
-                settleAfterExpansion { self.bluetoothDevices = newDevices }
+                settleAfterExpansion(key: "bluetooth-devices") { [weak self] in self?.bluetoothDevices = newDevices }
             }
             .store(in: &cancellables)
 
@@ -747,7 +748,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] state in
                 guard let self else { return }
-                settleAfterExpansion { self.bluetoothControllerState = state }
+                settleAfterExpansion(key: "bluetooth-state") { [weak self] in self?.bluetoothControllerState = state }
             }
             .store(in: &cancellables)
 
@@ -864,7 +865,6 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         #endif
         let sampleFast: @Sendable () -> Void = { [weak self] in
             #if DIRECT_DISTRIBUTION
-            // 直连版 CPU 来自 ps,无基线,与面板不存在共享问题。
             // 直连版 CPU 来自 ps,无基线,不与面板游标共享状态。
             let cpu = enrichCPU(sampleTopCPUViaPS(limit: 12, includeSystemProcesses: true))
             #else
@@ -916,7 +916,6 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         // 启动;已授权则幂等补挂监视(覆盖运行期授权变化)。
         bluetoothSampler.activateBLE()
         if wasEmpty {
-            loadAnimator.setPanelVisible(true)
             isPanelVisible = true
             startProcSampleTimer()
             refreshAllProcesses()
@@ -928,19 +927,21 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         visiblePanelKinds.remove(kind)
         if visiblePanelKinds.isEmpty {
             isPanelVisible = false
-            loadAnimator.setPanelVisible(false)
             processSampleGeneration &+= 1
+            expansionAnimationDeadline = .distantPast
+            panelPublications.resume()
             stopProcSampleTimer()
             clearProcesses()
         }
     }
 
     /// 由 SwiftUI 侧在每次展开/收起起点调用:置位动画截止时刻。
-    /// 窗口期内的采样结果推迟到动画结束后再刷 UI,避免 1-3s 节奏的模块刷新恰好
-    /// 撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
-    func beginExpansionAnimation() {
-        expansionAnimationDeadline = Date().addingTimeInterval(MonitorConstants.panelExpansionSettleTime)
-        // 动画窗口内同步停更负载环 30fps 相位,不与展开动画抢主线程。
+    /// 窗口期内合并最新界面数据，运动结束后一次发布；采样缓存与统计持续更新，
+    /// 避免周期数据发布与运动布局争用主线程。
+    func beginExpansionAnimation(duration: TimeInterval = MonitorConstants.panelExpansionSettleTime) {
+        expansionAnimationDeadline = Date().addingTimeInterval(duration)
+        panelPublications.pause(until: expansionAnimationDeadline)
+        // 动画窗口内同步停更负载环，不与展开动画抢绘制。
         loadAnimator.suspend(until: expansionAnimationDeadline)
     }
 
@@ -951,29 +952,10 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     }
 
     /// 把一个 @Published 应用动作推迟到展开/收起动画窗口结束再执行,窗口外直接执行。
-    /// 窗口内刷新会拖着面板视图树在动画帧间重算,造成肉眼可见的顿挫;
-    /// 推迟到弹簧收尾后再刷,主队列 FIFO 保证多次推迟的顺序不乱。
-    /// (调试对照:HAGIMI_NODEFER_SAMPLING=1 时关闭推迟,用于帧探针 A/B 对比。)
-    private func deferUntilExpansionSettles(_ action: @escaping () -> Void) {
-        let deferDisabled = ProcessInfo.processInfo.environment["HAGIMI_NODEFER_SAMPLING"] != nil
-        guard !deferDisabled, Date() < expansionAnimationDeadline else {
-            action()
-            return
-        }
-        let delay = expansionAnimationDeadline.timeIntervalSinceNow
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-            guard let self else { return }
-            // 重检:连点期间 deadline 被后续 toggle 推后,原定时点可能仍落在新窗口内,
-            // 此时再推迟一次而不是强行应用,避免 @Published 刷新撞弹簧动画帧。
-            if Date() < self.expansionAnimationDeadline {
-                let next = self.expansionAnimationDeadline.timeIntervalSinceNow
-                DispatchQueue.main.asyncAfter(deadline: .now() + next) {
-                    action()
-                }
-            } else {
-                action()
-            }
-        }
+    /// 每个发布切片在运动结束后只应用最新结果；旧截止回调由门控代际作废。
+    private func deferUntilExpansionSettles(key: String, _ action: @escaping () -> Void) {
+        if ProcessInfo.processInfo.environment["HAGIMI_NODEFER_SAMPLING"] != nil { action() }
+        else { panelPublications.submit(key: key, action) }
     }
 
     /// 当前设置里已开启进程列表的类目集合。
@@ -1125,7 +1107,8 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
                     current: self.processSampleGeneration,
                     hasVisiblePanel: !self.visiblePanelKinds.isEmpty
                 ) else { return }
-                self.deferUntilExpansionSettles {
+                self.deferUntilExpansionSettles(key: "processes:" + kinds.map(\.id).sorted().joined(separator: ",")) { [weak self] in
+                    guard let self else { return }
                     guard Self.shouldPublishProcessSample(
                         startedAt: generation,
                         current: self.processSampleGeneration,
@@ -1344,43 +1327,22 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         }
     }
 
-    /// 动画窗口期内的 @Published 应用推迟:展开/收起弹簧动画的 ~0.5s 衰减期内,把非主采样的
-    /// 独立采样器(风扇/蓝牙)刷新同样排空,给逐帧动画让出主线程余量——主采样已按
-    /// 同一 deadline 推迟,这里补齐剩余会拖动面板子树重算的指标,外接屏扩放渲染
-    /// 负载时余量越少越易掉帧。
-    private func settleAfterExpansion(_ apply: @escaping @MainActor @Sendable () -> Void) {
-        let deadline = expansionAnimationDeadline
-        if Date() < deadline {
-            DispatchQueue.main.asyncAfter(deadline: .now() + deadline.timeIntervalSinceNow) { [weak self] in
-                MainActor.assumeIsolated {
-                    guard let self else {
-                        apply()
-                        return
-                    }
-                    if Date() < self.expansionAnimationDeadline {
-                        let next = self.expansionAnimationDeadline.timeIntervalSinceNow
-                        DispatchQueue.main.asyncAfter(deadline: .now() + next) {
-                            MainActor.assumeIsolated {
-                                apply()
-                            }
-                        }
-                    } else {
-                        apply()
-                    }
-                }
-            }
-        } else {
-            apply()
-        }
+    /// 独立采样器按字段合并发布，风扇与蓝牙不会互相覆盖最新值。
+    private func settleAfterExpansion(key: String, _ apply: @escaping @MainActor @Sendable () -> Void) {
+        deferUntilExpansionSettles(key: key, apply)
     }
 
     private func applySamplingResult(_ result: Result<SystemMonitorSnapshot, SamplingError>, freshKinds: Set<MonitorKind>) {
         switch result {
         case .success(let snapshot):
-            // 展开/收起动画窗口期内推迟应用,与 TOP 列表发布同规则
-            // (见 deferUntilExpansionSettles)。
-            deferUntilExpansionSettles { [weak self] in
-                self?.applySamplingSuccess(snapshot, freshKinds: freshKinds)
+            // 采样缓存和统计立即推进，界面发布独立等待运动收敛。
+            allModules = snapshot.modules
+            if statisticsSamplingActive {
+                statisticsRecorder.record(modules: snapshot.modules, fans: fanSampler.fans,
+                    freshKinds: freshKinds, at: Date())
+            }
+            deferUntilExpansionSettles(key: "modules") { [weak self] in
+                self?.publishSamplingSuccess()
             }
 
         case .failure(let error):
@@ -1399,12 +1361,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     }
 
     /// 应用一次成功采样的结果到发布属性。
-    private func applySamplingSuccess(_ snapshot: SystemMonitorSnapshot, freshKinds: Set<MonitorKind>) {
-        // 采样值未变时跳过重新赋值:避免空转触发 @Published,拖动
-        // MonitorPanelView 等 @ObservedObject 订阅方做无意义的重算。
-        if allModules != snapshot.modules {
-            allModules = snapshot.modules
-        }
+    private func publishSamplingSuccess() {
         // 注入风扇模块:仅在 fanAvailable 时插入,位置固定在 GPU 之后、内存之前。
         // FanSampler 独立于 SystemMonitorSampler 管线(读 SMC 而非 Mach),此处
         // 把它的输出合成成 MonitorModule.fan 填入 allModules。
@@ -1416,9 +1373,6 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             modules = newVisibleModules
         }
         updateMenuBarTargetComputeLoad()
-        if statisticsSamplingActive {
-            statisticsRecorder.record(modules: allModules, fans: fans, freshKinds: freshKinds, at: Date())
-        }
         #if DIRECT_DISTRIBUTION
         // Game HUD 快照发布:由 provider 内部依据活跃订阅数与勾选短路,
         // HUD 隐藏(无订阅)或无勾选时无下游开销。
@@ -1512,94 +1466,6 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     }
 }
 
-/// 菜单栏负载环的 30fps 平滑动画状态。从 MonitorStore 拆出独立发布,详见
-/// `MonitorStore.loadAnimator` 处的说明。
-final class MenuBarLoadAnimator: ObservableObject {
-    @Published private(set) var displayedComputeLoad = 0.0
-
-    private var targetComputeLoad = 0.0
-    private var smoothingTimerCancellable: AnyCancellable?
-    /// 任一监控面板可见时，菜单栏环只随采样低频更新；避免 30fps 状态项
-    /// 重绘持续触发透明毛玻璃窗口与桌面的屏幕合成。
-    private var panelVisible = false
-    /// 展开动画窗口截止时刻:窗口内暂停 30fps 推进,动画结束后恢复平滑。
-    private var suspensionDeadline = Date.distantPast
-
-    func updateTarget(_ target: Double) {
-        guard ComputeLoadModel.shouldUpdateMenuBarTarget(
-            currentTarget: targetComputeLoad,
-            nextTarget: target
-        ) else {
-            return
-        }
-        targetComputeLoad = target
-        if panelVisible {
-            publishTargetImmediately()
-            return
-        }
-        ensureSmoothingTimer()
-    }
-
-    /// 可见期保留准确读数，但把菜单栏动画从 30fps 降为采样驱动（通常 1fps）。
-    /// 面板收起后恢复原平滑策略；若可见期已追上目标则不会额外启动计时器。
-    func setPanelVisible(_ visible: Bool) {
-        guard panelVisible != visible else { return }
-        panelVisible = visible
-        if visible {
-            smoothingTimerCancellable?.cancel()
-            smoothingTimerCancellable = nil
-            publishTargetImmediately()
-        } else if Self.quantizeLoad(targetComputeLoad) != displayedComputeLoad {
-            ensureSmoothingTimer()
-        }
-    }
-
-    /// 暂停平滑推进至指定时刻(用于展开动画窗口),动画结束后自然恢复。
-    func suspend(until deadline: Date) {
-        suspensionDeadline = deadline
-    }
-
-    private func advanceSmoothing() {
-        guard Date() >= suspensionDeadline else { return }
-        let next = ComputeLoadModel.smoothedDisplayValue(
-            current: displayedComputeLoad,
-            target: targetComputeLoad
-        )
-        let quantized = Self.quantizeLoad(next)
-        if quantized != displayedComputeLoad {
-            displayedComputeLoad = quantized
-        }
-        let quantizedTarget = Self.quantizeLoad(targetComputeLoad)
-        if abs(displayedComputeLoad - quantizedTarget) <= MonitorConstants.menuBarLoadSmoothStopThreshold {
-            if displayedComputeLoad != quantizedTarget {
-                displayedComputeLoad = quantizedTarget
-            }
-            smoothingTimerCancellable?.cancel()
-            smoothingTimerCancellable = nil
-        }
-    }
-
-    private static func quantizeLoad(_ load: Double) -> Double {
-        min(100.0, max(0.0, load)).rounded()
-    }
-
-    private func ensureSmoothingTimer() {
-        guard !panelVisible, smoothingTimerCancellable == nil else { return }
-        smoothingTimerCancellable = Timer.publish(every: MonitorConstants.menuBarLoadSmoothFrameInterval, on: .main, in: .common)
-            .autoconnect()
-            .sink { [weak self] _ in
-                self?.advanceSmoothing()
-            }
-    }
-
-    private func publishTargetImmediately() {
-        let target = Self.quantizeLoad(targetComputeLoad)
-        if displayedComputeLoad != target {
-            displayedComputeLoad = target
-        }
-    }
-}
-
 enum ComputeLoadModel {
     static func combined(
         cpuValue: Double,
@@ -1642,33 +1508,13 @@ enum ComputeLoadModel {
 
     static func loadLevel(for load: Double) -> MenuBarComputeLoadLevel {
         // 阈值按 softmax 聚合(k=0.08)的值分布校准：单瓶颈天花板≈86，
-        // 故 stressed 下探到 78 以让「单子系统近满/双高/内存critical」触红。
+        // stressed 从 78 起表示单子系统近满或多个高负载；内存 critical 单独贡献约 71。
         switch load {
-        case ..<25: return .idle
-        case ..<50: return .working
-        case ..<78: return .busy
+        case ..<MonitorConstants.menuBarLoadLevelBoundaries[0]: return .idle
+        case ..<MonitorConstants.menuBarLoadLevelBoundaries[1]: return .working
+        case ..<MonitorConstants.menuBarLoadLevelBoundaries[2]: return .busy
         default: return .stressed
         }
-    }
-
-    static func smoothedDisplayValue(
-        current: Double,
-        target: Double,
-        factor: Double = MonitorConstants.menuBarLoadSmoothFactor,
-        minStep: Double = MonitorConstants.menuBarLoadSmoothMinStep
-    ) -> Double {
-        let clampedCurrent = min(100, max(0, current))
-        let clampedTarget = min(100, max(0, target))
-        let delta = clampedTarget - clampedCurrent
-        let distance = abs(delta)
-
-        if distance <= minStep {
-            return clampedTarget
-        }
-
-        // ease-out: proportional step, fast start, slow finish.
-        let step = max(minStep, distance * factor)
-        return clampedCurrent + (delta > 0 ? step : -step)
     }
 
     static func shouldUpdateMenuBarTarget(
@@ -1677,6 +1523,7 @@ enum ComputeLoadModel {
         threshold: Double = MonitorConstants.menuBarLoadChangeThreshold
     ) -> Bool {
         abs(min(100, max(0, nextTarget)) - min(100, max(0, currentTarget))) >= threshold
+            || loadLevel(for: currentTarget) != loadLevel(for: nextTarget)
     }
 }
 

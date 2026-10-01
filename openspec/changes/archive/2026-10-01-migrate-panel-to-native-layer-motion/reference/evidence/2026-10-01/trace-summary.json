@@ -1,0 +1,38 @@
+[
+  {
+    "trace": "trace-native-both.trace",
+    "export_error": "Export failed: Document Missing Template Error\nExport failed: Unexpected internal error\n"
+  },
+  {
+    "trace": "trace-native-cpu.trace",
+    "pid": 2940,
+    "app_events": 7,
+    "app_hitch_duration_ms": 116.666662,
+    "all_events": 7,
+    "coverage": "initial 8 seconds; no screen recording; no display drop-rate denominator"
+  },
+  {
+    "trace": "trace-native-normal.trace",
+    "pid": 2720,
+    "app_events": 10,
+    "app_hitch_duration_ms": 183.333161,
+    "all_events": 10,
+    "coverage": "initial 8 seconds; no screen recording; no display drop-rate denominator"
+  },
+  {
+    "trace": "trace-original-both.trace",
+    "export_error": "Export failed: Document Missing Template Error\nExport failed: Unexpected internal error\n"
+  },
+  {
+    "trace": "trace-original-cpu.trace",
+    "export_error": "Export failed: Document Missing Template Error\nExport failed: Unexpected internal error\n"
+  },
+  {
+    "trace": "trace-original-normal.trace",
+    "pid": 2196,
+    "app_events": 26,
+    "app_hitch_duration_ms": 466.66457099999997,
+    "all_events": 26,
+    "coverage": "initial 8 seconds; no screen recording; no display drop-rate denominator"
+  }
+]

@@ -1,0 +1,3 @@
+# 认可 Demo 的源码及原始日志以登记哈希识别，保留其原始字节内容。
+prototypes/panel-motion-demo/install_native_cpu.py -whitespace
+prototypes/panel-motion-demo/reference/evidence/*.log -whitespace

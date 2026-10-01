@@ -1,0 +1,20 @@
+[
+  {
+    "channel": "direct",
+    "app": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/panel-closeout-2026-10-01/FinalDirectSmoke.app",
+    "bundle_id": "local.hagimi.closeout.final.direct",
+    "executable_sha256": "5f5fffc20c2f9e2a4f1de9885e6329bbc55cecc5dfd5a72bd53dc697434b9dd8",
+    "motion_selection_flags": [],
+    "shipping_app": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/dd-direct/Build/Products/Release/HagimiMonitorDirect.app",
+    "shipping_executable_sha256": "a7fdf68a5a0015b607d7a5810cc73bdb909cb7f5914255f8062c65f5e1f1fe4c"
+  },
+  {
+    "channel": "appstore",
+    "app": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/panel-closeout-2026-10-01/FinalAppStoreSmoke.app",
+    "bundle_id": "local.hagimi.closeout.final.appstore",
+    "executable_sha256": "33c049febfbdd384b5f92f06a22b0d93b7788eba616142dc2a63c0b69c93d552",
+    "motion_selection_flags": [],
+    "shipping_app": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/dd-appstore/Build/Products/Release/HagimiMonitor.app",
+    "shipping_executable_sha256": "5bdf7fd885061810a2f2df2e346a6adcdcdd68119a1149bd7271b31468d9ed0c"
+  }
+]

@@ -18,9 +18,9 @@ struct DisplayControlEngineTests {
         )
     }
 
-    /// 等待引擎串行队列消费完当前积压。
+    /// Fake 的同步回调会继续向引擎队列追加结果处理；覆盖提交、回读和最多三个属性的串行回调。
     private func settle(_ engine: DisplayControlEngine) async {
-        await engine.__waitForIdleForTesting()
+        for _ in 0..<4 { await engine.__waitForIdleForTesting() }
     }
 
     /// 提交一次写入并推进虚拟时钟:先 settle 让 enqueue 落定并调度 timer,
@@ -609,14 +609,19 @@ struct DisplayControlEngineTests {
         await settle(engine)
 
         await runWrite(engine, clock: clock, token: token, control: .brightness, value: 80)
-        // 推进足够长,让两次确认重试(0.3 + 0.5 + 0.5)全部执行。
-        clock.advance(by: 5.0)
-        await settle(engine)
+        // 每轮等串行队列处理读回并登记下一次定时器，再推进虚拟时钟。
+        // 一次跨越全部期限会让异步确认任务在时钟终点才开始，不能代表重试已完成。
+        for interval in [0.4, 0.6, 0.6] {
+            clock.advance(by: interval)
+            await settle(engine)
+        }
 
         let snapshot = await engine.__snapshotForTesting()
         let state = snapshot.states[token]?[.brightness]
+        #expect(transport.readCount() == 3, "初次确认与两次重试都必须执行")
         #expect(state?.writeStatus == .sentUnverified, "持续不一致不能伪造成功")
         #expect(state?.observed == 50, "保留真实读数")
+        #expect(state?.desired == 80, "真实读数不能覆盖尚未确认的目标")
     }
 
     /// 连接更换:旧连接的确认不作用于新连接。

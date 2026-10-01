@@ -59,17 +59,12 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private let panel: NSPanel
     private let presentation = QuickPanelPresentation()
     private var hostingView: NSHostingView<AnyView>?
-    private var glassHost: CompatiblePanelGlassHost?
     private var cancellables = Set<AnyCancellable>()
     private let cleanupBox = PinnedPanelCleanupBox()
 
     /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
     private let panelRefreshGate: PanelRefreshGate
 
-    /// 最近一次实测内容尺寸,弹簧收尾对账用。
-    private var lastReportedContentSize: CGSize = .zero
-    /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
-    private static let minPanelHeight: CGFloat = 96
 
     /// 面板外框圆角:与 FluidPanelController 一致(panelCornerRadius)。
     private static let panelCornerRadius = CGFloat(MonitorConstants.panelCornerRadius)
@@ -79,9 +74,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         self.openSettingsAction = openSettings
         panelRefreshGate = PanelRefreshGate(store: store)
 
-        panel = NSPanel(
+        panel = NativePanelWindow(
             contentRect: CGRect(x: 0, y: 0, width: MonitorConstants.panelIdealWidth, height: 200),
-            styleMask: [.titled, .nonactivatingPanel, .utilityWindow, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -96,12 +91,6 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         )
         installEventMonitor()
 
-        store.settings.$liquidGlassEnabled
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] enabled in
-                self?.glassHost?.updateMaterial(liquidGlassEnabled: enabled)
-            }
-            .store(in: &cancellables)
     }
 
     // MARK: - Setup
@@ -109,7 +98,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private func configurePanel() {
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.animationBehavior = .none
         // 仅当前桌面显示,不跟随 Spaces 切换。
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
@@ -127,9 +116,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         // 窗口底座宿主：由 CompatiblePanelGlassHost 提供跨版本兼容背景（Liquid Glass / popover 毛玻璃），
         // 内部行卡片严格保持 withinWindow 材质。
         let glassHost = CompatiblePanelGlassHost(cornerRadius: Self.panelCornerRadius)
-        glassHost.updateMaterial(liquidGlassEnabled: store.settings.liquidGlassEnabled)
         panel.contentView = glassHost
-        self.glassHost = glassHost
 
         let root = MonitorPanelView(store: store, refreshGate: panelRefreshGate, quickPanelPresentation: presentation)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action { [weak self] in
@@ -137,12 +124,8 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
                 self?.openSettingsAction()
             })
             .environment(\.panelMotionAdapter, self)
-            .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
-                self?.applyWindowHeight(height, animated: animated)
-            }
-            .modifier(PinnedPanelSizeReader { [weak self] size in
-                self?.contentSizeDidChange(to: size)
-            })
+            .ignoresSafeArea()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
         let hosting = NSHostingView(rootView: AnyView(root))
         hosting.sizingOptions = []
@@ -150,7 +133,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
         hosting.layer?.cornerCurve = .continuous
-        hosting.layer?.masksToBounds = true
+        hosting.layer?.masksToBounds = false
         glassHost.setHostingView(hosting)
 
         hostingView = hosting
@@ -212,22 +195,48 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panelRefreshGate.open()
         panelMotion?.resume()
         // 隐藏时未收敛的窗口弹簧在此清场,本次呼出由重定位接管。
-        windowSpring.cancel()
         presentation.resetPin()
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] != nil,
+           NativePanelMotionMode.testHost == "pinned" { presentation.togglePinState() }
         updatePresentationMode()
 
         hostingView?.layoutSubtreeIfNeeded()
-        if PanelMotionExperiment.enabled && panelMotion?.currentFrame == nil {
+        if panelMotion?.currentFrame == nil {
             awaitingGeometry = true
+            if !panel.isVisible {
+                let screen = currentScreen() ?? NSScreen.main
+                let size = CGSize(width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
+                    height: screen?.visibleFrame.height ?? 800)
+                panel.setContentSize(size)
+                if let screen {
+                    panel.setFrameOrigin(CGPoint(x: screen.visibleFrame.midX - size.width / 2,
+                        y: screen.visibleFrame.maxY - size.height))
+                }
+                panel.alphaValue = 0; panel.ignoresMouseEvents = true
+                panel.orderFrontRegardless(); hostingView?.needsLayout = true
+            }
             return
         }
         awaitingGeometry = false
         let intrinsic = hostingView?.intrinsicContentSize ?? .zero
-        let size = (intrinsic.width > 1 && intrinsic.height > 1) ? intrinsic : panel.frame.size
+        let size: CGSize
+
+            size = CGSize(width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
+                height: (currentScreen() ?? NSScreen.main)?.visibleFrame.height ?? 800)
+
 
         // 读取记忆位置,无历史值则用默认位置（主屏右上角）。
-        if let savedOrigin = store.settings.pinnedPanelOrigin {
-            panel.setFrame(CGRect(origin: savedOrigin, size: size), display: false)
+        if let screen = NativePanelMotionMode.testScreen {
+            panel.setFrame(CGRect(x: screen.visibleFrame.midX - size.width / 2,
+                y: screen.visibleFrame.maxY - size.height, width: size.width, height: size.height), display: false)
+        } else if let savedOrigin = store.settings.pinnedPanelOrigin {
+            var origin = savedOrigin
+
+                let visibleHeight = panelMotion?.currentFrame?.windowContentSize.height ?? size.height
+                origin.x -= MonitorConstants.panelNativeShadowInset
+                origin.y += visibleHeight + MonitorConstants.panelNativeShadowInset - size.height
+
+            panel.setFrame(CGRect(origin: origin, size: size), display: false)
         } else {
             panel.setContentSize(size)
             // 默认位置:主屏右上角,留出边距。
@@ -245,7 +254,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         ensureOnScreen()
 
         // 非激活方式呈现,保持当前 App 前台。
+        panel.alphaValue = 1
         panel.orderFrontRegardless()
+panelMotion?.nativeLayer.panelDidShow()
 
         store.panelDidAppear(.pinned)
     }
@@ -255,12 +266,13 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         if awaitingGeometry {
             awaitingGeometry = false
             panelMotion?.suspend()
+panel.orderOut(nil)
             panelRefreshGate.close()
             return
         }
         guard panel.isVisible else { return }
         panelMotion?.suspend()
-        panel.orderOut(nil)
+panel.orderOut(nil)
         panelMotion?.resetForHiddenPanel?()
         store.panelDidDisappear(.pinned)
         if resetPin {
@@ -286,78 +298,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panel.isVisible
     }
 
-    // MARK: - Sizing / Positioning
 
-    /// 窗口高度弹簧跟随器:以与内容侧完全相同的弹簧参数驱动窗口 frame,
-    /// 与合成器侧的内容高度插值同参同相(详见 FluidPanelController 同名属性)。
-    private lazy var windowSpring = PanelWindowSpring(
-        applyHeight: { [weak self] height in self?.applySpringHeight(height) },
-        screen: { [weak self] in self?.panel.screen }
-    )
-
-    /// driver 下发窗口目标高度。
-    /// animated=true(展开/收起):预测终高交给同参弹簧逐帧跟随,收敛后对账;
-    /// animated=false(初始化/隐藏重置):直接贴合。
-    private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
-        guard panel.isVisible else { return }
-        if animated {
-            windowSpring.retarget(to: contentHeight, from: panel.frame.height) { [weak self] in
-                self?.reconcileWindowToContentSize()
-            }
-        } else {
-            windowSpring.setInstantly(to: contentHeight)
-        }
-    }
-
-    /// 弹簧逐帧高度 → 窗口贴合。固定顶部,向下生长;高度下限兜底:
-    /// 预测链异常时防止窗口被带到 0/负高度(表现为「整页消失」)。
-    private func applySpringHeight(_ height: CGFloat) {
-        let size = CGSize(width: panel.frame.width, height: max(height, Self.minPanelHeight))
-        guard panel.frame.size != size else { return }
-        var frame = panel.frame
-        let top = frame.maxY
-        frame.size = size
-        frame.origin.y = top - size.height
-        panel.setFrame(frame, display: true)
-    }
-
-    /// 弹簧收尾对账:窗口尺寸与最近一次内容实测尺寸不一致时补贴合一次。
-    private func reconcileWindowToContentSize() {
-        guard lastReportedContentSize.height > 0,
-              panel.frame.size != lastReportedContentSize else { return }
-        var frame = panel.frame
-        let top = frame.maxY
-        frame.size = lastReportedContentSize
-        frame.origin.y = top - frame.height
-        panel.setFrame(frame, display: true)
-    }
-
-    private func contentSizeDidChange(to size: CGSize) {
-        lastReportedContentSize = size
-        guard windowSpring.isAnimating || panel.frame.size != size else { return }
-        if windowSpring.isAnimating, abs(windowSpring.target - size.height) < 0.5 {
-            return
-        }
-        DispatchQueue.main.async { [weak self] in
-            guard let self else { return }
-            if self.store.isExpansionAnimating || self.windowSpring.isAnimating {
-                if self.windowSpring.isAnimating, abs(self.windowSpring.target - size.height) < 0.5 {
-                    return
-                }
-                self.windowSpring.retarget(to: size.height, from: self.panel.frame.height) { [weak self] in
-                    self?.reconcileWindowToContentSize()
-                }
-            } else {
-                guard self.panel.frame.size != size else { return }
-                // 固定顶部，内容展开时只向下生长。
-                var frame = self.panel.frame
-                let top = frame.maxY
-                frame.size = size
-                frame.origin.y = top - size.height
-                self.panel.setFrame(frame, display: true)
-            }
-        }
-    }
 
     /// 确保面板在可见屏幕范围内。若不与任何屏幕相交,回收到主屏。
     private func ensureOnScreen() {
@@ -397,7 +338,13 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 
     nonisolated func windowDidMove(_ notification: Notification) {
         MainActor.assumeIsolated {
-            store.settings.savePinnedPanelOrigin(panel.frame.origin)
+            var origin = panel.frame.origin
+
+                origin.x += MonitorConstants.panelNativeShadowInset
+                origin.y = panel.frame.maxY - MonitorConstants.panelNativeShadowInset
+                    - (panelMotion?.nativeLayer.sample(at: CACurrentMediaTime())?.frame.windowContentSize.height ?? panel.frame.height)
+
+            store.settings.savePinnedPanelOrigin(origin)
         }
     }
 
@@ -437,34 +384,7 @@ final class QuickPanelPresentation: ObservableObject {
     }
 }
 
-// MARK: - Size Reader
 
-/// 与 FluidPanelSizeReader 相同的尺寸读取器,用于钉住面板。
-private struct PinnedPanelSizeReader: ViewModifier {
-    let onChange: (CGSize) -> Void
-
-    func body(content: Content) -> some View {
-        if PanelMotionExperiment.enabled {
-            content
-                .ignoresSafeArea()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        } else {
-        content
-            .edgesIgnoringSafeArea(.all)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear { onChange(geometry.size) }
-                        .onChange(of: geometry.size) { _, newValue in
-                            onChange(newValue)
-                        }
-                }
-            )
-            .fixedSize()
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-        }
-    }
-}
 
 extension PinnedPanelController: PanelWindowSubmissionAdapter {
     var isWindowUnoccluded: Bool { panel.isVisible && panel.occlusionState.contains(.visible) }
@@ -475,10 +395,10 @@ extension PinnedPanelController: PanelWindowSubmissionAdapter {
     func geometryDidPrepare() {
         guard awaitingGeometry else { return }
         awaitingGeometry = false
+panel.orderOut(nil)
         show()
     }
     func submitWindowFrame(size: CGSize, frameID: UInt) {
-        lastReportedContentSize = size
         var frame = panel.frame
         let top = frame.maxY
         // fullSizeContentView 的宿主覆盖整个 frame，内容高度已包含标题栏区域。
@@ -486,6 +406,6 @@ extension PinnedPanelController: PanelWindowSubmissionAdapter {
         frame.origin.y = top - frame.height
         panel.setFrame(frame, display: false, animate: false)
     }
-    func currentScreen() -> NSScreen? { panel.screen }
+    func currentScreen() -> NSScreen? { NativePanelMotionMode.testScreen ?? panel.screen }
     func completePresentationLayout() { hostingView?.layoutSubtreeIfNeeded() }
 }

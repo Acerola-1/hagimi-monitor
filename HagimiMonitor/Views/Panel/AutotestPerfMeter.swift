@@ -1,20 +1,18 @@
 import AppKit
 import Darwin.Mach
 
-/// 展开动画的调试度量器（**仅 autotest 构建生效**）。
+/// 由显式 Autotest 环境启用的展开动画调试度量器。
 ///
 /// 由 `HAGIMI_PANEL_AUTOTEST` 环境变量门控：未设置时所有方法首条即 return，
-/// 生产环境零开销。每次 `setExpansion` 展开前调 `beginExpand()`，在动画时长
-/// （+0.08s settle 尾巴）结束后汇总一行 `[autotest] expand ...`，输出：
+/// 正式运行只做门控判断。每次 `setExpansion` 展开前调 `beginExpand()`，
+/// 在所选测量窗口加 0.05s 尾段后汇总一行 `[autotest] expand ...`，输出：
 /// - `main`：主线程在该窗口内消耗的 CPU 时间（ms），反映 SwiftUI body/布局/
 ///   行级毛玻璃等 **app 进程内**的工作量；
 /// - `proc`：整个进程同窗口 CPU 时间（ms），与 main 的差值可暴露后台采样队列；
-/// - `slowframes`：窗口内主线程打卡间隔 > 半帧(8.3ms) 的次数（掉帧体感）；
-/// - `wall`：墙钟时长（ms），应为 ~230ms。
+/// - `slowframes`：窗口内主线程打卡间隔 > 半帧(8.3ms) 的次数（调度延迟，非显示掉帧）；
+/// - `wall`：实际墙钟时长（ms），包含主队列调度延迟。
 ///
-/// 关键诊断：若 main 不高、slowframes≈0 但活动监视器里 WindowServer 在展开时
-/// 明显冲高，则高 CPU 来自窗口 `.behindWindow` 毛玻璃在逐帧 resize 时的背景
-/// 重采样（计入 WindowServer、不计入本进程），主线程埋点无法直接量到。
+/// 主线程与进程 CPU 无法定位 WindowServer 的合成成本，需另外采集系统证据。
 @MainActor
 final class AutotestPerfMeter {
     static let shared = AutotestPerfMeter()
@@ -56,7 +54,8 @@ final class AutotestPerfMeter {
         startProcCPU = processCPUTime()
         startWall = CACurrentMediaTime()
 
-        let window = MonitorConstants.panelExpansionSettleTime + 0.05
+        let window = (ProcessInfo.processInfo.environment["HAGIMI_PANEL_PERF_WINDOW"].flatMap(Double.init)
+            ?? MonitorConstants.panelNativeMotionDuration) + 0.05
         DispatchQueue.main.asyncAfter(deadline: .now() + window) { [weak self] in
             MainActor.assumeIsolated {
                 self?.finish(label: label, token: token)
@@ -64,11 +63,11 @@ final class AutotestPerfMeter {
         }
     }
 
-    /// 帧探针在打卡间隔 > 半帧时调用，仅累计当前度量窗口内的掉帧。
+    /// 帧探针在打卡间隔 > 半帧时调用，仅累计当前度量窗口内的主线程调度延迟。
     func noteSlowFrame(gap ms: Double) {
         guard enabled, isMeasuring else { return }
         slowFrameCount += 1
-        // 逐帧卡顿分布也只在动画窗口内打，避免窗口静止期的无关间隔刷屏。
+        // 调度间隔分布只在动画窗口内记录，避免窗口静止期的无关间隔刷屏。
         NSLog("[autotest] slowframe gap=%.1fms", ms)
     }
 

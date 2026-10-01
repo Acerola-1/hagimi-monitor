@@ -36,8 +36,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private(set) lazy var pinnedPanelController: PinnedPanelController = {
         PinnedPanelController(store: store, openSettings: { [weak self] in
-            // 打开设置时收起的是钉选面板自身;原先误调成 fluid 面板的 dismiss,
-            // 导致钉选面板留在屏幕上遮挡设置窗口。
+            // 收起发起设置操作的钉选面板，避免它继续遮挡设置窗口。
             self?.pinnedPanelController.hide()
             SettingsWindowPresenter.open()
         })
@@ -55,8 +54,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 反馈,这里优先呈现设置窗口。返回 false:reopen 意图已由设置窗口承接,
     /// 无需系统再走"恢复隐藏窗口"的默认路径。
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
-        if PanelMotionExperiment.enabled {
-            fluidPanelController.presentAnimationPrototype()
+        if NativePanelMotionMode.testHost != nil || NativePanelMotionMode.testScreen != nil {
+            if NativePanelMotionMode.testHost == "pinned" {
+                pinnedPanelController.show()
+            } else { fluidPanelController.presentAnimationPrototype() }
             return false
         }
         SettingsWindowPresenter.open()
@@ -139,6 +140,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DIRECT_DISTRIBUTION
         _ = UpdateService.shared
         #endif
+        // 预览标记只写入独立测试产物，正式 Info.plist 不含这些键。
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] == "full-lifecycle" {
+            Task { [weak self] in
+                guard let self else { return }
+                await PanelLifecycleFixture.run(app: self)
+            }
+        } else if ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] != nil,
+           NativePanelMotionMode.testHost == "pinned" {
+            DispatchQueue.main.async { [weak self] in self?.pinnedPanelController.show() }
+        } else if Bundle.main.object(forInfoDictionaryKey: "HagimiPanelNativePreview") as? Bool == true,
+           NativePanelMotionMode.testHost != nil || NativePanelMotionMode.testScreen != nil {
+            DispatchQueue.main.async { [weak self] in
+                if NativePanelMotionMode.testHost == "pinned" { self?.pinnedPanelController.show() }
+                else { self?.fluidPanelController.presentAnimationPrototype() }
+            }
+        }
 
         // 注册 willTerminate 通知
         NotificationCenter.default.addObserver(

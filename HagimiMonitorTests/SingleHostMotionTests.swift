@@ -79,7 +79,7 @@ struct SingleHostMotionTests {
         registry.reportMeasurement(id: "cpu", headerHeight: 34, detailHeight: 100, revision: 1)
 
         let adapter = MockSubmissionAdapter()
-        let coordinator = SingleHostMotionCoordinator(registry: registry, adapter: adapter)
+        let coordinator = SingleHostMotionCoordinator(registry: registry, adapter: adapter, usesNativeMotion: false)
 
         // 瞬时提交
         coordinator.setInstantly(targets: ["cpu": 1.0])
@@ -100,7 +100,7 @@ extension SingleHostMotionTests {
             structureSignature: "cpu"))
         registry.configureStructure(topLevelIDs: ["cpu"])
         registry.reportMeasurement(id: "cpu", headerHeight: 34, detailHeight: detailHeight, revision: 1)
-        let motion = SingleHostMotionCoordinator(registry: registry)
+        let motion = SingleHostMotionCoordinator(registry: registry, usesNativeMotion: false)
         motion.setInstantly(targets: ["cpu": 1])
         motion.retarget(targets: ["cpu": 0], at: motion.currentFrame!.sampleTime + 1)
         return motion
@@ -199,7 +199,7 @@ extension SingleHostMotionTests {
             width: 340, localeIdentifier: "en", dynamicTypeSize: "default", backingScale: 2, structureSignature: "cpu"))
         registry.configureStructure(topLevelIDs: ["cpu"])
         registry.reportMeasurement(id: "cpu", headerHeight: 34, detailHeight: 284, isAvailable: false, revision: 1)
-        let motion = SingleHostMotionCoordinator(registry: registry)
+        let motion = SingleHostMotionCoordinator(registry: registry, usesNativeMotion: false)
         motion.retarget(targets: ["cpu": 1])
         #expect(motion.currentFrame?.revealHeights["cpu"] == 0)
         #expect(!motion.isAnimating)
@@ -237,7 +237,7 @@ extension SingleHostMotionTests {
         registry.configureStructure(topLevelIDs: ["cpu"])
         registry.reportMeasurement(id: "cpu", headerHeight: 34, detailHeight: 284, revision: 1)
         let adapter = MockSubmissionAdapter()
-        let motion = SingleHostMotionCoordinator(registry: registry, adapter: adapter)
+        let motion = SingleHostMotionCoordinator(registry: registry, adapter: adapter, usesNativeMotion: false)
         let now = CACurrentMediaTime()
         motion.retarget(targets: ["cpu": 1], at: now)
         motion.advance(to: now + 0.1)
@@ -264,7 +264,7 @@ extension SingleHostMotionTests {
             registry.reportMeasurement(id: id, parentID: "display", headerHeight: 18, detailHeight: 400,
                                        revision: 1, collapsedDetailHeight: 80)
         }
-        let motion = SingleHostMotionCoordinator(registry: registry)
+        let motion = SingleHostMotionCoordinator(registry: registry, usesNativeMotion: false)
         motion.setInstantly(targets: ["display": 1, "a": 1, "b": 1])
         let now = motion.currentFrame!.sampleTime + 1
         motion.retarget(targets: ["display": 0], at: now)
@@ -297,7 +297,7 @@ extension SingleHostMotionTests {
             for id in ["cpu", "gpu"] {
                 registry.reportMeasurement(id: id, headerHeight: 34, detailHeight: 284, revision: 1)
             }
-            let motion = SingleHostMotionCoordinator(registry: registry)
+            let motion = SingleHostMotionCoordinator(registry: registry, usesNativeMotion: false)
             motion.setInstantly(targets: ["cpu": 1])
             let now = motion.currentFrame!.sampleTime + 1
             motion.userScrollBegan(at: 20)
@@ -319,7 +319,7 @@ extension SingleHostMotionTests {
         registry.contentHeightCap = 250
         registry.configureStructure(topLevelIDs: ["cpu", "gpu"])
         for id in ["cpu", "gpu"] { registry.reportMeasurement(id: id, headerHeight: 34, detailHeight: 284, revision: 1) }
-        let motion = SingleHostMotionCoordinator(registry: registry)
+        let motion = SingleHostMotionCoordinator(registry: registry, usesNativeMotion: false)
         let now = CACurrentMediaTime()
         motion.retarget(targets: ["gpu": 1, "cpu": 1], at: now)
         #expect(motion.currentFrame?.scrollOffset == 0)
@@ -346,7 +346,7 @@ extension SingleHostMotionTests {
             width: 340, localeIdentifier: "en", dynamicTypeSize: "default", backingScale: 2, structureSignature: "cpu"))
         registry.configureStructure(topLevelIDs: ["cpu"])
         registry.reportMeasurement(id: "cpu", headerHeight: 34, detailHeight: 300, revision: 1)
-        let motion = SingleHostMotionCoordinator(registry: registry)
+        let motion = SingleHostMotionCoordinator(registry: registry, usesNativeMotion: false)
         let now = CACurrentMediaTime()
         motion.retarget(targets: ["cpu": 1], at: now)
         motion.advance(to: now + 0.10)
@@ -366,7 +366,7 @@ extension SingleHostMotionTests {
             width: 340, localeIdentifier: "en", dynamicTypeSize: "default", backingScale: 2, structureSignature: "cpu,gpu"))
         registry.configureStructure(topLevelIDs: ["cpu", "gpu"])
         for id in ["cpu", "gpu"] { registry.reportMeasurement(id: id, headerHeight: 34, detailHeight: 200, revision: 1) }
-        let motion = SingleHostMotionCoordinator(registry: registry)
+        let motion = SingleHostMotionCoordinator(registry: registry, usesNativeMotion: false)
         let now = CACurrentMediaTime()
         motion.retarget(targets: ["cpu": 1, "gpu": 1], at: now)
         motion.advance(to: now + 0.10)

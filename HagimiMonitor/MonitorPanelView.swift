@@ -2,14 +2,6 @@ import AppKit
 import Combine
 import SwiftUI
 
-/// 主体 ScrollView 两端是否还有被裁内容,驱动上下渐隐遮罩。
-private struct BodyScrollEdges: Equatable {
-    let top: Bool
-    let bottom: Bool
-    /// 内容自然高度(不含视口),用于判定内容是否真实超高。
-    let contentHeight: CGFloat
-}
-
 private enum PanelTopLevelItem: Identifiable {
     case module(MonitorModule)
     case display
@@ -40,16 +32,7 @@ struct MonitorPanelView: View {
     @Namespace private var glassNamespace
     @State private var expandedKinds: Set<MonitorKind> = []
     @State private var benchmarkInputs: PanelBenchmarkInputs?
-    /// header 实测高度,用于从内容总高上限换算主体 ScrollView 的 maxHeight。
-    @State private var headerHeight: CGFloat = 0
     @State private var preDragContentHeight: CGFloat = 0
-    @State private var scrollBodyFrame: CGRect = .zero
-    /// 主体是否已向上滚动:控制顶部渐隐遮罩。仅滚动后启用,避免未滚动时
-    /// 误伤第一张卡片的顶边。
-    @State private var isBodyScrolled = false
-    /// 主体下方是否还有未滚到的内容:控制底部渐隐遮罩。滚到底/未溢出时
-    /// 关闭,保证底部按钮清晰不被误伤。
-    @State private var bodyHasMoreBelow = false
     /// header 小猫客串彩蛋（致敬 RunCat）。仅菜单栏下拉面板参与，钉住面板不触发。
     @StateObject private var cameoModel = HeaderCatCameoModel()
     /// 本面板实例私有的展开动画驱动器:与各展开区的相位 key 一一对应,
@@ -59,9 +42,6 @@ struct MonitorPanelView: View {
     @StateObject private var panelReorder = PanelReorderController()
     /// 显示器模块(包含内嵌档案)动画状态凭据:供 MonitorPanelView 在子区块动画时将整体布局并入 withAnimation 事务
     @State private var displaySectionMotionTicket: Int = 0
-    /// 窗口层注入的贴合回调:driver 在 toggle 时把目标高度与是否动画下发给窗口层。
-    /// 预览/无窗口宿主为 nil。
-    @Environment(\.panelWindowResizeHandler) private var windowResizeHandler
     @Environment(\.panelMotionAdapter) private var motionAdapter
 
     init(store: MonitorStore, refreshGate: PanelRefreshGate, quickPanelPresentation: QuickPanelPresentation? = nil) {
@@ -74,28 +54,14 @@ struct MonitorPanelView: View {
 
     private var maxContentHeight: CGFloat {
         guard let value = ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH_CAP"],
-              let height = Double(value), height >= 160 else { return hostMaxContentHeight }
+            let height = Double(value), height >= 160
+        else { return hostMaxContentHeight }
         return min(hostMaxContentHeight, height)
     }
 
-    /// 主体 ScrollView 的高度上限:内容总高上限减去 header、顶/底内边距(8/6)
-    /// 与 header—主体间距(4),另留 4pt 布局缓冲。header 首帧尚未测定时偏大,
-    /// 由窗口层 clamp 兜底。无上限(钉住面板等宿主)时返 nil,不施加约束。
-    private var scrollBodyMaxHeight: CGFloat? {
-        guard maxContentHeight != .infinity else { return nil }
-        return max(120, maxContentHeight - headerHeight - 22)
-    }
-
-    /// 主体封顶时内容总高度的实际钳制值(header + 内边距/间距 + 主体上限),
-    /// 与 body 的布局公式一致,上报驱动器用于识别「实测高度已封顶」。
-    /// 无上限(钉住面板等宿主)时为无穷。
-    private var effectiveContentHeightCap: CGFloat {
-        guard let scrollBodyMaxHeight else { return .infinity }
-        return scrollBodyMaxHeight + headerHeight + 22
-    }
-
     private func displaySection(theme: MonitorPanelTheme) -> some View {
-        DisplaySection(theme: theme, settings: store.settings, isPanelVisible: store.isPanelVisible,
+        DisplaySection(
+            theme: theme, settings: store.settings, isPanelVisible: store.isPanelVisible,
             animate: { key, toFull, animated in
                 store.beginExpansionAnimation()
                 if animated {
@@ -118,6 +84,7 @@ struct MonitorPanelView: View {
     }
 
     var body: some View {
+        let _ = PanelLayoutCounters.shared.measure("panel-body")
         let _ = displaySectionMotionTicket
         // theme 按 (preference, colorScheme) 缓存,避免每秒采样刷新时重建整棵 Color 树。
         // 缓存返回稳定实例,Row 的 Equatable 比较可据此跳过未变化行。
@@ -126,173 +93,19 @@ struct MonitorPanelView: View {
             scheme: colorScheme
         )
 
-        CompatibleGlassContainer(spacing: 8, isLiquidGlassEnabled: store.settings.liquidGlassEnabled) {
-            if PanelMotionExperiment.enabled {
-                SingleHostPrototypeView(motion: panelExpansion.motion,
-                    ids: orderedTopLevelItems.map(\.id), cap: maxContentHeight) {
-                    header(theme: theme)
-                } cards: {
-                    ForEach(orderedTopLevelItems) { item in
-                        switch item {
-                        case .module(let module):
-                            compactRow(for: module, theme: theme)
-                                .sectionLayoutID(module.kind.id)
-                                .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
-                        case .display:
-                            displaySection(theme: theme).sectionLayoutID("display")
-                                .compatibleGlassEffectID("display", in: glassNamespace)
-                        }
-                    }
-                    prototypeFooter(theme: theme)
-                        .panelMeasure("__footer__")
-                        .sectionLayoutID("__footer__")
-                }
-                .background(panelBackgroundColor)
-            } else {
-            VStack(spacing: 4) {
-                header(theme: theme)
-                    .transaction { $0.animation = nil }
-                    .background(
-                        GeometryReader { geometry in
-                            Color.clear
-                                .onAppear { headerHeight = geometry.size.height }
-                                .onChange(of: geometry.size.height) { _, newValue in
-                                    headerHeight = newValue
-                                }
-                        }
-                    )
+        CompatibleGlassContainer(spacing: 8, isLiquidGlassEnabled: false) {
 
-                // 主体(模块列表+底部按钮)包在 ScrollView 里:未超高时 ScrollView
-                // 理想高度=内容高度、不可滚动,行为与无 ScrollView 时一致;
-                // 触封顶时仅主体滚动,header 固定不动。
-                ScrollViewReader { proxy in
-                    ScrollView(.vertical) {
-                        VStack(spacing: 6) {
-                            ForEach(orderedTopLevelItems) { item in
-                                switch item {
-                                case .module(let module):
-                                    compactRow(for: module, theme: theme)
-                                        .id(module.kind)
-                                        .compatibleGlassEffectID("metric-\(module.kind.id)", in: glassNamespace)
-                                case .display:
-                                    displaySection(theme: theme)
-                                        .id(PanelOrderCatalog.displayID)
-                                        .compatibleGlassEffectID("display", in: glassNamespace)
-                                }
-                            }
-
-                            // 底部三按钮与行卡片同规格:同内边距/同字体/同间距,
-                            // 高度与行间留白都与模块行一致;文案用短形式避免折行。
-                            HStack(spacing: 6) {
-                                Button {
-                                    openActivityMonitor()
-                                } label: {
-                                    Label(String(localized: "panel.monitor"), systemImage: "waveform.path.ecg")
-                                        .lineLimit(1)
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
-
-                                // 快捷功能入口:激活角标与浮层打开态高亮由子视图
-                                // 自行观察 store,开关变化不牵动整块面板重绘。
-                                // 设置「小工具」关闭入口时不渲染(全部工具隐藏时
-                                // 该开关会被联动关闭,见 MonitorSettings)。
-                                if store.settings.quickToolsVisible {
-                                    QuickToolsEntryButton(settings: store.settings, theme: theme,
-                                        minimumHeight: MonitorConstants.panelRowHeaderHeight)
-                                }
-
-                                Button {
-                                    fluidOpenSettings()
-                                } label: {
-                                    Label(String(localized: "panel.settings"), systemImage: "gearshape")
-                                        .lineLimit(1)
-                                        .frame(maxWidth: .infinity)
-                                }
-                                .compatibleButtonStyle(minimumHeight: MonitorConstants.panelRowHeaderHeight)
-                            }
-                            .font(.callout.weight(.medium))
-                            .foregroundStyle(theme.primaryText)
-                            .panelRowHeaderHeight()
-
-                        }
-                        .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                           dampingFraction: MonitorConstants.panelExpansionSpringDamping),
-                                   value: orderedTopLevelItems.map(\.id))
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-                        scrollBodyFrame = frame
-                    }
-                    .overlay {
-                        PanelEdgeScrollObserver(pointer: panelReorder.pointer,
-                                                controller: panelReorder,
-                                                viewport: scrollBodyFrame,
-                                                proxy: proxy)
-                    }
-                    // 隐藏滚动条:展开/收起时内容高度频繁变化,滚动条会随之闪现,观感差;
-                    // 面板内容有限且封顶场景少见,不依赖滚动条提示位置。
-                    .scrollIndicators(.never)
-                    .onScrollGeometryChange(for: BodyScrollEdges.self) { geometry in
-                        BodyScrollEdges(
-                            top: geometry.contentOffset.y > 1,
-                            bottom: geometry.contentOffset.y + geometry.containerSize.height
-                                < geometry.contentSize.height - 1,
-                            contentHeight: geometry.contentSize.height
-                        )
-                    } action: { _, edges in
-                        isBodyScrolled = edges.top
-                        // 底部渐隐只在内容真实超高时显示:展开动画期间内容高度补间
-                        // 领先视口补间约一帧,contentSize 会瞬时大于 containerSize,
-                        // 直接据此判断会在「未超高、无需滚动」时也闪现一次底部渐隐。
-                        // 用稳定的封顶高度(动画期间不变)作门控,未超高时恒不触发。
-                        let cappedHeight = scrollBodyMaxHeight ?? .infinity
-                        bodyHasMoreBelow = edges.contentHeight > cappedHeight && edges.bottom
-                    }
-                    // 上下渐隐遮罩:对应边缘外还有内容时,圆角卡片滑到边界不再被直线
-                    // 硬切,而是在 12pt 内渐隐消失;贴边/未溢出时渐隐段高度为 0,
-                    // 首尾内容(第一张卡片/底部按钮)不受影响。
-                    .mask(
-                        VStack(spacing: 0) {
-                            LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom)
-                                .frame(height: isBodyScrolled ? 12 : 0)
-                            Color.black
-                            LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom)
-                                .frame(height: bodyHasMoreBelow ? 12 : 0)
-                        }
-                        .animation(.easeInOut(duration: 0.15), value: isBodyScrolled)
-                        .animation(.easeInOut(duration: 0.15), value: bodyHasMoreBelow)
-                    )
-                    .frame(maxHeight: scrollBodyMaxHeight)
-                    // 展开新行时滚动揭示:面板高度封顶后 ScrollView 才可滚(未溢出时
-                    // scrollTo 无效果),把展开行底缘对齐视口底缘,保证新展开的明细
-                    // (如风扇控制区)不被截在视口外看不见。
-                    .onChange(of: expandedKinds) { oldSet, newSet in
-                        guard let added = newSet.subtracting(oldSet).first else { return }
-                        withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                              dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
-                            proxy.scrollTo(added, anchor: .bottom)
-                        }
-                    }
-                }
-            }
-            // 顶部留白收紧至 8pt 与 header—主体间距 4pt 配合压缩首屏空白;
-            // 侧边与底边留白与行间节奏(6pt)对齐;外框圆角与卡片/按钮同为 14pt,取舍见 MonitorConstants.panelCornerRadius。
-            .padding(.top, 8)
-            .padding(.horizontal, 6)
-            .padding(.bottom, 6)
-            .frame(
-                minWidth: MonitorConstants.panelMinWidth,
-                idealWidth: MonitorConstants.panelIdealWidth,
-                maxWidth: MonitorConstants.panelMaxWidth
+            NativePanelSurfaceView(
+                motion: panelExpansion.motion, ids: orderedTopLevelItems.map(\.id),
+                cap: maxContentHeight, header: AnyView(header(theme: theme)), items: nativePanelItems(theme: theme)
             )
-            .fixedSize(horizontal: false, vertical: true)
-            .background(panelBackgroundColor)
-            }
+            .environment(\.nativePanelExpansion, panelExpansion)
+
         }
-        .frame(height: panelReorder.session == nil || preDragContentHeight == 0
-               ? nil : preDragContentHeight, alignment: .top)
-        .compatibleContainerBackground()
+        .frame(
+            height: panelReorder.session == nil || preDragContentHeight == 0
+                ? nil : preDragContentHeight, alignment: .top
+        )
         .overlay {
             // 点一下后弹出的 RunCat 致谢卡片(面板内 overlay,避免系统 sheet 抢焦点关面板)。
             if cameoModel.showThanks {
@@ -340,52 +153,44 @@ struct MonitorPanelView: View {
             panelReorder.canBegin = { [weak store] in
                 store?.isExpansionAnimating == false
             }
-            // 桥接窗口层注入的贴合回调:动画路径下发预测终高,窗口以与内容
-            // 同参数的弹簧跟随;同步路径(初始化/隐藏重置)直接贴合。
-            panelExpansion.onWindowResize = windowResizeHandler
             let motion = panelExpansion.motion
             let monitorStore = store
             motion.submissionAdapter = motionAdapter
-            motion.onMotionFrame = { [weak monitorStore] in monitorStore?.beginExpansionAnimation() }
-            if PanelMotionExperiment.enabled {
-                motionAdapter?.bindMotion(motion)
-                let expansion = $expandedKinds
-                motion.resetForHiddenPanel = { [weak monitorStore, weak motion] in
-                    guard let monitorStore else { return }
-                    let target = monitorStore.settings.defaultExpandedKinds.intersection(monitorStore.modules.map(\.kind))
-                    expansion.wrappedValue = target
-                    motion?.hiddenPanelReset.send()
-                    motion?.setInstantly(targets: Dictionary(uniqueKeysWithValues:
-                        MonitorKind.allCases.map { ($0.id, target.contains($0) ? CGFloat(1) : 0) }))
-                }
+            motion.onMotionFrame = { [weak monitorStore] in
+                monitorStore?.beginExpansionAnimation(duration: MonitorConstants.panelNativeMotionDuration)
             }
+
+            motionAdapter?.bindMotion(motion)
+            let expansion = $expandedKinds
+            motion.resetForHiddenPanel = { [weak monitorStore, weak motion] in
+                guard let monitorStore else { return }
+                let target = monitorStore.settings.defaultExpandedKinds.intersection(monitorStore.modules.map(\.kind))
+                expansion.wrappedValue = target
+                motion?.hiddenPanelReset.send()
+                motion?.setInstantly(
+                    targets: Dictionary(
+                        uniqueKeysWithValues:
+                            MonitorKind.allCases.map { ($0.id, target.contains($0) ? CGFloat(1) : 0) }))
+            }
+
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             applyDefaultExpansion()
         }
-        // 实测内容总高度上报驱动器:非动画期间据此反推收起态基线高度,
-        // 动画开始时由 targetContentHeight 叠加目标相位高度预测窗口目标尺寸。
-        // 同时上报总高度上限:主体 ScrollView 封顶时实测高度被钳在上限,
-        // 驱动器据此跳过基线校准(反推等式在封顶期失真,会解出错误基线)。
+        // 排序预览冻结当前承载高度，避免拖动过程改变窗口容量。
         .background(
             GeometryReader { geometry in
                 Color.clear
                     .onAppear {
                         if panelReorder.session == nil { preDragContentHeight = geometry.size.height }
-                        panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
-                        panelExpansion.reportMeasuredContentHeight(geometry.size.height)
+
                     }
                     .onChange(of: geometry.size.height) { _, newValue in
                         guard panelReorder.session == nil else { return }
                         preDragContentHeight = newValue
-                        panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
-                        panelExpansion.reportMeasuredContentHeight(newValue)
+
                     }
             }
         )
-        .onChange(of: maxContentHeight) { _, _ in
-            // 上限变化(换屏/Dock 变化)独立刷新,尺寸未必随之变化。
-            panelExpansion.reportContentHeightCap(effectiveContentHeightCap)
-        }
         // 展开驱动器注入整棵面板子树:CollapsibleDetail 按各自 key 自读相位。
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
@@ -395,10 +200,21 @@ struct MonitorPanelView: View {
         .onExitCommand { panelReorder.cancel() }
         .onDisappear { panelReorder.cancel() }
         .task {
-            guard isPanelBenchmark, !showsQuickPanelControls else { return }
+            guard isPanelBenchmark, !showsQuickPanelControls || isFullPanelBenchmark else { return }
+            guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] != "full-lifecycle" else { return }
+            if let host = NativePanelMotionMode.testHost {
+                guard (host == "pinned") == showsQuickPanelControls else { return }
+            }
             try? await Task.sleep(for: .seconds(3))
             let mode = ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] ?? "single"
+            NSLog(
+                "[panel-bench] scope=%@ ids=%@", isFullPanelBenchmark ? "live-full" : "three-card",
+                orderedTopLevelItems.map(\.id).joined(separator: ","))
             if let path = ProcessInfo.processInfo.environment["HAGIMI_PANEL_FIXTURE"] {
+                guard !isFullPanelBenchmark else {
+                    NSLog("[panel-bench] full mode requires live data; three-card fixture refused")
+                    return
+                }
                 do {
                     benchmarkInputs = try PanelBenchmarkInputs.loadOrCapture(store: store, path: path)
                     refreshGate.close()
@@ -417,25 +233,63 @@ struct MonitorPanelView: View {
                 }
                 PanelLayoutCounters.shared.checkpoint()
                 NSLog("[panel-bench] operation=%d mode=%@ unoccluded=1", index, mode)
-                if mode == "all" {
-                    setExpansion {
-                        expandedKinds = expandedKinds.isEmpty ? Set(prototypeModules.map(\.kind)) : []
+                if mode == "full-matrix" {
+                    let ids = orderedTopLevelItems.map(\.id)
+                    if index < ids.count {
+                        if ids[index] == "display" { PanelBenchmarkCommand.send(.display(true)) }
+                        else if let kind = MonitorKind(rawValue: ids[index]) { toggleExpansion(for: kind) }
+                    } else {
+                        switch (index - ids.count) % 10 {
+                        case 0:
+                            setExpansion(scrollToTop: true) { expandedKinds = Set(panelModules.map(\.kind)) }
+                            PanelBenchmarkCommand.send(.display(true))
+                        case 1: PanelBenchmarkCommand.send(.archives(true))
+                        case 2: PanelBenchmarkCommand.send(.batteryPage("ranking"))
+                        case 3: PanelBenchmarkCommand.send(.batteryPage("health"))
+                        case 4: PanelBenchmarkCommand.send(.batteryPage("supply"))
+                        case 5: PanelBenchmarkCommand.send(.batteryPage("flow"))
+                        case 6: PanelBenchmarkCommand.send(.archives(false))
+                        case 7, 8: toggleExpansion(for: .cpu)
+                        default:
+                            setExpansion(scrollToTop: true) { expandedKinds = [] }
+                            PanelBenchmarkCommand.send(.display(false))
+                        }
                     }
+                } else if mode == "all" || mode == "full-all" {
+                    let opening = expandedKinds.isEmpty
+                    setExpansion {
+                        expandedKinds = expandedKinds.isEmpty ? Set(panelModules.map(\.kind)) : []
+                    }
+                    if isFullPanelBenchmark { PanelBenchmarkCommand.send(.display(opening)) }
+                } else if mode == "full-sequence", !panelModules.isEmpty {
+                    toggleExpansion(for: panelModules[index % panelModules.count].kind)
                 } else {
                     toggleExpansion(for: .cpu)
                 }
-                try? await Task.sleep(for: .milliseconds(mode == "reverse" ? 100 : 700))
+                let fast = mode == "reverse" || mode == "full-reverse"
+                    || (mode == "full-matrix" && index >= orderedTopLevelItems.count
+                        && (index - orderedTopLevelItems.count) % 10 == 7)
+                try? await Task.sleep(for: .milliseconds(fast ? 100 : 700))
             }
+            PanelLayoutCounters.shared.checkpoint()
             NSLog("[panel-bench] complete")
+            if ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH_HIDE"] == "1" {
+                if showsQuickPanelControls { AppDelegate.shared?.pinnedPanelController.hide() }
+                else { AppDelegate.shared?.fluidPanelController.dismissPanelForSettings() }
+                NSLog("[panel-bench] hidden panel-visible=%d", store.isPanelVisible ? 1 : 0)
+            }
         }
     }
 
     private var isPanelBenchmark: Bool {
         ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] != nil
     }
+    private var isFullPanelBenchmark: Bool {
+        ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"]?.hasPrefix("full-") == true
+    }
 
     private var panelModules: [MonitorModule] {
-        let source = isPanelBenchmark ? prototypeModules : store.modules
+        let source = isPanelBenchmark && !isFullPanelBenchmark ? prototypeModules : store.modules
         #if DIRECT_DISTRIBUTION
         return source
         #else
@@ -445,7 +299,7 @@ struct MonitorPanelView: View {
 
     private var orderedTopLevelItems: [PanelTopLevelItem] {
         let modulesByID = Dictionary(uniqueKeysWithValues: panelModules.map { ($0.kind.id, $0) })
-        let includesDisplay = store.settings.displayModuleVisible && !isPanelBenchmark
+        let includesDisplay = store.settings.displayModuleVisible && (!isPanelBenchmark || isFullPanelBenchmark)
         let available = panelModules.map { $0.kind.id }
             + (includesDisplay ? [PanelOrderCatalog.displayID] : [])
         let saved = store.settings.orderedPanelIDs(for: .modules, available: available)
@@ -495,11 +349,20 @@ struct MonitorPanelView: View {
 
     }
 
-    private var panelBackgroundColor: Color {
-        colorScheme == .dark
-            ? Color.black.opacity(0.35)
-            : Color.white.opacity(0.45)
+    private func nativePanelItems(theme: MonitorPanelTheme) -> [NativePanelContentItem] {
+        var result = orderedTopLevelItems.map { item -> NativePanelContentItem in
+            switch item {
+            case .module(let module):
+                NativePanelContentItem(id: module.kind.id, content: AnyView(compactRow(for: module, theme: theme)))
+            case .display:
+                NativePanelContentItem(id: PanelOrderCatalog.displayID, content: AnyView(displaySection(theme: theme)))
+            }
+        }
+        result.append(NativePanelContentItem(id: "__footer__", content: AnyView(prototypeFooter(theme: theme))))
+        return result
     }
+
+
 
     private func header(theme: MonitorPanelTheme) -> some View {
         HStack(spacing: 0) {
@@ -822,17 +685,17 @@ struct MonitorPanelView: View {
     private var visibleKinds: [MonitorKind] {
         store.modules.map(\.kind)
     }
-    
+
     /// 当前是否所有列表行都处于展开状态。
     /// 空集时为 false——没有行可展开,双击不应被视为「已全开」。
     private var allVisibleRowsExpanded: Bool {
         !visibleKinds.isEmpty
         && visibleKinds.allSatisfy { expandedKinds.contains($0) }
     }
-    
+
     /// 残留 expandedKinds 里的不可见 kind 不影响判定;全展开分支用可见行集合覆盖,顺便清掉残留。
     private func toggleAllExpansion() {
-        setExpansion {
+        setExpansion(scrollToTop: true) {
             if allVisibleRowsExpanded {
                 expandedKinds.removeAll()
             } else {
@@ -840,7 +703,7 @@ struct MonitorPanelView: View {
             }
         }
     }
-    
+
     /// 把展开状态重置为「各模块默认展开设置 ∩ 可见行」(顺便清掉残留 kind)。
     /// 面板隐藏时直接赋值,不走 setExpansion——无需动画,但要把驱动器相位瞬间
     /// 同步到目标(0/1),否则收起的行会残留旧相位、呼出时高度不对;面板可见时
@@ -860,36 +723,27 @@ struct MonitorPanelView: View {
         }
     }
 
-    /// toggle 时 `expandedKinds` 变化驱动 `CollapsibleDetail` 的 `.frame(height:)`
-    /// 与 `.opacity` 动画——由 `withAnimation` 包裹状态变更,可见插值在
-    /// CoreAnimation 合成器侧完成。窗口目标高度由 driver 一次性下发,窗口层
-    /// 以与内容同参数的弹簧跟随,与内容同相。
-    private func setExpansion(_ mutate: () -> Void) {
+    /// 展开意图统一提交给本面板驱动器，在自然尺寸内容上播放共享图层轨迹。
+    private func setExpansion(scrollToTop: Bool = false, _ mutate: () -> Void) {
         // 展开补间与浮层子窗口并存会引发布局抖动,展开前确保浮层已收起。
         QuickToolsStore.shared.popoverPresenter.dismiss()
         // 调试度量(仅 HAGIMI_PANEL_AUTOTEST 生效):在最前打快照,包住整段动画窗口。
         AutotestPerfMeter.shared.beginExpand()
         let previous = expandedKinds
-        // 置位一次性动画截止标记:动画窗口内的采样结果推迟应用,避免 1-3s 节奏的
-        // 模块刷新恰好撞进 ~0.15s 展开动画、拖动整棵视图树重算造成掉帧。
+        // 延迟并合并界面发布，使周期数据更新避开运动窗口；采样与统计继续执行。
         store.beginExpansionAnimation()
 
-        if PanelMotionExperiment.enabled {
+
             var transaction = Transaction(animation: nil)
             transaction.disablesAnimations = true
             withTransaction(transaction) { mutate() }
-        } else {
-            withAnimation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                  dampingFraction: MonitorConstants.panelExpansionSpringDamping)) {
-                mutate()
-            }
-        }
+
         let current = expandedKinds
         guard current != previous else { return }
         var targets: [String: CGFloat] = [:]
         for removed in previous.subtracting(current) { targets[removed.id] = 0 }
         for added in current.subtracting(previous) { targets[added.id] = 1 }
-        panelExpansion.animate(targets: targets)
+        panelExpansion.animate(targets: targets, scrollToTop: scrollToTop)
     }
 
     private func openActivityMonitor() {
@@ -1048,9 +902,6 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.statusTint == rhs.statusTint
             && lhs.samples == rhs.samples else { return false }
         // 收起态下明细网格与进程列表均不可见，跳过对未展开内容的深度比对，阻断无关重绘。
-        if !lhs.isExpanded && !PanelMotionExperiment.enabled {
-            return true
-        }
         return lhs.details == rhs.details
             && lhs.metricOrder == rhs.metricOrder
             && lhs.topMemoryProcesses == rhs.topMemoryProcesses
@@ -2147,7 +1998,7 @@ private struct BatteryGlassRow: View, Equatable {
     }
 
     var body: some View {
-        PanelCardStack(measurementKey: "\(module.kind.id)|\(canExpand)") {
+        PanelCardStack(measurementKey: "\(module.kind.id)|\(canExpand)|\(detailMeasurementKey)") {
             HStack(spacing: 10) {
                 // 充电时用 `battery.100percent.bolt`(电池中间带闪电)静态图标表示充电状态,
                 // 不再叠加 `.variableColor.iterative` 持续动画——该动画会让 SwiftUI 视图图每帧
@@ -2298,6 +2149,16 @@ private struct BatteryGlassRow: View, Equatable {
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
             theme.rowGlassFill(for: module.kind)
         }
+        .panelBenchmarkCommands { command in
+            guard case .batteryPage(let raw) = command, let page = BatteryPageTab(rawValue: raw) else { return }
+            guard availableTabs.contains(page) else {
+                NSLog("[panel-bench] page-skipped=%@ available=%@", raw, availableTabs.map(\.rawValue).joined(separator: ","))
+                return
+            }
+            withPanelExpansionState { selectedTab = page }
+            NSLog("[panel-bench] page=%@", raw)
+        }
+
     }
 
     private var hasBattery: Bool {
@@ -2673,14 +2534,18 @@ private struct NetworkRatePill: View {
 /// 亮色 0.15 / 暗色 0.08(暗色玻璃对白敏感,低浓度即可)。
 private struct PanelCardBrightenModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.nativePanelOwnsCardBackdrop) private var ownsBackdrop
 
-    func body(content: Content) -> some View {
+    @ViewBuilder func body(content: Content) -> some View {
+        if ownsBackdrop { content }
+        else {
         content
             .background {
                 RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
                     .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.15))
                     .allowsHitTesting(false)
             }
+        }
     }
 }
 
@@ -3515,38 +3380,18 @@ private struct ProcessIcon: View {
 
 // MARK: - Collapsible Detail
 
-/// 高度揭示式展开容器。
-///
-/// 不能用 scale / opacity 这类「渲染层变换」做展开:它们不改变布局占位--展开区一插入就
-/// 按完整高度占位,容器(进而窗口)高度会「瞬间」跳到终点,随后内容才在已定型的空间里
-/// 淡入/缩放,肉眼看到「边框先到位、内容再补上」的错位闪烁;收起时镜像反过来。
-///
-/// 实现:内容常驻(以测出自然高度),布局高度在展开/收起两态间切换(0 或自然高度),
-/// 由 SwiftUI 动画系统(`.animation(value: isExpanded)`)在 CoreAnimation 层插值--
-/// body 只在 toggle 时求值一次,帧间高度插值由 CA 在合成器侧完成,不在主线程逐帧
-/// 重算。顶部对齐 + 裁剪,内容随高度增长自上而下「卷出」。
-///
-/// `isExpanded` 是展开态(toggle 时触发高度动画),`contentAvailable` 是内容门控:
-/// 内容可用性消失(如蓝牙设备全部断开)时高度直接钳 0,瞬时归零、不参与动画--
-/// 数据驱动的收起没有用户手势,不需要过渡动画。
-///
-/// 供各 metric 行与 `DisplaySection` 共用,故非 private。
+/// 正式明细常驻以登记完整自然尺寸；原生宿主统一控制揭示、布局、命中与辅助功能显隐。
+/// 逻辑展开态只在操作时更新，图层播放复用同一份有限几何轨迹。
 struct CollapsibleDetail<Content: View>: View {
-    /// 面板根注入的展开驱动器:仅用于上报自然高度供窗口高度预测。
-    @EnvironmentObject private var expansion: PanelExpansionDriver
     /// 驱动器内对应的展开区 key。
     private let expansionKey: String
-    /// 是否处于展开态。toggle 时由 SwiftUI 动画系统补间布局高度。
+    /// 当前逻辑展开态，与宿主可访问性保持一致。
     private let isExpanded: Bool
     /// 是否有可展开的内容。false 时无论展开态如何,高度恒为 0。
     private let contentAvailable: Bool
     private let content: Content
     private let measurementKey: String
 
-    /// 内容的自然高度。内容始终挂载并被 GeometryReader 测量,故在首次展开前就已就绪,
-    /// 保证展开时高度从 0 平滑增长,而不是等测量回填后「跳」到终点。
-    @State private var contentHeight: CGFloat = 0
-    @State private var hasAppeared = false
 
     init(
         expansionKey: String,
@@ -3564,35 +3409,7 @@ struct CollapsibleDetail<Content: View>: View {
 
     var body: some View {
         let expanded = contentAvailable && isExpanded
-
-        if PanelMotionExperiment.enabled {
-            SingleHostDetail(id: expansionKey, isExpanded: expanded, available: contentAvailable,
-                content: content, presentation: expansion.motion.presentation(for: expansionKey), measurementKey: measurementKey)
-        } else {
-            content
-                .opacity(expanded ? 1 : 0)
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear {
-                                contentHeight = geometry.size.height
-                                expansion.reportNaturalHeight(expansionKey, geometry.size.height)
-                                DispatchQueue.main.async { hasAppeared = true }
-                            }
-                            .onChange(of: geometry.size.height) { _, height in
-                                contentHeight = height
-                                expansion.reportNaturalHeight(expansionKey, height)
-                            }
-                    }
-                )
-                .frame(height: expanded ? contentHeight : 0, alignment: .top)
-                .clipped()
-                .contentShape(Rectangle())
-                .allowsHitTesting(expanded)
-                .accessibilityHidden(!expanded)
-                .animation(hasAppeared ? .spring(response: MonitorConstants.panelExpansionSpringResponse,
-                    dampingFraction: MonitorConstants.panelExpansionSpringDamping) : nil,
-                    value: expanded ? contentHeight : 0)
-        }
+        SingleHostDetail(id: expansionKey, isExpanded: expanded, available: contentAvailable,
+            content: content, measurementKey: measurementKey)
     }
 }

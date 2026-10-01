@@ -10,14 +10,14 @@ nonisolated enum MonitorConstants {
 
     // MARK: - Animation
     static let menuBarLoadChangeThreshold = 5.0
-    // 缓动系数：每帧向目标靠拢的比例
-    // 0.10 ⇒ 约 0.95s 缓缓到位；softmax 目标跳变更大，故取较柔和的值
-    static let menuBarLoadSmoothFactor = 0.10
-    // 每帧最小步进，保证大缓动尾段也能稳定收敛、不会无限逼近
-    static let menuBarLoadSmoothMinStep = 0.6
+    // 临界阻尼按实际时间求解，约 0.6s 走完 95%，转向保留当前位置及速度。
+    static let menuBarLoadMotionFrequency = 8.0
     static let menuBarLoadSmoothStopThreshold = 0.5
-    // 收敛后定时器停止，静止时零开销
-    static let menuBarLoadSmoothFrameInterval = 1.0 / 30.0
+    static let menuBarLoadSmoothStopVelocity = 1.0
+    // 小尺寸图标只在跨整数桶时发布；24Hz 是采样上限，稳定后停止。
+    static let menuBarLoadSmoothFrameInterval = 1.0 / 24.0
+    static let menuBarLoadLevelBoundaries = [25.0, 50.0, 78.0]
+    static let menuBarLoadColorBlendHalfWidth = 4.0
 
     // MARK: - Panel Dimensions
     static let panelMinWidth: Double = 300
@@ -52,6 +52,12 @@ nonisolated enum MonitorConstants {
     // 弹簧衰减到不可察觉的时间。采样推迟 / 校准 / 负载环暂停均以此为窗口,
     // 覆盖弹簧尾段微振,避免校准过早捕获中间态。
     static let panelExpansionSettleTime: TimeInterval = 0.50
+
+    static let panelNativeMotionFrequency: Double = 20
+    static let panelNativeMotionDuration: TimeInterval = 0.75
+    static let panelNativeMotionSamplingRate: Double = 120
+    static let panelNativeShadowInset: CGFloat = 20
+    static let panelScrollFadeLength: CGFloat = 12
 
     // MARK: - Sampling
     static let sparklineMaxPoints = 24

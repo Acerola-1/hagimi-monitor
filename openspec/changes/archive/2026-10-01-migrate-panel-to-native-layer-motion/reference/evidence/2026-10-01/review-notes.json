@@ -1,0 +1,304 @@
+{
+  "mode": "host review with OCR file selection and rule resolution",
+  "scope": "all existing unstaged/untracked changes plus affected ownership, measurement, input and sampler chains",
+  "findings": [
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/Views/Panel/NativePanelLayerMotion.swift",
+      "finding": "geometryDidChange ignored reduced-motion preference during page/structure changes",
+      "fix": "apply same endpoint policy as retarget; added reducedMotionAlsoAppliesPageAndStructureEndpoints"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/Views/Panel/FluidPanelController.swift",
+      "finding": "closing while awaiting first geometry left transparent capacity window ordered in",
+      "fix": "orderOut and reclaim content on awaiting-geometry dismissal"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/Views/Panel/PinnedPanelController.swift",
+      "finding": "awaiting-geometry hide left transparent bootstrap window visible",
+      "fix": "orderOut before closing refresh gate"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/Views/Panel/NativePanelLayerView.swift",
+      "finding": "drag latch survived hidden interval when mouse-up monitor was removed",
+      "fix": "reset drag state with monitor cancellation"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/Views/Panel/DisplaySection.swift",
+      "finding": "legacy Autotest archive sequence ran concurrently with benchmark, confounding attribution",
+      "fix": "make legacy sequence and explicit benchmark mutually exclusive"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitorTests/NativePanelHostingTests.swift",
+      "finding": "offscreen surface test used a lazy render-tree traversal and fixed delay that failed in full-suite execution",
+      "fix": "drive actual surface, inspect owner registry, verify window membership, serialize AppKit fixtures and wait for real measurements"
+    },
+    {
+      "severity": "low",
+      "path": "HagimiMonitor/Views/Panel/AutotestPerfMeter.swift",
+      "finding": "comments described main-thread probe intervals as dropped display frames and measurement window omitted native tail",
+      "fix": "label scheduling intervals accurately; allow common measurement window for baseline and candidate"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/Views/Panel/FluidPanelController.swift",
+      "finding": "Autotest startup opener and switch timer close the first panel; pinned benchmark also starts a menu host",
+      "fix": "collector uses non-toggling 0:0 flag; menu opener excludes the explicitly selected pinned host"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/MonitorModels.swift",
+      "finding": "deadline recheck stopped after two deferrals and statistics were delayed together with UI publication",
+      "fix": "keyed latest-only PanelPublicationGate with generation cancellation; advance sampling cache and statistics immediately, defer only UI publication; five deterministic tests"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/MonitorPanelView.swift",
+      "finding": "hidden menu host ran the full benchmark alongside explicitly selected pinned host, invalidating cost and visibility attribution",
+      "fix": "selected-host guard; repeated both pinned paths with one scope and all 50 operations"
+    },
+    {
+      "severity": "low",
+      "path": "scripts/validation/capture-panel-motion.py",
+      "finding": "unbounded probe subprocess and unchecked stress exit could produce an inaccurate finite-load receipt",
+      "fix": "bounded probe and metadata subprocesses; stress exit validation; raw stress results independently verified"
+    },
+    {
+      "severity": "medium",
+      "path": "HagimiMonitor/Views/Panel/NativePanelLayerView.swift",
+      "finding": "fixed footer requires viewport reservation and hit routing based on presentation coordinates; shared module geometry offsets must not move chrome",
+      "fix": "footer outside scroll; reserved native and SwiftUI viewport space; presentation hit routing; footer excluded from module offsets; two geometry/trajectory regressions"
+    },
+    {
+      "severity": "low",
+      "path": "scripts/validation/analyze-panel-motion.py",
+      "finding": "explicit overlapping-QA exclusion was documented but not applied by resource summary script",
+      "fix": "apply analysis-exclusions.json to resource_comparison; preserve raw receipts and exclusion reason"
+    }
+  ],
+  "coverage": {
+    "total_files": 78,
+    "reviewable_files": 42,
+    "reviewed_files": 42,
+    "skipped_reviewable_files": 0,
+    "coverage_rate": 1.0,
+    "manual_extra": "tests and documents reviewed; reference binary/archive files verified by SHA and rebuild, not treated as editable production code"
+  },
+  "checklist": [
+    {
+      "path": "HagimiMonitor/AppDelegate.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Constants.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/MenuBarComputeRingIcon.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/MenuBarStatusLabel.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/MonitorModels.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/MonitorPanelView.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/CompatibleGlassContainer.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/AutotestPerfMeter.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/DisplaySection.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/FluidPanelController.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelBenchmarkFixture.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelCapsulePicker.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelExpansionDriver.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelGeometrySolver.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelGeometryTypes.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelReorderInteraction.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PinnedPanelController.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/SingleHostLayoutComponents.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/SingleHostMotionCoordinator.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/SingleHostPrototypeView.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Settings/GeneralSettingsView.swift",
+      "status": "modified",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/MenuBarLoadAnimator.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/NativePanelLayerMotion.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/NativePanelLayerView.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelLifecycleFixture.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "HagimiMonitor/Views/Panel/PanelPublicationGate.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "openspec/changes/migrate-panel-to-native-layer-motion/.openspec.yaml",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "premium-audit.json",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/Demo.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/NativeCPUMotionDemo.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/build-native-reference.sh",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/build.sh",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/install_native_cpu.py",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/make_native_cpu.py",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/prepare_skin.py",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "prototypes/panel-motion-demo/snapshot.json",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "scripts/validation/analyze-panel-motion.py",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "scripts/validation/capture-panel-motion.py",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "scripts/validation/panel-capture-background.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "scripts/validation/panel-resource-probe.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "scripts/validation/panel-screen-capture.swift",
+      "status": "added",
+      "review": "reviewed"
+    },
+    {
+      "path": "scripts/validation/panel-stress.swift",
+      "status": "added",
+      "review": "reviewed"
+    }
+  ]
+}
