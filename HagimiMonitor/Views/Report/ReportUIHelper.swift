@@ -58,38 +58,20 @@ enum ReportUIHelper {
         timeOnlyFormatter.string(from: date)
     }
 
+    /// 吞吐/速率：统一十进制 MB/s、GB/s，与设置页网络速率同一套单位。
     nonisolated static func formatBytesRate(_ bytesPerSec: Double) -> String {
-        guard bytesPerSec > 0 else { return "0 B/s" }
-        let mbs = bytesPerSec / (1024 * 1024)
-        if mbs >= 1024 {
-            return String(format: "%.1f GB/s", mbs / 1024)
-        } else if mbs >= 1 {
-            return String(format: "%.1f MB/s", mbs)
-        } else {
-            let kbs = bytesPerSec / 1024
-            if kbs >= 1 {
-                return String(format: "%.1f KB/s", kbs)
-            } else {
-                return String(format: "%.0f B/s", bytesPerSec)
-            }
-        }
+        StatisticsDisplayFormat.decimalRate(bytesPerSec)
     }
 
+    /// 二进制容量（GiB/MiB），用于内存、显存这类按字节计量的资源。
     nonisolated static func formatBytes(_ bytes: Double) -> String {
-        guard bytes > 0 else { return "0 B" }
-        let gb = bytes / (1024 * 1024 * 1024)
-        if gb >= 1024 {
-            return String(format: "%.2f TB", gb / 1024)
-        } else if gb >= 1 {
-            return String(format: "%.2f GB", gb)
-        } else {
-            let mb = bytes / (1024 * 1024)
-            if mb >= 1 {
-                return String(format: "%.1f MB", mb)
-            } else {
-                return String(format: "%.0f KB", bytes / 1024)
-            }
-        }
+        StatisticsDisplayFormat.binaryCapacity(bytes)
+    }
+
+    /// 十进制总量（GB/TB），用于磁盘与网络累计量；与设置页同源，
+    /// 避免同一批字节在设置与报表里出现两套除数。
+    nonisolated static func formatVolume(_ bytes: Double) -> String {
+        StatisticsDisplayFormat.decimalVolume(bytes)
     }
 
     nonisolated static func formatHours(_ seconds: Double) -> String {
@@ -102,7 +84,7 @@ enum ReportUIHelper {
         }
     }
 
-    // MARK: - 热状态语义映射（0~3 档位，禁止乘 100）
+    // MARK: - 热状态语义映射（0~3 档位）
 
     static func thermalStateLabel(_ level: Double?) -> String {
         guard let level else { return "—" }

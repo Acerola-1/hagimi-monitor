@@ -27,6 +27,16 @@ nonisolated enum StatisticsOverviewRange: CaseIterable, Hashable, Sendable {
     case week
     case month
 
+    /// 设置摘要使用的三个预设范围。报表侧对应的自然日预设见 `ReportTimeRange`，
+    /// 两处必须给出同一起点；这里是设置的唯一来源。
+    var reportTimeRange: ReportTimeRange {
+        switch self {
+        case .today: .today
+        case .week: .week
+        case .month: .month
+        }
+    }
+
     /// 聚合窗口起点(本地时区自然日对齐)。
     nonisolated func startOfDayWindow(from today: Date, calendar: Calendar) -> Date {
         switch self {
@@ -79,23 +89,33 @@ nonisolated struct StatisticsReportDataProvider: Sendable {
         processStore?.flush()
         let processData: ReportProcessData? = {
             guard let store = processStore else { return nil }
-            let fromDay = StatisticsProcessStore.dayKey(
-                now.addingTimeInterval(-59 * 86400), calendar: calendar)
-            let toDay = StatisticsProcessStore.dayKey(now, calendar: calendar)
+            // 应用日行与系统指标共用同一套右开边界：把 now 之后的部分裁掉，
+            // 结束端点用「含当天」的下一自然日零点表示。
+            let dayRange = StatisticsProcessStore.dayRange(
+                from: now.addingTimeInterval(-59 * 86400),
+                to: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now,
+                calendar: calendar
+            )
             let rawIdentities = store.identities()
             var identities: [String: ReportAppIdentity] = [:]
             for identity in rawIdentities {
                 identities[identity.appKey] = ReportAppIdentity(
                     appKey: identity.appKey,
                     name: identity.name,
-                    iconPNG: identity.iconPNG
+                    iconPNG: identity.iconPNG,
+                    hasStableIdentity: identity.hasStableIdentity
                 )
             }
             return ReportProcessData(
                 identities: identities,
-                dailyRows: store.dailyRows(fromDay: fromDay, toDay: toDay),
+                dailyRows: store.dailyRows(fromDay: dayRange.fromDay, toDay: dayRange.toDayExclusive),
                 batteryHistory: store.batteryHistory(),
-                alerts: alerts
+                alerts: alerts,
+                // 历史事件按同一自然日窗口读取，重启后仍可用。
+                persistedEvents: store.events(
+                    from: now.addingTimeInterval(-59 * 86400),
+                    to: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now
+                )
             )
         }()
 
@@ -112,6 +132,10 @@ nonisolated struct StatisticsReportDataProvider: Sendable {
 /// 速率积分的分段上限:超过视为采样中断,不把旧速率外推成长时段流量。
 final class StatisticsRecorder: ObservableObject {
     static let rateIntegrationCap: TimeInterval = 30
+
+    /// 进程采样速率的积分上限（秒）。排期为每分钟一次，留出调度抖动余量；
+    /// 超过该上限视为睡眠或长时间未采样，不补区间。
+    nonisolated static let processSampleIntegrationCap: TimeInterval = 90
 
     /// 各范围的聚合行(无数据为 nil)。分钟封口后随概览一起刷新。
     @Published private(set) var rangeRows: [StatisticsOverviewRange: StatisticsRow?] = [:]
@@ -146,6 +170,7 @@ final class StatisticsRecorder: ObservableObject {
 
     nonisolated private let database: StatisticsDatabase?
     nonisolated private let calendar: Calendar
+    private let processAlertCenter: ProcessAlertCenter
 
     /// 列名 → 列下标,与 StatisticsRow.columns 的顺序契约绑定。
     private static let columnIndex: [String: Int] = {
@@ -202,6 +227,8 @@ final class StatisticsRecorder: ObservableObject {
     private var lastDiskWrite: (rate: Double, at: Date)?
     /// 上一帧时刻,用于分段累计采样覆盖秒数(cover_s)。
     private var lastFrameAt: Date?
+    /// 上一次进程采样的时刻，用于按真实间隔积分速率型指标。
+    private var lastProcessSampleAt: Date?
 
     // MARK: - 秒数口径(运行状态评估模型 v0.1)
 
@@ -247,14 +274,20 @@ final class StatisticsRecorder: ObservableObject {
     private let maintenanceQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.statistics-maintenance", qos: .utility)
     private let sleepObservers = WorkspaceSleepObserversBox(center: NSWorkspace.shared.notificationCenter)
 
-    init(databaseURL: URL? = nil, calendar: Calendar = .current) {
+    init(
+        databaseURL: URL? = nil,
+        calendar: Calendar = .current,
+        processStoreDirectory: URL? = nil,
+        processAlertCenter: ProcessAlertCenter = .shared
+    ) {
         self.calendar = calendar
+        self.processAlertCenter = processAlertCenter
         let url = databaseURL ?? FileManager.default
             .urls(for: .applicationSupportDirectory, in: .userDomainMask)
             .first?
             .appendingPathComponent(Bundle.main.bundleIdentifier ?? "HagimiMonitor", isDirectory: true)
             .appendingPathComponent("statistics.sqlite3")
-        processStore = StatisticsProcessStore.defaultDirectory().map { StatisticsProcessStore(directory: $0) }
+        processStore = (processStoreDirectory ?? StatisticsProcessStore.defaultDirectory()).map { StatisticsProcessStore(directory: $0) }
         if let url {
             database = StatisticsDatabase(url: url, calendar: calendar)
             maintenanceQueue.async { [weak self] in
@@ -263,6 +296,12 @@ final class StatisticsRecorder: ObservableObject {
             }
         } else {
             database = nil
+        }
+        // 重启时将持久化中处于进行中状态的事件终结为中断，结束时间取最后有效观测时刻。
+        processStore?.interruptPersistedOngoing(reason: ProcessAlertEpisode.EndReason.replaced.rawValue)
+        // 确认事件落库，供重启后按历史日期查询。
+        processAlertCenter.eventPersister = { [weak self] event in
+            self?.processStore?.persist(event: event)
         }
         let center = NSWorkspace.shared.notificationCenter
         sleepObservers.add(center.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
@@ -287,11 +326,36 @@ final class StatisticsRecorder: ObservableObject {
         lastObservation = [:]
         lastIntersection = nil
         database?.beginSystemSleep(at: date)
+        // 睡眠期间无有效观测，进行中的应用事件标记为中断。
+        processAlertCenter.interruptAll(reason: .suspended, at: date)
     }
 
     private func handleSystemDidWake(at date: Date) {
         database?.endSystemSleep(at: date)
         systemAsleep = false
+        // 唤醒后重置采样时间基线。
+        lastProcessSampleAt = nil
+    }
+
+    /// 计算本次采样覆盖的真实秒数，并推进基线。
+    private func processSampleInterval(at date: Date) -> TimeInterval {
+        let interval = Self.sampleInterval(previous: lastProcessSampleAt, at: date)
+        lastProcessSampleAt = date
+        return interval
+    }
+
+    /// 速率型指标在两次采样之间应积分的秒数。
+    ///
+    /// 首次采样与超过允许间隔的采样都返回 0：前者没有可积分的区间，后者更可能是
+    /// 睡眠或长时间未采样，补一个区间会凭空放大累计量。抽成纯函数便于直接验证，
+    /// 不必依赖落库结果。
+    nonisolated static func sampleInterval(previous: Date?, at date: Date) -> TimeInterval {
+        guard let previous else { return 0 }
+        let elapsed = date.timeIntervalSince(previous)
+        // 进程采样排期是每分钟一次，间隔上限要按它来定；
+        // 逐秒系统采样的 30 秒上限在这里会把每次正常采样都判成越界。
+        guard elapsed > 0, elapsed <= processSampleIntegrationCap else { return 0 }
+        return elapsed
     }
 
     /// 一帧进程采样的直通入口(MonitorStore 统计定时器调用,主线程)。
@@ -306,11 +370,26 @@ final class StatisticsRecorder: ObservableObject {
         at date: Date
     ) {
         guard recordingActive, !systemAsleep else { return }
+        // 过滤时间戳重复或回退的采样批次。
+        if let last = lastProcessSampleAt, date <= last { return }
         let cpuEntries = cpu.map { (name: $0.name, pid: $0.pid, usage: $0.cpuUsage) }
         let memEntries = memory.map { (name: $0.name, pid: $0.pid, bytes: Double($0.memoryUsage)) }
         let gpuEntries = gpu.map { (name: $0.name, pid: $0.pid, usage: $0.gpuUsage) }
-        let netEntries = network.map { (name: $0.name, pid: $0.pid, downBytes: Double($0.download) * 60, upBytes: Double($0.upload) * 60) }
-        let diskEntries = disk.map { (name: $0.name, pid: $0.pid, readBytes: Double($0.bytesRead), writeBytes: Double($0.bytesWritten)) }
+        // 告警消费速率（B/s），应用库消费区间总量。
+        let networkRates = network.map { (name: $0.name, pid: $0.pid, downBytes: Double($0.download), upBytes: Double($0.upload)) }
+        // 区间总量使用采样实际间隔进行积分，首次采样或越界间隔不累加。
+        let frameInterval = processSampleInterval(at: date)
+        let netEntries = network.map {
+            (name: $0.name, pid: $0.pid,
+             downBytes: Double($0.download) * frameInterval,
+             upBytes: Double($0.upload) * frameInterval)
+        }
+        // 磁盘读写数据已经是采样间隔内的增量区间量，直接使用。
+        let diskEntries = disk.map {
+            (name: $0.name, pid: $0.pid,
+             readBytes: Double($0.bytesRead),
+             writeBytes: Double($0.bytesWritten))
+        }
 
         processStore?.record(
             cpu: cpuEntries,
@@ -322,11 +401,11 @@ final class StatisticsRecorder: ObservableObject {
             calendar: calendar
         )
 
-        ProcessAlertCenter.shared.ingest(
+        processAlertCenter.ingest(
             cpu: cpuEntries,
             memory: memEntries,
             gpu: gpuEntries,
-            network: netEntries,
+            network: networkRates,
             at: date
         ) { [weak self] name, pid in
             self?.processStore?.iconPNG(for: name)
@@ -483,8 +562,7 @@ final class StatisticsRecorder: ObservableObject {
         accrueIntersection(at: date)
     }
 
-    /// 记录一次新鲜观测,返回上次观测与可累计的间隔;首次观测或间隔越界返回 nil。
-    /// 未知档位(level 为 nil)同样更新观测:未知要切断后续累计,不能沿用旧档位。
+    /// 记录一次观测，返回上次观测与可累计的有效间隔；首次观测或间隔越界返回 nil。
     private func noteObservation(
         _ dimension: ObservationDimension,
         value: Double? = nil,

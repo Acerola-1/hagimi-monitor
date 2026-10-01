@@ -13,11 +13,21 @@ final class StatsAppIdentity {
     @Attribute(.unique) var appKey: String
     var name: String
     var iconPNG: Data?
+    /// 身份类别（bundle / systemExecutable / unresolved / legacyName）。未设置时回退为 legacyName。
+    var identityKind: String?
 
-    init(appKey: String, name: String, iconPNG: Data? = nil) {
+    init(appKey: String, name: String, iconPNG: Data? = nil, identityKind: String? = nil) {
         self.appKey = appKey
         self.name = name
         self.iconPNG = iconPNG
+        self.identityKind = identityKind
+    }
+
+    /// 身份是否为可跨重命名延续的稳定键。
+    var hasStableIdentity: Bool {
+        guard let identityKind else { return false }
+        return identityKind != AppIdentity.Kind.unresolved.rawValue
+            && identityKind != "legacyName"
     }
 }
 
@@ -107,6 +117,13 @@ final class StatsUsageMeta {
 /// ModelContext 只在该队列上创建与使用。API 值类型进出,调用方不接触托管对象。
 /// 安全不变式：内部 ModelContext 与所有状态均由专用串行队列（com.acerola.hagimi-monitor.stats-process-db）串行管理，对外提供线程安全的访问接口。
 nonisolated final class StatisticsProcessStore: @unchecked Sendable {
+    /// 确认事件的默认保留期（自然日）。与日汇总同口径，由调用方按窗口传入。
+    static let eventRetentionDays = 60
+
+    /// 进程统计库的 schema 版本。2 = 新增 `StatsAppEvent` 并把 `appKey` 语义
+    /// 从显示名改为稳定身份键。迁移与回滚路线见 docs/development/statistics-store-schema.md。
+    static let schemaVersion = 2
+
     private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.stats-process-db", qos: .utility)
     private var container: ModelContainer?
     private var context: ModelContext?
@@ -118,6 +135,8 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
 
     /// 一日内的进程聚合累加器(仅队列线程访问),封口刷入 SwiftData。
     private struct AppAccumulator {
+        /// 稳定身份存储键（bundle:/systemExecutable:/unresolved:）。
+        var appKey: String
         var name: String
         var cpuScore = 0.0
         var cpuSamples = 0
@@ -173,9 +192,10 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
             self.breakdownHandle = nil
         }
         let config = ModelConfiguration(url: databaseURL)
+        // 注册数据模型实体，保留已有表并增量创建事件表。
         let newContainer = try ModelContainer(
             for: StatsAppIdentity.self, StatsAppDaily.self, StatsBatteryDaily.self,
-                 StatsUsageMeta.self, StatsActiveDay.self,
+                 StatsUsageMeta.self, StatsActiveDay.self, StatsAppEvent.self,
             configurations: config
         )
         let newContext = ModelContext(newContainer)
@@ -284,8 +304,9 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
 
     // MARK: - 写入
 
-    /// 一帧进程采样:按应用名合并进当日累加器。在统计串行队列外调用安全。
-    /// 图标按 pid 现取全分辨率源(见 captureIcon),不消费面板的降采样图标。
+    /// 一帧进程采样：按应用身份合并进当日累加器。在统计串行队列外调用安全。
+    /// 身份标识优先使用 bundle identifier 或可执行路径，未确定时使用 unresolved 会话键。
+    /// 显示名称作为展示标签保留。图标按 pid 捕获全分辨率源。
     func record(
         cpu: [(name: String, pid: pid_t, usage: Double)],
         memory: [(name: String, pid: pid_t, bytes: Double)],
@@ -299,69 +320,80 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         queue.async { [weak self] in
             guard let self else { return }
             self.ensureContextLocked()
+            // 每帧清空身份缓存，避免进程退出后 PID 复用导致身份串联。
+            self.identityCache.removeAll(keepingCapacity: true)
             if day != self.currentDay {
                 self.flushLocked()
                 self.currentDay = day
             }
-            for entry in cpu where entry.usage >= 0.5 {
-                var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
+            // 档位边界与采样下限统一使用 StatisticsMetricDefinition 定义的标准阈值。
+            let cpuBands = StatisticsMetricDefinition.cpuBandBoundaries
+            let gpuBands = StatisticsMetricDefinition.gpuBandBoundaries
+            let memoryBands = StatisticsMetricDefinition.memoryBands.map(\.lowerBound)
+
+            for entry in cpu where entry.usage >= cpuBands[0] / 2 {
+                let identity = self.identity(for: entry.name, pid: entry.pid)
+                var acc = self.accumulators[identity.storageKey] ?? AppAccumulator(appKey: identity.storageKey, name: entry.name)
                 acc.cpuScore += entry.usage
                 acc.cpuSamples += 1
                 acc.cpuPeak = max(acc.cpuPeak, entry.usage)
-                if entry.usage >= 80 {
+                if entry.usage >= cpuBands[2] {
                     acc.cpuTier3 += 1
-                } else if entry.usage >= 50 {
+                } else if entry.usage >= cpuBands[1] {
                     acc.cpuTier2 += 1
-                } else if entry.usage >= 30 {
+                } else if entry.usage >= cpuBands[0] {
                     acc.cpuTier1 += 1
                 }
-                self.accumulators[entry.name] = acc
-                self.captureIcon(entry.name, pid: entry.pid)
+                self.accumulators[identity.storageKey] = acc
+                self.captureIcon(identity.storageKey, pid: entry.pid)
             }
-            for entry in memory where entry.bytes >= 64 * 1_048_576 {
-                var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
+            for entry in memory where entry.bytes >= 64 * StatisticsMetricDefinition.mebibyte {
+                let identity = self.identity(for: entry.name, pid: entry.pid)
+                var acc = self.accumulators[identity.storageKey] ?? AppAccumulator(appKey: identity.storageKey, name: entry.name)
                 acc.memSum += entry.bytes
                 acc.memSamples += 1
                 acc.memPeak = max(acc.memPeak, entry.bytes)
-                let gb = entry.bytes / 1_073_741_824
-                if gb >= 4.0 {
+                if entry.bytes >= memoryBands[2] {
                     acc.memTier3 += 1
-                } else if gb >= 2.0 {
+                } else if entry.bytes >= memoryBands[1] {
                     acc.memTier2 += 1
-                } else if gb >= 1.0 {
+                } else if entry.bytes >= memoryBands[0] {
                     acc.memTier1 += 1
                 }
-                self.accumulators[entry.name] = acc
-                self.captureIcon(entry.name, pid: entry.pid)
+                self.accumulators[identity.storageKey] = acc
+                self.captureIcon(identity.storageKey, pid: entry.pid)
             }
-            for entry in gpu where entry.usage >= 0.5 {
-                var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
+            for entry in gpu where entry.usage >= gpuBands[0] / 2 {
+                let identity = self.identity(for: entry.name, pid: entry.pid)
+                var acc = self.accumulators[identity.storageKey] ?? AppAccumulator(appKey: identity.storageKey, name: entry.name)
                 acc.gpuScore += entry.usage
                 acc.gpuSamples += 1
                 acc.gpuPeak = max(acc.gpuPeak, entry.usage)
-                if entry.usage >= 70 {
+                if entry.usage >= gpuBands[2] {
                     acc.gpuTier3 += 1
-                } else if entry.usage >= 40 {
+                } else if entry.usage >= gpuBands[1] {
                     acc.gpuTier2 += 1
-                } else if entry.usage >= 20 {
+                } else if entry.usage >= gpuBands[0] {
                     acc.gpuTier1 += 1
                 }
-                self.accumulators[entry.name] = acc
-                self.captureIcon(entry.name, pid: entry.pid)
+                self.accumulators[identity.storageKey] = acc
+                self.captureIcon(identity.storageKey, pid: entry.pid)
             }
-            for entry in network where entry.downBytes + entry.upBytes >= 5 * 1_048_576 {
-                var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
+            for entry in network where entry.downBytes + entry.upBytes >= 5 * StatisticsMetricDefinition.mebibyte {
+                let identity = self.identity(for: entry.name, pid: entry.pid)
+                var acc = self.accumulators[identity.storageKey] ?? AppAccumulator(appKey: identity.storageKey, name: entry.name)
                 acc.netDown += entry.downBytes
                 acc.netUp += entry.upBytes
-                self.accumulators[entry.name] = acc
-                self.captureIcon(entry.name, pid: entry.pid)
+                self.accumulators[identity.storageKey] = acc
+                self.captureIcon(identity.storageKey, pid: entry.pid)
             }
-            for entry in disk where entry.readBytes + entry.writeBytes >= 10 * 1_048_576 {
-                var acc = self.accumulators[entry.name] ?? AppAccumulator(name: entry.name)
+            for entry in disk where entry.readBytes + entry.writeBytes >= 10 * StatisticsMetricDefinition.mebibyte {
+                let identity = self.identity(for: entry.name, pid: entry.pid)
+                var acc = self.accumulators[identity.storageKey] ?? AppAccumulator(appKey: identity.storageKey, name: entry.name)
                 acc.diskRead += entry.readBytes
                 acc.diskWrite += entry.writeBytes
-                self.accumulators[entry.name] = acc
-                self.captureIcon(entry.name, pid: entry.pid)
+                self.accumulators[identity.storageKey] = acc
+                self.captureIcon(identity.storageKey, pid: entry.pid)
             }
         }
     }
@@ -425,6 +457,14 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         }
     }
 
+    /// 同步收口所有待落库内容。
+    /// 在应用退出、测试验证或迁移时使用，确保内存累加器完全持久化到数据库。
+    func flushSynchronously() {
+        queue.sync {
+            flushLocked()
+        }
+    }
+
     private func flushLocked() {
         ensureContextLocked()
         guard let context else { return }
@@ -471,11 +511,29 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
     /// 进程取不到图标时本轮跳过,下轮采样再试。缩放走 CoreGraphics,
     /// 不触碰 NSGraphicsContext.current,后台队列安全。
     /// 落库不单独 save:由 flushLocked/分钟封口的统一 save 收口。
-    private func captureIcon(_ name: String, pid: pid_t) {
-        let nameKey = name as NSString
-        guard iconCache.object(forKey: nameKey) == nil, !iconSkipSet.contains(name) else { return }
+    /// 采样帧期间解析到的稳定身份。按 pid 缓存，避免每条指标各查一次。
+    private var identityCache: [pid_t: AppIdentity] = [:]
+    /// 显示名称 → 最近一次解析到的身份键。用于按名称取图标等展示型查询：
+    /// 身份键才是聚合主键，但调用方（如实时告警）手上只有显示名称。
+    private var identityKeyByName: [String: String] = [:]
+
+    /// 解析并缓存本帧的稳定身份；拿不到稳定身份时明确标记 unresolved。
+    private func identity(for name: String, pid: pid_t) -> AppIdentity {
+        if let cached = identityCache[pid] {
+            identityKeyByName[name] = cached.storageKey
+            return cached
+        }
+        let resolved = AppIdentityResolver.resolve(pid: pid, name: name)
+        identityCache[pid] = resolved
+        identityKeyByName[name] = resolved.storageKey
+        return resolved
+    }
+
+    private func captureIcon(_ identityKey: String, pid: pid_t) {
+        let nameKey = identityKey as NSString
+        guard iconCache.object(forKey: nameKey) == nil, !iconSkipSet.contains(identityKey) else { return }
         guard let context else { return }
-        let key = name
+        let key = identityKey
         let predicate = #Predicate<StatsAppIdentity> { $0.appKey == key }
         let existing = (try? context.fetch(FetchDescriptor(predicate: predicate)).first) ?? nil
         if let stored = existing?.iconPNG, Self.iconPixels(stored) >= Int(Self.iconSize) {
@@ -486,7 +544,7 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         // 不落库——数十个守护进程共用同一张图标,冗余存储可达数 MB。
         guard let app = NSRunningApplication(processIdentifier: pid),
               app.activationPolicy != .prohibited else {
-            iconSkipSet.insert(name)
+            iconSkipSet.insert(identityKey)
             return
         }
         guard let png = ProcessIconCache.fullSizePNG(forPID: pid, sidePixels: Int(Self.iconSize)) else { return }
@@ -494,7 +552,14 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         if let existing {
             existing.iconPNG = png
         } else {
-            context.insert(StatsAppIdentity(appKey: name, name: name, iconPNG: png))
+            let displayName = identityKeyByName.first(where: { $0.value == identityKey })?.key ?? identityKey
+            let kind = identityKey.split(separator: ":").first.map(String.init)
+            context.insert(StatsAppIdentity(
+                appKey: identityKey,
+                name: displayName,
+                iconPNG: png,
+                identityKind: kind
+            ))
         }
     }
 
@@ -506,13 +571,143 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         let nameKey = name as NSString
         if let cached = iconCache.object(forKey: nameKey) { return cached as Data }
         guard let context else { return nil }
-        let key = name
-        let predicate = #Predicate<StatsAppIdentity> { $0.appKey == key }
-        let data = (try? context.fetch(FetchDescriptor(predicate: predicate)).first)?.iconPNG
+        // 优先根据身份键查询，缺失时回退至显示名称。
+        let identityKey = identityKeyByName[name] ?? name
+        let predicate = #Predicate<StatsAppIdentity> { $0.appKey == identityKey }
+        var data = (try? context.fetch(FetchDescriptor(predicate: predicate)).first)?.iconPNG
+        if data == nil, identityKey != name {
+            let fallback = #Predicate<StatsAppIdentity> { $0.appKey == name }
+            data = (try? context.fetch(FetchDescriptor(predicate: fallback)).first)?.iconPNG
+        }
         if let data {
             iconCache.setObject(data as NSData, forKey: nameKey)
         }
         return data
+    }
+
+    // MARK: - 事件持久化
+
+    /// 写入或更新一条确认事件（按 eventID 幂等）。
+    func persist(event: PersistedAppEvent) {
+        queue.async { [weak self] in
+            self?.persistLocked(event)
+        }
+    }
+
+    /// 同步写入：供需要在返回后立刻读回的场景（例如测试与退出前的收口）。
+    func persistSynchronously(event: PersistedAppEvent) {
+        queue.sync {
+            persistLocked(event)
+        }
+    }
+
+    private func persistLocked(_ event: PersistedAppEvent) {
+        ensureContextLocked()
+        guard let context else { return }
+        let key = event.eventID
+        let predicate = #Predicate<StatsAppEvent> { $0.eventID == key }
+        let row = (try? context.fetch(FetchDescriptor(predicate: predicate)).first) ?? nil
+        if let row {
+            row.appKey = event.appKey
+            row.name = event.name
+            row.endedAt = event.endedAt
+            row.lastEffectiveAt = event.lastEffectiveAt
+            row.continuousHighSeconds = event.continuousHighSeconds
+            row.eventSpanSeconds = event.eventSpanSeconds
+            row.averageUsage = event.averageUsage
+            row.peakUsage = event.peakUsage
+            row.observationCount = event.observationCount
+            row.segmentsJSON = Self.encodeSegments(event.segments)
+            row.state = event.state
+            row.endReason = event.endReason
+            row.notified = event.notified
+        } else {
+            context.insert(StatsAppEvent(
+                eventID: event.eventID,
+                appKey: event.appKey,
+                name: event.name,
+                metric: event.metric,
+                startedAt: event.startedAt,
+                endedAt: event.endedAt,
+                lastEffectiveAt: event.lastEffectiveAt,
+                continuousHighSeconds: event.continuousHighSeconds,
+                eventSpanSeconds: event.eventSpanSeconds,
+                averageUsage: event.averageUsage,
+                peakUsage: event.peakUsage,
+                observationCount: event.observationCount,
+                segmentsJSON: Self.encodeSegments(event.segments),
+                state: event.state,
+                endReason: event.endReason,
+                notified: event.notified
+            ))
+        }
+        do {
+            try context.save()
+        } catch {
+            // 保存失败时保留当前上下文供后续重试。
+            AppLogger.settings.error("Statistics event persist failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
+    /// 查询与 [from, to) 有交集的事件。完全在范围外的事件不进列表。
+    func events(from: Date, to: Date) -> [PersistedAppEvent] {
+        queue.sync {
+            guard let context else { return [] }
+            let predicate = #Predicate<StatsAppEvent> { $0.startedAt < to && $0.endedAt > from }
+            let rows = (try? context.fetch(
+                FetchDescriptor(predicate: predicate, sortBy: [SortDescriptor(\.startedAt, order: .reverse)])
+            )) ?? []
+            return rows.map {
+                PersistedAppEvent(
+                    eventID: $0.eventID,
+                    appKey: $0.appKey,
+                    name: $0.name,
+                    metric: $0.metric,
+                    startedAt: $0.startedAt,
+                    endedAt: $0.endedAt,
+                    lastEffectiveAt: $0.lastEffectiveAt,
+                    continuousHighSeconds: $0.continuousHighSeconds,
+                    eventSpanSeconds: $0.eventSpanSeconds,
+                    averageUsage: $0.averageUsage,
+                    peakUsage: $0.peakUsage,
+                    observationCount: $0.observationCount,
+                    segments: Self.decodeSegments($0.segmentsJSON),
+                    state: $0.state,
+                    endReason: $0.endReason,
+                    notified: $0.notified
+                )
+            }
+        }
+    }
+
+    /// 重启时把持久化中仍处于进行中状态的事件标记为中断，结束时间取最后有效观测时刻。
+    func interruptPersistedOngoing(reason: String) {
+        queue.async { [weak self] in
+            self?.interruptPersistedOngoingLocked(reason: reason)
+        }
+    }
+
+    /// 同步版本：应用退出或测试中需要在返回后立刻读回。
+    func interruptPersistedOngoingSynchronously(reason: String) {
+        queue.sync {
+            interruptPersistedOngoingLocked(reason: reason)
+        }
+    }
+
+    private func interruptPersistedOngoingLocked(reason: String) {
+        ensureContextLocked()
+        guard let context else { return }
+        let ongoing = "ongoing"
+        let predicate = #Predicate<StatsAppEvent> { $0.state == ongoing }
+        let rows = (try? context.fetch(FetchDescriptor(predicate: predicate))) ?? []
+        guard !rows.isEmpty else { return }
+        for row in rows {
+            row.state = "interrupted"
+            row.endReason = reason
+            row.endedAt = row.lastEffectiveAt
+            row.eventSpanSeconds = row.lastEffectiveAt.timeIntervalSince(row.startedAt)
+        }
+        try? context.save()
     }
 
     /// 查询某应用持久化的图标 PNG（内存缓存命中即返，未命中查库）
@@ -675,10 +870,11 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         let memPeak: Double
     }
 
+    /// 按右开区间 `[fromDay, toDay)` 查询日级应用聚合行。
     func dailyRows(fromDay: Int64, toDay: Int64) -> [DailyAppRow] {
         queue.sync {
             guard let context else { return [] }
-            let predicate = #Predicate<StatsAppDaily> { $0.day >= fromDay && $0.day <= toDay }
+            let predicate = #Predicate<StatsAppDaily> { $0.day >= fromDay && $0.day < toDay }
             let rows = (try? context.fetch(FetchDescriptor(predicate: predicate, sortBy: [SortDescriptor(\.day)]))) ?? []
             let result = rows.map { row in
                 DailyAppRow(
@@ -716,12 +912,13 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         }
     }
 
-    /// 全部应用身份(含图标),报表用。
-    func identities() -> [(appKey: String, name: String, iconPNG: Data?)] {
+    /// 全部应用身份(含图标),报表用。`hasStableIdentity` 为 false 表示这是旧版
+    /// 按显示名存储的行，其历史应标为旧版估算。
+    func identities() -> [(appKey: String, name: String, iconPNG: Data?, hasStableIdentity: Bool)] {
         queue.sync {
             guard let context else { return [] }
             let rows = (try? context.fetch(FetchDescriptor<StatsAppIdentity>())) ?? []
-            let result = rows.map { ($0.appKey, $0.name, $0.iconPNG) }
+            let result = rows.map { ($0.appKey, $0.name, $0.iconPNG, $0.hasStableIdentity) }
             if !context.hasChanges {
                 resetContextLocked()
             }
@@ -786,13 +983,18 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
             activeRows.forEach { context.delete($0) }
             let batteryRows = (try? context.fetch(FetchDescriptor<StatsBatteryDaily>(predicate: #Predicate { $0.day < day }))) ?? []
             batteryRows.forEach { context.delete($0) }
+            // 早于保留窗口的确认事件与日汇总保持一致口径清理。
+            let cutoff = Date(timeIntervalSince1970: TimeInterval(Self.dateFromDayKey(day)))
+            let eventRows = (try? context.fetch(FetchDescriptor<StatsAppEvent>(
+                predicate: #Predicate { $0.endedAt < cutoff }
+            ))) ?? []
+            eventRows.forEach { context.delete($0) }
             repairUsageMetaLocked()
             do {
                 try context.save()
                 compactDatabaseLocked()
                 resetContextLocked()
             } catch {
-                // 保留含待删除对象的 context，后续保存仍有机会完成本次操作。
                 AppLogger.settings.error("Statistics delete-before save failed: \(String(describing: error), privacy: .public)")
             }
         }
@@ -804,8 +1006,7 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
     func deleteRange(fromDay: Int64, toDay: Int64) {
         queue.sync {
             flushLocked()
-            // flush 成功时会重建 context；必须在它之后重新获取，保证删除、
-            // 打卡元信息修复与 save 位于同一个事务上下文。
+            // flushLocked 会重置 context，此处重新获取以保证在同一上下文中执行后续删除与保存。
             guard let context else { return }
             let appRows = (try? context.fetch(FetchDescriptor<StatsAppDaily>(predicate: #Predicate { $0.day >= fromDay && $0.day < toDay }))) ?? []
             appRows.forEach { context.delete($0) }
@@ -813,13 +1014,19 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
             activeRows.forEach { context.delete($0) }
             let batteryRows = (try? context.fetch(FetchDescriptor<StatsBatteryDaily>(predicate: #Predicate { $0.day >= fromDay && $0.day < toDay }))) ?? []
             batteryRows.forEach { context.delete($0) }
+            // 删除指定区间内对应时间戳范围的确认事件，与日汇总保持一致。
+            let lowerBound = Date(timeIntervalSince1970: TimeInterval(Self.dateFromDayKey(fromDay)))
+            let upperBound = Date(timeIntervalSince1970: TimeInterval(Self.dateFromDayKey(toDay)))
+            let eventRows = (try? context.fetch(FetchDescriptor<StatsAppEvent>(
+                predicate: #Predicate { $0.startedAt < upperBound && $0.endedAt > lowerBound }
+            ))) ?? []
+            eventRows.forEach { context.delete($0) }
             repairUsageMetaLocked()
             do {
                 try context.save()
                 compactDatabaseLocked()
                 resetContextLocked()
             } catch {
-                // 不替换失败的 context，避免把尚未持久化的删除与元信息修复丢掉。
                 AppLogger.settings.error("Statistics delete-range save failed: \(String(describing: error), privacy: .public)")
             }
         }
@@ -841,12 +1048,8 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         }
     }
 
-    /// 清空全部应用统计(应用聚合/身份图标/电池快照)。Core Data 逐行删除只把
-    /// 页挂进 freelist,文件体积永不收缩——数 MB 的图标库清空后占用纹丝不动,
-    /// 连同库文件一并销毁再按原 schema 重建,是让占用真实回落到空库地板的
-    /// 唯一途径。
-    /// 使用打卡(活跃日与连续天数)是用户的连续性记录,不随清空丢失:
-    /// 销毁前取出,重建后原样写回。
+    /// 清空全部应用统计数据（应用聚合、身份图标、电池快照）。
+    /// 通过销毁并重建库文件彻底回收存储空间，保留打卡与活跃天数元信息。
     func deleteAll() {
         queue.sync {
             guard let url = databaseURL else { return }
@@ -919,8 +1122,161 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         meta.lastActiveDay = remaining.last?.day ?? meta.lastActiveDay
     }
 
+    /// 编码/解码事件的有效覆盖分段。
+    ///
+    /// 分段用于按查询范围精确裁剪时长与均值。旧数据没有分段，解码得到空数组，
+    /// 调用方回退到比例折算，不会因此显示为零。
+    private struct SegmentDTO: Codable {
+        let start: Double
+        let end: Double
+        let average: Double
+    }
+
+    static func encodeSegments(_ segments: [AppResourceEventStateMachine.CoveredSegment]) -> Data? {
+        guard !segments.isEmpty else { return nil }
+        let dto = segments.map {
+            SegmentDTO(
+                start: $0.start.timeIntervalSince1970,
+                end: $0.end.timeIntervalSince1970,
+                average: $0.averageValue
+            )
+        }
+        return try? JSONEncoder().encode(dto)
+    }
+
+    static func decodeSegments(_ data: Data?) -> [AppResourceEventStateMachine.CoveredSegment] {
+        guard let data,
+              let dto = try? JSONDecoder().decode([SegmentDTO].self, from: data) else { return [] }
+        return dto.map {
+            AppResourceEventStateMachine.CoveredSegment(
+                start: Date(timeIntervalSince1970: $0.start),
+                end: Date(timeIntervalSince1970: $0.end),
+                averageValue: $0.average
+            )
+        }
+    }
+
+    /// 把日键还原成当天零点的 unix 秒，供按时间戳存储的事件区间使用。
+    /// 只用于把日键范围转成事件查询边界，不参与展示。
+    static func dateFromDayKey(_ key: Int64, calendar: Calendar = .current) -> Int64 {
+        let year = Int(key / 10_000)
+        let month = Int((key % 10_000) / 100)
+        let day = Int(key % 100)
+        var components = DateComponents()
+        components.year = year
+        components.month = month
+        components.day = day
+        guard let date = calendar.date(from: components) else { return key }
+        return Int64(calendar.startOfDay(for: date).timeIntervalSince1970)
+    }
+
     static func dayKey(_ date: Date, calendar: Calendar) -> Int64 {
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         return Int64(components.year ?? 0) * 10_000 + Int64(components.month ?? 0) * 100 + Int64(components.day ?? 0)
     }
+
+    /// 将查询时间区间 [from, to) 转换为日键右开范围 `[fromDay, toDayExclusive)`。
+    struct DayRange: Sendable, Equatable {
+        let fromDay: Int64
+        let toDayExclusive: Int64
+
+        func contains(day: Int64) -> Bool {
+            day >= fromDay && day < toDayExclusive
+        }
+    }
+
+    static func dayRange(from: Date, to: Date, calendar: Calendar) -> DayRange {
+        let fromDay = dayKey(from, calendar: calendar)
+        let toDayStart = calendar.startOfDay(for: to)
+        // 结束端点恰是某天零点时，该天不属于本区间；否则结束端点所在日整天参与统计。
+        let toDay = dayKey(to, calendar: calendar)
+        let isExactDayStart = to == toDayStart
+        let exclusive = isExactDayStart
+            ? toDay
+            : dayKey(calendar.date(byAdding: .day, value: 1, to: toDayStart) ?? to, calendar: calendar)
+        return DayRange(fromDay: fromDay, toDayExclusive: exclusive)
+    }
+}
+
+/// 持久化的应用资源高占用事件，记录有效区间、均值峰值、覆盖分段及结束状态。
+@Model
+final class StatsAppEvent {
+    /// 稳定事件 ID。同一事件重复写入时按它幂等更新。
+    @Attribute(.unique) var eventID: String
+    var appKey: String
+    var name: String
+    var metric: String
+    var startedAt: Date
+    var endedAt: Date
+    var lastEffectiveAt: Date
+    /// 有效高占用秒数。
+    var continuousHighSeconds: Double
+    /// 首末观测跨度。
+    var eventSpanSeconds: Double
+    var averageUsage: Double
+    var peakUsage: Double
+    var observationCount: Int
+    /// 有效覆盖分段（JSON 编码）。若为空则回退为空数组。
+    var segmentsJSON: Data?
+    var state: String
+    var endReason: String?
+    var notified: Bool
+
+    init(
+        eventID: String,
+        appKey: String,
+        name: String,
+        metric: String,
+        startedAt: Date,
+        endedAt: Date,
+        lastEffectiveAt: Date,
+        continuousHighSeconds: Double,
+        eventSpanSeconds: Double,
+        averageUsage: Double,
+        peakUsage: Double,
+        observationCount: Int,
+        segmentsJSON: Data?,
+        state: String,
+        endReason: String?,
+        notified: Bool
+    ) {
+        self.eventID = eventID
+        self.appKey = appKey
+        self.name = name
+        self.metric = metric
+        self.startedAt = startedAt
+        self.endedAt = endedAt
+        self.lastEffectiveAt = lastEffectiveAt
+        self.continuousHighSeconds = continuousHighSeconds
+        self.eventSpanSeconds = eventSpanSeconds
+        self.averageUsage = averageUsage
+        self.peakUsage = peakUsage
+        self.observationCount = observationCount
+        self.segmentsJSON = segmentsJSON
+        self.state = state
+        self.endReason = endReason
+        self.notified = notified
+    }
+}
+
+
+/// 事件持久化的值类型：跨队列传递用，不直接把 SwiftData 实体交给调用方。
+nonisolated struct PersistedAppEvent: Sendable, Equatable {
+    let eventID: String
+    let appKey: String
+    let name: String
+    let metric: String
+    let startedAt: Date
+    let endedAt: Date
+    let lastEffectiveAt: Date
+    let continuousHighSeconds: Double
+    let eventSpanSeconds: Double
+    let averageUsage: Double
+    let peakUsage: Double
+    let observationCount: Int
+    /// 有效覆盖分段。缺失时可按比例折算。
+    var segments: [AppResourceEventStateMachine.CoveredSegment] = []
+    let state: String
+    let endReason: String?
+    let notified: Bool
 }

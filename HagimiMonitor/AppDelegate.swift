@@ -122,9 +122,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 default: return nil
                 }
             }()
+            // 可选应用/指标深链：验证设置摘要 → 报表应用详情的定位链路。
+            let focusedApp = ProcessInfo.processInfo.environment["HAGIMI_REPORT_APP"]
+            let focusedMetric: ProcessAlertEpisode.Metric? = {
+                switch ProcessInfo.processInfo.environment["HAGIMI_REPORT_METRIC"]?.lowercased() {
+                case "cpu": return .cpu
+                case "gpu": return .gpu
+                case "memory": return .memory
+                case "network": return .network
+                default: return nil
+                }
+            }()
+            let context = StatisticsReportContext(
+                anchor: anchor,
+                appKey: focusedApp,
+                metric: focusedMetric
+            )
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
-                StatisticsReportFlow.open(recorder: self.store.statisticsRecorder, anchor: anchor)
+                StatisticsReportFlow.open(recorder: self.store.statisticsRecorder, context: context)
             }
         }
 

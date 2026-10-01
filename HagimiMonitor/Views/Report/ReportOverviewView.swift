@@ -7,6 +7,23 @@ struct ReportOverviewView: View {
     @ObservedObject var viewModel: NativeReportViewModel
     @State private var selectedDate: Date?
     @State private var showScoreBasis = false
+    /// 趋势视图模式：默认只看 CPU/GPU 两条负载曲线，内存单独切换查看。
+    /// 四条线同时叠在一根百分比轴上会让人误以为可以互相比较或相加。
+    @State private var trendMode: TrendMode = .load
+
+    enum TrendMode: String, CaseIterable, Identifiable {
+        case load
+        case memory
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .load: return String(localized: "stats.report.trend.load", defaultValue: "负载")
+            case .memory: return String(localized: "stats.report.trend.memory", defaultValue: "内存")
+            }
+        }
+    }
 
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
@@ -26,6 +43,7 @@ struct ReportOverviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             overviewHeading
+            periodConclusionCard
             healthScoreSummary
             resourceGrid(primary: true)
             compositeTrendCard
@@ -36,6 +54,45 @@ struct ReportOverviewView: View {
             }
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// 时段结论前置：先回答「这段时间怎么样」，再看评分与曲线。
+    /// 结论只讲系统压力维度，高占用应用作为补充，不与之混为一谈。
+    private var periodConclusionCard: some View {
+        let model = viewModel.rangeModel
+        let events = model?.events ?? []
+        let appAlerts = model?.apps.highLoadAlerts ?? []
+        let summary = ReportPeriodConclusion.summary(
+            events: events,
+            appAlertCount: appAlerts.count,
+            coveredSeconds: model?.coveredSeconds ?? 0,
+            quality: model?.quality ?? [.noObservation]
+        )
+        let tint: Color = summary.isElevated
+            ? palette.severityTint(for: .warning)
+            : palette.severityTint(for: .calm)
+
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Image(systemName: summary.isElevated ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                .foregroundStyle(tint)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(summary.headline)
+                    .font(.title3.weight(.semibold))
+                if let detail = summary.detail {
+                    Text(detail)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Text(String(localized: "stats.report.conclusion.scope"))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     private var overviewHeading: some View {
@@ -55,9 +112,20 @@ struct ReportOverviewView: View {
                 ProgressView().controlSize(.small)
                     .accessibilityLabel(Text("report.ui.updating"))
             }
-            Text("report.ui.historical")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("report.ui.historical")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                // 快照的采集时刻必须可见：报表是历史快照，不是每秒刷新的实时面板。
+                if let capturedAt = viewModel.rangeModel?.updatedAt {
+                    Text(String(
+                        format: String(localized: "stats.report.snapshotAt"),
+                        capturedAt.formatted(date: .abbreviated, time: .shortened)
+                    ))
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+                }
+            }
         }
     }
 
@@ -290,6 +358,14 @@ struct ReportOverviewView: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
+
+            // 数据源与数据质量补充说明。
+            if let notice = viewModel.rangeModel?.qualityNotice {
+                Text(notice)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .help(String(localized: "stats.r.coverageHelp", defaultValue: "有效采样时长占清醒时间的比例；系统确认的整机休眠不计入清醒时间。"))
     }
@@ -445,13 +521,13 @@ struct ReportOverviewView: View {
     private func formatNetworkValue(_ net: ReportNetworkMetrics?) -> String {
         guard let net else { return "—" }
         guard net.totalDownBytes != nil || net.totalUpBytes != nil else { return "—" }
-        return "↓ \(net.totalDownBytes.map(ReportUIHelper.formatBytes) ?? "—")  ↑ \(net.totalUpBytes.map(ReportUIHelper.formatBytes) ?? "—")"
+        return "↓ \(net.totalDownBytes.map(ReportUIHelper.formatVolume) ?? "—")  ↑ \(net.totalUpBytes.map(ReportUIHelper.formatVolume) ?? "—")"
     }
 
     private func formatDiskValue(_ disk: ReportDiskMetrics?) -> String {
         guard let disk else { return "—" }
         guard disk.totalReadBytes != nil || disk.totalWriteBytes != nil else { return "—" }
-        return String(format: String(localized: "report.ui.diskTotal"), disk.totalReadBytes.map(ReportUIHelper.formatBytes) ?? "—", disk.totalWriteBytes.map(ReportUIHelper.formatBytes) ?? "—")
+        return String(format: String(localized: "report.ui.diskTotal"), disk.totalReadBytes.map(ReportUIHelper.formatVolume) ?? "—", disk.totalWriteBytes.map(ReportUIHelper.formatVolume) ?? "—")
     }
 
     private func navigateTo(_ module: ReportNavigationModule) {
@@ -505,10 +581,20 @@ struct ReportOverviewView: View {
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 16) {
-                        ReportLegendItem(title: String(localized: "stats.r.sCpu", defaultValue: "CPU"), color: cpuColor)
-                        ReportLegendItem(title: String(localized: "stats.r.sGpu", defaultValue: "GPU"), color: gpuColor)
-                        ReportLegendItem(title: String(localized: "stats.r.sMemPressure", defaultValue: "内存压力"), color: memPressureColor)
-                        ReportLegendItem(title: String(localized: "stats.r.sMemUsage", defaultValue: "内存占比"), color: memUsageColor, isDashed: true)
+                        ReportNavigationPicker(title: "", selection: $trendMode) {
+                            ForEach(TrendMode.allCases) { mode in
+                                Text(mode.label).tag(mode)
+                            }
+                        }
+                        .fixedSize()
+
+                        if trendMode == .load {
+                            ReportLegendItem(title: String(localized: "stats.r.sCpu", defaultValue: "CPU"), color: cpuColor)
+                            ReportLegendItem(title: String(localized: "stats.r.sGpu", defaultValue: "GPU"), color: gpuColor)
+                        } else {
+                            ReportLegendItem(title: String(localized: "stats.r.sMemPressure", defaultValue: "内存压力"), color: memPressureColor)
+                            ReportLegendItem(title: String(localized: "stats.r.sMemUsage", defaultValue: "内存占比"), color: memUsageColor, isDashed: true)
+                        }
 
                         Spacer()
 
@@ -520,8 +606,8 @@ struct ReportOverviewView: View {
                     }
 
                     Chart {
-                        // 1. CPU 均值
-                        ForEach(Array(cpuSegments.keys.sorted()), id: \.self) { seg in
+                        // 1. CPU 均值（负载模式）
+                        ForEach(trendMode == .load ? Array(cpuSegments.keys.sorted()) : [], id: \.self) { seg in
                             let segPoints = cpuSegments[seg] ?? []
                             ForEach(segPoints) { pt in
                                 LineMark(
@@ -534,8 +620,8 @@ struct ReportOverviewView: View {
                             }
                         }
 
-                        // 2. GPU 均值
-                        ForEach(Array(gpuSegments.keys.sorted()), id: \.self) { seg in
+                        // 2. GPU 均值（负载模式）
+                        ForEach(trendMode == .load ? Array(gpuSegments.keys.sorted()) : [], id: \.self) { seg in
                             let segPoints = gpuSegments[seg] ?? []
                             ForEach(segPoints) { pt in
                                 LineMark(
@@ -548,8 +634,8 @@ struct ReportOverviewView: View {
                             }
                         }
 
-                        // 3. 内存压力
-                        ForEach(Array(pressureSegments.keys.sorted()), id: \.self) { seg in
+                        // 3. 内存压力（内存模式）
+                        ForEach(trendMode == .memory ? Array(pressureSegments.keys.sorted()) : [], id: \.self) { seg in
                             let segPoints = pressureSegments[seg] ?? []
                             ForEach(segPoints) { pt in
                                 LineMark(
@@ -562,8 +648,8 @@ struct ReportOverviewView: View {
                             }
                         }
 
-                        // 4. 内存占用比 (虚线)
-                        ForEach(Array(memUsageSegments.keys.sorted()), id: \.self) { seg in
+                        // 4. 内存占用比（内存模式，虚线）
+                        ForEach(trendMode == .memory ? Array(memUsageSegments.keys.sorted()) : [], id: \.self) { seg in
                             let segPoints = memUsageSegments[seg] ?? []
                             ForEach(segPoints) { pt in
                                 LineMark(

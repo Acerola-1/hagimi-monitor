@@ -16,7 +16,10 @@ struct ReportMachineView: View {
                     title: String(localized: "stats.r.kThisMac", defaultValue: "本机硬件全景规格"),
                     icon: "laptopcomputer"
                 ) {
-                    ReportEmptyPlaceholder(text: String(localized: "stats.r.emptyHardware", defaultValue: "正在采集或当前环境限制无法读取硬件全景清单"))
+                    // 硬件清单异步加载，加载期间与空数据状态区分展示。
+                    ReportEmptyPlaceholder(text: viewModel.isHardwareLoading
+                        ? String(localized: "stats.r.loadingHardware", defaultValue: "正在采集硬件全景清单，统计内容已可用")
+                        : String(localized: "stats.r.emptyHardware", defaultValue: "正在采集或当前环境限制无法读取硬件全景清单"))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
@@ -31,6 +34,12 @@ struct ReportMachineView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onAppear {
+            if selectedCategoryId.isEmpty, let first = categories.first {
+                selectedCategoryId = first.id
+            }
+        }
+        .onChange(of: viewModel.isHardwareLoading) { _, _ in
+            // 硬件清单就绪后默认选中首个分类。
             if selectedCategoryId.isEmpty, let first = categories.first {
                 selectedCategoryId = first.id
             }
@@ -70,9 +79,7 @@ struct ReportMachineView: View {
         ) {
             VStack(alignment: .leading, spacing: 16) {
                 if category.id == "this-mac" {
-                    // 本机概览页在原生报表中特化仅呈现核心身份组（型号、芯片、系统版本等）。
-                    // 其余硬件分类（CPU、GPU、内存、显示、磁盘、电池）在原生报表中均已有独立的主题二级看板；
-                    // 完整的全部硬件事实与高级属性统一由 StandaloneHTML 独立导出报告完整承载。
+                    // 本机概览呈现核心身份组（型号、芯片、系统版本等），其余硬件分类由对应主题看板展示。
                     ForEach(category.groups.filter { $0.id == "identity" }, id: \.id) { group in
                         hardwareGroup(group)
                     }
@@ -95,7 +102,7 @@ struct ReportMachineView: View {
 
                 Spacer()
 
-                // 复制整组规格按钮
+                // 复制整组规格
                 Button(action: { copyGroupFacts(group) }) {
                     HStack(spacing: 4) {
                         Image(systemName: "doc.on.doc")
@@ -124,7 +131,7 @@ struct ReportMachineView: View {
         }
     }
 
-    // MARK: - 规格项排版 (R23: 弹性宽度与自动换行，避免截断)
+    // MARK: - 规格项排版
 
     private func factRow(fact: HardwareFact) -> some View {
         HStack(alignment: .top, spacing: 12) {

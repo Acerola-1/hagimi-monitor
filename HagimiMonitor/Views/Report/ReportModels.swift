@@ -20,23 +20,30 @@ nonisolated enum ReportTimeRange: Sendable, Hashable {
         }
     }
 
-    /// 计算起止时间（开区间 [from, to)）
+    /// 计算起止时间（开区间 [from, to)）。
+    ///
+    /// 预设按本地自然日推进，不再用固定 86400 秒的滚动窗口：设置页的「今日 /
+    /// 近 7 日 / 近 30 日」用的是自然日，两处必须给出同一起点。跨夏令时的日子
+    /// 由 Calendar 处理，固定秒数会在切换日落到 23:00/01:00 而偏一天。
+    /// 未来端点由聚合层裁到快照时刻，终止日始终为下一自然日零点。
     func bounds(now: Date = Date(), calendar: Calendar = .current) -> (from: Date, to: Date) {
+        let today = calendar.startOfDay(for: now)
+        func dayStart(offsetDays: Int) -> Date {
+            calendar.date(byAdding: .day, value: offsetDays, to: today) ?? today
+        }
         switch self {
         case .today:
-            let start = calendar.startOfDay(for: now)
-            return (start, now)
+            return (today, now)
         case .week:
-            let from = now.addingTimeInterval(-7 * 86400)
-            return (from, now)
+            return (dayStart(offsetDays: -6), now)
         case .month:
-            let from = now.addingTimeInterval(-30 * 86400)
-            return (from, now)
+            return (dayStart(offsetDays: -29), now)
         case .year:
-            let from = now.addingTimeInterval(-365 * 86400)
-            return (from, now)
+            return (dayStart(offsetDays: -364), now)
         case .custom(let from, let to):
-            return (from, to)
+            // 日期选择器已把结束日提交为下一自然日零点，保持右开；未来端点由
+            // 聚合层裁到快照时刻，这里不重复加一天。
+            return (calendar.startOfDay(for: from), to)
         }
     }
 
@@ -87,6 +94,11 @@ nonisolated struct ReportAppIdentity: Sendable, Equatable {
     let appKey: String
     let name: String
     let iconPNG: Data?
+    /// 是否为可跨重命名延续的稳定身份。旧版按显示名存储的记录为 false。
+    var hasStableIdentity: Bool = false
+
+    /// 仅包含显示名称的旧版记录。
+    var isLegacyNameOnly: Bool { !hasStableIdentity }
 }
 
 /// 进程统计与告警快照
@@ -95,6 +107,22 @@ nonisolated struct ReportProcessData: Sendable {
     let dailyRows: [StatisticsProcessStore.DailyAppRow]
     let batteryHistory: [StatisticsProcessStore.BatteryPoint]
     let alerts: [ProcessAlertEpisode]
+    /// 已确认并持久化的历史事件。
+    var persistedEvents: [PersistedAppEvent] = []
+
+    init(
+        identities: [String: ReportAppIdentity],
+        dailyRows: [StatisticsProcessStore.DailyAppRow],
+        batteryHistory: [StatisticsProcessStore.BatteryPoint],
+        alerts: [ProcessAlertEpisode],
+        persistedEvents: [PersistedAppEvent] = []
+    ) {
+        self.identities = identities
+        self.dailyRows = dailyRows
+        self.batteryHistory = batteryHistory
+        self.alerts = alerts
+        self.persistedEvents = persistedEvents
+    }
 }
 
 /// 打开报表时一次性后台拉取的完整快照
@@ -278,7 +306,10 @@ nonisolated struct ReportAppRankingItem: Sendable, Equatable, Identifiable {
     let id: String
     let appKey: String
     let name: String
+    /// 当前分类的主排序值（CPU 核·分、内存字节、网络字节等）。
     let value: Double
+    /// 同一分类下的采样峰值，用于「按峰值」排序；不可用时与 value 相同。
+    let peakValue: Double
     let valueText: String
     let tierHint: String?
     let iconData: Data?
@@ -334,6 +365,8 @@ nonisolated struct ReportAppRankings: Sendable, Equatable {
     let diskList: [ReportAppRankingItem]
     let netList: [ReportAppRankingItem]
     let highLoadAlerts: [ReportHighLoadAppGroup]
+    /// 当前范围内是否包含仅按显示名称存储的旧版身份记录。
+    var hasLegacyNameIdentities: Bool = false
 
     init(
         cpuList: [ReportAppRankingItem],
@@ -341,7 +374,8 @@ nonisolated struct ReportAppRankings: Sendable, Equatable {
         gpuList: [ReportAppRankingItem],
         diskList: [ReportAppRankingItem],
         netList: [ReportAppRankingItem],
-        highLoadAlerts: [ReportHighLoadAppGroup]
+        highLoadAlerts: [ReportHighLoadAppGroup],
+        hasLegacyNameIdentities: Bool = false
     ) {
         self.cpuList = cpuList
         self.memList = memList
@@ -349,6 +383,7 @@ nonisolated struct ReportAppRankings: Sendable, Equatable {
         self.diskList = diskList
         self.netList = netList
         self.highLoadAlerts = highLoadAlerts
+        self.hasLegacyNameIdentities = hasLegacyNameIdentities
     }
 }
 
@@ -359,9 +394,13 @@ nonisolated struct ReportHighLoadAppGroup: Sendable, Equatable, Identifiable {
     let name: String
     let isOngoing: Bool
     let earliestStart: Date?
-    let maxDurationMinutes: Int
+    /// 最长有效高占用时长（秒）。由事件的有效覆盖推导，不是采样次数。
+    let maxDurationSeconds: TimeInterval
     let episodes: [ProcessAlertEpisode]
     let iconData: Data?
+
+    /// 展示用分钟数。
+    var maxDurationMinutes: Int { Int((maxDurationSeconds / 60).rounded()) }
 }
 
 /// 异常事件条目
@@ -461,8 +500,33 @@ nonisolated struct ReportActiveRangeModel: Sendable, Equatable {
     let rows: [StatisticsRow]
     /// 所选时间范围内的有效采样覆盖比例（0...1）；无有效范围或无样本时为 nil。
     let coverageRatio: Double?
+    /// 本期结果的数据来源与质量标记（部分覆盖、旧版日汇总或样本估算）。
+    let quality: StatisticsDataQuality
+    /// 本期真正被观测到的秒数（有效采样覆盖时长）。
+    let coveredSeconds: Double
+    let updatedAt: Date?
 
     var coveragePercent: Double? { coverageRatio.map { $0 * 100 } }
+
+    /// 估算或部分覆盖时的说明；数据可信时返回 nil，页面不显示多余提示。
+    var qualityNotice: String? {
+        if quality.contains(.noObservation) {
+            return String(localized: "stats.quality.noObservation")
+        }
+        if quality.contains(.sourceUnsupported) {
+            return String(localized: "stats.quality.unsupported")
+        }
+        if quality.contains(.legacyDailyEstimate) {
+            return String(localized: "stats.quality.legacyDaily")
+        }
+        if quality.contains(.leadingSampleEstimate) {
+            return String(localized: "stats.quality.leadingSample")
+        }
+        if quality.contains(.partialCoverage) {
+            return String(localized: "stats.quality.partial")
+        }
+        return nil
+    }
 
 
     let healthScore: StatisticsHealthScore.Result?
