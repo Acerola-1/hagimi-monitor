@@ -76,6 +76,170 @@ nonisolated enum ReportDataAggregator: Sendable {
         return min(1, max(0, covered / awakeSpan))
     }
 
+    /// 将事件裁剪至查询区间 [from, to) 内，按有效交集计算区间内时长与加权均值。
+    static func clipEpisode(
+        _ episode: ProcessAlertEpisode,
+        from: Date,
+        to: Date
+    ) -> (episode: ProcessAlertEpisode, coveredSeconds: Double)? {
+        let start = max(episode.startedAt, from)
+        let end = min(episode.endedAt ?? episode.lastSeenAt, to)
+        guard end > start else { return nil }
+
+        var clipped = episode
+        clipped.eventSpanSeconds = end.timeIntervalSince(start)
+
+        // 存在分段记录时按覆盖分段精确裁剪时长、均值与峰值
+        if let precise = AppResourceEventStateMachine.clipSegments(episode.segments, from: from, to: to) {
+            clipped.continuousHighSeconds = precise.seconds
+            clipped.averageUsage = precise.averageValue
+            clipped.peakUsage = min(episode.peakUsage, max(precise.peak, precise.averageValue))
+            let fraction = precise.seconds / max(episode.continuousHighSeconds, 0.001)
+            clipped.observationCount = max(1, Int((Double(episode.observationCount) * fraction).rounded()))
+            return (clipped, clipped.continuousHighSeconds)
+        }
+
+        // 无分段记录时按跨度比例折算
+        let effective = episode.endedAt ?? episode.lastSeenAt
+        let fullSpan = max(effective.timeIntervalSince(episode.startedAt), 0.001)
+        let inRange = end.timeIntervalSince(start)
+        let fraction = min(1, max(0, inRange / fullSpan))
+        clipped.continuousHighSeconds = episode.continuousHighSeconds * fraction
+        clipped.observationCount = max(1, Int((Double(episode.observationCount) * fraction).rounded()))
+        return (clipped, clipped.continuousHighSeconds)
+    }
+
+    /// 从持久化记录还原事件展示模型。
+    static func persistedEpisodes(_ events: [PersistedAppEvent]) -> [ProcessAlertEpisode] {
+        events.compactMap { stored in
+            guard let metric = ProcessAlertEpisode.Metric(rawValue: stored.metric),
+                  let state = ProcessAlertEpisode.State(rawValue: stored.state),
+                  let id = UUID(uuidString: stored.eventID) else {
+                return nil
+            }
+            return ProcessAlertEpisode(
+                id: id,
+                appKey: stored.appKey,
+                name: stored.name,
+                metric: metric,
+                startedAt: stored.startedAt,
+                lastSeenAt: stored.lastEffectiveAt,
+                endedAt: stored.endedAt,
+                peakUsage: stored.peakUsage,
+                averageUsage: stored.averageUsage,
+                continuousHighSeconds: stored.continuousHighSeconds,
+                eventSpanSeconds: stored.eventSpanSeconds,
+                observationCount: stored.observationCount,
+                endReason: stored.endReason.flatMap(ProcessAlertEpisode.EndReason.init(rawValue:)),
+                state: state,
+                notified: stored.notified
+            )
+        }
+    }
+
+    /// 趋势图支持的应用指标类别。
+    enum AppTrendMetric: String, Sendable, CaseIterable {
+        case cpu
+        case gpu
+        case memory
+        case network
+        case disk
+    }
+
+    /// 单个应用在范围内的逐日趋势点（按时间升序）。
+    static func appTrendSeries(
+        dailyRows: [StatisticsProcessStore.DailyAppRow],
+        appKey: String,
+        trendMetric: AppTrendMetric,
+        from: Date,
+        to: Date,
+        calendar: Calendar = .current
+    ) -> [(date: Date, value: Double)] {
+        let range = StatisticsProcessStore.dayRange(from: from, to: to, calendar: calendar)
+        let rows = dailyRows
+            .filter { $0.appKey == appKey && range.contains(day: $0.day) }
+            .sorted { $0.day < $1.day }
+
+        return rows.compactMap { row in
+            let value: Double? = switch trendMetric {
+            case .cpu: row.cpuSamples > 0 ? row.cpuAvg : nil
+            case .gpu: row.gpuSamples > 0 ? row.gpuAvg : nil
+            case .memory: row.memSamples > 0 ? row.memAvgBytes : nil
+            case .network: (row.netDownBytes + row.netUpBytes) > 0 ? row.netDownBytes + row.netUpBytes : nil
+            case .disk: (row.diskReadBytes + row.diskWriteBytes) > 0 ? row.diskReadBytes + row.diskWriteBytes : nil
+            }
+            guard let value else { return nil }
+            return (date: dayKeyToDate(row.day, calendar: calendar), value: value)
+        }
+    }
+
+    /// 单个应用在范围内的逐日趋势点（告警指标重载，兼容既有调用）。
+    static func appTrendSeries(
+        dailyRows: [StatisticsProcessStore.DailyAppRow],
+        appKey: String,
+        metric: ProcessAlertEpisode.Metric,
+        from: Date,
+        to: Date,
+        calendar: Calendar = .current
+    ) -> [(date: Date, value: Double)] {
+        let trendMetric: AppTrendMetric = switch metric {
+        case .cpu: .cpu
+        case .gpu: .gpu
+        case .memory: .memory
+        case .network: .network
+        }
+        return appTrendSeries(
+            dailyRows: dailyRows,
+            appKey: appKey,
+            trendMetric: trendMetric,
+            from: from,
+            to: to,
+            calendar: calendar
+        )
+    }
+
+    /// 日键（yyyyMMdd）还原为当天零点。
+    static func dayKeyToDate(_ key: Int64, calendar: Calendar = .current) -> Date {
+        Date(timeIntervalSince1970: TimeInterval(StatisticsProcessStore.dateFromDayKey(key, calendar: calendar)))
+    }
+
+    /// 历史名称到稳定身份键的可证实映射。
+    /// 仅在显示名称唯一对应已知身份时归并，存在同名冲突时保持独立。
+    static func identityAliases(processData: ReportProcessData) -> [String: String] {
+        var byDisplayName: [String: String] = [:]
+        for (key, identity) in processData.identities {
+            guard key != identity.name else { continue }
+            if let existing = byDisplayName[identity.name], existing != key {
+                byDisplayName[identity.name] = ""
+                continue
+            }
+            byDisplayName[identity.name] = key
+        }
+        return byDisplayName.filter { !$0.value.isEmpty }
+    }
+
+    /// 汇总本期结果的数据质量标记（无观测、日汇总估算、样本估算、部分覆盖）。
+    static func dataQuality(
+        rows: [StatisticsRow],
+        coverageRatio: Double?,
+        granularity: ReportSourceGranularity,
+        appsEstimateLeadingSample: Bool
+    ) -> StatisticsDataQuality {
+        guard !rows.isEmpty else { return [.noObservation] }
+        var quality: StatisticsDataQuality = [.observed]
+        if granularity == .days {
+            quality = quality.combining(.legacyDailyEstimate)
+        }
+        if appsEstimateLeadingSample {
+            quality = quality.combining(.leadingSampleEstimate)
+        }
+        // 覆盖率低于 1 时标记为部分覆盖。
+        if let coverageRatio, coverageRatio < 0.95 {
+            quality = quality.combining(.partialCoverage)
+        }
+        return quality
+    }
+
     /// 先裁剪再合并区间，避免重复通知或跨范围休眠造成分母重复扣除。
     static func sleepSeconds(in intervals: [SystemSleepInterval], from: Date, to: Date) -> TimeInterval {
         let clipped = intervals.compactMap { interval -> (Date, Date)? in
@@ -455,10 +619,9 @@ nonisolated enum ReportDataAggregator: Sendable {
         let acFrac = weightedAverage(of: rows, keyPath: \.acFrac)
         let chgFrac = weightedAverage(of: rows, keyPath: \.chargingFrac)
 
-        let fromDay = StatisticsProcessStore.dayKey(from, calendar: .current)
-        let toDay = StatisticsProcessStore.dayKey(to, calendar: .current)
+        let dayRange = StatisticsProcessStore.dayRange(from: from, to: to, calendar: .current)
 
-        let filteredHistory = batteryHistory.filter { $0.day >= fromDay && $0.day <= toDay }
+        let filteredHistory = batteryHistory.filter { dayRange.contains(day: $0.day) }
         let dailyHealth = filteredHistory.map { item -> ReportBatteryMetrics.DailyHealth in
             let date = parseDayKey(item.day)
             return ReportBatteryMetrics.DailyHealth(
@@ -511,8 +674,11 @@ nonisolated enum ReportDataAggregator: Sendable {
             return ReportAppRankings(cpuList: [], memList: [], gpuList: [], diskList: [], netList: [], highLoadAlerts: [])
         }
 
-        let fromDay = StatisticsProcessStore.dayKey(from, calendar: .current)
-        let toDay = StatisticsProcessStore.dayKey(to, calendar: .current)
+        // 应用日行按 [from, to) 右开区间过滤
+        let dayRange = StatisticsProcessStore.dayRange(from: from, to: to, calendar: .current)
+
+        // 权威名称表归并旧版记录：仅在旧键唯一对应已知身份显示名时映射，避免同名冲突误合
+        let aliasMap = identityAliases(processData: processData)
 
         typealias AppAggEntry = (
             name: String,
@@ -529,9 +695,10 @@ nonisolated enum ReportDataAggregator: Sendable {
         var agg: [String: AppAggEntry] = [:]
 
         for row in processData.dailyRows {
-            if row.day < fromDay || row.day > toDay { continue }
+            if !dayRange.contains(day: row.day) { continue }
+            let canonicalKey = aliasMap[row.appKey] ?? row.appKey
 
-            var entry = agg[row.appKey] ?? (
+            var entry = agg[canonicalKey] ?? (
                 name: row.name,
                 cpuSum: 0, cpuN: 0,
                 gpuSum: 0, gpuN: 0,
@@ -569,7 +736,7 @@ nonisolated enum ReportDataAggregator: Sendable {
             entry.memT3 += row.memTier3
             if row.memPeak > entry.memPeak { entry.memPeak = row.memPeak }
 
-            agg[row.appKey] = entry
+            agg[canonicalKey] = entry
         }
 
         // 约定：stats.r.prefix* 与 stats.r.unit* 为原子级词缀/单位键，xcstrings 中其值必须是无格式占位符（不得含 %@ / %d 等）的纯文本，由 Swift 插值拼接避免格式化参数不匹配风险。
@@ -594,6 +761,7 @@ nonisolated enum ReportDataAggregator: Sendable {
             getValue: ((appKey: String, val: AppAggEntry)) -> Double,
             format: (Double) -> String,
             getTierHint: (((appKey: String, val: AppAggEntry, value: Double)) -> String?)? = nil,
+            getPeak: ((AppAggEntry) -> Double)? = nil,
             minThreshold: Double = 0.05,
             tag: String = "item"
         ) -> [ReportAppRankingItem] {
@@ -607,14 +775,14 @@ nonisolated enum ReportDataAggregator: Sendable {
                     appKey: appKey,
                     name: val.name,
                     value: v,
+                    peakValue: getPeak?(val) ?? v,
                     valueText: format(v),
                     tierHint: tierHint,
                     iconData: iconData
                 )
             }
+            // 保留全部聚合记录，条目截断由展示层控制
             .sorted { $0.value > $1.value }
-            .prefix(25)
-            .map { $0 }
         }
 
         let cpuList = makeList(
@@ -641,6 +809,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 }
                 return parts.joined(separator: " · ")
             },
+            getPeak: { $0.cpuPeak },
             minThreshold: 0.05,
             tag: "cpu"
         )
@@ -662,6 +831,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 }
                 return parts.isEmpty ? String(localized: "stats.r.appResidentAvg", defaultValue: "常驻均值") : parts.joined(separator: " · ")
             },
+            getPeak: { $0.memPeak },
             minThreshold: 1024 * 1024,
             tag: "mem"
         )
@@ -687,6 +857,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 }
                 return parts.joined(separator: " · ")
             },
+            getPeak: { $0.gpuPeak },
             minThreshold: 0.05,
             tag: "gpu"
         )
@@ -700,6 +871,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 let writePrefix = String(localized: "stats.r.prefixWrite", defaultValue: "写")
                 return "\(readPrefix) \(ReportUIHelper.formatBytes(val.diskReadBytes)) · \(writePrefix) \(ReportUIHelper.formatBytes(val.diskWriteBytes))"
             },
+            getPeak: { $0.diskReadBytes + $0.diskWriteBytes },
             minThreshold: 1024,
             tag: "disk"
         ) : []
@@ -711,21 +883,35 @@ nonisolated enum ReportDataAggregator: Sendable {
                 let val = item.val
                 return "↓ \(ReportUIHelper.formatBytes(val.netDownBytes)) · ↑ \(ReportUIHelper.formatBytes(val.netUpBytes))"
             },
+            getPeak: { $0.netDownBytes + $0.netUpBytes },
             minThreshold: 1024,
             tag: "net"
         ) : []
 
-        // 高负载告警分组
+        // 高负载告警分组：合并内存中的活跃事件与持久化历史事件，按事件 ID 去重
         var alertGroups: [String: [ProcessAlertEpisode]] = [:]
+        var mergedByID: [UUID: ProcessAlertEpisode] = [:]
         for alert in processData.alerts {
+            mergedByID[alert.id] = alert
+        }
+        for restored in persistedEpisodes(processData.persistedEvents) where mergedByID[restored.id] == nil {
+            mergedByID[restored.id] = restored
+        }
+        for alert in mergedByID.values {
             alertGroups[alert.appKey, default: []].append(alert)
         }
 
-        let highLoadItems = alertGroups.map { (appKey, episodes) -> ReportHighLoadAppGroup in
+        // 仅保留与本期有交集的事件并按区间裁剪
+        let clippedGroups = alertGroups.compactMap { (appKey, episodes) -> (String, [ProcessAlertEpisode])? in
+            let clipped = episodes.compactMap { clipEpisode($0, from: from, to: to)?.episode }
+            return clipped.isEmpty ? nil : (appKey, clipped)
+        }
+
+        let highLoadItems = clippedGroups.map { (appKey, episodes) -> ReportHighLoadAppGroup in
             let name = episodes.first?.name ?? appKey
             let isOngoing = episodes.contains { $0.state == .ongoing }
             let earliest = episodes.map(\.startedAt).min()
-            let maxDur = episodes.map(\.durationMinutes).max() ?? 0
+            let maxDur = episodes.map(\.continuousHighSeconds).max() ?? 0
             let iconData = processData.identities[appKey]?.iconPNG
             return ReportHighLoadAppGroup(
                 id: appKey,
@@ -733,13 +919,13 @@ nonisolated enum ReportDataAggregator: Sendable {
                 name: name,
                 isOngoing: isOngoing,
                 earliestStart: earliest,
-                maxDurationMinutes: maxDur,
+                maxDurationSeconds: maxDur,
                 episodes: episodes,
                 iconData: iconData
             )
         }.sorted { a, b in
             if a.isOngoing != b.isOngoing { return a.isOngoing }
-            return a.maxDurationMinutes > b.maxDurationMinutes
+            return a.maxDurationSeconds > b.maxDurationSeconds
         }
 
         return ReportAppRankings(
@@ -748,7 +934,8 @@ nonisolated enum ReportDataAggregator: Sendable {
             gpuList: gpuList,
             diskList: diskList,
             netList: netList,
-            highLoadAlerts: highLoadItems
+            highLoadAlerts: highLoadItems,
+            hasLegacyNameIdentities: processData.identities.values.contains { $0.isLegacyNameOnly }
         )
     }
 
@@ -1214,6 +1401,13 @@ nonisolated enum ReportDataAggregator: Sendable {
         let filtered = filterRows(sourceRows, from: from, to: to)
         let hourlyFiltered = filterRows(snapshot.hours, from: from, to: to)
         let coverageRatioValue = coverageRatio(rows: filtered, from: from, to: to, systemSleepIntervals: snapshot.systemSleepIntervals)
+        let coveredSeconds = filtered.reduce(0.0) { $0 + max(0, coverSeconds(for: $1)) }
+        let quality = dataQuality(
+            rows: filtered,
+            coverageRatio: coverageRatioValue,
+            granularity: granularity,
+            appsEstimateLeadingSample: !(snapshot.process?.dailyRows.isEmpty ?? true)
+        )
 
         // 健康评分计算
         let healthScore = StatisticsHealthScore.evaluate(rows: filtered)
@@ -1283,6 +1477,9 @@ nonisolated enum ReportDataAggregator: Sendable {
             isSingleDay: isSingleDay,
             rows: filtered,
             coverageRatio: coverageRatioValue,
+            quality: quality,
+            coveredSeconds: coveredSeconds,
+            updatedAt: snapshot.capturedAt,
             healthScore: healthScore,
             healthScoreNilReason: healthScoreNilReason,
             cpu: cpu,

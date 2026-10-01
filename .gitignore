@@ -91,6 +91,7 @@ promo-codes.html
 tmp/
 tmp-shots/
 *.profraw
+*-audit.json
 
 # macOS 桌面杂项
 .DS_Store

@@ -27,10 +27,15 @@ enum ReportWindowPresenter {
 
     /// 打开原生硬件报表窗口；窗口先显示,数据快照在后台加载完成后更新内容。
     static func open(recorder: StatisticsRecorder, anchor: StatisticsReportAnchor? = nil) {
+        open(recorder: recorder, context: StatisticsReportContext(anchor: anchor))
+    }
+
+    /// 携带范围、模块、应用与指标上下文打开；已有窗口复用同一实例并提交新上下文。
+    static func open(recorder: StatisticsRecorder, context: StatisticsReportContext) {
         let win = ensureWindow(recorder: recorder)
         win.appearance = AppDelegate.shared?.store.settings.themePreference.appearance
         focus(win)
-        viewModel?.load(anchor: anchor)
+        viewModel?.apply(context)
         windowDelegate?.refreshVisibility()
     }
 
@@ -43,9 +48,9 @@ enum ReportWindowPresenter {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// 重新加载当前报表数据快照
+    /// 重新加载当前报表数据快照；保留当前范围与深链目标。
     static func reloadCurrentReport() {
-        viewModel?.load()
+        viewModel?.refreshCurrentReport()
     }
 
     /// 另存为导出独立 HTML 文件（按需生成）
@@ -56,6 +61,8 @@ enum ReportWindowPresenter {
         savePanel.nameFieldStringValue = "HagimiMonitor-Report.html"
         savePanel.title = String(localized: "stats.report.export.title", defaultValue: "导出硬件规格档案")
 
+        // 携带用户当前提交的范围。
+        let committedRange = viewModel?.committedExportRange()
         let performExport: (URL) -> Void = { targetURL in
             Task { @MainActor in
                 do {
@@ -64,7 +71,7 @@ enum ReportWindowPresenter {
                         if didStartAccess { targetURL.stopAccessingSecurityScopedResource() }
                     }
                     let generation = Task.detached(priority: .userInitiated) {
-                        try Self.writeHTML(snapshot: snapshot, to: targetURL)
+                        try Self.writeHTML(snapshot: snapshot, to: targetURL, committedRange: committedRange)
                     }
                     _ = try await generation.value
                 } catch {
@@ -94,6 +101,8 @@ enum ReportWindowPresenter {
               let snapshot = viewModel?.snapshot else { return }
         let generationID = UUID()
         printGenerationID = generationID
+        // 打印使用用户当前提交的范围。
+        let committedRange = viewModel?.committedExportRange()
         let generationTask = Task { @MainActor in
             defer {
                 if printGenerationID == generationID {
@@ -106,9 +115,9 @@ enum ReportWindowPresenter {
                     let fileURL = FileManager.default.temporaryDirectory
                         .appendingPathComponent("HagimiMonitor-Report-\(UUID().uuidString).html")
                     do {
-                        return try Self.writeHTML(snapshot: snapshot, to: fileURL)
+                        return try Self.writeHTML(snapshot: snapshot, to: fileURL, committedRange: committedRange)
                     } catch {
-                        // 生成阶段也可能已经创建了部分文件,失败时不能把它留在临时目录。
+                        // 生成失败时清理残留的临时文件。
                         try? FileManager.default.removeItem(at: fileURL)
                         throw error
                     }
@@ -127,7 +136,11 @@ enum ReportWindowPresenter {
     }
 
     /// 组装导出或打印所需的单文件 HTML。调用方负责把它放到后台任务。
-    nonisolated private static func writeHTML(snapshot: ReportSnapshot, to outputURL: URL) throws -> URL {
+    nonisolated private static func writeHTML(
+        snapshot: ReportSnapshot,
+        to outputURL: URL,
+        committedRange: (label: String, from: Date, to: Date)? = nil
+    ) throws -> URL {
         let process = snapshot.process.flatMap { StandaloneHTMLReportExporter.processSnapshot(from: $0) }
         return try StandaloneHTMLReportExporter.write(
             to: outputURL,
@@ -141,7 +154,8 @@ enum ReportWindowPresenter {
                 "direct": snapshot.meta.isDirect
             ],
             process: process,
-            hardware: snapshot.hardware
+            hardware: snapshot.hardware,
+            committedRange: committedRange
         )
     }
 

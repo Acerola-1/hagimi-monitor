@@ -83,7 +83,8 @@ nonisolated enum StandaloneHTMLReportExporter {
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
         process: StatisticsProcessSnapshot? = nil,
-        hardware: HardwareInventory? = nil
+        hardware: HardwareInventory? = nil,
+        committedRange: (label: String, from: Date, to: Date)? = nil
     ) throws -> URL {
         guard let templateURL = Bundle.main.url(forResource: templateResource, withExtension: "html"),
               let hardwareCSSURL = Bundle.main.url(forResource: hardwareSectionResource, withExtension: "css"),
@@ -116,7 +117,13 @@ nonisolated enum StandaloneHTMLReportExporter {
         // 编码失败(NaN/非 JSON 值混入 payload)抛错走统一的失败上报,不 trap 进程。
         let json: String
         do {
-            json = try payloadJSON(snapshot: snapshot, meta: meta, process: process, hardware: hardware)
+            json = try payloadJSON(
+                snapshot: snapshot,
+                meta: meta,
+                process: process,
+                hardware: hardware,
+                committedRange: committedRange
+            )
         } catch {
             throw StatisticsReportError.encodingFailed(error)
         }
@@ -218,15 +225,42 @@ nonisolated enum StandaloneHTMLReportExporter {
         snapshot: (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow]),
         meta: [String: Any],
         process: StatisticsProcessSnapshot?,
-        hardware: HardwareInventory?
+        hardware: HardwareInventory?,
+        committedRange: (label: String, from: Date, to: Date)? = nil
     ) throws -> String {
         let columnNames = StatisticsRow.columns.map(\.name)
+        // 自然日范围由 Swift 侧统一计算下发，保持与设置及原生报表口径一致。
+        let now = Date()
+        let today = Calendar.current.startOfDay(for: now)
+        func dayOffset(_ days: Int) -> Int {
+            Int((Calendar.current.date(byAdding: .day, value: days, to: today) ?? today).timeIntervalSince1970)
+        }
+        // 数据来源与限制说明随载荷下发，保证纸面与离线文件均可查看。
+        var metaWithScope = meta
+        if metaWithScope["scopeNote"] == nil {
+            metaWithScope["scopeNote"] = String(
+                localized: "stats.export.scopeNote",
+                defaultValue: "应用数值来自每分钟前列采样，属估算；含旧日汇总的时段无法还原到分钟。"
+            )
+        }
         var payload: [String: Any] = [
             "generatedAt": Int(Date().timeIntervalSince1970),
-            "meta": meta,
+            "meta": metaWithScope,
+            // 与 ReportTimeRange 一致：含今天在内的 1/7/30/365 个自然日，右开端点为 now。
+            "rangeBounds": [
+                "today": [dayOffset(0), Int(now.timeIntervalSince1970)],
+                "week": [dayOffset(-6), Int(now.timeIntervalSince1970)],
+                "month": [dayOffset(-29), Int(now.timeIntervalSince1970)],
+                "year": [dayOffset(-364), Int(now.timeIntervalSince1970)],
+            ],
+            // 打印与导出使用用户当前提交的范围。
+            "committedRange": committedRange.map {
+                ["label": $0.label,
+                 "from": Int($0.from.timeIntervalSince1970),
+                 "to": Int($0.to.timeIntervalSince1970)]
+            } ?? [:],
             "lang": currentLanguageTag,
-            // 评分常量随载荷下发:报表 JS 与 App 端 StatisticsHealthScore 共用同一组
-            // 权重、门槛与等级区间,改口径只需改一处,不会两边各写一套数字。
+            // 评分常量随载荷下发，与 App 端 StatisticsHealthScore 共享统一权重、门槛与等级区间。
             "scoreModel": [
                 "memWeight": StatisticsHealthScore.memWeight,
                 "thermalWeight": StatisticsHealthScore.thermalWeight,
@@ -264,8 +298,7 @@ nonisolated enum StandaloneHTMLReportExporter {
             payload["hardware"] = [
                 "capturedAt": Int(hardware.capturedAt.timeIntervalSince1970),
                 "categories": hardware.categories.map(encodeCategory),
-                // 各模块右栏要展示的分组由 App 侧选好,报表只渲染——分组名与其
-                // 消费者不再分处两种语言两套文件。
+                // 各模块右栏展示分组由 App 侧选定，报表直接渲染。
                 "rails": hardware.rails.mapValues { $0.map(encodeGroup) },
             ]
         }
@@ -273,8 +306,7 @@ nonisolated enum StandaloneHTMLReportExporter {
         return String(data: data, encoding: .utf8) ?? "{}"
     }
 
-    /// 硬件分类编码成前端要的最小结构。缺失值编成 NSNull,前端按「—」渲染——
-    /// 不能省略这一行,省略会让「读不到」和「这一项不存在」混为一谈。
+    /// 硬件分类编码成前端所需结构。缺失值编成 NSNull，前端按「—」渲染，以区分未读取到与项不存在。
     nonisolated private static func encodeCategory(_ category: HardwareCategory) -> [String: Any] {
         [
             "id": category.id,
@@ -387,8 +419,11 @@ nonisolated enum StandaloneHTMLReportExporter {
     /// 应用行取近 60 天(与报表小时层窗口一致),日级粒度供网页端按范围聚合。
     @MainActor static func processSnapshot(from store: StatisticsProcessStore, calendar: Calendar = .current) -> StatisticsProcessSnapshot? {
         let now = Date()
-        let fromDay = StatisticsProcessStore.dayKey(now.addingTimeInterval(-59 * 86400), calendar: calendar)
-        let toDay = StatisticsProcessStore.dayKey(now, calendar: calendar)
+        let dayRange = StatisticsProcessStore.dayRange(
+            from: now.addingTimeInterval(-59 * 86400),
+            to: calendar.date(byAdding: .day, value: 1, to: calendar.startOfDay(for: now)) ?? now,
+            calendar: calendar
+        )
 
         let identities = store.identities()
         var nameIndex: [String: Int] = [:]
@@ -401,7 +436,7 @@ nonisolated enum StandaloneHTMLReportExporter {
         }
 
         // 行:[日键, 名称下标, cpu%, cpuN, gpu%, gpuN, 内存MB, 内存N, 下行MB, 上行MB, cpuT1, cpuT2, cpuT3, cpuPeak, gpuT1, gpuT2, gpuT3, gpuPeak]
-        let rows: [[Any]] = store.dailyRows(fromDay: fromDay, toDay: toDay).map { row in
+        let rows: [[Any]] = store.dailyRows(fromDay: dayRange.fromDay, toDay: dayRange.toDayExclusive).map { row in
             let index = nameIndex[row.appKey] ?? {
                 nameIndex[row.appKey] = names.count
                 names.append(row.name)
@@ -425,13 +460,16 @@ nonisolated enum StandaloneHTMLReportExporter {
                 "metric": alert.metric.rawValue,
                 "peakUsage": (alert.peakUsage * 10).rounded() / 10,
                 "avgUsage": (alert.averageUsage * 10).rounded() / 10,
-                "durationMinutes": alert.durationMinutes,
+                "durationSeconds": alert.continuousHighSeconds,
                 "state": alert.state.rawValue,
                 "startedAt": Int(alert.startedAt.timeIntervalSince1970),
                 "lastSeenAt": Int(alert.lastSeenAt.timeIntervalSince1970),
-                "tier1": alert.tier1Minutes,
-                "tier2": alert.tier2Minutes,
-                "tier3": alert.tier3Minutes,
+                // 档位时长按有效秒数下发。
+                "tier1Seconds": alert.tier1Seconds,
+                "tier2Seconds": alert.tier2Seconds,
+                "tier3Seconds": alert.tier3Seconds,
+                // 档位标签由共享指标定义生成。
+                "bandLabels": bandLabels(for: alert.metric),
             ]
             if let endedAt = alert.endedAt {
                 dict["endedAt"] = Int(endedAt.timeIntervalSince1970)
@@ -480,13 +518,16 @@ nonisolated enum StandaloneHTMLReportExporter {
                 "metric": alert.metric.rawValue,
                 "peakUsage": (alert.peakUsage * 10).rounded() / 10,
                 "avgUsage": (alert.averageUsage * 10).rounded() / 10,
-                "durationMinutes": alert.durationMinutes,
+                "durationSeconds": alert.continuousHighSeconds,
                 "state": alert.state.rawValue,
                 "startedAt": Int(alert.startedAt.timeIntervalSince1970),
                 "lastSeenAt": Int(alert.lastSeenAt.timeIntervalSince1970),
-                "tier1": alert.tier1Minutes,
-                "tier2": alert.tier2Minutes,
-                "tier3": alert.tier3Minutes,
+                // 档位时长按有效秒数下发。
+                "tier1Seconds": alert.tier1Seconds,
+                "tier2Seconds": alert.tier2Seconds,
+                "tier3Seconds": alert.tier3Seconds,
+                // 档位标签由共享指标定义生成。
+                "bandLabels": bandLabels(for: alert.metric),
             ]
             if let endedAt = alert.endedAt {
                 dict["endedAt"] = Int(endedAt.timeIntervalSince1970)
@@ -498,6 +539,29 @@ nonisolated enum StandaloneHTMLReportExporter {
         }
         guard !names.isEmpty || !battery.isEmpty || !alertList.isEmpty else { return nil }
         return StatisticsProcessSnapshot(appRows: rows, appNames: names, appIcons: icons, batteryDaily: battery, alerts: alertList)
+    }
+
+    /// 某指标三个档位的展示标签，来自共享指标定义。
+    nonisolated static func bandLabels(for metric: ProcessAlertEpisode.Metric) -> [String] {
+        let definition: StatisticsMetricDefinition.Metric = switch metric {
+        case .cpu: .cpu
+        case .gpu: .gpu
+        case .memory: .memory
+        case .network: .network
+        }
+        let boundaries: [Double] = switch definition {
+        case .cpu: StatisticsMetricDefinition.cpuBandBoundaries
+        case .gpu: StatisticsMetricDefinition.gpuBandBoundaries
+        case .memory: StatisticsMetricDefinition.memoryBands.map(\.lowerBound)
+        case .network: StatisticsMetricDefinition.networkBandBoundaries.map { $0 * StatisticsMetricDefinition.mebibyte }
+        }
+        return boundaries.map { boundary in
+            switch definition {
+            case .memory: StatisticsDisplayFormat.binaryCapacity(boundary)
+            case .network: StatisticsDisplayFormat.decimalRate(boundary)
+            default: StatisticsDisplayFormat.percent(boundary)
+            }
+        }
     }
 
     // MARK: - 元信息
@@ -560,16 +624,43 @@ enum StatisticsReportError: LocalizedError {
 }
 
 /// 原生报表打开时要定位的模块。视图模型将枚举 case 映射为初始选中的模块。
-enum StatisticsReportAnchor: Sendable {
+enum StatisticsReportAnchor: Sendable, Equatable {
     case memory
     case thermal
     case apps
+}
+
+/// 报表打开上下文：携带时间范围、目标模块、应用、指标及事件，确保跨页面跳转时状态对齐。
+struct StatisticsReportContext: Sendable, Equatable {
+    var range: StatisticsOverviewRange?
+    var anchor: StatisticsReportAnchor?
+    var appKey: String?
+    var metric: ProcessAlertEpisode.Metric?
+    var eventID: UUID?
+
+    init(
+        range: StatisticsOverviewRange? = nil,
+        anchor: StatisticsReportAnchor? = nil,
+        appKey: String? = nil,
+        metric: ProcessAlertEpisode.Metric? = nil,
+        eventID: UUID? = nil
+    ) {
+        self.range = range
+        self.anchor = anchor
+        self.appKey = appKey
+        self.metric = metric
+        self.eventID = eventID
+    }
 }
 
 /// 报表打开流程：设置页按钮与 App 菜单共用。直接唤起原生报表窗口。
 @MainActor
 enum StatisticsReportFlow {
     static func open(recorder: StatisticsRecorder, anchor: StatisticsReportAnchor? = nil) {
-        ReportWindowPresenter.open(recorder: recorder, anchor: anchor)
+        open(recorder: recorder, context: StatisticsReportContext(anchor: anchor))
+    }
+
+    static func open(recorder: StatisticsRecorder, context: StatisticsReportContext) {
+        ReportWindowPresenter.open(recorder: recorder, context: context)
     }
 }

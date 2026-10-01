@@ -56,13 +56,13 @@ struct ReportDiskView: View {
             )
             ReportKpiCard(
                 title: String(localized: "stats.r.sTotalRead", defaultValue: "读取总量"),
-                value: disk?.totalReadBytes.map { ReportUIHelper.formatBytes($0) } ?? "—",
+                value: disk?.totalReadBytes.map { ReportUIHelper.formatVolume($0) } ?? "—",
                 caption: nil,
                 color: readColor
             )
             ReportKpiCard(
                 title: String(localized: "stats.r.sTotalWrite", defaultValue: "写入总量"),
-                value: disk?.totalWriteBytes.map { ReportUIHelper.formatBytes($0) } ?? "—",
+                value: disk?.totalWriteBytes.map { ReportUIHelper.formatVolume($0) } ?? "—",
                 caption: nil,
                 color: writeColor
             )

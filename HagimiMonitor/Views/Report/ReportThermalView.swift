@@ -32,7 +32,7 @@ struct ReportThermalView: View {
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - 1. KPI 指标行 (R05: 热状态为 0~3 档位，禁止乘 100 当百分比)
+    // MARK: - 1. KPI 指标行
 
     private var kpiSummaryRow: some View {
         let th = viewModel.rangeModel?.thermal

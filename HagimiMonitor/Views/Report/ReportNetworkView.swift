@@ -47,13 +47,13 @@ struct ReportNetworkView: View {
         return HStack(spacing: 12) {
             ReportKpiCard(
                 title: String(localized: "stats.r.kNetDown", defaultValue: "下载总流量"),
-                value: net?.totalDownBytes.map { ReportUIHelper.formatBytes($0) } ?? "—",
+                value: net?.totalDownBytes.map { ReportUIHelper.formatVolume($0) } ?? "—",
                 caption: net?.peakDownRate.map { "峰 " + ReportUIHelper.formatBytesRate($0) },
                 color: downColor
             )
             ReportKpiCard(
                 title: String(localized: "stats.r.kNetUp", defaultValue: "上传总流量"),
-                value: net?.totalUpBytes.map { ReportUIHelper.formatBytes($0) } ?? "—",
+                value: net?.totalUpBytes.map { ReportUIHelper.formatVolume($0) } ?? "—",
                 caption: net?.peakUpRate.map { "峰 " + ReportUIHelper.formatBytesRate($0) },
                 color: upColor
             )
