@@ -693,17 +693,17 @@ private struct DisplayInfoCard: View {
         Group {
 
                 PanelCardStack(measurementKey: String(describing: display)) {
-                    HStack(alignment: .top, spacing: 10) {
-                        displayIcon
-                        VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(alignment: .top, spacing: 10) {
+                            displayIcon
                             title
-                            DisplayInfoBaseGrid(display: display, palette: palette)
                         }
+                        DisplayInfoBaseGrid(display: display, palette: palette)
                     }
                     .padding(.bottom, MetricGridMetrics.gridRowGap)
                     .panelMeasure("row:" + archiveKey)
                     SingleHostDetail(id: archiveKey, isExpanded: archiveExpanded, available: true,
-                        content: archiveContent.padding(.leading, 28),
+                        content: archiveContent,
                         measurementKey: String(describing: display))
                 }
 
@@ -1252,8 +1252,8 @@ private struct DisplayControlGroup: View {
                     }
                     .panelMeasure("row:" + archiveKey)
                     SingleHostReplacement(id: archiveKey, isExpanded: archiveExpanded,
-                        collapsed: controlsContent.padding(.leading, 28).padding(.top, 7),
-                        expanded: replacementArchive.padding(.leading, 28).padding(.top, 7))
+                        collapsed: controlsContent.padding(.top, 7),
+                        expanded: replacementArchive.padding(.top, 7))
                 }
 
         }
