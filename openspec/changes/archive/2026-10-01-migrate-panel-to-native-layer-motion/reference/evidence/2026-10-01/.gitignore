@@ -1,0 +1,19 @@
+# 大体积原始采集包本地保留；Git 保存索引、哈希和最终摘要。
+*
+!.gitignore
+!index.md
+!manifest.sha256
+!final-video-index.json
+!final-resource-summary.json
+!final-test-summary.json
+!final-merged-test-summary.json
+!final-production-artifacts.json
+!final-production-source-receipt.json
+!review-notes.json
+!review-after-default.json
+!display-capabilities.json
+!artifacts.json
+!footer-accepted-build-receipt.json
+!final-source-receipt.json
+!trace-summary.json
+!analysis-exclusions.json

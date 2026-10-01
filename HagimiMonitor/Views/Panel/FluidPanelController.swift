@@ -128,10 +128,8 @@ struct FluidPanelDismissalDecision: Equatable, Sendable {
 /// 同时拿到「不闪」和「平滑展开动画」,这里借鉴 FluidMenuBarExtra 的思路,自建
 /// `NSPanel` 承载面板内容;顶边锚定在菜单栏下沿,只向下增长。
 ///
-/// 动画分工(关键):展开/收起的内容高度由 SwiftUI 弹簧插值,可见运动在
-/// 合成器侧完成;窗口层以与内容**同参数**的弹簧(`PanelWindowSpring`)
-/// 在显示帧时钟上跟随同一终高,同起点、中断保速度,边框与内容全程同相;
-/// 数据驱动的尺寸变化瞬时贴合。
+/// 原生面板在固定容量窗口内播放共享几何轨迹，可见底边和阴影共同变化；
+/// 窗口 frame 只承载容量与定位，不另作展开高度插值。
 ///
 /// 动态图标:把 `MenuBarStatusLabel` 用 `ImageRenderer` 快照成 `NSImage` 赋给标准
 /// `NSStatusItem.button.image`(负载/采样变化时重刷)。走标准图路径而非子视图,是为了
@@ -147,7 +145,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private let statusItem: NSStatusItem
     private let panel: NSPanel
     private var hostingView: NSHostingView<AnyView>?
-    private var glassHost: CompatiblePanelGlassHost?
 
     /// 面板树观察侧门控:隐藏期冻结失效,呼出开闸补发一次(见 PanelRefreshGate)。
     private let panelRefreshGate: PanelRefreshGate
@@ -158,7 +155,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 内容侧最近一次上报的自然尺寸(未经封顶)。showPanel 用它定位首帧:
     /// hosting 的 sizingOptions 为空,intrinsicContentSize 不可靠,
     /// 而 size reader 的首次上报在 init 布局阶段就已发生。
-    private var lastReportedContentSize: CGSize = .zero
 
     /// 向 SwiftUI 侧下发布局约束(内容高度上限)。面板主体据此自行封顶并在
     /// 内部 ScrollView 滚动,header 固定在外、不参与滚动。
@@ -187,8 +183,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// 面板底部距屏幕可视区下缘(Dock 上沿)的最小留白。
     private static let panelBottomMargin: CGFloat = 10
-    /// 窗口高度下限:预测链异常时的兜底,至少露出 header 与首行。
-    private static let minPanelHeight: CGFloat = 96
 
     /// 状态项内容左右留白,避免图标/文字贴住菜单栏边缘(系统 MenuBarExtra 自带此留白)。
     private static let statusItemHorizontalPadding: CGFloat = 2
@@ -203,12 +197,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
-        panel = NSPanel(
+        panel = NativePanelWindow(
             contentRect: CGRect(x: 0, y: 0, width: MonitorConstants.panelIdealWidth, height: 200),
             // 对齐 FluidMenuBarExtra:保留 `.titled` 使窗口行为与系统面板一致
             // (边框尺寸/圆角裁剪),再用 `.fullSizeContentView` + 隐藏标题栏
             // 做出无边框外观。
-            styleMask: [.titled, .nonactivatingPanel, .utilityWindow, .fullSizeContentView],
+            styleMask: [.borderless, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -252,9 +246,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         startFrameProbe()
     }
 
-    /// 调试帧探针:主线程上以 4ms 目标间隔持续打卡,记录实际间隔。
-    /// 展开动画(0.15s)期间若主线程被重绘/布局拖住,打卡间隔会显著拉大,
-    /// 交给 `AutotestPerfMeter` 在度量窗口内累计为 slowframes 并逐帧打印。
+    /// 调试主线程探针按 4ms 调度，记录实际回调间隔。
+    /// AutotestPerfMeter 的 slowframes 是调度延迟计数，不能换算为屏幕掉帧。
     private func startFrameProbe() {
         let timer = DispatchSource.makeTimerSource(queue: .main)
         timer.schedule(deadline: .now(), repeating: .milliseconds(4), leeway: .milliseconds(1))
@@ -264,7 +257,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let gap = (now - last) * 1000
             last = now
             if gap > 8.3 {
-                // 动画窗口内的掉帧计入度量并逐帧打印;窗口外的间隔与本度量无关,忽略。
+                // 动画窗口内记录主线程调度延迟；显示掉帧需由合成器或连续画面另行验证。
                 MainActor.assumeIsolated {
                     AutotestPerfMeter.shared.noteSlowFrame(gap: gap)
                 }
@@ -283,7 +276,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.level = .statusBar
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.animationBehavior = .none
         panel.collectionBehavior = [.stationary, .moveToActiveSpace, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
@@ -300,20 +293,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 窗口底座宿主：由 CompatiblePanelGlassHost 提供跨版本兼容背景（Liquid Glass / popover 毛玻璃），
         // 内部行卡片严格保持 withinWindow 材质。
         let glassHost = CompatiblePanelGlassHost(cornerRadius: Self.panelCornerRadius)
-        glassHost.updateMaterial(liquidGlassEnabled: store.settings.liquidGlassEnabled)
         panel.contentView = glassHost
-        self.glassHost = glassHost
 
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
         let root = FluidPanelRootView(store: store, refreshGate: panelRefreshGate, metrics: layoutMetrics)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
             .environment(\.panelMotionAdapter, self)
-            .environment(\.panelWindowResizeHandler) { [weak self] height, animated in
-                self?.applyWindowHeight(height, animated: animated)
-            }
-            .modifier(FluidPanelSizeReader { [weak self] size in
-                self?.contentSizeDidChange(to: size)
-            })
+            .ignoresSafeArea()
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
         let hosting = NSHostingView(rootView: AnyView(root))
         hosting.sizingOptions = []
@@ -322,7 +309,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         hosting.wantsLayer = true
         hosting.layer?.cornerRadius = Self.panelCornerRadius
         hosting.layer?.cornerCurve = CALayerCornerCurve.continuous
-        hosting.layer?.masksToBounds = true
+        hosting.layer?.masksToBounds = false
         glassHost.setHostingView(hosting)
 
         hostingView = hosting
@@ -335,7 +322,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         // 调试自动测试:启动 0.5s 后自动呼出面板(无需人工点击状态栏)。
-        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
+        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil,
+           NativePanelMotionMode.testHost != "pinned" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self, !self.panel.isVisible else { return }
                 self.showPanel()
@@ -361,28 +349,26 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         button.setAccessibilityTitle("HagimiMonitor")
 
         refreshStatusItemImage()
+        store.loadAnimator.setAnimationEnabled(store.settings.menuBarDisplayMode == .ring)
 
-        // 负载环随 displayedComputeLoad 平滑变化(30fps);指标文本随 modules 采样变化。
-        // 指标模式下 displayedComputeLoad 根本不参与渲染,过滤掉这个模式下的 30fps
-        // tick,避免白白触发 ImageRenderer 快照(见 refreshStatusItemImage 指标分支)。
+        // 只消费这一帧的新值；Published 在属性写回前发送，回读 store 会落后一帧。
         store.loadAnimator.$displayedComputeLoad
-            .sink { [weak self] _ in
+            .sink { [weak self] load in
                 guard let self else { return }
                 switch self.store.settings.menuBarDisplayMode {
                 case .ring:
-                    self.refreshStatusItemImage()
+                    self.refreshStatusItemImage(displayedLoad: load)
                 case .metrics:
                     break
                 }
             }
             .store(in: &cancellables)
-        // $modules 每秒发布(网络字节几乎每秒都变)。这里不做去重:环模式的负载等级颜色
-        // (idle/working/busy/stressed)由 haloRingLoadLevel 决定,而 loadAnimator 仅在负载
-        // 变化≥阈值时才驱动刷新,若小幅漂移跨越等级边界会漏刷环色;故环模式仍需 $modules
-        // 每秒兜底刷新。真正昂贵的指标模式 ImageRenderer 快照已由 refreshStatusItemImage
-        // 内部的 MetricsRenderKey 去重挡下,故此处每秒触发的实际开销极低(环模式命中缓存图)。
+        // 环的进度和颜色都来自同一显示值，不再用每秒模块回报重刷原始颜色。
         store.$modules
-            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .sink { [weak self] _ in
+                guard let self, self.store.settings.menuBarDisplayMode == .metrics else { return }
+                self.refreshStatusItemImage()
+            }
             .store(in: &cancellables)
 
         // 告警红点起灭:立即重刷,不等下一秒的 modules tick。
@@ -392,20 +378,17 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         // 显示模式(环/指标)切换。
         store.settings.$menuBarDisplayMode
-            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .receive(on: RunLoop.main)
+            .sink { [weak self] mode in
+                guard let self else { return }
+                self.store.loadAnimator.setAnimationEnabled(mode == .ring)
+                self.refreshStatusItemImage()
+            }
             .store(in: &cancellables)
 
         // 主题切换:重新快照(SwiftUI 内部不感知 NSStatusItem 的 appearance)。
         store.settings.$themePreference
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
-            .store(in: &cancellables)
-
-        // 液态玻璃开关切换：更新面板底座材质
-        store.settings.$liquidGlassEnabled
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] enabled in
-                self?.glassHost?.updateMaterial(liquidGlassEnabled: enabled)
-            }
             .store(in: &cancellables)
 
         // 关键:直接监听 button 自身的 effectiveAppearance。焦点切换 / 壁纸变化 /
@@ -524,8 +507,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
     }
 
+    var isVisible: Bool { panel.isVisible && !awaitingGeometry }
+
+    func presentBenchmarkHost() {
+        guard NativePanelMotionMode.diagnostics else { return }
+        if !panel.isVisible { showPanel() }
+    }
+
     func presentAnimationPrototype() {
-        guard PanelMotionExperiment.enabled else { return }
         if !panel.isVisible { showPanel() }
         panel.makeKeyAndOrderFront(nil)
     }
@@ -534,7 +523,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 用户点开面板即视为看过菜单栏那处告警:只清这一处红点,
         // 面板统计入口与统计页的红点各有各的清除时机。
         PressureAlertCenter.shared.markRead(.menuBar)
-        // 先作废在途淡出并清除关闭锁。几何实验路径可能在首帧返回
+        // 先作废在途淡出并清除关闭锁。首次几何准备可能在首帧返回
         // awaitingGeometry,也必须允许随后由系统 didEnd 正常收敛。
         dismissGeneration += 1
         dismissalInProgress = false
@@ -549,27 +538,34 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panelRefreshGate.open()
         panelMotion?.resume()
         // 隐藏时未收敛的窗口弹簧在此清场,本次呼出由重定位接管。
-        windowSpring.cancel()
         // 先同步高度上限(可能换了屏幕/Dock 变化),再让 SwiftUI 布局。
         updateContentHeightCap()
         // 先让 SwiftUI 布局出内容固有尺寸,再据此定位窗口,避免首帧尺寸跳变。
         // 优先用 size reader 上报的自然尺寸(init 布局阶段即已上报);内容包在
         // ScrollView 里后 intrinsicContentSize 不再反映内容高度,仅作兜底。
         hostingView?.layoutSubtreeIfNeeded()
-        if PanelMotionExperiment.enabled && panelMotion?.currentFrame == nil {
+        if panelMotion?.currentFrame == nil {
             awaitingGeometry = true
+            if !panel.isVisible {
+                let size = CGSize(width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
+                    height: min(layoutMetrics.maxContentHeight, currentScreen()?.visibleFrame.height ?? 800))
+                setPanelFrame(size: size)
+                panel.alphaValue = 0
+                panel.ignoresMouseEvents = true
+                // 首次测量需要已挂载的窗口渲染环境；透明引导帧不承接输入。
+                panel.orderFrontRegardless()
+                hostingView?.needsLayout = true
+            }
             return
         }
         awaitingGeometry = false
         let intrinsic = hostingView?.intrinsicContentSize ?? .zero
         let size: CGSize
-        if lastReportedContentSize.width > 1, lastReportedContentSize.height > 1 {
-            size = lastReportedContentSize
-        } else if intrinsic.width > 1, intrinsic.height > 1 {
-            size = intrinsic
-        } else {
-            size = panel.frame.size
-        }
+
+            let screen = currentScreen() ?? NSScreen.main
+            size = CGSize(width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
+                height: min(layoutMetrics.maxContentHeight, screen?.visibleFrame.height ?? 800))
+
         setPanelFrame(size: size)
 
         store.panelDidAppear()
@@ -583,6 +579,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // alpha 从 0 开始,先调零再上屏,避免闪现一帧全不透明。
         panel.alphaValue = 0
         panel.makeKeyAndOrderFront(nil)
+panelMotion?.nativeLayer.panelDidShow()
         NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.12
             context.timingFunction = CAMediaTimingFunction(name: .easeOut)
@@ -613,7 +610,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         if decision.closesAwaitingGeometry {
             awaitingGeometry = false
             panelMotion?.suspend()
+panel.orderOut(nil)
             panelRefreshGate.close()
+            reclaimHiddenPanelResources()
             if decision.shouldCancelExpandedInterfaceSession {
                 cancelExpandedInterfaceSessionIfNeeded()
             }
@@ -658,7 +657,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     private func completePanelDismissal(generation: Int) {
         guard generation == dismissGeneration else { return }
-        panel.orderOut(nil)
+panel.orderOut(nil)
         panelMotion?.resetForHiddenPanel?()
         panel.alphaValue = 1
         if #unavailable(macOS 27.0) {
@@ -701,100 +700,16 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 隐藏期间暂存的 contentView,showPanel 时装回。
     private var savedContentView: NSView?
 
-    // MARK: - Sizing / Positioning
 
-    /// 窗口高度弹簧跟随器:以与内容侧完全相同的弹簧参数驱动窗口 frame。
-    /// 内容高度的可见插值在合成器侧完成、尺寸上报直接给出终值,窗口必须
-    /// 以同参弹簧自行跟随该终值才能与内容同相(异参补间或瞬时贴合都会
-    /// 表现为分段跳变/底部瞬移)。
-    private lazy var windowSpring = PanelWindowSpring(
-        applyHeight: { [weak self] height in self?.applySpringHeight(height) },
-        screen: { [weak self] in self?.panel.screen }
-    )
-
-    /// driver 下发窗口目标高度。
-    /// animated=true(展开/收起):预测终高交给同参弹簧逐帧跟随,收敛后对账;
-    /// animated=false(初始化/隐藏重置):直接贴合。
-    private func applyWindowHeight(_ contentHeight: CGFloat, animated: Bool) {
-        guard panel.isVisible else { return }
-        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
-            NSLog("[autotest] applyWindowHeight h=%.1f anim=%d cur=%.1f",
-                  contentHeight, animated ? 1 : 0, panel.frame.height)
-        }
-        if animated {
-            windowSpring.retarget(to: contentHeight, from: panel.frame.height) { [weak self] in
-                self?.reconcileWindowToContentSize()
-            }
-        } else {
-            windowSpring.setInstantly(to: contentHeight)
-        }
-    }
-
-    /// 弹簧逐帧高度 → 窗口贴合:下限兜底后走统一的锚定/钳制定位。
-    private func applySpringHeight(_ height: CGFloat) {
-        guard panel.contentView != nil else { return }
-        setPanelFrame(size: CGSize(width: panel.frame.width, height: max(height, Self.minPanelHeight)))
-    }
-
-    /// 弹簧收尾对账:窗口尺寸与最近一次内容实测尺寸不一致时补贴合一次,
-    /// 封死预测误差/上报时序造成的卡高。
-    private func reconcileWindowToContentSize() {
-        guard panel.contentView != nil,
-              lastReportedContentSize.height > 0,
-              panel.frame.size != lastReportedContentSize else { return }
-        setPanelFrame(size: lastReportedContentSize)
-    }
-
-    /// SwiftUI 内容尺寸变化时:窗口顶边锚定、高度贴合内容当前尺寸。
-    ///
-    /// 必须 `DispatchQueue.main.async`(对齐 FluidMenuBarExtra):该回调发生在 SwiftUI
-    /// 布局事务内,若同步 `setFrame(display:true)` 会在动画事务里强制重绘、引发 re-entrant
-    /// 布局,把窗口定位/尺寸状态搞坏(表现为面板脱离菜单栏、底部大片空窗)。异步派发
-    /// 到下一个 runloop,让 SwiftUI 先完成当前帧布局,窗口再贴合。
-    ///
-    /// 不能 guard panel.isVisible:size reader 的首次 onAppear 常在面板可见之前(init
-    /// 布局阶段)触发,若丢弃则窗口尺寸永远停在默认值、之后 onChange 不再触发。
-    ///
-    /// 动画分工(关键):展开/收起时内容高度的可见插值在合成器侧完成,布局模型
-    /// 一次性落到终值——动画窗口内的尺寸上报因此直接是终高,把它作为窗口弹簧
-    /// 的重定向目标(与内容同参、保速度续接),而不是瞬时贴合;非动画期的
-    /// 数据驱动尺寸变化仍直接贴合。
-    private func contentSizeDidChange(to size: CGSize) {
-        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
-            NSLog("[autotest] sizeDidChange h=%.1f visible=%d cur=%.1f",
-                  size.height, panel.isVisible ? 1 : 0, panel.frame.height)
-        }
-        lastReportedContentSize = size
-        guard windowSpring.isAnimating || panel.frame.size != size else { return }
-        // 弹簧若已在向实测高度运动(差值 < 0.5pt),无需打断并重启;收敛后由 reconcile 兜底对账。
-        if windowSpring.isAnimating, abs(windowSpring.target - size.height) < 0.5 {
-            return
-        }
-        DispatchQueue.main.async { [weak self] in
-            // contentView 已卸(隐藏回收后)不再贴合:隐藏窗口已收到最小高度,
-            // 积压的上报若此时撑大它,回收省下的纹理资源会立刻被吃回去。
-            guard let self, self.panel.contentView != nil else { return }
-            if self.store.isExpansionAnimating || self.windowSpring.isAnimating {
-                if self.windowSpring.isAnimating, abs(self.windowSpring.target - size.height) < 0.5 {
-                    return
-                }
-                self.windowSpring.retarget(to: size.height, from: self.panel.frame.height) { [weak self] in
-                    self?.reconcileWindowToContentSize()
-                }
-            } else {
-                guard self.panel.frame.size != size else { return }
-                if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil {
-                    NSLog("[autotest] sizeDidChange -> setFrame h=%.1f", size.height)
-                }
-                self.setPanelFrame(size: size)
-            }
-        }
-    }
 
     /// 把「菜单栏下沿 → 屏幕可视区底部」的可用高度下发给内容侧:面板主体据此
     /// 自行封顶(header 固定,主体在内部 ScrollView 滚动),上报的自然尺寸随之
     /// 不再超限,窗口层的 clamp 仅作兜底。
     private func updateContentHeightCap() {
+        if let screen = NativePanelMotionMode.testScreen {
+            layoutMetrics.maxContentHeight = screen.visibleFrame.height - Self.panelBottomMargin
+            return
+        }
         guard let buttonWindow = statusItem.button?.window,
               let screen = buttonWindow.screen else { return }
         let available = buttonWindow.frame.minY - screen.visibleFrame.minY - Self.panelBottomMargin
@@ -803,6 +718,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func setPanelFrame(size: CGSize, display: Bool = true) {
+        if let screen = NativePanelMotionMode.testScreen {
+            updateContentHeightCap()
+            let frame = CGRect(x: screen.visibleFrame.midX - size.width / 2,
+                y: screen.visibleFrame.maxY - size.height, width: size.width, height: size.height)
+            if panel.frame != frame { panel.setFrame(frame, display: display) }
+            return
+        }
         guard let buttonWindow = statusItem.button?.window else {
             panel.setContentSize(size)
             panel.center()
@@ -826,8 +748,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         // macOS 坐标原点在左下:origin.y 减去窗口高度,使顶边钉在菜单栏下沿,
         // 面板只向下生长。左边缘与按钮对齐,补偿窗口边框。
-        origin.y -= size.height
-        origin.x -= Self.windowBorderSize
+        origin.y -= size.height - (MonitorConstants.panelNativeShadowInset)
+        origin.x -= Self.windowBorderSize + (MonitorConstants.panelNativeShadowInset)
 
         var newFrame = CGRect(origin: origin, size: size)
 
@@ -842,10 +764,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         guard newFrame != panel.frame else { return }
-        // 帧设定统一出口:动画期由窗口弹簧(PanelWindowSpring)逐显示帧调用,
-        // 非动画期直接同步贴合。不包动画组提交:动画期间本函数逐帧调用,
-        // 0 时长 CAAnimation 的创建/提交每帧都是纯开销;窗口 frame 无在途
-        // CA 补间,唯一的 animator() 动画是显隐 alpha 渐变,不碰 frame。
+        // 容量和定位直接提交；展开轨迹由内部图层拥有，避免产生竞争的窗口补间。
         panel.setFrame(newFrame, display: display)
     }
 
@@ -854,7 +773,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 图标被挤)。水平留白模拟系统 MenuBarExtra 的边距。
     /// 把 SwiftUI 状态项 label 快照成 NSImage 赋给 `button.image`,并按图像宽度更新
     /// `statusItem.length`。快照走 SwiftUI 现有绘制,样式与旧的子视图完全一致。
-    private func refreshStatusItemImage() {
+    private func refreshStatusItemImage(displayedLoad: Double? = nil) {
         // 用「状态项按钮的外观」而非 App 全局外观来决定墨色:菜单栏图标的黑/白由
         // 系统按当前壁纸/菜单栏底色决定(彩色壁纸下会走白字模式),button 的
         // effectiveAppearance 已反映这一判定,与旁边系统图标同步;若用 App 全局外观,
@@ -881,9 +800,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             // 相同,也得重新栅格化(当前 button.image 已是环形图)。
             lastMetricsRenderKey = nil
             let image = MenuBarComputeRingIcon.image(
-                load: store.loadAnimator.displayedComputeLoad,
+                load: displayedLoad ?? store.loadAnimator.displayedComputeLoad,
                 darkMode: isDark,
-                loadLevel: store.haloRingLoadLevel,
                 showsAlert: showsAlert,
                 showsHUDBadge: showsHUDBadge
             )
@@ -996,48 +914,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 }
 
-// MARK: - Size Reader
 
-/// 读取 SwiftUI 内容固有尺寸并回调。展开/收起的可见插值在合成器侧完成,
-/// 布局模型一次性落到终值,上报直接给出终高;数据驱动的尺寸变化即时上报。
-///
-/// 滚动已下移到 MonitorPanelView 内部(header 固定、仅主体滚动,据
-/// `\.panelMaxContentHeight` 自行封顶),故此处测到的自然尺寸已含封顶效果。
-///
-/// modifier 顺序对齐 FluidMenuBarExtra 的 `RootViewModifier`,三者缺一不可:
-/// 1. `.background(GeometryReader)` 放在 `.fixedSize()` **之前**——测的是内容自然
-///    布局尺寸,不受后面 `.frame(maxHeight:.infinity)` 拉伸影响;
-/// 2. `.fixedSize()` 固定内容为固有尺寸;
-/// 3. `.frame(maxWidth/Height:.infinity, alignment: .top)` 让内容在被窗口拉伸的
-///    hosting 里顶部对齐--窗口高度变化时内容从顶部展开,而非居中跳变。
-private struct FluidPanelSizeReader: ViewModifier {
-    let onChange: (CGSize) -> Void
-
-    func body(content: Content) -> some View {
-        if PanelMotionExperiment.enabled {
-            content
-                .ignoresSafeArea()
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        } else {
-        content
-            // 关键:必须忽略安全区。窗口是 `.titled`,SwiftUI 默认把顶部标题栏区域
-            // 当安全区留白——内容被下顶(顶部大空白),底部溢出窗口(按钮被裁掉)。
-            // 对齐 FluidMenuBarExtra 的 RootViewModifier,填掉标题栏空间。
-            .edgesIgnoringSafeArea(.all)
-            .background(
-                GeometryReader { geometry in
-                    Color.clear
-                        .onAppear { onChange(geometry.size) }
-                        .onChange(of: geometry.size) { _, newValue in
-                            onChange(newValue)
-                        }
-                }
-            )
-            .fixedSize()
-            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .top)
-        }
-    }
-}
 
 // MARK: - Layout Metrics / Root View
 
@@ -1137,10 +1014,9 @@ extension FluidPanelController: PanelWindowSubmissionAdapter {
         showPanel()
     }
     func submitWindowFrame(size: CGSize, frameID: UInt) {
-        lastReportedContentSize = size
         guard panel.contentView != nil else { return }
         setPanelFrame(size: size, display: false)
     }
-    func currentScreen() -> NSScreen? { panel.screen ?? statusItem.button?.window?.screen }
+    func currentScreen() -> NSScreen? { NativePanelMotionMode.testScreen ?? statusItem.button?.window?.screen ?? panel.screen }
     func completePresentationLayout() { hostingView?.layoutSubtreeIfNeeded() }
 }

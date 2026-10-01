@@ -1,0 +1,54 @@
+native-cpu update=1 cpu=-- detail-height=128.0 processes=
+native-cpu update=2 cpu=-- detail-height=128.0 processes=Safari浏览器,duetexpertd,XprotectService,WindowServer,ChatGPT
+native-cpu update=3 cpu=0% detail-height=227.0 processes=Safari浏览器,duetexpertd,XprotectService,WindowServer,ChatGPT
+native-cpu update=4 cpu=0% detail-height=227.0 processes=Safari浏览器,duetexpertd,XprotectService,WindowServer,ChatGPT
+native-cpu update=5 cpu=78% detail-height=284.0 processes=Safari浏览器,duetexpertd,XprotectService,WindowServer,ChatGPT
+native-cpu update=6 cpu=78% detail-height=284.0 processes=Safari浏览器,duetexpertd,XprotectService,WindowServer,ChatGPT
+native-cpu update=7 cpu=78% detail-height=284.0 processes=WindowServer,duetexpertd,siriactionsd,ChatGPT,Zed
+native-cpu update=8 cpu=52% detail-height=284.0 processes=WindowServer,duetexpertd,siriactionsd,ChatGPT,Zed
+motion operation=1 target=1.0 start=0.0 velocity=0.0 layouts=[4, 10, 103, 10, 10, 10]
+motion operation=2 target=0.0 start=0.9999998569474587 velocity=2.716134991784966e-06 layouts=[4, 11, 138, 12, 12, 12]
+native-cpu update=9 cpu=52% detail-height=284.0 processes=WindowServer,ChatGPT,HapiGo,QQ,duetexpertd
+native-cpu update=10 cpu=52% detail-height=284.0 processes=WindowServer,ChatGPT,HapiGo,QQ,duetexpertd
+motion operation=3 target=1.0 start=5.444642311550058e-08 velocity=-1.036472809543857e-06 layouts=[4, 14, 140, 15, 15, 15]
+native-cpu update=11 cpu=34% detail-height=284.0 processes=WindowServer,ChatGPT,HapiGo,QQ,duetexpertd
+motion operation=4 target=0.0 start=0.9999986320837253 velocity=2.578203731731824e-05 layouts=[4, 16, 165, 16, 16, 16]
+native-cpu update=12 cpu=34% detail-height=284.0 processes=QQ,WindowServer,ChatGPT,微信,BiomeAgent
+motion operation=5 target=1.0 start=6.862526039296613e-07 velocity=-1.2966226309345429e-05 layouts=[4, 18, 180, 19, 19, 19]
+native-cpu update=13 cpu=43% detail-height=284.0 processes=QQ,WindowServer,ChatGPT,微信,BiomeAgent
+motion operation=6 target=0.0 start=0.9999999648865621 velocity=6.691734824140987e-07 layouts=[4, 20, 219, 21, 21, 21]
+motion operation=7 target=1.0 start=0.00046768004750668516 velocity=-0.008508815381787986 layouts=[4, 21, 219, 22, 22, 22]
+native-cpu update=14 cpu=43% detail-height=284.0 processes=WindowServer,nehelper,ChatGPT,ClashMac,微信
+motion operation=8 target=0.0 start=0.9999993415815749 velocity=1.2442060475564767e-05 layouts=[4, 23, 220, 24, 24, 24]
+native-cpu update=15 cpu=21% detail-height=284.0 processes=WindowServer,nehelper,ChatGPT,ClashMac,微信
+motion operation=9 target=1.0 start=7.372849854508668e-08 velocity=-1.4024299542067312e-06 layouts=[4, 25, 259, 26, 26, 26]
+native-cpu update=16 cpu=34% detail-height=284.0 processes=mdbulkimport,ChatGPT,WindowServer,Safari浏览器,ClashMac
+native-cpu update=17 cpu=34% detail-height=284.0 processes=mdbulkimport,ChatGPT,WindowServer,Safari浏览器,ClashMac
+motion operation=10 target=0.0 start=0.9999999589327156 velocity=7.823365292237241e-07 layouts=[4, 28, 299, 29, 29, 29]
+motion operation=11 target=1.0 start=6.840957021693015e-05 velocity=-0.0012642868397533267 layouts=[4, 29, 299, 30, 30, 30]
+native-cpu update=18 cpu=19% detail-height=284.0 processes=WindowServer,ChatGPT,微信,nehelper,Safari浏览器
+native-cpu update=19 cpu=19% detail-height=284.0 processes=WindowServer,ChatGPT,微信,nehelper,Safari浏览器
+motion operation=12 target=0.0 start=0.9999999861557473 velocity=2.644100590406039e-07 layouts=[4, 32, 339, 33, 33, 33]
+native-cpu update=20 cpu=20% detail-height=284.0 processes=WindowServer,ChatGPT,微信,nehelper,Safari浏览器
+motion operation=13 target=1.0 start=1.0918814566933859e-08 velocity=-2.0864637196490578e-07 layouts=[4, 34, 378, 35, 35, 35]
+motion operation=14 target=0.0 start=0.9995573050947213 velocity=0.008058578146973933 layouts=[4, 35, 378, 35, 35, 35]
+native-cpu update=21 cpu=20% detail-height=284.0 processes=WindowServer,siriactionsd,ChatGPT,微信,ChatGPT Computer Use
+motion operation=15 target=1.0 start=7.56471809086e-09 velocity=-1.446665756058389e-07 layouts=[4, 37, 417, 38, 38, 38]
+motion operation=16 target=0.0 start=0.9996625530467137 velocity=0.006158500161806798 layouts=[4, 38, 417, 39, 39, 39]
+native-cpu update=22 cpu=27% detail-height=284.0 processes=siriactionsd,WindowServer,ChatGPT,axassetsd,Safari浏览器
+native-cpu update=23 cpu=29% detail-height=284.0 processes=siriactionsd,WindowServer,ChatGPT,axassetsd,Safari浏览器
+native-cpu update=24 cpu=30% detail-height=284.0 processes=siriactionsd,WindowServer,ChatGPT,axassetsd,Safari浏览器
+motion operation=17 target=1.0 start=2.982039326447722e-18 velocity=-5.832024497011378e-17 layouts=[4, 42, 501, 42, 42, 42]
+motion operation=18 target=0.0 start=0.6639368277330155 velocity=4.67056807518989 layouts=[4, 43, 515, 43, 43, 43]
+motion operation=19 target=1.0 start=0.2669359825405372 velocity=-3.603103971306091 layouts=[4, 44, 529, 44, 44, 44]
+motion operation=20 target=0.0 start=0.7158051846667373 velocity=3.8516403852677654 layouts=[4, 45, 534, 46, 46, 46]
+motion operation=21 target=1.0 start=0.1520840307897581 velocity=-2.271360371207708 layouts=[4, 46, 534, 47, 47, 47]
+motion operation=22 target=0.0 start=0.8785484376776832 velocity=1.8821904645251186 layouts=[4, 47, 534, 48, 48, 48]
+motion operation=23 target=1.0 start=0.12229383456901 velocity=-1.8993682447545 layouts=[4, 48, 534, 49, 49, 49]
+motion operation=24 target=0.0 start=0.8190694595550656 velocity=2.7049881132387092 layouts=[4, 49, 534, 50, 50, 50]
+native-cpu update=25 cpu=27% detail-height=284.0 processes=siriactionsd,ChatGPT,WindowServer,微信输入法,微信
+native-cpu update=26 cpu=27% detail-height=284.0 processes=siriactionsd,ChatGPT,WindowServer,微信输入法,微信
+native-cpu update=27 cpu=27% detail-height=284.0 processes=siriactionsd,WindowServer,ChatGPT,微信,微信输入法
+native-cpu update=28 cpu=28% detail-height=284.0 processes=siriactionsd,WindowServer,ChatGPT,微信,微信输入法
+native-cpu update=29 cpu=28% detail-height=284.0 processes=siriactionsd,WindowServer,ChatGPT,微信,微信输入法
+complete operations=24 updates=29 layouts=[4, 55, 615, 55, 55, 55]

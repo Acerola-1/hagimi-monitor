@@ -30,27 +30,15 @@ struct CompatibleGlassContainer<Content: View>: View {
 
 // MARK: - Compatible Panel Glass Host
 
-/// 面板窗口的跨版本底座宿主视图。
-/// 严格遵守材质分层纪律：
-/// 1. 窗口底座宿主（Window Backdrop）：
-///    - 开启 Liquid Glass 且 macOS 26+ 时，使用 `NSGlassEffectView` 提供现代液态通透质感；
-///    - 关闭或 macOS 15 时，使用 `NSVisualEffectView(material: .popover, blendingMode: .behindWindow)` 模糊桌面。
-/// 2. 内部行卡片（Row Cards）：
-///    - 严格保持 `.withinWindow` 毛玻璃，绝不回退或绑定为 `.behindWindow`，杜绝展开 resize 闪烁。
+/// 透明容量宿主约束 SwiftUI 根视图；内部原生面板统一拥有可见轮廓和经典底座材质。
 final class CompatiblePanelGlassHost: NSView {
-    private var visualEffectView: NSVisualEffectView?
-    private var glassEffectView: NSView?
-    private let cornerRadius: CGFloat
-    private(set) var isLiquidGlassEnabled: Bool = false
-    private var hostingView: NSView?
 
     init(cornerRadius: CGFloat) {
-        self.cornerRadius = cornerRadius
         super.init(frame: .zero)
         wantsLayer = true
         layer?.cornerRadius = cornerRadius
         layer?.cornerCurve = .continuous
-        layer?.masksToBounds = true
+        layer?.masksToBounds = false
     }
 
     required init?(coder: NSCoder) {
@@ -58,7 +46,6 @@ final class CompatiblePanelGlassHost: NSView {
     }
 
     func setHostingView(_ hosting: NSView) {
-        self.hostingView = hosting
         addSubview(hosting)
         hosting.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
@@ -69,61 +56,6 @@ final class CompatiblePanelGlassHost: NSView {
         ])
     }
 
-    func updateMaterial(liquidGlassEnabled: Bool) {
-        if visualEffectView != nil || glassEffectView != nil {
-            guard isLiquidGlassEnabled != liquidGlassEnabled else { return }
-        }
-        isLiquidGlassEnabled = liquidGlassEnabled
-
-        visualEffectView?.removeFromSuperview()
-        visualEffectView = nil
-        glassEffectView?.removeFromSuperview()
-        glassEffectView = nil
-
-        if #available(macOS 26, *), liquidGlassEnabled {
-            let glass = NSGlassEffectView()
-            glass.style = .regular
-            glass.wantsLayer = true
-            glass.layer?.cornerRadius = cornerRadius
-            glass.layer?.cornerCurve = .continuous
-            glass.layer?.masksToBounds = true
-            glass.translatesAutoresizingMaskIntoConstraints = false
-            if let hostingView {
-                addSubview(glass, positioned: .below, relativeTo: hostingView)
-            } else {
-                addSubview(glass)
-            }
-            NSLayoutConstraint.activate([
-                glass.leadingAnchor.constraint(equalTo: leadingAnchor),
-                glass.trailingAnchor.constraint(equalTo: trailingAnchor),
-                glass.topAnchor.constraint(equalTo: topAnchor),
-                glass.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
-            self.glassEffectView = glass
-        } else {
-            let visualEffect = NSVisualEffectView()
-            visualEffect.material = .popover
-            visualEffect.blendingMode = .behindWindow
-            visualEffect.state = .active
-            visualEffect.wantsLayer = true
-            visualEffect.layer?.cornerRadius = cornerRadius
-            visualEffect.layer?.cornerCurve = .continuous
-            visualEffect.layer?.masksToBounds = true
-            visualEffect.translatesAutoresizingMaskIntoConstraints = false
-            if let hostingView {
-                addSubview(visualEffect, positioned: .below, relativeTo: hostingView)
-            } else {
-                addSubview(visualEffect)
-            }
-            NSLayoutConstraint.activate([
-                visualEffect.leadingAnchor.constraint(equalTo: leadingAnchor),
-                visualEffect.trailingAnchor.constraint(equalTo: trailingAnchor),
-                visualEffect.topAnchor.constraint(equalTo: topAnchor),
-                visualEffect.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
-            self.visualEffectView = visualEffect
-        }
-    }
 }
 
 // MARK: - Compatible Glass Effect Modifier
@@ -143,8 +75,11 @@ final class CompatiblePanelGlassHost: NSView {
 struct CompatibleGlassEffect<Fill: View>: ViewModifier {
     var cornerRadius: CGFloat
     var fill: Fill
+    @Environment(\.nativePanelOwnsCardBackdrop) private var ownsBackdrop
 
-    func body(content: Content) -> some View {
+    @ViewBuilder func body(content: Content) -> some View {
+        if ownsBackdrop { content }
+        else {
         let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
         content
             .background {
@@ -155,6 +90,7 @@ struct CompatibleGlassEffect<Fill: View>: ViewModifier {
                             .clipShape(shape)
                     }
             }
+        }
     }
 }
 

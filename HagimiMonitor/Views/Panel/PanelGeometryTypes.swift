@@ -10,6 +10,7 @@ enum PanelSectionKind: String, CaseIterable, Sendable {
     case fan
     case network
     case battery
+    case bluetooth
     case display
 
     var id: String { rawValue }
@@ -64,6 +65,7 @@ struct GeometrySnapshot: Equatable, Sendable {
     /// 父分区 ID -> 子分区 ID 列表。
     var childrenByParent: [String: [String]]
     var childGroups: [String: PanelChildGroup] = [:]
+    var pinsFooter = false
 
     func childGroup(_ id: String) -> PanelChildGroup {
         childGroups[id] ?? PanelChildGroup(ids: childrenByParent[id] ?? [])
@@ -114,7 +116,7 @@ struct PanelFrame: Equatable, Sendable {
     var childFrames: [String: CGRect]
     /// 各分区的实际揭示高度。
     var revealHeights: [String: CGFloat]
-    /// 主体完整文档高度（含卡片、卡片间距、底部按钮）。
+    /// 可滚动文档高度；固定底部操作区时仅包含模块卡片及间距。
     var bodyDocumentHeight: CGFloat
     /// 视口高度（受屏幕上限封顶）。
     var viewportHeight: CGFloat

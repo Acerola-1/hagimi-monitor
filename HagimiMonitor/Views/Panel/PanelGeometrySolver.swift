@@ -16,7 +16,8 @@ enum PanelGeometrySolver {
         phases: [String: CGFloat],
         frameID: UInt = 0,
         sampleTime: CFTimeInterval = 0,
-        scrollOffset: CGFloat = 0
+        scrollOffset: CGFloat = 0,
+        revealAdjustments: [String: CGFloat] = [:]
     ) -> PanelFrame {
         var revealHeights: [String: CGFloat] = [:]
         var childFrames: [String: CGRect] = [:]
@@ -44,7 +45,8 @@ enum PanelGeometrySolver {
             natural += group.bottom
             detailContentHeights[id] = natural
             let base = section.collapsedDetailHeight
-            let reveal = section.isAvailable ? max(0, base + (natural - base) * max(0, phases[id] ?? 0)) : 0
+            let reveal = section.isAvailable ? max(0, base + (natural - base) * max(0, phases[id] ?? 0)
+                + (revealAdjustments[id] ?? 0)) : 0
             revealHeights[id] = reveal
             return reveal
         }
@@ -70,7 +72,8 @@ enum PanelGeometrySolver {
             currentY += cardHeight
         }
 
-        // 底部操作按钮区域（如有）
+        let moduleDocumentHeight = currentY
+        // 底部操作区可独立于滚动文档，未封顶时保留原来的间距。
         if snapshot.footerHeight > 0 {
             if !snapshot.orderedTopLevelIDs.isEmpty {
                 currentY += cardToCardSpacing
@@ -85,15 +88,22 @@ enum PanelGeometrySolver {
             currentY += snapshot.footerHeight
         }
 
-        let bodyDocumentHeight = currentY
-        let cap = snapshot.availableViewportCap
+        let footerSpace = snapshot.footerHeight > 0
+            ? snapshot.footerHeight + (snapshot.orderedTopLevelIDs.isEmpty ? 0 : cardToCardSpacing) : 0
+        let bodyDocumentHeight = snapshot.pinsFooter ? moduleDocumentHeight : currentY
+        let cap = max(0, snapshot.availableViewportCap - (snapshot.pinsFooter ? footerSpace : 0))
         let isCapped = bodyDocumentHeight > cap
         let viewportHeight = isCapped ? cap : bodyDocumentHeight
 
+        if snapshot.pinsFooter, var footer = cardFrames["__footer__"] {
+            footer.origin.y = viewportHeight + (snapshot.orderedTopLevelIDs.isEmpty ? 0 : cardToCardSpacing)
+            cardFrames["__footer__"] = footer
+        }
         let totalWindowHeight = panelTopMargin
             + snapshot.panelHeaderHeight
             + headerToBodySpacing
             + viewportHeight
+            + (snapshot.pinsFooter ? footerSpace : 0)
             + panelBottomMargin
 
         let windowContentSize = CGSize(

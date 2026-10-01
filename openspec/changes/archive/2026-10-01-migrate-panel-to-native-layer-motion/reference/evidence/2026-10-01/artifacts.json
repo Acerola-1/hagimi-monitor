@@ -1,0 +1,22 @@
+{
+  "artifacts": [
+    {
+      "scheme": "HagimiMonitorDirect",
+      "path": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/panel-closeout-2026-10-01/CloseoutDirect.app",
+      "bundle_id": "local.hagimi.closeout.direct",
+      "configuration": "Release",
+      "executable_sha256": "d4745027fe6f1100b73b9ba042479ec4fa9a2383e2df3c532c9d58efad82971d",
+      "plist_sha256": "0a166f56d63cd59a277d0c0b50ef2c19f705e026f7cdafca983a759c8deee544"
+    },
+    {
+      "scheme": "HagimiMonitor",
+      "path": "/Users/acerola/Dev/Swift/hagimi-monitor/tmp/panel-closeout-2026-10-01/CloseoutAppStore.app",
+      "bundle_id": "local.hagimi.closeout.appstore",
+      "configuration": "Release",
+      "executable_sha256": "d06767e77009cb3cbbed191b00b865fd185a57f391f3eb70a73a79ac7b1b7e7d",
+      "plist_sha256": "aae6f1ad86ca143ff95387b4b229af6dcc79333f3407405c56d61ad55ffdf500"
+    }
+  ],
+  "configuration_sha256": "b4b05bad0d3f43db24684140449eca0a963d90fd140ecbf20898caf6c0796933",
+  "build_receipt": "footer-accepted-build-receipt.json"
+}

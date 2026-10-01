@@ -1,4 +1,32 @@
 import AppKit
+import Combine
+import SwiftUI
+
+/// 全模块采集通过正式状态入口提交命令；普通启动不安装这条诊断订阅。
+enum PanelBenchmarkCommand {
+    case display(Bool)
+    case archives(Bool)
+    case batteryPage(String)
+
+    static let notification = Notification.Name("HagimiPanelBenchmarkCommand")
+    static var isFullRun: Bool {
+        ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"]?.hasPrefix("full-") == true
+    }
+    static func send(_ command: Self) {
+        guard isFullRun else { return }
+        NotificationCenter.default.post(name: notification, object: command)
+    }
+}
+
+extension View {
+    @ViewBuilder func panelBenchmarkCommands(_ receive: @escaping (PanelBenchmarkCommand) -> Void) -> some View {
+        if PanelBenchmarkCommand.isFullRun {
+            onReceive(NotificationCenter.default.publisher(for: PanelBenchmarkCommand.notification)) { event in
+                if let command = event.object as? PanelBenchmarkCommand { receive(command) }
+            }
+        } else { self }
+    }
+}
 
 /// 原生动画对照的真实输入夹具。仅显式指定文件时读写，普通采样不经过该路径。
 struct PanelBenchmarkInputs {

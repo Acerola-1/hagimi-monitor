@@ -8,15 +8,10 @@ enum MenuBarComputeRingIcon {
 
     /// 内部锁，确保并发请求同一个 bucket 时只绘制一次并安全缓存
     private static let lock = NSLock()
-    private static let cache: NSCache<NSString, NSImage> = {
-        let cache = NSCache<NSString, NSImage>()
-        // 桶组合上限 101(负载)×2(明暗)×4(等级)×2(告警红点)=1616,但菜单栏实际只在
-        // 当前负载附近的少数桶间移动。840 会让几乎所有历史桶常驻,且每张被绘制过的缓存图
-        // 会各持有一个 AppKit 位图 rep,累积成内存高水位。displayedComputeLoad 由 30fps
-        // 平滑定时器驱动,负载爬升/回落时会连续扫过一整段整数桶,limit 太小会导致近期刚
-        // 淘汰的桶被立刻重新访问、频繁重绘。300 约等于「整段负载范围 × 明暗两态」
-        // (101×2=202,红点开或关各算一套)再留一些余量给相邻等级切换,足以覆盖单次
-        // 爬升/回落的连续扫桶,不必到 1616。
+    private static let cache: NSCache<NSNumber, NSImage> = {
+        let cache = NSCache<NSNumber, NSImage>()
+        // 颜色由同一负载桶派生，不再把原始等级另列为缓存维度。
+        // 保留最近负载区间及两种外观，避免升降过程中反复淘汰、重绘。
         cache.countLimit = 300
         return cache
     }()
@@ -25,14 +20,16 @@ enum MenuBarComputeRingIcon {
         Int(min(100.0, max(0.0, load)).rounded())
     }
 
-    private static func cacheKey(loadBucket: Int, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool, showsHUDBadge: Bool) -> NSString {
-        "\(loadBucket)|\(darkMode ? 1 : 0)|\(loadLevel.cacheIndex)|\(showsAlert ? 1 : 0)|\(showsHUDBadge ? 1 : 0)" as NSString
+    private static func cacheKey(loadBucket: Int, darkMode: Bool, showsAlert: Bool, showsHUDBadge: Bool) -> NSNumber {
+        // 告警优先于 HUD，两者同时开启与仅有告警是同一图像。
+        let badge = showsAlert ? 1 : (showsHUDBadge ? 2 : 0)
+        return NSNumber(value: (loadBucket * 2 + (darkMode ? 1 : 0)) * 3 + badge)
     }
 
-    static func image(load: Double, darkMode: Bool, loadLevel: MenuBarComputeLoadLevel, showsAlert: Bool = false, showsHUDBadge: Bool = false) -> NSImage {
+    static func image(load: Double, darkMode: Bool, showsAlert: Bool = false, showsHUDBadge: Bool = false) -> NSImage {
         let loadBucket = loadBucket(for: load)
         let canonicalLoad = Double(loadBucket)
-        let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, loadLevel: loadLevel, showsAlert: showsAlert, showsHUDBadge: showsHUDBadge)
+        let key = cacheKey(loadBucket: loadBucket, darkMode: darkMode, showsAlert: showsAlert, showsHUDBadge: showsHUDBadge)
         lock.lock()
         if let cached = cache.object(forKey: key) {
             lock.unlock()
@@ -53,7 +50,7 @@ enum MenuBarComputeRingIcon {
                 isDark = darkMode
             }
 
-            let style = MenuBarComputeRingImageStyle(load: canonicalLoad, darkMode: isDark, loadLevel: loadLevel)
+            let style = MenuBarComputeRingImageStyle(load: canonicalLoad, darkMode: isDark)
             drawRing(style: style, center: NSPoint(x: rect.midX, y: rect.midY))
             if showsAlert {
                 MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
@@ -149,7 +146,6 @@ enum MenuBarComputeRingIcon {
 private struct MenuBarComputeRingImageStyle {
     let load: Double
     let darkMode: Bool
-    let loadLevel: MenuBarComputeLoadLevel
 
     private var normalizedLoad: Double {
         min(1, max(0, load / 100))
@@ -169,7 +165,7 @@ private struct MenuBarComputeRingImageStyle {
     }
 
     var coreColor: NSColor {
-        loadLevel.coreColor(darkMode: darkMode)
+        MenuBarComputeLoadLevel.ringColor(for: load, darkMode: darkMode)
             .withAlphaComponent((darkMode ? 0.76 : 0.88) + normalizedLoad * 0.10)
     }
 
@@ -213,14 +209,21 @@ enum MenuBarComputeLoadLevel: Sendable {
     case working
     case busy
     case stressed
+    private static let ringLevels: [Self] = [.idle, .working, .busy, .stressed]
 
-    var cacheIndex: Int {
-        switch self {
-        case .idle: return 0
-        case .working: return 1
-        case .busy: return 2
-        case .stressed: return 3
+    /// 渐变仅影响负载环；模块和告警仍使用真实采样等级的离散语义。
+    static func ringColor(for load: Double, darkMode: Bool) -> NSColor {
+        let halfWidth = MonitorConstants.menuBarLoadColorBlendHalfWidth
+        for (index, boundary) in MonitorConstants.menuBarLoadLevelBoundaries.enumerated() {
+            if load < boundary - halfWidth { return ringLevels[index].coreColor(darkMode: darkMode) }
+            if load <= boundary + halfWidth {
+                let fraction = min(1, max(0, (load - boundary + halfWidth) / (halfWidth * 2)))
+                let eased = fraction * fraction * (3 - 2 * fraction)
+                let from = ringLevels[index].coreColor(darkMode: darkMode)
+                return from.blended(withFraction: eased, of: ringLevels[index + 1].coreColor(darkMode: darkMode)) ?? from
+            }
         }
+        return Self.stressed.coreColor(darkMode: darkMode)
     }
 
     func coreColor(darkMode: Bool) -> NSColor {
