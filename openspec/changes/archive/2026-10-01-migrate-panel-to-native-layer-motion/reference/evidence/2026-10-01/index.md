@@ -97,3 +97,5 @@
 原始采集包约859MiB，本目录及 `tmp/panel-closeout-2026-10-01` 的本地文件均保留。按项目验证产物约定，Git只保存索引、哈希、必要源码参考和最终摘要；大体积录像、原始日志/配置不自动提交。`manifest.sha256` 仍覆盖本地原始文件，另一 checkout 重现需取得该原始包或按协议重新采集。
 
 归档后任务为29/30；三份受影响主规范严格校验通过。全仓校验还有无关旧规范错误，见本地 `archive-main-spec-validation.log`。菜单栏清理的正常退出回执见本地 `menu-app-cleanup.json`，系统/网络/鼠标服务保留。
+
+最终正常启动的签名边界修正：[签名产物](signed-production-artifact.json)、[正确签名环境下561项测试](final-signed-test-summary.json)。保留硬化运行时；此前 ad-hoc 重签名副本仅代表相应独立夹具条件，不代表原始 Xcode 产物已通过正常启动。

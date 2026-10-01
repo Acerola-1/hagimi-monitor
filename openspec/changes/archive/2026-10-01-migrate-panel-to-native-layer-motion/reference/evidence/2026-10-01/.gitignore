@@ -17,3 +17,5 @@
 !final-source-receipt.json
 !trace-summary.json
 !analysis-exclusions.json
+!final-signed-test-summary.json
+!signed-production-artifact.json

@@ -21,5 +21,10 @@
     "legacy/current refresh-rate interface disagreement remains; no independently established 120Hz playback claim",
     "finite lifecycle run is not a proof for arbitrary durations"
   ],
-  "unresolved_production_findings": []
+  "unresolved_production_findings": [],
+  "signing_fix": {
+    "finding": "Direct target selected ad-hoc signing with hardened runtime; normal launch failed dyld library validation. Re-signed smoke copies hid this.",
+    "fix": "Direct and its test bundle use existing project development team; Sparkle and main code retain hardened runtime and same Team ID",
+    "verification": "561 tests actually passed under corrected signing; both channel builds passed; normal launch and signed artifact verification recorded separately"
+  }
 }
