@@ -156,6 +156,14 @@ HagimiMonitor 提供两种获取方式，核心监控体验一致；受 App Stor
 
 应用已通过 Apple 公证，下载后可直接打开。
 
+如果你安装了 [Homebrew](https://brew.sh), 可以在命令行中输入：
+
+```shell
+brew install hagimimonitordirect
+```
+
+完成安装。
+
 ## 系统要求
 
 - macOS 15 及以上
