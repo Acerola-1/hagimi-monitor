@@ -23,12 +23,9 @@ struct PanelCapsulePicker<T: Hashable & Identifiable>: View {
                 let isSelected = selection == item
                 Button {
                     guard selection != item else { return }
-                    withAnimation(
-                        .spring(
-                            response: MonitorConstants.panelExpansionSpringResponse,
-                            dampingFraction: MonitorConstants.panelExpansionSpringDamping
-                        )
-                    ) {
+                    // 原生面板以新页的完整自然尺寸生成唯一的高度轨迹，
+                    // 分页选择不再启动第二套 SwiftUI 布局补间。
+                    withPanelExpansionState {
                         selection = item
                     }
                 } label: {

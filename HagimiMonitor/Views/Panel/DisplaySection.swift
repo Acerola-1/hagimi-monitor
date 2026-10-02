@@ -115,13 +115,12 @@ struct DisplaySection: View {
         #if DISPLAY_CONTROL
         controlsContent
             .onReceive(expansion.motion.hiddenPanelReset) {
-                guard PanelMotionExperiment.enabled else { return }
                 isExpanded = settings.displayControlsExpandedByDefault
                 animate(Self.sectionKey, isExpanded, false)
                 controller.setPolling(active: false)
             }
             .onReceive(expansion.motion.$isSuspended.removeDuplicates()) { suspended in
-                guard PanelMotionExperiment.enabled, !suspended, isPanelVisible else { return }
+                guard !suspended, isPanelVisible else { return }
                 controller.refreshAsync()
                 controller.setPolling(active: isExpanded)
             }
@@ -131,7 +130,6 @@ struct DisplaySection: View {
         #else
         infoContent
             .onReceive(expansion.motion.hiddenPanelReset) {
-                guard PanelMotionExperiment.enabled else { return }
                 isExpanded = false
                 animate(Self.sectionKey, false, false)
             }
@@ -191,25 +189,20 @@ struct DisplaySection: View {
             .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
                               title: String(localized: "kind.display"))
 
-            if PanelMotionExperiment.enabled {
+
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
                     group: PanelChildGroup(ids: displays.map { "display-arc-\($0.id)" },
                         leading: 10, trailing: 10, bottom: 9, spacing: 9),
-                    motion: expansion.motion, content:
-                        ForEach(displays) { display in
-                            displaySection(display).sectionLayoutID("display-arc-\(display.id)")
+                    motion: expansion.motion, nativeItems: displays.map { display in
+                            NativePanelContentItem(id: "display-arc-\(display.id)", content: AnyView(displaySection(display)))
                         })
-            } else {
-            CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded, contentAvailable: !displays.isEmpty) {
-                VStack(spacing: 9) {
-                    ForEach(displays) { display in
-                        displaySection(display)
-                    }
-                }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 9)
-            }
-            }
+
+        }
+        .panelBenchmarkCommands { command in
+            guard case .display(let expanded) = command, isExpanded != expanded else { return }
+            withPanelExpansionState { isExpanded = expanded }
+            animate(Self.sectionKey, expanded, true)
+            NSLog("[panel-bench] display=%d", expanded ? 1 : 0)
         }
         .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
@@ -297,20 +290,19 @@ struct DisplaySection: View {
             .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
                               title: String(localized: "kind.display"))
 
-            if PanelMotionExperiment.enabled && hasControls && !visibleDisplays.isEmpty {
+            if hasControls && !visibleDisplays.isEmpty {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
                     group: PanelChildGroup(ids: visibleDisplays.map { "display-arc-\($0.id)" },
                         leading: 10, trailing: 10, top: 9, bottom: 9, spacing: 17),
-                    motion: expansion.motion, content:
-                        ForEach(Array(visibleDisplays.enumerated()), id: \.element.id) { index, display in
-                            DisplayControlGroup(display: display, displayInfo: displayInfoByID[display.id],
-                                settings: settings, controller: controller, palette: palette, tint: tint,
-                                isSectionExpanded: isExpanded, archiveKey: "display-arc-\(display.id)", animate: animate)
-                            .overlay(alignment: .top) {
-                                Rectangle().fill(palette.displaySeparator.opacity(index == 0 ? 1 : 0.72))
-                                    .frame(height: 1).offset(y: -9)
-                            }
-                            .sectionLayoutID("display-arc-\(display.id)")
+                    motion: expansion.motion, nativeItems: visibleDisplays.enumerated().map { index, display in
+                            NativePanelContentItem(id: "display-arc-\(display.id)", content: AnyView(
+                                DisplayControlGroup(display: display, displayInfo: displayInfoByID[display.id],
+                                    settings: settings, controller: controller, palette: palette, tint: tint,
+                                    isSectionExpanded: isExpanded, archiveKey: "display-arc-\(display.id)", animate: animate)
+                                    .overlay(alignment: .top) {
+                                        Rectangle().fill(palette.displaySeparator.opacity(index == 0 ? 1 : 0.72))
+                                            .frame(height: 1).offset(y: -9)
+                                    }))
                         })
             } else {
             CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded,
@@ -384,7 +376,8 @@ struct DisplaySection: View {
         // 调试自动测试:延迟待面板自动呼出后,自动跑「展开分节 → 展开档案 →
         // 收起档案」三轮序列,供日志观察嵌套展开/收起期间的窗口贴合行为。
         .task {
-            guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil else { return }
+            guard ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil,
+                  ProcessInfo.processInfo.environment["HAGIMI_PANEL_BENCH"] == nil else { return }
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             if !isExpanded { toggleExpansion() }
             for round in 0..<3 {
@@ -395,6 +388,12 @@ struct DisplaySection: View {
                 NSLog("[autotest] seq round=%d archive toggle -> false", round)
                 NotificationCenter.default.post(name: .autotestArchiveToggle, object: nil)
             }
+        }
+        .panelBenchmarkCommands { command in
+            guard case .display(let expanded) = command, isExpanded != expanded else { return }
+            withPanelExpansionState { isExpanded = expanded }
+            animate(Self.sectionKey, expanded, true)
+            NSLog("[panel-bench] display=%d", expanded ? 1 : 0)
         }
         .panelCardBrighten()
         .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
@@ -692,34 +691,37 @@ private struct DisplayInfoCard: View {
 
     var body: some View {
         Group {
-            if PanelMotionExperiment.enabled {
+
                 PanelCardStack(measurementKey: String(describing: display)) {
-                    HStack(alignment: .top, spacing: 10) {
-                        displayIcon
-                        VStack(alignment: .leading, spacing: 7) {
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(alignment: .top, spacing: 10) {
+                            displayIcon
                             title
-                            DisplayInfoBaseGrid(display: display, palette: palette)
                         }
+                        DisplayInfoBaseGrid(display: display, palette: palette)
                     }
                     .padding(.bottom, MetricGridMetrics.gridRowGap)
                     .panelMeasure("row:" + archiveKey)
                     SingleHostDetail(id: archiveKey, isExpanded: archiveExpanded, available: true,
-                        content: archiveContent.padding(.leading, 28), presentation: expansion.motion.presentation(for: archiveKey),
+                        content: archiveContent,
                         measurementKey: String(describing: display))
                 }
-            } else {
-                legacyContent
-            }
+
+        }
+        .panelBenchmarkCommands { command in
+            guard case .archives(let expanded) = command, archiveExpanded != expanded else { return }
+            withPanelExpansionState { archiveExpanded = expanded }
+            animate(archiveKey, expanded, true)
+            NSLog("[panel-bench] archive=%@ expanded=%d", archiveKey, expanded ? 1 : 0)
         }
         .onReceive(expansion.motion.hiddenPanelReset) {
-            guard PanelMotionExperiment.enabled else { return }
             archiveExpanded = false
             animate(archiveKey, false, false)
         }
         .onChange(of: isSectionExpanded) { _, newValue in
             if !newValue && archiveExpanded {
                 archiveExpanded = false
-                animate(archiveKey, false, PanelMotionExperiment.enabled)
+                animate(archiveKey, false, true)
             }
         }
     }
@@ -751,23 +753,7 @@ private struct DisplayInfoCard: View {
             .padding(.top, 2)
     }
 
-    private var legacyContent: some View {
-        HStack(alignment: .top, spacing: 10) {
-            displayIcon
 
-            VStack(alignment: .leading, spacing: 7) {
-                title
-
-                VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
-                    DisplayInfoBaseGrid(display: display, palette: palette)
-
-                    CollapsibleDetail(expansionKey: archiveKey, isExpanded: archiveExpanded) {
-                        archiveContent
-                    }
-                }
-            }
-        }
-    }
 
     /// 档案内容:明细网格 + 底部复制按钮,随折叠整体隐现。
     private var archiveContent: some View {
@@ -795,9 +781,9 @@ private struct DisplayExpansionRotation: ViewModifier {
     @EnvironmentObject private var expansion: PanelExpansionDriver
 
     @ViewBuilder func body(content: Content) -> some View {
-        if PanelMotionExperiment.enabled, let id {
-            content.modifier(PanelPhaseRotation(presentation: expansion.motion.presentation(for: id),
-                                               collapsed: collapsedAngle, expanded: expandedAngle))
+        if let id {
+            NativePanelRotationView(motion: expansion.motion, id: id, collapsed: collapsedAngle,
+                expanded: expandedAngle, content: AnyView(content))
         } else {
             content.rotationEffect(.degrees(expanded ? expandedAngle : collapsedAngle))
                 .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
@@ -1255,12 +1241,10 @@ private struct DisplayControlGroup: View {
 
     @EnvironmentObject private var expansion: PanelExpansionDriver
     @State private var archiveExpanded = false
-    @State private var controlsHeight: CGFloat = 0
-    @State private var archiveHeight: CGFloat = 0
 
     var body: some View {
         Group {
-            if PanelMotionExperiment.enabled {
+
                 PanelCardStack(measurementKey: measurementKey) {
                     HStack(alignment: .top, spacing: 10) {
                         displayIcon
@@ -1268,28 +1252,26 @@ private struct DisplayControlGroup: View {
                     }
                     .panelMeasure("row:" + archiveKey)
                     SingleHostReplacement(id: archiveKey, isExpanded: archiveExpanded,
-                        measurementKey: measurementKey,
-                        presentation: expansion.motion.presentation(for: archiveKey),
-                        collapsed: controlsContent.padding(.leading, 28).padding(.top, 7),
-                        expanded: replacementArchive.padding(.leading, 28).padding(.top, 7))
+                        collapsed: controlsContent.padding(.top, 7),
+                        expanded: replacementArchive.padding(.top, 7))
                 }
-            } else {
-                legacyContent
-            }
+
+        }
+        .panelBenchmarkCommands { command in
+            guard case .archives(let expanded) = command, archiveExpanded != expanded else { return }
+            withPanelExpansionState { archiveExpanded = expanded }
+            animate(archiveKey, expanded, true)
+            NSLog("[panel-bench] archive=%@ expanded=%d", archiveKey, expanded ? 1 : 0)
         }
         .onReceive(expansion.motion.hiddenPanelReset) {
-            guard PanelMotionExperiment.enabled else { return }
             archiveExpanded = false
             animate(archiveKey, false, false)
         }
         .onChange(of: isSectionExpanded) { _, newValue in
             if !newValue && archiveExpanded {
                 archiveExpanded = false
-                animate(archiveKey, false, PanelMotionExperiment.enabled)
+                animate(archiveKey, false, true)
             }
-        }
-        .onChange(of: displayInfo?.id) { _, _ in
-            updateDelta()
         }
         // 调试自动测试:接收自动序列的档案 toggle(仅第一台显示器响应)。
         .onReceive(NotificationCenter.default.publisher(for: .autotestArchiveToggle)) { _ in
@@ -1350,87 +1332,7 @@ private struct DisplayControlGroup: View {
                 .padding(.top, 2)
     }
 
-    private var legacyContent: some View {
-        HStack(alignment: .top, spacing: 10) {
-            displayIcon
 
-            VStack(alignment: .leading, spacing: 7) {
-                title
-
-                toggledContent
-            }
-        }
-        .background {
-            // 在背景层挂载不可见的真实档案区进行无约束自然高度测量,
-            // 确保在档案收起态(frame 被限制为 controlsHeight)时,仍然可以
-            // 预先精准测得展开后的档案高度,从而在 toggle 的第一帧就上报准确的 delta。
-            if let info = displayInfo {
-                archiveContent(for: info)
-                    .hidden()
-                    .background(
-                        GeometryReader { geometry in
-                            Color.clear
-                                .onAppear {
-                                    let h = geometry.size.height
-                                    if h > 0, h != archiveHeight {
-                                        archiveHeight = h
-                                        updateDelta()
-                                    }
-                                }
-                                .onChange(of: geometry.size.height) { _, newH in
-                                    if newH > 0, newH != archiveHeight {
-                                        archiveHeight = newH
-                                        updateDelta()
-                                    }
-                                }
-                        }
-                    )
-            }
-        }
-    }
-
-    /// 控制区与档案区的平滑过渡容器:
-    /// 控制区与档案区各自测量自然高度,高度差 delta 登记为该 archiveKey 的增量高度;
-    /// toggle 时 frame 高度在两者间连续插值,内部透明度交叉渐变,窗口层与内容层等量同相跟随。
-    private var toggledContent: some View {
-        let targetHeight: CGFloat? = archiveExpanded
-            ? (archiveHeight > 0 ? archiveHeight : nil)
-            : (controlsHeight > 0 ? controlsHeight : nil)
-
-        return ZStack(alignment: .top) {
-            controlsContent
-                .opacity(archiveExpanded ? 0 : 1)
-                .allowsHitTesting(!archiveExpanded)
-                .background(
-                    GeometryReader { geometry in
-                        Color.clear
-                            .onAppear {
-                                let h = geometry.size.height
-                                if h > 0, h != controlsHeight {
-                                    controlsHeight = h
-                                    updateDelta()
-                                }
-                            }
-                            .onChange(of: geometry.size.height) { _, newH in
-                                if newH > 0, newH != controlsHeight {
-                                    controlsHeight = newH
-                                    updateDelta()
-                                }
-                            }
-                    }
-                )
-
-            if let info = displayInfo {
-                archiveContent(for: info)
-                    .opacity(archiveExpanded ? 1 : 0)
-                    .allowsHitTesting(archiveExpanded)
-            }
-        }
-        .frame(height: targetHeight, alignment: .top)
-        .clipped()
-        .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                           dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: archiveExpanded)
-    }
 
     private var controlsContent: some View {
         VStack(spacing: 7) {
@@ -1511,15 +1413,7 @@ private struct DisplayControlGroup: View {
         }
     }
 
-    /// 上报本卡的净增量高度到驱动器:
-    /// 控制卡在收起态具备滑杆高度(controlsHeight),展开档案后切换到档案高度(archiveHeight),
-    /// 净高度差为 archiveHeight - controlsHeight。
-    private func updateDelta() {
-        guard !PanelMotionExperiment.enabled else { return }
-        guard controlsHeight > 0, archiveHeight > 0 else { return }
-        let delta = max(archiveHeight - controlsHeight, 0)
-        expansion.reportNaturalHeight(archiveKey, delta)
-    }
+
 
     /// 档案开合与其他展开区同一驱动源:置位窗口层采样推迟截止标记,
     /// 并把本档案相位交驱动器补间(0↔1)。

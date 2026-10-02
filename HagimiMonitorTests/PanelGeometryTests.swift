@@ -451,3 +451,85 @@ extension PanelGeometryTests {
         }
     }
 }
+
+
+extension PanelGeometryTests {
+    @Test func everyModulePreservesUserOrderAcrossCapAndUncap() throws {
+        let ids = ["bluetooth", "display", "battery", "network", "storage", "memory", "fan", "gpu", "cpu"]
+        #expect(Set(ids) == Set(PanelSectionKind.allCases.map(\.id)))
+        let registry = PanelDimensionRegistry(initialEnvironment: GeometryEnvironmentToken(width: 340,
+            localeIdentifier: "zh_CN", dynamicTypeSize: "default", backingScale: 2, structureSignature: ids.joined(separator: ",")))
+        registry.configureStructure(topLevelIDs: ids)
+        registry.panelHeaderHeight = 22; registry.footerHeight = 34; registry.contentHeightCap = 600
+        for id in ids { registry.reportMeasurement(id: id, headerHeight: 34, detailHeight: 200,
+            isAvailable: id != "fan", revision: registry.currentRevision) }
+        let snapshot = try #require(registry.makeSnapshot())
+        let open = PanelGeometrySolver.solve(snapshot: snapshot, phases: snapshot.sections.mapValues { _ in 1 })
+        #expect(open.isCapped)
+        #expect(open.windowContentSize.height == 600)
+        #expect(open.revealHeights["fan"] == 0)
+        #expect(open.cardFrames["fan"]?.height == 34)
+        let visual = open.cardFrames.filter { $0.key != "__footer__" }.sorted { $0.value.minY < $1.value.minY }.map(\.key)
+        #expect(visual == ids)
+        let bottom = PanelGeometrySolver.solve(snapshot: snapshot, phases: snapshot.sections.mapValues { _ in 1 }, scrollOffset: 10000)
+        #expect(bottom.cardFrames["__footer__"]?.maxY == bottom.scrollOffset + bottom.viewportHeight)
+        let closed = PanelGeometrySolver.solve(snapshot: snapshot, phases: [:], scrollOffset: bottom.scrollOffset)
+        #expect(!closed.isCapped)
+        #expect(closed.scrollOffset == 0)
+        #expect(closed.cardFrames.count == ids.count + 1)
+    }
+
+    @Test func recursiveDeviceAdditionRemovalAndHiddenModulesDiscardStaleDimensions() throws {
+        var environment = GeometryEnvironmentToken(width: 460, localeIdentifier: "en_US",
+            dynamicTypeSize: "default", backingScale: 2, structureSignature: "all-v1")
+        let registry = PanelDimensionRegistry(initialEnvironment: environment)
+        let ids = PanelSectionKind.allCases.map(\.id)
+        registry.configureStructure(topLevelIDs: ids, hierarchy: ["display": ["archive-a"]],
+            childGroups: ["display": PanelChildGroup(ids: ["archive-a"], leading: 10, trailing: 10)])
+        for id in ids { registry.reportMeasurement(id: id, headerHeight: 34, detailHeight: 100, revision: 1) }
+        registry.reportMeasurement(id: "archive-a", parentID: "display", headerHeight: 18,
+            detailHeight: 120, revision: 1, collapsedDetailHeight: 80)
+        #expect(registry.isReady)
+        environment.structureSignature = "device-b-added-bt-hidden"
+        #expect(registry.updateEnvironment(environment))
+        let visible = ids.filter { $0 != "bluetooth" }
+        registry.configureStructure(topLevelIDs: visible, hierarchy: ["display": ["archive-b"]],
+            childGroups: ["display": PanelChildGroup(ids: ["archive-b"], leading: 10, trailing: 10)])
+        #expect(!registry.reportMeasurement(id: "archive-a", parentID: "display", headerHeight: 18, detailHeight: 9999, revision: 1))
+        for id in visible { registry.reportMeasurement(id: id, headerHeight: 34, detailHeight: 100, revision: 2) }
+        #expect(!registry.isReady)
+        registry.reportMeasurement(id: "archive-b", parentID: "display", headerHeight: 18,
+            detailHeight: 160, revision: 2, collapsedDetailHeight: 60)
+        let snapshot = try #require(registry.makeSnapshot())
+        #expect(snapshot.sections["bluetooth"] == nil)
+        #expect(snapshot.sections["archive-a"] == nil)
+        #expect(snapshot.width(for: "archive-b") == 428)
+        let frame = PanelGeometrySolver.solve(snapshot: snapshot, phases: ["display": 1, "archive-b": 1])
+        #expect(frame.childFrames["archive-a"] == nil)
+        #expect(frame.childFrames["archive-b"]?.width == 428)
+        #expect(frame.sectionFrames["archive-b"] != nil)
+    }
+}
+
+@Suite("Pinned panel footer geometry")
+struct PinnedPanelFooterTests {
+    @Test func cappedFooterStaysAtVisibleBottomWhileModulesScroll() {
+        var snapshot = GeometrySnapshot(revision: 1,
+            environment: GeometryEnvironmentToken(width: 340, localeIdentifier: "zh_CN", dynamicTypeSize: "default", backingScale: 2, structureSignature: "cpu"),
+            panelWidth: 340, panelHeaderHeight: 34, footerHeight: 34, contentHeightCap: 200,
+            orderedTopLevelIDs: ["cpu"], sections: ["cpu": SectionNaturalSize(id: "cpu", parentID: nil, headerHeight: 34, detailHeight: 300, isAvailable: true)], childrenByParent: [:])
+        snapshot.pinsFooter = true
+        let top = PanelGeometrySolver.solve(snapshot: snapshot, phases: ["cpu": 1])
+        let bottom = PanelGeometrySolver.solve(snapshot: snapshot, phases: ["cpu": 1], scrollOffset: 10000)
+        #expect(top.cardFrames["__footer__"] == bottom.cardFrames["__footer__"])
+        #expect(top.bodyDocumentHeight == 334)
+        #expect(top.viewportHeight == 108)
+        #expect(top.cardFrames["__footer__"]?.maxY == 148)
+        #expect(bottom.scrollOffset == 226)
+        #expect(top.windowContentSize.height == 200)
+        let closed = PanelGeometrySolver.solve(snapshot: snapshot, phases: [:])
+        #expect(!closed.isCapped)
+        #expect(closed.cardFrames["__footer__"]?.minY == 40)
+        #expect(closed.windowContentSize.height == 126)
+    }
+}

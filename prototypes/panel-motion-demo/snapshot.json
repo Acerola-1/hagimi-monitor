@@ -1,0 +1,316 @@
+{
+  "capturedAt": 812404674.403897,
+  "modules": [
+    {
+      "pressureSamples": [],
+      "samples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        36.75213675213676,
+        27.182952182952185
+      ],
+      "metrics": [
+        {
+          "number": 5.301455301455301,
+          "unit": "%",
+          "name": "system",
+          "value": "5%"
+        },
+        {
+          "number": 21.881496881496883,
+          "unit": "%",
+          "name": "user",
+          "value": "22%"
+        },
+        {
+          "number": 72.81704781704782,
+          "unit": "%",
+          "name": "idle",
+          "value": "73%"
+        },
+        {
+          "name": "uptime",
+          "value": "2天17小时"
+        },
+        {
+          "number": 762,
+          "name": "process-count",
+          "value": "762"
+        },
+        {
+          "number": 0,
+          "name": "thermal-pressure",
+          "value": "normal"
+        },
+        {
+          "number": 49.0272373540856,
+          "name": "core-split",
+          "value": "49% / 12%"
+        },
+        {
+          "number": 95.37423578898112,
+          "unit": "°C",
+          "name": "temperature",
+          "value": "95°C"
+        }
+      ],
+      "summary": "27%",
+      "placeholder": false,
+      "reading": 27.182952182952185,
+      "cores": [
+        {
+          "performance": false,
+          "index": 0,
+          "usage": 25.263157894736842
+        },
+        {
+          "performance": false,
+          "index": 1,
+          "usage": 18.75
+        },
+        {
+          "performance": false,
+          "index": 2,
+          "usage": 12.56544502617801
+        },
+        {
+          "performance": false,
+          "index": 3,
+          "usage": 7.731958762886598
+        },
+        {
+          "performance": false,
+          "index": 4,
+          "usage": 6.770833333333333
+        },
+        {
+          "performance": false,
+          "index": 5,
+          "usage": 3.6269430051813467
+        },
+        {
+          "performance": true,
+          "index": 6,
+          "usage": 51.28205128205128
+        },
+        {
+          "performance": true,
+          "index": 7,
+          "usage": 49.47916666666667
+        },
+        {
+          "performance": true,
+          "index": 8,
+          "usage": 48.18652849740933
+        },
+        {
+          "performance": true,
+          "index": 9,
+          "usage": 47.12041884816754
+        }
+      ],
+      "performanceUsage": 49.0272373540856,
+      "kind": "cpu",
+      "efficiencyUsage": 12.413194444444445
+    },
+    {
+      "pressureSamples": [],
+      "samples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        75,
+        83
+      ],
+      "metrics": [
+        {
+          "number": 83,
+          "name": "usage",
+          "value": "83%"
+        },
+        {
+          "number": 98.25080851387456,
+          "name": "clock-state",
+          "value": "P15 98%"
+        },
+        {
+          "number": 1674395648,
+          "name": "gpu-memory",
+          "value": "1.67 GB"
+        },
+        {
+          "name": "allocated",
+          "value": "7.12 GB"
+        },
+        {
+          "number": 82,
+          "name": "render",
+          "value": "82%"
+        },
+        {
+          "number": 83,
+          "name": "tiler",
+          "value": "83%"
+        },
+        {
+          "number": 0,
+          "name": "throttle",
+          "value": "0%"
+        },
+        {
+          "number": 100,
+          "name": "power-cap",
+          "value": "100%"
+        }
+      ],
+      "summary": "83%",
+      "placeholder": false,
+      "reading": 83,
+      "kind": "gpu"
+    },
+    {
+      "pressureValue": 65,
+      "samples": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        80.25102615356445,
+        80.64146041870117
+      ],
+      "metrics": [
+        {
+          "number": 27708194816,
+          "name": "used",
+          "value": "25.81 GB"
+        },
+        {
+          "number": 1,
+          "name": "pressure",
+          "value": "warning"
+        },
+        {
+          "number": 18168020992,
+          "name": "swap-used",
+          "value": "16.92 GB"
+        },
+        {
+          "name": "total",
+          "value": "32 GB"
+        },
+        {
+          "number": 16788717568,
+          "name": "compressed",
+          "value": "15.64 GB"
+        },
+        {
+          "number": 1,
+          "name": "pressure-level",
+          "value": "warning"
+        },
+        {
+          "number": 1345981,
+          "name": "swapins",
+          "value": "1345981"
+        },
+        {
+          "number": 3232449,
+          "name": "swapouts",
+          "value": "3232449"
+        },
+        {
+          "number": 61.6949094883068,
+          "unit": " GB/s",
+          "name": "memory-bandwidth",
+          "value": "61.7 GB/s"
+        }
+      ],
+      "summary": "81%",
+      "pressureSamples": [
+        65,
+        65
+      ],
+      "placeholder": false,
+      "reading": 80.64146041870117,
+      "kind": "memory",
+      "pressure": 1
+    }
+  ],
+  "cpu": [
+    {
+      "usage": 118.69999999999999,
+      "translated": false,
+      "pid": 78023,
+      "name": "ChatGPT"
+    },
+    {
+      "usage": 47,
+      "translated": false,
+      "pid": 176,
+      "name": "WindowServer"
+    },
+    {
+      "usage": 13.6,
+      "translated": false,
+      "pid": 27509,
+      "name": "HapiGo"
+    }
+  ]
+}

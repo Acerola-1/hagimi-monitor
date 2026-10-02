@@ -1,0 +1,662 @@
+[
+  {
+    "file": "focus-battery-dark.mp4",
+    "sha256": "5af9bd7123a9ad7267722d892eb0b9002386902a1be84ca9baf1ac3c172e2bd4",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.750000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 96286,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "focus-battery-light.mp4",
+    "sha256": "fa27f00e94c49166f0b563e2c1da6bd81597b73660d80d71902f6b06d1784c83",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "35.125000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 96147,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "focus-display-dark.mp4",
+    "sha256": "152e19d3bfcaaddfb7c8a3abc2c1a4b44a7dd1a971cecb4309143f3320d8bc20",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "33.921667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 96609,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "focus-display-light.mp4",
+    "sha256": "3a4bf5e5c5a9077269eae0d2462507f9863a4cf989535def74e718fe65beae04",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "35.143333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 96440,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "focus-reverse-dark.mp4",
+    "sha256": "27c7671cc403f69b0843aeb79ddd2c7de012b9f16776108aae199b760b2076ba",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "33.878333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 96887,
+    "scope": "full-reverse",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "focus-reverse-light.mp4",
+    "sha256": "9b054411ae7e8a0c0be0a4bb4639423a403a284450b1c775b22a0dbd502681c5",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "33.883333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 96770,
+    "scope": "full-reverse",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "footer-appstore-smoke.mp4",
+    "sha256": "6e18d13b4c0b749dfa6e116c94478db622714dcf1ac016b1e1737ab2413b9b10",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.975000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "d06767e77009cb3cbbed191b00b865fd185a57f391f3eb70a73a79ac7b1b7e7d",
+    "pid": 9873,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "footer-compatible-smoke.mp4",
+    "sha256": "e57c287ae6c1be4ef43bac250afeb8a3a8c2bb81ed0ef860662a0cc91438eba6",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1000,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.833333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "d4745027fe6f1100b73b9ba042479ec4fa9a2383e2df3c532c9d58efad82971d",
+    "pid": 9982,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "footer-native-normal.mp4",
+    "sha256": "e5ab6d906af655c2f800286447dd39f7670b4b403bbb6fe1d675ecc367132e05",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.791667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "d4745027fe6f1100b73b9ba042479ec4fa9a2383e2df3c532c9d58efad82971d",
+    "pid": 9312,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "original-visual-dark-complex.mp4",
+    "sha256": "fe9aa39442e72a681b7ca1744ed5754b62426e38f58d1e5c8659585650bec453",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1000,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.368333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b772ed7faa352e25bf41a1d3ec9342c833ee71dacf2f2cd64b1aaf0536da2030",
+    "pid": 2051,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "original-visual-dark-dark.mp4",
+    "sha256": "7512ec2f74bc03ece115c3ba71f857dd9e81012591e41f9f215e95eb11eeeccc",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1000,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.966667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b772ed7faa352e25bf41a1d3ec9342c833ee71dacf2f2cd64b1aaf0536da2030",
+    "pid": 1860,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "original-visual-dark-white.mp4",
+    "sha256": "7fcf575bd27cd319b7a4eedffa0476c38fbc9ca3c203437afde3aee5ea9287b7",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1000,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.711667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b772ed7faa352e25bf41a1d3ec9342c833ee71dacf2f2cd64b1aaf0536da2030",
+    "pid": 1663,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "original-visual-light-complex.mp4",
+    "sha256": "39358ba86cef014a1909e41cdc943a772cd520661f5904322fd366fa307a7143",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1000,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "33.763333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b772ed7faa352e25bf41a1d3ec9342c833ee71dacf2f2cd64b1aaf0536da2030",
+    "pid": 1483,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "original-visual-light-dark.mp4",
+    "sha256": "9b0fd86002b4c5a7fb409c21c0dbc35ad042e7dda8164fa9eb9469dbab8e790f",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1000,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.933333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b772ed7faa352e25bf41a1d3ec9342c833ee71dacf2f2cd64b1aaf0536da2030",
+    "pid": 1026,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "original-visual-light-white.mp4",
+    "sha256": "a9c9e66784cff197b656424f66b6be92c8f16ea455b1cd33e2bc0cefe3c0c0fa",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1000,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.946667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b772ed7faa352e25bf41a1d3ec9342c833ee71dacf2f2cd64b1aaf0536da2030",
+    "pid": 679,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "stress-visual-native-both.mp4",
+    "sha256": "2ad5b86356cb73bc8114611267da8b281ced57fcdd93802bb6584296c291502b",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.793333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "a6a97db6819b301b08bc0e5e2b6140a9979dfe9e931fb101871e7633e1e11190",
+    "pid": 447,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "stress-visual-native-cpu.mp4",
+    "sha256": "f33e11087b7f4fd2a6befc01c41c28bc350d1d2b5ed7e755bb95c9e27bcd0642",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.133333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "a6a97db6819b301b08bc0e5e2b6140a9979dfe9e931fb101871e7633e1e11190",
+    "pid": 290,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-dark-balanced-complex.mp4",
+    "sha256": "2dc11db2fca9e9c3f27e508d25e7ed2b42ed31262956f9903effaecc1541150f",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.235000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 95194,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-dark-balanced-dark.mp4",
+    "sha256": "f9f91e152e86e1e089991249766a5c3912cb6c0caedc8a731b2c2e26c5d51c67",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.835000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 95012,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-dark-balanced-white.mp4",
+    "sha256": "4f40237804ebd23ee3a394455afd09bec7987d62677b41145e2d9d03595b4dc5",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.383333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 94808,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-dark-vibrant-complex.mp4",
+    "sha256": "f16b117817a6e6cc396390ce0343f31bf5b6cc809a835034adb589b06111c9ec",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.783333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 95692,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-dark-vibrant-dark.mp4",
+    "sha256": "153562d453dae53eb6a74fa6d0a3b7fb69a5926a67e5b2f15da090b1ce21553a",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "35.118333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 95542,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-dark-vibrant-white.mp4",
+    "sha256": "5151f461005dd6721413c21223e02c5373cf9abc120f6f905e5db91b43b26792",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.466667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 95358,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-light-balanced-complex.mp4",
+    "sha256": "2261c64237d974603a6ffb5f50bc96511c9fdd3071c650c011aff1788b2a57c0",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.800000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 94156,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-light-balanced-dark.mp4",
+    "sha256": "6a3ecf96951a9f749437b612db2f3f7075e1ebea3e8f9c83b8ecd273b4b9718a",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.515000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 93963,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-light-balanced-white.mp4",
+    "sha256": "f5a6f294a57913c266abf56fcbbda05b81600d75f3ec3d762a7608d62e83924d",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "34.750000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 93769,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-light-vibrant-dark.mp4",
+    "sha256": "d17bc5fc3984ce58cb9155886ad145e3c212d3effd42f3a40dc868aabcbb0d56",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "35.123333"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 94465,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "visual-light-vibrant-white.mp4",
+    "sha256": "fa6bc3d96af082b5642a12effa3fafab510ef1f74da406d8875fb9f9bb1fd1ef",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1958
+        }
+      ],
+      "format": {
+        "duration": "33.451667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "27a95f5b19f8522e6ee48094b89defabf35a30a86f5fb1fbe355b9c2d5386f6c",
+    "pid": 94309,
+    "scope": "full-matrix",
+    "note": "metadata is recording duration and size, not display drop rate"
+  },
+  {
+    "file": "demo-retry-light.mp4",
+    "sha256": "4a1c8966b17a81f6b524e1b7a95236076573724113832ebfbb782248acbb83e4",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1928
+        }
+      ],
+      "format": {
+        "duration": "19.880000"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b9486edc933ba85ee6f5bf21bc9c2a84e1006a6beaff3940d84a2180d984d4f1",
+    "pid": 97617,
+    "scope": "Demo 24 operations including rapid reversal",
+    "note": "recording metadata is not display drop rate"
+  },
+  {
+    "file": "demo-retry-dark.mp4",
+    "sha256": "161be28d5c4d146517cbd21fca133003f68ffacfa59f521756d307b849f3af2c",
+    "metadata": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "width": 1080,
+          "height": 1928
+        }
+      ],
+      "format": {
+        "duration": "19.176667"
+      }
+    },
+    "complete": true,
+    "executable_sha256": "b9486edc933ba85ee6f5bf21bc9c2a84e1006a6beaff3940d84a2180d984d4f1",
+    "pid": 97677,
+    "scope": "Demo 24 operations including rapid reversal",
+    "note": "recording metadata is not display drop rate"
+  }
+]

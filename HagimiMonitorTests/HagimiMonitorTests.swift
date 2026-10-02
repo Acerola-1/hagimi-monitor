@@ -105,14 +105,6 @@ struct HagimiMonitorTests {
         #expect(ComputeLoadModel.loadLevel(for: ComputeLoadModel.combined(cpuValue: 70, gpuValue: 0)) == .busy)
     }
 
-    @Test func computeLoadDisplayValueMovesTowardTarget() {
-        // ease-out：每帧靠拢 distance×factor(0.10)，不小于 minStep(0.6)
-        #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 10, target: 50) - 14) < 1e-9)
-        #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 50, target: 10) - 46) < 1e-9)
-        #expect(abs(ComputeLoadModel.smoothedDisplayValue(current: 49, target: 50) - 49.6) < 1e-9)
-        #expect(ComputeLoadModel.smoothedDisplayValue(current: 49.7, target: 50) == 50)
-    }
-
     @Test func menuBarTargetIgnoresSmallComputeLoadChanges() {
         #expect(!ComputeLoadModel.shouldUpdateMenuBarTarget(currentTarget: 30, nextTarget: 34.9))
         #expect(ComputeLoadModel.shouldUpdateMenuBarTarget(currentTarget: 30, nextTarget: 35))

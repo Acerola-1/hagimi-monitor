@@ -137,6 +137,7 @@ nonisolated struct PanelRevealHeightKey: LayoutValueKey {
 
 /// 行外壳返回可见高度，行头收到完整固定提议，明细视口独立决定自己的揭示高度。
 nonisolated struct PanelCardLayout: Layout {
+    var usesNaturalDetailHeight = true
     // 外壳按顶部几何定位，内容基线不参与外层对齐。
     func explicitAlignment(of guide: HorizontalAlignment, in bounds: CGRect, proposal: ProposedViewSize,
                            subviews: Subviews, cache: inout Cache) -> CGFloat? { nil }
@@ -148,28 +149,36 @@ nonisolated struct PanelCardLayout: Layout {
         var width: CGFloat?
         var key: String?
         var headerHeight: CGFloat = 0
+        var detailHeight: CGFloat = 0
     }
     func makeCache(subviews: Subviews) -> Cache { Cache() }
     func updateCache(_ cache: inout Cache, subviews: Subviews) {}
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
+        PanelLayoutCounters.shared.measure("layout:card.fit")
         let width = proposal.width ?? cache.width ?? 0
         if cache.width != width || cache.key != measurementKey {
             cache.headerHeight = subviews.first?.sizeThatFits(ProposedViewSize(width: width, height: nil)).height ?? 0
             cache.width = width
             cache.key = measurementKey
         }
-        let reveal = subviews.count > 1 ? subviews[1][PanelRevealHeightKey.self] : 0
+        let reveal = subviews.count > 1 ? (usesNaturalDetailHeight
+            ? subviews[1].sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+            : subviews[1][PanelRevealHeightKey.self]) : 0
+        cache.detailHeight = reveal
         return CGSize(width: width, height: cache.headerHeight + reveal)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) {
+        PanelLayoutCounters.shared.measure("layout:card.place")
         _ = sizeThatFits(proposal: proposal, subviews: subviews, cache: &cache)
         subviews.first?.place(at: bounds.origin, anchor: .topLeading,
                              proposal: ProposedViewSize(width: bounds.width, height: cache.headerHeight))
         if subviews.count > 1 {
+            // 原生路径承载完整内容，裁剪由外部图层负责；零高度提议仅属于旧视口。
+            let detailHeight = usesNaturalDetailHeight ? cache.detailHeight : 0
             subviews[1].place(at: CGPoint(x: bounds.minX, y: bounds.minY + cache.headerHeight), anchor: .topLeading,
-                             proposal: ProposedViewSize(width: bounds.width, height: 0))
+                             proposal: ProposedViewSize(width: bounds.width, height: detailHeight))
         }
     }
 }
@@ -186,9 +195,7 @@ struct PanelCardStack<Content: View>: View {
     }
     var body: some View {
         let content = self.content
-        let layout = PanelMotionExperiment.enabled
-            ? AnyLayout(PanelCardLayout(measurementKey: "\(measurementKey)|\(locale.identifier)|\(typeSize)|\(scale)"))
-            : AnyLayout(VStackLayout(spacing: 0))
+        let layout = PanelCardLayout(measurementKey: "\(measurementKey)|\(locale.identifier)|\(typeSize)|\(scale)")
         layout { content }
     }
 }

@@ -83,12 +83,15 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         let systemPower = preferredSystemPowerWatts(
             registryFallback: registryPower ?? smcReader?.dcInputPower()
         )
+        // 功率流:适配器实际输入。Direct 版优先读 SMC PDTR (与 PSTR 处于同一秒级时域),
+        // 缺失时退回注册表 SystemPowerIn。避免秒级系统负载与 60s 滞后的适配器输入做差导致虚假放电判定。
+        let powerIn = connected ? preferredDcInputWatts(registryFallback: smart.powerInWatts) : nil
         #else
         let systemPower = registryPower
+        let powerIn = connected ? smart.powerInWatts : nil
         #endif
 
         // 功率流:适配器实际输入、电池流向(正=充电/负=放电)。
-        let powerIn = connected ? smart.powerInWatts : nil
         // 电池流向的方向只由 IOPS 状态决定,幅度取 |BatteryPower|(该字段的符号
         // 约定随机型/系统版本不同,本机实测充电为正值)。插电未充电时固件常停报
         // 遥测(充电上限维持期 BatteryPower 恒 0),此时按功率守恒用
@@ -98,6 +101,13 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
                 return smart.batteryMagnitudeWatts
             }
             if !connected {
+                #if DISPLAY_CONTROL
+                // 直连版系统负载为秒级 SMC PSTR, 纯电池供电下电池放电功率与整机负载同源对齐,
+                // 避免使用 60s 滞后的 BatteryPower 导致与当前功耗数值割裂。
+                if let systemPower {
+                    return -systemPower
+                }
+                #endif
                 if let magnitude = smart.batteryMagnitudeWatts {
                     return -magnitude
                 }
@@ -245,8 +255,18 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
     /// 直连版先读 SMC `PSTR`（约每秒更新）。读不到时再退回注册表里的 SystemLoad。
     private func preferredSystemPowerWatts(registryFallback: Double?) -> Double? {
         #if DISPLAY_CONTROL
-        if let pstr = smcReader?.systemPower(), pstr.isFinite, pstr >= 0 {
+        if let pstr = smcReader?.systemPower(), pstr.isFinite, pstr > 0 {
             return pstr
+        }
+        #endif
+        return registryFallback
+    }
+
+    /// 直连版优先读取 SMC `PDTR`（DC 输入轨功率，秒级更新）。读不到时退回注册表里的 SystemPowerIn。
+    private func preferredDcInputWatts(registryFallback: Double?) -> Double? {
+        #if DISPLAY_CONTROL
+        if let pdtr = smcReader?.dcInputPower(), pdtr.isFinite, pdtr > 0 {
+            return pdtr
         }
         #endif
         return registryFallback

@@ -3,7 +3,7 @@ import IOKit.pwr_mgt
 import OSLog
 import SwiftUI
 
-/// 快捷功能:监控面板外的主动操作入口(键盘锁定/系统防休眠/不息屏)。
+/// 快捷功能:监控面板外的主动操作入口(键盘锁定/系统防休眠/防熄屏)。
 /// 与只读监控数据严格分离:状态由本 store 独立发布,浮层独立于面板
 /// 每秒刷新,不引入面板重绘开销。
 ///
@@ -59,7 +59,7 @@ final class QuickToolsStore: ObservableObject {
     /// 系统防休眠激活中:阻止空闲引发的系统休眠(屏幕可正常熄灭;
     /// 合盖是否休眠由硬件/外接条件决定,断言不参与)。
     @Published private(set) var systemSleepPrevented = false
-    /// 不息屏激活中:阻止空闲熄屏(连带阻止空闲休眠)。
+    /// 防熄屏激活中:阻止空闲熄屏(连带阻止空闲休眠)。
     @Published private(set) var displayAwake = false
 
     var anyActive: Bool {
@@ -385,7 +385,7 @@ final class QuickToolsStore: ObservableObject {
         systemSleepPrevented = systemAssertionID != nil
     }
 
-    // MARK: - 不息屏
+    // MARK: - 防熄屏
 
     func toggleDisplayAwake() {
         if displayAwake {

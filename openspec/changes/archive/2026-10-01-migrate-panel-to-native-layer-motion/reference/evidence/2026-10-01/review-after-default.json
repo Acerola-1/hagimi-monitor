@@ -1,0 +1,30 @@
+{
+  "scope": "default-path cleanup and affected production/test ownership chains, following full earlier review",
+  "removed": [
+    "incremental height prediction and calibration",
+    "PanelWindowSpring and both controller resize callbacks",
+    "SwiftUI single-host experiment UI",
+    "legacy display page height-delta branches",
+    "duplicate child content construction",
+    "identity material updates and subscriptions",
+    "write-only host fields and unused detail environment subscription"
+  ],
+  "retained": "analytic reference model and explicit test-only model selection; natural proposal fixtures in test target; independent approved Demo",
+  "checks": [
+    "all old scenario names retained in spec deltas",
+    "561 final tests passed",
+    "both Release builds passed",
+    "both exact products 50-operation default-path smoke passed; no motion-selection flags",
+    "6 lifecycle cycles / 24 checks valid; failures 0"
+  ],
+  "known_limits": [
+    "legacy/current refresh-rate interface disagreement remains; no independently established 120Hz playback claim",
+    "finite lifecycle run is not a proof for arbitrary durations"
+  ],
+  "unresolved_production_findings": [],
+  "signing_fix": {
+    "finding": "Direct target selected ad-hoc signing with hardened runtime; normal launch failed dyld library validation. Re-signed smoke copies hid this.",
+    "fix": "Direct and its test bundle use existing project development team; Sparkle and main code retain hardened runtime and same Team ID",
+    "verification": "561 tests actually passed under corrected signing; both channel builds passed; normal launch and signed artifact verification recorded separately"
+  }
+}

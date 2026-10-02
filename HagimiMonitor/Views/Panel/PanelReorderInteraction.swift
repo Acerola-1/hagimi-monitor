@@ -143,14 +143,22 @@ final class PanelReorderController: ObservableObject {
     }
 
     func registeredFrame(scope: PanelOrderScope, id: String) -> CGRect? {
-        frames[PanelReorderItemKey(scope: scope, id: id)]?.rect
+        let key = PanelReorderItemKey(scope: scope, id: id)
+        if let view = captureViews[key]?.value,
+           let rect = NativePanelCoordinates.frame(of: view) { return rect }
+        return frames[key]?.rect
+    }
+
+    func gestureLocation(scope: PanelOrderScope, id: String, fallback: CGPoint) -> CGPoint {
+        guard let view = captureViews[PanelReorderItemKey(scope: scope, id: id)]?.value else { return fallback }
+        return NativePanelCoordinates.pointer(in: view) ?? fallback
     }
 
     func begin(scope: PanelOrderScope, id: String, location: CGPoint,
                settings: MonitorSettings, preview: NSImage? = nil,
                fallbackContent: AnyView? = nil) {
         guard session == nil, canBegin(),
-              let source = frames[PanelReorderItemKey(scope: scope, id: id)]?.rect else { return }
+              let source = registeredFrame(scope: scope, id: id) else { return }
         let slots = visibleSlots(scope: scope, settings: settings)
         guard slots.count > 1, slots.contains(where: { $0.id == id }) else { return }
         // 钉住面板可能仅被 orderFrontRegardless 显示；开始拖动时取得键盘焦点，
@@ -181,7 +189,7 @@ final class PanelReorderController: ObservableObject {
         let scope = current.scope
         current.slots = current.slots.map { slot in
             let latest = frames[PanelReorderItemKey(scope: scope, id: slot.id)]
-            return (slot.id, latest?.rect ?? slot.frame, latest?.span ?? slot.span)
+            return (slot.id, registeredFrame(scope: scope, id: slot.id) ?? slot.frame, latest?.span ?? slot.span)
         }
         // 只接收同一作用域的实际卡片；展开区和固定组件即使位于两项之间也无效。
         current.valid = current.slots.contains {
@@ -300,7 +308,7 @@ final class PanelReorderController: ObservableObject {
         return settings.orderedPanelIDs(for: scope, available: available).compactMap { id in
             guard let frame = frames[PanelReorderItemKey(scope: scope, id: id)],
                   frame.rect.width > 0, frame.rect.height > 0 else { return nil }
-            return (id, frame.rect, frame.span)
+            return (id, registeredFrame(scope: scope, id: id) ?? frame.rect, frame.span)
         }
     }
 }
@@ -470,23 +478,23 @@ private struct PanelReorderItemModifier: ViewModifier {
                         guard case .second(true, let drag) = phase else { return }
                         if let drag {
                             if !controller.isSource(scope: scope, id: id) {
-                                beginDrag(content: content, location: drag.startLocation,
+                                beginDrag(content: content, location: controller.gestureLocation(scope: scope, id: id, fallback: drag.startLocation),
                                           controller: controller, settings: settings)
                             }
                             if controller.isSource(scope: scope, id: id) {
-                                controller.update(location: drag.location)
+                                controller.update(location: controller.gestureLocation(scope: scope, id: id, fallback: drag.location))
                             }
                         } else if !controller.isSource(scope: scope, id: id),
                                   let frame = controller.registeredFrame(scope: scope, id: id) {
                             beginDrag(content: content,
-                                      location: CGPoint(x: frame.midX, y: frame.midY),
+                                      location: controller.gestureLocation(scope: scope, id: id, fallback: CGPoint(x: frame.midX, y: frame.midY)),
                                       controller: controller, settings: settings)
                         }
                     }
                     .onEnded { phase in
                         guard controller.isSource(scope: scope, id: id) else { return }
                         if case .second(true, let drag) = phase, let drag {
-                            controller.update(location: drag.location)
+                            controller.update(location: controller.gestureLocation(scope: scope, id: id, fallback: drag.location))
                         }
                         controller.finish(settings: settings)
                     }

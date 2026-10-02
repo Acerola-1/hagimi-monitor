@@ -171,9 +171,27 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     var resetForHiddenPanel: (() -> Void)?
     var registry: PanelDimensionRegistry
     weak var submissionAdapter: PanelWindowSubmissionAdapter?
-    var isAnimating: Bool { displayLinkBox != nil }
+    var isAnimating: Bool { usesNativeMotion ? nativeLayer.isAnimating : displayLinkBox != nil }
+    lazy var nativeLayer: NativePanelLayerMotion = {
+        let layer = NativePanelLayerMotion(registry: registry)
+        layer.onCommit = { [weak self] frame, phases in
+            guard let self else { return }
+            self.currentFrame = frame
+            for (id, presentation) in self.presentations {
+                presentation.sample = PanelDetailPresentation.Sample(revealHeight: frame.revealHeights[id] ?? 0,
+                    opacity: Double(phases[id] ?? 0))
+            }
+            self.submissionAdapter?.geometryDidPrepare()
+        }
+        layer.onStart = { [weak self] in self?.onMotionFrame?() }
+        return layer
+    }()
 
-    init(registry: PanelDimensionRegistry, adapter: PanelWindowSubmissionAdapter? = nil) {
+    /// 解析模型夹具可关闭原生提交；正式宿主使用系统图层运动。
+    private let usesNativeMotion: Bool
+
+    init(registry: PanelDimensionRegistry, adapter: PanelWindowSubmissionAdapter? = nil, usesNativeMotion: Bool = true) {
+        self.usesNativeMotion = usesNativeMotion
         self.registry = registry
         submissionAdapter = adapter
         super.init()
@@ -191,6 +209,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
 
     /// 等待完整版本就绪，再以可见点数和速度承接正在运动的分区。
     func geometryDidChange() {
+        if usesNativeMotion { nativeLayer.geometryDidChange(); return }
         guard let next = registry.makeSnapshot(), next != snapshot else { return }
         let previous = snapshot
         let now = max(CACurrentMediaTime(), lastSampleTime)
@@ -240,6 +259,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
 
     func retarget(targets: [String: CGFloat], at time: CFTimeInterval,
                   reduceMotion: Bool = false, onSettle: (() -> Void)? = nil) {
+        if usesNativeMotion { nativeLayer.retarget(targets, instantly: reduceMotion); return }
         let targets = targetsIncludingCollapsedChildren(targets)
         desiredTargets.merge(targets) { _, new in new }
         if isSuspended {
@@ -306,6 +326,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     }
 
     func setInstantly(targets: [String: CGFloat]) {
+        if usesNativeMotion { nativeLayer.retarget(targets, instantly: true); return }
         let targets = targetsIncludingCollapsedChildren(targets)
         desiredTargets.merge(targets) { _, new in new }
         let now = max(CACurrentMediaTime(), lastSampleTime)
@@ -318,6 +339,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     }
 
     func cancel() {
+        if usesNativeMotion { nativeLayer.cancel(); return }
         pendingTargets.removeAll()
         autoRevealID = nil
         scrollTrack = nil
@@ -326,6 +348,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
 
     /// 淡出期间保持最后呈现的几何，隐藏后的尺寸登记不再写入窗口。
     func suspend() {
+        if usesNativeMotion { nativeLayer.suspend(); isSuspended = true; return }
         isSuspended = true
         stopDisplayLink()
         onSettle = nil
@@ -333,6 +356,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     }
 
     func resume() {
+        if usesNativeMotion { isSuspended = false; nativeLayer.resume(); return }
         guard isSuspended else { return }
         isSuspended = false
         let now = max(CACurrentMediaTime(), lastSampleTime)
@@ -354,6 +378,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
 
     /// 原生滚动开始时从实际偏移接管，卡片轨迹保持运行。
     func userScrollBegan(at offset: CGFloat) {
+        if usesNativeMotion { nativeLayer.userScrollBegan(at: offset); return }
         isUserScrolling = true
         autoRevealID = nil
         scrollTrack = nil
@@ -361,6 +386,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     }
 
     func updateUserScroll(_ offset: CGFloat) {
+        if usesNativeMotion { nativeLayer.updateUserScroll(offset); return }
         guard isUserScrolling, let frame = currentFrame else { return }
         scrollOffset = PanelScrollCoordinator.clampUserOffset(offset: offset, frame: frame)
         if frame.scrollOffset != scrollOffset {
@@ -371,6 +397,7 @@ final class SingleHostMotionCoordinator: NSObject, ObservableObject {
     }
 
     func userScrollEnded(at offset: CGFloat) {
+        if usesNativeMotion { nativeLayer.userScrollEnded(at: offset); return }
         guard isUserScrolling else { return }
         updateUserScroll(offset)
         isUserScrolling = false

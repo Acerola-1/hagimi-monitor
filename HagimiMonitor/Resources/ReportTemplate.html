@@ -1077,6 +1077,19 @@
     $("meta-chips").appendChild(c);
   });
 
+  // 顶栏元信息在打印时保留范围与来源限制；屏幕上也可见，无需额外布局。
+  let printScopeChip = null;
+  function updatePrintScope(rangeText) {
+    const scope = DATA.meta && DATA.meta.scopeNote;
+    const text = scope ? (rangeText + " · " + scope) : rangeText;
+    if (!printScopeChip) {
+      printScopeChip = el("span", "chip");
+      printScopeChip.id = "print-scope";
+      $("meta-chips").appendChild(printScopeChip);
+    }
+    printScopeChip.textContent = text;
+  }
+
   $("t-health").textContent = I.healthTitle;
   $("t-health-trend").textContent = I.healthTrend;
   $("t-overview").textContent = I.secOverview;
@@ -1527,11 +1540,24 @@
       const isOngoing = episodes.some((e) => e.state === "ongoing");
       const iconData = episodes.find((e) => e.iconBase64)?.iconBase64;
 
-      const maxDur = Math.max(...episodes.map(e => e.durationMinutes || 0));
+      // durationSeconds 是有效高占用秒数（不是采样次数）。展示成分钟,
+      // 不足一分钟按秒显示,避免把 30 秒的观测写成「1 分钟」。
+      function formatDuration(seconds) {
+        const s = Math.max(0, Number(seconds) || 0);
+        if (s < 60) return isZh ? "不足 1 分钟" : "< 1 min";
+        const minutes = Math.round(s / 60);
+        if (minutes < 60) return isZh ? minutes + " 分钟" : minutes + " min";
+        const h = Math.floor(minutes / 60);
+        const m = minutes % 60;
+        return isZh
+          ? (m > 0 ? h + " 小时 " + m + " 分钟" : h + " 小时")
+          : (m > 0 ? h + "h " + m + "m" : h + "h");
+      }
+      const maxDur = Math.max(...episodes.map(e => e.durationSeconds || 0));
       const validStarts = episodes.map(e => e.startedAt || 0).filter(Boolean);
       const earliestStart = validStarts.length ? Math.min(...validStarts) : 0;
       const headStartStr = earliestStart ? formatHM(earliestStart) : "";
-      const maxDurText = isZh ? "最长持续 " + maxDur + " 分钟" : "Max duration " + maxDur + " min";
+      const maxDurText = (isZh ? "最长持续 " : "Max duration ") + formatDuration(maxDur);
       let headTimeSub = maxDurText;
       if (headStartStr) {
         const prefix = isZh
@@ -1540,13 +1566,28 @@
         headTimeSub = prefix + headTimeSub;
       }
 
-      function formatMem(mb) {
-        if (!mb) return "0 MB";
-        if (mb >= 1024) {
-          const gb = Math.round(mb / 102.4) / 10;
-          return (gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)) + " GB";
+      // 应用告警的原始值是字节(内存)与字节每秒(网络)，与设置页共享同一单位合同:
+      // 容量用二进制 GiB/MiB，速率用十进制 MB/s。此前这里按 MiB 处理内存，
+      // 一旦上层改用原始字节就会差 6 个数量级。
+      function formatCapacity(bytes) {
+        if (!bytes) return "0 MiB";
+        if (bytes >= 1073741824) {
+          const gib = Math.round(bytes / 107374182.4) / 10;
+          return (gib % 1 === 0 ? gib.toFixed(0) : gib.toFixed(1)) + " GiB";
         }
-        return Math.round(mb) + " MB";
+        return Math.round(bytes / 1048576) + " MiB";
+      }
+      function formatRateDecimal(bytesPerSecond) {
+        if (!bytesPerSecond) return "0 B/s";
+        if (bytesPerSecond >= 1e9) return (Math.round(bytesPerSecond / 1e8) / 10) + " GB/s";
+        if (bytesPerSecond >= 1e6) return (Math.round(bytesPerSecond / 1e5) / 10) + " MB/s";
+        if (bytesPerSecond >= 1e3) return (Math.round(bytesPerSecond / 1e2) / 10) + " KB/s";
+        return Math.round(bytesPerSecond) + " B/s";
+      }
+      function formatApplicationUsage(metric, value) {
+        if (metric === "memory") return formatCapacity(value);
+        if (metric === "network") return formatRateDecimal(value);
+        return value + "%";
       }
 
       const iconHTML = iconData
@@ -1564,49 +1605,47 @@
       let metricsHTML = "";
       episodes.forEach(alert => {
         const metricLabel = escHtml(alert.metric ? alert.metric.toUpperCase() : "LOAD");
-        const usageStr = alert.metric === "memory" ? formatMem(alert.avgUsage) : alert.avgUsage + "%";
-        const peakStr = alert.metric === "memory" ? formatMem(alert.peakUsage) : alert.peakUsage + "%";
+        const usageStr = formatApplicationUsage(alert.metric, alert.avgUsage);
+        const peakStr = formatApplicationUsage(alert.metric, alert.peakUsage);
 
         const startStr = formatHM(alert.startedAt);
         let timeRange = "";
         if (startStr) {
           if (alert.state === "ongoing") {
             timeRange = isZh
-              ? startStr + " 至今 · 已持续 " + alert.durationMinutes + " 分钟"
-              : "Since " + startStr + " · " + alert.durationMinutes + " min";
+              ? startStr + " 至今 · 已持续 " + formatDuration(alert.durationSeconds)
+              : "Since " + startStr + " · " + formatDuration(alert.durationSeconds);
           } else {
             const endStr = formatHM(alert.endedAt || alert.lastSeenAt);
             timeRange = isZh
-              ? startStr + " - " + endStr + " · 持续 " + alert.durationMinutes + " 分钟"
-              : startStr + " - " + endStr + " · " + alert.durationMinutes + " min";
+              ? startStr + " - " + endStr + " · 持续 " + formatDuration(alert.durationSeconds)
+              : startStr + " - " + endStr + " · " + formatDuration(alert.durationSeconds);
           }
         } else {
-          timeRange = isZh ? "持续 " + alert.durationMinutes + " 分钟" : alert.durationMinutes + " min";
+          timeRange = (isZh ? "持续 " : "Duration ") + formatDuration(alert.durationSeconds);
         }
 
-        let t1Name = "30-50%", t2Name = "50-80%", t3Name = "80%+";
-        if (alert.metric === "gpu") {
-          t1Name = "20-40%"; t2Name = "40-70%"; t3Name = "70%+";
-        } else if (alert.metric === "memory") {
-          t1Name = "2-4 GB"; t2Name = "4-8 GB"; t3Name = "8 GB+";
-        } else if (alert.metric === "network") {
-          t1Name = "10-30 MB/s"; t2Name = "30-80 MB/s"; t3Name = "80 MB/s+";
-        }
-        const t1 = alert.tier1 || 0, t2 = alert.tier2 || 0, t3 = alert.tier3 || 0;
+        // 档位标签来自 Swift 侧的指标定义，模板不再硬编码边界数字：
+        // 此前这里写的是「2-4 GB / 4-8 GB / 8 GB+」，与真实的 1/2/4 GiB 边界矛盾。
+        const bandNames = alert.bandLabels || [];
+        const t1Name = bandNames[0] || "—", t2Name = bandNames[1] || "—", t3Name = bandNames[2] || "—";
+        // tier*Seconds 是有效覆盖秒数，不是观测次数；展示成时长。
+        const t1 = alert.tier1Seconds || 0, t2 = alert.tier2Seconds || 0, t3 = alert.tier3Seconds || 0;
         const totalT = Math.max(1, t1 + t2 + t3);
+        const tierTip = (name, seconds) => name + ': ' + formatDuration(seconds);
 
         metricsHTML +=
           '<div class="hl-metric-item">' +
             '<div class="hl-sub">' + sustainedWord + ' <strong>' + metricLabel + '</strong> ' + avgWord + ' <strong>' + usageStr + '</strong> (' + peakWord + ' ' + peakStr + ') · <span style="font-feature-settings:\'tnum\' 1;">' + timeRange + '</span></div>' +
             '<div class="hl-dist-bar">' +
-              (t1 > 0 ? '<div class="hl-seg hl-t1" style="width:' + (t1 / totalT * 100).toFixed(1) + '%" title="' + t1Name + ': ' + t1 + minUnit + '"></div>' : '') +
-              (t2 > 0 ? '<div class="hl-seg hl-t2" style="width:' + (t2 / totalT * 100).toFixed(1) + '%" title="' + t2Name + ': ' + t2 + minUnit + '"></div>' : '') +
-              (t3 > 0 ? '<div class="hl-seg hl-t3" style="width:' + (t3 / totalT * 100).toFixed(1) + '%" title="' + t3Name + ': ' + t3 + minUnit + '"></div>' : '') +
+              (t1 > 0 ? '<div class="hl-seg hl-t1" style="width:' + (t1 / totalT * 100).toFixed(1) + '%" title="' + tierTip(t1Name, t1) + '"></div>' : '') +
+              (t2 > 0 ? '<div class="hl-seg hl-t2" style="width:' + (t2 / totalT * 100).toFixed(1) + '%" title="' + tierTip(t2Name, t2) + '"></div>' : '') +
+              (t3 > 0 ? '<div class="hl-seg hl-t3" style="width:' + (t3 / totalT * 100).toFixed(1) + '%" title="' + tierTip(t3Name, t3) + '"></div>' : '') +
             '</div>' +
             '<div class="hl-dist-labels">' +
-              '<span class="hl-chip hl-chip-t1">' + t1Name + ': <strong>' + t1 + minUnit + '</strong></span>' +
-              '<span class="hl-chip hl-chip-t2">' + t2Name + ': <strong>' + t2 + minUnit + '</strong></span>' +
-              '<span class="hl-chip hl-chip-t3">' + t3Name + ': <strong>' + t3 + minUnit + '</strong></span>' +
+              (t1 > 0 ? '<span class="hl-chip hl-chip-t1">' + t1Name + ': <strong>' + formatDuration(t1) + '</strong></span>' : '') +
+              (t2 > 0 ? '<span class="hl-chip hl-chip-t2">' + t2Name + ': <strong>' + formatDuration(t2) + '</strong></span>' : '') +
+              (t3 > 0 ? '<span class="hl-chip hl-chip-t3">' + t3Name + ': <strong>' + formatDuration(t3) + '</strong></span>' : '') +
             '</div>' +
           '</div>';
       });
@@ -1802,14 +1841,42 @@
   // ── 范围与粒度 ────────────────────────────────────────────────
   // 时间档位:今日 / 近 7 天 / 近 30 天 / 近一年(自选日期另走日期控件)。
   // 跨度决定取哪一层数据(见 pickSource):今日走分钟,周/月/年走小时或日。
+  // 范围边界来自 Swift 侧下发的自然日边界，与本机设置、原生报表保持同一起点。
+  // 此前这里用 Date.now() - N * DAY，是滚动小时窗口，与「近 7 日」的自然日语义不一致。
+  const RANGE_BOUNDS = DATA.rangeBounds || {};
+  function rangeBounds(key, fallback) {
+    const bounds = RANGE_BOUNDS[key];
+    if (!Array.isArray(bounds) || bounds.length !== 2) return fallback();
+    // 起止都按本地自然日与快照时刻解释：起点是下发值，终点不超过快照生成时刻。
+    return [new Date(bounds[0] * 1000), new Date(Math.min(bounds[1] * 1000, Date.now()))];
+  }
   const RANGES = [
-    ["today", I.rToday, () => [startOfToday, Date.now()]],
-    ["week", I.rWeek, () => [Date.now() - 7 * DAY, Date.now()]],
-    ["month", I.rMonth, () => [Date.now() - 30 * DAY, Date.now()]],
-    ["year", I.rYear, () => [Date.now() - 365 * DAY, Date.now()]],
+    ["today", I.rToday, () => rangeBounds("today", () => [startOfToday, Date.now()])],
+    ["week", I.rWeek, () => rangeBounds("week", () => [startOfToday, Date.now()])],
+    ["month", I.rMonth, () => rangeBounds("month", () => [startOfToday, Date.now()])],
+    ["year", I.rYear, () => rangeBounds("year", () => [startOfToday, Date.now()])],
   ];
   let currentRange = "today";
   let custom = null;
+
+  // 导出时由 Swift 侧下发用户当前提交的范围：首次应用一次，之后仍可自由切换。
+  // 没有下发时保持模板默认，不做猜测。
+  let COMMITTED_RANGE = DATA.committedRange || {};
+  let committedApplied = false;
+  // 打印与元信息里使用的日期格式：只到日，避免纸面上出现无意义的时分。
+  function fmtDay(d) {
+    return new Intl.DateTimeFormat(DATA.lang || navigator.language,
+      { year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  }
+  function applyCommittedRangeOnce() {
+    if (committedApplied) return;
+    committedApplied = true;
+    const from = Number(COMMITTED_RANGE.from);
+    const to = Number(COMMITTED_RANGE.to);
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return;
+    custom = [new Date(from * 1000), new Date(to * 1000)];
+    currentRange = "custom";
+  }
 
   RANGES.forEach(([key, label]) => {
     const b = el("button");
@@ -2729,9 +2796,18 @@
     $("sec-heatmap").hidden = isToday;
     $("sec-net-daily").hidden = isToday;
     $("sec-disk-daily").hidden = isToday;
-    // 时间栏左侧的当前档位说明:自选时显示范围控件本身的文案
-    $("range-title").textContent = I.rangeLabel + " · "
-      + (custom ? I.selectRange : (RANGES.find(([k]) => k === currentRange) || [null, ""])[1]);
+    // 时间栏左侧的当前档位说明:自选时显示范围控件本身的文案。
+    // 打开导出文件时先落在用户提交的范围（committedRange），而不是回退到今日默认值。
+    applyCommittedRangeOnce();
+    // 自选/导出提交的范围直接显示实际日期跨度，比「选择日期范围」这种控件文案
+    // 更能说明这份报表对应哪段时间。
+    const rangeText = I.rangeLabel + " · " + (custom
+      ? fmtDay(custom[0]) + " – " + fmtDay(custom[1])
+      : (RANGES.find(([k]) => k === currentRange) || [null, ""])[1]);
+    $("range-title").textContent = rangeText;
+    // 打印/PDF 上控件被隐藏，范围说明必须留在纸上：把当前范围与来源限制
+    // 写进顶栏元信息，保证纸面能看出这份报表对应哪段时间、数据有何限制。
+    updatePrintScope(rangeText);
     let from, to;
     if (custom) {
       [from, to] = custom;

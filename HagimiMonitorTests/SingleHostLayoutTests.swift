@@ -4,6 +4,27 @@ import SwiftUI
 import Testing
 @testable import HagimiMonitorDirect
 
+/// 有限几何模型夹具保留自然提议与揭示高度的独立性；真实图层宿主由 NativePanelHostingTests 验证。
+private struct ReferenceViewportLayout: Layout {
+    let height: CGFloat
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        CGSize(width: proposal.width ?? 0, height: max(0, height))
+    }
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, anchor: .topLeading,
+                             proposal: ProposedViewSize(width: bounds.width, height: nil))
+    }
+}
+
+private struct ReferenceDetailViewport<Content: View>: View {
+    @ObservedObject var presentation: PanelDetailPresentation
+    let content: Content
+    var body: some View {
+        ReferenceViewportLayout(height: presentation.sample.revealHeight) { content }
+            .clipped()
+    }
+}
+
 struct SingleHostLayoutTests {
     @MainActor private final class HeaderFixtureState: ObservableObject {
         @Published var hasChart = false
@@ -141,8 +162,8 @@ struct SingleHostLayoutTests {
         let box = ProposalProbeLayout.ProbeBox()
         let presentation = PanelDetailPresentation()
         let content = ProposalProbeLayout(box: box) { Color.red }
-        let root = SingleHostDetail(id: "archive", isExpanded: true, available: true,
-            content: content, presentation: presentation)
+        let root = ReferenceDetailViewport(presentation: presentation,
+            content: PanelNaturalContent(label: "archive", content: content))
             .padding(.leading, 28)
             .padding(.horizontal, 10)
             .frame(width: 328, alignment: .topLeading)
@@ -175,10 +196,13 @@ struct SingleHostLayoutTests {
         let archive = ProposalProbeLayout.ProbeBox()
         let presentation = PanelDetailPresentation()
         presentation.sample = .init(revealHeight: 167, opacity: 0)
-        let root = SingleHostReplacement(id: "archive", isExpanded: false, measurementKey: "two-leaves",
-            presentation: presentation,
-            collapsed: ProposalProbeLayout(box: controls) { Color.clear }.padding(.leading, 22).padding(.top, 7),
-            expanded: ProposalProbeLayout(box: archive) { Color.clear }.padding(.leading, 22).padding(.top, 7))
+        let root = ReferenceDetailViewport(presentation: presentation, content:
+            ZStack(alignment: .topLeading) {
+                PanelNaturalContent(label: "controls", measurementKey: "two-leaves", content:
+                    ProposalProbeLayout(box: controls) { Color.clear }.padding(.leading, 22).padding(.top, 7))
+                PanelNaturalContent(label: "archive", measurementKey: "two-leaves", content:
+                    ProposalProbeLayout(box: archive) { Color.clear }.padding(.leading, 22).padding(.top, 7))
+            })
         let hosting = NSHostingView(rootView: root)
         hosting.sizingOptions = []
         hosting.frame = CGRect(x: 0, y: 0, width: 280, height: 167)

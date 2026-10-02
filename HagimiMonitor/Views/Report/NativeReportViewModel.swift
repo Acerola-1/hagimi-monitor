@@ -231,9 +231,24 @@ final class NativeReportViewModel: ObservableObject {
     @Published private(set) var snapshot: ReportSnapshot?
     @Published private(set) var rangeModel: ReportActiveRangeModel?
     @Published private(set) var isLoading: Bool = true
+    /// 硬件清单仍在后台采集。统计已可用，只有依赖硬件事实的区域需要显示加载态。
+    @Published private(set) var isHardwareLoading: Bool = false
     @Published private(set) var isAggregating: Bool = false
     /// 应用排行：是否包含系统应用（默认开启，跨模块切换保持）
     @Published var includeSystemApps: Bool = true
+    /// 应用排行的搜索、排序与展开状态，跨模块切换保持。
+    @Published var appSearchText: String = ""
+    @Published var appSortOrder: ReportAppRankingFilter.SortOrder = .value
+    @Published var appsShowsAll: Bool = false
+    /// 展开完整列表后当前渲染到多少条；按批增长，避免一次渲染数百行。
+    @Published var appsRenderLimit: Int = ReportAppRankingFilter.renderBatch
+    /// 深链目标应用与指标；用于应用页默认选中对应排行分类并定位应用行。
+    @Published private(set) var focusedAppKey: String?
+    @Published private(set) var focusedMetric: ProcessAlertEpisode.Metric?
+    /// 深链事件；目标事件已被删除时用于展示「记录不存在」说明。
+    @Published private(set) var focusedEventID: UUID?
+    /// 深链事件在快照中是否确实存在；用于区分「待加载」与「已确认为缺失」。
+    @Published private(set) var focusedEventIsMissing = false
 
     /// 判定当前选定范围是否为单日跨度（优先取已算好的 rangeModel，加载期回退取 selectedRange 的起止计算）
     var isSingleDaySelected: Bool {
@@ -258,6 +273,32 @@ final class NativeReportViewModel: ObservableObject {
 
     /// 加载完整报表快照，可在携带锚点时直接跳转对应模块。
     func load(anchor: StatisticsReportAnchor? = nil) {
+        apply(StatisticsReportContext(anchor: anchor))
+    }
+
+    /// 应用一次完整打开上下文：更新时间范围、模块、应用与指标选择，并同步重新加载快照。
+    func apply(_ context: StatisticsReportContext) {
+        if let range = context.range {
+            selectedRange = range.reportTimeRange
+        }
+        switch context.anchor {
+        case .memory: selectedModule = .memory
+        case .thermal: selectedModule = .thermal
+        case .apps: selectedModule = .apps
+        case nil: break
+        }
+        if context.appKey != nil {
+            selectedModule = .apps
+        }
+        focusedAppKey = context.appKey
+        focusedMetric = context.metric
+        focusedEventID = context.eventID
+        focusedEventIsMissing = false
+        reload()
+    }
+
+    /// 以当前上下文重新加载（不清除深链目标）。
+    private func reload() {
         guard let recorder, !isClosed else {
             self.isLoading = false
             return
@@ -266,14 +307,6 @@ final class NativeReportViewModel: ObservableObject {
         isLoading = true
         let requestID = UUID()
         self.currentRequestID = requestID
-
-        if let anchor {
-            switch anchor {
-            case .memory: selectedModule = .memory
-            case .thermal: selectedModule = .thermal
-            case .apps: selectedModule = .apps
-            }
-        }
 
         let now = Date()
         let recordDays = recorder.recordDays
@@ -291,14 +324,11 @@ final class NativeReportViewModel: ObservableObject {
                 await MainActor.run {
                     guard let self, self.currentRequestID == requestID, !self.isClosed else { return }
                     self.isLoading = false
+                    self.isHardwareLoading = false
                 }
                 return
             }
             guard !Task.isCancelled else { return }
-
-            // 硬件清单采集 (约 2 秒耗时操作，务必在后台执行)
-            let hardware = HardwareInventoryReader().capture(
-                screenSnapshots: screenSnapshots)
 
             let meta = ReportMeta(
                 deviceName: StandaloneHTMLReportExporter.deviceName(),
@@ -309,24 +339,24 @@ final class NativeReportViewModel: ObservableObject {
                 isDirect: StandaloneHTMLReportExporter.isDirect
             )
 
-            let fullSnapshot = ReportSnapshot(
+            // 第一阶段：先发布统计数据，硬件清单在后台并行采集后补充。
+            let statisticsSnapshot = ReportSnapshot(
                 capturedAt: now,
                 meta: meta,
                 minutes: input.minutes,
                 hours: input.hours,
                 days: input.days,
                 process: input.process,
-                hardware: hardware,
+                hardware: nil,
                 systemSleepIntervals: input.systemSleepIntervals
             )
 
-            // 硬件电池与物理风扇支持检测
             let hasBattery = Self.checkHardwareBattery()
             let hasFans = Self.checkHardwareFans(model: meta.modelName)
 
-            // R02: 使用请求中的 targetRange 计算初次聚合，禁止用 .today 强行覆盖用户选中范围
-            let initialRangeModel = ReportDataAggregator.aggregate(
-                snapshot: fullSnapshot,
+            // 使用请求中的 targetRange 计算初次聚合。
+            let statisticsModel = ReportDataAggregator.aggregate(
+                snapshot: statisticsSnapshot,
                 range: targetRange,
                 now: now,
                 hardwareHasBattery: hasBattery,
@@ -338,15 +368,77 @@ final class NativeReportViewModel: ObservableObject {
 
             await MainActor.run {
                 guard let self, self.currentRequestID == requestID, !self.isClosed else { return }
-                self.snapshot = fullSnapshot
-                self.rangeModel = initialRangeModel
+                self.snapshot = statisticsSnapshot
+                self.rangeModel = statisticsModel
                 self.isLoading = false
+                self.isHardwareLoading = true
+                self.resolveFocusedEvent(in: statisticsModel)
                 self.liveSource.start()
+            }
+
+            // 第二阶段：硬件清单独立补充。失败只影响硬件区，不撤销已发布的统计。
+            let hardware = HardwareInventoryReader().capture(
+                screenSnapshots: screenSnapshots)
+
+            guard !Task.isCancelled else { return }
+
+            await MainActor.run {
+                guard let self, self.currentRequestID == requestID, !self.isClosed else { return }
+                let enriched = ReportSnapshot(
+                    capturedAt: statisticsSnapshot.capturedAt,
+                    meta: statisticsSnapshot.meta,
+                    minutes: statisticsSnapshot.minutes,
+                    hours: statisticsSnapshot.hours,
+                    days: statisticsSnapshot.days,
+                    process: statisticsSnapshot.process,
+                    hardware: hardware,
+                    systemSleepIntervals: statisticsSnapshot.systemSleepIntervals
+                )
+                let enrichedModel = ReportDataAggregator.aggregate(
+                    snapshot: enriched,
+                    range: targetRange,
+                    now: now,
+                    hardwareHasBattery: hasBattery,
+                    hardwareHasFans: hasFans,
+                    fanSensorAvailable: meta.isDirect
+                )
+                self.snapshot = enriched
+                self.rangeModel = enrichedModel
+                self.isHardwareLoading = false
+                self.resolveFocusedEvent(in: enrichedModel)
             }
         }
     }
 
-    /// 切换时间范围并重新计算聚合模型 (R02: 建立版本追踪)
+    /// 当前提交范围的导出上下文：标签与右开区间。
+    ///
+    /// 供打印与 HTML 导出使用，保证离线文件打开时先落在用户正在看的时间段，
+    /// 而不是回退到默认的今日。
+    func committedExportRange() -> (label: String, from: Date, to: Date)? {
+        guard let model = rangeModel else { return nil }
+        return (model.range.label, model.from, model.to)
+    }
+
+    /// 刷新当前报表快照，保留范围与深链目标（供「重新载入报表」使用）。
+    func refreshCurrentReport() {
+        reload()
+    }
+
+    /// 深链目标事件是否仍存在于已提交快照中。目标被删除时页面需要明确说明，
+    /// 而不是静默地把用户切到别的应用或事件。
+    private func resolveFocusedEvent(in model: ReportActiveRangeModel) {
+        guard let focusedEventID else {
+            focusedEventIsMissing = false
+            return
+        }
+        // 在分组的所有 episode 中匹配目标事件 ID。
+        let exists = model.apps.highLoadAlerts.contains { group in
+            group.episodes.contains { $0.id == focusedEventID }
+        }
+        focusedEventIsMissing = !exists
+    }
+
+    /// 切换时间范围并重新计算聚合模型。
     func selectRange(_ range: ReportTimeRange) {
         guard selectedRange != range || rangeModel == nil else { return }
         selectedRange = range

@@ -16,7 +16,7 @@ final class PressureAlertCenter: ObservableObject {
     static let shared = PressureAlertCenter()
 
     /// 通知类别:点击通知据此路由到「数据统计」页(见 `AlertNotificationDelegate`)。
-    static let notificationCategory = "hagimi-pressure-alert"
+    nonisolated static let notificationCategory = "hagimi-pressure-alert"
 
     /// 严重档持续门槛,兼挡两类误报:秒级瞬时抖动,以及睡眠唤醒后短时抬高的档位。
     static let notificationSustain: TimeInterval = 60

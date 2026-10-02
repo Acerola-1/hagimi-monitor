@@ -838,12 +838,12 @@ struct StatisticsDisplayFormatTests {
     }
 
     @Test func bytesKeepOnlyMeaningfulDecimals() {
-        #expect(StatisticsDisplayFormat.bytes(0) == "0 B")
-        #expect(StatisticsDisplayFormat.bytes(512) == "512 B")
-        #expect(StatisticsDisplayFormat.bytes(1.5e9) == "1.5 GB")
-        #expect(StatisticsDisplayFormat.bytes(124.07e9) == "124 GB")
-        #expect(StatisticsDisplayFormat.bytes(9.87e6) == "9.9 MB")
-        #expect(StatisticsDisplayFormat.bytes(2.5e12) == "2.5 TB")
+        #expect(StatisticsDisplayFormat.decimalVolume(0) == "0 B")
+        #expect(StatisticsDisplayFormat.decimalVolume(512) == "512 B")
+        #expect(StatisticsDisplayFormat.decimalVolume(1.5e9) == "1.5 GB")
+        #expect(StatisticsDisplayFormat.decimalVolume(124.07e9) == "124 GB")
+        #expect(StatisticsDisplayFormat.decimalVolume(9.87e6) == "9.9 MB")
+        #expect(StatisticsDisplayFormat.decimalVolume(2.5e12) == "2.5 TB")
     }
 }
 
