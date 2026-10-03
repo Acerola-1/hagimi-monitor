@@ -145,19 +145,20 @@ nonisolated final class StorageSampler: MonitorSampler, @unchecked Sendable {
     }
 
     private func detectExternalVolumes() -> [ExternalVolume] {
-        let volumeKeys: [URLResourceKey] = [.volumeTotalCapacityKey, .volumeAvailableCapacityKey, .volumeAvailableCapacityForImportantUsageKey, .volumeNameKey, .volumeIsInternalKey, .volumeIsEjectableKey]
-        guard let volumeURLs = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: volumeKeys, options: []) else {
+        // 可回收空间查询会访问系统缓存服务，先排除内置卷，再读取外置卷容量。
+        guard let volumeURLs = FileManager.default.mountedVolumeURLs(includingResourceValuesForKeys: [.volumeIsInternalKey], options: []) else {
             return []
         }
 
+        let volumeKeys: Set<URLResourceKey> = [.volumeTotalCapacityKey, .volumeAvailableCapacityKey, .volumeAvailableCapacityForImportantUsageKey, .volumeNameKey]
         var volumes: [ExternalVolume] = []
         for url in volumeURLs {
-            guard let values = try? url.resourceValues(forKeys: Set(volumeKeys)),
+            guard let identity = try? url.resourceValues(forKeys: [.volumeIsInternalKey]),
+                  identity.volumeIsInternal == false else { continue }
+            guard let values = try? url.resourceValues(forKeys: volumeKeys),
                   let totalCapacity = values.volumeTotalCapacity,
                   let availableCapacity = values.volumeAvailableCapacity,
-                  let name = values.volumeName,
-                  // 用 volumeIsInternalKey == false 检测外置卷，比 removable 更准确
-                  values.volumeIsInternal == false else {
+                  let name = values.volumeName else {
                 continue
             }
 
