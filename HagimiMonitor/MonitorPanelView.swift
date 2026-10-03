@@ -934,8 +934,10 @@ private struct MetricGlassRow: View, Equatable {
 
     private var detailMeasurementKey: String {
         [details.map(\.name).joined(separator: ","),
+         metricOrder.joined(separator: ","),
          "\(module.cpuCoreDetail?.cores.count ?? 0)",
          "\(showCPUProcesses):\(min(5, topCPUProcesses.count))",
+         "\(topCPUProcesses.contains(where: \.translated))",
          "\(showGPUProcesses):\(min(5, topGPUProcesses.count))",
          "\(showMemoryProcesses):\(min(5, topMemoryProcesses.count))",
          "\(showDiskProcesses):\(min(5, topDiskProcesses.count))",
@@ -1989,7 +1991,15 @@ private struct BatteryGlassRow: View, Equatable {
 
     private var detailMeasurementKey: String {
         [tabMetrics(for: activeTab).map(\.name).joined(separator: ","),
+         (metricOrders[activeTab] ?? []).joined(separator: ","),
+         availableTabs.map(\.rawValue).joined(separator: ","),
          "\(showPowerFlow)",
+         "\(numericValue("power") != nil)",
+         "\(module.processEnergy?.shares.count ?? 0)",
+         "\(module.isPlaceholder)|\(rawValue("status"))",
+         PanelOrderCatalog.supplyIDs.filter { name in
+             module.metrics.contains { $0.name == name && $0.value != "--" }
+         }.joined(separator: ","),
          activeTab.rawValue].joined(separator: "|")
     }
 

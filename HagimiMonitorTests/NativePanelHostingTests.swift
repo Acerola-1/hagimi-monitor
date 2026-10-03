@@ -7,6 +7,62 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct NativePanelHostingTests {
+    nonisolated private final class MeasurementProbe: @unchecked Sendable {
+        var placedValues: [Int] = []
+    }
+
+    private struct MeasuredDetail: Layout {
+        let probe: MeasurementProbe
+        let height: CGFloat
+        let value: Int
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            return CGSize(width: proposal.width ?? 300, height: height + (proposal.width ?? 300) / 10)
+        }
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            probe.placedValues.append(value)
+            subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(bounds.size))
+        }
+    }
+
+    private struct CachedDetail: View {
+        let probe: MeasurementProbe
+        let height: CGFloat
+        let value: Int
+        let key: String
+        var width: CGFloat = 300
+        var body: some View {
+            PanelNaturalContent(label: "fixture", measurementKey: key,
+                content: MeasuredDetail(probe: probe, height: height, value: value) { Text("\(value)") })
+                .frame(width: width)
+        }
+    }
+
+    @Test func naturalSizeTracksStructureAndWidthWhilePlacingNewReadings() {
+        let probe = MeasurementProbe()
+        let host = NSHostingView(rootView: CachedDetail(probe: probe, height: 100, value: 0, key: "one"))
+        host.frame.size = CGSize(width: 300, height: 500)
+        #expect(abs(host.fittingSize.height - 130) < 0.01)
+        for value in 1...8 {
+            host.rootView = CachedDetail(probe: probe, height: 100, value: value, key: "one")
+            host.layoutSubtreeIfNeeded()
+            #expect(abs(host.fittingSize.height - 130) < 0.01)
+            #expect(probe.placedValues.last == value)
+        }
+        host.rootView = CachedDetail(probe: probe, height: 200, value: 9, key: "two")
+        #expect(abs(host.fittingSize.height - 230) < 0.01)
+        host.rootView = CachedDetail(probe: probe, height: 200, value: 9, key: "two", width: 200)
+        #expect(abs(host.fittingSize.height - 220) < 0.01)
+    }
+
+    @Test func unregisteredNaturalSizeStillTracksContentChanges() {
+        let probe = MeasurementProbe()
+        let host = NSHostingView(rootView: CachedDetail(probe: probe, height: 100, value: 0, key: ""))
+        host.frame.size = CGSize(width: 300, height: 500)
+        #expect(abs(host.fittingSize.height - 130) < 0.01)
+        host.rootView = CachedDetail(probe: probe, height: 200, value: 1, key: "")
+        #expect(abs(host.fittingSize.height - 230) < 0.01)
+    }
+
     @Test func pageGrowthKeepsReservedBackingAndExistingMaskPlan() async throws {
         let node = NativePanelContentHost()
         node.minimumAllocatedHeight = 600

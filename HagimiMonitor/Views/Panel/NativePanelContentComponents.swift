@@ -90,7 +90,8 @@ struct PanelNaturalContentLayout: Layout {
     }
     func makeCache(subviews: Subviews) -> Cache { Cache() }
     func updateCache(_ cache: inout Cache, subviews: Subviews) {
-        cache.key = nil
+        // 未登记尺寸依赖的内容仍随更新失效；有结构键的内容复用自然尺寸。
+        if measurementKey.isEmpty { cache.key = nil }
     }
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {
         let width = proposal.width ?? cache.width ?? 328
@@ -118,12 +119,14 @@ struct PanelNaturalContent<Content: View>: View {
     @Environment(\.locale) private var locale
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.displayScale) private var scale
+    @Environment(\.panelReorderController) private var reorder
 
     var body: some View {
         let content = self.content
         PanelNaturalContentLayout(
             label: label,
-            measurementKey: "\(measurementKey)|\(locale.identifier)|\(dynamicTypeSize)|\(scale)"
+            measurementKey: measurementKey.isEmpty || reorder?.session != nil ? ""
+                : "\(measurementKey)|\(locale.identifier)|\(dynamicTypeSize)|\(scale)"
         ) { content }
     }
 }
