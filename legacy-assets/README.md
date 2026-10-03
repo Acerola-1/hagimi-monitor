@@ -22,6 +22,14 @@
 | `hagimi-promo-2880/` | 2880px 宣传海报五张(promo-01~05),原位于 docs/,官网未引用故归档 |
 | `xhs-cover/` | 小红书宣传封面图与配套 HTML 模板(xhs-cover-g.*),原位于 docs/,官网未引用故归档 |
 
+## website/ — 官网未引用图片
+
+| 文件 | 说明 |
+|---|---|
+| `bar_img_负载环.png` | 菜单栏样式展示图"负载环",现页面未引用 |
+
+注意:`icon.png` 曾随本批归档,但根目录 README.md 与 README.en.md 仍以 `docs/images/icon.png` 引用,已移回 `docs/images/`。
+
 ## website-ja/ — 日语官网(已停更)
 
 | 目录 | 说明 |

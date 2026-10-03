@@ -82,18 +82,16 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   background:radial-gradient(circle at 78% 43%,rgba(50,195,107,.12),transparent 34%),linear-gradient(180deg,var(--bg),#fff);
 }
 .hero .section-inner{
-  display:flex;align-items:center;gap:40px;
+  display:flex;align-items:center;gap:32px;
 }
 .hero-left{flex:1;min-width:0;display:flex;flex-direction:column;gap:20px;}
-.hero-actions{display:flex;gap:14px;margin-top:10px;align-items:center;flex-wrap:wrap;}
-.hero-actions-note{font-size:12px;color:var(--muted);margin-top:0;}
 .hero-left h1{font-size:clamp(44px,5.5vw,64px);}
 .hero-left .lead{margin-top:4px;}
 .hero-highlights{display:flex;flex-wrap:wrap;gap:10px 0;margin-top:8px;color:#42464b;font-size:14px;font-weight:600;}
 .hero-highlights span{display:inline-flex;align-items:center;gap:9px;white-space:nowrap;}
 .hero-highlights span+span{margin-left:16px;padding-left:16px;border-left:1px solid #c7c9cb;}
 .hero-highlights span::before{content:"";width:6px;height:6px;border-radius:50%;background:#25c665;flex:none;}
-.hero-right{flex:0 0 520px;display:flex;justify-content:center;align-items:center;}
+.hero-right{flex:0 0 496px;display:flex;justify-content:center;align-items:center;}
 .fan{position:relative;width:480px;height:460px;overflow:visible;}
 .fan img{
   position:absolute;width:340px;border-radius:20px;
@@ -137,14 +135,12 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 
 /* ============ Statistics showcase ============ */
 .stats-showcase{
-  background:radial-gradient(circle at 82% 12%,rgba(49,192,105,.13),transparent 30%),#202225;
-  color:#f5f5f7;
+  background:#fff;
   overflow:hidden;
 }
-.stats-showcase .kicker{color:#65dfa0;}
-.stats-showcase .lead{max-width:750px;color:#c5c9cd;margin-top:18px;}
+.stats-showcase .lead{max-width:750px;margin-top:18px;}
 .stats-showcase h2{font-size:clamp(36px,5vw,54px);margin-top:14px;}
-.stats-showcase .shot{border-color:rgba(255,255,255,.16);box-shadow:0 24px 60px rgba(0,0,0,.2);}
+.stats-showcase .shot{box-shadow:0 16px 40px rgba(29,29,31,.08);}
 .stats-showcase .shot:last-child{max-width:660px;}
 
 /* ============ Themes ============ */
@@ -253,6 +249,59 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 .btn-store:hover{border-color:#999;transform:translateY(-2px);}
 .btn-store svg{width:18px;height:18px;}
 .download-note{font-size:13px;color:var(--muted);margin-top:8px;}
+.brew-hint{font-size:13px;color:var(--muted);margin:2px 0 12px;}
+.brew-install{
+  display:inline-flex;align-items:center;gap:10px;
+  background:var(--surface);color:#f5f5f7;
+  border:none;border-radius:10px;
+  padding:13px 20px;cursor:pointer;
+  font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  font-size:14px;letter-spacing:.01em;
+  transition:transform .2s,box-shadow .2s;
+  box-shadow:0 4px 16px rgba(29,29,31,.16);
+  min-width:0;max-width:100%;
+}
+.brew-install:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(29,29,31,.24);}
+.brew-install .prompt{color:#8e8e93;user-select:none;}
+.brew-install svg{width:15px;height:15px;opacity:.75;flex:none;}
+.brew-install .copied{display:none;color:var(--green);font-family:var(--body);font-size:13px;font-weight:500;}
+/* Hero 安装区：终端与上方按钮行同宽——宽度由按钮行决定（不写死像素），终端跟随 */
+.v3-install{display:flex;flex-direction:column;align-items:flex-start;min-width:0;max-width:100%;}
+.v3-stack{display:flex;flex-direction:column;align-items:stretch;width:fit-content;max-width:100%;}
+.v3-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px;}
+.v3-term{
+  margin-top:18px;width:100%;border-radius:12px;overflow:hidden;
+  background:#1d1d1f;box-shadow:0 14px 36px -14px rgba(0,0,0,.42);
+}
+.v3-bar{display:flex;align-items:center;gap:6px;padding:9px 12px;background:#2a2a2c;border-bottom:1px solid rgba(255,255,255,.07);}
+.v3-dot{width:10px;height:10px;border-radius:50%;flex:none;}
+.v3-dot.r{background:#ff5f57;}
+.v3-dot.y{background:#febc2e;}
+.v3-dot.g{background:#28c840;}
+.v3-title{margin-left:8px;font-size:11px;color:#8e8e93;letter-spacing:.03em;}
+.v3-body{
+  display:flex;align-items:center;gap:10px;width:100%;
+  padding:16px 14px;background:transparent;border:none;cursor:pointer;
+  font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+  font-size:13.5px;color:#f5f5f7;text-align:left;min-width:0;
+}
+.v3-body .prompt{color:#7dd3a0;user-select:none;flex:none;}
+.v3-body .cmd{min-width:0;overflow-wrap:anywhere;}
+.v3-copy{
+  margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:5px;
+  font-family:var(--body);font-size:12px;font-weight:500;color:#c7c7cc;
+  border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 9px;
+  transition:border-color .18s,color .18s,background .18s;
+}
+.v3-body:hover .v3-copy{border-color:rgba(255,255,255,.42);color:#fff;background:rgba(255,255,255,.07);}
+.v3-copy svg{width:12px;height:12px;}
+.v3-body .copied{display:none;margin-left:auto;color:#4ade80;font-size:12px;}
+.v3-badge{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);margin-top:14px;}
+.v3-badge svg{width:14px;height:14px;color:var(--green);flex:none;}
+.v3-note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.6;max-width:540px;}
+@media(max-width:430px){
+  .brew-install{font-size:12px;padding:12px 14px;gap:8px;}
+}
 
 /* ============ Feedback ============ */
 .feedback{text-align:center;}
@@ -289,7 +338,9 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
 @media(max-width:900px){
   .hero .section-inner{flex-direction:column-reverse;text-align:center;gap:24px;}
   .hero-right{flex:none;width:100%;}
-  .hero-actions,.hero-highlights{justify-content:center;}
+  .v3-actions,.hero-highlights{justify-content:center;}
+  .v3-install{align-items:center;width:100%;}
+  .v3-note{text-align:center;margin-left:auto;margin-right:auto;}
   .fan{width:320px;height:320px;margin:0 auto;}
   .fan img{width:200px;margin-left:-100px;margin-top:-150px;}
   .fan .back{transform:translate(-36px,20px) rotate(-9deg) scale(.86);}
@@ -312,6 +363,10 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   .hero{padding:100px 0 72px;}
   .hero-highlights{justify-content:center;gap:6px 12px;}
   .hero-highlights span+span{margin-left:0;padding-left:0;border-left:0;}
+  /* 按钮竖排后终端铺满整栏，不再跟随按钮行的 fit-content 宽度 */
+  .v3-stack{width:100%;}
+  .v3-actions{flex-direction:column;align-items:stretch;}
+  .v3-actions .btn-primary,.v3-actions .btn-store{justify-content:center;}
   .gallery-grid{grid-template-columns:1fr 1fr;}
   .gallery-cell.center{grid-column:1/3;}
   .bar-grid{grid-template-columns:1fr;}
@@ -364,17 +419,40 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
       <div class="hero-highlights" aria-label="功能概览">
         <span>八大模块实时监测</span><span>历史统计报告</span><span>常用快捷控制</span>
       </div>
-      <div class="hero-actions">
-        <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-          GitHub 免费下载
-        </a>
-        <a href="https://apps.apple.com/app/hagimimonitor/id6792169908" target="_blank" rel="noopener" class="btn-store">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.1.67.97 1.47 2.06 2.53 2.02 1.02-.04 1.4-.65 2.63-.65 1.23 0 1.57.65 2.65.63 1.09-.02 1.79-.99 2.46-1.97.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.24zM15.03 6.29c.56-.68.94-1.63.83-2.57-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.9.07 1.83-.46 2.4-1.13z"/></svg>
-          App Store 支持购买
-        </a>
+      <div class="v3-install">
+        <div class="v3-stack">
+          <div class="v3-actions">
+            <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              GitHub 免费下载
+            </a>
+            <a href="https://apps.apple.com/app/hagimimonitor/id6792169908" target="_blank" rel="noopener" class="btn-store">
+              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.1.67.97 1.47 2.06 2.53 2.02 1.02-.04 1.4-.65 2.63-.65 1.23 0 1.57.65 2.65.63 1.09-.02 1.79-.99 2.46-1.97.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.24zM15.03 6.29c.56-.68.94-1.63.83-2.57-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.9.07 1.83-.46 2.4-1.13z"/></svg>
+              App Store 支持购买
+            </a>
+          </div>
+          <div class="v3-term">
+            <div class="v3-bar">
+              <span class="v3-dot r"></span><span class="v3-dot y"></span><span class="v3-dot g"></span>
+              <span class="v3-title">Homebrew</span>
+            </div>
+            <button class="v3-body" type="button" data-copy title="点击复制安装命令" aria-label="复制 Homebrew 安装命令">
+              <span class="prompt">$</span>
+              <span class="cmd">brew install hagimimonitordirect</span>
+              <span class="v3-copy">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                复制
+              </span>
+              <span class="copied">已复制 ✓</span>
+            </button>
+          </div>
+          <div class="v3-badge">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            已收录于 Homebrew 官方 Cask 仓库 · 也可直接下载 DMG 手动安装
+          </div>
+        </div>
+        <p class="v3-note">GitHub 版完全免费，版本更新最快、功能最全；App Store 版付费下载，且受沙盒限制，部分功能可能受影响。什么？你问为啥要花钱买一个功能不全的版本？其实我也推荐你下载 GitHub 版——App Store 版是我留的打赏渠道。感谢支持 (*^▽^*)</p>
       </div>
-      <p class="hero-actions-note">GitHub 版完全免费 · App Store 版为对开发者的一份支持</p>
     </div>
     <div class="hero-right fade-in">
       <div class="fan">
@@ -599,6 +677,12 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
         App Store 支持购买
       </a>
     </div>
+    <p class="brew-hint">GitHub 版也可以通过 Homebrew 一行命令安装（点击复制）：</p>
+    <button class="brew-install" type="button" data-brew-cmd aria-label="复制 Homebrew 安装命令">
+      <span class="prompt">$</span><span>brew install hagimimonitordirect</span>
+      <svg class="brew-copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+      <span class="copied">已复制 ✓</span>
+    </button>
     <p class="download-note">GitHub 开源免费，功能完整 · App Store 版是一份心意，感谢你的支持</p>
   </div>
 </section>
@@ -685,6 +769,37 @@ document.querySelectorAll('a[href^="#"]').forEach(function(a) {
       el.textContent = fmt(d.stargazers_count);
       try { localStorage.setItem(KEY, JSON.stringify({ count: d.stargazers_count, ts: Date.now() })); } catch(e) {}
     }).catch(function(){});
+})();
+
+// Copy Homebrew install command
+(function() {
+  var CMD = 'brew install hagimimonitordirect';
+  document.querySelectorAll('.v3-body, .brew-install').forEach(function(btn) {
+    var icon = btn.querySelector('.brew-copy-icon') || btn.querySelector('.v3-copy');
+    var copied = btn.querySelector('.copied');
+    function showCopied() {
+      if (icon) icon.style.display = 'none';
+      copied.style.display = 'inline-flex';
+      setTimeout(function() {
+        if (icon) icon.style.display = '';
+        copied.style.display = 'none';
+      }, 1600);
+    }
+    btn.addEventListener('click', function() {
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(CMD).then(showCopied).catch(function() {});
+      } else {
+        var ta = document.createElement('textarea');
+        ta.value = CMD;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { if (document.execCommand('copy')) showCopied(); } catch (e) {}
+        document.body.removeChild(ta);
+      }
+    });
+  });
 })();
 </script>
 </body>
