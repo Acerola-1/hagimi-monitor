@@ -129,6 +129,43 @@ nonisolated struct StatisticsReportDataProvider: Sendable {
     }
 }
 
+/// 存储按首次写入或历史读取创建，关闭记录且不查看历史时不加载数据库容器。
+/// 锁只保护首次构建和句柄读取；数据库操作仍由各存储自己的串行队列拥有。
+nonisolated private final class StatisticsStorage: @unchecked Sendable {
+    private let lock = NSLock()
+    private let databaseURL: URL?
+    private let processDirectory: URL?
+    private let calendar: Calendar
+    private var initialized = false
+    private var storedDatabase: StatisticsDatabase?
+    private var storedProcessStore: StatisticsProcessStore?
+
+    init(databaseURL: URL?, processDirectory: URL?, calendar: Calendar) {
+        self.databaseURL = databaseURL
+        self.processDirectory = processDirectory
+        self.calendar = calendar
+    }
+
+    /// 配置检查只读取已知路径，不打开数据库或创建 SwiftData 容器。
+    var isConfigured: Bool { databaseURL != nil && processDirectory != nil }
+
+    private func prepareLocked() {
+        guard !initialized else { return }
+        initialized = true
+        storedDatabase = databaseURL.map { StatisticsDatabase(url: $0, calendar: calendar) }
+        storedProcessStore = processDirectory.map { StatisticsProcessStore(directory: $0) }
+        storedProcessStore?.interruptPersistedOngoing(reason: ProcessAlertEpisode.EndReason.replaced.rawValue)
+    }
+
+    var database: StatisticsDatabase? {
+        lock.withLock { prepareLocked(); return storedDatabase }
+    }
+    var processStore: StatisticsProcessStore? {
+        lock.withLock { prepareLocked(); return storedProcessStore }
+    }
+    var existingDatabase: StatisticsDatabase? { lock.withLock { storedDatabase } }
+}
+
 /// 速率积分的分段上限:超过视为采样中断,不把旧速率外推成长时段流量。
 final class StatisticsRecorder: ObservableObject {
     static let rateIntegrationCap: TimeInterval = 30
@@ -165,10 +202,13 @@ final class StatisticsRecorder: ObservableObject {
         var totalBytes: Int64 { metricBytes + appBytes + systemBytes }
     }
 
-    /// 进程/电池/打卡的 SwiftData 存储(图标随身份持久化,卸载应用不丢历史)。
-    nonisolated let processStore: StatisticsProcessStore?
+    /// 按需打开进程/电池/打卡的 SwiftData 存储；首次访问可能创建容器。
+    nonisolated var processStore: StatisticsProcessStore? { storage.processStore }
+    /// 只表示两个存储路径已配置，不探测实际打开结果，也不触发初始化。
+    nonisolated var hasStorageBacking: Bool { storage.isConfigured }
 
-    nonisolated private let database: StatisticsDatabase?
+    nonisolated private var database: StatisticsDatabase? { storage.database }
+    nonisolated private let storage: StatisticsStorage
     nonisolated private let calendar: Calendar
     private let processAlertCenter: ProcessAlertCenter
 
@@ -278,7 +318,8 @@ final class StatisticsRecorder: ObservableObject {
         databaseURL: URL? = nil,
         calendar: Calendar = .current,
         processStoreDirectory: URL? = nil,
-        processAlertCenter: ProcessAlertCenter = .shared
+        processAlertCenter: ProcessAlertCenter = .shared,
+        recordingEnabled: Bool = true
     ) {
         self.calendar = calendar
         self.processAlertCenter = processAlertCenter
@@ -287,18 +328,15 @@ final class StatisticsRecorder: ObservableObject {
             .first?
             .appendingPathComponent(Bundle.main.bundleIdentifier ?? "HagimiMonitor", isDirectory: true)
             .appendingPathComponent("statistics.sqlite3")
-        processStore = (processStoreDirectory ?? StatisticsProcessStore.defaultDirectory()).map { StatisticsProcessStore(directory: $0) }
-        if let url {
-            database = StatisticsDatabase(url: url, calendar: calendar)
+        storage = StatisticsStorage(databaseURL: url,
+            processDirectory: processStoreDirectory ?? StatisticsProcessStore.defaultDirectory(), calendar: calendar)
+        recordingActive = recordingEnabled
+        if recordingEnabled {
             maintenanceQueue.async { [weak self] in
                 self?.database?.maintain(now: Date())
                 self?.refreshOverview()
             }
-        } else {
-            database = nil
         }
-        // 重启时将持久化中处于进行中状态的事件终结为中断，结束时间取最后有效观测时刻。
-        processStore?.interruptPersistedOngoing(reason: ProcessAlertEpisode.EndReason.replaced.rawValue)
         // 确认事件落库，供重启后按历史日期查询。
         processAlertCenter.eventPersister = { [weak self] event in
             self?.processStore?.persist(event: event)
@@ -325,13 +363,13 @@ final class StatisticsRecorder: ObservableObject {
         lastDiskWrite = nil
         lastObservation = [:]
         lastIntersection = nil
-        database?.beginSystemSleep(at: date)
+        storage.existingDatabase?.beginSystemSleep(at: date)
         // 睡眠期间无有效观测，进行中的应用事件标记为中断。
         processAlertCenter.interruptAll(reason: .suspended, at: date)
     }
 
     private func handleSystemDidWake(at date: Date) {
-        database?.endSystemSleep(at: date)
+        storage.existingDatabase?.endSystemSleep(at: date)
         systemAsleep = false
         // 唤醒后重置采样时间基线。
         lastProcessSampleAt = nil
@@ -820,6 +858,17 @@ final class StatisticsRecorder: ObservableObject {
     }
 
     // MARK: - 概览(设置页数据)
+
+    /// 设置窗口请求历史元信息；暂停记录时同样允许读取，初始化成本留在后台。
+    func loadOverview(completion: @escaping @MainActor @Sendable () -> Void = {}) {
+        maintenanceQueue.async { [weak self] in
+            guard let self else {
+                DispatchQueue.main.async(execute: completion)
+                return
+            }
+            self.refreshOverview(completion: completion)
+        }
+    }
 
     /// 后台重算各范围聚合行 + 元信息并回主线程发布。分钟一封口即刷新。
     nonisolated private func refreshOverview(

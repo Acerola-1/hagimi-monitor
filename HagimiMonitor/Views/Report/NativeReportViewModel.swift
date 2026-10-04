@@ -311,7 +311,6 @@ final class NativeReportViewModel: ObservableObject {
         let now = Date()
         let recordDays = recorder.recordDays
         let targetRange = selectedRange
-        let dataProvider = recorder.reportDataProvider()
         // ProcessAlertCenter 是 MainActor 状态;只复制不可变值,后台不直接访问它。
         let alertSnapshot = ProcessAlertCenter.shared.activeAlerts + ProcessAlertCenter.shared.recentAlerts
         // NSScreen 只能在 MainActor 读取;这里只复制轻量值,重型硬件探针仍在后台。
@@ -319,6 +318,9 @@ final class NativeReportViewModel: ObservableObject {
 
         loadTask?.cancel()
         loadTask = Task.detached(priority: .userInitiated) { [weak self] in
+            guard !Task.isCancelled else { return }
+            // 首次历史读取可能打开存储容器，句柄准备也留在后台。
+            let dataProvider = recorder.reportDataProvider()
             guard let input = dataProvider.load(now: now, alerts: alertSnapshot) else {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {

@@ -566,7 +566,7 @@ final class MonitorStore: ObservableObject {
 
     /// 历史统计记录器:把每秒采样帧聚合成分钟行落库(见 StatisticsRecorder)。
     /// 设置页「数据统计」与网页报表共用其数据。
-    let statisticsRecorder = StatisticsRecorder()
+    let statisticsRecorder: StatisticsRecorder
 
     /// Game HUD 的未过滤采样结果访问器。主面板行显隐由 `modules` 承担,
     /// Game HUD 勾选与其独立,必须直接读全量模块;只读出、不绕过任何过滤。
@@ -650,10 +650,10 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     /// unknown(数据源尚未确认)时面板保留蓝牙占位行,只有 off 才移除行。
     @Published private(set) var bluetoothControllerState: BluetoothControllerState = .unknown
 
-    init() {
-        let settings = MonitorSettings()
+    init(settings: MonitorSettings = MonitorSettings(), statisticsRecorder: StatisticsRecorder? = nil) {
         let initialModules = MonitorKind.allCases.map(MonitorModule.placeholder)
         self.settings = settings
+        self.statisticsRecorder = statisticsRecorder ?? StatisticsRecorder(recordingEnabled: settings.statisticsEnabled)
         allModules = initialModules
         modules = initialModules.filter { settings.isVisible($0.kind) }
         advance(kinds: MonitorKind.samplerBackedCases)
@@ -811,9 +811,9 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     private var statisticsSamplingActive = false
 
     private func startStatisticsProcessSampling() {
-        guard statisticsRecorder.processStore != nil else { return }
-        // 以持久化值对齐初始状态:关闭态启动时补一次 suspend,让 recorder 的
-        // 默认 recordingActive=true 落回关闭;订阅用 dropFirst 只处理切换。
+        guard statisticsRecorder.hasStorageBacking else { return }
+        // 初始记录状态已按设置构造；关闭分支的 suspend 只作幂等兜底。
+        // 这里只检查路径配置，不能为安装订阅而同步打开存储。
         let enabled = settings.statisticsEnabled
         statisticsSamplingActive = enabled
         settings.$statisticsEnabled
@@ -834,7 +834,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     /// maintain 全量重扫自然补齐);关闭时撤销定时器并丢弃进行中的分钟累加,
     /// 让「停止记录」立刻干净生效,不再写入半个未关闭的分钟。
     private func setStatisticsSampling(_ enabled: Bool) {
-        guard statisticsRecorder.processStore != nil else { return }
+        guard statisticsRecorder.hasStorageBacking else { return }
         if enabled {
             guard !statisticsSamplingActive else { return }
             statisticsSamplingActive = true

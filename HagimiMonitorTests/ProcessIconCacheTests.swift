@@ -50,6 +50,31 @@ struct ProcessIconCacheTests {
 @Suite("MonitorStore process sampling gating")
 struct MonitorStoreProcessGatingTests {
 
+    @Test @MainActor func collapsedModulesPrefetchRankingsWhenPanelOpens() async throws {
+        let store = MonitorStore()
+        let originalExpanded = store.settings.defaultExpandedKinds
+        let originalMemoryList = store.settings.showMemoryProcesses
+        defer {
+            store.panelDidDisappear(.menuBar)
+            store.settings.showMemoryProcesses = originalMemoryList
+            for kind in MonitorKind.allCases {
+                store.settings.setExpandedByDefault(originalExpanded.contains(kind), for: kind)
+            }
+        }
+        store.settings.showMemoryProcesses = true
+        for kind in MonitorKind.allCases {
+            store.settings.setExpandedByDefault(false, for: kind)
+        }
+        #expect(store.settings.defaultExpandedKinds.isEmpty)
+        store.panelDidAppear(.menuBar)
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while store.topMemoryProcesses.isEmpty && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(50))
+        }
+        #expect(!store.topMemoryProcesses.isEmpty,
+                "所有模块默认收起时也应预加载排行，展开直接使用已采集的真实数据")
+    }
+
     @Test("Only expanded AND enabled kinds are sampled")
     func intersectsExpandedAndEnabled() {
         #expect(

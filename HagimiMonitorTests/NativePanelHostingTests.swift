@@ -7,6 +7,135 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct NativePanelHostingTests {
+    private final class RenderProbe {
+        var values: [Int] = []
+        var locales: [String] = []
+    }
+
+    private struct VersionedCard: View, Equatable {
+        let probe: RenderProbe
+        let value: Int
+        let height: CGFloat
+        @Environment(\.locale) private var locale
+        static func == (lhs: Self, rhs: Self) -> Bool { lhs.value == rhs.value && lhs.height == rhs.height }
+        var body: some View {
+            let _ = probe.values.append(value)
+            let _ = probe.locales.append(locale.identifier)
+            VStack(spacing: 0) {
+                Text("\(value)").frame(height: 34)
+                Color.clear.frame(height: height)
+            }
+            .preference(key: PanelNaturalMeasurements.self, value: [
+                "row:cpu": CGSize(width: 328, height: 34),
+                "detail:cpu": CGSize(width: 328, height: height),
+                "available:cpu": CGSize(width: 1, height: 0)])
+        }
+    }
+
+    @Test func unchangedCardsStayMountedWhileValuesStructureAndLocaleRefresh() async throws {
+        let probe = RenderProbe()
+        let registry = PanelDimensionRegistry(initialEnvironment: GeometryEnvironmentToken(width: 340,
+            localeIdentifier: "en", dynamicTypeSize: "default", backingScale: 2, structureSignature: ""))
+        let motion = SingleHostMotionCoordinator(registry: registry)
+        let surface = NativePanelSurface(motion: motion)
+        let window = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 380, height: 600),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        window.contentView = surface
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil); window.contentView = nil; motion.nativeLayer.suspend() }
+        var environment = EnvironmentValues()
+        environment.panelMaxContentHeight = 600
+        environment.locale = Locale(identifier: "en")
+        func update(_ value: Int, height: CGFloat) {
+            let item = NativePanelContentItem(id: "cpu", content: VersionedCard(probe: probe, value: value, height: height))
+            surface.update(header: AnyView(Color.clear.frame(height: 22)), ids: ["cpu"],
+                views: [item.content, AnyView(Color.clear.frame(height: 34))],
+                environment: environment, cap: 600, versions: [item.version])
+        }
+        func settle(until condition: () -> Bool) async throws {
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while !condition() && ContinuousClock.now < deadline {
+                surface.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            #expect(condition())
+        }
+        update(0, height: 60)
+        try await settle { surface.contentHost(for: "cpu") != nil && probe.values.last == 0 }
+        try await Task.sleep(for: .milliseconds(200))
+        let node = try #require(surface.contentHost(for: "cpu"))
+        let count = probe.values.count
+        #expect(count > 0)
+        update(0, height: 60)
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(surface.contentHost(for: "cpu") === node)
+        #expect(probe.values.count == count, "同值更新不应重新提交卡片内容")
+        update(1, height: 140)
+        try await settle { probe.values.last == 1 && motion.nativeLayer.snapshot?.sections["cpu"]?.detailHeight == 140 }
+        #expect(probe.values.last == 1)
+        #expect(motion.nativeLayer.snapshot?.sections["cpu"]?.detailHeight == 140)
+        environment.locale = Locale(identifier: "zh_CN")
+        update(1, height: 140)
+        try await settle { probe.locales.last == "zh_CN" }
+        #expect(probe.locales.last == "zh_CN", "同值内容仍须接收排版环境变化")
+    }
+
+    nonisolated private final class MeasurementProbe: @unchecked Sendable {
+        var placedValues: [Int] = []
+    }
+
+    private struct MeasuredDetail: Layout {
+        let probe: MeasurementProbe
+        let height: CGFloat
+        let value: Int
+        func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+            return CGSize(width: proposal.width ?? 300, height: height + (proposal.width ?? 300) / 10)
+        }
+        func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+            probe.placedValues.append(value)
+            subviews.first?.place(at: bounds.origin, anchor: .topLeading, proposal: ProposedViewSize(bounds.size))
+        }
+    }
+
+    private struct CachedDetail: View {
+        let probe: MeasurementProbe
+        let height: CGFloat
+        let value: Int
+        let key: String
+        var width: CGFloat = 300
+        var body: some View {
+            PanelNaturalContent(label: "fixture", measurementKey: key,
+                content: MeasuredDetail(probe: probe, height: height, value: value) { Text("\(value)") })
+                .frame(width: width)
+        }
+    }
+
+    @Test func naturalSizeTracksStructureAndWidthWhilePlacingNewReadings() {
+        let probe = MeasurementProbe()
+        let host = NSHostingView(rootView: CachedDetail(probe: probe, height: 100, value: 0, key: "one"))
+        host.frame.size = CGSize(width: 300, height: 500)
+        #expect(abs(host.fittingSize.height - 130) < 0.01)
+        for value in 1...8 {
+            host.rootView = CachedDetail(probe: probe, height: 100, value: value, key: "one")
+            host.layoutSubtreeIfNeeded()
+            #expect(abs(host.fittingSize.height - 130) < 0.01)
+            #expect(probe.placedValues.last == value)
+        }
+        host.rootView = CachedDetail(probe: probe, height: 200, value: 9, key: "two")
+        #expect(abs(host.fittingSize.height - 230) < 0.01)
+        host.rootView = CachedDetail(probe: probe, height: 200, value: 9, key: "two", width: 200)
+        #expect(abs(host.fittingSize.height - 220) < 0.01)
+    }
+
+    @Test func unregisteredNaturalSizeStillTracksContentChanges() {
+        let probe = MeasurementProbe()
+        let host = NSHostingView(rootView: CachedDetail(probe: probe, height: 100, value: 0, key: ""))
+        host.frame.size = CGSize(width: 300, height: 500)
+        #expect(abs(host.fittingSize.height - 130) < 0.01)
+        host.rootView = CachedDetail(probe: probe, height: 200, value: 1, key: "")
+        #expect(abs(host.fittingSize.height - 230) < 0.01)
+    }
+
     @Test func pageGrowthKeepsReservedBackingAndExistingMaskPlan() async throws {
         let node = NativePanelContentHost()
         node.minimumAllocatedHeight = 600
