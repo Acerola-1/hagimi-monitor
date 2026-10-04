@@ -128,9 +128,12 @@ struct MonitorPalette {
     }
 
     /// 活力行玻璃满浓度不透明度:暗底需要更高浓度才能显出模块色相。
-    private var vibrantGlassOpacity: Double {
+    var vibrantGlassOpacity: Double {
         isDark ? 0.16 : 0.08
     }
+
+    /// 内容和原生底座共用提亮强度，保持材质层次一致。
+    var cardBrightenOpacity: Double { isDark ? 0.08 : 0.15 }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
         switch preference {
@@ -168,7 +171,7 @@ struct MonitorPalette {
         }
     }
 
-    private var neutralGlassTint: Color {
+    var neutralGlassTint: Color {
         Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
     }
 

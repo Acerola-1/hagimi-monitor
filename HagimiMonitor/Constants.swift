@@ -58,6 +58,8 @@ nonisolated enum MonitorConstants {
     static let panelNativeMotionSamplingRate: Double = 120
     static let panelNativeShadowInset: CGFloat = 20
     static let panelScrollFadeLength: CGFloat = 12
+    /// 连续查看期间保留已呈现的窗口，长期隐藏后释放合成承载资源。
+    static let panelWarmRetention: TimeInterval = 10
 
     // MARK: - Sampling
     static let sparklineMaxPoints = 24

@@ -32,6 +32,7 @@ struct SettingsRootView: View {
                 .ignoresSafeArea(edges: .top)
         }
         .background(SettingsWindowTracker(selection: $selection))
+        .onAppear { store.statisticsRecorder.loadOverview() }
     }
 
     @ViewBuilder

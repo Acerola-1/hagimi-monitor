@@ -95,15 +95,18 @@ class NativePanelFlippedView: NSView {
 
 final class NativePanelContentHost: NativePanelFlippedView {
     let hosting = NSHostingView(rootView: AnyView(EmptyView()))
-    let backdrop = NSHostingView(rootView: AnyView(EmptyView()))
+    private(set) var backdrop: NativePanelCardBackdropView?
     let maskShape = CAShapeLayer()
     var visibleHeight: CGFloat = 0
     var cornerRadius: CGFloat = 0
     var allocatedHeight: CGFloat = 0
     var minimumAllocatedHeight: CGFloat = 0
-    var backdropPreference: MonitorColorSchemePreference?
-    var backdropScheme: ColorScheme?
     var appliedGeneration: UInt?
+    fileprivate var contentVersion: NativePanelContentVersion?
+    fileprivate var contentEnvironment: NativePanelHostEnvironment?
+    fileprivate var needsNaturalMeasurement = true
+    fileprivate var measuredWidth: CGFloat?
+    fileprivate var naturalHeight: CGFloat = 1
     init() {
         super.init(frame: .zero)
         wantsLayer = true
@@ -111,8 +114,6 @@ final class NativePanelContentHost: NativePanelFlippedView {
         layer?.mask = maskShape
         hosting.sizingOptions = [.intrinsicContentSize]
         hosting.wantsLayer = true
-        backdrop.wantsLayer = true
-        addSubview(backdrop)
         addSubview(hosting)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -129,9 +130,27 @@ final class NativePanelContentHost: NativePanelFlippedView {
         hosting.frame = CGRect(x: 0, y: 0, width: width, height: contentHeight)
         frame.size = CGSize(width: width, height: allocatedHeight)
         if frame.size != previousAllocation && minimumAllocatedHeight == 0 { appliedGeneration = nil }
-        backdrop.frame = bounds
+        backdrop?.frame = bounds
         maskShape.frame = bounds
+        measuredWidth = width
+        naturalHeight = height
+        needsNaturalMeasurement = false
         return height
+    }
+
+    func updateBackdrop(id: String, palette: MonitorPalette, enabled: Bool) {
+        guard enabled else {
+            backdrop?.removeFromSuperview()
+            backdrop = nil
+            return
+        }
+        let view = backdrop ?? NativePanelCardBackdropView()
+        if backdrop == nil {
+            backdrop = view
+            addSubview(view, positioned: .below, relativeTo: hosting)
+            view.frame = bounds
+        }
+        view.update(kind: MonitorKind(rawValue: id), palette: palette)
     }
     func contour(_ rect: CGRect) -> CGPath {
         CGPath(roundedRect: CGRect(origin: .zero, size: CGSize(width: rect.width, height: max(0, rect.height))),
@@ -142,20 +161,6 @@ final class NativePanelContentHost: NativePanelFlippedView {
         let path = (maskShape.presentation() as? CAShapeLayer)?.path ?? maskShape.path
         guard path?.contains(local) == true else { return nil }
         return super.hitTest(point)
-    }
-}
-
-private struct NativePanelCardBackdrop: View {
-    let id: String
-    let palette: MonitorPalette
-    @ViewBuilder var body: some View {
-        Color.clear.panelCardBrighten()
-            .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
-                if let kind = MonitorKind(rawValue: id) { palette.rowGlassFill(for: kind) }
-                else { palette.displayGlassFill }
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
     }
 }
 
@@ -183,16 +188,18 @@ private class NativePanelNodeGroup: NativePanelFlippedView, NativePanelLayerRend
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func update(ids: [String], content: [AnyView], environment: EnvironmentValues, width: CGFloat) {
+    func update(ids: [String], content: [AnyView], environment: EnvironmentValues, width: CGFloat,
+                versions: [NativePanelContentVersion?] = []) {
         updateTicket &+= 1
         let ticket = updateTicket
         DispatchQueue.main.async { [weak self] in
             guard let self, self.isMounted, ticket == self.updateTicket else { return }
-            self.updateContents(ids: ids, content: content, environment: environment, width: width)
+            self.updateContents(ids: ids, content: content, environment: environment, width: width, versions: versions)
         }
     }
 
-    private func updateContents(ids: [String], content: [AnyView], environment: EnvironmentValues, width: CGFloat) {
+    private func updateContents(ids: [String], content: [AnyView], environment: EnvironmentValues, width: CGFloat,
+                                versions: [NativePanelContentVersion?]) {
         self.ids = ids; self.width = width
         for id in Set(nodes.keys).subtracting(ids) {
             nodes.removeValue(forKey: id)?.removeFromSuperview()
@@ -213,15 +220,17 @@ private class NativePanelNodeGroup: NativePanelFlippedView, NativePanelLayerRend
             // 子宿主继承扣除本层内衬后的宽度，避免控件更新与 sizeThatFits 往返改宽。
             env.nativePanelContentWidth = max(1, width - group.leading - group.trailing)
             env.nativePanelOwnsCardBackdrop = isTopLevel && id != "__footer__"
-            if env.nativePanelOwnsCardBackdrop {
-                let preference = environment.panelReorderSettings?.colorSchemePreference ?? .balanced
-                if node.backdropPreference != preference || node.backdropScheme != environment.colorScheme {
-                    node.backdropPreference = preference; node.backdropScheme = environment.colorScheme
-                    node.backdrop.rootView = AnyView(NativePanelCardBackdrop(id: id, palette: MonitorPalette(
-                        preference: preference, colorScheme: environment.colorScheme))
-                        .modifier(NativePanelEnvironmentBridge(values: environment)).environment(\.nativePanelOwnsCardBackdrop, false))
-                }
-            }
+            node.updateBackdrop(id: id, palette: MonitorPalette(
+                preference: environment.panelReorderSettings?.colorSchemePreference ?? .balanced,
+                colorScheme: environment.colorScheme), enabled: env.nativePanelOwnsCardBackdrop)
+            let version = index < versions.count ? versions[index] : nil
+            let hostEnvironment = NativePanelHostEnvironment(env)
+            // 只对有完整值语义的内容去重；未登记的嵌套内容继续正常提交。
+            if let version, let previous = node.contentVersion,
+               previous == version, node.contentEnvironment == hostEnvironment { continue }
+            node.contentVersion = version
+            node.contentEnvironment = hostEnvironment
+            node.needsNaturalMeasurement = true
             let view = content[index]
                 .modifier(NativePanelEnvironmentBridge(values: env))
                 // 自然高度回报前仍承载旧尺寸，内容始终从顶部排版。
@@ -243,6 +252,7 @@ private class NativePanelNodeGroup: NativePanelFlippedView, NativePanelLayerRend
         guard isMounted, nodes[id] != nil else { return }
         guard preferenceValues[id] != values else { return }
         preferenceValues[id] = values
+        nodes[id]?.needsNaturalMeasurement = true
         scheduleMeasurement()
     }
     func receive(id: String, groups: [String: PanelChildGroup]) {
@@ -280,8 +290,12 @@ private class NativePanelNodeGroup: NativePanelFlippedView, NativePanelLayerRend
         for (index, id) in ids.enumerated() {
             guard let node = nodes[id] else { continue }
             if index > 0 { y += group.spacing }
-            if NativePanelMotionMode.diagnostics { PanelLayoutCounters.shared.measure("native-host:" + id) }
-            let h = node.measure(width: max(1, width - group.leading - group.trailing))
+            let contentWidth = max(1, width - group.leading - group.trailing)
+            let h: CGFloat
+            if node.needsNaturalMeasurement || node.measuredWidth != contentWidth {
+                if NativePanelMotionMode.diagnostics { PanelLayoutCounters.shared.measure("native-host:" + id) }
+                h = node.measure(width: contentWidth)
+            } else { h = node.naturalHeight }
             if motion.nativeLayer.snapshot == nil { node.frame.origin = CGPoint(x: group.leading, y: y) }
             y += h
         }
@@ -374,6 +388,56 @@ extension EnvironmentValues {
 struct NativePanelContentItem: Identifiable {
     let id: String
     let content: AnyView
+    let version: NativePanelContentVersion?
+
+    init(id: String, content: AnyView) {
+        self.id = id
+        self.content = content
+        version = nil
+    }
+
+    init<Content: View & Equatable>(id: String, content: Content) {
+        self.id = id
+        self.content = AnyView(content.equatable())
+        version = NativePanelContentVersion(content)
+    }
+}
+
+/// 保留组件已有的值比较合同；闭包与局部状态仍由稳定 ID 的宿主拥有。
+struct NativePanelContentVersion: Equatable {
+    private let value: Any
+    private let equals: (Any) -> Bool
+
+    init<Value: Equatable>(_ value: Value) {
+        self.value = value
+        equals = { ($0 as? Value).map { value == $0 } ?? false }
+    }
+    static func == (lhs: Self, rhs: Self) -> Bool { lhs.equals(rhs.value) }
+}
+
+/// 与独立宿主实际继承的排版和产品环境一一对应，环境变化不能被内容去重遮蔽。
+fileprivate struct NativePanelHostEnvironment: Equatable {
+    let locale: Locale
+    let scheme: ColorScheme
+    let typeSize: DynamicTypeSize
+    let scale: CGFloat
+    let font: Font?
+    let cap: CGFloat
+    let width: CGFloat
+    let ownsBackdrop: Bool
+    let reorder: ObjectIdentifier?
+    let settings: ObjectIdentifier?
+    let expansion: ObjectIdentifier?
+
+    init(_ values: EnvironmentValues) {
+        locale = values.locale; scheme = values.colorScheme
+        typeSize = values.dynamicTypeSize; scale = values.displayScale; font = values.font
+        cap = values.panelMaxContentHeight; width = values.nativePanelContentWidth
+        ownsBackdrop = values.nativePanelOwnsCardBackdrop
+        reorder = values.panelReorderController.map(ObjectIdentifier.init)
+        settings = values.panelReorderSettings.map(ObjectIdentifier.init)
+        expansion = values.nativePanelExpansion.map(ObjectIdentifier.init)
+    }
 }
 
 private final class NativePanelRotationHost: NativePanelFlippedView, NativePanelLayerRenderer {
@@ -726,16 +790,18 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    func update(header content: AnyView, ids: [String], views: [AnyView], environment: EnvironmentValues, cap: CGFloat) {
+    func update(header content: AnyView, ids: [String], views: [AnyView], environment: EnvironmentValues, cap: CGFloat,
+                versions: [NativePanelContentVersion?] = []) {
         updateTicket &+= 1
         let ticket = updateTicket
         DispatchQueue.main.async { [weak self] in
             guard let self, ticket == self.updateTicket else { return }
-            self.updateContents(header: content, ids: ids, views: views, environment: environment, cap: cap)
+            self.updateContents(header: content, ids: ids, views: views, environment: environment, cap: cap, versions: versions)
         }
     }
     func contentHost(for id: String) -> NativePanelContentHost? { document.nodes[id] }
-    private func updateContents(header content: AnyView, ids: [String], views: [AnyView], environment: EnvironmentValues, cap: CGFloat) {
+    private func updateContents(header content: AnyView, ids: [String], views: [AnyView], environment: EnvironmentValues, cap: CGFloat,
+                                versions: [NativePanelContentVersion?]) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         if reorderController !== environment.panelReorderController {
@@ -771,7 +837,7 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         motion.nativeLayer.report(owner: "__header__", values: ["__header__": CGSize(width: width - 12, height: h)])
         var env = environment
         env.nativePanelContentWidth = width - 12
-        document.update(ids: ids, content: Array(views.prefix(ids.count)), environment: env, width: width - 12)
+        document.update(ids: ids, content: Array(views.prefix(ids.count)), environment: env, width: width - 12, versions: versions)
         if let content = views.dropFirst(ids.count).first {
             footer.rootView = AnyView(content.modifier(NativePanelEnvironmentBridge(values: env)))
             footer.frame.size.width = width - 12
@@ -984,10 +1050,11 @@ private struct NativePanelSurfaceRepresentable: NSViewRepresentable {
     let ids: [String]
     let header: AnyView
     let views: [AnyView]
+    let versions: [NativePanelContentVersion?]
     let cap: CGFloat
     func makeNSView(context: Context) -> NativePanelSurface { NativePanelSurface(motion: motion) }
     func updateNSView(_ view: NativePanelSurface, context: Context) {
-        view.update(header: header, ids: ids, views: views, environment: context.environment, cap: cap)
+        view.update(header: header, ids: ids, views: views, environment: context.environment, cap: cap, versions: versions)
     }
     static func dismantleNSView(_ view: NativePanelSurface, coordinator: ()) {
         view.updateTicket &+= 1
@@ -1010,7 +1077,7 @@ struct NativePanelSurfaceView: View {
     }
     var body: some View {
         NativePanelSurfaceRepresentable(motion: motion, ids: ids, header: header,
-            views: items.map(\.content), cap: boundedCap)
+            views: items.map(\.content), versions: items.map(\.version), cap: boundedCap)
         .frame(width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
             height: boundedCap + MonitorConstants.panelNativeShadowInset * 2, alignment: .topLeading)
     }

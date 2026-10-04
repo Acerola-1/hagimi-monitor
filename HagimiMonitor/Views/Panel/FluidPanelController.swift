@@ -152,10 +152,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private let cleanupBox = PanelCleanupBox()
     private var cancellables: Set<AnyCancellable> = []
 
-    /// 内容侧最近一次上报的自然尺寸(未经封顶)。showPanel 用它定位首帧:
-    /// hosting 的 sizingOptions 为空,intrinsicContentSize 不可靠,
-    /// 而 size reader 的首次上报在 init 布局阶段就已发生。
-
     /// 向 SwiftUI 侧下发布局约束(内容高度上限)。面板主体据此自行封顶并在
     /// 内部 ScrollView 滚动,header 固定在外、不参与滚动。
     private let layoutMetrics = FluidPanelLayoutMetrics()
@@ -527,23 +523,23 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // awaitingGeometry,也必须允许随后由系统 didEnd 正常收敛。
         dismissGeneration += 1
         dismissalInProgress = false
-        // 恢复隐藏期间卸下的 contentView(见 reclaimHiddenPanelResources)。
-        // 必须在布局/定位之前恢复,后续 layoutSubtreeIfNeeded 才能测到内容尺寸。
-        if let savedContentView, panel.contentView == nil {
+        hiddenResourceRelease?.cancel()
+        hiddenResourceRelease = nil
+        let wasDetached = savedContentView != nil
+        if let savedContentView {
             panel.contentView = savedContentView
             self.savedContentView = nil
         }
-        // 开闸补发:隐藏期冻结的视图树先追平 store 当前值,
-        // 随后的强制布局/测量才带最新数据。
-        panelRefreshGate.open()
-        panelMotion?.resume()
-        // 隐藏时未收敛的窗口弹簧在此清场,本次呼出由重定位接管。
-        // 先同步高度上限(可能换了屏幕/Dock 变化),再让 SwiftUI 布局。
+        let previousCap = layoutMetrics.maxContentHeight
         updateContentHeightCap()
-        // 先让 SwiftUI 布局出内容固有尺寸,再据此定位窗口,避免首帧尺寸跳变。
-        // 优先用 size reader 上报的自然尺寸(init 布局阶段即已上报);内容包在
-        // ScrollView 里后 intrinsicContentSize 不再反映内容高度,仅作兜底。
-        hostingView?.layoutSubtreeIfNeeded()
+        // 已准备好的容量和几何直接复用，普通读数追平不阻塞窗口显示。
+        // 首次挂载或屏幕容量变化仍走完整准备，以免首帧裁切。
+        let needsPreparation = wasDetached || panelMotion?.currentFrame == nil || previousCap != layoutMetrics.maxContentHeight
+        if needsPreparation {
+            panelRefreshGate.open()
+            hostingView?.layoutSubtreeIfNeeded()
+        }
+        panelMotion?.resume()
         if panelMotion?.currentFrame == nil {
             awaitingGeometry = true
             if !panel.isVisible {
@@ -559,7 +555,6 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             return
         }
         awaitingGeometry = false
-        let intrinsic = hostingView?.intrinsicContentSize ?? .zero
         let size: CGSize
 
             let screen = currentScreen() ?? NSScreen.main
@@ -568,23 +563,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
         setPanelFrame(size: size)
 
-        store.panelDidAppear()
         if #unavailable(macOS 27.0) {
             statusItem.button?.highlight(true)
             // 旧系统在全屏模式下仍需要兼容通知;macOS 27 由官方 session 管理。
             DistributedNotificationCenter.default().post(name: .beginMenuTracking, object: nil)
         }
 
-        // 淡入呼出:与 dismissPanel 的淡出对称,避免面板硬切出现的生硬感。
-        // alpha 从 0 开始,先调零再上屏,避免闪现一帧全不透明。
-        panel.alphaValue = 0
+        // 呼出直接显示已准备好的画面，展开区继续使用原有共享运动。
+        panel.alphaValue = 1
         panel.makeKeyAndOrderFront(nil)
-panelMotion?.nativeLayer.panelDidShow()
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.12
-            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
-            panel.animator().alphaValue = 1
-        }
+        panelMotion?.nativeLayer.panelDidShow()
+        store.panelDidAppear()
+        panelRefreshGate.open()
     }
 
     private var dismissalInProgress = false
@@ -612,7 +602,7 @@ panelMotion?.nativeLayer.panelDidShow()
             panelMotion?.suspend()
 panel.orderOut(nil)
             panelRefreshGate.close()
-            reclaimHiddenPanelResources()
+            scheduleHiddenResourceRelease()
             if decision.shouldCancelExpandedInterfaceSession {
                 cancelExpandedInterfaceSessionIfNeeded()
             }
@@ -668,39 +658,32 @@ panel.orderOut(nil)
         // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
         // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
         panelRefreshGate.close()
-        reclaimHiddenPanelResources()
+        scheduleHiddenResourceRelease()
     }
 
     /// dismissPanel 代际令牌,showPanel 时递增使在途淡出回调失效。
     private var dismissGeneration = 0
 
-    /// 面板隐藏后回收窗口层常驻资源。
-    ///
-    /// 实测(footprint):面板展开过一次后,隐藏状态下窗口及视图/层树仍被
-    /// WindowServer/CA 持有大尺寸 backing store 与材质合成资源,计入本进程
-    /// footprint 的 graphics 类目且不主动释放——仅菜单栏常驻时多占 ~40-50MB,
-    /// 是后台内存高水位的主要来源。收缩 frame 不足以释放,必须把 contentView
-    /// (毛玻璃底 + SwiftUI hosting 层树)整体从窗口卸下,隐藏态 graphics 才能
-    /// 回落到 ~1MB。contentView 对象本身被暂存不销毁,SwiftUI 视图状态
-    /// (@State/展开态)全部保留;下次 showPanel 先装回再定位上屏,用户无感知。
-    private func reclaimHiddenPanelResources() {
-        guard savedContentView == nil, let contentView = panel.contentView else { return }
-        // 顺手把 frame 收到最小高度:下次装回前 showPanel 会重新定位,
-        // 避免隐藏窗口继续按大尺寸占用纹理。
-        if panel.frame.height > 2 {
-            panel.setFrame(
-                CGRect(x: panel.frame.origin.x, y: panel.frame.origin.y, width: panel.frame.width, height: 1),
-                display: false
-            )
-        }
-        savedContentView = contentView
-        panel.contentView = nil
-    }
-
-    /// 隐藏期间暂存的 contentView,showPanel 时装回。
     private var savedContentView: NSView?
+    private var hiddenResourceRelease: DispatchWorkItem?
 
-
+    private func scheduleHiddenResourceRelease() {
+        hiddenResourceRelease?.cancel()
+        let generation = dismissGeneration
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.dismissGeneration == generation,
+                  !self.panel.isVisible, !self.awaitingGeometry,
+                  self.savedContentView == nil, let content = self.panel.contentView else { return }
+            // 保存视图状态，仅卸下窗口关联的合成资源；下一次打开重新挂载。
+            self.hiddenResourceRelease = nil
+            self.panel.setFrame(CGRect(x: self.panel.frame.minX, y: self.panel.frame.minY,
+                width: self.panel.frame.width, height: 1), display: false)
+            self.savedContentView = content
+            self.panel.contentView = nil
+        }
+        hiddenResourceRelease = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelWarmRetention, execute: work)
+    }
 
     /// 把「菜单栏下沿 → 屏幕可视区底部」的可用高度下发给内容侧:面板主体据此
     /// 自行封顶(header 固定,主体在内部 ScrollView 滚动),上报的自然尺寸随之

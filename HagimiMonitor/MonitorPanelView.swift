@@ -353,7 +353,7 @@ struct MonitorPanelView: View {
         var result = orderedTopLevelItems.map { item -> NativePanelContentItem in
             switch item {
             case .module(let module):
-                NativePanelContentItem(id: module.kind.id, content: AnyView(compactRow(for: module, theme: theme)))
+                nativeModuleItem(for: module, theme: theme)
             case .display:
                 NativePanelContentItem(id: PanelOrderCatalog.displayID, content: AnyView(displaySection(theme: theme)))
             }
@@ -477,12 +477,11 @@ struct MonitorPanelView: View {
         }
     }
 
-    @ViewBuilder
-    private func compactRow(for module: MonitorModule, theme: MonitorPanelTheme) -> some View {
+    private func nativeModuleItem(for module: MonitorModule, theme: MonitorPanelTheme) -> NativePanelContentItem {
         let isExpanded = expandedKinds.contains(module.kind)
         switch module.kind {
         case .cpu:
-            MetricGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: MetricGlassRow(
                 module: module,
                 theme: theme,
                 detail: module.summary,
@@ -494,10 +493,9 @@ struct MonitorPanelView: View {
                 showCPUProcesses: store.settings.showCPUProcesses
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         case .gpu:
-            MetricGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: MetricGlassRow(
                 module: module,
                 theme: theme,
                 detail: module.summary,
@@ -509,11 +507,10 @@ struct MonitorPanelView: View {
                 showGPUProcesses: store.settings.showGPUProcesses
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         case .memory:
             let pressureMode = store.settings.memoryPrimaryMetric == .pressure
-            MetricGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: MetricGlassRow(
                 module: module,
                 theme: theme,
                 detail: pressureMode ? memoryPressureText(for: module) : module.summary,
@@ -529,10 +526,9 @@ struct MonitorPanelView: View {
                 showMemoryProcesses: store.settings.showMemoryProcesses
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         case .storage:
-            MetricGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: MetricGlassRow(
                 module: module,
                 theme: theme,
                 detail: module.summary,
@@ -545,10 +541,9 @@ struct MonitorPanelView: View {
                 showDiskProcesses: store.settings.showDiskProcesses
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         case .network:
-            NetworkGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: NetworkGlassRow(
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
@@ -558,10 +553,9 @@ struct MonitorPanelView: View {
                 showNetworkProcesses: store.settings.showNetworkProcesses
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         case .battery:
-            BatteryGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: BatteryGlassRow(
                 module: module,
                 theme: theme,
                 details: enabledMetrics(for: module),
@@ -574,10 +568,9 @@ struct MonitorPanelView: View {
                 powerFlowActive: !store.isExpansionAnimating
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         case .fan:
-            MetricGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: MetricGlassRow(
                 module: module,
                 theme: theme,
                 detail: module.summary,
@@ -586,17 +579,15 @@ struct MonitorPanelView: View {
                 fans: module.fans
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         case .bluetooth:
-            BluetoothGlassRow(
+            return NativePanelContentItem(id: module.kind.id, content: BluetoothGlassRow(
                 module: module,
                 theme: theme,
                 isExpanded: isExpanded
             ) {
                 toggleExpansion(for: module.kind)
-            }
-            .equatable()
+            })
         }
     }
 
@@ -2552,7 +2543,7 @@ private struct PanelCardBrightenModifier: ViewModifier {
         content
             .background {
                 RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.15))
+                    .fill(Color.white.opacity(MonitorPalette(preference: .balanced, colorScheme: colorScheme).cardBrightenOpacity))
                     .allowsHitTesting(false)
             }
         }
