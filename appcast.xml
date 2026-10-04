@@ -3,47 +3,26 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.7.0</title>
-            <pubDate>Fri, 02 Oct 2026 04:09:42 +0000</pubDate>
-            <sparkle:version>95</sparkle:version>
-            <sparkle:shortVersionString>1.7.0</sparkle:shortVersionString>
+            <title>1.7.1</title>
+            <pubDate>Sun, 04 Oct 2026 13:17:39 +0000</pubDate>
+            <sparkle:version>96</sparkle:version>
+            <sparkle:shortVersionString>1.7.1</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-感谢 GPT 6.1 Sol 的倾情支持，困扰许久的软件性能终于得到大幅度的跃升。同时感谢 @srcenchen 为供电读数改进贡献的 PR。建议所有用户更新。
-
 ### 中文
 
-#### 优化与体验
-
-- 数据统计体验与口径全面升级：统一各模块的容量/流量单位、百分比基准与档位阈值，修复网络速率与区间总量混用导致的读数矛盾；应用高占用事件现在区分「持续高占用」「累计高占用」与观测跨度，结果跨版本持久保留。设置页的高负载摘要改为紧凑双行展示、可独立展开、按影响时长排序，并明确区分历史系统压力与普通应用占用的表述边界。报表支持携带时间范围、应用、指标与事件上下文跳转，趋势抽屉补齐多维度图表（含磁盘读写）与全量应用排行；对采样估算、旧日汇总等数据局限做了显式标记，避免误读。
-- 面板展开与滚动动画改由系统原生图层驱动，过渡更连贯；底部操作区固定显示，不再随内容滚动。
-- 系统功耗读数优先采用实时采样：在部分机型上，菜单栏与面板的整机功耗此前可能滞后约 30–60 秒，现已即时跟随负载变化（直连版，#125）。
-- 显示器信息卡的图标与标题改为同行排列，展开内容不再额外缩进。
-
-#### 修复
-
-- 修复直连版在部分供电状态下，功率流在「交流供电」与「维持」之间横跳、直供时误报电池放电的问题。
+感谢 @singularitti 改进 Homebrew 安装说明（#127、#128）。本次更新聚焦面板与统计的资源利用优化。
 
 ### English
 
-#### Improvements
-
-- Special thanks to GPT 6.1 Sol for its dedicated support — the app's long-standing performance has finally taken a major leap forward. Thanks to @srcenchen for the power-reading improvement. We recommend all users update.
-- Statistics have been overhauled for a consistent experience and unified units: capacity/traffic units, percentage baselines, and severity thresholds are now uniform across modules, fixing readings that mixed network speed with per-period totals. Heavy-app events now distinguish sustained usage, accumulated usage, and observation spans, and persist across versions. The high-load summary in Settings is now a compact two-line layout with independent expansion, ordered by impact duration, with clearer wording that separates historical system pressure from ordinary app usage. Reports can be opened with the time range, app, metric, and event context carried over; the trend drawer adds multi-dimension charts (including disk I/O) and a full app ranking. Data limitations such as sampling estimates and legacy daily summaries are now labeled explicitly to avoid misreading.
-- Panel expansion and scrolling are now driven by the system's native layer motion for smoother transitions; the bottom action bar stays fixed instead of scrolling with the content.
-- System power readings now use real-time sampling first: on some Macs, the menu bar and panel power previously lagged by about 30–60 seconds; they now follow load changes immediately (direct edition, #125).
-- In the display info card, the icon and title now share one row, and expanded content is no longer indented.
-
-#### Fixes
-
-- Fixed an issue in the direct edition where the power flow diagram flip-flopped between "AC power" and "maintaining" states, and could falsely report battery discharge while on direct power.
+Thanks to @singularitti for improving the Homebrew installation instructions (#127, #128). This release focuses on panel and statistics resource optimizations.
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.7.0/HagimiMonitor-v1.7.0.zip" length="6152884" type="application/octet-stream" sparkle:edSignature="W2D46dZ7xFGssh+HVXd30rYhVs+QUPhsZB8Ic7nzO1Qmmg1lx5RjQrNXvSFFc7bZsr09xr8ptXrPUVAPNNz1BQ=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.7.1/HagimiMonitor-v1.7.1.zip" length="6160077" type="application/octet-stream" sparkle:edSignature="hl5PlgIDU3VnqfkiQAJKdSw6R8wx/xKabo1zoBEchaNVmdbV4GJC3ROqfvrZLAKxISkADY0kJc56hJZqrk43Ag=="/>
         </item>
     </channel>
 </rss>
