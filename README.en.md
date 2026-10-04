@@ -156,6 +156,12 @@ HagimiMonitor offers two ways to get it, with the same core monitoring experienc
 
 The app is notarized by Apple and opens directly after download.
 
+If you have [Homebrew](https://brew.sh) installed, you can install it by running the following command in your terminal:
+
+```shell
+brew install hagimimonitordirect
+```
+
 ## Requirements
 
 - macOS 15 or later
