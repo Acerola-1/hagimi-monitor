@@ -151,7 +151,7 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
             MonitorMetric(name: MonitorMetricKey.type, value: "battery"),
             MonitorMetric(name: "status", value: statusValue),
             MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
-            MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", unit: connected ? " W" : nil),
+            MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", numericValue: chargingPower, unit: connected ? " W" : nil),
             MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower, unit: " W")
         ]
         #if DIRECT_DISTRIBUTION

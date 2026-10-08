@@ -99,7 +99,7 @@ struct ModuleRowPreview: View {
             trailing
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 8)
+        .padding(.vertical, kind == .battery || kind == .network ? RowHeaderPillMetrics.verticalPadding : 8)
         .panelRowHeaderHeight()
     }
 
@@ -138,7 +138,11 @@ struct ModuleRowPreview: View {
         case .storage:
             ProgressMeter(value: MetricSampleCatalog.storageUsageFraction * 100, tint: tint, theme: theme)
                 .frame(width: 56, height: 3)
-        case .network, .battery, .fan, .bluetooth:
+        case .battery:
+            PowerHeaderPills(module: MetricSampleCatalog.powerFlowModule, theme: theme)
+        case .network:
+            NetworkHeaderPills(upload: MetricSampleCatalog.networkUpload, download: MetricSampleCatalog.networkDownload, theme: theme)
+        case .fan, .bluetooth:
             EmptyView()
         }
     }

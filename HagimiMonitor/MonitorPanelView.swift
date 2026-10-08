@@ -1150,10 +1150,10 @@ struct CPUCoresDetail: View {
 
     private func tint(for kind: CPUCoreKind) -> Color {
         switch kind {
-        case .superCore: theme.palette.performanceCoreTint
+        case .superCore: theme.palette.superCoreTint
         case .performance: displayedDetail.superUsage == nil
             ? theme.palette.performanceCoreTint : theme.palette.secondaryPerformanceCoreTint
-        case .efficiency: theme.palette.severityTint(for: .calm)
+        case .efficiency: theme.palette.efficiencyCoreTint
         }
     }
 
@@ -1183,13 +1183,10 @@ struct CPUCoresDetail: View {
                     CoreLoadRing(
                         usage: core.usage,
                         tint: tint(for: core.kind),
-                        // 底环比内衬底色深一档(trackFill 叠 trackFill 会糊),
-                        // 复用行分隔线令牌拉开层次。
-                        track: theme.rowSeparator(for: .cpu)
+                        track: theme.palette.cpuCoreTrack
                     )
                 }
             }
-            // 环底用行分隔线令牌(比共享内衬深一档),避免糊成一片。
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
 
@@ -1254,10 +1251,15 @@ struct CPUCoresDetail: View {
     }
 }
 
+nonisolated private enum CPUCoreRingMetrics {
+    static let diameter: CGFloat = 18
+    static let lineWidth: CGFloat = 3
+}
+
 /// 逐核圆环流式布局:优先放满一行(按最小间隙算每行容量),放不下再折行;
 /// 每一行(含末行)都按自身环数把间隙撑满整行,单环行居中。
 private struct CoreRingFlowLayout: Layout {
-    var ringSize: CGFloat = 14
+    var ringSize: CGFloat = CPUCoreRingMetrics.diameter
     var minSpacing: CGFloat = 6
     var rowGap: CGFloat = 6
 
@@ -1309,7 +1311,7 @@ private struct CoreRingFlowLayout: Layout {
     }
 }
 
-/// 单核负载环:trackFill 底环 + 占用弧。弧线随采样帧短促缓动过渡,
+/// 单核负载环:空闲轨道 + 类别色占用弧。弧线随采样帧短促缓动过渡,
 /// 无持续动画。
 private struct CoreLoadRing: View {
     let usage: Double
@@ -1319,13 +1321,15 @@ private struct CoreLoadRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(track, lineWidth: 2)
+                .inset(by: CPUCoreRingMetrics.lineWidth / 2)
+                .stroke(track, lineWidth: CPUCoreRingMetrics.lineWidth)
             Circle()
+                .inset(by: CPUCoreRingMetrics.lineWidth / 2)
                 .trim(from: 0, to: max(0.001, min(1, usage / 100)))
-                .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: CPUCoreRingMetrics.lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
-        .frame(width: 14, height: 14)
+        .frame(width: CPUCoreRingMetrics.diameter, height: CPUCoreRingMetrics.diameter)
         .animation(.easeOut(duration: 0.3), value: usage)
     }
 }
@@ -1818,7 +1822,7 @@ struct StorageVolumeInfo: Identifiable {
 
 // MARK: - Network Row
 
-private struct NetworkGlassRow: View, Equatable {
+struct NetworkGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
@@ -1882,11 +1886,7 @@ private struct NetworkGlassRow: View, Equatable {
 
                     Spacer(minLength: 4)
 
-                    HStack(spacing: RowHeaderPillMetrics.spacing) {
-                        NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
-                        NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+                    NetworkHeaderPills(upload: value("upload"), download: value("download"), theme: theme)
                     .layoutPriority(2)
                 }
             }
@@ -1900,7 +1900,7 @@ private struct NetworkGlassRow: View, Equatable {
             // 无障碍语义与其余行同款:行头单一元素 + 按钮语义 + 展开提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "kind.network"))
-            .accessibilityValue(localizedNetworkInterface(module.summary))
+            .accessibilityValue("\(localizedNetworkInterface(module.summary)), \(String(localized: "panel.network.upload")) \(value("upload")), \(String(localized: "panel.network.download")) \(value("download"))")
             .accessibilityHint(hasExpandableContent ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -1949,7 +1949,7 @@ private struct NetworkGlassRow: View, Equatable {
 
 // MARK: - Battery Row
 
-private struct BatteryGlassRow: View, Equatable {
+struct BatteryGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
@@ -2030,20 +2030,8 @@ private struct BatteryGlassRow: View, Equatable {
 
                 Spacer(minLength: 4)
 
-                // 双 pill 常驻:⚡(充电功率)+ 仪表(整机功耗)。成对出现互相注解——
-                // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
-                // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
-                // 采用与网络行严格统一的定宽与间距(RowHeaderPillMetrics),保证两行上下完美对齐。
-                HStack(spacing: RowHeaderPillMetrics.spacing) {
-                    if hasBattery {
-                        PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
-                    }
-                    if hasBattery || numericValue("power") != nil {
-                        PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                    }
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
+                PowerHeaderPills(module: module, theme: theme)
+                    .layoutPriority(2)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
@@ -2059,7 +2047,7 @@ private struct BatteryGlassRow: View, Equatable {
             // 无障碍语义与其余行同款。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "kind.battery"))
-            .accessibilityValue(summaryText)
+            .accessibilityValue("\(summaryText), \(String(localized: "panel.power.input")) \(PowerReadings(module: module).inputText), \(String(localized: "panel.power.load")) \(PowerReadings(module: module).loadText)")
             .accessibilityHint(canExpand ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -2198,13 +2186,6 @@ private struct BatteryGlassRow: View, Equatable {
         default:
             return "battery.0percent"
         }
-    }
-
-    /// CHG pill 内容:充电中显充电功率,其余状态(电池供电/插电直供)显占位符。
-    private var chargingPillValue: String {
-        guard isCharging else { return "-" }
-        let raw = rawValue("charging-power")
-        return raw == "--" ? "-" : raw
     }
 
     private var summaryText: String {
@@ -2461,72 +2442,6 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
             percentage: Int(parts[4]) ?? 0,
             isExternal: true
         )
-    }
-}
-
-/// 行头定宽胶囊度量:网络行（上传/下载）与电源行（充电/整机功耗）统一使用同款定宽胶囊与间距，
-/// 确保两行在右侧垂直对齐，彻底消除不同位数跳动带来的推挤。
-enum RowHeaderPillMetrics {
-    static let width: CGFloat = 70
-    static let height: CGFloat = 20
-    /// 胶囊行上下留白由统一行头高度反推，保持胶囊尺寸与其他行头基线一致。
-    static let verticalPadding = (MonitorConstants.panelRowHeaderHeight - height) / 2
-    static let spacing: CGFloat = 6
-}
-
-/// 电源行专用的定宽胶囊:符号标识(⚡充电 / 仪表功耗)+ 数值。
-/// 定宽与 Capsule(theme.trackFill) 衬底保证数值位数变化/充电状态切换时行内元素不抖动。
-private struct PowerLabelPill: View {
-    let symbol: String
-    let value: String
-    let theme: MonitorPanelTheme
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(theme.secondaryText.opacity(0.72))
-                .frame(width: 10)
-            Text(value)
-                .font(.system(size: 10, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(theme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .padding(.horizontal, 5)
-        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
-        .background(Capsule().fill(theme.trackFill))
-    }
-}
-
-/// 网络行专用的定宽胶囊:箭头符号(↑上传 / ↓下载)+ 速率数值。
-/// 定宽与 Capsule(theme.trackFill) 衬底保证高频跳动时布局零抖动。
-private struct NetworkRatePill: View {
-    let systemImage: String
-    let text: String
-    let theme: MonitorPanelTheme
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(theme.secondaryText.opacity(0.72))
-                .frame(width: 10)
-
-            Text(text)
-                .font(.system(size: 10, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(theme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .padding(.horizontal, 5)
-        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
-        .background(Capsule().fill(theme.trackFill))
     }
 }
 
