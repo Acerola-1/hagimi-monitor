@@ -1818,7 +1818,7 @@ struct StorageVolumeInfo: Identifiable {
 
 // MARK: - Network Row
 
-private struct NetworkGlassRow: View, Equatable {
+struct NetworkGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
@@ -1882,11 +1882,7 @@ private struct NetworkGlassRow: View, Equatable {
 
                     Spacer(minLength: 4)
 
-                    HStack(spacing: RowHeaderPillMetrics.spacing) {
-                        NetworkRatePill(systemImage: "arrow.up", text: value("upload"), theme: theme)
-                        NetworkRatePill(systemImage: "arrow.down", text: value("download"), theme: theme)
-                    }
-                    .fixedSize(horizontal: true, vertical: false)
+                    NetworkHeaderPills(upload: value("upload"), download: value("download"), theme: theme)
                     .layoutPriority(2)
                 }
             }
@@ -1900,7 +1896,7 @@ private struct NetworkGlassRow: View, Equatable {
             // 无障碍语义与其余行同款:行头单一元素 + 按钮语义 + 展开提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "kind.network"))
-            .accessibilityValue(localizedNetworkInterface(module.summary))
+            .accessibilityValue("\(localizedNetworkInterface(module.summary)), \(String(localized: "panel.network.upload")) \(value("upload")), \(String(localized: "panel.network.download")) \(value("download"))")
             .accessibilityHint(hasExpandableContent ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -1949,7 +1945,7 @@ private struct NetworkGlassRow: View, Equatable {
 
 // MARK: - Battery Row
 
-private struct BatteryGlassRow: View, Equatable {
+struct BatteryGlassRow: View, Equatable {
     let module: MonitorModule
     let theme: MonitorPanelTheme
     var details: [MonitorMetric] = []
@@ -2030,20 +2026,8 @@ private struct BatteryGlassRow: View, Equatable {
 
                 Spacer(minLength: 4)
 
-                // 双 pill 常驻:⚡(充电功率)+ 仪表(整机功耗)。成对出现互相注解——
-                // 闪电抢占「充电」语义后,仪表自然归位为「消耗读数」;未充电时 CHG
-                // 显占位符而非隐藏,布局永不跳动(同进程列表横杠占位哲学)。
-                // 采用与网络行严格统一的定宽与间距(RowHeaderPillMetrics),保证两行上下完美对齐。
-                HStack(spacing: RowHeaderPillMetrics.spacing) {
-                    if hasBattery {
-                        PowerLabelPill(symbol: "bolt.fill", value: chargingPillValue, theme: theme)
-                    }
-                    if hasBattery || numericValue("power") != nil {
-                        PowerLabelPill(symbol: "gauge.with.needle", value: value("power"), theme: theme)
-                    }
-                }
-                .fixedSize(horizontal: true, vertical: false)
-                .layoutPriority(2)
+                PowerHeaderPills(module: module, theme: theme)
+                    .layoutPriority(2)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
@@ -2059,7 +2043,7 @@ private struct BatteryGlassRow: View, Equatable {
             // 无障碍语义与其余行同款。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "kind.battery"))
-            .accessibilityValue(summaryText)
+            .accessibilityValue("\(summaryText), \(String(localized: "panel.power.input")) \(PowerReadings(module: module).inputText), \(String(localized: "panel.power.load")) \(PowerReadings(module: module).loadText)")
             .accessibilityHint(canExpand ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -2198,13 +2182,6 @@ private struct BatteryGlassRow: View, Equatable {
         default:
             return "battery.0percent"
         }
-    }
-
-    /// CHG pill 内容:充电中显充电功率,其余状态(电池供电/插电直供)显占位符。
-    private var chargingPillValue: String {
-        guard isCharging else { return "-" }
-        let raw = rawValue("charging-power")
-        return raw == "--" ? "-" : raw
     }
 
     private var summaryText: String {
@@ -2461,72 +2438,6 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
             percentage: Int(parts[4]) ?? 0,
             isExternal: true
         )
-    }
-}
-
-/// 行头定宽胶囊度量:网络行（上传/下载）与电源行（充电/整机功耗）统一使用同款定宽胶囊与间距，
-/// 确保两行在右侧垂直对齐，彻底消除不同位数跳动带来的推挤。
-enum RowHeaderPillMetrics {
-    static let width: CGFloat = 70
-    static let height: CGFloat = 20
-    /// 胶囊行上下留白由统一行头高度反推，保持胶囊尺寸与其他行头基线一致。
-    static let verticalPadding = (MonitorConstants.panelRowHeaderHeight - height) / 2
-    static let spacing: CGFloat = 6
-}
-
-/// 电源行专用的定宽胶囊:符号标识(⚡充电 / 仪表功耗)+ 数值。
-/// 定宽与 Capsule(theme.trackFill) 衬底保证数值位数变化/充电状态切换时行内元素不抖动。
-private struct PowerLabelPill: View {
-    let symbol: String
-    let value: String
-    let theme: MonitorPanelTheme
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: symbol)
-                .font(.system(size: 10, weight: .semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(theme.secondaryText.opacity(0.72))
-                .frame(width: 10)
-            Text(value)
-                .font(.system(size: 10, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(theme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .padding(.horizontal, 5)
-        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
-        .background(Capsule().fill(theme.trackFill))
-    }
-}
-
-/// 网络行专用的定宽胶囊:箭头符号(↑上传 / ↓下载)+ 速率数值。
-/// 定宽与 Capsule(theme.trackFill) 衬底保证高频跳动时布局零抖动。
-private struct NetworkRatePill: View {
-    let systemImage: String
-    let text: String
-    let theme: MonitorPanelTheme
-
-    var body: some View {
-        HStack(spacing: 3) {
-            Image(systemName: systemImage)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(theme.secondaryText.opacity(0.72))
-                .frame(width: 10)
-
-            Text(text)
-                .font(.system(size: 10, weight: .medium))
-                .monospacedDigit()
-                .foregroundStyle(theme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.82)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-        }
-        .padding(.horizontal, 5)
-        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
-        .background(Capsule().fill(theme.trackFill))
     }
 }
 

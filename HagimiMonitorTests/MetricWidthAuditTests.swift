@@ -128,18 +128,10 @@ struct MetricWidthAuditTests {
         }
     }
 
-    /// 定宽胶囊最坏值契约审计:网络速率与电源功率在定宽胶囊衬底内，
-    /// 在 0.82 紧凑缩放限度内必须能够完整容纳最坏情况读数，杜绝横向推挤与折行。
+    /// 带标签胶囊把整行宽度留给读数，网络速率与电源功率都不依赖缩放或截断。
     @Test func pillsFitHeaderPillBudget() {
-        let pillWidth: CGFloat = RowHeaderPillMetrics.width
-        let horizontalPadding: CGFloat = 10 // 5 * 2
-        let iconWidth: CGFloat = 10
-        let spacing: CGFloat = 3
-        let availableTextWidth = pillWidth - horizontalPadding - iconWidth - spacing
-        let minScaleFactor: CGFloat = 0.82
-        let maxAllowedTextWidth = availableTextWidth / minScaleFactor
-
-        let pillFont = NSFont.monospacedDigitSystemFont(ofSize: 10, weight: .medium)
+        let availableTextWidth = RowHeaderPillMetrics.width - 2 * RowHeaderPillMetrics.horizontalPadding
+        let pillFont = NSFont.monospacedDigitSystemFont(ofSize: RowHeaderPillMetrics.valueSize, weight: .medium)
 
         let worstTexts = [
             "1024 KB/s",
@@ -157,7 +149,54 @@ struct MetricWidthAuditTests {
 
         for text in worstTexts {
             let textWidth = width(text, font: pillFont)
-            #expect(textWidth <= maxAllowedTextWidth, "胶囊文本 \(text) 宽度 \(textWidth) 超过最坏缩放预算 \(maxAllowedTextWidth)")
+            #expect(textWidth <= availableTextWidth, "胶囊文本 \(text) 宽度 \(textWidth) 超过预算 \(availableTextWidth)")
+        }
+    }
+
+    @Test @MainActor func labeledHeaderPillsFitWithoutScaling() throws {
+        let budget = RowHeaderPillMetrics.width - 2 * RowHeaderPillMetrics.horizontalPadding
+        for language in languages {
+            for key in ["panel.power.input", "panel.power.load", "panel.network.upload", "panel.network.download"] {
+                let label = try localized(key, language)
+                #expect(width(label, font: .systemFont(ofSize: RowHeaderPillMetrics.labelSize)) <= budget)
+            }
+        }
+        for value in ["999.9 W", "188.0 W", "13.1 W", "—"] {
+            #expect(width(value, font: .monospacedDigitSystemFont(ofSize: RowHeaderPillMetrics.valueSize, weight: .medium)) <= budget)
+        }
+    }
+
+    @Test @MainActor func batteryPowerAndLongestLocalizedEtaFitOriginalBar() throws {
+        // 比正式最窄面板再少留一圈外边距，覆盖嵌套宿主与展开区的内衬。
+        let barWidth = CGFloat(MonitorConstants.panelMinWidth) - 40
+        let percentageFont = NSFont.monospacedSystemFont(ofSize: PowerFlowBatteryMetrics.percentageSize, weight: .bold)
+        let statusFont = NSFont.systemFont(ofSize: PowerFlowBatteryMetrics.detailSize)
+        let detailFont = NSFont.monospacedSystemFont(ofSize: PowerFlowBatteryMetrics.detailSize, weight: .regular)
+        for language in languages {
+            let formatter = DateComponentsFormatter()
+            formatter.allowedUnits = [.hour, .minute]
+            formatter.unitsStyle = .short
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.locale = Locale(identifier: language)
+            formatter.calendar = calendar
+            let duration = try #require(formatter.string(from: 9999 * 60))
+            let statusKeys = ["battery-state.charging", "panel.power.discharging", "battery-state.maintain", "battery-state.insufficient", "battery-state.ac-power"]
+            let etaKeys = ["panel.power-flow.eta-full", "panel.power-flow.eta-empty", "panel.power-flow.direct-supply", "panel.power-flow.optimized-protection", "panel.power-flow.hold-limit", "panel.power-flow.fully-charged"]
+            for statusKey in statusKeys {
+                let status = try localized(statusKey, language)
+                let leftWidth = width("100%", font: percentageFont)
+                    + max(width(status, font: statusFont), width("999.9 W", font: detailFont))
+                let etaWidth = barWidth - leftWidth - 2 * PowerFlowBatteryMetrics.horizontalPadding
+                    - 3 * PowerFlowBatteryMetrics.contentSpacing - PowerFlowBatteryMetrics.spacerWidth
+                #expect(etaWidth > 0)
+                for etaKey in etaKeys {
+                    let text = String(format: try localized(etaKey, language), duration)
+                    let bounds = (text as NSString).boundingRect(with: CGSize(width: etaWidth, height: .greatestFiniteMagnitude),
+                        options: [.usesLineFragmentOrigin, .usesFontLeading], attributes: [.font: detailFont])
+                    #expect(bounds.height <= PowerFlowDiagram.barHeight - 4,
+                        "[\(language)] \(status) + \(text) 在原电池条内无法完整显示")
+                }
+            }
         }
     }
 }

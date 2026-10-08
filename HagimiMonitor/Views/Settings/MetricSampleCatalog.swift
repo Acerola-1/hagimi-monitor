@@ -24,6 +24,9 @@ struct MetricSample {
 }
 
 enum MetricSampleCatalog {
+    static let networkUpload = "128 KB/s"
+    static let networkDownload = "12.4 MB/s"
+
     /// 内存压力主指标模式下,面板「压力」槽位实际渲染使用率百分比,
     /// 示例值随模式切换;普通模式为档位文本。
     static func sample(for kind: MonitorKind, id: String, memoryPressureMode: Bool = false) -> MetricSample {

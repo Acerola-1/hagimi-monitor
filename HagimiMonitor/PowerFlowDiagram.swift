@@ -18,7 +18,7 @@ struct PowerFlowDiagram: View {
     private static let nodeWidth: CGFloat = 90
     private static let nodeHeight: CGFloat = 46
     private static let stubHeight: CGFloat = 16
-    private static let barHeight: CGFloat = 38
+    static let barHeight: CGFloat = 38
 
     var body: some View {
         if systemWatts != nil {
@@ -142,22 +142,11 @@ struct PowerFlowDiagram: View {
                            height: geo.size.height - 4)
                     .offset(x: 2)
 
-                HStack(spacing: 6) {
-                    Text(percent(module.value))
-                        .font(.system(size: 14, weight: .bold, design: .monospaced))
-                        .foregroundStyle(barTextPrimary)
-                    Text(barStatusText)
-                        .font(.system(size: 10))
-                        .foregroundStyle(barTextSecondary)
-                    Spacer(minLength: 8)
-                    if let eta = barEtaText {
-                        Text(eta)
-                            .font(.system(size: 10, design: .monospaced))
-                            .foregroundStyle(barTextSecondary)
-                            .lineLimit(1)
-                    }
-                }
-                .padding(.horizontal, 11)
+                PowerFlowBatteryContent(
+                    percentage: percent(module.value), status: barStatusText,
+                    power: PowerReadings(module: module).batteryText, eta: barEtaText,
+                    primary: barTextPrimary, secondary: barTextSecondary
+                )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 // 深色模式填充上的白字需要轻投影保可读性;浅色模式用深字不投影。
                 .shadow(color: .black.opacity(isDark ? 0.45 : 0), radius: 2, x: 0, y: 1)
@@ -241,7 +230,7 @@ struct PowerFlowDiagram: View {
     private var barStatusText: String {
         switch status {
         case "charging": return localizedBatteryState("charging")
-        case "on-battery": return localizedBatteryState("on-battery")
+        case "on-battery": return String(localized: "panel.power.discharging")
         case "maintain":
             // 适配器不足是 maintain 的告警子态(输入顶到额定仍放电补差),优先展示。
             return isInsufficient
@@ -457,6 +446,52 @@ struct PowerFlowDiagram: View {
 
     private func numericValue(_ name: String) -> Double? {
         module.metrics.first { $0.name == name }?.numericValue
+    }
+}
+
+enum PowerFlowBatteryMetrics {
+    static let percentageSize: CGFloat = 14
+    static let detailSize: CGFloat = 10
+    static let horizontalPadding: CGFloat = 11
+    static let contentSpacing: CGFloat = 6
+    static let spacerWidth: CGFloat = 8
+}
+
+/// 功率放在状态下方，电量与 ETA 保持原位置；两行内容仍落在原电池条高度内。
+struct PowerFlowBatteryContent: View {
+    let percentage: String
+    let status: String
+    let power: String?
+    let eta: String?
+    let primary: Color
+    let secondary: Color
+
+    var body: some View {
+        HStack(spacing: PowerFlowBatteryMetrics.contentSpacing) {
+            Text(percentage)
+                .font(.system(size: PowerFlowBatteryMetrics.percentageSize, weight: .bold, design: .monospaced))
+                .foregroundStyle(primary)
+                .fixedSize()
+            VStack(alignment: .leading, spacing: 1) {
+                Text(status)
+                    .font(.system(size: PowerFlowBatteryMetrics.detailSize))
+                if let power {
+                    Text(power)
+                        .font(.system(size: PowerFlowBatteryMetrics.detailSize, design: .monospaced))
+                }
+            }
+            .foregroundStyle(secondary)
+            .fixedSize()
+            Spacer(minLength: PowerFlowBatteryMetrics.spacerWidth)
+            if let eta {
+                Text(eta)
+                    .font(.system(size: PowerFlowBatteryMetrics.detailSize, design: .monospaced))
+                    .foregroundStyle(secondary)
+                    .multilineTextAlignment(.trailing)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.horizontal, PowerFlowBatteryMetrics.horizontalPadding)
     }
 }
 
@@ -911,4 +946,3 @@ private final class PowerFlowTracksNSView: NSView {
         }
     }
 }
-
