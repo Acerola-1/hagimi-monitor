@@ -1150,10 +1150,10 @@ struct CPUCoresDetail: View {
 
     private func tint(for kind: CPUCoreKind) -> Color {
         switch kind {
-        case .superCore: theme.palette.performanceCoreTint
+        case .superCore: theme.palette.superCoreTint
         case .performance: displayedDetail.superUsage == nil
             ? theme.palette.performanceCoreTint : theme.palette.secondaryPerformanceCoreTint
-        case .efficiency: theme.palette.severityTint(for: .calm)
+        case .efficiency: theme.palette.efficiencyCoreTint
         }
     }
 
@@ -1183,13 +1183,10 @@ struct CPUCoresDetail: View {
                     CoreLoadRing(
                         usage: core.usage,
                         tint: tint(for: core.kind),
-                        // 底环比内衬底色深一档(trackFill 叠 trackFill 会糊),
-                        // 复用行分隔线令牌拉开层次。
-                        track: theme.rowSeparator(for: .cpu)
+                        track: theme.palette.cpuCoreTrack
                     )
                 }
             }
-            // 环底用行分隔线令牌(比共享内衬深一档),避免糊成一片。
             .padding(.vertical, 6)
             .padding(.horizontal, 8)
 
@@ -1254,10 +1251,15 @@ struct CPUCoresDetail: View {
     }
 }
 
+nonisolated private enum CPUCoreRingMetrics {
+    static let diameter: CGFloat = 18
+    static let lineWidth: CGFloat = 3
+}
+
 /// 逐核圆环流式布局:优先放满一行(按最小间隙算每行容量),放不下再折行;
 /// 每一行(含末行)都按自身环数把间隙撑满整行,单环行居中。
 private struct CoreRingFlowLayout: Layout {
-    var ringSize: CGFloat = 14
+    var ringSize: CGFloat = CPUCoreRingMetrics.diameter
     var minSpacing: CGFloat = 6
     var rowGap: CGFloat = 6
 
@@ -1309,7 +1311,7 @@ private struct CoreRingFlowLayout: Layout {
     }
 }
 
-/// 单核负载环:trackFill 底环 + 占用弧。弧线随采样帧短促缓动过渡,
+/// 单核负载环:空闲轨道 + 类别色占用弧。弧线随采样帧短促缓动过渡,
 /// 无持续动画。
 private struct CoreLoadRing: View {
     let usage: Double
@@ -1319,13 +1321,15 @@ private struct CoreLoadRing: View {
     var body: some View {
         ZStack {
             Circle()
-                .stroke(track, lineWidth: 2)
+                .inset(by: CPUCoreRingMetrics.lineWidth / 2)
+                .stroke(track, lineWidth: CPUCoreRingMetrics.lineWidth)
             Circle()
+                .inset(by: CPUCoreRingMetrics.lineWidth / 2)
                 .trim(from: 0, to: max(0.001, min(1, usage / 100)))
-                .stroke(tint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+                .stroke(tint, style: StrokeStyle(lineWidth: CPUCoreRingMetrics.lineWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
         }
-        .frame(width: 14, height: 14)
+        .frame(width: CPUCoreRingMetrics.diameter, height: CPUCoreRingMetrics.diameter)
         .animation(.easeOut(duration: 0.3), value: usage)
     }
 }

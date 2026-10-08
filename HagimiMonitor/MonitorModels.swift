@@ -163,9 +163,8 @@ nonisolated enum MonitorKind: String, CaseIterable, Identifiable, Sendable {
                 MetricSwitch(id: "core-split", title: String(localized: "metric.cpu.core-split"), isDefault: true),
             ]
         case .gpu:
-            var metrics = [
-                MetricSwitch(id: "usage", title: String(localized: "metric.gpu.usage"), isDefault: true),
-            ]
+            // 总占用已由主行展示，展开区只提供补充指标。
+            var metrics: [MetricSwitch] = []
             #if DIRECT_DISTRIBUTION
             metrics.append(MetricSwitch(id: "clock-state", title: String(localized: "metric.gpu.clock-state"), isDefault: true))
             #endif

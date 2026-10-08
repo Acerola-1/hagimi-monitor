@@ -82,26 +82,52 @@ struct MonitorPalette {
         quickToolTint.opacity(isDark ? 0.16 : 0.10)
     }
 
-    /// P 核主色:独立于 CPU 模块主色。活力模式下 CPU 为橙,性能核用高醒目
-    /// 绯红与行 tint 形成强对比,保证逐核圆环在彩色底上的辨识度;
-    /// 平衡模式下与 CPU 主色一致。
+    /// 核心类别色与模块色分工：活力模式用冷蓝表示性能核，橙色只承担 CPU 模块识别。
+    /// 明暗外观分别取色，保持小尺寸占用弧的辨识度；平衡模式沿用原有配色。
     var performanceCoreTint: Color {
         switch preference {
         case .balanced:
             moduleTint(for: .cpu)
         case .vibrant:
-            Color(hex: 0xFA4D56)
+            Color(hex: isDark ? 0x7EA6F0 : 0x4776CC)
         }
     }
 
-    /// S/P/E 三组并存时，P 核改用冷蓝；最强的 S 核占用原有红色，
-    /// 避开 CPU 模块自身的橙色底调，也与绿色 E 核拉开色相。
+    /// 三组核心的平衡配色保留冷蓝性能核；活力配色中的性能核不随超核是否存在换色。
     var secondaryPerformanceCoreTint: Color {
         switch preference {
         case .balanced:
             Color(hex: 0x4E7FD9)
         case .vibrant:
-            Color(hex: 0x4F83E8)
+            performanceCoreTint
+        }
+    }
+
+    var superCoreTint: Color {
+        switch preference {
+        case .balanced:
+            moduleTint(for: .cpu)
+        case .vibrant:
+            Color(hex: isDark ? 0xB6A0EC : 0x8B6FD6)
+        }
+    }
+
+    var efficiencyCoreTint: Color {
+        switch preference {
+        case .balanced:
+            severityTint(for: .calm)
+        case .vibrant:
+            Color(hex: isDark ? 0x66C7BD : 0x278C88)
+        }
+    }
+
+    /// 空闲轨道只交代圆环轮廓，不携带模块色；与行背景渐变和分隔线的着色独立。
+    var cpuCoreTrack: Color {
+        switch preference {
+        case .balanced:
+            neutralSeparator
+        case .vibrant:
+            isDark ? Color.white.opacity(0.22) : Color(hex: 0x3C485A).opacity(0.18)
         }
     }
 
