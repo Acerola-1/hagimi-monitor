@@ -4,10 +4,13 @@ import SwiftUI
 enum RowHeaderPillMetrics {
     static let width: CGFloat = 70
     static let height: CGFloat = 26
+    static let cornerRadius = CGFloat(MonitorConstants.rowCornerRadius) - verticalPadding
     static let labelSize: CGFloat = 9
     static let valueSize: CGFloat = 10
     static let horizontalPadding: CGFloat = 5
     static let verticalPadding = (MonitorConstants.panelRowHeaderHeight - height) / 2
+    /// 右缘与上下留白等距，内层转角沿主行轮廓内缩。
+    static let trailingPadding = verticalPadding
     static let spacing: CGFloat = 6
 }
 
@@ -30,7 +33,8 @@ struct MetricLabelPill: View {
         }
         .padding(.horizontal, RowHeaderPillMetrics.horizontalPadding)
         .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
-        .background(Capsule().fill(theme.trackFill))
+        .background(RoundedRectangle(cornerRadius: RowHeaderPillMetrics.cornerRadius, style: .continuous)
+            .fill(theme.trackFill))
         .accessibilityElement(children: .combine)
     }
 }

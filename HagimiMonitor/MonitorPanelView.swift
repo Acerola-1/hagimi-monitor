@@ -1890,7 +1890,8 @@ struct NetworkGlassRow: View, Equatable {
                     .layoutPriority(2)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.leading, 10)
+            .padding(.trailing, RowHeaderPillMetrics.trailingPadding)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
@@ -2033,7 +2034,8 @@ struct BatteryGlassRow: View, Equatable {
                 PowerHeaderPills(module: module, theme: theme)
                     .layoutPriority(2)
             }
-            .padding(.horizontal, 10)
+            .padding(.leading, 10)
+            .padding(.trailing, RowHeaderPillMetrics.trailingPadding)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplaySection

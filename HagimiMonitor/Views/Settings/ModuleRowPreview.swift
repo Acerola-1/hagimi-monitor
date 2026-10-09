@@ -98,7 +98,8 @@ struct ModuleRowPreview: View {
 
             trailing
         }
-        .padding(.horizontal, 10)
+        .padding(.leading, 10)
+        .padding(.trailing, kind == .battery || kind == .network ? RowHeaderPillMetrics.trailingPadding : 10)
         .padding(.vertical, kind == .battery || kind == .network ? RowHeaderPillMetrics.verticalPadding : 8)
         .panelRowHeaderHeight()
     }
