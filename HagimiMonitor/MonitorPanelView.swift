@@ -517,8 +517,8 @@ struct MonitorPanelView: View {
                 // 压力模式下头部即压力等级文案:等级色落在词前小圆点,正文保持
                 // 常规数值色——状态色不与行玻璃底色叠加,两套色彩语义各归其位。
                 statusTint: pressureMode ? memoryPressureColor(level: pressureRawLevel(module), theme: theme) : nil,
-                // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
-                samples: pressureMode ? module.pressureSamples : [],
+                memoryPressureMode: pressureMode,
+                samples: PanelChartReadings.memorySamples(module, pressureMode: pressureMode),
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
                 metricOrder: storedMetricOrder(for: .metrics(.memory)),
                 isExpanded: isExpanded,
@@ -572,7 +572,7 @@ struct MonitorPanelView: View {
             return NativePanelContentItem(id: module.kind.id, content: MetricGlassRow(
                 module: module,
                 theme: theme,
-                detail: module.summary,
+                detail: PanelChartReadings.fanSummary(module),
                 samples: module.samples,
                 isExpanded: isExpanded,
                 fans: module.fans
@@ -866,6 +866,7 @@ private struct MetricGlassRow: View, Equatable {
     /// 行头状态词的状态色(如内存压力等级):着色于词后小圆点,正文恒为
     /// valueText——状态色不与行玻璃底色叠加,避免两套色彩语义互相稀释。
     var statusTint: Color? = nil
+    var memoryPressureMode = false
     var samples: [Double] = []
     var details: [MonitorMetric] = []
     var metricOrder: [String] = []
@@ -890,6 +891,7 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.detail == rhs.detail
             && lhs.statusTint == rhs.statusTint
+            && lhs.memoryPressureMode == rhs.memoryPressureMode
             && lhs.samples == rhs.samples else { return false }
         // 收起态下明细网格与进程列表均不可见，跳过对未展开内容的深度比对，阻断无关重绘。
         return lhs.details == rhs.details
@@ -966,8 +968,9 @@ private struct MetricGlassRow: View, Equatable {
                 trailingView(theme: theme)
             }
             .padding(.leading, 10)
-            .padding(.trailing, module.kind == .storage ? RowHeaderPillMetrics.trailingPadding : 10)
-            .padding(.vertical, module.kind == .storage ? RowHeaderPillMetrics.verticalPadding : 8)
+            .padding(.trailing, module.kind == .storage
+                     ? RowHeaderPillMetrics.trailingPadding : 10)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
@@ -981,8 +984,7 @@ private struct MetricGlassRow: View, Equatable {
             // 暴露按钮语义与展开/收起提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(module.kind.title)
-            .accessibilityValue(module.kind == .storage
-                ? StorageHeaderReadings.accessibilityValue(module, summary: detail) : detail)
+            .accessibilityValue(rowAccessibilityValue)
             .accessibilityHint(detailAvailable ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -1039,48 +1041,50 @@ private struct MetricGlassRow: View, Equatable {
         }
     }
 
+    private var rowAccessibilityValue: String {
+        if module.kind == .storage {
+            return StorageHeaderReadings.accessibilityValue(module, summary: detail)
+        }
+        if module.kind == .memory {
+            return "\(String(localized: memoryPressureMode ? "panel.chart.memory.pressure-label" : "panel.chart.memory.usage-label")), \(detail)"
+        }
+        return detail
+    }
+
     @ViewBuilder
     private func trailingView(theme: MonitorPanelTheme) -> some View {
         switch module.kind {
-        case .cpu, .gpu:
-            if !samples.isEmpty {
-                SparklineChart(samples: samples, tint: tint)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
-            }
-        case .memory:
-            // 压力模式才会传入 samples(压力历史):有则画曲线,无则维持使用率占比进度条。
-            if !samples.isEmpty {
-                SparklineChart(samples: samples, tint: tint)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
-            } else {
-                trailingMeter(theme: theme)
-            }
         case .storage:
             StorageHeaderPills(module: module, theme: theme)
+        case .cpu, .gpu, .memory:
+            if !module.isPlaceholder, !samples.isEmpty {
+                PanelHistoryChart(samples: samples,
+                    tint: module.kind == .memory && memoryPressureMode ? (statusTint ?? tint) : tint,
+                    theme: theme)
+                    .help(String(localized: module.kind == .memory
+                        ? (memoryPressureMode ? "panel.chart.memory.pressure-help" : "panel.chart.memory.usage-help")
+                        : "panel.chart.percent-help"))
+            } else {
+                missingChart(theme: theme)
+            }
+        case .fan:
+            if !module.isPlaceholder, let scale = PanelChartReadings.fanScale(fans ?? []), !samples.isEmpty {
+                PanelHistoryChart(samples: samples,
+                    tint: tint, theme: theme, scale: scale,
+                    referenceValue: fans?.map(\.minRPM).filter { $0 > 0 }.min().map(Double.init))
+                    .help(String(format: String(localized: "panel.chart.fan-help"), Int(scale.upper)))
+            } else {
+                missingChart(theme: theme)
+            }
         case .network, .battery, .bluetooth:
             EmptyView()
-        case .fan:
-            // 风扇主行右侧:有 RPM 历史则画 sparkline,否则显示当前 max RPM 数字。
-            // Y 轴用风扇硬件 min~max 范围归一化(如 2317~6550),而非默认 0~100,
-            // 这样日常 ~2500 RPM 的线不会贴顶,转速变化也能被放大可见。
-            if !samples.isEmpty {
-                let fanMin = Double(fans?.map(\.minRPM).min() ?? 0)
-                let fanMax = Double(fans?.map(\.maxRPM).max() ?? 100)
-                SparklineChart(samples: samples, tint: tint, minValue: fanMin, maxValue: fanMax)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
-            } else {
-                Text(module.summary)
-                    .monitorPanelMonoFont(weight: .semibold)
-                    .foregroundStyle(theme.valueText)
-            }
         }
     }
 
-    /// 占比进度条:5pt 细条在统一槽位(56×18)内垂直居中,与 sparkline 同右缘节奏。
-    private func trailingMeter(theme: MonitorPanelTheme) -> some View {
-        ProgressMeter(value: module.value, tint: tint, theme: theme)
-            .frame(width: MonitorConstants.trailingSlotWidth, height: 5)
-            .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
+    private func missingChart(theme: MonitorPanelTheme) -> some View {
+        Text("—")
+            .foregroundStyle(theme.secondaryText)
+            .frame(width: MonitorConstants.panelChartWidth, height: MonitorConstants.panelChartHeight)
     }
 
     private var storageVolumes: [StorageVolumeInfo]? {

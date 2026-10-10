@@ -99,8 +99,9 @@ struct ModuleRowPreview: View {
             trailing
         }
         .padding(.leading, 10)
-        .padding(.trailing, kind == .battery || kind == .network || kind == .storage ? RowHeaderPillMetrics.trailingPadding : 10)
-        .padding(.vertical, kind == .battery || kind == .network || kind == .storage ? RowHeaderPillMetrics.verticalPadding : 8)
+        .padding(.trailing, kind == .battery || kind == .network || kind == .storage
+                 ? RowHeaderPillMetrics.trailingPadding : 10)
+        .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
         .panelRowHeaderHeight()
     }
 
@@ -124,25 +125,24 @@ struct ModuleRowPreview: View {
     @ViewBuilder
     private var trailing: some View {
         switch kind {
-        case .cpu, .gpu:
-            SparklineChart(samples: MetricSampleCatalog.sparklineSamples, tint: tint)
-                .frame(width: 56, height: 18)
-        case .memory:
-            // 压力模式行尾为压力历史曲线,使用率模式保持占比进度条,与面板行尾同构。
-            if memoryPressureMode {
-                SparklineChart(samples: MetricSampleCatalog.sparklineSamples, tint: tint)
-                    .frame(width: 56, height: 18)
-            } else {
-                ProgressMeter(value: MetricSampleCatalog.memoryUsageFraction * 100, tint: tint, theme: theme)
-                    .frame(width: 56, height: 3)
-            }
         case .storage:
             StorageHeaderPills(module: StorageHeaderPills.previewModule, theme: theme)
+        case .cpu, .gpu, .memory:
+            let usage = MetricSampleCatalog.memoryUsageFraction * 100
+            let samples = kind == .memory && !memoryPressureMode
+                ? MetricSampleCatalog.sparklineSamples.map { usage + ($0 - 50) * 0.1 }
+                : MetricSampleCatalog.sparklineSamples
+            PanelHistoryChart(samples: samples,
+                tint: kind == .memory && memoryPressureMode ? palette.severityTint(for: .calm) : tint,
+                theme: theme)
+        case .fan:
+            PanelHistoryChart(samples: MetricSampleCatalog.sparklineSamples.map { 2400 + $0 * 8 },
+                tint: tint, theme: theme, scale: PanelChartScale(upper: 6500), referenceValue: 2300)
         case .battery:
             PowerHeaderPills(module: MetricSampleCatalog.powerFlowModule, theme: theme)
         case .network:
             NetworkHeaderPills(upload: MetricSampleCatalog.networkUpload, download: MetricSampleCatalog.networkDownload, theme: theme)
-        case .fan, .bluetooth:
+        case .bluetooth:
             EmptyView()
         }
     }

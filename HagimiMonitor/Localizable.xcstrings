@@ -52,6 +52,108 @@
         }
       }
     },
+    "panel.chart.memory.pressure-label": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存压力"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure"
+          }
+        }
+      }
+    },
+    "panel.chart.memory.usage-label": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存使用率"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory usage"
+          }
+        }
+      }
+    },
+    "panel.chart.memory.pressure-help": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存压力历史 · 固定范围 0–100%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory pressure history · Fixed scale 0–100%"
+          }
+        }
+      }
+    },
+    "panel.chart.memory.usage-help": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存使用率历史 · 固定范围 0–100%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory usage history · Fixed scale 0–100%"
+          }
+        }
+      }
+    },
+    "panel.chart.percent-help": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "占用历史 · 固定范围 0–100%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usage history · Fixed scale 0–100%"
+          }
+        }
+      }
+    },
+    "panel.chart.fan-help": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "转速历史 · 0–%d RPM · 虚线为硬件最低转速参考"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fan speed history · 0–%d RPM · Dashed line marks the hardware minimum"
+          }
+        }
+      }
+    },
     "panel.reorder.move-up": {
       "extractionState": "manual",
       "localizations": {
