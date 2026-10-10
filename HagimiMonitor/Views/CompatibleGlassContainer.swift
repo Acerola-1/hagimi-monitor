@@ -169,17 +169,19 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: minimumHeight ?? 0)
             .background {
                 VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                    .overlay {
+                        // 仅悬浮改变底色，按下与松开保持当前外观。
+                        shape.fill(palette.trackFill.opacity(isHovering ? 1 : 0))
+                            .allowsHitTesting(false)
+                            .animation(.easeOut(duration: 0.12), value: isHovering)
+                    }
                     .clipShape(shape)
             }
             .overlay(
                 shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
             )
-            .overlay(shape.fill(palette.trackFill.opacity(isHovering ? 1 : 0)).allowsHitTesting(false))
             .contentShape(shape)
-            .opacity(configuration.isPressed ? 0.7 : 1)
             .onHover { isHovering = $0 }
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 }
 
