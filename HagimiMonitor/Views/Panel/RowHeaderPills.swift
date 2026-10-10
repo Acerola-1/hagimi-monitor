@@ -33,8 +33,6 @@ struct MetricLabelPill: View {
         }
         .padding(.horizontal, RowHeaderPillMetrics.horizontalPadding)
         .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
-        .background(RoundedRectangle(cornerRadius: RowHeaderPillMetrics.cornerRadius, style: .continuous)
-            .fill(theme.trackFill))
         .accessibilityElement(children: .combine)
     }
 }
@@ -45,10 +43,31 @@ struct NetworkHeaderPills: View {
     let theme: MonitorPanelTheme
 
     var body: some View {
-        HStack(spacing: RowHeaderPillMetrics.spacing) {
+        PairedHeaderReadings(theme: theme) {
             MetricLabelPill(title: String(localized: "panel.network.upload"), value: upload, theme: theme)
             MetricLabelPill(title: String(localized: "panel.network.download"), value: download, theme: theme)
         }
+    }
+}
+
+/// 一层浅底承载成对读数，避免重复的独立轮廓与主行争夺视觉重点。
+struct PairedHeaderReadings<Content: View>: View {
+    let theme: MonitorPanelTheme
+    let content: Content
+
+    init(theme: MonitorPanelTheme, @ViewBuilder content: () -> Content) {
+        self.theme = theme
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(spacing: RowHeaderPillMetrics.spacing) {
+            content
+        }
         .fixedSize(horizontal: true, vertical: false)
+        .background {
+            RoundedRectangle(cornerRadius: RowHeaderPillMetrics.cornerRadius, style: .continuous)
+                .fill(theme.trackFill)
+        }
     }
 }
