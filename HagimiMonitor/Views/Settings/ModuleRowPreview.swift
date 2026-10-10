@@ -99,8 +99,8 @@ struct ModuleRowPreview: View {
             trailing
         }
         .padding(.leading, 10)
-        .padding(.trailing, kind == .battery || kind == .network ? RowHeaderPillMetrics.trailingPadding : 10)
-        .padding(.vertical, kind == .battery || kind == .network ? RowHeaderPillMetrics.verticalPadding : 8)
+        .padding(.trailing, kind == .battery || kind == .network || kind == .storage ? RowHeaderPillMetrics.trailingPadding : 10)
+        .padding(.vertical, kind == .battery || kind == .network || kind == .storage ? RowHeaderPillMetrics.verticalPadding : 8)
         .panelRowHeaderHeight()
     }
 
@@ -137,8 +137,7 @@ struct ModuleRowPreview: View {
                     .frame(width: 56, height: 3)
             }
         case .storage:
-            ProgressMeter(value: MetricSampleCatalog.storageUsageFraction * 100, tint: tint, theme: theme)
-                .frame(width: 56, height: 3)
+            StorageHeaderPills(module: StorageHeaderPills.previewModule, theme: theme)
         case .battery:
             PowerHeaderPills(module: MetricSampleCatalog.powerFlowModule, theme: theme)
         case .network:

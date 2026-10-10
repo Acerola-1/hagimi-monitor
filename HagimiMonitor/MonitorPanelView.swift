@@ -532,8 +532,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
-                // 每秒采样累积使用率历史(采样器 seed 起步),行尾与 CPU/GPU 同款趋势。
-                samples: module.samples,
+                samples: [],
                 details: enabledMetrics(for: module),
                 metricOrder: storedMetricOrder(for: .metrics(.storage)),
                 isExpanded: isExpanded,
@@ -966,8 +965,9 @@ private struct MetricGlassRow: View, Equatable {
 
                 trailingView(theme: theme)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.leading, 10)
+            .padding(.trailing, module.kind == .storage ? RowHeaderPillMetrics.trailingPadding : 10)
+            .padding(.vertical, module.kind == .storage ? RowHeaderPillMetrics.verticalPadding : 8)
             .panelRowHeaderHeight()
             // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
@@ -981,7 +981,8 @@ private struct MetricGlassRow: View, Equatable {
             // 暴露按钮语义与展开/收起提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(module.kind.title)
-            .accessibilityValue(detail)
+            .accessibilityValue(module.kind == .storage
+                ? StorageHeaderReadings.accessibilityValue(module, summary: detail) : detail)
             .accessibilityHint(detailAvailable ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -1055,13 +1056,7 @@ private struct MetricGlassRow: View, Equatable {
                 trailingMeter(theme: theme)
             }
         case .storage:
-            // 使用率历史每秒累积:有采样即画趋势(与 CPU/GPU 同槽位),未到时回退占比条。
-            if !samples.isEmpty {
-                SparklineChart(samples: samples, tint: tint)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
-            } else {
-                trailingMeter(theme: theme)
-            }
+            StorageHeaderPills(module: module, theme: theme)
         case .network, .battery, .bluetooth:
             EmptyView()
         case .fan:
