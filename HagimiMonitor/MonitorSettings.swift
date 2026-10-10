@@ -148,6 +148,7 @@ final class MonitorSettings: ObservableObject {
     /// 隐藏后列表常显得空。
     @Published var memoryShowSystemProcesses: Bool = true
     @Published var memoryPrimaryMetric: MemoryPrimaryMetricPreference = .pressure
+    @Published private(set) var panelChartStyles: [MonitorKind: PanelHistoryChartStyle] = [:]
     @Published var showCPUProcesses: Bool = true
     @Published var cpuShowSystemProcesses: Bool = true
     @Published var showGPUProcesses: Bool = true
@@ -209,6 +210,22 @@ final class MonitorSettings: ObservableObject {
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
+        // 在其他设置迁移写入标记前识别存量安装；旧版即使从未修改设置，
+        // 也会保存 settings.metricsDefaultOnMigrated 等迁移标记。
+        // 独立的一次性标记避免新用户第二次启动时被误判为升级用户。
+        if !defaults.bool(forKey: Keys.panelChartStylesMigrated) {
+            let hasExistingSettings = defaults.dictionaryRepresentation().keys.contains {
+                $0.hasPrefix("settings.") && $0 != Keys.panelChartStylesMigrated
+            }
+            if defaults.object(forKey: Keys.panelChartStyles) == nil, hasExistingSettings {
+                let styles = Dictionary(uniqueKeysWithValues: MonitorKind.allCases
+                    .filter(PanelHistoryChartStyle.supports)
+                    .map { ($0.rawValue, PanelHistoryChartStyle.line.rawValue) })
+                defaults.set(styles, forKey: Keys.panelChartStyles)
+            }
+            defaults.set(true, forKey: Keys.panelChartStylesMigrated)
+        }
+
         let themeRawValue = defaults.string(forKey: Keys.themePreference) ?? AppThemePreference.system.rawValue
         themePreference = AppThemePreference(rawValue: themeRawValue) ?? .system
 
@@ -247,6 +264,11 @@ final class MonitorSettings: ObservableObject {
         memoryShowSystemProcesses = defaults.object(forKey: Keys.memoryShowSystemProcesses) as? Bool ?? true
         let memoryPrimaryMetricRawValue = defaults.string(forKey: Keys.memoryPrimaryMetric) ?? MemoryPrimaryMetricPreference.pressure.rawValue
         memoryPrimaryMetric = MemoryPrimaryMetricPreference(rawValue: memoryPrimaryMetricRawValue) ?? .pressure
+        for (rawKind, value) in defaults.dictionary(forKey: Keys.panelChartStyles) ?? [:] {
+            guard let kind = MonitorKind(rawValue: rawKind), PanelHistoryChartStyle.supports(kind),
+                  let rawStyle = value as? String, let style = PanelHistoryChartStyle(rawValue: rawStyle) else { continue }
+            panelChartStyles[kind] = style
+        }
         showCPUProcesses = defaults.object(forKey: Keys.showCPUProcesses) as? Bool ?? true
         cpuShowSystemProcesses = defaults.object(forKey: Keys.cpuShowSystemProcesses) as? Bool ?? true
         showGPUProcesses = defaults.object(forKey: Keys.showGPUProcesses) as? Bool ?? true
@@ -616,6 +638,20 @@ final class MonitorSettings: ObservableObject {
 
     func resetMetrics(for kind: MonitorKind) {
         enabledMetrics[kind] = defaultMetricIds(for: kind)
+        setPanelChartStyle(.bars, for: kind)
+    }
+
+    func panelChartStyle(for kind: MonitorKind) -> PanelHistoryChartStyle {
+        panelChartStyles[kind] ?? .bars
+    }
+
+    func setPanelChartStyle(_ style: PanelHistoryChartStyle, for kind: MonitorKind) {
+        guard PanelHistoryChartStyle.supports(kind), panelChartStyle(for: kind) != style else { return }
+        if style == .bars {
+            panelChartStyles.removeValue(forKey: kind)
+        } else {
+            panelChartStyles[kind] = style
+        }
     }
 
     #if DIRECT_DISTRIBUTION
@@ -979,6 +1015,14 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $panelChartStyles
+            .dropFirst()
+            .sink { [weak self] styles in
+                let stored = Dictionary(uniqueKeysWithValues: styles.map { ($0.key.rawValue, $0.value.rawValue) })
+                self?.persist(stored, forKey: Keys.panelChartStyles)
+            }
+            .store(in: &cancellables)
+
         $showCPUProcesses
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1235,6 +1279,8 @@ private enum Keys {
     static let showMemoryProcesses = "settings.memory.showProcesses"
     static let memoryShowSystemProcesses = "settings.memory.showSystemProcesses"
     static let memoryPrimaryMetric = "settings.memory.primaryMetric"
+    static let panelChartStyles = "settings.panel.chartStyles"
+    static let panelChartStylesMigrated = "settings.panel.chartStylesMigrated"
     static let showCPUProcesses = "settings.cpu.showProcesses"
     static let cpuShowSystemProcesses = "settings.cpu.showSystemProcesses"
     static let showGPUProcesses = "settings.gpu.showProcesses"

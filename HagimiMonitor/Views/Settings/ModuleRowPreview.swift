@@ -11,6 +11,7 @@ struct ModuleRowPreview: View {
     let memoryPressureMode: Bool
     let palette: MonitorPalette
     let metricOrders: [String: [String]]
+    var chartStyle: PanelHistoryChartStyle = .bars
     /// 电池模块分页选择(拓扑/健康/排名/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
 
@@ -134,10 +135,10 @@ struct ModuleRowPreview: View {
                 : MetricSampleCatalog.sparklineSamples
             PanelHistoryChart(samples: samples,
                 tint: kind == .memory && memoryPressureMode ? palette.severityTint(for: .calm) : tint,
-                theme: theme)
+                theme: theme, style: chartStyle)
         case .fan:
-            PanelHistoryChart(samples: MetricSampleCatalog.sparklineSamples.map { 2400 + $0 * 8 },
-                tint: tint, theme: theme, scale: PanelChartScale(upper: 6500), referenceValue: 2300)
+            PanelHistoryChart(samples: MetricSampleCatalog.fanHistorySamples,
+                tint: tint, theme: theme, scale: PanelChartScale(upper: 6500), referenceValue: 2300, style: chartStyle)
         case .battery:
             PowerHeaderPills(module: MetricSampleCatalog.powerFlowModule, theme: theme)
         case .network:

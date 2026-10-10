@@ -485,6 +485,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
+                chartStyle: store.settings.panelChartStyle(for: .cpu),
                 samples: module.samples,
                 details: cpuDetails(for: module),
                 metricOrder: storedMetricOrder(for: .metrics(.cpu)),
@@ -499,6 +500,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
+                chartStyle: store.settings.panelChartStyle(for: .gpu),
                 samples: module.samples,
                 details: enabledMetrics(for: module),
                 metricOrder: storedMetricOrder(for: .metrics(.gpu)),
@@ -518,6 +520,7 @@ struct MonitorPanelView: View {
                 // 常规数值色——状态色不与行玻璃底色叠加,两套色彩语义各归其位。
                 statusTint: pressureMode ? memoryPressureColor(level: pressureRawLevel(module), theme: theme) : nil,
                 memoryPressureMode: pressureMode,
+                chartStyle: store.settings.panelChartStyle(for: .memory),
                 samples: PanelChartReadings.memorySamples(module, pressureMode: pressureMode),
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
                 metricOrder: storedMetricOrder(for: .metrics(.memory)),
@@ -573,6 +576,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: PanelChartReadings.fanSummary(module),
+                chartStyle: store.settings.panelChartStyle(for: .fan),
                 samples: module.samples,
                 isExpanded: isExpanded,
                 fans: module.fans
@@ -867,6 +871,7 @@ private struct MetricGlassRow: View, Equatable {
     /// valueText——状态色不与行玻璃底色叠加,避免两套色彩语义互相稀释。
     var statusTint: Color? = nil
     var memoryPressureMode = false
+    var chartStyle: PanelHistoryChartStyle = .bars
     var samples: [Double] = []
     var details: [MonitorMetric] = []
     var metricOrder: [String] = []
@@ -892,6 +897,7 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.detail == rhs.detail
             && lhs.statusTint == rhs.statusTint
             && lhs.memoryPressureMode == rhs.memoryPressureMode
+            && lhs.chartStyle == rhs.chartStyle
             && lhs.samples == rhs.samples else { return false }
         // 收起态下明细网格与进程列表均不可见，跳过对未展开内容的深度比对，阻断无关重绘。
         return lhs.details == rhs.details
@@ -1060,7 +1066,7 @@ private struct MetricGlassRow: View, Equatable {
             if !module.isPlaceholder, !samples.isEmpty {
                 PanelHistoryChart(samples: samples,
                     tint: module.kind == .memory && memoryPressureMode ? (statusTint ?? tint) : tint,
-                    theme: theme)
+                    theme: theme, style: chartStyle)
                     .help(String(localized: module.kind == .memory
                         ? (memoryPressureMode ? "panel.chart.memory.pressure-help" : "panel.chart.memory.usage-help")
                         : "panel.chart.percent-help"))
@@ -1071,7 +1077,7 @@ private struct MetricGlassRow: View, Equatable {
             if !module.isPlaceholder, let scale = PanelChartReadings.fanScale(fans ?? []), !samples.isEmpty {
                 PanelHistoryChart(samples: samples,
                     tint: tint, theme: theme, scale: scale,
-                    referenceValue: fans?.map(\.minRPM).filter { $0 > 0 }.min().map(Double.init))
+                    referenceValue: fans?.map(\.minRPM).filter { $0 > 0 }.min().map(Double.init), style: chartStyle)
                     .help(String(format: String(localized: "panel.chart.fan-help"), Int(scale.upper)))
             } else {
                 missingChart(theme: theme)

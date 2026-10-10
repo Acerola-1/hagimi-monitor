@@ -1,6 +1,176 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "settings.panel.chart-type": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主行图表"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Main row chart"
+          }
+        }
+      }
+    },
+    "panel.chart.type.bars": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "柱状图"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bars"
+          }
+        }
+      }
+    },
+    "panel.chart.type.line": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "折线图"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Line"
+          }
+        }
+      }
+    },
+    "panel.chart.sample.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "柱条刻度样例"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History bar scale sample"
+          }
+        }
+      }
+    },
+    "panel.chart.sample.notice": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例数据 · 不代表当前设备读数"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample data · Not current device readings"
+          }
+        }
+      }
+    },
+    "panel.chart.sample.appearance": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "样例外观"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample appearance"
+          }
+        }
+      }
+    },
+    "panel.chart.sample.light": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "浅色"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light"
+          }
+        }
+      }
+    },
+    "panel.chart.sample.dark": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "深色"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dark"
+          }
+        }
+      }
+    },
+    "panel.chart.sample.zero-transition": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风扇：前半段停转 → 后半段 2600 RPM"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fan: stopped in the first half → 2600 RPM in the second"
+          }
+        }
+      }
+    },
+    "panel.chart.sample.missing-transition": {
+      "extractionState": "manual",
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存：前半段没有数据 → 后半段 65%"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory: no data in the first half → 65% in the second"
+          }
+        }
+      }
+    },
     "panel.storage.available": {
       "extractionState": "manual",
       "localizations": {

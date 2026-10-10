@@ -3,6 +3,29 @@ import Testing
 @testable import HagimiMonitorDirect
 
 struct PanelChartReadingsTests {
+    @Test func lineKeepsRealZeroAndBreaksAtMissingSamples() {
+        let capacity = MonitorConstants.sparklineMaxPoints
+        let segments = PanelChartReadings.lineSegments([0, 0, .nan, 40, .infinity, 90], scale: PanelChartScale())
+        #expect(segments == [
+            [PanelChartLinePoint(slot: capacity - 6, fraction: 0), PanelChartLinePoint(slot: capacity - 5, fraction: 0)],
+            [PanelChartLinePoint(slot: capacity - 3, fraction: 0.4)],
+            [PanelChartLinePoint(slot: capacity - 1, fraction: 0.9)]
+        ])
+        #expect(PanelChartReadings.lineSegments([], scale: PanelChartScale()).isEmpty)
+        #expect(PanelChartReadings.lineSegments([.nan], scale: PanelChartScale()).isEmpty)
+    }
+
+    @Test func lineUsesTheSameFixedHistoryWindowAsBars() {
+        let capacity = MonitorConstants.sparklineMaxPoints
+        let full = PanelChartReadings.lineSegments(Array(repeating: 10, count: capacity + 5), scale: PanelChartScale())
+        #expect(full.count == 1)
+        #expect(full.first?.count == capacity)
+        #expect(full.first?.first == PanelChartLinePoint(slot: 0, fraction: 0.1))
+        #expect(full.first?.last == PanelChartLinePoint(slot: capacity - 1, fraction: 0.1))
+        let short = PanelChartReadings.lineSegments([90], scale: PanelChartScale())
+        #expect(short == [[PanelChartLinePoint(slot: capacity - 1, fraction: 0.9)]])
+    }
+
     @Test func memoryChoiceSelectsItsOwnHistory() {
         var module = MonitorModule(kind: .memory, value: 90, summary: "90%", metrics: [], samples: [80, 90])
         module.pressureSamples = [8, 10]
