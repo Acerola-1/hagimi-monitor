@@ -2,7 +2,7 @@
 
 AirPods 沿用 BluetoothBatterySampler 的主线程合并发布入口。MAC 为系统设备身份，电源树/广播 UUID 单独保存，不能把 UUID 的十六进制字符当作 MAC。profiler 的同地址名称、同一会话的配对名称历史可以桥接连接后切换为通用 AirPods 名称的设备；名字不唯一时不学习绑定。
 
-广播只补充系统连接或唯一已配对身份。打开充电仓但还没有音频连接时，也可由有效广播展示已配对 AirPods。附近陌生设备不进入列表，不对广播设备主动建立连接。已配对音频设备且蓝牙模块启用时，每 30 秒监听 8 秒；停用模块/关闭蓝牙停止。正常采样与诊断的 15 分钟预算分开，正常版本不写详细原始日志。
+广播只补充系统连接或唯一已配对身份。打开充电仓但还没有音频连接时，也可由有效广播展示已配对 AirPods。附近陌生设备不进入列表，不对广播设备主动建立连接。已配对音频设备且蓝牙模块启用时，每 30 秒监听 8 秒；停用模块/关闭蓝牙停止。正式版本不保留临时原始蓝牙日志采集，也不进行诊断全服务枚举或设备元数据读取；原有通用诊断导出保持不变。
 
 当前解析范围是系统已解密标记为真的 Apple 0x07/0x19、29 字节双耳格式，型号 0x2002、0x200F、0x2013、0x200E、0x2014。依据公开项目的协议分析及本项目采集验证独立实现；25 字节合盖格式、Max、其他型号与未解密载荷暂不解读。参考协议说明：[AirBattery BLEBattery.swift](https://github.com/lihaoyun6/AirBattery/blob/134e02f2861f933b862b2b6a9562a7f55e505e97/AirBattery/BatteryInfo/BLEBattery.swift)。目前真实日志回放验证的型号是 0x200F，其他登记型号仍需实机确认。
 
@@ -16,10 +16,10 @@ Apple Watch 电量没有在本次范围内新增来源，缺失仍显示破折�
 
 ## 本次验证（2026-10-11）
 
-- App Store Debug 构建：通过，记录 `tmp/airpods-final-appstore.log`。
-- Direct Debug 构建与 AirPods、诊断、宽度、面板几何/宿主回归：通过，记录 `tmp/airpods-final-tests.log`。
-- 现有蓝牙文件全部十个测试组：通过，记录 `tmp/airpods-existing-bluetooth-tests.log`。
+- App Store Debug 构建：通过，记录 `tmp/bluetooth-finalize/appstore-build.log`。
+- Direct Debug 构建与 AirPods、宽度、面板几何/宿主回归：通过，记录 `tmp/bluetooth-finalize/direct-tests.log`。
+- 现有蓝牙文件全部十个测试组：通过，记录 `tmp/bluetooth-finalize/direct-tests.log`。
 - 59 条匿名真实广播回放：全部通过。
 - 最窄面板中英文明暗原生宿主截图：检查通过，文件 `tmp/airpods-ui-review/`。
 - 两版本地 Debug 应用已重启；源差异检查与静态 UI 审计通过。
-- 未进行无硬件条件下的真实开仓/取耳验收；桌面先前发给朋友的诊断包没有在此次源码修复中替换。
+- 朋友 build 2026101106 的两渠道日志已确认同一耳机没有重复显示、沙盒广播电量有效、主电量未包含充电仓。手表未开放标准电量服务，缺失仍保持破折号。

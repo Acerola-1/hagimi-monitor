@@ -79,11 +79,8 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     private var airPodsIdentifiers = Set<UUID>()
     private var airPodsByIdentifier: [UUID: AirPodsAdvertisement] = [:]
     private var lastPublishedAirPods: [AirPodsAdvertisement] = []
-    private var diagnosticScanEnd: DispatchWorkItem?
-    private var lastDiagnosticScan: TimeInterval?
-    private var diagnosticCaptureStartedAt: TimeInterval?
-    private var diagnosticBroadcastComplete = false
-    private var diagnosticServiceUUIDs = Set<String>()
+    private var airPodsScanEnd: DispatchWorkItem?
+    private var lastAirPodsScan: TimeInterval?
     /// 常驻连接的外设(强引用保证 delegate 回调可达),值为最新已知名。
     private var tracked: [CBPeripheral: String] = [:]
     private var connectTimeouts: [CBPeripheral: DispatchWorkItem] = [:]
@@ -116,7 +113,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
 
     var onAirPodsUpdate: (@MainActor @Sendable ([AirPodsAdvertisement]) -> Void)?
 
-    /// 仅已配对音频设备需要正常广播采样；诊断采样独立保留其时间预算。
+    /// 仅已配对音频设备需要广播电量采样。
     func updateAirPodsMonitoring(names: Set<String>, identifiers: Set<UUID>) {
         queue.async { [weak self] in
             guard let self else { return }
@@ -132,10 +129,10 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
             if !enabled {
                 self.airPodsByIdentifier.removeAll()
                 self.publishAirPods()
-                self.stopDiagnosticScan()
+                self.stopAirPodsScan()
             }
-            self.lastDiagnosticScan = nil
-            if let central = self.central, central.state == .poweredOn { self.startDiagnosticScanIfNeeded(central) }
+            self.lastAirPodsScan = nil
+            if let central = self.central, central.state == .poweredOn { self.startAirPodsScanIfNeeded(central) }
         }
     }
 
@@ -187,16 +184,13 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     func stop() {
         queue.async { [weak self] in
             guard let self else { return }
-            self.stopDiagnosticScan()
+            self.stopAirPodsScan()
             self.monitorsAirPods = false
             self.airPodsNames.removeAll()
             self.airPodsIdentifiers.removeAll()
             self.airPodsByIdentifier.removeAll()
             self.publishAirPods()
-            self.lastDiagnosticScan = nil
-            self.diagnosticCaptureStartedAt = nil
-            self.diagnosticBroadcastComplete = false
-            self.diagnosticServiceUUIDs.removeAll()
+            self.lastAirPodsScan = nil
             self.refreshTimer?.cancel()
             self.refreshTimer = nil
             self.pollTimer?.cancel()
@@ -239,29 +233,14 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
         // 双路召回:常见标准服务过滤为主 + 绑定表 identifier 直接召回兜底
         // (覆盖系统未缓存其标准服务的设备,召回后仅保留已连接态)。
         publishAirPods()
-        startDiagnosticScanIfNeeded(central)
-        // 诊断召回覆盖实测手表的 Apple 服务；仍只召回系统已连接设备。
-        let serviceFilter = BluetoothDiagnostics.shared.enabled
-            ? Self.discoveryServiceUUIDs + ["D0611E78-BBB4-4591-A5F8-487910AE4366", "9FA480E0-4967-4542-9390-D343DC5D04AE"].map { CBUUID(string: $0) }
-                + diagnosticServiceUUIDs.sorted().map { CBUUID(string: $0) }
-            : Self.discoveryServiceUUIDs
+        startAirPodsScanIfNeeded(central)
+        let serviceFilter = Self.discoveryServiceUUIDs
         var peripherals = central.retrieveConnectedPeripherals(withServices: serviceFilter)
         if !knownIdentifiers.isEmpty {
             let seen = Set(peripherals.map(\.identifier))
             let rawRecalled = central.retrievePeripherals(withIdentifiers: knownIdentifiers)
-            if BluetoothDiagnostics.shared.enabled {
-                BluetoothDiagnostics.shared.record("ble.bound-recall", fields: ["requested": knownIdentifiers.map(\.uuidString),
-                    "peripherals": rawRecalled.map { Self.diagnosticFields($0) }], deduplicate: true)
-            }
             let recalled = rawRecalled.filter { $0.state == .connected && !seen.contains($0.identifier) }
             peripherals.append(contentsOf: recalled)
-        }
-        if BluetoothDiagnostics.shared.enabled {
-            BluetoothDiagnostics.shared.record("ble.retrieve", fields: [
-                "serviceFilter": serviceFilter.map(\.uuidString),
-                "knownIdentifiers": knownIdentifiers.map(\.uuidString),
-                "peripherals": peripherals.map { Self.diagnosticFields($0) }
-            ], deduplicate: true)
         }
         // 无名外设没有可展示的身份,不进清单也不跟踪。
         peripherals = peripherals.filter { $0.name != nil }
@@ -297,7 +276,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
 
     /// 为外设挂常驻连接:已连接(系统持有链路)直接建交,否则发起连接并设安全网超时。
     private func attach(_ peripheral: CBPeripheral, central: CBCentralManager) {
-        Self.trace("ble.attach", peripheral)
         guard let name = peripheral.name else { return }
         tracked[peripheral] = name
         if peripheral.state == .connected {
@@ -309,7 +287,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
             guard let self, let peripheral,
                   self.tracked[peripheral] != nil,
                   peripheral.state != .connected else { return }
-            Self.trace("ble.connect-timeout", peripheral)
             self.connectTimeouts.removeValue(forKey: peripheral)
             self.tracked.removeValue(forKey: peripheral)
             self.central?.cancelPeripheralConnection(peripheral)
@@ -322,8 +299,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     private func setUp(_ peripheral: CBPeripheral) {
         connectTimeouts.removeValue(forKey: peripheral)?.cancel()
         peripheral.delegate = self
-        // 诊断包仅枚举已连接设备的服务目录；仍只读取现有标准电量/形态特征。
-        peripheral.discoverServices(BluetoothDiagnostics.shared.enabled ? nil : [Self.batteryServiceUUID, Self.gapServiceUUID])
+        peripheral.discoverServices([Self.batteryServiceUUID, Self.gapServiceUUID])
     }
 
     private func startRefreshTimer() {
@@ -376,7 +352,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         queue.async { [weak self] in
             guard let self else { return }
-            BluetoothDiagnostics.shared.record("ble.controller", fields: ["state": central.state.rawValue, "authorization": CBManager.authorization.rawValue])
             switch central.state {
             case .poweredOn:
                 self.publishControllerState(true)
@@ -386,10 +361,10 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                 // 蓝牙被用户关闭:清空全部状态,面板行立即消失。
                 // 读数按 characteristic 对象标识分键,重开后 GATT 重新发现产生的
                 // 新实例与旧键不匹配,残留读数会参与 min() 聚合,须一并清空。
-                self.stopDiagnosticScan()
+                self.stopAirPodsScan()
                 self.airPodsByIdentifier.removeAll()
                 self.publishAirPods()
-                self.lastDiagnosticScan = nil
+                self.lastAirPodsScan = nil
                 self.publishControllerState(false)
                 for work in self.connectTimeouts.values {
                     work.cancel()
@@ -409,7 +384,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                 self.pollTimer = nil
                 self.publishSnapshots()
             case .unauthorized, .unsupported:
-                self.stopDiagnosticScan()
+                self.stopAirPodsScan()
                 // 用户拒绝授权 / 无硬件:静默禁用,system_profiler 路径不受影响。
                 AppLogger.sampler.info("BLE battery reader disabled, central state: \(central.state.rawValue)")
             default:
@@ -421,7 +396,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         queue.async { [weak self] in
             guard let self, self.tracked[peripheral] != nil else { return }
-            Self.trace("ble.connected", peripheral)
             self.setUp(peripheral)
         }
     }
@@ -429,7 +403,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         queue.async { [weak self] in
             guard let self else { return }
-            Self.trace("ble.connect-failed", peripheral, fields: ["error": error?.localizedDescription as Any? ?? NSNull()])
             self.connectTimeouts.removeValue(forKey: peripheral)?.cancel()
             self.tracked.removeValue(forKey: peripheral)
         }
@@ -438,7 +411,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         queue.async { [weak self] in
             guard let self else { return }
-            Self.trace("ble.disconnected", peripheral, fields: ["error": error?.localizedDescription as Any? ?? NSNull()])
             // 自持连接断开即设备离场信号:立即重新同步清单,秒级反映断连。
             self.connectTimeouts.removeValue(forKey: peripheral)?.cancel()
             self.batteryReadRetries.removeValue(forKey: peripheral.identifier)?.forEach { $0.cancel() }
@@ -456,18 +428,14 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
         queue.async { [weak self] in
             guard let self, self.tracked[peripheral] != nil else { return }
             let services = peripheral.services ?? []
-            Self.trace("ble.services", peripheral, fields: ["error": error?.localizedDescription as Any? ?? NSNull(),
-                "services": services.map { ["uuid": $0.uuid.uuidString, "instance": String(describing: ObjectIdentifier($0)), "primary": $0.isPrimary] as [String: Any] }])
-            Self.trace("ble.battery-service-status", peripheral, fields: BluetoothDiagnostics.batteryServiceStatus(
-                serviceUUIDs: services.map { $0.uuid.uuidString }, error: error?.localizedDescription))
             if services.isEmpty {
                 // 无标准服务缓存(厂商私有协议):保留清单条目,电量留空不伪造。
                 return
             }
-            for service in services where BluetoothDiagnostics.shared.enabled || service.uuid == Self.batteryServiceUUID
+            for service in services where service.uuid == Self.batteryServiceUUID
                 || service.uuid == Self.gapServiceUUID {
                 peripheral.discoverCharacteristics(
-                    BluetoothDiagnostics.shared.enabled ? nil : [Self.batteryLevelCharacteristicUUID, Self.appearanceCharacteristicUUID],
+                    [Self.batteryLevelCharacteristicUUID, Self.appearanceCharacteristicUUID],
                     for: service
                 )
             }
@@ -478,23 +446,13 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
         queue.async { [weak self] in
             guard let self else { return }
             let characteristics = service.characteristics ?? []
-            Self.trace("ble.characteristics", peripheral, fields: ["error": error?.localizedDescription as Any? ?? NSNull(),
-                "service": service.uuid.uuidString, "serviceInstance": String(describing: ObjectIdentifier(service)),
-                "characteristics": characteristics.map { ["uuid": $0.uuid.uuidString, "instance": String(describing: ObjectIdentifier($0)), "properties": $0.properties.rawValue] as [String: Any] }])
             let batteryChars = characteristics.filter { service.uuid == Self.batteryServiceUUID && $0.uuid == BLEBatteryReader.batteryLevelCharacteristicUUID }
-            if BluetoothDiagnostics.shared.enabled, service.uuid == Self.batteryServiceUUID {
-                Self.trace("ble.battery-characteristic-status", peripheral, fields: ["available": !batteryChars.isEmpty,
-                    "reason": error != nil ? "characteristic-discovery-failed" : batteryChars.isEmpty ? "battery-characteristic-not-exposed" : "battery-characteristic-exposed",
-                    "error": error?.localizedDescription as Any? ?? NSNull()])
-            }
             for characteristic in batteryChars {
                 var list = self.batteryCharacteristicsByIdentifier[peripheral.identifier] ?? []
                 if !list.contains(where: { $0 === characteristic }) {
                     list.append(characteristic)
                     self.batteryCharacteristicsByIdentifier[peripheral.identifier] = list
                 }
-                Self.trace("ble.read-request", peripheral, fields: ["characteristic": characteristic.uuid.uuidString, "instance": String(describing: ObjectIdentifier(characteristic))])
-                if BluetoothDiagnostics.shared.enabled { peripheral.discoverDescriptors(for: characteristic) }
                 peripheral.readValue(for: characteristic)
                 if characteristic.properties.contains(.notify) || characteristic.properties.contains(.indicate) {
                     // 2A19 标准属性含 Notify:订阅后电量变化实时推送,不等轮询。
@@ -506,14 +464,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                     self.startPollTimer()
                 }
             }
-            if BluetoothDiagnostics.shared.enabled {
-                for characteristic in characteristics where Self.shouldReadDiagnosticMetadata(
-                    serviceUUID: service.uuid.uuidString, characteristicUUID: characteristic.uuid.uuidString,
-                    isReadable: characteristic.properties.contains(.read)) {
-                    Self.trace("ble.metadata-read-request", peripheral, fields: ["characteristic": characteristic.uuid.uuidString])
-                    peripheral.readValue(for: characteristic)
-                }
-            }
             if service.uuid == Self.gapServiceUUID, let characteristic = characteristics.first(where: { $0.uuid == BLEBatteryReader.appearanceCharacteristicUUID }) {
                 peripheral.readValue(for: characteristic)
             }
@@ -523,20 +473,6 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         queue.async { [weak self] in
             guard let self, self.tracked[peripheral] != nil else { return }
-            Self.trace("ble.value", peripheral, fields: [
-                "characteristic": characteristic.uuid.uuidString, "instance": String(describing: ObjectIdentifier(characteristic)),
-                "service": characteristic.service?.uuid.uuidString as Any? ?? NSNull(),
-                "serviceInstance": characteristic.service.map { String(describing: ObjectIdentifier($0)) } as Any? ?? NSNull(),
-                "error": error?.localizedDescription as Any? ?? NSNull(),
-                "bytes": characteristic.value.map { $0.map { String(format: "%02x", $0) }.joined() } as Any? ?? NSNull(),
-                "notifying": characteristic.isNotifying
-            ])
-            if BluetoothDiagnostics.shared.enabled, characteristic.service?.uuid.uuidString == "180A",
-               ["2A24", "2A25", "2A26", "2A27", "2A28", "2A29"].contains(characteristic.uuid.uuidString) {
-                Self.trace("ble.device-information", peripheral, fields: ["characteristic": characteristic.uuid.uuidString,
-                    "text": characteristic.value.flatMap { String(data: $0, encoding: .utf8) } as Any? ?? NSNull(),
-                    "error": error?.localizedDescription as Any? ?? NSNull()])
-            }
             switch characteristic.uuid {
             case Self.batteryLevelCharacteristicUUID:
                 // GATT 2A19 规范:0-100 合法,101-255 保留值拒绝,不污染缓存。
@@ -565,85 +501,31 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
         }
     }
 
-    /// 只读标准 Device Information 元数据，不把任意可读特征当作可安全探测的数据。
-    static func shouldReadDiagnosticMetadata(serviceUUID: String, characteristicUUID: String, isReadable: Bool) -> Bool {
-        serviceUUID == "180A" && isReadable
-            && ["2A23", "2A24", "2A25", "2A26", "2A27", "2A28", "2A29", "2A2A", "2A50"].contains(characteristicUUID)
-    }
-
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverDescriptorsFor characteristic: CBCharacteristic, error: Error?) {
-        queue.async {
-            guard BluetoothDiagnostics.shared.enabled else { return }
-            let descriptors = characteristic.descriptors ?? []
-            Self.trace("ble.descriptors", peripheral, fields: ["characteristic": characteristic.uuid.uuidString,
-                "instance": String(describing: ObjectIdentifier(characteristic)), "descriptors": descriptors.map { $0.uuid.uuidString },
-                "error": error?.localizedDescription as Any? ?? NSNull()])
-            for descriptor in descriptors where ["2901", "2904"].contains(descriptor.uuid.uuidString) {
-                peripheral.readValue(for: descriptor)
-            }
-        }
-    }
-
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor descriptor: CBDescriptor, error: Error?) {
-        queue.async {
-            guard BluetoothDiagnostics.shared.enabled else { return }
-            Self.trace("ble.descriptor-value", peripheral, fields: ["descriptor": descriptor.uuid.uuidString,
-                "characteristic": descriptor.characteristic?.uuid.uuidString as Any? ?? NSNull(),
-                "instance": descriptor.characteristic.map { String(describing: ObjectIdentifier($0)) } as Any? ?? NSNull(),
-                "value": descriptor.value.map(BluetoothDiagnostics.advertisement) ?? NSNull(),
-                "error": error?.localizedDescription as Any? ?? NSNull()])
-        }
-    }
-
-    nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateNotificationStateFor characteristic: CBCharacteristic, error: Error?) {
-        queue.async {
-            Self.trace("ble.notification-state", peripheral, fields: ["characteristic": characteristic.uuid.uuidString,
-                "instance": String(describing: ObjectIdentifier(characteristic)), "notifying": characteristic.isNotifying,
-                "error": error?.localizedDescription as Any? ?? NSNull()])
-        }
-    }
-
-    /// 已配对音频设备启用期间每 30 秒监听 8 秒；诊断独立采样最多 15 分钟。
-    private func startDiagnosticScanIfNeeded(_ central: CBCentralManager) {
-        guard (BluetoothDiagnostics.shared.enabled || monitorsAirPods), diagnosticScanEnd == nil else { return }
+    /// 已配对耳机每 30 秒监听 8 秒，停用模块或关闭蓝牙时立即停止。
+    private func startAirPodsScanIfNeeded(_ central: CBCentralManager) {
+        guard monitorsAirPods, airPodsScanEnd == nil else { return }
         let now = ProcessInfo.processInfo.systemUptime
-        guard monitorsAirPods || !diagnosticBroadcastComplete else { return }
-        if diagnosticCaptureStartedAt == nil { diagnosticCaptureStartedAt = now }
-        if !monitorsAirPods, let started = diagnosticCaptureStartedAt, now - started >= 15 * 60 {
-            diagnosticBroadcastComplete = true
-            BluetoothDiagnostics.shared.record("ble.scan-budget-complete", fields: ["lifetimeSeconds": 15 * 60])
-            return
-        }
-        if let lastDiagnosticScan, now - lastDiagnosticScan < 30 { return }
-        lastDiagnosticScan = now
-        BluetoothDiagnostics.shared.record("ble.scan-start", fields: ["durationSeconds": 8, "periodSeconds": 30, "lifetimeSeconds": monitorsAirPods ? NSNull() : 15 * 60 as Any, "serviceFilter": "none", "duplicates": monitorsAirPods])
-        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: monitorsAirPods])
-        let work = DispatchWorkItem { [weak self] in self?.stopDiagnosticScan() }
-        diagnosticScanEnd = work
+        if let lastAirPodsScan, now - lastAirPodsScan < 30 { return }
+        lastAirPodsScan = now
+        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        let work = DispatchWorkItem { [weak self] in self?.stopAirPodsScan() }
+        airPodsScanEnd = work
         queue.asyncAfter(deadline: .now() + 8, execute: work)
     }
 
-    private func stopDiagnosticScan() {
-        guard diagnosticScanEnd != nil else { return }
-        diagnosticScanEnd?.cancel()
-        diagnosticScanEnd = nil
+    private func stopAirPodsScan() {
+        guard airPodsScanEnd != nil else { return }
+        airPodsScanEnd?.cancel()
+        airPodsScanEnd = nil
         central?.stopScan()
-        BluetoothDiagnostics.shared.record("ble.scan-stop")
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
         let airPods = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data).flatMap {
             AirPodsAdvertisement.decode($0, identifier: peripheral.identifier, name: peripheral.name, observedAt: Date().timeIntervalSince1970, isDecrypted: advertisementData["kCBAdvDataProximityPairingStatusDecrypted"] as? Bool == true)
         }
-        if BluetoothDiagnostics.shared.enabled {
-            Self.trace("ble.advertisement", peripheral, fields: ["rssi": RSSI, "advertisement": BluetoothDiagnostics.advertisement(advertisementData), "observationOnly": true])
-        }
-        let serviceUUIDs = (advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? [])
-            + (advertisementData[CBAdvertisementDataOverflowServiceUUIDsKey] as? [CBUUID] ?? [])
-            + Array((advertisementData[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data] ?? [:]).keys)
-        let serviceNames = serviceUUIDs.map(\.uuidString)
         queue.async { [weak self] in
-            guard let self, self.central === central, self.diagnosticScanEnd != nil else { return }
+            guard let self, self.central === central, self.airPodsScanEnd != nil else { return }
             if self.monitorsAirPods, let airPods,
                self.airPodsIdentifiers.contains(airPods.identifier) || airPods.name.map(self.airPodsNames.contains) == true {
                 if self.airPodsByIdentifier.count < 32 || self.airPodsByIdentifier[airPods.identifier] != nil {
@@ -651,19 +533,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                     self.publishAirPods()
                 }
             }
-            guard BluetoothDiagnostics.shared.enabled else { return }
-            // 广播只扩展服务召回条件；后续仍由系统的已连接清单决定是否建交。
-            for name in serviceNames where self.diagnosticServiceUUIDs.count < 128 { self.diagnosticServiceUUIDs.insert(name) }
         }
-    }
-
-    private static func diagnosticFields(_ peripheral: CBPeripheral) -> [String: Any] {
-        ["identifier": peripheral.identifier.uuidString, "name": peripheral.name as Any? ?? NSNull(), "state": peripheral.state.rawValue]
-    }
-
-    private static func trace(_ event: String, _ peripheral: CBPeripheral, fields: [String: Any] = [:]) {
-        guard BluetoothDiagnostics.shared.enabled else { return }
-        BluetoothDiagnostics.shared.record(event, fields: diagnosticFields(peripheral).merging(fields) { _, new in new })
     }
 
     // MARK: - 低频补读与退避重试

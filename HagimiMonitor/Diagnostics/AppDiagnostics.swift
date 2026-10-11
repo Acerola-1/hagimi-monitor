@@ -373,7 +373,6 @@ struct AppLogExporter {
         var launchStateTracker: AppLaunchStateTracker
         var dateProvider: () -> Date
         var compress: Bool
-        var bluetoothDiagnostics: BluetoothDiagnostics = .shared
 
         static var `default`: Configuration {
             Configuration(
@@ -425,9 +424,6 @@ struct AppLogExporter {
         try writeReadme(to: folderURL.appendingPathComponent("README.txt"), generatedAt: generatedAt)
         try writeMetadata(to: folderURL.appendingPathComponent("metadata.json"), generatedAt: generatedAt)
         try copyAppLogs(to: logsURL)
-        if configuration.bluetoothDiagnostics.enabled {
-            try configuration.bluetoothDiagnostics.copyLogs(to: folderURL.appendingPathComponent("bluetooth", isDirectory: true))
-        }
         try copyLaunchState(to: stateURL)
         writeUnifiedLog(to: logsURL)
 
@@ -462,10 +458,7 @@ struct AppLogExporter {
         \(String(localized: "diagnostics.readme.feedback"))
         https://github.com/Acerola-1/hagimi-monitor/issues
         """
-        let bluetoothNote = configuration.bluetoothDiagnostics.enabled
-            ? "\n\n" + String(localized: "diagnostics.readme.bluetooth")
-            : ""
-        try (text + bluetoothNote).write(to: url, atomically: true, encoding: .utf8)
+        try text.write(to: url, atomically: true, encoding: .utf8)
     }
 
     private func writeMetadata(to url: URL, generatedAt: Date) throws {

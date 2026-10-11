@@ -2340,22 +2340,6 @@
         }
       }
     },
-    "diagnostics.readme.bluetooth": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Bluetooth capture enabled: bluetooth/*.jsonl contains device names, addresses and identifiers, raw Bluetooth probe outputs, connection events and GATT values. Logs stay on this Mac until you export them. Old files rotate automatically; export soon after testing."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "已启用蓝牙诊断：bluetooth/*.jsonl 包含设备名称、地址及标识、蓝牙探针原始返回、连接事件和 GATT 读数。日志保存在本机，不自动上传。旧日志会自动轮转，请测完尽快导出。"
-          }
-        }
-      }
-    },
     "diagnostics.readme.description": {
       "localizations": {
         "en": {

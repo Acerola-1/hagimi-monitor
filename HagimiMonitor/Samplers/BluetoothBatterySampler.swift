@@ -158,10 +158,6 @@ final class BluetoothBatterySampler: NSObject {
               NSClassFromString("XCTestCase") == nil else {
             return
         }
-        BluetoothDiagnostics.shared.record("sampler.start", fields: ["authorization": CBManager.authorization.rawValue])
-        #if !DIRECT_DISTRIBUTION
-        BluetoothDiagnostics.shared.record("source.unavailable", fields: ["source": "pmset/private-getters", "reason": "excluded-from-app-store-channel"])
-        #endif
         sessionGeneration += 1
         let capturedGeneration = sessionGeneration
         bleReader.updateKnownIdentifiers(boundIdentifiers())
@@ -255,7 +251,6 @@ final class BluetoothBatterySampler: NSObject {
     }
 
     func stop() {
-        BluetoothDiagnostics.shared.record("sampler.stop")
         // 递增 generation,使所有在飞异步回调失效(探针/BLE/防抖/重试)。
         sessionGeneration += 1
         timer?.cancel()
@@ -363,11 +358,7 @@ final class BluetoothBatterySampler: NSObject {
     @objc nonisolated private func ioDeviceDidConnect(
         _ notification: IOBluetoothUserNotification, device: IOBluetoothDevice
     ) {
-        let address = device.addressString ?? ""
-        let name = device.nameOrAddress ?? ""
-        let callbackTime = Date().timeIntervalSince1970
         DispatchQueue.main.async { [weak self] in
-            BluetoothDiagnostics.shared.record("io.connected", fields: ["address": address, "name": name, "callbackTime": callbackTime])
             self?.scheduleEventRefresh(retries: true)
         }
     }
@@ -377,11 +368,7 @@ final class BluetoothBatterySampler: NSObject {
     @objc nonisolated private func ioDeviceDidDisconnect(
         _ notification: IOBluetoothUserNotification, device: IOBluetoothDevice
     ) {
-        let address = device.addressString ?? ""
-        let name = device.nameOrAddress ?? ""
-        let callbackTime = Date().timeIntervalSince1970
         DispatchQueue.main.async { [weak self] in
-            BluetoothDiagnostics.shared.record("io.disconnected", fields: ["address": address, "name": name, "callbackTime": callbackTime])
             self?.scheduleEventRefresh(retries: false)
         }
     }
@@ -502,22 +489,6 @@ final class BluetoothBatterySampler: NSObject {
         // 维护绑定:更新已召回的 lastSeenAt,清理长期未召回的过期绑定。
         maintainBindings(recalledUUIDs: Set(bleSnapshots.map { $0.identifier.uuidString } + airPodsAdvertisements.map { $0.identifier.uuidString }))
         devices = Self.displayOrder(result.devices)
-        if BluetoothDiagnostics.shared.enabled {
-            BluetoothDiagnostics.shared.record("merge", fields: [
-                "controller": String(describing: controllerOn),
-                "io": BluetoothDiagnostics.devices(ioDevices), "pmset": BluetoothDiagnostics.devices(pmsetDevices),
-                "profiler": BluetoothDiagnostics.devices(profilerDevices),
-                "ble": bleSnapshots.map { ["identifier": $0.identifier.uuidString, "name": $0.name as Any? ?? NSNull(),
-                    "level": $0.batteryLevel as Any? ?? NSNull(), "appearance": $0.appearance as Any? ?? NSNull()] as [String: Any] },
-                "airPods": airPodsAdvertisements.map { ["identifier": $0.identifier.uuidString, "name": $0.name as Any? ?? NSNull(), "observedAt": $0.observedAt,
-                    "components": $0.components.map { ["kind": $0.kind.rawValue, "level": $0.level, "charging": $0.isCharging as Any? ?? NSNull()] as [String: Any] }] as [String: Any] },
-                "powerSourceObservedAt": pmsetObservedAt as Any? ?? NSNull(),
-                "bindings": bindingsForMerge, "learned": result.learnedBindings,
-                "display": BluetoothDiagnostics.devices(devices),
-                "profilerObservedAt": profilerControllerUpdatedAt?.timeIntervalSince1970 as Any? ?? NSNull(),
-                "cbObservedAt": cbControllerUpdatedAt?.timeIntervalSince1970 as Any? ?? NSNull()
-            ], deduplicate: true)
-        }
         // 日常日志只记录设备数量;详细设备名/电量用 .private 隐私级别,
         // 调试构建可见但不暴露在系统日志中。
         AppLogger.sampler.info("Bluetooth merged: \(self.devices.count) devices")
@@ -592,15 +563,8 @@ final class BluetoothBatterySampler: NSObject {
     /// 枚举同时维护每设备断开通知注册表(断开通知是 per-device API)。
     private func ioConnectedDevices() -> [BluetoothDeviceInfo] {
         guard let paired = IOBluetoothDevice.pairedDevices() as? [IOBluetoothDevice] else {
-            BluetoothDiagnostics.shared.record("io.unavailable", fields: ["reason": "pairedDevices-returned-no-list"], deduplicate: true)
             pairedAudioDevices = []
             return []
-        }
-        if BluetoothDiagnostics.shared.enabled {
-            BluetoothDiagnostics.shared.record("io.paired", fields: ["devices": paired.map {
-                ["address": $0.addressString ?? "", "name": $0.nameOrAddress ?? "", "connected": $0.isConnected(),
-                 "major": Int($0.deviceClassMajor), "minor": Int($0.deviceClassMinor)] as [String: Any]
-            }], deduplicate: true)
         }
         pairedAudioDevices = paired.compactMap { device in
             guard let raw = device.addressString, let name = device.nameOrAddress else { return nil }
@@ -679,24 +643,16 @@ final class BluetoothBatterySampler: NSObject {
     /// 粘性缓存保证显示连续性。
     /// 读取规则与安全守卫:
     /// 1. 手机、平板、手表、电脑等非音频配件绝不调用分量 getter,避免把未初始化 ivar 的默认 0 值当成有效电量;
-    /// 2. 多单体(左/右/仓)仅在确认为耳机/耳麦或未知音频形态时读取;若所有分量均为 0,视为默认未初始化零值,返回 nil;
+    /// 2. 左右耳分量仅在确认为耳机/耳麦或未知音频形态时读取；充电仓不参与耳机主电量；私有零值不采信;
     /// 3. 单体 getter (batteryPercentSingle 等)仅接受合法非零区间 (1...100);
-    ///    真实 0% 由 GATT 2A19 或系统电源管理(pmset)精确提供,私有 getter 的 0 一律视为未就绪/默认值。
+    ///    真实 0% 由 GATT 2A19、系统电源树或有效 AirPods 广播提供，私有 getter 的 0 视为未就绪/默认值。
     private static func ioBatteryPercent(of device: IOBluetoothDevice, deviceType: BluetoothDeviceType) -> Int? {
         guard deviceType != .phone, deviceType != .watch, deviceType != .computer, deviceType != .tablet else {
-            BluetoothDiagnostics.shared.record("io.getters.skipped", fields: ["address": device.addressString ?? "", "type": String(describing: deviceType)], deduplicate: true)
             return nil
-        }
-        var getterValues: [String: Any] = [:]
-        defer {
-            if BluetoothDiagnostics.shared.enabled {
-                BluetoothDiagnostics.shared.record("io.getters", fields: ["address": device.addressString ?? "", "name": device.nameOrAddress ?? "", "values": getterValues], deduplicate: true)
-            }
         }
         func number(for key: String) -> Int? {
             let supported = device.responds(to: Selector((key)))
             let boxed = supported ? device.value(forKey: key) as? NSNumber : nil
-            getterValues[key] = ["supported": supported, "raw": boxed as Any? ?? NSNull(), "accepted": boxed.map { (1...100).contains($0.intValue) } ?? false]
             guard let boxed, (1...100).contains(boxed.intValue) else {
                 return nil
             }
@@ -1080,7 +1036,7 @@ final class BluetoothBatterySampler: NSObject {
     private nonisolated static func probe() -> ProbeOutcome {
         guard let output = probeProcessData(
             executableURL: URL(fileURLWithPath: "/usr/sbin/system_profiler"),
-            arguments: ["SPBluetoothDataType", "-json"], diagnosticsSource: "system_profiler"
+            arguments: ["SPBluetoothDataType", "-json"]
         ) else { return .failure }
         return parse(profilerJSON: output)
     }
@@ -1089,40 +1045,25 @@ final class BluetoothBatterySampler: NSObject {
     nonisolated static func probeProcessData(
         executableURL: URL,
         arguments: [String],
-        timeout: DispatchTimeInterval = probeTimeout,
-        diagnosticsSource: String? = nil,
-        diagnostics: BluetoothDiagnostics = .shared
+        timeout: DispatchTimeInterval = probeTimeout
     ) -> Data? {
         let task = Process()
         task.executableURL = executableURL
         task.arguments = arguments
         let pipe = Pipe()
         task.standardOutput = pipe
-        let captureDiagnostics = diagnosticsSource != nil && diagnostics.enabled
-        let stderrPipe = captureDiagnostics ? Pipe() : nil
-        task.standardError = stderrPipe ?? nil
-        if stderrPipe == nil { task.standardError = FileHandle.nullDevice }
-        let startedAt = Date()
+        task.standardError = FileHandle.nullDevice
         let exited = DispatchSemaphore(value: 0)
         task.terminationHandler = { _ in exited.signal() }
-        do {
-            try task.run()
-        } catch {
-            if let source = diagnosticsSource {
-                diagnostics.record("probe", fields: ["source": source, "status": "launch-failed", "error": error.localizedDescription])
-            }
-            return nil
-        }
+        do { try task.run() } catch { return nil }
         nonisolated final class OutputDataCaptureBox: @unchecked Sendable {
             private let lock = NSLock()
             private var data: Data?
-
             func set(_ value: Data) {
                 lock.lock()
                 data = value
                 lock.unlock()
             }
-
             func get() -> Data? {
                 lock.lock()
                 defer { lock.unlock() }
@@ -1130,32 +1071,11 @@ final class BluetoothBatterySampler: NSObject {
             }
         }
         let box = OutputDataCaptureBox()
-        let errorBox = OutputDataCaptureBox()
-        let errorDone = DispatchSemaphore(value: 0)
-        if let stderrPipe {
-            DispatchQueue.global(qos: .utility).async {
-                // 持续排空错误管道，仅保留前 64 KiB，避免探针大量 stderr 阻塞。
-                var captured = Data()
-                while let chunk = try? stderrPipe.fileHandleForReading.read(upToCount: 8192), !chunk.isEmpty {
-                    captured.append(chunk.prefix(max(0, 65536 - captured.count)))
-                }
-                errorBox.set(captured)
-                errorDone.signal()
-            }
-        }
-        func logProbe(_ status: String, output: Data?, exit: Int32? = nil) {
-            guard let source = diagnosticsSource, captureDiagnostics else { return }
-            diagnostics.record("probe", fields: ["source": source, "status": status,
-                "startedAt": startedAt.timeIntervalSince1970, "duration": Date().timeIntervalSince(startedAt),
-                "exit": exit as Any? ?? NSNull(), "stdout": BluetoothDiagnostics.raw(output),
-                "stderr": BluetoothDiagnostics.raw(errorBox.get())])
-        }
         let done = DispatchSemaphore(value: 0)
         DispatchQueue.global(qos: .utility).async {
             box.set(pipe.fileHandleForReading.readDataToEndOfFile())
             done.signal()
         }
-
         let deadline = DispatchTime.now() + timeout
         guard exited.wait(timeout: deadline) == .success,
               done.wait(timeout: deadline) == .success else {
@@ -1165,14 +1085,11 @@ final class BluetoothBatterySampler: NSObject {
                     kill(task.processIdentifier, SIGKILL)
                 }
             }
-            // 等待收尸留在后台；读取线程独占管道，不再启动第二次读取。
+            // 后台等待收尸，输出读取仅由原来的读取线程负责。
             DispatchQueue.global(qos: .utility).async { task.waitUntilExit() }
-            logProbe("timeout", output: box.get())
             return nil
         }
         task.waitUntilExit()
-        if stderrPipe != nil { _ = errorDone.wait(timeout: deadline) }
-        logProbe(task.terminationStatus == 0 ? "success" : "failed", output: box.get(), exit: task.terminationStatus)
         guard task.terminationStatus == 0 else { return nil }
         return box.get()
     }
@@ -1258,7 +1175,7 @@ final class BluetoothBatterySampler: NSObject {
         timeout: DispatchTimeInterval = probeTimeout
     ) -> [BluetoothDeviceInfo] {
         guard let data = probeProcessData(
-            executableURL: executableURL, arguments: ["-g", "accps", "-xml"], timeout: timeout, diagnosticsSource: "pmset"
+            executableURL: executableURL, arguments: ["-g", "accps", "-xml"], timeout: timeout
         ) else { return [] }
         return PMSetAccessoryParser.parse(xmlData: data)
     }
