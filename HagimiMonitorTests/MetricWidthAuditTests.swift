@@ -200,15 +200,26 @@ struct MetricWidthAuditTests {
         }
     }
     @Test func bluetoothComponentsFitMinimumPanelWithChargingAnd100Percent() throws {
-        let value = width("100%", font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)) + 14
-        #expect(value <= BluetoothComponentSizing.valueWidth)
+        let value = width("100%", font: NSFont.monospacedDigitSystemFont(ofSize: BluetoothComponentSizing.valueSize, weight: .semibold))
+            + BluetoothComponentSizing.chargingSize + BluetoothComponentSizing.chargingGap
+        #expect(value <= BluetoothComponentSizing.contentWidth)
         for language in languages {
             for key in ["bluetooth.component.left", "bluetooth.component.right", "bluetooth.component.case"] {
                 let label = try localized(key, language)
-                let required = width(label, font: NSFont.systemFont(ofSize: 12))
-                    + BluetoothComponentSizing.barWidth + BluetoothComponentSizing.valueWidth
-                    + BluetoothComponentSizing.leadingInset + MetricGridMetrics.columnSpacing * 3
-                #expect(required <= MonitorConstants.panelMinWidth - 20, "完整蓝牙部件读数超出最窄面板: \(language) \(label)")
+                let required = width(label, font: NSFont.systemFont(ofSize: AccessoryDetailSizing.statusSize, weight: .medium))
+                    + BluetoothComponentSizing.symbolSize + BluetoothComponentSizing.symbolLabelGap
+                #expect(required <= BluetoothComponentSizing.contentWidth, "部件标题超出三列预算: \(language) \(label)")
+            }
+        }
+    }
+
+    @Test func fanReadingsAndStatusFitMinimumTwoColumnBudget() throws {
+        let value = width("99,999", font: NSFont.monospacedDigitSystemFont(ofSize: AccessoryDetailSizing.fanValueSize, weight: .semibold))
+            + AccessoryDetailSizing.valueUnitSpacing + width("RPM", font: NSFont.systemFont(ofSize: AccessoryDetailSizing.statusSize, weight: .medium))
+        #expect(value <= AccessoryDetailSizing.fanContentWidth)
+        for language in languages {
+            for key in ["fan.status.stopped", "fan.status.running", "fan.status.warning", "fan.status.fault", "fan.status.unknown"] {
+                #expect(width(try localized(key, language), font: NSFont.systemFont(ofSize: AccessoryDetailSizing.statusSize, weight: .medium)) + 8 <= AccessoryDetailSizing.fanContentWidth)
             }
         }
     }

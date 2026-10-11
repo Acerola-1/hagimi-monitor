@@ -2004,6 +2004,22 @@
         }
       }
     },
+    "bluetooth.component.single": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Battery"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电量"
+          }
+        }
+      }
+    },
     "bluetooth.component.left": {
       "localizations": {
         "en": {
@@ -3287,13 +3303,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fan may have stopped. Max RPM: %lld"
+            "value": "Fan reading exceeds the reported range. Max RPM: %lld"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "风扇可能已停转。最大转速：%lld RPM"
+            "value": "风扇读数超出上报范围。最高读数：%lld RPM"
           }
         }
       }
@@ -3303,13 +3319,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Fan Fault Detected"
+            "value": "Unusual Fan Reading"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "检测到风扇故障"
+            "value": "风扇读数异常"
           }
         }
       }
@@ -3406,6 +3422,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "正常"
+          }
+        }
+      }
+    },
+    "fan.status.stopped": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stopped"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停转"
+          }
+        }
+      }
+    },
+    "fan.status.running": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Running"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "运行中"
+          }
+        }
+      }
+    },
+    "fan.name.left": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left Fan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左侧风扇"
+          }
+        }
+      }
+    },
+    "fan.name.right": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right Fan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右侧风扇"
+          }
+        }
+      }
+    },
+    "fan.name.index %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fan %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "风扇 %lld"
           }
         }
       }

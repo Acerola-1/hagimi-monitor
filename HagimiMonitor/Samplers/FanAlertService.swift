@@ -73,7 +73,7 @@ final class FanAlertService {
 
         switch newStatus {
         case .fault:
-            // 停转或传感器异常:最高优先级,立即告警。
+            // 读数超出传感器范围，立即报告异常。
             sendFanAlert(status: .fault, fans: sampler.fans)
             lastAlertedStatus = .fault
         case .warning:
@@ -88,9 +88,9 @@ final class FanAlertService {
                 sendRecoveryAlert(fans: sampler.fans)
             }
             lastAlertedStatus = .normal
-        case .unknown:
-            // 传感器数据不足,不触发通知,但更新 lastAlertedStatus 以便下次正确判断。
-            lastAlertedStatus = .unknown
+        case .unknown, .stopped:
+            // 停转与数据不足都不证明故障或恢复，不发送告警或恢复通知。
+            lastAlertedStatus = newStatus
         }
     }
 
