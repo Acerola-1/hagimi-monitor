@@ -3410,22 +3410,6 @@
         }
       }
     },
-    "fan.status.normal": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Normal"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "正常"
-          }
-        }
-      }
-    },
     "fan.status.stopped": {
       "localizations": {
         "en": {

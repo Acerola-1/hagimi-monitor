@@ -234,7 +234,7 @@ extension StaticMetricSizing {
     ]
 }
 
-/// 蓝牙部件按整行排列，最窄面板也保留标签、条形与完整充电读数。
+/// 风扇与蓝牙明细共用的分组内衬、字号与列宽预算。
 nonisolated enum AccessoryDetailSizing {
     static let inset: CGFloat = 10
     static let cornerRadius: CGFloat = MonitorConstants.rowCornerRadius / 2
@@ -247,6 +247,7 @@ nonisolated enum AccessoryDetailSizing {
     static let fanContentWidth: CGFloat = (MonitorConstants.panelMinWidth - 12 - 2 * inset - 1) / 2 - 2 * inset
 }
 
+/// 蓝牙部件按整行排列，最窄面板也保留标签、条形与完整充电读数。
 nonisolated enum BluetoothComponentSizing {
     static let barWidth: CGFloat = 56
     static let valueWidth: CGFloat = 56

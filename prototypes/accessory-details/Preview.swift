@@ -7,7 +7,6 @@ private struct DemoFan: Identifiable {
     let id: Int
     let name: String
     let rpm: Int
-    let maximum: Int
 }
 private struct DemoPart: Identifiable {
     let id: String
@@ -37,16 +36,16 @@ private struct PreviewPanel: View {
     private var fans: [DemoFan] {
         switch scene {
         case .screenshot:
-            return [.init(id: 0, name: l("左侧风扇", "Left Fan"), rpm: 0, maximum: 6200),
-                    .init(id: 1, name: l("右侧风扇", "Right Fan"), rpm: 0, maximum: 6200)]
+            return [.init(id: 0, name: l("左侧风扇", "Left Fan"), rpm: 0),
+                    .init(id: 1, name: l("右侧风扇", "Right Fan"), rpm: 0)]
         case .complete:
-            return [.init(id: 0, name: l("左侧风扇", "Left Fan"), rpm: 1320, maximum: 6200),
-                    .init(id: 1, name: l("右侧风扇", "Right Fan"), rpm: 1480, maximum: 6200)]
+            return [.init(id: 0, name: l("左侧风扇", "Left Fan"), rpm: 1320),
+                    .init(id: 1, name: l("右侧风扇", "Right Fan"), rpm: 1480)]
         case .multiple:
-            return [.init(id: 0, name: l("左侧风扇", "Left Fan"), rpm: 0, maximum: 6200),
-                    .init(id: 1, name: l("右侧风扇", "Right Fan"), rpm: 2460, maximum: 6200),
-                    .init(id: 2, name: l("辅助风扇", "Auxiliary Fan"), rpm: 1840, maximum: 5200),
-                    .init(id: 3, name: l("机箱风扇", "Chassis Fan"), rpm: 0, maximum: 5200)]
+            return [.init(id: 0, name: l("左侧风扇", "Left Fan"), rpm: 0),
+                    .init(id: 1, name: l("右侧风扇", "Right Fan"), rpm: 2460),
+                    .init(id: 2, name: l("辅助风扇", "Auxiliary Fan"), rpm: 1840),
+                    .init(id: 3, name: l("机箱风扇", "Chassis Fan"), rpm: 0)]
         }
     }
     private var devices: [DemoDevice] {

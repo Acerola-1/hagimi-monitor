@@ -314,22 +314,12 @@ nonisolated enum FanStatus: Equatable, Comparable, Sendable {
         }
     }
 
-    /// 映射到全局 MonitorSeverity,复用面板已有的着色/标题体系。
+    /// 映射到全局 MonitorSeverity,复用面板已有的 severity 着色。
     var severity: MonitorSeverity {
         switch self {
         case .normal, .stopped, .unknown: return .calm
         case .warning: return .warning
         case .fault: return .critical
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .stopped: String(localized: "fan.status.stopped")
-        case .normal: String(localized: "fan.status.normal")
-        case .warning: String(localized: "fan.status.warning")
-        case .fault: String(localized: "fan.status.fault")
-        case .unknown: String(localized: "fan.status.unknown")
         }
     }
 
