@@ -150,8 +150,10 @@ enum MetricSampleCatalog {
             return MetricSample(parts: [MetricSamplePart(text: "Wi-Fi")])
         case .battery:
             return MetricSample(parts: [MetricSamplePart(text: "76", unit: "%")])
-        case .fan, .bluetooth:
-            // 无监测项目可勾的模块不渲染预览卡,行头示例仅作兜底。
+        case .fan:
+            return MetricSample(parts: [MetricSamplePart(text: String(Int(fanHistorySamples.last ?? 0)), unit: "RPM")])
+        case .bluetooth:
+            // 蓝牙设置不渲染模块行预览，行头示例仅作兜底。
             return MetricSample(parts: [MetricSamplePart(text: "--")])
         }
     }
@@ -159,6 +161,7 @@ enum MetricSampleCatalog {
     /// 行头示例曲线样本:平缓起伏的典型负载形态;内存压力模式的行尾曲线
     /// 复用同一形态(压力百分比历史同为 0~100 区间的平缓序列)。
     static let sparklineSamples: [Double] = [18, 26, 22, 34, 30, 45, 38, 52, 44, 40, 48, 42]
+    static let fanHistorySamples = sparklineSamples.map { 2400 + $0 * 8 }
 
     /// 行头示例进度条占比(内存/存储):与 summary 百分比一致。
     static let memoryUsageFraction: Double = 0.64

@@ -4,10 +4,13 @@ import SwiftUI
 enum RowHeaderPillMetrics {
     static let width: CGFloat = 70
     static let height: CGFloat = 26
+    static let cornerRadius = CGFloat(MonitorConstants.rowCornerRadius) - verticalPadding
     static let labelSize: CGFloat = 9
     static let valueSize: CGFloat = 10
     static let horizontalPadding: CGFloat = 5
     static let verticalPadding = (MonitorConstants.panelRowHeaderHeight - height) / 2
+    /// 右缘与上下留白等距，内层转角沿主行轮廓内缩。
+    static let trailingPadding = verticalPadding
     static let spacing: CGFloat = 6
 }
 
@@ -30,7 +33,6 @@ struct MetricLabelPill: View {
         }
         .padding(.horizontal, RowHeaderPillMetrics.horizontalPadding)
         .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
-        .background(Capsule().fill(theme.trackFill))
         .accessibilityElement(children: .combine)
     }
 }
@@ -41,10 +43,31 @@ struct NetworkHeaderPills: View {
     let theme: MonitorPanelTheme
 
     var body: some View {
-        HStack(spacing: RowHeaderPillMetrics.spacing) {
+        PairedHeaderReadings(theme: theme) {
             MetricLabelPill(title: String(localized: "panel.network.upload"), value: upload, theme: theme)
             MetricLabelPill(title: String(localized: "panel.network.download"), value: download, theme: theme)
         }
+    }
+}
+
+/// 一层浅底承载成对读数，避免重复的独立轮廓与主行争夺视觉重点。
+struct PairedHeaderReadings<Content: View>: View {
+    let theme: MonitorPanelTheme
+    let content: Content
+
+    init(theme: MonitorPanelTheme, @ViewBuilder content: () -> Content) {
+        self.theme = theme
+        self.content = content()
+    }
+
+    var body: some View {
+        HStack(spacing: RowHeaderPillMetrics.spacing) {
+            content
+        }
         .fixedSize(horizontal: true, vertical: false)
+        .background {
+            RoundedRectangle(cornerRadius: RowHeaderPillMetrics.cornerRadius, style: .continuous)
+                .fill(theme.trackFill)
+        }
     }
 }

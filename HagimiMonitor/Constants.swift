@@ -30,6 +30,9 @@ nonisolated enum MonitorConstants {
     /// 与胶囊行(高 20)共用行头垂直中线,右缘视觉节奏一致。
     static let trailingSlotWidth: CGFloat = 56
     static let trailingSlotHeight: CGFloat = 18
+    static let panelChartWidth: CGFloat = 72
+    static let panelChartHeight: CGFloat = 24
+    static let panelChartInset: CGFloat = 2
     static let rowCornerRadius = 14.0
     /// 面板外框圆角:与行卡片/底部按钮同值,外轮廓弧度统一、观感更利落。
     /// 留白 6pt 下转角间隙略宽于直边(约 8.5pt),为有意取舍,不遵循同心圆角 R_outer = R_inner + padding。

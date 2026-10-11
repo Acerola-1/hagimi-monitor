@@ -39,7 +39,7 @@ nonisolated struct PowerReadings {
     }
 }
 
-/// 标签和值分两行，复用网络胶囊的横向槽位，不挤占模块名称与电量。
+/// 标签和值分两行，与网络共用读数分组，不挤占模块名称与电量。
 struct PowerHeaderPills: View {
     let module: MonitorModule
     let theme: MonitorPanelTheme
@@ -48,7 +48,7 @@ struct PowerHeaderPills: View {
     private var hasBattery: Bool { module.metrics.first { $0.name == "type" }?.value == "battery" }
 
     var body: some View {
-        HStack(spacing: RowHeaderPillMetrics.spacing) {
+        PairedHeaderReadings(theme: theme) {
             if hasBattery || module.metrics.contains(where: { $0.name == "power-in" && $0.numericValue != nil }) {
                 MetricLabelPill(title: String(localized: "panel.power.input"), value: readings.inputText, theme: theme)
                     .help(readings.connected
@@ -60,6 +60,5 @@ struct PowerHeaderPills: View {
                     .help(String(localized: "panel.power.load-help"))
             }
         }
-        .fixedSize(horizontal: true, vertical: false)
     }
 }

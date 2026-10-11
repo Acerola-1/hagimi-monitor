@@ -151,6 +151,8 @@ extension View {
 /// 深浅模式下基调一致。
 private struct PanelMaterialButtonStyle: ButtonStyle {
     let minimumHeight: CGFloat?
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovering = false
 
     init(minimumHeight: CGFloat? = nil) {
         self.minimumHeight = minimumHeight
@@ -158,6 +160,7 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         let shape = RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
+        let palette = MonitorPalette(preference: .balanced, colorScheme: colorScheme)
         return configuration.label
             // 内边距与行卡片严格一致(同为 vertical 8):按钮高度与行同高,
             // rowCornerRadius 在矮按钮上会被夹到 height/2 退化成胶囊。
@@ -166,14 +169,19 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
             .frame(maxWidth: .infinity, minHeight: minimumHeight ?? 0)
             .background {
                 VisualEffectView(material: .menu, blendingMode: .withinWindow)
+                    .overlay {
+                        // 仅悬浮改变底色，按下与松开保持当前外观。
+                        shape.fill(palette.trackFill.opacity(isHovering ? 1 : 0))
+                            .allowsHitTesting(false)
+                            .animation(.easeOut(duration: 0.12), value: isHovering)
+                    }
                     .clipShape(shape)
             }
             .overlay(
                 shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
             )
             .contentShape(shape)
-            .opacity(configuration.isPressed ? 0.7 : 1)
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .onHover { isHovering = $0 }
     }
 }
 

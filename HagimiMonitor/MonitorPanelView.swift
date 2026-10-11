@@ -485,6 +485,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
+                chartStyle: store.settings.panelChartStyle(for: .cpu),
                 samples: module.samples,
                 details: cpuDetails(for: module),
                 metricOrder: storedMetricOrder(for: .metrics(.cpu)),
@@ -499,6 +500,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
+                chartStyle: store.settings.panelChartStyle(for: .gpu),
                 samples: module.samples,
                 details: enabledMetrics(for: module),
                 metricOrder: storedMetricOrder(for: .metrics(.gpu)),
@@ -517,8 +519,9 @@ struct MonitorPanelView: View {
                 // 压力模式下头部即压力等级文案:等级色落在词前小圆点,正文保持
                 // 常规数值色——状态色不与行玻璃底色叠加,两套色彩语义各归其位。
                 statusTint: pressureMode ? memoryPressureColor(level: pressureRawLevel(module), theme: theme) : nil,
-                // 压力模式下传入压力历史,右侧即切换为曲线;使用率模式传空,保持占比进度条。
-                samples: pressureMode ? module.pressureSamples : [],
+                memoryPressureMode: pressureMode,
+                chartStyle: store.settings.panelChartStyle(for: .memory),
+                samples: PanelChartReadings.memorySamples(module, pressureMode: pressureMode),
                 details: memoryMetrics(for: module, pressureMode: pressureMode),
                 metricOrder: storedMetricOrder(for: .metrics(.memory)),
                 isExpanded: isExpanded,
@@ -532,8 +535,7 @@ struct MonitorPanelView: View {
                 module: module,
                 theme: theme,
                 detail: module.summary,
-                // 每秒采样累积使用率历史(采样器 seed 起步),行尾与 CPU/GPU 同款趋势。
-                samples: module.samples,
+                samples: [],
                 details: enabledMetrics(for: module),
                 metricOrder: storedMetricOrder(for: .metrics(.storage)),
                 isExpanded: isExpanded,
@@ -573,7 +575,8 @@ struct MonitorPanelView: View {
             return NativePanelContentItem(id: module.kind.id, content: MetricGlassRow(
                 module: module,
                 theme: theme,
-                detail: module.summary,
+                detail: PanelChartReadings.fanSummary(module),
+                chartStyle: store.settings.panelChartStyle(for: .fan),
                 samples: module.samples,
                 isExpanded: isExpanded,
                 fans: module.fans
@@ -867,6 +870,8 @@ private struct MetricGlassRow: View, Equatable {
     /// 行头状态词的状态色(如内存压力等级):着色于词后小圆点,正文恒为
     /// valueText——状态色不与行玻璃底色叠加,避免两套色彩语义互相稀释。
     var statusTint: Color? = nil
+    var memoryPressureMode = false
+    var chartStyle: PanelHistoryChartStyle = .bars
     var samples: [Double] = []
     var details: [MonitorMetric] = []
     var metricOrder: [String] = []
@@ -891,6 +896,8 @@ private struct MetricGlassRow: View, Equatable {
             && lhs.theme.palette.colorScheme == rhs.theme.palette.colorScheme
             && lhs.detail == rhs.detail
             && lhs.statusTint == rhs.statusTint
+            && lhs.memoryPressureMode == rhs.memoryPressureMode
+            && lhs.chartStyle == rhs.chartStyle
             && lhs.samples == rhs.samples else { return false }
         // 收起态下明细网格与进程列表均不可见，跳过对未展开内容的深度比对，阻断无关重绘。
         return lhs.details == rhs.details
@@ -933,7 +940,7 @@ private struct MetricGlassRow: View, Equatable {
          "\(showMemoryProcesses):\(min(5, topMemoryProcesses.count))",
          "\(showDiskProcesses):\(min(5, topDiskProcesses.count))",
          storageVolumes?.map(\.id).joined(separator: ",") ?? "",
-         fans?.map { String($0.id) }.joined(separator: ",") ?? ""].joined(separator: "|")
+         fans?.map { "\($0.id):\($0.name)" }.joined(separator: ",") ?? ""].joined(separator: "|")
     }
 
     var body: some View {
@@ -966,8 +973,10 @@ private struct MetricGlassRow: View, Equatable {
 
                 trailingView(theme: theme)
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.leading, 10)
+            .padding(.trailing, module.kind == .storage
+                     ? RowHeaderPillMetrics.trailingPadding : 10)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
@@ -981,7 +990,7 @@ private struct MetricGlassRow: View, Equatable {
             // 暴露按钮语义与展开/收起提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(module.kind.title)
-            .accessibilityValue(detail)
+            .accessibilityValue(rowAccessibilityValue)
             .accessibilityHint(detailAvailable ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -1038,54 +1047,50 @@ private struct MetricGlassRow: View, Equatable {
         }
     }
 
+    private var rowAccessibilityValue: String {
+        if module.kind == .storage {
+            return StorageHeaderReadings.accessibilityValue(module, summary: detail)
+        }
+        if module.kind == .memory {
+            return "\(String(localized: memoryPressureMode ? "panel.chart.memory.pressure-label" : "panel.chart.memory.usage-label")), \(detail)"
+        }
+        return detail
+    }
+
     @ViewBuilder
     private func trailingView(theme: MonitorPanelTheme) -> some View {
         switch module.kind {
-        case .cpu, .gpu:
-            if !samples.isEmpty {
-                SparklineChart(samples: samples, tint: tint)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
-            }
-        case .memory:
-            // 压力模式才会传入 samples(压力历史):有则画曲线,无则维持使用率占比进度条。
-            if !samples.isEmpty {
-                SparklineChart(samples: samples, tint: tint)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
-            } else {
-                trailingMeter(theme: theme)
-            }
         case .storage:
-            // 使用率历史每秒累积:有采样即画趋势(与 CPU/GPU 同槽位),未到时回退占比条。
-            if !samples.isEmpty {
-                SparklineChart(samples: samples, tint: tint)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
+            StorageHeaderPills(module: module, theme: theme)
+        case .cpu, .gpu, .memory:
+            if !module.isPlaceholder, !samples.isEmpty {
+                PanelHistoryChart(samples: samples,
+                    tint: module.kind == .memory && memoryPressureMode ? (statusTint ?? tint) : tint,
+                    theme: theme, style: chartStyle)
+                    .help(String(localized: module.kind == .memory
+                        ? (memoryPressureMode ? "panel.chart.memory.pressure-help" : "panel.chart.memory.usage-help")
+                        : "panel.chart.percent-help"))
             } else {
-                trailingMeter(theme: theme)
+                missingChart(theme: theme)
+            }
+        case .fan:
+            if !module.isPlaceholder, let scale = PanelChartReadings.fanScale(fans ?? []), !samples.isEmpty {
+                PanelHistoryChart(samples: samples,
+                    tint: tint, theme: theme, scale: scale,
+                    referenceValue: fans?.map(\.minRPM).filter { $0 > 0 }.min().map(Double.init), style: chartStyle)
+                    .help(String(format: String(localized: "panel.chart.fan-help"), Int(scale.upper)))
+            } else {
+                missingChart(theme: theme)
             }
         case .network, .battery, .bluetooth:
             EmptyView()
-        case .fan:
-            // 风扇主行右侧:有 RPM 历史则画 sparkline,否则显示当前 max RPM 数字。
-            // Y 轴用风扇硬件 min~max 范围归一化(如 2317~6550),而非默认 0~100,
-            // 这样日常 ~2500 RPM 的线不会贴顶,转速变化也能被放大可见。
-            if !samples.isEmpty {
-                let fanMin = Double(fans?.map(\.minRPM).min() ?? 0)
-                let fanMax = Double(fans?.map(\.maxRPM).max() ?? 100)
-                SparklineChart(samples: samples, tint: tint, minValue: fanMin, maxValue: fanMax)
-                    .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
-            } else {
-                Text(module.summary)
-                    .monitorPanelMonoFont(weight: .semibold)
-                    .foregroundStyle(theme.valueText)
-            }
         }
     }
 
-    /// 占比进度条:5pt 细条在统一槽位(56×18)内垂直居中,与 sparkline 同右缘节奏。
-    private func trailingMeter(theme: MonitorPanelTheme) -> some View {
-        ProgressMeter(value: module.value, tint: tint, theme: theme)
-            .frame(width: MonitorConstants.trailingSlotWidth, height: 5)
-            .frame(width: MonitorConstants.trailingSlotWidth, height: MonitorConstants.trailingSlotHeight)
+    private func missingChart(theme: MonitorPanelTheme) -> some View {
+        Text("—")
+            .foregroundStyle(theme.secondaryText)
+            .frame(width: MonitorConstants.panelChartWidth, height: MonitorConstants.panelChartHeight)
     }
 
     private var storageVolumes: [StorageVolumeInfo]? {
@@ -1890,7 +1895,8 @@ struct NetworkGlassRow: View, Equatable {
                     .layoutPriority(2)
                 }
             }
-            .padding(.horizontal, 10)
+            .padding(.leading, 10)
+            .padding(.trailing, RowHeaderPillMetrics.trailingPadding)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
@@ -2033,7 +2039,8 @@ struct BatteryGlassRow: View, Equatable {
                 PowerHeaderPills(module: module, theme: theme)
                     .layoutPriority(2)
             }
-            .padding(.horizontal, 10)
+            .padding(.leading, 10)
+            .padding(.trailing, RowHeaderPillMetrics.trailingPadding)
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplaySection
@@ -2923,56 +2930,75 @@ private struct InlineNetworkProcessList: View {
     }
 }
 
-/// 风扇展开区列表:按实际风扇数量动态渲染行数(无占位行)。
-/// 每行展示 name / current RPM / min-max 比例条 / 状态指示点。
-/// 仅在多风扇(>=2)时渲染;单风扇的主行已展示 RPM,不进入展开区。
-private struct FanList: View {
+/// 多风扇共用内衬，按两列排列；单风扇沿主行门控，不进入明细。
+struct FanList: View {
     let fans: [FanInfo]
     let theme: MonitorPanelTheme
 
     var body: some View {
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: .fan))
-                .frame(height: 1)
-
-            VStack(spacing: 4) {
-                ForEach(fans) { fan in
-                    fanRow(fan)
-                }
+        PanelAccessoryGroup(theme: theme) {
+            PanelAccessoryGrid(count: fans.count, columns: 2, kind: .fan, theme: theme) { index in
+                fanCell(fans[index])
             }
         }
     }
 
-    /// 渲染单个风扇行:状态点 + 名称 + RPM(带单位,取代原 min-max 比例条)。
-    @ViewBuilder
-    private func fanRow(_ fan: FanInfo) -> some View {
-        let status = fan.status
+    private func fanCell(_ fan: FanInfo) -> some View {
+        VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
+            HStack(spacing: 5) {
+                Image(systemName: "fanblades.fill")
+                    .foregroundStyle(theme.moduleTint(for: .fan))
+                    .accessibilityHidden(true)
+                fanName(fan)
+                    .foregroundStyle(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.system(size: AccessoryDetailSizing.labelSize, weight: .medium))
+            HStack(alignment: .firstTextBaseline, spacing: AccessoryDetailSizing.valueUnitSpacing) {
+                Text("\(fan.currentRPM)")
+                    .font(.system(size: AccessoryDetailSizing.fanValueSize, weight: .semibold, design: .monospaced))
+                Text("RPM")
+                    .font(.system(size: AccessoryDetailSizing.statusSize, weight: .medium))
+                    .foregroundStyle(theme.captionText)
+            }
+            .foregroundStyle(fan.status >= .warning ? theme.palette.severityTint(for: fan.status.severity) : theme.valueText)
+            .fixedSize()
+            HStack(spacing: 4) {
+                Circle().fill(statusColor(fan.status)).frame(width: 4, height: 4)
+                Text(LocalizedStringKey(statusKey(fan.status)))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .font(.system(size: AccessoryDetailSizing.statusSize, weight: .medium))
+            .foregroundStyle(fan.status >= .warning ? theme.palette.severityTint(for: fan.status.severity) : theme.captionText)
+        }
+        .padding(AccessoryDetailSizing.inset)
+        .accessibilityElement(children: .combine)
+    }
 
-        HStack(spacing: 6) {
-            // 状态指示点:fault=红 / warning=橙 / normal=绿 / unknown=灰
-            Circle()
-                .fill(theme.palette.severityTint(for: status.severity))
-                .frame(width: 5, height: 5)
-            Text(fan.name)
-                .monitorPanelMetricLabelFont()
-                .foregroundStyle(theme.primaryText)
-                .lineLimit(1)
-            Spacer(minLength: 8)
-            // 单位直接缀在数值后:比例条信息量低且易被误读为 sparkline。
-            Text("\(fan.currentRPM) RPM")
-                .monitorPanelMonoFont(.callout, weight: .semibold)
-                .foregroundStyle(rpmColor(for: status))
-                .lineLimit(1)
-                .monospacedDigit()
+    @ViewBuilder private func fanName(_ fan: FanInfo) -> some View {
+        switch fan.name {
+        case "Left Fan": Text("fan.name.left")
+        case "Right Fan": Text("fan.name.right")
+        case "Fan #\(fan.id)": Text("fan.name.index \(fan.id + 1)")
+        default: Text(verbatim: fan.name)
         }
     }
 
-    /// RPM 数值颜色:fault/warning 用 severity 色,normal/unknown 用默认值色。
-    private func rpmColor(for status: FanStatus) -> Color {
+    private func statusKey(_ status: FanStatus) -> String {
         switch status {
-        case .fault, .warning: theme.palette.severityTint(for: status.severity)
-        case .normal, .unknown: theme.valueText
+        case .normal: "fan.status.running"
+        case .stopped: "fan.status.stopped"
+        case .unknown: "fan.status.unknown"
+        case .warning: "fan.status.warning"
+        case .fault: "fan.status.fault"
+        }
+    }
+
+    private func statusColor(_ status: FanStatus) -> Color {
+        switch status {
+        case .stopped, .unknown: theme.captionText
+        case .normal: theme.moduleTint(for: .fan)
+        case .warning, .fault: theme.palette.severityTint(for: status.severity)
         }
     }
 }
@@ -2998,6 +3024,11 @@ private struct BluetoothGlassRow: View, Equatable {
 
     private var devices: [BluetoothDeviceInfo] {
         module.bluetoothDevices ?? []
+    }
+
+    private func hasBluetoothComponents(_ device: BluetoothDeviceInfo) -> String {
+        let single = !device.components.isEmpty && device.components.allSatisfy { $0.kind == .single }
+        return single ? "single" : (!device.components.isEmpty || device.batterySource == .advertisement ? "parts" : "none")
     }
 
     /// 行头的无障碍值:设备数 + 摘要(如「3 个设备, 最低 45%」)。
@@ -3074,7 +3105,7 @@ private struct BluetoothGlassRow: View, Equatable {
 
             .panelMeasure("row:" + module.kind.id)
 
-            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty, measurementKey: devices.map { "\($0.id):\($0.name):\($0.type):\(hasBluetoothComponents($0))" }.joined(separator: "|")) {
                 BluetoothDeviceList(devices: devices, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
@@ -3087,86 +3118,153 @@ private struct BluetoothGlassRow: View, Equatable {
     }
 }
 
-/// 蓝牙展开区设备列表:图标底座 + 名称/类型双行文字 + 电量条 + 百分比。
+/// 蓝牙展开区按设备分组；分部电量使用等分网格，普通设备保留总电量。
+/// 系统连接与已配对耳机的有效广播合并成同一清单。
 /// 未上报电量的设备(厂商私有协议,系统本身收不到)右侧以短横占位,不伪造读数。
-private struct BluetoothDeviceList: View {
+struct BluetoothDeviceList: View {
     let devices: [BluetoothDeviceInfo]
     let theme: MonitorPanelTheme
 
     var body: some View {
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: .bluetooth))
-                .frame(height: 1)
-
-            VStack(spacing: 8) {
-                ForEach(devices) { device in
-                    deviceRow(device)
-                }
+        VStack(spacing: MetricGridMetrics.rowSpacing) {
+            ForEach(devices) { device in
+                deviceRow(device)
             }
         }
     }
 
-    @ViewBuilder
+    private func hasComponentGrid(_ device: BluetoothDeviceInfo) -> Bool {
+        !device.components.isEmpty || device.batterySource == .advertisement
+    }
+
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
-        HStack(spacing: 8) {
-            // 图标底座:模块色圆角方块承托形态符号,与系统设备卡片语言一致。
-            Image(systemName: device.type.symbol)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.moduleTint(for: .bluetooth))
-                .frame(width: 26, height: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(theme.badgeFill(for: .bluetooth))
+        PanelAccessoryGroup(theme: theme) {
+            VStack(spacing: 0) {
+                HStack(spacing: 8) {
+                    Image(systemName: device.type.symbol)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(theme.moduleTint(for: .bluetooth))
+                        .frame(width: AccessoryDetailSizing.iconSize, height: AccessoryDetailSizing.iconSize)
+                        .background {
+                            RoundedRectangle(cornerRadius: AccessoryDetailSizing.cornerRadius, style: .continuous)
+                                .fill(theme.badgeFill(for: .bluetooth))
+                        }
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(device.name)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(theme.primaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                        Text(LocalizedStringKey(typeLocalizationKey(device.type)))
+                            .monitorPanelCaptionFont()
+                            .foregroundStyle(theme.captionText)
+                    }
+                    Spacer(minLength: 4)
+                    if !hasComponentGrid(device) {
+                        if let level = device.batteryLevel {
+                            BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
+                                .frame(width: BluetoothComponentSizing.barWidth, height: BluetoothComponentSizing.trackHeight)
+                        }
+                        batteryValue(device.batteryLevel, charging: device.isCharging)
+                            .frame(minWidth: BluetoothComponentSizing.valueWidth, alignment: .trailing)
+                    }
                 }
-                .accessibilityHidden(true)  // 图标由组合标签统一描述
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(device.name)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                Text(typeLabel(for: device.type))
-                    .monitorPanelCaptionFont()
-                    .foregroundStyle(theme.captionText)
-                    .lineLimit(1)
-            }
-            .accessibilityHidden(true)  // 名称/类型由组合标签统一描述
-
-            Spacer(minLength: 8)
-
-            if let level = device.batteryLevel {
-                BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
-                    .frame(width: 56, height: 6)
-                Text("\(level)%")
-                    .monitorPanelMonoFont(.footnote, weight: .semibold)
-                    .foregroundStyle(levelTextColor(level))
-                    .lineLimit(1)
-                    .frame(width: 38, alignment: .trailing)
-                    .accessibilityHidden(true)  // 电量由组合标签统一描述
-            } else {
-                // 无电量设备右侧占位与 TOP 进程空位行同规;列表本身即「已连接」清单。
-                Text("—")
-                    .monitorPanelCaptionFont(.footnote)
-                    .foregroundStyle(theme.captionText)
-                    .frame(width: 38, alignment: .trailing)
-                    .accessibilityHidden(true)  // 占位符由组合标签统一描述
+                .padding(AccessoryDetailSizing.inset)
+                if hasComponentGrid(device) {
+                    Rectangle().fill(theme.rowSeparator(for: .bluetooth)).frame(height: 1)
+                        .padding(.horizontal, AccessoryDetailSizing.inset)
+                    let kinds = componentKinds(for: device)
+                    PanelAccessoryGrid(count: kinds.count, columns: kinds.count, kind: .bluetooth, theme: theme) { index in
+                        componentCell(kinds[index], device: device)
+                    }
+                }
             }
         }
-        // 组合无障碍标签:设备名 + 类型 + 电量(或「电量不可用」),
-        // VoiceOver 一次读出完整信息,不分散到子视图。
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(device.name)
         .accessibilityValue(accessibilityValueForDevice(device))
     }
 
-    /// 设备行的无障碍值:类型 + 电量(或本地化「电量不可用」)。
-    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
-        let type = typeLabel(for: device.type)
-        if let level = device.batteryLevel {
-            return "\(type), \(level)%"
+    private func componentCell(_ kind: BluetoothBatteryComponent.Kind, device: BluetoothDeviceInfo) -> some View {
+        let component = device.components.first { $0.kind == kind }
+        return VStack(spacing: MetricGridMetrics.rowSpacing) {
+            HStack(spacing: BluetoothComponentSizing.symbolLabelGap) {
+                Image(systemName: componentSymbol(kind))
+                    .font(.system(size: BluetoothComponentSizing.symbolSize))
+                    .foregroundStyle(theme.moduleTint(for: .bluetooth).opacity(component == nil ? 0.5 : 1))
+                Text(LocalizedStringKey(componentLocalizationKey(kind)))
+                    .font(.system(size: AccessoryDetailSizing.statusSize, weight: .medium))
+                    .foregroundStyle(theme.captionText)
+            }.fixedSize()
+            batteryValue(component?.level, charging: component?.isCharging)
+            if let component {
+                BluetoothBatteryBar(level: component.level, tint: batteryColor(component.level), theme: theme)
+                    .frame(height: BluetoothComponentSizing.trackHeight)
+            } else {
+                Capsule().fill(theme.trackFill).frame(height: BluetoothComponentSizing.trackHeight)
+            }
         }
-        return "\(type), " + String(localized: "bluetooth.battery-unavailable")
+        .padding(.horizontal, BluetoothComponentSizing.horizontalInset)
+        .padding(.vertical, AccessoryDetailSizing.inset)
+        .frame(maxWidth: .infinity)
+    }
+
+    private func batteryValue(_ level: Int?, charging: Bool?) -> some View {
+        HStack(spacing: BluetoothComponentSizing.chargingGap) {
+            if charging == true {
+                Image(systemName: "bolt.fill")
+                    .font(.system(size: BluetoothComponentSizing.chargingSize))
+                    .foregroundStyle(theme.palette.severityTint(for: .calm))
+            }
+            Text(level.map { "\($0)%" } ?? "—")
+                .font(.system(size: BluetoothComponentSizing.valueSize, weight: .semibold, design: .monospaced))
+                .foregroundStyle(level.map(levelTextColor) ?? theme.captionText)
+        }.fixedSize()
+    }
+
+    private func componentSymbol(_ kind: BluetoothBatteryComponent.Kind) -> String {
+        switch kind {
+        case .left: "airpod.left"
+        case .right: "airpod.right"
+        case .case: "airpods.chargingcase"
+        case .single: "battery.100percent"
+        }
+    }
+
+    private func componentKinds(for device: BluetoothDeviceInfo) -> [BluetoothBatteryComponent.Kind] {
+        if device.components.allSatisfy({ $0.kind == .single }), !device.components.isEmpty {
+            return [.single]
+        }
+        if device.batterySource == .advertisement || device.components.contains(where: { $0.kind == .left || $0.kind == .right || $0.kind == .case }) {
+            return [.left, .right, .case]
+        }
+        return [.single]
+    }
+
+    private func componentLocalizationKey(_ kind: BluetoothBatteryComponent.Kind) -> String {
+        switch kind {
+        case .left: "bluetooth.component.left"
+        case .right: "bluetooth.component.right"
+        case .case: "bluetooth.component.case"
+        case .single: "bluetooth.component.single"
+        }
+    }
+
+    /// 朗读所有部件，包括未上报的项，避免把缺失电量读成真实零值。
+    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
+        var details = [typeLabel(for: device.type)]
+        if hasComponentGrid(device) {
+            for kind in componentKinds(for: device) {
+                let component = device.components.first { $0.kind == kind }
+                let label = String(localized: String.LocalizationValue(componentLocalizationKey(kind)))
+                let value = component.map { "\($0.level)%" } ?? String(localized: "bluetooth.battery-unavailable")
+                let charging = component?.isCharging == true ? ", " + String(localized: "bluetooth.charging") : ""
+                details.append("\(label) \(value)\(charging)")
+            }
+        } else {
+            details.append(device.batteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.battery-unavailable"))
+            if device.isCharging == true { details.append(String(localized: "bluetooth.charging")) }
+        }
+        return details.joined(separator: ", ")
     }
 
     /// 电量条颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
@@ -3194,15 +3292,23 @@ private struct BluetoothDeviceList: View {
 
     /// 设备类型副标题:两语文案见 Localizable 的 bluetooth.type.* 键。
     private func typeLabel(for type: BluetoothDeviceType) -> String {
+        String(localized: String.LocalizationValue(typeLocalizationKey(type)))
+    }
+
+    private func typeLocalizationKey(_ type: BluetoothDeviceType) -> String {
         switch type {
-        case .mouse: String(localized: "bluetooth.type.mouse")
-        case .keyboard: String(localized: "bluetooth.type.keyboard")
-        case .headphones: String(localized: "bluetooth.type.headphones")
-        case .headset: String(localized: "bluetooth.type.headset")
-        case .gamepad: String(localized: "bluetooth.type.gamepad")
-        case .trackpad: String(localized: "bluetooth.type.trackpad")
-        case .speaker: String(localized: "bluetooth.type.speaker")
-        case .other: String(localized: "bluetooth.type.other")
+        case .mouse: "bluetooth.type.mouse"
+        case .keyboard: "bluetooth.type.keyboard"
+        case .headphones: "bluetooth.type.headphones"
+        case .headset: "bluetooth.type.headset"
+        case .gamepad: "bluetooth.type.gamepad"
+        case .trackpad: "bluetooth.type.trackpad"
+        case .speaker: "bluetooth.type.speaker"
+        case .phone: "bluetooth.type.phone"
+        case .tablet: "bluetooth.type.tablet"
+        case .watch: "bluetooth.type.watch"
+        case .computer: "bluetooth.type.computer"
+        case .other: "bluetooth.type.other"
         }
     }
 }

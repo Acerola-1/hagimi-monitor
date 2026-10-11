@@ -66,10 +66,10 @@ struct FanStatusTests {
 
     // MARK: 故障状态
 
-    @Test func faultStatusWhenRPMIsZero() {
-        // RPM = 0:停转 → fault
+    @Test func stoppedStatusWhenRPMIsZero() {
+        // 实测停转不能推断健康状态。
         let fan = FanInfo(id: 0, name: "Fan #0", currentRPM: 0, minRPM: 1000, maxRPM: 6000)
-        #expect(fan.status == .fault)
+        #expect(fan.status == .stopped)
     }
 
     @Test func faultStatusWhenRPMExceedsMax() {
@@ -92,10 +92,13 @@ struct FanStatusTests {
 
     // MARK: 边界优先级
 
-    @Test func faultTakesPriorityOverUnknown() {
-        // maxRPM = 0 → 通常 unknown,但 RPM = 0 时是否 fault?
-        // 设计决策:maxRPM <= 0 优先返回 unknown(传感器数据不足,无法判断)
+    @Test func zeroRPMRemainsStoppedWithoutMaximum() {
         let fan = FanInfo(id: 0, name: "Fan #0", currentRPM: 0, minRPM: 0, maxRPM: 0)
+        #expect(fan.status == .stopped)
+    }
+
+    @Test func negativeReadingIsUnknown() {
+        let fan = FanInfo(id: 0, name: "Fan #0", currentRPM: -1, minRPM: 0, maxRPM: 6000)
         #expect(fan.status == .unknown)
     }
 }
@@ -124,9 +127,16 @@ struct FanOverallStatusTests {
     @Test func faultDominatesOverWarning() {
         let fans = [
             FanInfo(id: 0, name: "Fan #0", currentRPM: 5500, minRPM: 1000, maxRPM: 6000),  // warning
-            FanInfo(id: 1, name: "Fan #1", currentRPM: 0, minRPM: 1000, maxRPM: 6000),     // fault
+            FanInfo(id: 1, name: "Fan #1", currentRPM: 7000, minRPM: 1000, maxRPM: 6000),  // 超范围
         ]
         #expect(FanInfo.overallStatus(of: fans) == .fault)
+    }
+
+    @Test func stoppedFansDoNotBecomeAlerts() {
+        let stopped = FanInfo(id: 0, name: "Fan #0", currentRPM: 0, minRPM: 1000, maxRPM: 6000)
+        let running = FanInfo(id: 1, name: "Fan #1", currentRPM: 1200, minRPM: 1000, maxRPM: 6000)
+        #expect(FanInfo.overallStatus(of: [stopped]) == .stopped)
+        #expect(FanInfo.overallStatus(of: [stopped, running]) < .warning)
     }
 
     @Test func allNormalReturnsNormal() {
@@ -143,7 +153,8 @@ struct FanOverallStatusTests {
 struct FanStatusComparableTests {
 
     @Test func orderingFromBestToWorst() {
-        #expect(FanStatus.unknown < .normal)
+        #expect(FanStatus.unknown < .stopped)
+        #expect(FanStatus.stopped < .normal)
         #expect(FanStatus.normal < .warning)
         #expect(FanStatus.warning < .fault)
     }
@@ -155,6 +166,7 @@ struct FanStatusComparableTests {
 
     @Test func severityMapping() {
         #expect(FanStatus.normal.severity == .calm)
+        #expect(FanStatus.stopped.severity == .calm)
         #expect(FanStatus.unknown.severity == .calm)
         #expect(FanStatus.warning.severity == .warning)
         #expect(FanStatus.fault.severity == .critical)
@@ -231,14 +243,14 @@ struct FanSamplerTests {
         sampler.stop()
     }
 
-    @Test func faultStatusWhenFanStopped() {
+    @Test func stoppedStatusWhenFanStopped() {
         let mock = MockFanSMCReader(
             fanCount: 1,
-            allFans: [(id: 0, currentRPM: 0, minRPM: 1000, maxRPM: 6000)]  // fault
+            allFans: [(id: 0, currentRPM: 0, minRPM: 1000, maxRPM: 6000)]  // 停转
         )
         let sampler = FanSampler(smcReader: mock)
         sampler.start()
-        #expect(sampler.status == .fault)
+        #expect(sampler.status == .stopped)
         sampler.stop()
     }
 

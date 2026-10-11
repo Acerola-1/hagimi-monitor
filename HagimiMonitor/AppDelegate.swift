@@ -54,6 +54,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// 反馈,这里优先呈现设置窗口。返回 false:reopen 意图已由设置窗口承接,
     /// 无需系统再走"恢复隐藏窗口"的默认路径。
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        #if DEBUG
+        if PanelHistoryChartSample.isEnabled {
+            PanelHistoryChartSample.show()
+            return false
+        }
+        #endif
         if NativePanelMotionMode.testHost != nil || NativePanelMotionMode.testScreen != nil {
             if NativePanelMotionMode.testHost == "pinned" {
                 pinnedPanelController.show()
@@ -65,6 +71,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        #if DEBUG
+        if PanelHistoryChartSample.isEnabled {
+            PanelHistoryChartSample.show()
+            return
+        }
+        #endif
         // 通知代理须在启动完成前就位:前台横幅(菜单栏 App 打开面板时即前台)
         // 与通知点击路由都由它承接,冷启动自通知点击的场景也走这里。
         UNUserNotificationCenter.current().delegate = AlertNotificationDelegate.shared

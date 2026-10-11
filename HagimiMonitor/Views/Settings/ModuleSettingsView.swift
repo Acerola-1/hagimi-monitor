@@ -60,10 +60,25 @@ struct ModuleSettingsView: View {
                     .labelsHidden()
                 }
 
-                // 实时预览卡:复刻面板行卡片,勾选变化即时反映到明细网格。
-                // 仅对有可选指标的模块展示——风扇/蓝牙无监测项目可勾,
-                // 单独行头示例没有信息量。
-                if !availableMetrics.isEmpty {
+                if PanelHistoryChartStyle.supports(kind) {
+                    SettingsDivider()
+                    SettingsRow(title: String(localized: "settings.panel.chart-type")) {
+                        Picker(String(localized: "settings.panel.chart-type"), selection: Binding(
+                            get: { settings.panelChartStyle(for: kind) },
+                            set: { settings.setPanelChartStyle($0, for: kind) }
+                        )) {
+                            ForEach(PanelHistoryChartStyle.allCases) { style in
+                                Text(style.title).tag(style)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .frame(width: 190)
+                    }
+                }
+
+                // 风扇没有明细勾选项，但图表类型仍需要同源主行预览。
+                if !availableMetrics.isEmpty || PanelHistoryChartStyle.supports(kind) {
                     SettingsDivider()
 
                     ModuleRowPreview(
@@ -72,6 +87,7 @@ struct ModuleSettingsView: View {
                         memoryPressureMode: memoryPressureMode,
                         palette: palette,
                         metricOrders: settings.panelOrders,
+                        chartStyle: settings.panelChartStyle(for: kind),
                         batteryTab: $batteryTab
                     )
                     .padding(.horizontal, 10)

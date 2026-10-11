@@ -12,6 +12,12 @@ usage() {
   -c, --code  <文本>   代码质量
   -m, --raw   <文本>   原样追加（兼容旧用法，未分类）
 
+已知问题与致谢（每个选项可重复；空小节自动隐藏）:
+  -t, --thanks        <文本>   致谢，写在「更新内容」标题下的自然段
+  -k, --known         <文本>   目前已知的问题 · 未修复
+      --known-fixing  <文本>   目前已知的问题 · 正在修复
+      --known-fixed   <文本>   目前已知的问题 · 本版已解决
+
 示例:
   ./scripts/release.sh 0.8.3 -o "优化内存排行算法，显示更精准"
   ./scripts/release.sh 0.9.0 \
@@ -19,6 +25,11 @@ usage() {
       -f "修复 WiFi 切以太网后网络模块无反应" \
       -o "重写负载聚合逻辑，改用 softmax" \
       -c "删除残留测试代码"
+  ./scripts/release.sh 1.7.3 \
+      -o "磁盘主行读数改为读写速率" \
+      -t "感谢 @someone 提供设备协助验证" \
+      -k "Apple Watch 电量显示不正确，仍在修复中" \
+      --known-fixed "修复 WiFi 切以太网后网络模块无反应"
   ./scripts/release.sh 0.8.3                          # 不写说明，仅占位
   ./scripts/release.sh 0.8.3 -m "$(cat notes.md)"     # 整段原样写入
 
@@ -57,6 +68,10 @@ FIX_ITEMS=()
 OPT_ITEMS=()
 CODE_ITEMS=()
 RAW_BLOCKS=()
+THANKS_ITEMS=()
+KNOWN_ITEMS=()
+FIXING_ITEMS=()
+RESOLVED_ITEMS=()
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -75,6 +90,18 @@ while [[ $# -gt 0 ]]; do
     -m|--raw)
       [[ $# -lt 2 ]] && { echo "错误: $1 需要一个文本参数"; exit 1; }
       RAW_BLOCKS+=("$2"); shift 2 ;;
+    -t|--thanks)
+      [[ $# -lt 2 ]] && { echo "错误: $1 需要一个文本参数"; exit 1; }
+      THANKS_ITEMS+=("$2"); shift 2 ;;
+    -k|--known)
+      [[ $# -lt 2 ]] && { echo "错误: $1 需要一个文本参数"; exit 1; }
+      KNOWN_ITEMS+=("$2"); shift 2 ;;
+    --known-fixing)
+      [[ $# -lt 2 ]] && { echo "错误: $1 需要一个文本参数"; exit 1; }
+      FIXING_ITEMS+=("$2"); shift 2 ;;
+    --known-fixed)
+      [[ $# -lt 2 ]] && { echo "错误: $1 需要一个文本参数"; exit 1; }
+      RESOLVED_ITEMS+=("$2"); shift 2 ;;
     -h|--help)
       usage; exit 0 ;;
     -*)
@@ -214,6 +241,8 @@ fi
 HAS_CONTENT=0
 if [[ ${#NEW_ITEMS[@]} -gt 0 || ${#FIX_ITEMS[@]} -gt 0 \
    || ${#OPT_ITEMS[@]} -gt 0 || ${#CODE_ITEMS[@]} -gt 0 \
+   || ${#KNOWN_ITEMS[@]} -gt 0 || ${#FIXING_ITEMS[@]} -gt 0 \
+   || ${#RESOLVED_ITEMS[@]} -gt 0 || ${#THANKS_ITEMS[@]} -gt 0 \
    || ${#RAW_BLOCKS[@]} -gt 0 ]]; then
   HAS_CONTENT=1
 fi
@@ -231,15 +260,47 @@ render_section() {
   echo ""
 }
 
+# 渲染子分类（标题降一级），供「目前已知的问题」下的状态分列使用
+render_subsection() {
+  local title="$1"; shift
+  local -a items=("$@")
+  [[ ${#items[@]} -eq 0 ]] && return 0
+  echo "#### ${title}"
+  echo ""
+  for item in "${items[@]}"; do
+    echo "- ${item}"
+  done
+  echo ""
+}
+
+# 已知问题按「未修复 / 正在修复 / 本版已解决」分列；三者都空则整节隐藏，
+# 这样每版都能带上该板块，不必逐次判断是否要有它。
+render_known_issues() {
+  if [[ ${#KNOWN_ITEMS[@]} -eq 0 && ${#FIXING_ITEMS[@]} -eq 0 && ${#RESOLVED_ITEMS[@]} -eq 0 ]]; then
+    return 0
+  fi
+  echo "### 目前已知的问题"
+  echo ""
+  render_subsection "未修复"     "${KNOWN_ITEMS[@]+"${KNOWN_ITEMS[@]}"}"
+  render_subsection "正在修复"   "${FIXING_ITEMS[@]+"${FIXING_ITEMS[@]}"}"
+  render_subsection "本版已解决" "${RESOLVED_ITEMS[@]+"${RESOLVED_ITEMS[@]}"}"
+}
+
 if [[ $HAS_CONTENT -eq 1 ]]; then
   echo ">>> 写入发布说明到 ${NOTES_FILE}..."
   {
     echo "## 更新内容"
     echo ""
+    # 致谢按既有发布习惯写成标题下的自然段，不单列小节。
+    for item in "${THANKS_ITEMS[@]+"${THANKS_ITEMS[@]}"}"; do
+      echo "${item}"
+      echo ""
+    done
     render_section "新功能"     "${NEW_ITEMS[@]+"${NEW_ITEMS[@]}"}"
     render_section "修复"       "${FIX_ITEMS[@]+"${FIX_ITEMS[@]}"}"
     render_section "优化与体验" "${OPT_ITEMS[@]+"${OPT_ITEMS[@]}"}"
     render_section "代码质量"   "${CODE_ITEMS[@]+"${CODE_ITEMS[@]}"}"
+    render_known_issues
     if [[ ${#RAW_BLOCKS[@]} -gt 0 ]]; then
       for block in "${RAW_BLOCKS[@]}"; do
         echo "${block}"

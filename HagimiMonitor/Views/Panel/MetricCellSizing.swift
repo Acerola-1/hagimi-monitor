@@ -233,3 +233,30 @@ extension StaticMetricSizing {
         AuditEntry(kind: .battery, name: "input-telemetry", layout: .measured(WorstValue(number: "48.00 V · 5.00 A", unit: nil)))
     ]
 }
+
+/// 风扇与蓝牙明细共用的分组内衬、字号与列宽预算。
+nonisolated enum AccessoryDetailSizing {
+    static let inset: CGFloat = 10
+    static let cornerRadius: CGFloat = MonitorConstants.rowCornerRadius / 2
+    static let iconSize: CGFloat = 26
+    static let labelSize: CGFloat = 11
+    static let statusSize: CGFloat = 10
+    static let fanValueSize: CGFloat = 17
+    static let valueUnitSpacing: CGFloat = 4
+    /// 最窄面板减去外留白、展开区留白、分隔线和格内内衬。
+    static let fanContentWidth: CGFloat = (MonitorConstants.panelMinWidth - 12 - 2 * inset - 1) / 2 - 2 * inset
+}
+
+/// 蓝牙部件按整行排列，最窄面板也保留标签、条形与完整充电读数。
+nonisolated enum BluetoothComponentSizing {
+    static let barWidth: CGFloat = 56
+    static let valueWidth: CGFloat = 56
+    static let horizontalInset: CGFloat = 8
+    static let valueSize: CGFloat = 14
+    static let symbolSize: CGFloat = 11
+    static let chargingSize: CGFloat = 9
+    static let chargingGap: CGFloat = 2
+    static let trackHeight: CGFloat = 3
+    static let symbolLabelGap: CGFloat = 3
+    static let contentWidth: CGFloat = (MonitorConstants.panelMinWidth - 12 - 2 * AccessoryDetailSizing.inset - 2) / 3 - 2 * horizontalInset
+}

@@ -292,11 +292,13 @@ nonisolated struct MonitorMetric: Identifiable, Equatable, Sendable {
 /// 风扇运行状态。基于 RPM 与 min/max 范围判断,用于告警门控与面板着色。
 /// 判断规则见 `FanInfo.status`。
 nonisolated enum FanStatus: Equatable, Comparable, Sendable {
+    /// 实测停转，不单凭零转速推断故障或正常休眠。
+    case stopped
     /// 正常:RPM > 0 且未接近最大值(< 85% maxRPM)。
     case normal
     /// 警告:RPM 接近最大值(>= 85% maxRPM),散热压力高。
     case warning
-    /// 故障:RPM = 0(停转)或 RPM > maxRPM(传感器读数异常)。
+    /// 异常:RPM > maxRPM(传感器读数超范围)。
     case fault
     /// 未知:缺少 maxRPM 数据,无法判断。
     case unknown
@@ -305,27 +307,19 @@ nonisolated enum FanStatus: Equatable, Comparable, Sendable {
     var rank: Int {
         switch self {
         case .unknown: return 0
-        case .normal: return 1
-        case .warning: return 2
-        case .fault: return 3
+        case .stopped: return 1
+        case .normal: return 2
+        case .warning: return 3
+        case .fault: return 4
         }
     }
 
-    /// 映射到全局 MonitorSeverity,复用面板已有的着色/标题体系。
+    /// 映射到全局 MonitorSeverity,复用面板已有的 severity 着色。
     var severity: MonitorSeverity {
         switch self {
-        case .normal, .unknown: return .calm
+        case .normal, .stopped, .unknown: return .calm
         case .warning: return .warning
         case .fault: return .critical
-        }
-    }
-
-    var title: String {
-        switch self {
-        case .normal: String(localized: "fan.status.normal")
-        case .warning: String(localized: "fan.status.warning")
-        case .fault: String(localized: "fan.status.fault")
-        case .unknown: String(localized: "fan.status.unknown")
         }
     }
 
@@ -344,14 +338,15 @@ nonisolated struct FanInfo: Identifiable, Equatable, Sendable {
     let maxRPM: Int
 
     /// 根据当前 RPM 与 min/max 范围判断风扇运行状态。
-    /// - RPM = 0 → fault(停转;有风扇的 Mac 在唤醒时 RPM 至少 ~1000)
+    /// - RPM = 0 → stopped(只表达实测转速，不判断健康状态)
     /// - RPM > maxRPM → fault(传感器读数异常)
     /// - RPM >= 85% maxRPM → warning(接近满载,散热压力高)
     /// - maxRPM <= 0 → unknown(SMC 未提供上限,无法判断)
     /// - 其余 → normal
     var status: FanStatus {
+        if currentRPM < 0 { return .unknown }
+        if currentRPM == 0 { return .stopped }
         if maxRPM <= 0 { return .unknown }
-        if currentRPM == 0 { return .fault }
         if currentRPM > maxRPM { return .fault }
         if Double(currentRPM) >= Double(maxRPM) * 0.85 { return .warning }
         return .normal

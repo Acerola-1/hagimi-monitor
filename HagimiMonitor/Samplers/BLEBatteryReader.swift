@@ -4,9 +4,7 @@ import OSLog
 
 /// CoreBluetooth 侧单台已连接外设的快照。
 nonisolated struct BLEDeviceSnapshot: Equatable, Sendable {
-    /// 系统按设备 MAC 派生的稳定标识:设备改名不变、跨重启稳定。
-    /// CoreBluetooth 无公开 MAC 接口,此标识是与 system_profiler 地址
-    /// 做身份关联的可靠锚点。
+    /// CoreBluetooth 提供的外设标识；公开接口不提供 MAC，需通过已确认绑定关联系统地址。
     let identifier: UUID
     /// 空中 GAP 名(实时,设备端改名立即反映);极少数外设可能为 nil。
     let name: String?
@@ -76,6 +74,13 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     /// 所有状态流转都在此队列上,天然串行。
     private let queue = DispatchQueue(label: "com.acerola.hagimi-monitor.ble-battery", qos: .utility)
     private var central: CBCentralManager?
+    private var monitorsAirPods = false
+    private var airPodsNames = Set<String>()
+    private var airPodsIdentifiers = Set<UUID>()
+    private var airPodsByIdentifier: [UUID: AirPodsAdvertisement] = [:]
+    private var lastPublishedAirPods: [AirPodsAdvertisement] = []
+    private var airPodsScanEnd: DispatchWorkItem?
+    private var lastAirPodsScan: TimeInterval?
     /// 常驻连接的外设(强引用保证 delegate 回调可达),值为最新已知名。
     private var tracked: [CBPeripheral: String] = [:]
     private var connectTimeouts: [CBPeripheral: DispatchWorkItem] = [:]
@@ -105,6 +110,46 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     var onSnapshotsUpdate: (@MainActor @Sendable ([BLEDeviceSnapshot]) -> Void)?
     /// 控制器开关(poweredOn/poweredOff,主线程);授权中间态不发布。
     var onControllerStateUpdate: (@MainActor @Sendable (Bool) -> Void)?
+
+    var onAirPodsUpdate: (@MainActor @Sendable ([AirPodsAdvertisement]) -> Void)?
+
+    /// 仅已配对音频设备需要广播电量采样。
+    func updateAirPodsMonitoring(names: Set<String>, identifiers: Set<UUID>) {
+        queue.async { [weak self] in
+            guard let self else { return }
+            self.airPodsNames = names
+            self.airPodsIdentifiers = identifiers
+            self.airPodsByIdentifier = self.airPodsByIdentifier.filter { _, advertisement in
+                identifiers.contains(advertisement.identifier) || advertisement.name.map(names.contains) == true
+            }
+            self.publishAirPods()
+            let enabled = !names.isEmpty || !identifiers.isEmpty
+            guard self.monitorsAirPods != enabled else { return }
+            self.monitorsAirPods = enabled
+            if !enabled {
+                self.airPodsByIdentifier.removeAll()
+                self.publishAirPods()
+                self.stopAirPodsScan()
+            }
+            self.lastAirPodsScan = nil
+            if let central = self.central, central.state == .poweredOn { self.startAirPodsScanIfNeeded(central) }
+        }
+    }
+
+    private func publishAirPods() {
+        let now = Date().timeIntervalSince1970
+        airPodsByIdentifier = airPodsByIdentifier.filter { now - $0.value.observedAt <= AirPodsAdvertisement.freshnessInterval }
+        let snapshots = airPodsByIdentifier.values.sorted { $0.identifier.uuidString < $1.identifier.uuidString }
+        let unchanged = snapshots.count == lastPublishedAirPods.count && zip(snapshots, lastPublishedAirPods).allSatisfy {
+            $0.identifier == $1.identifier && $0.name == $1.name && $0.components == $1.components
+                && $0.observedAt - $1.observedAt < 30
+        }
+        guard !unchanged else { return }
+        lastPublishedAirPods = snapshots
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.onAirPodsUpdate?(snapshots) }
+        }
+    }
 
     /// 更新 identifier 兜底召回名单(线程安全,串行队列写入)。
     func updateKnownIdentifiers(_ identifiers: [UUID]) {
@@ -139,6 +184,13 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     func stop() {
         queue.async { [weak self] in
             guard let self else { return }
+            self.stopAirPodsScan()
+            self.monitorsAirPods = false
+            self.airPodsNames.removeAll()
+            self.airPodsIdentifiers.removeAll()
+            self.airPodsByIdentifier.removeAll()
+            self.publishAirPods()
+            self.lastAirPodsScan = nil
             self.refreshTimer?.cancel()
             self.refreshTimer = nil
             self.pollTimer?.cancel()
@@ -180,11 +232,14 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
         guard let central, central.state == .poweredOn else { return }
         // 双路召回:常见标准服务过滤为主 + 绑定表 identifier 直接召回兜底
         // (覆盖系统未缓存其标准服务的设备,召回后仅保留已连接态)。
-        var peripherals = central.retrieveConnectedPeripherals(withServices: Self.discoveryServiceUUIDs)
+        publishAirPods()
+        startAirPodsScanIfNeeded(central)
+        let serviceFilter = Self.discoveryServiceUUIDs
+        var peripherals = central.retrieveConnectedPeripherals(withServices: serviceFilter)
         if !knownIdentifiers.isEmpty {
             let seen = Set(peripherals.map(\.identifier))
-            let recalled = central.retrievePeripherals(withIdentifiers: knownIdentifiers)
-                .filter { $0.state == .connected && !seen.contains($0.identifier) }
+            let rawRecalled = central.retrievePeripherals(withIdentifiers: knownIdentifiers)
+            let recalled = rawRecalled.filter { $0.state == .connected && !seen.contains($0.identifier) }
             peripherals.append(contentsOf: recalled)
         }
         // 无名外设没有可展示的身份,不进清单也不跟踪。
@@ -306,6 +361,10 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                 // 蓝牙被用户关闭:清空全部状态,面板行立即消失。
                 // 读数按 characteristic 对象标识分键,重开后 GATT 重新发现产生的
                 // 新实例与旧键不匹配,残留读数会参与 min() 聚合,须一并清空。
+                self.stopAirPodsScan()
+                self.airPodsByIdentifier.removeAll()
+                self.publishAirPods()
+                self.lastAirPodsScan = nil
                 self.publishControllerState(false)
                 for work in self.connectTimeouts.values {
                     work.cancel()
@@ -325,6 +384,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                 self.pollTimer = nil
                 self.publishSnapshots()
             case .unauthorized, .unsupported:
+                self.stopAirPodsScan()
                 // 用户拒绝授权 / 无硬件:静默禁用,system_profiler 路径不受影响。
                 AppLogger.sampler.info("BLE battery reader disabled, central state: \(central.state.rawValue)")
             default:
@@ -386,7 +446,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
         queue.async { [weak self] in
             guard let self else { return }
             let characteristics = service.characteristics ?? []
-            let batteryChars = characteristics.filter { $0.uuid == BLEBatteryReader.batteryLevelCharacteristicUUID }
+            let batteryChars = characteristics.filter { service.uuid == Self.batteryServiceUUID && $0.uuid == BLEBatteryReader.batteryLevelCharacteristicUUID }
             for characteristic in batteryChars {
                 var list = self.batteryCharacteristicsByIdentifier[peripheral.identifier] ?? []
                 if !list.contains(where: { $0 === characteristic }) {
@@ -404,7 +464,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                     self.startPollTimer()
                 }
             }
-            if let characteristic = characteristics.first(where: { $0.uuid == BLEBatteryReader.appearanceCharacteristicUUID }) {
+            if service.uuid == Self.gapServiceUUID, let characteristic = characteristics.first(where: { $0.uuid == BLEBatteryReader.appearanceCharacteristicUUID }) {
                 peripheral.readValue(for: characteristic)
             }
         }
@@ -437,6 +497,41 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                 self.publishSnapshots()
             default:
                 break
+            }
+        }
+    }
+
+    /// 已配对耳机每 30 秒监听 8 秒，停用模块或关闭蓝牙时立即停止。
+    private func startAirPodsScanIfNeeded(_ central: CBCentralManager) {
+        guard monitorsAirPods, airPodsScanEnd == nil else { return }
+        let now = ProcessInfo.processInfo.systemUptime
+        if let lastAirPodsScan, now - lastAirPodsScan < 30 { return }
+        lastAirPodsScan = now
+        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: true])
+        let work = DispatchWorkItem { [weak self] in self?.stopAirPodsScan() }
+        airPodsScanEnd = work
+        queue.asyncAfter(deadline: .now() + 8, execute: work)
+    }
+
+    private func stopAirPodsScan() {
+        guard airPodsScanEnd != nil else { return }
+        airPodsScanEnd?.cancel()
+        airPodsScanEnd = nil
+        central?.stopScan()
+    }
+
+    nonisolated func centralManager(_ central: CBCentralManager, didDiscover peripheral: CBPeripheral, advertisementData: [String: Any], rssi RSSI: NSNumber) {
+        let airPods = (advertisementData[CBAdvertisementDataManufacturerDataKey] as? Data).flatMap {
+            AirPodsAdvertisement.decode($0, identifier: peripheral.identifier, name: peripheral.name, observedAt: Date().timeIntervalSince1970, isDecrypted: advertisementData["kCBAdvDataProximityPairingStatusDecrypted"] as? Bool == true)
+        }
+        queue.async { [weak self] in
+            guard let self, self.central === central, self.airPodsScanEnd != nil else { return }
+            if self.monitorsAirPods, let airPods,
+               self.airPodsIdentifiers.contains(airPods.identifier) || airPods.name.map(self.airPodsNames.contains) == true {
+                if self.airPodsByIdentifier.count < 32 || self.airPodsByIdentifier[airPods.identifier] != nil {
+                    self.airPodsByIdentifier[airPods.identifier] = airPods
+                    self.publishAirPods()
+                }
             }
         }
     }
