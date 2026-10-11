@@ -233,3 +233,10 @@ extension StaticMetricSizing {
         AuditEntry(kind: .battery, name: "input-telemetry", layout: .measured(WorstValue(number: "48.00 V · 5.00 A", unit: nil)))
     ]
 }
+
+/// 蓝牙部件按整行排列，最窄面板也保留标签、条形与完整充电读数。
+nonisolated enum BluetoothComponentSizing {
+    static let barWidth: CGFloat = 56
+    static let valueWidth: CGFloat = 56
+    static let leadingInset: CGFloat = 34
+}

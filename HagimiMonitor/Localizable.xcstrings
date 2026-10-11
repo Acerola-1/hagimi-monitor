@@ -1940,6 +1940,134 @@
         }
       }
     },
+    "bluetooth.type.computer": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Computer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电脑"
+          }
+        }
+      }
+    },
+    "bluetooth.type.phone": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Phone"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手机"
+          }
+        }
+      }
+    },
+    "bluetooth.type.tablet": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tablet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平板"
+          }
+        }
+      }
+    },
+    "bluetooth.type.watch": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Watch"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手表"
+          }
+        }
+      }
+    },
+    "bluetooth.component.left": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Left"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "左耳"
+          }
+        }
+      }
+    },
+    "bluetooth.component.right": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Right"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右耳"
+          }
+        }
+      }
+    },
+    "bluetooth.component.case": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Case"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充电盒"
+          }
+        }
+      }
+    },
+    "bluetooth.charging": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Charging"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "充电中"
+          }
+        }
+      }
+    },
     "cat-cameo.thanks.body": {
       "localizations": {
         "en": {
@@ -2208,6 +2336,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "S"
+          }
+        }
+      }
+    },
+    "diagnostics.readme.bluetooth": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bluetooth capture enabled: bluetooth/*.jsonl contains device names, addresses and identifiers, raw Bluetooth probe outputs, connection events and GATT values. Logs stay on this Mac until you export them. Old files rotate automatically; export soon after testing."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已启用蓝牙诊断：bluetooth/*.jsonl 包含设备名称、地址及标识、蓝牙探针原始返回、连接事件和 GATT 读数。日志保存在本机，不自动上传。旧日志会自动轮转，请测完尽快导出。"
           }
         }
       }

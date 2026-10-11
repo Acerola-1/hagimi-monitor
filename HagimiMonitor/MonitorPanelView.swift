@@ -3095,8 +3095,9 @@ private struct BluetoothGlassRow: View, Equatable {
 }
 
 /// 蓝牙展开区设备列表:图标底座 + 名称/类型双行文字 + 电量条 + 百分比。
+/// 系统连接与已配对耳机的有效广播合并成同一清单。
 /// 未上报电量的设备(厂商私有协议,系统本身收不到)右侧以短横占位,不伪造读数。
-private struct BluetoothDeviceList: View {
+struct BluetoothDeviceList: View {
     let devices: [BluetoothDeviceInfo]
     let theme: MonitorPanelTheme
 
@@ -3116,48 +3117,92 @@ private struct BluetoothDeviceList: View {
 
     @ViewBuilder
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
-        HStack(spacing: 8) {
-            // 图标底座:模块色圆角方块承托形态符号,与系统设备卡片语言一致。
-            Image(systemName: device.type.symbol)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(theme.moduleTint(for: .bluetooth))
-                .frame(width: 26, height: 26)
-                .background {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .fill(theme.badgeFill(for: .bluetooth))
+        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+            HStack(spacing: 8) {
+                // 图标底座:模块色圆角方块承托形态符号,与系统设备卡片语言一致。
+                Image(systemName: device.type.symbol)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(theme.moduleTint(for: .bluetooth))
+                    .frame(width: 26, height: 26)
+                    .background {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .fill(theme.badgeFill(for: .bluetooth))
+                    }
+                    .accessibilityHidden(true)  // 图标由组合标签统一描述
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(device.name)
+                        .font(.footnote.weight(.medium))
+                        .foregroundStyle(theme.primaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    HStack(spacing: 4) {
+                        Text(LocalizedStringKey(typeLocalizationKey(device.type)))
+                            .monitorPanelCaptionFont()
+                            .foregroundStyle(theme.captionText)
+                            .lineLimit(1)
+
+                    }
                 }
-                .accessibilityHidden(true)  // 图标由组合标签统一描述
+                .accessibilityHidden(true)  // 名称/类型由组合标签统一描述
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(device.name)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                Text(typeLabel(for: device.type))
-                    .monitorPanelCaptionFont()
-                    .foregroundStyle(theme.captionText)
-                    .lineLimit(1)
-            }
-            .accessibilityHidden(true)  // 名称/类型由组合标签统一描述
+                Spacer(minLength: 8)
 
-            Spacer(minLength: 8)
-
-            if let level = device.batteryLevel {
-                BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
-                    .frame(width: 56, height: 6)
-                Text("\(level)%")
-                    .monitorPanelMonoFont(.footnote, weight: .semibold)
-                    .foregroundStyle(levelTextColor(level))
-                    .lineLimit(1)
-                    .frame(width: 38, alignment: .trailing)
+                if let level = device.batteryLevel {
+                    BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
+                        .frame(width: 56, height: 6)
+                    HStack(spacing: 2) {
+                        if device.isCharging == true {
+                            Image(systemName: "bolt.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(theme.palette.severityTint(for: .calm))
+                        }
+                        Text("\(level)%")
+                            .monitorPanelMonoFont(.footnote, weight: .semibold)
+                            .foregroundStyle(levelTextColor(level))
+                            .lineLimit(1)
+                    }
+                    .frame(minWidth: BluetoothComponentSizing.valueWidth, alignment: .trailing)
                     .accessibilityHidden(true)  // 电量由组合标签统一描述
-            } else {
-                // 无电量设备右侧占位与 TOP 进程空位行同规;列表本身即「已连接」清单。
-                Text("—")
-                    .monitorPanelCaptionFont(.footnote)
-                    .foregroundStyle(theme.captionText)
-                    .frame(width: 38, alignment: .trailing)
-                    .accessibilityHidden(true)  // 占位符由组合标签统一描述
+                } else {
+                    // 无电量设备右侧占位与 TOP 进程空位行同规;清单也包含已配对耳机的有效广播。
+                    Text("—")
+                        .monitorPanelCaptionFont(.footnote)
+                        .foregroundStyle(theme.captionText)
+                        .frame(minWidth: BluetoothComponentSizing.valueWidth, alignment: .trailing)
+                        .accessibilityHidden(true)  // 占位符由组合标签统一描述
+                }
+            }
+            if !device.components.isEmpty || device.batterySource == .advertisement {
+                VStack(spacing: MetricGridMetrics.gridRowGap) {
+                    ForEach(componentKinds(for: device), id: \.self) { kind in
+                        let component = device.components.first { $0.kind == kind }
+                        HStack(spacing: MetricGridMetrics.columnSpacing) {
+                            Text(LocalizedStringKey(componentLocalizationKey(kind)))
+                                .monitorPanelCaptionFont()
+                                .foregroundStyle(theme.captionText)
+                                .fixedSize()
+                            Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+                            if let component {
+                                BluetoothBatteryBar(level: component.level, tint: batteryColor(component.level), theme: theme)
+                                    .frame(width: BluetoothComponentSizing.barWidth, height: 6)
+                            }
+                            HStack(spacing: 2) {
+                                if component?.isCharging == true {
+                                    Image(systemName: "bolt.fill")
+                                        .font(.caption2)
+                                        .foregroundStyle(theme.palette.severityTint(for: .calm))
+                                }
+                                Text(component.map { "\($0.level)%" } ?? "—")
+                                    .monitorPanelMonoFont(.footnote, weight: .semibold)
+                                    .foregroundStyle(theme.primaryText)
+                                    .fixedSize()
+                            }
+                            .frame(minWidth: BluetoothComponentSizing.valueWidth, alignment: .trailing)
+                        }
+                    }
+                }
+                .padding(.leading, BluetoothComponentSizing.leadingInset)
+                .accessibilityHidden(true)
             }
         }
         // 组合无障碍标签:设备名 + 类型 + 电量(或「电量不可用」),
@@ -3167,13 +3212,58 @@ private struct BluetoothDeviceList: View {
         .accessibilityValue(accessibilityValueForDevice(device))
     }
 
-    /// 设备行的无障碍值:类型 + 电量(或本地化「电量不可用」)。
+    private func componentKinds(for device: BluetoothDeviceInfo) -> [BluetoothBatteryComponent.Kind] {
+        if device.batterySource == .advertisement || device.components.contains(where: { $0.kind == .left || $0.kind == .right || $0.kind == .case }) {
+            return [.left, .right, .case]
+        }
+        return [.single]
+    }
+
+    private func componentLocalizationKey(_ kind: BluetoothBatteryComponent.Kind) -> String {
+        switch kind {
+        case .left: "bluetooth.component.left"
+        case .right: "bluetooth.component.right"
+        case .case: "bluetooth.component.case"
+        case .single: "bluetooth.type.headphones"
+        }
+    }
+
+    /// 解析多部件简要摘要（如「左耳 67% · 右耳 65% · 充电盒 89%」）。
+    private func componentsSummary(for device: BluetoothDeviceInfo) -> String? {
+        guard !device.components.isEmpty else { return nil }
+        return device.components.map { comp in
+            let label: String = {
+                switch comp.kind {
+                case .left: String(localized: "bluetooth.component.left")
+                case .right: String(localized: "bluetooth.component.right")
+                case .case: String(localized: "bluetooth.component.case")
+                case .single: ""
+                }
+            }()
+            let charging = (comp.isCharging == true) ? " ⚡" : ""
+            if label.isEmpty {
+                return "\(comp.level)%\(charging)"
+            }
+            return "\(label) \(comp.level)%\(charging)"
+        }.joined(separator: " · ")
+    }
+
+    /// 设备行的无障碍值:类型 + 电量(或本地化「电量不可用」) + 充电状态 + 部件细分。
     private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
         let type = typeLabel(for: device.type)
+        var details: [String] = [type]
         if let level = device.batteryLevel {
-            return "\(type), \(level)%"
+            details.append("\(level)%")
+        } else {
+            details.append(String(localized: "bluetooth.battery-unavailable"))
         }
-        return "\(type), " + String(localized: "bluetooth.battery-unavailable")
+        if device.isCharging == true {
+            details.append(String(localized: "bluetooth.charging"))
+        }
+        if let compText = componentsSummary(for: device) {
+            details.append(compText)
+        }
+        return details.joined(separator: ", ")
     }
 
     /// 电量条颜色:低电区间走 severity 色,正常区间绿色呼应电池语义。
@@ -3201,15 +3291,23 @@ private struct BluetoothDeviceList: View {
 
     /// 设备类型副标题:两语文案见 Localizable 的 bluetooth.type.* 键。
     private func typeLabel(for type: BluetoothDeviceType) -> String {
+        String(localized: String.LocalizationValue(typeLocalizationKey(type)))
+    }
+
+    private func typeLocalizationKey(_ type: BluetoothDeviceType) -> String {
         switch type {
-        case .mouse: String(localized: "bluetooth.type.mouse")
-        case .keyboard: String(localized: "bluetooth.type.keyboard")
-        case .headphones: String(localized: "bluetooth.type.headphones")
-        case .headset: String(localized: "bluetooth.type.headset")
-        case .gamepad: String(localized: "bluetooth.type.gamepad")
-        case .trackpad: String(localized: "bluetooth.type.trackpad")
-        case .speaker: String(localized: "bluetooth.type.speaker")
-        case .other: String(localized: "bluetooth.type.other")
+        case .mouse: "bluetooth.type.mouse"
+        case .keyboard: "bluetooth.type.keyboard"
+        case .headphones: "bluetooth.type.headphones"
+        case .headset: "bluetooth.type.headset"
+        case .gamepad: "bluetooth.type.gamepad"
+        case .trackpad: "bluetooth.type.trackpad"
+        case .speaker: "bluetooth.type.speaker"
+        case .phone: "bluetooth.type.phone"
+        case .tablet: "bluetooth.type.tablet"
+        case .watch: "bluetooth.type.watch"
+        case .computer: "bluetooth.type.computer"
+        case .other: "bluetooth.type.other"
         }
     }
 }

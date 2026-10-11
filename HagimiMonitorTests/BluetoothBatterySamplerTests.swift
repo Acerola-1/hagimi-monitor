@@ -57,27 +57,44 @@ struct BluetoothDeviceTypeTests {
         #expect(BluetoothDeviceType(minorType: "Gamepad") == .gamepad)
         #expect(BluetoothDeviceType(minorType: "Trackpad") == .trackpad)
         #expect(BluetoothDeviceType(minorType: "Speaker") == .speaker)
+        #expect(BluetoothDeviceType(minorType: "Phone") == .phone)
+        #expect(BluetoothDeviceType(minorType: "Tablet") == .tablet)
+        #expect(BluetoothDeviceType(minorType: "Watch") == .watch)
+        #expect(BluetoothDeviceType(minorType: "Computer") == .computer)
     }
 
     @Test func fallsBackToOther() {
         #expect(BluetoothDeviceType(minorType: nil) == .other)
-        #expect(BluetoothDeviceType(minorType: "Wearable") == .other)
+        #expect(BluetoothDeviceType(minorType: "UnknownGadget") == .other)
     }
 
     @Test func mapsClassOfDevice() {
-        // Audio/Video (major=4):实测小米耳夹式耳机 minor=0x6;红米 Buds 4 minor=0x1。
+        // Computer (major=1): minor 0x07 为平板,其余归电脑
+        #expect(BluetoothDeviceType.fromClassOfDevice(major: 1, minor: 0x01) == .computer)
+        #expect(BluetoothDeviceType.fromClassOfDevice(major: 1, minor: 0x02) == .computer)
+        #expect(BluetoothDeviceType.fromClassOfDevice(major: 1, minor: 0x07) == .tablet)
+
+        // Phone (major=2): 手机
+        #expect(BluetoothDeviceType.fromClassOfDevice(major: 2, minor: 0x01) == .phone)
+        #expect(BluetoothDeviceType.fromClassOfDevice(major: 2, minor: 0x02) == .phone)
+
+        // Audio/Video (major=4): 实测小米耳夹式耳机 minor=0x6; 红米 Buds 4 minor=0x1; 音箱 minor=0x8
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 4, minor: 0x6) == .headphones)
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 4, minor: 0x1) == .headphones)
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 4, minor: 0x8) == .speaker)
-        // Peripheral (major=5):低 6 位子类型,依据 SDK 常量。
+
+        // Peripheral (major=5): 低 6 位子类型
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x01) == .gamepad)  // Joystick
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x02) == .gamepad)  // Gamepad (Xbox 手柄)
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x10) == .keyboard)
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x20) == .mouse)  // Pointing
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x30) == .mouse)  // Combo keyboard/pointing
-        // 数位板 (Digitizer Tablet) 归 other,不强行猜测。
-        #expect(BluetoothDeviceType.fromClassOfDevice(major: 5, minor: 0x04) == nil)
-        // misc(major=0,如 BLE 鼠标)无形态信息。
+
+        // Wearable (major=7): 腕表 0x01 归 watch
+        #expect(BluetoothDeviceType.fromClassOfDevice(major: 7, minor: 0x01) == .watch)
+        #expect(BluetoothDeviceType.fromClassOfDevice(major: 7, minor: 0x02) == nil)
+
+        // misc(major=0, 如 BLE 鼠标)无形态信息
         #expect(BluetoothDeviceType.fromClassOfDevice(major: 0, minor: 0) == nil)
     }
 
@@ -89,17 +106,38 @@ struct BluetoothDeviceTypeTests {
         #expect(BluetoothDeviceType.inferred(fromName: "AirPods Pro") == .headphones)
         #expect(BluetoothDeviceType.inferred(fromName: "Keychron Keyboard") == .keyboard)
         #expect(BluetoothDeviceType.inferred(fromName: "Xbox Wireless Controller") == .gamepad)
+
+        // 手机、平板、手表、电脑
+        #expect(BluetoothDeviceType.inferred(fromName: "iPhone 15 Pro") == .phone)
+        #expect(BluetoothDeviceType.inferred(fromName: "我的华为手机") == .phone)
+        #expect(BluetoothDeviceType.inferred(fromName: "iPad Air") == .tablet)
+        #expect(BluetoothDeviceType.inferred(fromName: "小米平板 6") == .tablet)
+        #expect(BluetoothDeviceType.inferred(fromName: "Apple Watch Ultra") == .watch)
+        #expect(BluetoothDeviceType.inferred(fromName: "华为智能手表") == .watch)
+        #expect(BluetoothDeviceType.inferred(fromName: "MacBook Pro") == .computer)
+        #expect(BluetoothDeviceType.inferred(fromName: "ThinkPad Laptop") == .computer)
     }
 
     @Test func infersOtherForUnknownName() {
+        // 自定义名称或未知设备安全降级为 other，不强行猜测
         #expect(BluetoothDeviceType.inferred(fromName: "苏轼的鹅鸡") == .other)
+        #expect(BluetoothDeviceType.inferred(fromName: "BLE_DEV_9823") == .other)
     }
 
     @Test func mapsGAPAppearance() {
-        // 值表:SIG Assigned Numbers appearance_values.yaml(Wearable Audio 0x0940 段、
-        // Audio Sink 0x0840 段、HID 0x03C0 段)。
+        // SIG Appearance：Laptop 为 0x0083，Tablet 为 0x0087。
+        #expect(BluetoothDeviceType.fromAppearance(0x0040) == .phone)
+        #expect(BluetoothDeviceType.fromAppearance(0x0041) == nil)
+        #expect(BluetoothDeviceType.fromAppearance(0x0080) == .computer)
+        #expect(BluetoothDeviceType.fromAppearance(0x0083) == .computer)
+        #expect(BluetoothDeviceType.fromAppearance(0x0087) == .tablet)
+        #expect(BluetoothDeviceType.fromAppearance(0x00C0) == .watch)
+        #expect(BluetoothDeviceType.fromAppearance(0x00C1) == .watch)
+
+        // 音频与外设
         #expect(BluetoothDeviceType.fromAppearance(0x0941) == .headphones) // Earbud
         #expect(BluetoothDeviceType.fromAppearance(0x0943) == .headphones) // Headphones
+        #expect(BluetoothDeviceType.fromAppearance(0x0944) == .headphones) // Neck Band
         #expect(BluetoothDeviceType.fromAppearance(0x0945) == .headphones) // Left Earbud
         #expect(BluetoothDeviceType.fromAppearance(0x0942) == .headset)    // Headset
         #expect(BluetoothDeviceType.fromAppearance(0x0841) == .speaker)    // Standalone Speaker
@@ -107,10 +145,11 @@ struct BluetoothDeviceTypeTests {
         #expect(BluetoothDeviceType.fromAppearance(0x03C1) == .keyboard)
         #expect(BluetoothDeviceType.fromAppearance(0x03C2) == .mouse)
         #expect(BluetoothDeviceType.fromAppearance(0x03C4) == .gamepad)
-        #expect(BluetoothDeviceType.fromAppearance(0x03C5) == .trackpad)   // Digitizer Tablet
-        // 无对应图标语言的形态(phone 等)返回 nil,调用方沿名称推断兜底。
-        #expect(BluetoothDeviceType.fromAppearance(0x0040) == nil)
+        #expect(BluetoothDeviceType.fromAppearance(0x03C5) == .trackpad)
+
+        // 未知/未映射形态返回 nil，交由调用方兜底
         #expect(BluetoothDeviceType.fromAppearance(0x0002) == nil)
+        #expect(BluetoothDeviceType.fromAppearance(0xFFFF) == nil)
     }
 }
 
@@ -721,3 +760,299 @@ struct BluetoothCallbackIsolationTests {
     }
 }
 
+struct BluetoothComponentParserTests {
+    @Test func parsesMultipleComponents() {
+        let raw = "Left: 67%, Right: 65%, Case: 89%"
+        let comps = BluetoothBatteryParser.components(from: raw)
+        #expect(comps.count == 3)
+        #expect(comps.first { $0.kind == .left }?.level == 67)
+        #expect(comps.first { $0.kind == .right }?.level == 65)
+        #expect(comps.first { $0.kind == .case }?.level == 89)
+    }
+
+    @Test func returnsEmptyForNoComponents() {
+        #expect(BluetoothBatteryParser.components(from: nil).isEmpty)
+        #expect(BluetoothBatteryParser.components(from: "").isEmpty)
+        #expect(BluetoothBatteryParser.components(from: "75%").isEmpty)
+    }
+}
+
+struct BluetoothPMSetAccessoryParserTests {
+    private static let sampleXML = """
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>Accessory Category</key>
+        <string>Pointing</string>
+        <key>Accessory Identifier</key>
+        <string>7c-c9-5e-67-e5-3f</string>
+        <key>Current Capacity</key>
+        <integer>95</integer>
+        <key>Is Charging</key>
+        <false/>
+        <key>Name</key>
+        <string>VXE R1 Wireless Mouse</string>
+        <key>Power Source State</key>
+        <string>Battery Power</string>
+        <key>Transport Type</key>
+        <string>Bluetooth Low Energy</string>
+    </dict>
+    </plist>
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>Accessory Category</key>
+        <string>Keyboard</string>
+        <key>Accessory Identifier</key>
+        <string>00-11-22-33-44-55</string>
+        <key>Current Capacity</key>
+        <integer>70</integer>
+        <key>Is Charging</key>
+        <true/>
+        <key>Name</key>
+        <string>MX Keys Mini</string>
+        <key>Power Source State</key>
+        <string>AC Power</string>
+        <key>Transport Type</key>
+        <string>Bluetooth Low Energy</string>
+    </dict>
+    </plist>
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>Accessory Category</key>
+        <string>Audio</string>
+        <key>Accessory Identifier</key>
+        <string>aa-bb-cc-dd-ee-ff</string>
+        <key>Current Capacity</key>
+        <integer>65</integer>
+        <key>Is Charging</key>
+        <false/>
+        <key>Name</key>
+        <string>AirPods Pro</string>
+        <key>Combined Parts</key>
+        <array>
+            <dict>
+                <key>Current Capacity</key>
+                <integer>67</integer>
+                <key>Is Charging</key>
+                <false/>
+                <key>Part Identifier</key>
+                <string>Left</string>
+            </dict>
+            <dict>
+                <key>Current Capacity</key>
+                <integer>65</integer>
+                <key>Is Charging</key>
+                <false/>
+                <key>Part Identifier</key>
+                <string>Right</string>
+            </dict>
+            <dict>
+                <key>Current Capacity</key>
+                <integer>89</integer>
+                <key>Is Charging</key>
+                <true/>
+                <key>Part Identifier</key>
+                <string>Case</string>
+            </dict>
+        </array>
+        <key>Power Source State</key>
+        <string>Battery Power</string>
+        <key>Transport Type</key>
+        <string>Bluetooth</string>
+    </dict>
+    </plist>
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0">
+    <dict>
+        <key>Accessory Identifier</key>
+        <string>internal-battery</string>
+        <key>Name</key>
+        <string>InternalBattery</string>
+        <key>Type</key>
+        <string>InternalBattery</string>
+    </dict>
+    </plist>
+    """.data(using: .utf8)!
+
+    @Test func parsesAccessoriesAndFiltersInternalBattery() {
+        let devices = PMSetAccessoryParser.parse(xmlData: Self.sampleXML)
+        // 应该解析出 3 台蓝牙外设，内建主电池被过滤
+        #expect(devices.count == 3)
+
+        // 鼠标
+        let mouse = devices.first { $0.address == "7cc95e67e53f" }
+        #expect(mouse?.name == "VXE R1 Wireless Mouse")
+        #expect(mouse?.type == .mouse)
+        #expect(mouse?.batteryLevel == 95)
+        #expect(mouse?.isCharging == false)
+
+        // 键盘（充电中）
+        let keyboard = devices.first { $0.address == "001122334455" }
+        #expect(keyboard?.name == "MX Keys Mini")
+        #expect(keyboard?.type == .keyboard)
+        #expect(keyboard?.batteryLevel == 70)
+        #expect(keyboard?.isCharging == true)
+
+        // 分体耳机（含左右耳及充电盒）
+        let airpods = devices.first { $0.address == "aabbccddeeff" }
+        #expect(airpods?.name == "AirPods Pro")
+        #expect(airpods?.type == .headphones)
+        #expect(airpods?.batteryLevel == 65)
+        #expect(airpods?.components.count == 3)
+        #expect(airpods?.components.first { $0.kind == .case }?.isCharging == true)
+        #expect(airpods?.components.first { $0.kind == .case }?.level == 89)
+    }
+
+    @Test func handlesEmptyAndCorruptedData() {
+        #expect(PMSetAccessoryParser.parse(xmlData: Data()).isEmpty)
+        #expect(PMSetAccessoryParser.parse(xmlData: "invalid xml".data(using: .utf8)!).isEmpty)
+    }
+}
+
+struct BluetoothBatteryValidityAndMergeTests {
+    @Test func unverifiedZeroOverriddenByRealBattery() {
+        // 场景：设备初始可能被赋予默认 0%（如来自未初始化 getter 或空字段），后续来源报告真实 76% 必须成功覆盖！
+        let initialDevice = BluetoothDeviceInfo(
+            address: "aabbcc112233",
+            name: "Apple Watch",
+            type: .watch,
+            batteryLevel: 0
+        )
+        let profilerDevice = BluetoothDeviceInfo(
+            address: "AA:BB:CC:11:22:33",
+            name: "Apple Watch",
+            type: .watch,
+            batteryLevel: 76
+        )
+        let merged = BluetoothBatterySampler.merge(
+            ioDevices: [initialDevice],
+            pmsetDevices: [],
+            profilerDevices: [profilerDevice],
+            bleSnapshots: [],
+            bindings: [:]
+        )
+        #expect(merged.devices.count == 1)
+        #expect(merged.devices[0].batteryLevel == 76)
+    }
+
+    @Test func pmsetOverridesAndEnrichesExistingDevice() {
+        let ioDevice = BluetoothDeviceInfo(
+            address: "001122334455",
+            name: "MX Keys Mini",
+            type: .keyboard,
+            batteryLevel: nil
+        )
+        let pmsetDevice = BluetoothDeviceInfo(
+            address: "001122334455",
+            name: "MX Keys Mini",
+            type: .keyboard,
+            batteryLevel: 70,
+            services: "Bluetooth Low Energy",
+            components: [],
+            isCharging: true
+        )
+        let merged = BluetoothBatterySampler.merge(
+            ioDevices: [ioDevice],
+            pmsetDevices: [pmsetDevice],
+            profilerDevices: [],
+            bleSnapshots: [],
+            bindings: [:]
+        )
+        #expect(merged.devices.count == 1)
+        #expect(merged.devices[0].batteryLevel == 70)
+        #expect(merged.devices[0].isCharging == true)
+    }
+
+    @Test func realZeroFromGATTIsPreserved() {
+        // 场景：临界耗尽的设备通过 GATT 2A19 自报真实 0%，应被正确保留
+        let ioDevice = BluetoothDeviceInfo(
+            address: "112233445566",
+            name: "BLE Mouse",
+            type: .mouse,
+            batteryLevel: nil
+        )
+        let gattSnapshot = BLEDeviceSnapshot(
+            identifier: UUID(uuidString: "11111111-2222-3333-4444-555555555555")!,
+            name: "BLE Mouse",
+            batteryLevel: 0,
+            appearance: 0x03C2
+        )
+        let merged = BluetoothBatterySampler.merge(
+            ioDevices: [ioDevice],
+            pmsetDevices: [],
+            profilerDevices: [],
+            bleSnapshots: [gattSnapshot],
+            bindings: [:]
+        )
+        #expect(merged.devices.count == 1)
+        #expect(merged.devices[0].batteryLevel == 0)
+    }
+
+    @Test func watchAndPhoneBypassAudioGettersAndDegradeGracefully() {
+        // 验证：针对 Watch 和 Phone，ioBatteryPercent 返回 nil，不读取音频分量 getter，
+        // 保证 Apple Watch 和 iPhone 不会被错误标为 0%。
+        let watchDevice = BluetoothDeviceInfo(
+            address: "watch001122",
+            name: "Apple Watch",
+            type: .watch,
+            batteryLevel: nil
+        )
+        let phoneDevice = BluetoothDeviceInfo(
+            address: "phone001122",
+            name: "iPhone",
+            type: .phone,
+            batteryLevel: nil
+        )
+        let merged = BluetoothBatterySampler.merge(
+            ioDevices: [watchDevice, phoneDevice],
+            pmsetDevices: [],
+            profilerDevices: [],
+            bleSnapshots: [],
+            bindings: [:]
+        )
+        #expect(merged.devices.count == 2)
+        let watch = merged.devices.first { $0.type == .watch }
+        let phone = merged.devices.first { $0.type == .phone }
+        #expect(watch?.batteryLevel == nil)
+        #expect(watch?.type.symbol == "applewatch")
+        #expect(phone?.batteryLevel == nil)
+        #expect(phone?.type.symbol == "iphone")
+    }
+
+    @Test func componentsMergedFromProfiler() {
+        let ioDevice = BluetoothDeviceInfo(
+            address: "aabbccddeeff",
+            name: "AirPods Pro",
+            type: .headphones,
+            batteryLevel: nil
+        )
+        let profilerDevice = BluetoothDeviceInfo(
+            address: "AA:BB:CC:DD:EE:FF",
+            name: "AirPods Pro",
+            type: .headphones,
+            batteryLevel: 65,
+            services: "HFP AVRCP A2DP ACL",
+            components: [
+                BluetoothBatteryComponent(kind: .left, level: 67),
+                BluetoothBatteryComponent(kind: .right, level: 65),
+                BluetoothBatteryComponent(kind: .case, level: 89)
+            ]
+        )
+        let merged = BluetoothBatterySampler.merge(
+            ioDevices: [ioDevice],
+            pmsetDevices: [],
+            profilerDevices: [profilerDevice],
+            bleSnapshots: [],
+            bindings: [:]
+        )
+        #expect(merged.devices.count == 1)
+        #expect(merged.devices[0].batteryLevel == 65)
+        #expect(merged.devices[0].components.count == 3)
+    }
+}

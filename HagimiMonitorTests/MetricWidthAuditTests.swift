@@ -199,4 +199,18 @@ struct MetricWidthAuditTests {
             }
         }
     }
+    @Test func bluetoothComponentsFitMinimumPanelWithChargingAnd100Percent() throws {
+        let value = width("100%", font: NSFont.monospacedDigitSystemFont(ofSize: 13, weight: .semibold)) + 14
+        #expect(value <= BluetoothComponentSizing.valueWidth)
+        for language in languages {
+            for key in ["bluetooth.component.left", "bluetooth.component.right", "bluetooth.component.case"] {
+                let label = try localized(key, language)
+                let required = width(label, font: NSFont.systemFont(ofSize: 12))
+                    + BluetoothComponentSizing.barWidth + BluetoothComponentSizing.valueWidth
+                    + BluetoothComponentSizing.leadingInset + MetricGridMetrics.columnSpacing * 3
+                #expect(required <= MonitorConstants.panelMinWidth - 20, "完整蓝牙部件读数超出最窄面板: \(language) \(label)")
+            }
+        }
+    }
+
 }
