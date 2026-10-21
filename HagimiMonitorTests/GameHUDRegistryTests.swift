@@ -450,6 +450,20 @@ struct GameHUDAutoDetectionTests {
         #expect(GameHUDAppAssociation.select(gameName: "Hades", candidates: [hades, hades]) == nil)
     }
 
+    @Test func steamManifestStateAcceptsPausedUpdatesAndRejectsNotInstalled() {
+        // 4 = FullyInstalled;516 = FullyInstalled + UpdatePaused;
+        // 68 = FullyInstalled + AppRunning。位掩码组合仍代表游戏在盘上。
+        #expect(GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "4"))
+        #expect(GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "516"))
+        #expect(GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "68"))
+        #expect(GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "6"))
+        #expect(!GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "0"))
+        #expect(!GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "2"))
+        #expect(!GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "1"))
+        #expect(GameHUDGameScanner.steamManifestIsInstalled(stateFlags: nil))
+        #expect(!GameHUDGameScanner.steamManifestIsInstalled(stateFlags: "oops"))
+    }
+
     @Test func epicLaunchExecutableResolvesNestedApplicationBundle() {
         let candidate = GameHUDAppAssociation.epicApplicationCandidate(
             launchExecutable: "Celeste.app/Contents/MacOS/Celeste",

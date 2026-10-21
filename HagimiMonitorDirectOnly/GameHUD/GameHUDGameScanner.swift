@@ -313,12 +313,9 @@ final class GameHUDGameScanner: ObservableObject {
         for library in libraryPaths {
             let files = (try? FileManager.default.contentsOfDirectory(at: library, includingPropertiesForKeys: nil)) ?? []
             for manifest in files where manifest.lastPathComponent.hasPrefix("appmanifest_") && manifest.pathExtension == "acf" {
-                guard let fields = acfFields(at: manifest, keys: ["appid", "name", "installdir"]),
-                      let installdir = fields["installdir"] else {
-                    continue
-                }
-                // StateFlags == 4 表示 Fully Installed;损坏/更新中清单跳过。
-                if let flags = acfFields(at: manifest, keys: ["StateFlags"])?["StateFlags"], flags != "4" {
+                guard let fields = acfFields(at: manifest, keys: ["appid", "name", "installdir", "StateFlags"]),
+                      let installdir = fields["installdir"],
+                      steamManifestIsInstalled(stateFlags: fields["StateFlags"]) else {
                     continue
                 }
                 let commonDir = library.appendingPathComponent("common").appendingPathComponent(installdir)
@@ -337,6 +334,15 @@ final class GameHUDGameScanner: ObservableObject {
             }
         }
         return games
+    }
+
+    /// ACF `StateFlags` 是位掩码,`FullyInstalled`(4) 可与更新暂停(512)、
+    /// 运行中等其他状态并存;只要求已完整安装,不要求数值恰好等于 4。
+    /// 缺省字段按旧清单兼容为已安装,无法解析的值按未安装处理。
+    nonisolated static func steamManifestIsInstalled(stateFlags: String?) -> Bool {
+        guard let stateFlags else { return true }
+        guard let flags = Int(stateFlags) else { return false }
+        return flags & 4 != 0
     }
 
     /// libraryfolders.vdf 里的 "path" 字段列表;解析失败回退默认库。
