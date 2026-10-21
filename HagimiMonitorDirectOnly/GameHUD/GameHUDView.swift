@@ -99,7 +99,7 @@ struct GameHUDView: View {
         .padding(.horizontal, 14)
         .frame(width: GameHUDViewContract.Metrics.cardWidth, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            GameHUDBackgroundAppearance.backgroundShape
                 .fill(GameHUDBackgroundAppearance.backgroundColor(
                     for: .card,
                     transparency: backgroundTransparency

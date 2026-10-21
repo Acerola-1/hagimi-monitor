@@ -31,10 +31,13 @@ struct GameHUDTopStripView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .fixedSize(horizontal: true, vertical: true)
-        .background(GameHUDBackgroundAppearance.backgroundColor(
-            for: .topStrip,
-            transparency: backgroundTransparency
-        ))
+        .background(
+            GameHUDBackgroundAppearance.backgroundShape
+                .fill(GameHUDBackgroundAppearance.backgroundColor(
+                    for: .topStrip,
+                    transparency: backgroundTransparency
+                ))
+        )
     }
 
     private var entries: [GameHUDMetricCatalog.Entry] {

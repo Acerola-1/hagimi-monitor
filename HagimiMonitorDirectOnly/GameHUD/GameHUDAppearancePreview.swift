@@ -18,9 +18,9 @@ struct GameHUDAppearancePreview: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: GameHUDPreviewContract.containerHeight(for: style))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .clipShape(GameHUDBackgroundAppearance.backgroundShape)
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
+            GameHUDBackgroundAppearance.backgroundShape
                 .strokeBorder(.separator.opacity(0.35), lineWidth: 1)
         }
         .accessibilityElement(children: .combine)

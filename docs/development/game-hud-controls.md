@@ -46,7 +46,7 @@
 
 内部把透明度归一化后按 `alpha = 1 - transparency` 计算背景填充，透明度增加表示背景更透明。该变化只作用于背景填充：不修改 `NSPanel` 整体 alpha，不修改整棵 HUD 的 opacity，文字、指标和行内容保持自身不透明度。非法存储值夹取或回退；顶部横条按既有几何规则回退卡片时，使用实际渲染的卡片样式值。
 
-更新沿现有内容观察链，不重启采样或测帧，不重建材质。常量、默认值、夹取与 alpha 解析由 `GameHUDBackgroundAppearance` 单一拥有；`GameHUDView` 与 `GameHUDTopStripView` 只消费解析后的背景色，文档不复制数值。
+更新沿现有内容观察链，不重启采样或测帧，不重建材质。常量、默认值、夹取、alpha 解析与背景轮廓由 `GameHUDBackgroundAppearance` 单一拥有；`GameHUDView` 与 `GameHUDTopStripView` 只消费解析后的背景色和形状。卡片、顶部横条与预览外框共用同一连续圆角，不在调用点复制半径，文档不复制数值。
 
 ## 局部预览合同
 

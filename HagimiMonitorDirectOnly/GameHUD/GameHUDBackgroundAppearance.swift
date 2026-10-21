@@ -11,6 +11,14 @@ nonisolated enum GameHUDBackgroundAppearance {
     static let topStripBaseOpacity: Double = 0.72
     static let step: Double = 0.01
 
+    /// 两种样式共用的背景轮廓圆角;预览外框也复用该值。
+    /// 顶部横条与卡片保持同一连续圆角语言,切换样式时轮廓不突变。
+    static let cornerRadius: CGFloat = 8
+
+    static var backgroundShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    }
+
     static func baseOpacity(for style: GameHUDPresentationStyle) -> Double {
         switch style {
         case .card: cardBaseOpacity
