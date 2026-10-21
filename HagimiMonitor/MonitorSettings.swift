@@ -183,20 +183,24 @@ final class MonitorSettings: ObservableObject {
     #if DIRECT_DISTRIBUTION
     // MARK: - Game HUD
 
-    /// Game HUD 总开关:实际显示还需前台命中游戏名单且
-    /// 目标窗口可确认;开启不等于正在显示。
-    @Published var gameHUDMasterEnabled: Bool = true
+    /// Game HUD 总开关:实际显示还需前台命中启用名单且
+    /// 目标窗口可确认;开启不等于正在显示。新用户默认关闭。
+    @Published var gameHUDMasterEnabled: Bool = false
     /// Game HUD 硬件指标勾选。与主面板模块显隐(`visibleKinds`/`enabledMetrics`)
     /// 完全独立:主面板隐藏 CPU 行不影响 HUD 读 CPU。
     @Published private(set) var gameHUDEnabledMetricIDs: Set<GameHUDMetricID> = GameHUDMetricCatalog.defaultEnabledIDs()
-    /// Game HUD 用户添加的游戏 bundle ID。内置候选只读不持久化,
-    /// 用户名单可增删;排除名单优先级最高(见 GameHUDGameDirectory)。
-    @Published private(set) var gameHUDCustomGames: Set<String> = []
-    @Published private(set) var gameHUDExcludedGames: Set<String> = []
+    /// 统一应用登记:自动来源、手动添加与黑名单的唯一所有者。
+    /// 名单投影和显示资格都从这里读取,避免视图分别拼接多个集合。
+    @Published private(set) var gameHUDRegistry = GameHUDAppRegistry()
+    /// 卡片背景透明度(0...1,透出程度);默认还原现有背景外观。
+    @Published private(set) var gameHUDCardTransparency: Double = GameHUDBackgroundAppearance.defaultTransparency(for: .card)
+    /// 顶部横条背景透明度;与卡片分别保存。
+    @Published private(set) var gameHUDTopStripTransparency: Double = GameHUDBackgroundAppearance.defaultTransparency(for: .topStrip)
     /// 硬件 HUD 在目标窗口的四象限(左上、右上、左下、右下，默认右下)。
     @Published var gameHUDSidePreference: GameHUDSide = .bottomRight
     /// 默认使用顶部单行横条；放不下时回退卡片布局。
     @Published var gameHUDPresentationStyle: GameHUDPresentationStyle = .topStrip
+
     #endif
 
     /// 钉住面板窗口位置持久化。
@@ -209,6 +213,14 @@ final class MonitorSettings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+
+        #if DIRECT_DISTRIBUTION
+        // 必须在任何迁移写入之前取快照:新用户第二次启动时已被写入迁移标记,
+        // 用当前键表判断会把新用户误判成旧档案。
+        let hadExistingSettingsBeforeMigration = defaults.dictionaryRepresentation().keys.contains {
+            $0.hasPrefix("settings.")
+        }
+        #endif
 
         // 在其他设置迁移写入标记前识别存量安装；旧版即使从未修改设置，
         // 也会保存 settings.metricsDefaultOnMigrated 等迁移标记。
@@ -515,13 +527,10 @@ final class MonitorSettings: ObservableObject {
         #endif
 
         #if DIRECT_DISTRIBUTION
-        if !defaults.bool(forKey: Keys.gameHUDMasterEnabledDefaultOnMigrated) {
-            gameHUDMasterEnabled = true
-            defaults.set(true, forKey: Keys.gameHUDMasterEnabled)
-            defaults.set(true, forKey: Keys.gameHUDMasterEnabledDefaultOnMigrated)
-        } else {
-            gameHUDMasterEnabled = defaults.object(forKey: Keys.gameHUDMasterEnabled) != nil ? defaults.bool(forKey: Keys.gameHUDMasterEnabled) : true
-        }
+        gameHUDMasterEnabled = GameHUDSettingsMigration.resolveMasterEnabled(
+            defaults: defaults,
+            existingInstallBeforeMigration: hadExistingSettingsBeforeMigration
+        )
         if let storedMetrics = defaults.array(forKey: Keys.gameHUDEnabledMetrics) as? [String] {
             var restored = Set(storedMetrics.compactMap { GameHUDMetricID(rawValue: $0) })
             if !defaults.bool(forKey: Keys.gameHUDFPSMigrated) {
@@ -559,12 +568,16 @@ final class MonitorSettings: ObservableObject {
         // 渠道不可读项不残留:目录跨渠道能力不同,存储里可能带着上一渠道
         // (换装/迁移)写下的不可读 ID,读取时按当前目录过滤。
         gameHUDEnabledMetricIDs = GameHUDMetricCatalog.readableIDs(from: gameHUDEnabledMetricIDs)
-        if let customGames = defaults.array(forKey: Keys.gameHUDCustomGames) as? [String] {
-            gameHUDCustomGames = Set(customGames)
-        }
-        if let excludedGames = defaults.array(forKey: Keys.gameHUDExcludedGames) as? [String] {
-            gameHUDExcludedGames = Set(excludedGames)
-        }
+        // 统一登记:优先读取新版数据;首次升级从旧 custom/excluded 迁移。
+        gameHUDRegistry = GameHUDRegistryStore.load(defaults: defaults)
+        gameHUDCardTransparency = GameHUDBackgroundAppearance.storedTransparency(
+            defaults.object(forKey: Keys.gameHUDBackgroundTransparencyCard) as? Double,
+            for: .card
+        )
+        gameHUDTopStripTransparency = GameHUDBackgroundAppearance.storedTransparency(
+            defaults.object(forKey: Keys.gameHUDBackgroundTransparencyTopStrip) as? Double,
+            for: .topStrip
+        )
         gameHUDSidePreference = GameHUDSide(fromStored: defaults.string(forKey: Keys.gameHUDSide) ?? "")
         gameHUDPresentationStyle = GameHUDPresentationStyle(fromStored: defaults.string(forKey: Keys.gameHUDPresentationStyle) ?? "")
         #endif
@@ -668,26 +681,134 @@ final class MonitorSettings: ObservableObject {
         gameHUDEnabledMetricIDs = current
     }
 
-    /// 添加用户自定义游戏 bundle ID。
-    func addGameHUDCustomGame(_ bundleID: String) {
-        let trimmed = bundleID.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        gameHUDCustomGames.insert(trimmed)
-        gameHUDExcludedGames.remove(trimmed)
+    /// 合并扫描结果:所有有效自动识别结果直接获得资格,不设确认门槛。
+    /// 扫描缺席不会删除记录,黑名单永远不被合并覆盖。
+    func mergeGameHUDScan(_ games: [GameHUDDiscoveredGame]) {
+        mergeGameHUDScannedApps(games.map {
+            GameHUDScannedApp(
+                bundleID: $0.bundleID,
+                name: $0.name,
+                applicationPath: $0.applicationURL?.path,
+                source: $0.source.recognitionSource
+            )
+        })
     }
 
-    func removeGameHUDCustomGame(_ bundleID: String) {
-        gameHUDCustomGames.remove(bundleID)
+    /// 扫描输入的独立入口(设置页/验收夹具共用同一条合并通路)。
+    func mergeGameHUDScannedApps(_ apps: [GameHUDScannedApp]) {
+        var registry = gameHUDRegistry
+        guard registry.merge(scannedApps: apps) else { return }
+        gameHUDRegistry = registry
     }
 
-    /// 排除一个候选(含内置自动候选与用户添加)。
-    func excludeGameHUDGame(_ bundleID: String) {
-        gameHUDExcludedGames.insert(bundleID)
+    /// 前台激活的即时登记:只有拿到类别证据时才调用,先登记再发布显示资格。
+    @discardableResult
+    func registerGameHUDRecognizedApp(
+        bundleID: String,
+        name: String,
+        applicationPath: String?,
+        source: GameHUDRecognitionSource
+    ) -> Bool {
+        guard !bundleID.isEmpty else { return false }
+        var registry = gameHUDRegistry
+        let changed = registry.merge(scannedApps: [
+            GameHUDScannedApp(
+                bundleID: bundleID,
+                name: name,
+                applicationPath: applicationPath,
+                source: source
+            ),
+        ])
+        if changed {
+            gameHUDRegistry = registry
+        }
+        return changed
     }
 
-    func removeGameHUDExcludedGame(_ bundleID: String) {
-        gameHUDExcludedGames.remove(bundleID)
+    /// 添加应用:建立/更新同一条手动登记;已在黑名单的应用会被移出排除。
+    @discardableResult
+    func addGameHUDManualApp(
+        bundleID: String,
+        name: String,
+        applicationPath: String?,
+        origin: GameHUDManualOrigin = .userAdded
+    ) -> GameHUDRegistryChange {
+        var registry = gameHUDRegistry
+        let change = registry.addManually(
+            bundleID: bundleID,
+            name: name,
+            applicationPath: applicationPath,
+            origin: origin
+        )
+        gameHUDRegistry = registry
+        return change
     }
+
+    /// 排除应用:来源/手动意图保留,写入黑名单后立即影响显示资格。
+    @discardableResult
+    func excludeGameHUDGame(
+        bundleID: String,
+        name: String,
+        applicationPath: String?
+    ) -> GameHUDRegistryChange {
+        var registry = gameHUDRegistry
+        let change = registry.exclude(
+            bundleID: bundleID,
+            name: name,
+            applicationPath: applicationPath
+        )
+        gameHUDRegistry = registry
+        return change
+    }
+
+    /// 移出排除:只解除黑名单,按保留的来源恢复正常资格。
+    @discardableResult
+    func removeGameHUDExcludedGame(_ bundleID: String) -> GameHUDRegistryChange? {
+        var registry = gameHUDRegistry
+        guard let change = registry.removeExclusion(bundleID: bundleID) else { return nil }
+        gameHUDRegistry = registry
+        return change
+    }
+
+    // MARK: - Game HUD 背景透明度
+
+    func gameHUDBackgroundTransparency(for style: GameHUDPresentationStyle) -> Double {
+        switch style {
+        case .card: gameHUDCardTransparency
+        case .topStrip: gameHUDTopStripTransparency
+        }
+    }
+
+    /// 透明度只保存当前样式的值,夹取到 0...1;非法值回退该样式默认。
+    func setGameHUDBackgroundTransparency(_ value: Double, for style: GameHUDPresentationStyle) {
+        let normalized = GameHUDBackgroundAppearance.normalized(value, for: style)
+        switch style {
+        case .card:
+            guard normalized != gameHUDCardTransparency else { return }
+            gameHUDCardTransparency = normalized
+        case .topStrip:
+            guard normalized != gameHUDTopStripTransparency else { return }
+            gameHUDTopStripTransparency = normalized
+        }
+    }
+
+    /// 恢复默认只作用于当前样式,不连带修改另一样式。
+    func resetGameHUDBackgroundTransparency(for style: GameHUDPresentationStyle) {
+        setGameHUDBackgroundTransparency(
+            GameHUDBackgroundAppearance.defaultTransparency(for: style),
+            for: style
+        )
+    }
+
+    #if DEBUG
+    /// 原生验收夹具专用:清空隔离偏好中的登记与透明度,不影响正式路径。
+    /// 仅在 Debug 构建且显式设置 HAGIMI_GAMEHUD_VERIFY_CONFIG 时调用。
+    func resetGameHUDStateForVerification() {
+        gameHUDRegistry = GameHUDAppRegistry()
+        gameHUDCardTransparency = GameHUDBackgroundAppearance.defaultTransparency(for: .card)
+        gameHUDTopStripTransparency = GameHUDBackgroundAppearance.defaultTransparency(for: .topStrip)
+    }
+    #endif
     #endif
 
     func panelOrder(for scope: PanelOrderScope) -> [String] {
@@ -1198,17 +1319,26 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $gameHUDCustomGames
+        $gameHUDRegistry
             .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(Array(newValue), forKey: Keys.gameHUDCustomGames)
+            .sink { [weak self] registry in
+                guard let self else { return }
+                // 新格式是权威;同时输出旧 custom/excluded 供旧版回退读取。
+                GameHUDRegistryStore.save(registry, defaults: self.defaults)
             }
             .store(in: &cancellables)
 
-        $gameHUDExcludedGames
+        $gameHUDCardTransparency
             .dropFirst()
             .sink { [weak self] newValue in
-                self?.persist(Array(newValue), forKey: Keys.gameHUDExcludedGames)
+                self?.persist(newValue, forKey: Keys.gameHUDBackgroundTransparencyCard)
+            }
+            .store(in: &cancellables)
+
+        $gameHUDTopStripTransparency
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.gameHUDBackgroundTransparencyTopStrip)
             }
             .store(in: &cancellables)
 
@@ -1345,15 +1475,23 @@ private enum Keys {
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"
     #if DIRECT_DISTRIBUTION
     // MARK: Game HUD
-    static let gameHUDMasterEnabled = "settings.gameHUD.masterEnabled"
-    static let gameHUDMasterEnabledDefaultOnMigrated = "settings.gameHUD.masterEnabledDefaultOnMigrated"
-    static let gameHUDEnabledMetrics = "settings.gameHUD.enabledMetrics"
-    static let gameHUDCustomGames = "settings.gameHUD.customGames"
-    static let gameHUDExcludedGames = "settings.gameHUD.excludedGames"
-    static let gameHUDSide = "settings.gameHUD.side"
-    static let gameHUDPresentationStyle = "settings.gameHUD.presentationStyle"
-    static let gameHUDFPSMigrated = "settings.gameHUD.fpsMigrated"
-    static let gameHUDNewMetricsV2Migrated = "settings.gameHUD.newMetricsV2Migrated"
-    static let gameHUDMemoryPressureMigrated = "settings.gameHUD.memoryPressureMigrated"
+    static let gameHUDMasterEnabled = GameHUDPreferenceKeys.masterEnabled
+    static let gameHUDMasterEnabledResolved = GameHUDPreferenceKeys.masterEnabledResolved
+    static let gameHUDMasterEnabledDefaultOnMigrated = GameHUDPreferenceKeys.masterEnabledDefaultOnMigrated
+    static let gameHUDEnabledMetrics = GameHUDPreferenceKeys.enabledMetrics
+    /// 统一登记 JSON(权威数据)。
+    static let gameHUDRegistryData = GameHUDPreferenceKeys.registryData
+    /// 损坏新格式的原始载荷备份前缀(保留可恢复证据,不静默覆盖)。
+    static let gameHUDRegistryCorruptBackupPrefix = GameHUDPreferenceKeys.registryCorruptBackupPrefix
+    /// 旧版回退输出键;新版本只写不读(迁移时除外)。
+    static let gameHUDCustomGames = GameHUDPreferenceKeys.customGames
+    static let gameHUDExcludedGames = GameHUDPreferenceKeys.excludedGames
+    static let gameHUDSide = GameHUDPreferenceKeys.side
+    static let gameHUDPresentationStyle = GameHUDPreferenceKeys.presentationStyle
+    static let gameHUDBackgroundTransparencyCard = GameHUDPreferenceKeys.backgroundTransparencyCard
+    static let gameHUDBackgroundTransparencyTopStrip = GameHUDPreferenceKeys.backgroundTransparencyTopStrip
+    static let gameHUDFPSMigrated = GameHUDPreferenceKeys.fpsMigrated
+    static let gameHUDNewMetricsV2Migrated = GameHUDPreferenceKeys.newMetricsV2Migrated
+    static let gameHUDMemoryPressureMigrated = GameHUDPreferenceKeys.memoryPressureMigrated
     #endif
 }

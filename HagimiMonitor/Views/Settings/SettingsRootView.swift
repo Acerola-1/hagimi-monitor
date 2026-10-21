@@ -191,6 +191,10 @@ extension SettingsTab {
             return .storage
         case .about:
             return .about
+        #if DIRECT_DISTRIBUTION
+        case .gameHUD:
+            return .gameHUD
+        #endif
         }
     }
 }

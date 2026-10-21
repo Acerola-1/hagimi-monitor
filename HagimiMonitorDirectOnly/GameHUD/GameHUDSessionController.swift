@@ -48,17 +48,18 @@ final class GameHUDSessionController: ObservableObject {
 
     private let settings: MonitorSettings
     private let windowLocator: GameHUDWindowLocator
-    private let dataSource: GameHUDSnapshotProviding
     /// HUD 卡片能塞进目标窗口的最小尺寸(pt)。
     let minimumWindowSize = CGSize(width: 260, height: 200)
 
     private var pollTimer: AnyCancellable?
     private var settingsCancellable: AnyCancellable?
+    private var registryCancellable: AnyCancellable?
     private var workspaceCancellables: Set<AnyCancellable> = []
+    /// 非游戏前台应用的类别证据负缓存:避免每秒轮询重复读 Info.plist。
+    private var categoryEvidenceCache: [String: Bool] = [:]
 
-    init(settings: MonitorSettings, dataSource: GameHUDSnapshotProviding) {
+    init(settings: MonitorSettings) {
         self.settings = settings
-        self.dataSource = dataSource
         self.windowLocator = GameHUDWindowLocator()
         observeSettings()
         if settings.gameHUDMasterEnabled {
@@ -107,21 +108,65 @@ final class GameHUDSessionController: ObservableObject {
     var onGameLaunched: ((GameHUDForegroundGame) -> Void)?
 
 
+    /// 当前目标是否仍有显示资格。协调器的快照/测帧/几何回调在呈现前复核它,
+    /// 晚到回调不能复活已被排除的目标。
+    var isTargetPermitted: Bool {
+        guard settings.gameHUDMasterEnabled,
+              state == .hardwareVisible,
+              let game = foregroundGame else {
+            return false
+        }
+        return GameHUDGameDirectory.matches(bundleID: game.bundleID, settings: settings)
+    }
+
     // MARK: - 内部
 
-    /// 前台应用 → 名单匹配。严格仅匹配 frontmostApplication。
+    /// 前台应用 → 启用名单匹配。严格仅匹配 frontmostApplication。
     /// 当用户从全屏游戏通过 Cmd+Tab、三指滑动或点击 Dock 切出时，frontmostApplication
     /// 变为其他应用或系统，立刻判定为非前台并隐藏 HUD，避免将用户强行拽回游戏 Space。
+    ///
+    /// 先登记再发布:新出现的游戏若带应用包类别证据,在该轮轮询内写入统一登记;
+    /// 只有商店安装路径线索时安排一次重扫,等清单证据落定后再显示。
     private func foregroundMatchedGame() -> GameHUDForegroundGame? {
         guard let app = NSWorkspace.shared.frontmostApplication,
-              GameHUDGameDirectory.matches(bundleID: app.bundleIdentifier, settings: settings) else {
+              let bundleID = app.bundleIdentifier,
+              !bundleID.isEmpty else {
+            return nil
+        }
+        if !settings.gameHUDRegistry.isEligible(bundleID) {
+            registerFrontmostAppIfRecognized(app, bundleID: bundleID)
+        }
+        guard GameHUDGameDirectory.matches(bundleID: bundleID, settings: settings) else {
             return nil
         }
         return GameHUDForegroundGame(
-            bundleID: app.bundleIdentifier ?? "",
+            bundleID: bundleID,
             processIdentifier: app.processIdentifier,
             localizedName: app.localizedName ?? ""
         )
+    }
+
+    /// 即时登记只接受稳定类别证据;路径/Metal 只用于安排重扫。
+    private func registerFrontmostAppIfRecognized(_ app: NSRunningApplication, bundleID: String) {
+        let categoryEvidence: Bool
+        if let cached = categoryEvidenceCache[bundleID] {
+            categoryEvidence = cached
+        } else {
+            categoryEvidence = app.bundleURL.map(GameHUDAutoDetection.isGameApplication(at:)) ?? false
+            categoryEvidenceCache[bundleID] = categoryEvidence
+        }
+        if categoryEvidence {
+            settings.registerGameHUDRecognizedApp(
+                bundleID: bundleID,
+                name: app.localizedName ?? "",
+                applicationPath: app.bundleURL?.path,
+                source: .applicationCategory
+            )
+            return
+        }
+        if GameHUDGameScanner.isLikelyGame(appURL: app.bundleURL, bundleID: bundleID) {
+            GameHUDGameScanner.shared.requestRescanForActivatedGame()
+        }
     }
 
     private func clearForeground() {
@@ -153,11 +198,19 @@ final class GameHUDSessionController: ObservableObject {
                     self.stopPolling()
                 }
             }
+        // 名单/黑名单变更在主线程同步驱动一轮判定:行内排除后,
+        // 状态与浮窗在下一次事件循环前收敛,而不是等下一秒轮询。
+        registryCancellable = settings.$gameHUDRegistry
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self, self.settings.gameHUDMasterEnabled else { return }
+                self.poll()
+            }
     }
 
     private func startPolling() {
         guard pollTimer == nil else { return }
-        AppLogger.diagnostics.info("GameHUD polling start, masterEnabled=\(self.settings.gameHUDMasterEnabled, privacy: .public) customGames=\(self.settings.gameHUDCustomGames.count, privacy: .public)")
+        AppLogger.diagnostics.info("GameHUD polling start, masterEnabled=\(self.settings.gameHUDMasterEnabled, privacy: .public) enabledApps=\(self.settings.gameHUDRegistry.enabledApps.count, privacy: .public) excludedApps=\(self.settings.gameHUDRegistry.excludedApps.count, privacy: .public)")
         poll()
         pollTimer = Timer.publish(every: 1, on: .main, in: .common)
             .autoconnect()

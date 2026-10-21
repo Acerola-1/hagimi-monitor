@@ -43,6 +43,8 @@ struct GameHUDView: View {
     var fpsStats: GameHUDFPSStats?
     /// 用户勾选的全部 HUD 指标集合(用于精确判断 FPS / AVG / 1% Low / 各硬件行显隐)。
     var enabledMetricIDs: Set<GameHUDMetricID> = GameHUDMetricCatalog.defaultEnabledIDs()
+    /// 背景透出程度(0...1)。只改变背景填充,文字与窗口 alpha 保持不变。
+    var backgroundTransparency: Double = GameHUDBackgroundAppearance.defaultTransparency(for: .card)
 
     var body: some View {
         VStack(alignment: .leading, spacing: GameHUDViewContract.Metrics.rowSpacing) {
@@ -98,7 +100,10 @@ struct GameHUDView: View {
         .frame(width: GameHUDViewContract.Metrics.cardWidth, alignment: .topLeading)
         .background(
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.black.opacity(0.68))
+                .fill(GameHUDBackgroundAppearance.backgroundColor(
+                    for: .card,
+                    transparency: backgroundTransparency
+                ))
         )
     }
 

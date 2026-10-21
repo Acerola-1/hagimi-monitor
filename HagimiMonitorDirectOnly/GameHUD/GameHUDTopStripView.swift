@@ -5,6 +5,8 @@ struct GameHUDTopStripView: View {
     let snapshot: GameHUDSnapshot
     let fpsStats: GameHUDFPSStats?
     let enabledMetricIDs: Set<GameHUDMetricID>
+    /// 背景透出程度(0...1)。只改变背景填充,文字与窗口 alpha 保持不变。
+    var backgroundTransparency: Double = GameHUDBackgroundAppearance.defaultTransparency(for: .topStrip)
 
     var body: some View {
         HStack(spacing: 10) {
@@ -29,7 +31,10 @@ struct GameHUDTopStripView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .fixedSize(horizontal: true, vertical: true)
-        .background(Color.black.opacity(0.72))
+        .background(GameHUDBackgroundAppearance.backgroundColor(
+            for: .topStrip,
+            transparency: backgroundTransparency
+        ))
     }
 
     private var entries: [GameHUDMetricCatalog.Entry] {

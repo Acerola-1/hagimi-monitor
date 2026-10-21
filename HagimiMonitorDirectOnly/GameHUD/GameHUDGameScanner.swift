@@ -7,22 +7,21 @@ import Foundation
 nonisolated struct GameHUDDiscoveredGame: Identifiable, Equatable, Sendable {
     let bundleID: String
     let name: String
-    /// 可执行文件路径(受控启动用);Spotlight 来源可能拿不到,为 nil。
-    let executableURL: URL?
-    /// Steam AppID(Steam 来源才有;steam_appid.txt 自动预备用)。
-    let steamAppID: String?
+    /// 应用包路径;Steam/Epic 清单关联失败时不产出该条目。
+    let applicationURL: URL?
     let source: Source
 
     nonisolated enum Source: String, Sendable {
         case steam
         case epic
-        case spotlight
+        /// 应用包自身声明了游戏类别(英文 canonical 或本地化类别名)。
+        case applicationCategory
 
-        var titleKey: String.LocalizationValue {
+        var recognitionSource: GameHUDRecognitionSource {
             switch self {
-            case .steam: "gamehud.scanner.source.steam"
-            case .epic: "gamehud.scanner.source.epic"
-            case .spotlight: "gamehud.scanner.source.spotlight"
+            case .steam: .steamManifest
+            case .epic: .epicManifest
+            case .applicationCategory: .applicationCategory
             }
         }
     }
@@ -30,28 +29,16 @@ nonisolated struct GameHUDDiscoveredGame: Identifiable, Equatable, Sendable {
     var id: String { bundleID }
 }
 
-/// 游戏自动扫描器:聚合 Steam / Epic / 系统类别三个来源,按 bundle ID 去重。
-///
-/// 来源与数据契约(2026-09-26 实机调研):
-/// - **Steam**:`~/Library/Application Support/Steam/steamapps/libraryfolders.vdf`
-///   列出全部库分区;每区 `appmanifest_*.acf` 提供游戏名与 installdir,
-///   `steamapps/common/<installdir>/*.app` 即游戏本体,读 Info.plist 得 bundle ID。
-/// - **Epic**:`~/Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests/*.item`
-///   (JSON:DisplayName/InstallLocation/LaunchExecutable)。用户机未装 Epic 时目录
-///   不存在,扫出空集。
-/// - **系统类别**:Spotlight 查询 `kMDItemAppStoreCategory == "Games"` 的 .app。
-///   Apple Games.app 的游戏库由私有守护进程 gamed 维护,无公开 API;但其识别
-///   结果与「Info.plist 声明 Games 类别」高度重合,走公开 Spotlight 索引可覆盖
-///   /Applications 与 App Store 游戏,不依赖私有框架。
-///
-/// 去重:同一游戏可能同时被 Steam 清单和 Spotlight 命中(同一个 .app 文件),
-/// 以 bundle ID 为唯一键,先到来源优先(Steam/Epic 带完整安装信息,优先于 Spotlight)。
-/// 受总开关门控，由目录变更、有效游戏激活与 5 分钟缓存控制驱动。
-///
+/// 一次扫描的结果。`failed` 只表示索引扫描本身不可用(命令无法执行/异常退出),
+/// 某个来源目录不存在只是“这里没有游戏”,不是失败。
+nonisolated struct GameHUDScanOutcome: Sendable {
+    let games: [GameHUDDiscoveredGame]
+    let failed: Bool
+}
+
 /// 启动器排除:Steam.app、Games.app、Epic Launcher 等平台本体的 Info.plist
-/// 也声明 `public.app-category.games`(实测),Spotlight 会把它们当游戏扫进来。
-/// 静态排除名单只用于剔除「明显是启动器/商店」的条目,不用于判定「是游戏」——
-/// 后者仍由用户勾选确认(保守原则)。
+/// 也声明 `public.app-category.games`(实测),类别扫描会命中它们。
+/// 该名单只剔除“明显是启动器/商店”的条目,不参与“是不是游戏”的判定。
 nonisolated enum GameHUDLauncherExclusions {
     /// bundle ID 精确匹配(小写)。
     static let bundleIDs: Set<String> = [
@@ -75,30 +62,36 @@ nonisolated enum GameHUDLauncherExclusions {
         "steam link", "steam app", "epic games launcher", "battle.net", "gog galaxy",
     ]
 }
-/// 监听节奏(设计定案 2026-09-26):
-/// - **目录监听**:DispatchSource 盯 Steam steamapps 与 Epic Manifests 目录。
-///   装新 Steam/Epic 游戏必然在这两处落新 manifest 文件,事件驱动零轮询。
-/// - **前台激活探测**:App Store/独立安装游戏没有清单目录可听,但用户装完
-///   一般立刻打开——监听 NSWorkspace 激活通知,前台 bundle ID 不在已知名单
-///   且不在本次扫描缓存里时补扫一次(Spotlight 扫描本身有 3s 上限,频率极低)。
-/// - 两种信号都只触发「重扫 + 更新发布」,名单变更是否采纳仍由用户决定
-///   (发现列表只增不自动加,保守原则)。
+
+/// 游戏自动扫描器:聚合 Steam / Epic / 系统应用类别三个可解释来源,
+/// 按 bundle ID 去重。扫描结果只是登记输入,由设置统一合并并自动采纳。
+///
+/// 来源与获取渠道:
+/// - **Steam**:`libraryfolders.vdf` + `appmanifest_*.acf`,并按游戏名关联真实 `.app`;
+/// - **Epic**:Manifests JSON 的 LaunchExecutable/InstallLocation,关联失败则跳过;
+/// - **系统类别**:Spotlight 枚举应用包,读取 Info.plist 的
+///   `LSApplicationCategoryType`。英文 canonical 与本地化类别名都能识别,
+///   不依赖索引语言;索引缺失时由前台激活/手动添加兜底。
+///
+/// 去重顺序即优先级:Steam/Epic 带安装信息,优先于类别扫描。
+/// 受总开关门控;设置页主动刷新允许一次独立扫描,不会打开总开关。
 @MainActor
 final class GameHUDGameScanner: ObservableObject {
 
     static let shared = GameHUDGameScanner()
 
     /// 缓存有效期:设置页停留期间反复刷新不重扫。
-    private static let cacheInterval: TimeInterval = 300
+    static let cacheInterval: TimeInterval = 300
     /// 激活探测的最小重扫间隔:同一场游戏连续切窗口不重复扫。
     private static let rescanDebounce: TimeInterval = 30
 
-    /// 扫描结果发布(设置页「自动发现」列表消费)。
+    /// 扫描结果发布(AppDelegate 合并进统一登记、设置页显示状态)。
     @Published private(set) var discoveredGames: [GameHUDDiscoveredGame] = []
-    /// 最近一次扫描结果的 bundle ID 快照(供名单匹配;扫描未完成前为空)。
-    private(set) var knownGameBundleIDs: Set<String> = []
     /// 正在扫描指示(设置页刷新按钮转圈用)。
     @Published private(set) var isScanning = false
+    @Published private(set) var lastScanCompletedAt: Date?
+    @Published private(set) var lastScanCount = 0
+    @Published private(set) var lastScanFailed = false
 
     private var cachedGames: [GameHUDDiscoveredGame]?
     private var lastScanDate: Date?
@@ -111,12 +104,12 @@ final class GameHUDGameScanner: ObservableObject {
 
     private init() {}
 
-    /// 常驻监听启动:目录监听 + 应用生命周期通知 + 自动定时扫描 (每 10 分钟) + 启动即后台初扫。
+    /// 常驻监听启动:目录监听 + 应用生命周期通知 + 自动定时扫描 + 启动即后台初扫。
+    /// 由总开关门控,关闭时停止这里的一切轮询。
     func startMonitoring() {
         guard !started else { return }
         started = true
-        // 启动即在后台执行一次扫描,保证 knownGameBundleIDs 与发现列表及早落定
-        rescanNow(force: true)
+        performRescan(force: true)
         watchDirectory(FileManager.default
             .homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Steam/steamapps"))
@@ -152,7 +145,6 @@ final class GameHUDGameScanner: ObservableObject {
         }
         workspaceObservers = [activated, launched]
 
-        // 自动定时扫描:每 10 分钟在后台轮询一次游戏目录与 Spotlight,自动发现新装游戏
         periodicTimer = Timer.publish(every: 600, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
@@ -176,13 +168,99 @@ final class GameHUDGameScanner: ObservableObject {
         periodicTimer = nil
     }
 
-    nonisolated private static func watchPathCandidates() -> [URL] {
-        [
-            FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/Steam/steamapps"),
-            FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"),
-        ]
+    /// 丢弃缓存强制重扫(手动刷新按钮用)。
+    func invalidate() {
+        cachedGames = nil
+        lastScanDate = nil
+    }
+
+    /// 常驻监听路径的扫描入口。
+    func rescanNow(force: Bool = false) {
+        guard started || force else { return }
+        performRescan(force: force)
+    }
+
+    /// 设置页路径:即使总开关关闭也允许单次扫描,但不启动常驻监听。
+    /// `force == false` 时仍遵守缓存,避免每次切回页面都重扫。
+    func rescanFromSettings(force: Bool) {
+        performRescan(force: force || !started)
+    }
+
+    /// 前台激活发现新候选时安排一次去抖重扫(商店清单证据靠这次扫描补全)。
+    func requestRescanForActivatedGame() {
+        scheduleRescan()
+    }
+
+    private func performRescan(force: Bool) {
+        guard !isScanning else { return }
+        if !force, let last = lastScanDate, Date().timeIntervalSince(last) < Self.cacheInterval, cachedGames != nil {
+            return
+        }
+        isScanning = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let outcome = GameHUDGameScanner.scanWithOutcome()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                self.cachedGames = outcome.games
+                self.lastScanDate = Date()
+                self.discoveredGames = outcome.games
+                self.lastScanCount = outcome.games.count
+                self.lastScanFailed = outcome.failed
+                self.lastScanCompletedAt = Date()
+                self.isScanning = false
+            }
+        }
+    }
+
+    /// 前台应用激活:不在缓存且存在类别或商店路径线索时补扫一次。
+    /// 这里只决定“值不值得扫”,不把路径/Metal 当作识别证据,也不直接登记。
+    private func handleActivation(bundleID: String, name: String, appURL: URL?) {
+        guard !bundleID.isEmpty else { return }
+        if bundleID.hasPrefix("com.apple.") { return }
+        if cachedGames?.contains(where: { $0.bundleID == bundleID }) == true { return }
+        if Self.isLauncher(bundleID: bundleID, name: name) { return }
+        guard Self.isLikelyGame(appURL: appURL, bundleID: bundleID) else { return }
+        scheduleRescan()
+    }
+
+    /// 去抖:30 秒内多次信号只扫一次。
+    private func scheduleRescan() {
+        guard Date().timeIntervalSince(lastRescanDate) >= Self.rescanDebounce else { return }
+        lastRescanDate = Date()
+        performRescan(force: false)
+    }
+
+    /// 仅用于触发重扫的线索:类别证据或商店安装目录。
+    static func isLikelyGame(appURL: URL?, bundleID: String) -> Bool {
+        guard let url = appURL else { return false }
+        if GameHUDAutoDetection.isGameApplication(at: url) {
+            return true
+        }
+        return GameHUDAutoDetection.storePathSource(for: url) != nil
+    }
+
+    /// 为名单游戏清理 per-app `MetalForceHudEnabled`,
+    /// 避免 Apple 官方 HUD 出现干扰 Hagimi 自研 HUD。
+    ///
+    /// 只在“总开关开启且目标真正允许显示”的运行时路径调用(见 coordinator),
+    /// 扫描结果、设置预览和黑名单操作都不会触发它。沙盒游戏(App Store)的容器偏好由 cfprefsd
+    /// 保护,先按容器目录存在性跳过——stat 元数据读取不触发授权,零弹窗。
+    nonisolated static func cleanupPerAppHUD(bundleID: String) {
+        DispatchQueue.global(qos: .utility).async {
+            let containerDir = FileManager.default.homeDirectoryForCurrentUser
+                .appendingPathComponent("Library/Containers/\(bundleID)")
+            var isDirectory: ObjCBool = false
+            if FileManager.default.fileExists(atPath: containerDir.path, isDirectory: &isDirectory), isDirectory.boolValue {
+                return
+            }
+            let defaults = Process()
+            defaults.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
+            defaults.arguments = ["delete", bundleID, "MetalForceHudEnabled"]
+            defaults.standardOutput = FileHandle.nullDevice
+            defaults.standardError = FileHandle.nullDevice
+            try? defaults.run()
+            defaults.waitUntilExit()
+        }
     }
 
     private func watchDirectory(_ url: URL) {
@@ -204,118 +282,21 @@ final class GameHUDGameScanner: ObservableObject {
         dirSources.append(source)
     }
 
-    /// 前台应用激活:目标是名单/缓存外的新 bundle(装完新游戏就立刻打开的场景)。
-    private func handleActivation(bundleID: String, name: String, appURL: URL?) {
-        guard !bundleID.isEmpty else { return }
-        // 系统应用跳过，避免 Finder/Safari/Xcode 等日常切换触发重扫
-        if bundleID.hasPrefix("com.apple.") { return }
-        // 已在缓存或名单关注范围内:不扫。
-        if cachedGames?.contains(where: { $0.bundleID == bundleID }) == true { return }
-        // 明显是启动器/系统应用:不扫。
-        if GameHUDGameScanner.isLauncher(bundleID: bundleID, name: name) { return }
-        // 过滤非游戏普通应用: 仅当位于游戏目录或包信息声明为游戏时才调度重扫
-        guard GameHUDGameScanner.isLikelyGame(appURL: appURL, bundleID: bundleID) else { return }
+    // MARK: - 扫描聚合
 
-        // 快速登记当前已激活的新游戏，避免 5 分钟 cacheInterval 导致刚安装并运行的游戏无法被即时识别
-        if let url = appURL, !knownGameBundleIDs.contains(bundleID) {
-            knownGameBundleIDs.insert(bundleID)
-            let newGame = GameHUDDiscoveredGame(
-                bundleID: bundleID,
-                name: name.isEmpty ? url.deletingPathExtension().lastPathComponent : name,
-                executableURL: url,
-                steamAppID: nil,
-                source: url.path.contains("steamapps/common") ? .steam : (url.path.contains("Epic Games") ? .epic : .spotlight)
-            )
-            if !discoveredGames.contains(where: { $0.bundleID == bundleID }) {
-                discoveredGames.append(newGame)
-                discoveredGames.sort { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
-            }
-        }
-
-        scheduleRescan()
-    }
-
-    nonisolated static func isLikelyGame(appURL: URL?, bundleID: String) -> Bool {
-        guard let url = appURL else { return false }
-        let path = url.path
-        if path.contains("steamapps/common") || path.contains("Epic Games") {
-            return true
-        }
-        if let bundle = Bundle(url: url) {
-            if let category = bundle.infoDictionary?["LSApplicationCategoryType"] as? String,
-               category.localizedCaseInsensitiveContains("games") {
-                return true
-            }
-        }
-        return false
-    }
-
-    /// 去抖:30 秒内多次信号只扫一次。
-    private func scheduleRescan() {
-        guard Date().timeIntervalSince(lastRescanDate) >= Self.rescanDebounce else { return }
-        lastRescanDate = Date()
-        rescanNow()
-    }
-
-    /// 为名单游戏清理 per-app `MetalForceHudEnabled`,
-    /// 避免 Apple 官方 HUD 出现干扰 Hagimi 自研 HUD。
-    /// 沙盒游戏(App Store)的容器偏好由 cfprefsd 保护,先按容器目录存在性
-    /// 跳过——stat 元数据读取不触发「App 管理」授权,零弹窗。写失败静默。
-    /// 移入后台 utility 队列执行外部进程，避免阻塞主线程。
-    nonisolated static func cleanupPerAppHUD(bundleID: String) {
-        DispatchQueue.global(qos: .utility).async {
-            let containerDir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent("Library/Containers/\(bundleID)")
-            var isDirectory: ObjCBool = false
-            if FileManager.default.fileExists(atPath: containerDir.path, isDirectory: &isDirectory), isDirectory.boolValue {
-                return
-            }
-            let defaults = Process()
-            defaults.executableURL = URL(fileURLWithPath: "/usr/bin/defaults")
-            defaults.arguments = ["delete", bundleID, "MetalForceHudEnabled"]
-            defaults.standardOutput = FileHandle.nullDevice
-            defaults.standardError = FileHandle.nullDevice
-            try? defaults.run()
-            defaults.waitUntilExit()
-        }
-    }
-
-    /// 丢弃缓存强制重扫(刷新按钮用)。
-    func invalidate() {
-        cachedGames = nil
-        lastScanDate = nil
-    }
-
-    /// 立即重扫并发布(刷新按钮与监听信号共用)。
-    func rescanNow(force: Bool = false) {
-        guard started || force else { return }
-        guard !isScanning else { return }
-        if !force, let last = lastScanDate, Date().timeIntervalSince(last) < Self.cacheInterval, cachedGames != nil {
-            return
-        }
-        isScanning = true
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let games = GameHUDGameScanner.scan()
-            let bundleIDs = Set(games.map(\.bundleID))
-            DispatchQueue.main.async {
-                self?.knownGameBundleIDs = bundleIDs
-                self?.cachedGames = games
-                self?.lastScanDate = Date()
-                self?.discoveredGames = games
-                self?.isScanning = false
-            }
-        }
-    }
-
-    nonisolated static func scan() -> [GameHUDDiscoveredGame] {
+    nonisolated static func scanWithOutcome() -> GameHUDScanOutcome {
+        let categories = scanApplicationCategories()
         var byBundleID: [String: GameHUDDiscoveredGame] = [:]
-        // 顺序即优先级:Steam/Epic 带安装信息,后扫的 Spotlight 不覆盖已存在的。
-        for game in scanSteam() + scanEpic() + scanSpotlight() {
+        // 顺序即优先级:Steam/Epic 带安装信息,后扫的类别结果不覆盖已存在条目。
+        for game in scanSteam() + scanEpic() + categories.games {
             if byBundleID[game.bundleID] == nil {
                 byBundleID[game.bundleID] = game
             }
         }
-        return byBundleID.values.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
+        let sorted = byBundleID.values.sorted {
+            $0.name.localizedStandardCompare($1.name) == .orderedAscending
+        }
+        return GameHUDScanOutcome(games: sorted, failed: categories.failed)
     }
 
     // MARK: - Steam
@@ -341,12 +322,16 @@ final class GameHUDGameScanner: ObservableObject {
                     continue
                 }
                 let commonDir = library.appendingPathComponent("common").appendingPathComponent(installdir)
-                guard let bundleID = firstGameBundleID(in: commonDir) else { continue }
+                let gameName = fields["name"] ?? installdir
+                // 不在多应用包目录里随便取第一个 .app:唯一候选或名称唯一匹配才采用。
+                let candidates = GameHUDAppAssociation.candidates(inDirectory: commonDir, maxDepth: 1)
+                guard let app = GameHUDAppAssociation.select(gameName: gameName, candidates: candidates) else {
+                    continue
+                }
                 games.append(GameHUDDiscoveredGame(
-                    bundleID: bundleID,
-                    name: fields["name"] ?? installdir,
-                    executableURL: firstExecutable(in: commonDir),
-                    steamAppID: fields["appid"],
+                    bundleID: app.bundleID,
+                    name: gameName,
+                    applicationURL: app.url,
                     source: .steam
                 ))
             }
@@ -381,7 +366,6 @@ final class GameHUDGameScanner: ObservableObject {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             for key in keys {
                 if result[key] == nil, trimmed.hasPrefix("\"\(key)\"") {
-                    // "key"  "value"
                     let segments = trimmed.split(separator: "\t").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\" \t")) }
                     if segments.count >= 2 {
                         result[key] = segments[1]
@@ -406,137 +390,101 @@ final class GameHUDGameScanner: ObservableObject {
                   let name = json["DisplayName"] as? String else {
                 continue
             }
-            // 只收原生 Mac 安装: 检查 InstallLocation 与 LaunchExecutable 并定位可执行文件。
             let installLocation = json["InstallLocation"] as? String ?? ""
             let launchExecutable = json["LaunchExecutable"] as? String ?? ""
             guard !installLocation.isEmpty, !launchExecutable.isEmpty else { continue }
-            let executable = URL(fileURLWithPath: installLocation).appendingPathComponent(launchExecutable)
-            // Epic 的 LaunchExecutable 形如 "Game/Binaries/Mac/Game.app" 或 ".../Mac/Game"。
-            let appURL = executable.path.contains(".app")
-                ? URL(fileURLWithPath: executable.path)
-                : URL(fileURLWithPath: installLocation)
-            guard let bundleID = bundleID(ofAppAt: appURL) else { continue }
+            guard let app = GameHUDAppAssociation.epicApplicationCandidate(
+                launchExecutable: launchExecutable,
+                installLocation: installLocation,
+                gameName: name
+            ) else {
+                continue
+            }
             games.append(GameHUDDiscoveredGame(
-                bundleID: bundleID,
+                bundleID: app.bundleID,
                 name: name,
-                executableURL: appURL,
-                steamAppID: nil,
+                applicationURL: app.url,
                 source: .epic
             ))
         }
         return games
     }
 
-    // MARK: - 系统类别(Spotlight)
+    // MARK: - 系统应用类别
 
-    /// 扫描声明为 Games 类别的 .app(App Store 类别全集,含子类)。
-    nonisolated static func scanSpotlight() -> [GameHUDDiscoveredGame] {
-        var byBundle: [String: GameHUDDiscoveredGame] = [:]
-        let lock = NSLock()
-        DispatchQueue.concurrentPerform(iterations: gameCategories.count) { index in
-            for game in categoryGames(category: gameCategories[index]) {
-                lock.lock()
-                if byBundle[game.bundleID] == nil {
-                    byBundle[game.bundleID] = game
+    /// 枚举应用包并读取包内类别。Spotlight 只作为可缺失的索引:
+    /// 命令不可用时返回 failed,由激活/手动添加兜底,不影响已有登记。
+    nonisolated static func scanApplicationCategories() -> (games: [GameHUDDiscoveredGame], failed: Bool) {
+        let enumeration = applicationBundlePaths()
+        var byBundleID: [String: GameHUDDiscoveredGame] = [:]
+        for path in enumeration.paths {
+            autoreleasepool {
+                guard let game = categoryGame(at: URL(fileURLWithPath: path)),
+                      byBundleID[game.bundleID] == nil else {
+                    return
                 }
-                lock.unlock()
+                byBundleID[game.bundleID] = game
             }
         }
-        return Array(byBundle.values)
+        return (Array(byBundleID.values), enumeration.failed)
     }
 
-    /// App Store 游戏类别全集(公开枚举):父类 + 各子类。
-    /// 实测:鸣潮等 App Store 游戏声明的是子类别("Action Games"),只查
-    /// "Games" 会漏,故枚举全部类别。
-    nonisolated static let gameCategories: [String] = [
-        "Games",
-        "Action Games",
-        "Adventure Games",
-        "Role Playing Games",
-        "Board Games",
-        "Card Games",
-        "Casino Games",
-        "Dice Games",
-        "Educational Games",
-        "Family Games",
-        "Kids Games",
-        "Music Games",
-        "Puzzle Games",
-        "Racing Games",
-        "Simulation Games",
-        "Sports Games",
-        "Strategy Games",
-        "Trivia Games",
-        "Word Games",
-    ]
+    /// 单个应用包的类别识别。拆出纯入口供夹具直接验证中英日类别与子类别,
+    /// 不依赖 Spotlight 索引语言或测试机安装位置。
+    nonisolated static func categoryGame(at url: URL) -> GameHUDDiscoveredGame? {
+        guard let info = GameHUDAutoDetection.infoDictionary(at: url),
+              let bundleID = info["CFBundleIdentifier"] as? String,
+              !bundleID.isEmpty,
+              let category = info["LSApplicationCategoryType"] as? String,
+              GameHUDAutoDetection.isGameCategory(category) else {
+            return nil
+        }
+        let name = GameHUDAutoDetection.applicationName(at: url, info: info)
+        if isLauncher(bundleID: bundleID, name: name) {
+            return nil
+        }
+        return GameHUDDiscoveredGame(
+            bundleID: bundleID,
+            name: name,
+            applicationURL: url,
+            source: .applicationCategory
+        )
+    }
 
-    /// 单类别扫描:调用 `mdfind`(Spotlight 的官方命令行接口)。
-    ///
-    /// 注:NSMetadataQuery(API 版)实测在本 app 内对 kMDItemAppStoreCategory
-    /// 查询返回 0 条,而 mdfind 命令行同一查询稳定命中——故走进程调用,
-    /// 输出即路径列表,行为可预期(沙盒版无此问题:未启用扫描)。
-    nonisolated private static func categoryGames(category: String) -> [GameHUDDiscoveredGame] {
+    nonisolated private static func applicationBundlePaths() -> (paths: [String], failed: Bool) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
-        process.arguments = ["kMDItemAppStoreCategory == \"\(category)\""]
+        process.arguments = ["kMDItemContentType == \"com.apple.application-bundle\""]
         let pipe = Pipe()
         process.standardOutput = pipe
         process.standardError = FileHandle.nullDevice
         do {
             try process.run()
         } catch {
-            return []
+            return ([], true)
         }
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
         guard process.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else {
-            return []
+            return ([], true)
         }
-        var games: [GameHUDDiscoveredGame] = []
+        var seen: Set<String> = []
+        var paths: [String] = []
         for line in text.split(separator: "\n") {
             let path = line.trimmingCharacters(in: .whitespaces)
-            // 系统应用本体(Games.app 等)不进候选。
             guard path.hasSuffix(".app"), !path.hasPrefix("/System/") else { continue }
-            let appURL = URL(fileURLWithPath: path)
-            guard let bundleID = bundleID(ofAppAt: appURL) else { continue }
-            let name = appURL.deletingPathExtension().lastPathComponent
-            if isLauncher(bundleID: bundleID, name: name) { continue }
-            games.append(GameHUDDiscoveredGame(
-                bundleID: bundleID,
-                name: name,
-                executableURL: appURL,
-                steamAppID: nil,
-                source: .spotlight
-            ))
+            // 只接受最外层应用包,跳过 .app 内部嵌套的 helper/插件。
+            guard path.components(separatedBy: ".app").count <= 2 else { continue }
+            guard seen.insert(path).inserted else { continue }
+            paths.append(path)
         }
-        return games
+        return (paths, false)
     }
 
     // MARK: - 工具
 
-    /// 目录下第一个 .app 的 bundle ID(Steam 游戏目录通常恰有一个 .app)。
-    nonisolated private static func firstGameBundleID(in directory: URL) -> String? {
-        let contents = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-        for item in contents where item.pathExtension == "app" {
-            if let id = bundleID(ofAppAt: item) {
-                return id
-            }
-        }
-        return nil
-    }
-
-    nonisolated private static func firstExecutable(in directory: URL) -> URL? {
-        let contents = (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? []
-        return contents.first { $0.pathExtension == "app" }
-    }
-
-    nonisolated private static func bundleID(ofAppAt url: URL) -> String? {
-        guard let bundle = Bundle(url: url) else { return nil }
-        return bundle.bundleIdentifier
-    }
-
     /// 已知启动器/商店平台本体(见 GameHUDLauncherExclusions 文档)。
-    nonisolated private static func isLauncher(bundleID: String, name: String) -> Bool {
+    nonisolated static func isLauncher(bundleID: String, name: String) -> Bool {
         if GameHUDLauncherExclusions.bundleIDs.contains(bundleID.lowercased()) {
             return true
         }
