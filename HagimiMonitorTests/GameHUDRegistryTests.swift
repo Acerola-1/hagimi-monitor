@@ -490,7 +490,6 @@ struct GameHUDAutoDetectionTests {
             "gamehud.games.feedback.excluded-early %@",
             "gamehud.games.feedback.removed-exclusion %@",
             "gamehud.games.feedback.removed-exclusion-no-source %@",
-            "gamehud.games.feedback.scan-finished %lld",
             "gamehud.excluded.title",
             "gamehud.excluded.add",
             "gamehud.excluded.remove",

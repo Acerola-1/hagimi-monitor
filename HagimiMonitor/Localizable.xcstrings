@@ -24605,23 +24605,6 @@
         }
       }
     },
-    "gamehud.games.feedback.scan-finished %lld": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Scan complete: %lld games found"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "扫描完成，发现 %lld 款游戏"
-          }
-        }
-      }
-    },
     "gamehud.games.feedback.scan-failed": {
       "extractionState": "manual",
       "localizations": {

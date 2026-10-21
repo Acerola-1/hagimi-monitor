@@ -16,7 +16,6 @@ nonisolated enum GameHUDActionFeedback: Equatable, Sendable {
     case removedExclusion(String)
     case removedExclusionWithoutSource(String)
     case readFailed
-    case scanFinished(Int)
     case scanFailed
 
     var message: String {
@@ -39,8 +38,6 @@ nonisolated enum GameHUDActionFeedback: Equatable, Sendable {
             String(localized: "gamehud.games.feedback.removed-exclusion-no-source \(name)")
         case .readFailed:
             String(localized: "gamehud.games.feedback.read-failed")
-        case .scanFinished(let count):
-            String(localized: "gamehud.games.feedback.scan-finished \(count)")
         case .scanFailed:
             String(localized: "gamehud.games.feedback.scan-failed")
         }
@@ -74,9 +71,12 @@ final class GameHUDSettingsModel: ObservableObject {
             .sink { [weak self] date in
                 guard let self, let date, date != self.lastHandledScanDate else { return }
                 self.lastHandledScanDate = date
-                self.feedback = self.scanner.lastScanFailed
-                    ? .scanFailed
-                    : .scanFinished(self.scanner.lastScanCount)
+                if self.scanner.lastScanFailed {
+                    self.feedback = .scanFailed
+                } else if self.feedback == .scanFailed {
+                    // 成功扫描只撤掉旧的失败提示,不再用完成计数占据名单下方。
+                    self.feedback = nil
+                }
             }
             .store(in: &cancellables)
     }
