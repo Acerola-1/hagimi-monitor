@@ -244,6 +244,58 @@ struct NativePanelHostingTests {
         }
     }
 
+    private struct FooterMeasurementCard: View {
+        var body: some View {
+            VStack(spacing: 0) {
+                Color.clear.frame(height: 34)
+                Color.clear.frame(height: 700)
+            }
+            .preference(key: PanelNaturalMeasurements.self, value: [
+                "row:cpu": CGSize(width: 328, height: 34),
+                "detail:cpu": CGSize(width: 328, height: 700),
+                "available:cpu": CGSize(width: 1, height: 0)])
+        }
+    }
+
+    /// 关闭淡出期间运动已暂停,此时 store 仍在发布;页脚不能被测量位置
+    /// (header 下沿)顶替,否则「监视器」等文字会浮到首张卡片上。
+    @Test func suspendedRefreshKeepsFooterInPinnedSlot() async throws {
+        let registry = PanelDimensionRegistry(initialEnvironment: GeometryEnvironmentToken(width: 340,
+            localeIdentifier: "zh_CN", dynamicTypeSize: "default", backingScale: 2, structureSignature: ""))
+        let motion = SingleHostMotionCoordinator(registry: registry)
+        let host = NativePanelSurface(motion: motion)
+        var environment = EnvironmentValues()
+        environment.panelMaxContentHeight = 600
+        func update() {
+            host.update(header: AnyView(Color.clear.frame(height: 22)), ids: ["cpu"], views: [
+                AnyView(FooterMeasurementCard()), AnyView(Color.clear.frame(height: 34))],
+                environment: environment, cap: 600)
+        }
+        update()
+        host.frame = CGRect(x: 0, y: 0, width: 380, height: 600)
+        let window = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 380, height: 600),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil); window.contentView = nil; motion.nativeLayer.suspend() }
+        host.layoutSubtreeIfNeeded()
+        let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+        while motion.nativeLayer.snapshot?.sections["cpu"] == nil {
+            guard ContinuousClock.now < deadline else { break }
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        motion.nativeLayer.retarget(["cpu": 1], instantly: true)
+        try await Task.sleep(for: .milliseconds(50))
+        let resting = host.footer.frame.minY
+        #expect(resting > 200, "页脚应停在面板底部，实际 minY=\(resting)")
+        motion.nativeLayer.suspend()
+        update()
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(abs(host.footer.frame.minY - resting) < 0.5,
+            "暂停期间刷新后页脚从 \(resting) 跳到 \(host.footer.frame.minY)")
+    }
+
     @Test func fullSurfaceReservesPowerBackingWithoutReportingCapacityAsPageHeight() async throws {
         let state = State()
         state.height = 60

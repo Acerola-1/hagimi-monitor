@@ -851,7 +851,17 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         let token = GeometryEnvironmentToken(width: width, localeIdentifier: environment.locale.identifier,
             dynamicTypeSize: String(describing: environment.dynamicTypeSize), backingScale: environment.displayScale, structureSignature: "")
         motion.nativeLayer.configure(ids: ids, cap: cap, environment: token)
-        if let plan = motion.nativeLayer.plan { applyNativePlan(plan) }
+        if let plan = motion.nativeLayer.plan {
+            applyNativePlan(plan)
+        } else if let sample = motion.nativeLayer.sample(at: CACurrentMediaTime())?.frame,
+                  let footerRect = sample.cardFrames["__footer__"] {
+            // 上面量高时把 footer 临时放在 header 下沿;真正的槽位由动画计划提交。
+            // 运动暂停(淡出/隐藏)期间不再产生计划,若此时 store 仍有发布送来刷新,
+            // footer 会停在测量位置、文字浮在首张卡片上。这里按冻结的几何放回槽位。
+            footer.frame.origin = CGPoint(
+                x: 6,
+                y: header.frame.maxY + PanelGeometrySolver.headerToBodySpacing + footerRect.minY)
+        }
         installMonitors()
     }
     func contour(height: CGFloat) -> CGPath {
