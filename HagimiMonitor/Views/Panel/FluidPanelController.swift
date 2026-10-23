@@ -523,18 +523,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // awaitingGeometry,也必须允许随后由系统 didEnd 正常收敛。
         dismissGeneration += 1
         dismissalInProgress = false
-        hiddenResourceRelease?.cancel()
-        hiddenResourceRelease = nil
-        let wasDetached = savedContentView != nil
-        if let savedContentView {
-            panel.contentView = savedContentView
-            self.savedContentView = nil
-        }
         let previousCap = layoutMetrics.maxContentHeight
         updateContentHeightCap()
         // 已准备好的容量和几何直接复用，普通读数追平不阻塞窗口显示。
         // 首次挂载或屏幕容量变化仍走完整准备，以免首帧裁切。
-        let needsPreparation = wasDetached || panelMotion?.currentFrame == nil || previousCap != layoutMetrics.maxContentHeight
+        let needsPreparation = panelMotion?.currentFrame == nil || previousCap != layoutMetrics.maxContentHeight
         if needsPreparation {
             panelRefreshGate.open()
             hostingView?.layoutSubtreeIfNeeded()
@@ -600,9 +593,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         if decision.closesAwaitingGeometry {
             awaitingGeometry = false
             panelMotion?.suspend()
-panel.orderOut(nil)
+            panel.orderOut(nil)
             panelRefreshGate.close()
-            scheduleHiddenResourceRelease()
             if decision.shouldCancelExpandedInterfaceSession {
                 cancelExpandedInterfaceSessionIfNeeded()
             }
@@ -625,7 +617,7 @@ panel.orderOut(nil)
         }
 
         // 代际令牌:淡出期间(0.18s)若被重开(showPanel 递增令牌),
-        // 过期的 completionHandler 不再执行 orderOut/卸载,避免把刚呼出的面板藏掉。
+        // 过期的 completionHandler 不再执行 orderOut,避免把刚呼出的面板藏掉。
         dismissGeneration += 1
         let generation = dismissGeneration
 
@@ -647,7 +639,7 @@ panel.orderOut(nil)
 
     private func completePanelDismissal(generation: Int) {
         guard generation == dismissGeneration else { return }
-panel.orderOut(nil)
+        panel.orderOut(nil)
         panelMotion?.resetForHiddenPanel?()
         panel.alphaValue = 1
         if #unavailable(macOS 27.0) {
@@ -658,32 +650,12 @@ panel.orderOut(nil)
         // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
         // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
         panelRefreshGate.close()
-        scheduleHiddenResourceRelease()
+        // 隐藏期间保留窗口内容及几何，避免再次呼出时同步重挂整棵宿主树。
+        // 采样可见租约、观察门控和运动暂停独立负责隐藏态的后台开销。
     }
 
     /// dismissPanel 代际令牌,showPanel 时递增使在途淡出回调失效。
     private var dismissGeneration = 0
-
-    private var savedContentView: NSView?
-    private var hiddenResourceRelease: DispatchWorkItem?
-
-    private func scheduleHiddenResourceRelease() {
-        hiddenResourceRelease?.cancel()
-        let generation = dismissGeneration
-        let work = DispatchWorkItem { [weak self] in
-            guard let self, self.dismissGeneration == generation,
-                  !self.panel.isVisible, !self.awaitingGeometry,
-                  self.savedContentView == nil, let content = self.panel.contentView else { return }
-            // 保存视图状态，仅卸下窗口关联的合成资源；下一次打开重新挂载。
-            self.hiddenResourceRelease = nil
-            self.panel.setFrame(CGRect(x: self.panel.frame.minX, y: self.panel.frame.minY,
-                width: self.panel.frame.width, height: 1), display: false)
-            self.savedContentView = content
-            self.panel.contentView = nil
-        }
-        hiddenResourceRelease = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + MonitorConstants.panelWarmRetention, execute: work)
-    }
 
     /// 把「菜单栏下沿 → 屏幕可视区底部」的可用高度下发给内容侧:面板主体据此
     /// 自行封顶(header 固定,主体在内部 ScrollView 滚动),上报的自然尺寸随之
