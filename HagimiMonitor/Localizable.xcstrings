@@ -4839,6 +4839,22 @@
         }
       }
     },
+    "menu-bar-metric-prefix.memory-swap-used": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SWAP"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SWAP"
+          }
+        }
+      }
+    },
     "menu-bar-metric-prefix.memory-usage": {
       "extractionState": "manual",
       "localizations": {
@@ -5046,6 +5062,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "内存压力"
+          }
+        }
+      }
+    },
+    "menu-bar-metric.memory-swap-used": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap Used"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Swap 用量"
           }
         }
       }

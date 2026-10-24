@@ -49,6 +49,7 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
     // 内存组
     case memoryUsage
     case memoryPressure
+    case memorySwapUsed
     case memoryBandwidth
     // 网络组
     case networkDownload
@@ -111,6 +112,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
             String(localized: "menu-bar-metric.memory-usage")
         case .memoryPressure:
             String(localized: "menu-bar-metric.memory-pressure")
+        case .memorySwapUsed:
+            String(localized: "menu-bar-metric.memory-swap-used")
         case .memoryBandwidth:
             String(localized: "menu-bar-metric.memory-bandwidth")
         case .networkDownload:
@@ -146,6 +149,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
             "memorychip"
         case .memoryPressure:
             "gauge.medium"
+        case .memorySwapUsed:
+            "arrow.left.arrow.right"
         case .memoryBandwidth:
             "memorychip"
         case .networkDownload:
@@ -181,6 +186,8 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
             String(localized: "menu-bar-metric-prefix.memory-usage")
         case .memoryPressure:
             String(localized: "menu-bar-metric-prefix.memory-pressure")
+        case .memorySwapUsed:
+            String(localized: "menu-bar-metric-prefix.memory-swap-used")
         case .memoryBandwidth:
             String(localized: "menu-bar-metric-prefix.memory-bandwidth")
         case .networkDownload:
