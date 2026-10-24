@@ -12,16 +12,33 @@ struct SettingsPage<Content: View>: View {
 
     var body: some View {
         GeometryReader { proxy in
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 24) {
-                    content
+            ScrollViewReader { scroller in
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(alignment: .leading, spacing: 24) {
+                        content
+                    }
+                    .controlSize(.small)
+                    .padding(.top, 34)
+                    .padding(.horizontal, 36)
+                    .padding(.bottom, 28)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+                    .frame(minHeight: proxy.size.height, alignment: .topLeading)
                 }
-                .controlSize(.small)
-                .padding(.top, 34)
-                .padding(.horizontal, 36)
-                .padding(.bottom, 28)
-                .frame(maxWidth: .infinity, alignment: .topLeading)
-                .frame(minHeight: proxy.size.height, alignment: .topLeading)
+                #if DEBUG
+                // Debug 验证夹具:用环境变量把设置页滚到指定分组锚点,
+                // 便于在无 Accessibility 权限时按固定宽度截图。
+                .onAppear {
+                    guard let target = ProcessInfo.processInfo.environment["HAGIMI_SETTINGS_SCROLL_ID"],
+                          !target.isEmpty else { return }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                        var transaction = Transaction()
+                        transaction.disablesAnimations = true
+                        withTransaction(transaction) {
+                            scroller.scrollTo(target, anchor: .top)
+                        }
+                    }
+                }
+                #endif
             }
         }
     }

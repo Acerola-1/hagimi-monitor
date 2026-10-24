@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             .store(in: &startupCancellables)
         _ = fluidPanelController
         #if DIRECT_DISTRIBUTION
-        // Game HUD 装配:总开关默认开,关闭态只有 settings 订阅在跑。
+        // Game HUD 装配:新用户总开关默认关闭,关闭态只保留设置订阅。
         _ = gameHUDCoordinator
         // 游戏扫描监听:受总开关门控驱动启动/停止。
         store.settings.$gameHUDMasterEnabled
@@ -112,6 +112,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
             .store(in: &startupCancellables)
+        // 扫描结果先合并进统一登记,再由会话/设置读取资格;
+        // 扫描本身不打开总开关,也不覆盖黑名单。
+        GameHUDGameScanner.shared.$discoveredGames
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] games in
+                self?.store.settings.mergeGameHUDScan(games)
+            }
+            .store(in: &startupCancellables)
         #endif
 
         // 验证夹具模式(HAGIMI_STATS_FIXTURE):启动即打开「数据统计」页,
@@ -121,6 +129,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 SettingsWindowPresenter.open(tab: .statistics)
             }
         }
+
+        #if DIRECT_DISTRIBUTION
+        // 验证夹具模式(HAGIMI_GAMEHUD_SETTINGS_FIXTURE):启动即打开 Game HUD 设置页,
+        // 供固定宽度名单/局部预览的原生截图自查;正式运行不受影响。
+        if ProcessInfo.processInfo.environment["HAGIMI_GAMEHUD_SETTINGS_FIXTURE"] != nil {
+            DispatchQueue.main.async {
+                SettingsWindowPresenter.open(tab: .gameHUD)
+            }
+        }
+        #if DEBUG
+        GameHUDVerificationFixture.runIfRequested(store: store)
+        #endif
+        #endif
 
         // 验证夹具模式(HAGIMI_REPORT_FIXTURE):启动即打开「统计报表」原生窗口,
         // 可选配合 HAGIMI_REPORT_ANCHOR 指定锚点模块,供原生报表面板与各模块目测/基准测试。

@@ -1,40 +1,18 @@
 import AppKit
 import Foundation
 
-/// Game HUD 的游戏名单:内置保守候选 + 用户添加 + 用户排除(优先级最高)。
+/// Game HUD 的显示资格与设置名单同源。
 ///
-/// 内置候选的原则(spec:游戏识别与显示门槛):仅因「用了 Metal/OpenGL」
-/// 不足以判为游戏;首批名单逐项人工登记 bundle ID,宁可漏判不可误判。
-/// 名单为空时功能仍可用——用户手动添加始终有效。
+/// 资格完全由 `MonitorSettings.gameHUDRegistry` 决定:
+/// 「存在有效自动来源或手动添加意图,且不在黑名单」。
+/// 内置候选不单独维护:游戏通过扫描来源(Steam/Epic/类别)自动进入登记;
+/// 任何能触发 HUD 的身份都必须在登记里有可管理行。
 @MainActor
 enum GameHUDGameDirectory {
-
-    /// 内置保守候选。当前为空是刻意的:首批 bundle ID 需在真实游戏上逐项
-    /// 验证窗口身份(见 tasks 1.5/3.1)后再登记;登记前依赖用户手动添加。
-    /// 新增条目时同步在注释记录来源与验证日期。
-    static let builtinCandidates: Set<String> = []
-
-    /// 判定前台 bundle ID 是否命中名单。
-    ///
-    /// 2026-09-26 定案:扫描结果自动采纳,名单 = 「扫描能发现的一切游戏 −
-    /// 用户排除」。内置候选保留(真实游戏验证后登记,不看扫描也能命中),
-    /// customGames 继续承载手动添加(浏览兜底)与自动采纳的持久化记录。
+    /// 判定前台 bundle ID 是否命中启用名单。
     static func matches(bundleID: String?, settings: MonitorSettings) -> Bool {
         guard let bundleID, !bundleID.isEmpty else { return false }
-        if settings.gameHUDExcludedGames.contains(bundleID) {
-            return false
-        }
-        return builtinCandidates.contains(bundleID)
-            || settings.gameHUDCustomGames.contains(bundleID)
-            || GameHUDGameScanner.shared.knownGameBundleIDs.contains(bundleID)
-    }
-
-    /// 名单页展示:内置候选 + 用户添加,排除项单独分组由设置页渲染。
-    static func catalogEntries(settings: MonitorSettings) -> (candidates: [String], custom: [String], excluded: [String]) {
-        let excluded = settings.gameHUDExcludedGames.sorted()
-        let candidates = (builtinCandidates.subtracting(settings.gameHUDExcludedGames)).sorted()
-        let custom = (settings.gameHUDCustomGames.subtracting(settings.gameHUDExcludedGames)).sorted()
-        return (candidates, custom, excluded)
+        return settings.gameHUDRegistry.isEligible(bundleID)
     }
 }
 

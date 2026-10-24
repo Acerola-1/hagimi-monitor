@@ -1202,6 +1202,8 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         case .memoryPressure:
             // 连续压力百分比,口径同面板压力曲线(活动监视器压力图)。
             return MenuBarMetricFormatter.fixedPercentage(allModules.first { $0.kind == .memory }?.pressureValue)
+        case .memorySwapUsed:
+            return MenuBarMetricFormatter.capacity(metricValue("swap-used", in: .memory))
         case .batteryLevel:
             // IOPS 缺失帧显示 " --%"(与数值缺失的既有格式一致),不消费沿用值。
             guard let battery = allModules.first(where: { $0.kind == .battery }), !battery.isPlaceholder else {
@@ -1259,6 +1261,8 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             "61%"
         case .memoryPressure:
             "23%"
+        case .memorySwapUsed:
+            "1.2G"
         case .memoryBandwidth:
             "9.4G"
         case .batteryLevel:

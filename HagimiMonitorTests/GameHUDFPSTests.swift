@@ -405,10 +405,10 @@ struct GameHUDFPSTests {
         #expect(zhVal == "游戏监测")
         #expect(enVal == "Game Monitoring")
 
-        // 3. MonitorSettings 默认开启游戏监测
+        // 3. 新用户默认关闭游戏监测(旧用户显式偏好另行保留)
         let tempDefaults = UserDefaults(suiteName: "test.hagimi.gamehud.defaults.\(UUID().uuidString)")!
         let settings = MonitorSettings(defaults: tempDefaults)
-        #expect(settings.gameHUDMasterEnabled == true)
+        #expect(settings.gameHUDMasterEnabled == false)
     }
 
     // MARK: - P0 修复验证: 迁移与 Generation 计数

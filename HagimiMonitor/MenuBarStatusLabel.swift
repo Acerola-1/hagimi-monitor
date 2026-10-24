@@ -157,7 +157,7 @@ struct MenuBarMetricLabel: View {
             "888M"
         case .cpuTemperature:
             "888°"
-        case .storageFree:
+        case .storageFree, .memorySwapUsed:
             "888G"
         case .systemPower, .gpuPower:
             "888W"

@@ -2,21 +2,24 @@
 
 ### 中文
 
-感谢 @kuaoaoaoao 提供设备协助验证，多风扇与 AirPods Pro 的显示改进得以落地。本次更新聚焦风扇与蓝牙明细的呈现，并让主行图表样式可按模块选择。
+本次更新聚焦游戏 HUD 的名单管理与窗口跟随体验，同时让面板呼出更即时。
+
+#### 新功能
+
+- 菜单栏指标新增可选的「Swap 用量」：显示系统交换空间的占用量，可在设置中按需开启。
+- 游戏名单改为统一的登记与排除机制：Steam、Epic 与系统扫描发现的有效结果直接采纳，排除立即生效并在重启后保留。设置页支持重新扫描、手动添加应用、逐行排除与恢复，也可单独添加要排除的应用。
 
 #### 修复
 
-- 蓝牙：设备类型识别补齐电脑、手机、平板与手表；AirPods 改用左耳 / 右耳 / 充电仓的分部电量，已有分部电量时不再重复显示耳机总电量，单部件耳机只显示一项；未上报的部件保留破折号与空轨道，不把缺失读成 0%。
-- 风扇：实测转速为 0 时不再判定为故障，改显示中性的「停转」，也不再触发故障与恢复通知；只有读数超出传感器上报范围才提示异常。
+- Steam 游戏识别改为按位读取安装状态，处于更新中或更新已暂停的已安装游戏不再被漏掉。
+- 关闭面板的淡出期间，底部「监视器 / 工具 / 设置」按钮文字不再短暂错位浮到上方卡片区域。
 
 #### 优化与体验
 
-- 磁盘主行保留容量占比，右侧改为读取 / 写入速率读数，与网络、电源行头共用同一套标签浅底；单项速率缺失显示缺失符号，两项都不可用时显示真实可用容量。
-- CPU、GPU、内存与风扇的主行图表可在「柱状图 / 折线图」之间按模块单独选择，已有用户沿用原来的折线图。
-- 风扇明细改为分组网格：多个风扇按两列排布，数量为奇数时末项占满整行；风扇名称（左侧风扇 / 右侧风扇 / 风扇 #N）随界面语言显示。
-- 普通蓝牙设备（鼠标、键盘、手表等）继续显示真实总电量，未上报电量时保持破折号占位。
-- 网络与电源的成对行头读数改用同一套组件与几何，收起、展开与设置页预览保持一致。
-- 底部监视器、工具与设置按钮的悬浮高亮改为只随鼠标悬浮淡入淡出，按下与松开不再额外改变颜色或整体透明度。
+- 游戏窗口移动时 HUD 自动隐藏，停稳后在新位置恢复显示，监控数据与历史曲线不中断；卡片与窗口边缘的间距也一并收紧。
+- HUD 外观新增背景透明度调节，只影响背景深浅、不改变文字可读性，并支持恢复默认值；卡片与横条的圆角轮廓统一。
+- 游戏扫描完成不再弹出数量提示，仅在此前扫描失败时清除失败提示。
+- 面板长时间隐藏后再次呼出不再重新装载内容，打开更即时，常驻内存占用略有下降。
 
 #### 目前已知的问题
 
@@ -29,21 +32,24 @@
 
 ### English
 
-Thanks to @kuaoaoaoao for helping verify with an extra device — the fan and AirPods Pro display improvements are in. This release focuses on how fan and Bluetooth details are presented, and lets each module choose its own main-row chart style.
+This release focuses on the Game HUD's game list and window-following experience, and makes the panel reopen faster.
+
+#### New Features
+
+- The menu bar gains an optional "Swap Used" metric showing swap space usage; enable it in Settings whenever you need it.
+- The game list is now one unified registry of adopted and excluded apps: valid results found by Steam, Epic, and system scanning are adopted directly, and exclusions take effect immediately and persist across restarts. In Settings you can rescan, add apps manually, exclude or restore them row by row, and add exclusions separately.
 
 #### Fixes
 
-- Bluetooth: device type detection now covers computers, phones, tablets, and watches. AirPods battery is split into Left / Right / Case; the headset total is no longer repeated when per-part levels exist, single-part headsets show one item, and parts with no reading keep a dash and an empty track instead of reading as 0%.
-- Fans: an actual 0 RPM is no longer treated as a fault. It now reads as a neutral "Stopped" and no longer sends fault or recovery notifications; only a reading outside the sensor's reported range is flagged as unusual.
+- Steam game detection now reads the installation state by bit flags, so installed games that are updating or paused mid-update are no longer missed.
+- During the panel's closing fade, the bottom "Monitor / Tools / Settings" labels no longer drift briefly over the cards above.
 
 #### Improvements
 
-- The storage row keeps its capacity share and now shows read/write rates on the right, sharing the same labeled pill as the network and power rows. A single missing rate shows the missing symbol, and when both are missing the row falls back to the real free capacity.
-- The main-row chart for CPU, GPU, Memory, and Fans can be set to Bars or Line per module; existing users keep the line chart they already had.
-- Fan details use a grouped grid: multiple fans in two columns, with the last item filling the row on an odd count. Fan names (Left Fan / Right Fan / Fan #N) follow the interface language.
-- Ordinary Bluetooth devices (mice, keyboards, watches) still show their real total battery, and keep a dash when nothing is reported.
-- Network and power paired header readings now share one component and geometry, so collapsed, expanded, and Settings preview stay in agreement.
-- The hover highlight on the bottom monitor, tools, and settings buttons now fades only with hover; pressing and releasing no longer change the color or overall opacity.
+- While the game window moves, the HUD hides itself and reappears at the window's new position once it settles, with monitoring data and history kept intact; the cards also sit closer to the window edges.
+- The HUD appearance adds a background opacity control that only affects the background and leaves text legibility unchanged, along with a reset to defaults; card and strip corner contours are unified.
+- A completed game scan no longer shows a count toast; scanning only clears a previous failure notice.
+- After staying hidden for a long time, the panel no longer reloads its content when reopened — it opens faster, with a slightly smaller resident memory footprint.
 
 #### Known Issues
 
