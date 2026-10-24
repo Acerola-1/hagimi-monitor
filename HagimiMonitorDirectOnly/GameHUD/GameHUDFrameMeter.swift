@@ -25,10 +25,19 @@ nonisolated struct GameHUDFPSStats: Equatable, Sendable {
     }
 }
 
+@MainActor
+protocol GameHUDFrameMeasuring: AnyObject {
+    var stats: GameHUDFPSStats? { get }
+    var statsPublisher: AnyPublisher<GameHUDFPSStats?, Never> { get }
+    func start(target app: NSRunningApplication)
+    func stop()
+}
+
 /// 仅转发目标进程的系统 Metal 呈现统计；探针无数据时保持缺值。
 @MainActor
-final class GameHUDFrameMeter: ObservableObject {
+final class GameHUDFrameMeter: ObservableObject, GameHUDFrameMeasuring {
     @Published private(set) var stats: GameHUDFPSStats?
+    var statsPublisher: AnyPublisher<GameHUDFPSStats?, Never> { $stats.eraseToAnyPublisher() }
 
     private let metalTraceMeter = MetalPerfTraceMeter()
     private var metalTraceCancellable: AnyCancellable?
