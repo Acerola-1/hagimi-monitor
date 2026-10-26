@@ -4,11 +4,11 @@ import Foundation
 /// 纯几何求解器：根据 GeometrySnapshot 与当前运动相位，集中计算所有尺寸、位置与视口。
 /// 无副作用、无 SwiftUI 视图依赖、无状态存储，可在任意线程或测试中独立运行。
 enum PanelGeometrySolver {
-    static let panelTopMargin: CGFloat = 8
-    static let headerToBodySpacing: CGFloat = 4
-    static let cardToCardSpacing: CGFloat = 6
-    static let childCardSpacing: CGFloat = 6
-    static let panelBottomMargin: CGFloat = 6
+    nonisolated static let panelTopMargin: CGFloat = 8
+    nonisolated static let headerToBodySpacing: CGFloat = 4
+    nonisolated static let cardToCardSpacing: CGFloat = 6
+    nonisolated static let childCardSpacing: CGFloat = 6
+    nonisolated static let panelBottomMargin: CGFloat = 6
 
     /// 求解一次完整布局帧。
     static func solve(
@@ -99,12 +99,12 @@ enum PanelGeometrySolver {
             footer.origin.y = viewportHeight + (snapshot.orderedTopLevelIDs.isEmpty ? 0 : cardToCardSpacing)
             cardFrames["__footer__"] = footer
         }
-        let totalWindowHeight = panelTopMargin
+        let totalWindowHeight = snapshot.chromeStyle.topInset
             + snapshot.panelHeaderHeight
-            + headerToBodySpacing
+            + snapshot.chromeStyle.headerSpacing
             + viewportHeight
             + (snapshot.pinsFooter ? footerSpace : 0)
-            + panelBottomMargin
+            + snapshot.chromeStyle.bottomInset
 
         let windowContentSize = CGSize(
             width: snapshot.panelWidth,

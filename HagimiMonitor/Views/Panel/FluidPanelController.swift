@@ -139,6 +139,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private weak var panelMotion: SingleHostMotionCoordinator?
     private var awaitingGeometry = false
     private let store: MonitorStore
+    private let contentScope: MonitorPanelContentScope
     /// 打开设置窗口的闭包。由外部注入,因为 `OpenSettingsAction` 只能在 SwiftUI 视图层获取。
     private let openSettingsAction: @MainActor @Sendable () -> Void
 
@@ -185,9 +186,11 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     init(
         store: MonitorStore,
+        contentScope: MonitorPanelContentScope = .systemMonitor,
         openSettings: @escaping @MainActor @Sendable () -> Void
     ) {
         self.store = store
+        self.contentScope = contentScope
         self.openSettingsAction = openSettings
         panelRefreshGate = PanelRefreshGate(store: store)
 
@@ -209,7 +212,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         configureStatusItem()
         cleanupBox.setStatusItem(statusItem)
         installEventMonitors()
-        startAutoTestIfNeeded()
+        if contentScope == .systemMonitor { startAutoTestIfNeeded() }
     }
 
     private var autoTestRemaining = 0
@@ -292,7 +295,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.contentView = glassHost
 
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
-        let root = FluidPanelRootView(store: store, refreshGate: panelRefreshGate, metrics: layoutMetrics)
+        let root = FluidPanelRootView(store: store, refreshGate: panelRefreshGate, metrics: layoutMetrics, contentScope: contentScope)
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
             .environment(\.panelMotionAdapter, self)
             .ignoresSafeArea()
@@ -318,7 +321,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         // 调试自动测试:启动 0.5s 后自动呼出面板(无需人工点击状态栏)。
-        if ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil,
+        if contentScope == .systemMonitor, ProcessInfo.processInfo.environment["HAGIMI_PANEL_AUTOTEST"] != nil,
            NativePanelMotionMode.testHost != "pinned" {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
                 guard let self, !self.panel.isVisible else { return }
@@ -335,6 +338,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             // 键盘导航和系统结束回调;旧系统继续走本地兼容事件路径。
             statusItem.expandedInterfaceDelegate = self
         }
+
+        #if DISPLAY_CONTROL
+        if contentScope == .displayControls {
+            statusItem.autosaveName = "DisplayControls"
+            statusItem.length = NSStatusItem.squareLength
+            button.image = DisplayControlStatusIcon.makeImage()
+            button.imagePosition = .imageOnly
+            button.toolTip = String(localized: "display.controls.title")
+            button.setAccessibilityTitle(String(localized: "display.controls.title"))
+            return
+        }
+        #endif
 
         // 关键:图标走标准的 `button.image` 路径(而非往 button 塞 NSHostingView 子视图)。
         // 只有标准状态项图会被菜单栏系统跨屏复制并在「非活跃屏幕」自动变淡,与原生 app
@@ -505,6 +520,12 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { panel.isVisible && !awaitingGeometry }
 
+    /// 开关关闭时同步停止本窗口的显示和回读，保留位置与预热内容供再次打开。
+    func setMenuBarEntryEnabled(_ enabled: Bool) {
+        if !enabled { dismissPanel(animated: false) }
+        statusItem.isVisible = enabled
+    }
+
     func presentBenchmarkHost() {
         guard NativePanelMotionMode.diagnostics else { return }
         if !panel.isVisible { showPanel() }
@@ -518,7 +539,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private func showPanel() {
         // 用户点开面板即视为看过菜单栏那处告警:只清这一处红点,
         // 面板统计入口与统计页的红点各有各的清除时机。
-        PressureAlertCenter.shared.markRead(.menuBar)
+        if contentScope == .systemMonitor { PressureAlertCenter.shared.markRead(.menuBar) }
         // 先作废在途淡出并清除关闭锁。首次几何准备可能在首帧返回
         // awaitingGeometry,也必须允许随后由系统 didEnd 正常收敛。
         dismissGeneration += 1
@@ -566,7 +587,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.alphaValue = 1
         panel.makeKeyAndOrderFront(nil)
         panelMotion?.nativeLayer.panelDidShow()
-        store.panelDidAppear()
+        if contentScope == .systemMonitor { store.panelDidAppear() }
         panelRefreshGate.open()
     }
 
@@ -610,7 +631,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panelMotion?.suspend()
 
         // 工具浮层是面板的子窗口,面板隐藏前先显式收起,避免残留。
-        QuickToolsStore.shared.popoverPresenter.dismiss()
+        if contentScope == .systemMonitor { QuickToolsStore.shared.popoverPresenter.dismiss() }
 
         if #unavailable(macOS 27.0) {
             DistributedNotificationCenter.default().post(name: .endMenuTracking, object: nil)
@@ -645,7 +666,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         if #unavailable(macOS 27.0) {
             statusItem.button?.highlight(false)
         }
-        store.panelDidDisappear()
+        if contentScope == .systemMonitor { store.panelDidDisappear() }
         dismissalInProgress = false
         // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
         // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
@@ -887,9 +908,10 @@ private struct FluidPanelRootView: View {
     let store: MonitorStore
     let refreshGate: PanelRefreshGate
     @ObservedObject var metrics: FluidPanelLayoutMetrics
+    let contentScope: MonitorPanelContentScope
 
     var body: some View {
-        MonitorPanelView(store: store, refreshGate: refreshGate)
+        MonitorPanelView(store: store, refreshGate: refreshGate, contentScope: contentScope)
             .environment(\.panelMaxContentHeight, metrics.maxContentHeight)
     }
 }

@@ -49,6 +49,8 @@ final class DisplayControlController: ObservableObject {
     /// 面板打开且详情展开期间的轮询定时器。系统设置/其他 app 改亮度音量不会
     /// 产生任何通知,DDC 又是只能主动读取的哑协议,唯一能发现外部变化的办法就是
     /// 这段时间内持续轮询;收起或面板隐藏后停掉,避免空转占用 DDC 总线。
+    private var pollingOwners: Set<UUID> = []
+    var isPollingActive: Bool { pollTimerCancellable != nil }
     private var pollTimerCancellable: AnyCancellable?
     private static let pollInterval: TimeInterval = 5
 
@@ -103,8 +105,11 @@ final class DisplayControlController: ObservableObject {
             }
     }
 
-    func setPolling(active: Bool) {
-        guard active else {
+    func setPolling(active: Bool, owner: UUID) {
+        if active { pollingOwners.insert(owner) }
+        else { pollingOwners.remove(owner) }
+        // 任一可见且展开的入口仍需回读，关闭其他入口不能提前停止。
+        guard !pollingOwners.isEmpty else {
             pollTimerCancellable?.cancel()
             pollTimerCancellable = nil
             return

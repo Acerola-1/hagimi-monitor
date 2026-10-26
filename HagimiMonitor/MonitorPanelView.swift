@@ -14,10 +14,16 @@ private enum PanelTopLevelItem: Identifiable {
     }
 }
 
+enum MonitorPanelContentScope: Equatable {
+    case systemMonitor
+    case displayControls
+}
+
 struct MonitorPanelView: View {
     /// 只读引用:面板树的失效信号统一经 refreshGate 门控(隐藏期冻结),
     /// 直接观察 store 会让隐藏态面板随每次采样发布重算。
     let store: MonitorStore
+    let contentScope: MonitorPanelContentScope
     @ObservedObject private var refreshGate: PanelRefreshGate
     @ObservedObject private var quickPanelPresentation: QuickPanelPresentation
     /// 压力告警只在 episode 起止/读取时发布(不是每秒),这里直接观察,
@@ -44,8 +50,10 @@ struct MonitorPanelView: View {
     @State private var displaySectionMotionTicket: Int = 0
     @Environment(\.panelMotionAdapter) private var motionAdapter
 
-    init(store: MonitorStore, refreshGate: PanelRefreshGate, quickPanelPresentation: QuickPanelPresentation? = nil) {
+    init(store: MonitorStore, refreshGate: PanelRefreshGate, quickPanelPresentation: QuickPanelPresentation? = nil,
+         contentScope: MonitorPanelContentScope = .systemMonitor) {
         self.store = store
+        self.contentScope = contentScope
         _refreshGate = ObservedObject(wrappedValue: refreshGate)
         let presentation = quickPanelPresentation ?? QuickPanelPresentation()
         _quickPanelPresentation = ObservedObject(wrappedValue: presentation)
@@ -60,20 +68,27 @@ struct MonitorPanelView: View {
     }
 
     private func displaySection(theme: MonitorPanelTheme) -> some View {
-        DisplaySection(
-            theme: theme, settings: store.settings, isPanelVisible: store.isPanelVisible,
-            animate: { key, toFull, animated in
-                store.beginExpansionAnimation()
-                if animated {
-                    withPanelExpansionState {
-                        displaySectionMotionTicket &+= 1
-                        panelExpansion.animate(key, toFull ? 1 : 0)
-                    }
-                } else {
-                    displaySectionMotionTicket &+= 1
-                    panelExpansion.setInstantly(key, toFull ? 1 : 0)
-                }
-            })
+        #if DISPLAY_CONTROL
+        DisplaySection(theme: theme, settings: store.settings, isPanelVisible: refreshGate.isOpen,
+                       animate: displayAnimation, controller: store.displayControlController,
+                       expandsControlsOnOpen: contentScope == .displayControls)
+        #else
+        DisplaySection(theme: theme, settings: store.settings, isPanelVisible: refreshGate.isOpen,
+                       animate: displayAnimation)
+        #endif
+    }
+
+    private func displayAnimation(_ key: String, _ expanded: Bool, _ animated: Bool) {
+        store.beginExpansionAnimation()
+        if animated {
+            withPanelExpansionState {
+                displaySectionMotionTicket &+= 1
+                panelExpansion.animate(key, expanded ? 1 : 0)
+            }
+        } else {
+            displaySectionMotionTicket &+= 1
+            panelExpansion.setInstantly(key, expanded ? 1 : 0)
+        }
     }
 
     @ViewBuilder
@@ -97,7 +112,8 @@ struct MonitorPanelView: View {
 
             NativePanelSurfaceView(
                 motion: panelExpansion.motion, ids: orderedTopLevelItems.map(\.id),
-                cap: maxContentHeight, header: AnyView(header(theme: theme)), items: nativePanelItems(theme: theme)
+                cap: maxContentHeight, header: contentScope == .displayControls ? AnyView(Color.clear.frame(height: 0)) : AnyView(header(theme: theme)), items: nativePanelItems(theme: theme),
+                chromeStyle: contentScope == .displayControls ? .contentOnly : .monitor
             )
             .environment(\.nativePanelExpansion, panelExpansion)
 
@@ -124,7 +140,7 @@ struct MonitorPanelView: View {
                 applyDefaultExpansion()
             }
             // 面板由隐藏→可见:菜单栏面板摧骰子决定是否客串;隐藏时清理。
-            guard !showsQuickPanelControls else { return }
+            guard !showsQuickPanelControls, contentScope == .systemMonitor else { return }
             if visible {
                 cameoModel.panelDidAppear()
                 // 调试自动测试:可见后 0.8s 自动全量展开(走真实 setExpansion 动画路径),
@@ -195,7 +211,7 @@ struct MonitorPanelView: View {
         // 驱动器为面板实例私有(@StateObject),钉住面板与菜单栏面板并存时
         // 展开动画互不牵动。
         .environmentObject(panelExpansion)
-        .environment(\.panelReorderController, panelReorder)
+        .environment(\.panelReorderController, contentScope == .systemMonitor ? panelReorder : nil)
         .environment(\.panelReorderSettings, store.settings)
         .onExitCommand { panelReorder.cancel() }
         .onDisappear { panelReorder.cancel() }
@@ -289,6 +305,7 @@ struct MonitorPanelView: View {
     }
 
     private var panelModules: [MonitorModule] {
+        guard contentScope == .systemMonitor else { return [] }
         let source = isPanelBenchmark && !isFullPanelBenchmark ? prototypeModules : store.modules
         #if DIRECT_DISTRIBUTION
         return source
@@ -298,6 +315,7 @@ struct MonitorPanelView: View {
     }
 
     private var orderedTopLevelItems: [PanelTopLevelItem] {
+        if contentScope == .displayControls { return [.display] }
         let modulesByID = Dictionary(uniqueKeysWithValues: panelModules.map { ($0.kind.id, $0) })
         let includesDisplay = store.settings.displayModuleVisible && (!isPanelBenchmark || isFullPanelBenchmark)
         let available = panelModules.map { $0.kind.id }
@@ -358,7 +376,9 @@ struct MonitorPanelView: View {
                 NativePanelContentItem(id: PanelOrderCatalog.displayID, content: AnyView(displaySection(theme: theme)))
             }
         }
-        result.append(NativePanelContentItem(id: "__footer__", content: AnyView(prototypeFooter(theme: theme))))
+        let footer = contentScope == .displayControls
+            ? AnyView(Color.clear.frame(height: 0)) : AnyView(prototypeFooter(theme: theme))
+        result.append(NativePanelContentItem(id: "__footer__", content: footer))
         return result
     }
 

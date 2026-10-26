@@ -7,6 +7,37 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct NativePanelHostingTests {
+    @Test func contentOnlySurfaceRemovesReservedChromeAndRestoresMonitorLayout() async throws {
+        let registry = PanelDimensionRegistry(initialEnvironment: GeometryEnvironmentToken(width: 340,
+            localeIdentifier: "en", dynamicTypeSize: "default", backingScale: 2, structureSignature: ""))
+        let motion = SingleHostMotionCoordinator(registry: registry)
+        let host = NativePanelSurface(motion: motion)
+        let window = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: 380, height: 600),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil); window.contentView = nil; motion.nativeLayer.suspend() }
+        for style in [PanelChromeStyle.contentOnly, .monitor] {
+            let item = NativePanelContentItem(id: "cpu", content: VersionedCard(probe: RenderProbe(), value: 1, height: 60))
+            host.update(header: AnyView(Color.clear.frame(height: 22)), ids: ["cpu"], views: [
+                item.content, AnyView(Color.clear.frame(height: 34))], environment: EnvironmentValues(),
+                cap: 600, versions: [item.version], chromeStyle: style)
+            let deadline = ContinuousClock.now.advanced(by: .seconds(10))
+            while (motion.nativeLayer.snapshot?.chromeStyle != style || host.contentHost(for: "cpu") == nil)
+                    && ContinuousClock.now < deadline {
+                host.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(10))
+            }
+            let snapshot = try #require(motion.nativeLayer.snapshot)
+            #expect(snapshot.chromeStyle == style)
+            #expect(host.header.frame.height == (style == .contentOnly ? 0 : 22))
+            #expect(host.footer.frame.height == (style == .contentOnly ? 0 : 34))
+            #expect(host.header.frame.minY == style.topInset)
+            let node = try #require(host.contentHost(for: "cpu"))
+            #expect(node.hosting.frame.width == 340 - 2 * style.horizontalInset)
+        }
+    }
+
     private final class RenderProbe {
         var values: [Int] = []
         var locales: [String] = []

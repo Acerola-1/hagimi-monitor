@@ -755,6 +755,9 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
     var capacity: CGFloat = 800
     var updateTicket: UInt = 0
     let inset = MonitorConstants.panelNativeShadowInset
+    private(set) var chromeStyle: PanelChromeStyle = .monitor
+    private var contentInset: CGFloat { chromeStyle.horizontalInset }
+    private var contentWidth: CGFloat { MonitorConstants.panelIdealWidth - 2 * contentInset }
 
     init(motion: SingleHostMotionCoordinator) {
         self.motion = motion
@@ -791,17 +794,17 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     func update(header content: AnyView, ids: [String], views: [AnyView], environment: EnvironmentValues, cap: CGFloat,
-                versions: [NativePanelContentVersion?] = []) {
+                versions: [NativePanelContentVersion?] = [], chromeStyle: PanelChromeStyle = .monitor) {
         updateTicket &+= 1
         let ticket = updateTicket
         DispatchQueue.main.async { [weak self] in
             guard let self, ticket == self.updateTicket else { return }
-            self.updateContents(header: content, ids: ids, views: views, environment: environment, cap: cap, versions: versions)
+            self.updateContents(header: content, ids: ids, views: views, environment: environment, cap: cap, versions: versions, chromeStyle: chromeStyle)
         }
     }
     func contentHost(for id: String) -> NativePanelContentHost? { document.nodes[id] }
     private func updateContents(header content: AnyView, ids: [String], views: [AnyView], environment: EnvironmentValues, cap: CGFloat,
-                                versions: [NativePanelContentVersion?]) {
+                                versions: [NativePanelContentVersion?], chromeStyle: PanelChromeStyle) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         if reorderController !== environment.panelReorderController {
@@ -813,6 +816,7 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
                     }]
             }
         }
+        self.chromeStyle = chromeStyle
         capacity = cap
         let width = CGFloat(MonitorConstants.panelIdealWidth)
         frame.size = CGSize(width: width + inset * 2, height: cap + inset * 2)
@@ -830,27 +834,27 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         contourShadow.frame = surface.frame; outline.frame = surface.frame
         CATransaction.commit()
         header.rootView = AnyView(content.modifier(NativePanelEnvironmentBridge(values: environment)))
-        header.frame.size.width = width - 12
+        header.frame.size.width = contentWidth
         header.layoutSubtreeIfNeeded()
-        let h = max(1, header.fittingSize.height)
-        header.frame = CGRect(x: 6, y: 8, width: width - 12, height: h)
-        motion.nativeLayer.report(owner: "__header__", values: ["__header__": CGSize(width: width - 12, height: h)])
+        let h = chromeStyle == .contentOnly ? 0 : max(1, header.fittingSize.height)
+        header.frame = CGRect(x: contentInset, y: chromeStyle.topInset, width: contentWidth, height: h)
+        motion.nativeLayer.report(owner: "__header__", values: ["__header__": CGSize(width: contentWidth, height: h)])
         var env = environment
-        env.nativePanelContentWidth = width - 12
-        document.update(ids: ids, content: Array(views.prefix(ids.count)), environment: env, width: width - 12, versions: versions)
+        env.nativePanelContentWidth = contentWidth
+        document.update(ids: ids, content: Array(views.prefix(ids.count)), environment: env, width: contentWidth, versions: versions)
         if let content = views.dropFirst(ids.count).first {
             footer.rootView = AnyView(content.modifier(NativePanelEnvironmentBridge(values: env)))
-            footer.frame.size.width = width - 12
+            footer.frame.size.width = contentWidth
             footer.layoutSubtreeIfNeeded()
-            let footerHeight = max(1, footer.fittingSize.height)
-            footer.frame = CGRect(x: 6, y: 8 + h + 4, width: width - 12, height: footerHeight)
-            motion.nativeLayer.report(owner: "__footer__", values: ["__footer__": CGSize(width: width - 12, height: footerHeight)])
+            let footerHeight = chromeStyle == .contentOnly ? 0 : max(1, footer.fittingSize.height)
+            footer.frame = CGRect(x: contentInset, y: chromeStyle.topInset + h + chromeStyle.headerSpacing, width: contentWidth, height: footerHeight)
+            motion.nativeLayer.report(owner: "__footer__", values: ["__footer__": CGSize(width: contentWidth, height: footerHeight)])
         }
-        document.frame.size = CGSize(width: width - 12, height: max(document.frame.height, document.naturalHeight))
-        scroll.frame = CGRect(x: 6, y: 8 + h + 4, width: width - 12, height: max(1, cap - (8 + h + 4 + 6 + footer.frame.height + (ids.isEmpty ? 0 : PanelGeometrySolver.cardToCardSpacing))))
+        document.frame.size = CGSize(width: contentWidth, height: max(document.frame.height, document.naturalHeight))
+        scroll.frame = CGRect(x: contentInset, y: chromeStyle.topInset + h + chromeStyle.headerSpacing, width: contentWidth, height: max(1, cap - (chromeStyle.topInset + h + chromeStyle.headerSpacing + chromeStyle.bottomInset + footer.frame.height + (ids.isEmpty || footer.frame.height == 0 ? 0 : PanelGeometrySolver.cardToCardSpacing))))
         let token = GeometryEnvironmentToken(width: width, localeIdentifier: environment.locale.identifier,
             dynamicTypeSize: String(describing: environment.dynamicTypeSize), backingScale: environment.displayScale, structureSignature: "")
-        motion.nativeLayer.configure(ids: ids, cap: cap, environment: token)
+        motion.nativeLayer.configure(ids: ids, cap: cap, environment: token, chromeStyle: chromeStyle)
         if let plan = motion.nativeLayer.plan {
             applyNativePlan(plan)
         } else if let sample = motion.nativeLayer.sample(at: CACurrentMediaTime())?.frame,
@@ -859,8 +863,8 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
             // 运动暂停(淡出/隐藏)期间不再产生计划,若此时 store 仍有发布送来刷新,
             // footer 会停在测量位置、文字浮在首张卡片上。这里按冻结的几何放回槽位。
             footer.frame.origin = CGPoint(
-                x: 6,
-                y: header.frame.maxY + PanelGeometrySolver.headerToBodySpacing + footerRect.minY)
+                x: contentInset,
+                y: header.frame.maxY + chromeStyle.headerSpacing + footerRect.minY)
         }
         installMonitors()
     }
@@ -870,9 +874,9 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
     }
     func applyNativePlan(_ plan: NativePanelAnimationPlan) {
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        let bodyTop = header.frame.maxY + PanelGeometrySolver.headerToBodySpacing
+        let bodyTop = header.frame.maxY + chromeStyle.headerSpacing
         if let final = plan.samples.last?.frame.cardFrames["__footer__"] {
-            footer.frame.origin = CGPoint(x: 6, y: bodyTop + final.minY)
+            footer.frame.origin = CGPoint(x: contentInset, y: bodyTop + final.minY)
         }
         nativeAnimate(footer.layer!, key: "position.y", values: plan.samples.map {
             bodyTop + ($0.frame.cardFrames["__footer__"]?.minY ?? 0)
@@ -1041,16 +1045,16 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         guard let sample = motion.nativeLayer.sample(at: CACurrentMediaTime()),
               contour(height: sample.frame.windowContentSize.height).contains(CGPoint(x: local.x - inset, y: local.y - inset)) else { return nil }
         let surfacePoint = CGPoint(x: local.x - inset, y: local.y - inset)
-        let bodyTop = header.frame.maxY + PanelGeometrySolver.headerToBodySpacing
+        let bodyTop = header.frame.maxY + chromeStyle.headerSpacing
         if let rect = sample.frame.cardFrames["__footer__"] {
-            let visibleFooter = rect.offsetBy(dx: 6, dy: bodyTop)
+            let visibleFooter = rect.offsetBy(dx: contentInset, dy: bodyTop)
             if visibleFooter.contains(surfacePoint) {
                 return footer.hitTest(CGPoint(x: surfacePoint.x,
                     y: surfacePoint.y + footer.frame.minY - visibleFooter.minY))
             }
         }
         if header.frame.contains(surfacePoint) { return header.hitTest(surfacePoint) }
-        let viewport = CGRect(x: 6, y: bodyTop, width: scroll.frame.width, height: sample.frame.viewportHeight)
+        let viewport = CGRect(x: contentInset, y: bodyTop, width: scroll.frame.width, height: sample.frame.viewportHeight)
         return viewport.contains(surfacePoint) ? scroll.hitTest(surfacePoint) : self
     }
 }
@@ -1062,9 +1066,10 @@ private struct NativePanelSurfaceRepresentable: NSViewRepresentable {
     let views: [AnyView]
     let versions: [NativePanelContentVersion?]
     let cap: CGFloat
+    let chromeStyle: PanelChromeStyle
     func makeNSView(context: Context) -> NativePanelSurface { NativePanelSurface(motion: motion) }
     func updateNSView(_ view: NativePanelSurface, context: Context) {
-        view.update(header: header, ids: ids, views: views, environment: context.environment, cap: cap, versions: versions)
+        view.update(header: header, ids: ids, views: views, environment: context.environment, cap: cap, versions: versions, chromeStyle: chromeStyle)
     }
     static func dismantleNSView(_ view: NativePanelSurface, coordinator: ()) {
         view.updateTicket &+= 1
@@ -1081,13 +1086,14 @@ struct NativePanelSurfaceView: View {
     let cap: CGFloat
     let header: AnyView
     let items: [NativePanelContentItem]
+    var chromeStyle: PanelChromeStyle = .monitor
     private var boundedCap: CGFloat {
         min(cap, motion.submissionAdapter?.currentScreen()?.visibleFrame.height
             ?? NSScreen.main?.visibleFrame.height ?? 800) - MonitorConstants.panelNativeShadowInset * 2
     }
     var body: some View {
         NativePanelSurfaceRepresentable(motion: motion, ids: ids, header: header,
-            views: items.map(\.content), versions: items.map(\.version), cap: boundedCap)
+            views: items.map(\.content), versions: items.map(\.version), cap: boundedCap, chromeStyle: chromeStyle)
         .frame(width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
             height: boundedCap + MonitorConstants.panelNativeShadowInset * 2, alignment: .topLeading)
     }

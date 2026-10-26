@@ -115,6 +115,7 @@ final class NativePanelLayerMotion {
     private var environment = GeometryEnvironmentToken(width: MonitorConstants.panelIdealWidth,
         localeIdentifier: Locale.current.identifier, dynamicTypeSize: "default", backingScale: 2, structureSignature: "")
     private var cap: CGFloat = 800
+    private var chromeStyle: PanelChromeStyle = .monitor
     private var geometryTicket: UInt = 0
     private var completion: DispatchWorkItem?
     private var desired: [String: CGFloat] = [:]
@@ -150,9 +151,10 @@ final class NativePanelLayerMotion {
         groupSources.removeValue(forKey: owner)
     }
 
-    func configure(ids: [String], cap: CGFloat, environment: GeometryEnvironmentToken) {
-        guard self.ids != ids || self.cap != cap || self.environment != environment else { return }
-        self.ids = ids; self.cap = cap; self.environment = environment
+    func configure(ids: [String], cap: CGFloat, environment: GeometryEnvironmentToken,
+                   chromeStyle: PanelChromeStyle = .monitor) {
+        guard self.ids != ids || self.cap != cap || self.environment != environment || self.chromeStyle != chromeStyle else { return }
+        self.ids = ids; self.cap = cap; self.environment = environment; self.chromeStyle = chromeStyle
         scheduleGeometry()
     }
 
@@ -200,7 +202,9 @@ final class NativePanelLayerMotion {
         token.structureSignature = allIDs.map {
             "\($0):\(values["row:" + $0]!.height):\(values["detail:" + $0]!.height):\(values["collapsed:" + $0]?.height ?? 0):\(values["available:" + $0]!.width)"
         }.joined(separator: "|") + groups.keys.sorted().map { "\($0):\(groups[$0]!)" }.joined()
+        token.structureSignature += "|chrome:" + chromeStyle.rawValue
         _ = registry.updateEnvironment(token)
+        registry.chromeStyle = chromeStyle
         registry.configureStructure(topLevelIDs: ids, hierarchy: groups.mapValues(\.ids), childGroups: groups)
         registry.contentHeightCap = cap
         registry.panelHeaderHeight = values["__header__"]!.height

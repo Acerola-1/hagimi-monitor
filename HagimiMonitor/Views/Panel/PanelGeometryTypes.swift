@@ -49,6 +49,17 @@ struct PanelChildGroup: Equatable, Sendable {
     var spacing: CGFloat = 6
 }
 
+/// 普通监控面板保留标题与操作区内衬；独立单卡面板由内容直接形成外轮廓。
+nonisolated enum PanelChromeStyle: String, Sendable {
+    case monitor
+    case contentOnly
+
+    var horizontalInset: CGFloat { self == .monitor ? 6 : 0 }
+    var topInset: CGFloat { self == .monitor ? PanelGeometrySolver.panelTopMargin : 0 }
+    var headerSpacing: CGFloat { self == .monitor ? PanelGeometrySolver.headerToBodySpacing : 0 }
+    var bottomInset: CGFloat { self == .monitor ? PanelGeometrySolver.panelBottomMargin : 0 }
+}
+
 /// 某一版本的完整面板几何快照（只读）。
 struct GeometrySnapshot: Equatable, Sendable {
     var revision: UInt
@@ -66,6 +77,7 @@ struct GeometrySnapshot: Equatable, Sendable {
     var childrenByParent: [String: [String]]
     var childGroups: [String: PanelChildGroup] = [:]
     var pinsFooter = false
+    var chromeStyle: PanelChromeStyle = .monitor
 
     func childGroup(_ id: String) -> PanelChildGroup {
         childGroups[id] ?? PanelChildGroup(ids: childrenByParent[id] ?? [])
@@ -96,11 +108,11 @@ struct GeometrySnapshot: Equatable, Sendable {
     }
 
     var cardWidth: CGFloat {
-        max(0, panelWidth - 12)
+        max(0, panelWidth - 2 * chromeStyle.horizontalInset)
     }
 
     var availableViewportCap: CGFloat {
-        max(0, contentHeightCap - (8 + panelHeaderHeight + 4 + 6))
+        max(0, contentHeightCap - (chromeStyle.topInset + panelHeaderHeight + chromeStyle.headerSpacing + chromeStyle.bottomInset))
     }
 }
 

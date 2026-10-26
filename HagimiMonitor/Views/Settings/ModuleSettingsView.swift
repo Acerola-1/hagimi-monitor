@@ -345,7 +345,17 @@ struct DisplayModuleSettingsView: View {
                         .labelsHidden()
                 }
 
-                if settings.displayModuleVisible {
+                SettingsDivider()
+                SettingsRow(
+                    title: String(localized: "settings.display.menubar"),
+                    subtitle: String(localized: "settings.display.menubar.subtitle")
+                ) {
+                    Toggle(String(localized: "settings.display.menubar"), isOn: $settings.displayControlMenuBarEnabled)
+                        .toggleStyle(.switch)
+                        .labelsHidden()
+                }
+
+                if settings.displayModuleVisible || settings.displayControlMenuBarEnabled {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.include-built-in")) {
@@ -354,21 +364,22 @@ struct DisplayModuleSettingsView: View {
                             .labelsHidden()
                     }
 
-                    SettingsDivider()
-
-                    SettingsRow(
-                        title: String(localized: "settings.expand-by-default"),
-                        subtitle: String(localized: "settings.expand-by-default.subtitle")
-                    ) {
-                        Toggle("", isOn: $settings.displayControlsExpandedByDefault)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
+                    if settings.displayModuleVisible {
+                        SettingsDivider()
+                        SettingsRow(
+                            title: String(localized: "settings.expand-by-default"),
+                            subtitle: String(localized: "settings.expand-by-default.subtitle")
+                        ) {
+                            Toggle("", isOn: $settings.displayControlsExpandedByDefault)
+                                .toggleStyle(.switch)
+                                .labelsHidden()
+                        }
                     }
                 }
             }
 
-            // 模块关闭后，下方的控制项 / 媒体键 / 说明都失去意义，直接隐藏。
-            if settings.displayModuleVisible {
+            // 任一显示入口开启时，都可配置共用的控制项和媒体键。
+            if settings.displayModuleVisible || settings.displayControlMenuBarEnabled {
                 SettingsGroup(String(localized: "settings.controls")) {
                     SettingsRow(title: String(localized: "settings.brightness")) {
                         Toggle("", isOn: $settings.displayBrightnessControlEnabled)
@@ -402,6 +413,7 @@ struct DisplayModuleSettingsView: View {
             }
         }
         .animation(.default, value: settings.displayModuleVisible)
+        .animation(.default, value: settings.displayControlMenuBarEnabled)
     }
 }
 #else

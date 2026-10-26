@@ -537,6 +537,14 @@ nonisolated private final class ProcessSampleCollector: @unchecked Sendable {
 
 final class MonitorStore: ObservableObject {
     let settings: MonitorSettings
+    #if DISPLAY_CONTROL
+    /// 各显示入口共享设备状态和媒体键接管，只在首次使用显示器面板时创建。
+    @MainActor lazy var displayControlController: DisplayControlController = {
+        let controller = DisplayControlController()
+        controller.attach(settings: settings)
+        return controller
+    }()
+    #endif
 
     @Published private(set) var modules: [MonitorModule]
     @Published var topMemoryProcesses: [TopMemoryProcess] = []
