@@ -157,8 +157,9 @@ struct RawMemoryProcess: Sendable {
 ///
 /// 合并逻辑:用 `responsibility_get_pid_responsible_for_pid` 把每个进程归到其宿主 App。
 /// Safari 的 WebContent、Chrome 的 Helper 等子进程的 ppid 是 launchd(1),无法靠父子链
-/// 归属,但 responsible pid 能正确指向宿主 App。各分组内内存求和,即该 App
-/// 的总内存占用,与活动监视器分组口径一致。
+/// 归属,但 responsible pid 能正确指向宿主 App。Chromium 系应用会主动放弃 responsibility
+/// (helper 的 responsible pid 指回自身),这类 helper 由 `processGroupKey` 沿同一 `.app`
+/// 包内的祖先链兜底归并。各分组内内存求和,即该 App 的总内存占用。
 nonisolated func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses: Bool = false) -> [RawMemoryProcess] {
     let pids = allProcessIds()
     guard !pids.isEmpty else { return [] }
@@ -166,14 +167,20 @@ nonisolated func sampleTopMemoryProcesses(limit: Int = 5, includeSystemProcesses
     // responsiblePid -> 累加分组
     var groups: [pid_t: ProcessGroup] = [:]
     groups.reserveCapacity(pids.count)
+    let parentIndex = ProcessParentIndex()
 
     for pid in pids {
         // 该进程的内存。读不到(进程已退出/无权限)就跳过。
         guard let memory = processMemoryUsage(for: pid) else { continue }
 
-        // 归属到宿主 App。responsible pid 即分组键。
-        let responsiblePid = responsiblePidResolver(pid)
-        let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
+        // 归属到宿主 App。responsible pid 即分组键;放弃 responsibility 的 helper 由
+        // 同一 App 包内的祖先兜底。
+        let groupKey = processGroupKey(
+            for: pid,
+            responsiblePid: responsiblePidResolver(pid),
+            parentOf: { parentIndex.parent(of: $0) },
+            pathOf: { executablePath(for: $0) }
+        )
 
         if groups[groupKey] == nil {
             // 首次见到该宿主:此刻它必然存活,立即捕获路径,避免后续退出导致整组丢失。

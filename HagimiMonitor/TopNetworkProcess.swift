@@ -162,13 +162,18 @@ nonisolated final class NetworkDeltaCursor: @unchecked Sendable {
             }
         }
 
-        // 按 responsible pid 归并:助手进程(浏览器渲染进程、各类 Helper)的流量并入宿主
+        // 按宿主 App 归并:助手进程(浏览器渲染进程、各类 Helper)的流量并入宿主
         // 应用,与 CPU/内存/GPU/磁盘四类 TOP 列表口径一致——否则 Safari 的 WebContent 子进程
         // 会逐条单列,真实流量被拆散到截断线以下,宿主应用可能不进榜单。
         var groups: [pid_t: (name: String, download: UInt64, upload: UInt64)] = [:]
+        let parentIndex = ProcessParentIndex()
         for (pid, rate) in perProcessRate {
-            let responsiblePid = responsiblePidResolver(pid)
-            let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
+            let groupKey = processGroupKey(
+                for: pid,
+                responsiblePid: responsiblePidResolver(pid),
+                parentOf: { parentIndex.parent(of: $0) },
+                pathOf: { executablePath(for: $0) }
+            )
             if groups[groupKey] == nil {
                 groups[groupKey] = (name: currentList[groupKey]?.rawName ?? "", download: 0, upload: 0)
             }

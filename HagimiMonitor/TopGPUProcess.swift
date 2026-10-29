@@ -50,14 +50,19 @@ nonisolated final class GPUDeltaCursor: @unchecked Sendable {
 
         // responsiblePid -> (path, usageDelta, api)
         var groups: [pid_t: (path: String, gpuTime: UInt64, api: String)] = [:]
+        let parentIndex = ProcessParentIndex()
 
         for (pid, entry) in current {
             guard let before = previous.perPid[pid], entry.gpuTime >= before else { continue }
             let delta = entry.gpuTime - before
             guard delta > 0 else { continue }
 
-            let responsiblePid = responsiblePidResolver(pid)
-            let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
+            let groupKey = processGroupKey(
+                for: pid,
+                responsiblePid: responsiblePidResolver(pid),
+                parentOf: { parentIndex.parent(of: $0) },
+                pathOf: { executablePath(for: $0) }
+            )
 
             if groups[groupKey] == nil {
                 groups[groupKey] = (path: executablePath(for: groupKey), gpuTime: 0, api: entry.api)

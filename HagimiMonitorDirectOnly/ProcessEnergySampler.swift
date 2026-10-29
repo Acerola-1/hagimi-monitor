@@ -48,6 +48,7 @@ nonisolated final class ProcessEnergySampler: @unchecked Sendable {
         let uptime = ProcessInfo.processInfo.systemUptime
 
         var joinedWatts: [pid_t: Double] = [:]
+        let parentIndex = ProcessParentIndex()
         for pid in Self.allPids() {
             var info = rusage_info_current()
             let status = withUnsafeMutablePointer(to: &info) { pointer -> Int32 in
@@ -72,8 +73,18 @@ nonisolated final class ProcessEnergySampler: @unchecked Sendable {
             guard watts >= 0, watts <= Self.maxWatts else { continue }
 
             // 子进程（Safari 的 WebContent、各 Helper）并入宿主 App，与 TOP 进程榜同口径。
+            // 放弃 responsibility 的 Chromium 系 helper 由同一 App 包内的祖先兜底。
             let responsible = responsiblePidResolver(pid)
-            let owner: pid_t = responsible > 1 ? responsible : pid
+            let owner: pid_t
+            if responsible > 1, responsible != pid {
+                owner = responsible
+            } else {
+                owner = enclosingAppOwner(
+                    for: pid,
+                    parentOf: { parentIndex.parent(of: $0) },
+                    pathOf: { executablePath(for: $0) }
+                )
+            }
             joinedWatts[owner, default: 0] += watts
         }
 
