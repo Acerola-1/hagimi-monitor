@@ -2,24 +2,19 @@
 
 ### 中文
 
-本次更新聚焦游戏 HUD 的名单管理与窗口跟随体验，同时让面板呼出更即时。
+本次更新新增独立的显示器控制菜单栏入口，并修正了部分应用的进程占用无法正确合并统计的问题。
 
 #### 新功能
 
-- 菜单栏指标新增可选的「Swap 用量」：显示系统交换空间的占用量，可在设置中按需开启。
-- 游戏名单改为统一的登记与排除机制：Steam、Epic 与系统扫描发现的有效结果直接采纳，排除立即生效并在重启后保留。设置页支持重新扫描、手动添加应用、逐行排除与恢复，也可单独添加要排除的应用。
+- 设置 → 显示器新增「独立显示器控制菜单栏图标」开关（默认关闭）：开启后可从菜单栏直接打开显示器控制，无需先展开主面板；独立窗口按卡片内容贴合，与主面板的显示开关互不影响。
 
 #### 修复
 
-- Steam 游戏识别改为按位读取安装状态，处于更新中或更新已暂停的已安装游戏不再被漏掉。
-- 关闭面板的淡出期间，底部「监视器 / 工具 / 设置」按钮文字不再短暂错位浮到上方卡片区域。
+- 修复部分应用（Chromium / Electron 系浏览器与客户端）的 Helper 子进程未按宿主应用合并统计的问题。此前这类应用在内存、CPU、GPU、磁盘、网络与能耗排行中会被拆成多条，合计占用被低估，甚至完全不显示。
 
 #### 优化与体验
 
-- 游戏窗口移动时 HUD 自动隐藏，停稳后在新位置恢复显示，监控数据与历史曲线不中断；卡片与窗口边缘的间距也一并收紧。
-- HUD 外观新增背景透明度调节，只影响背景深浅、不改变文字可读性，并支持恢复默认值；卡片与横条的圆角轮廓统一。
-- 游戏扫描完成不再弹出数量提示，仅在此前扫描失败时清除失败提示。
-- 面板长时间隐藏后再次呼出不再重新装载内容，打开更即时，常驻内存占用略有下降。
+- 小工具「不息屏」更名为「屏幕常亮」，与英文 Keep Display On 对应，含义更直白。
 
 #### 目前已知的问题
 
@@ -32,24 +27,19 @@
 
 ### English
 
-This release focuses on the Game HUD's game list and window-following experience, and makes the panel reopen faster.
+This release adds a standalone display-control menu bar entry and fixes process usage that was not merged correctly for some apps.
 
 #### New Features
 
-- The menu bar gains an optional "Swap Used" metric showing swap space usage; enable it in Settings whenever you need it.
-- The game list is now one unified registry of adopted and excluded apps: valid results found by Steam, Epic, and system scanning are adopted directly, and exclusions take effect immediately and persist across restarts. In Settings you can rescan, add apps manually, exclude or restore them row by row, and add exclusions separately.
+- Settings → Display gains a "Standalone display control menu bar icon" switch (off by default): when enabled, display controls open directly from the menu bar without expanding the main panel; the standalone window fits its card content and is independent of the main panel's display switch.
 
 #### Fixes
 
-- Steam game detection now reads the installation state by bit flags, so installed games that are updating or paused mid-update are no longer missed.
-- During the panel's closing fade, the bottom "Monitor / Tools / Settings" labels no longer drift briefly over the cards above.
+- Fixed Helper processes of some apps (Chromium / Electron-based browsers and clients) not being merged under their host app. These apps could appear as several separate rows across memory, CPU, GPU, disk, network, and energy rankings, so their total usage was understated or missing entirely.
 
 #### Improvements
 
-- While the game window moves, the HUD hides itself and reappears at the window's new position once it settles, with monitoring data and history kept intact; the cards also sit closer to the window edges.
-- The HUD appearance adds a background opacity control that only affects the background and leaves text legibility unchanged, along with a reset to defaults; card and strip corner contours are unified.
-- A completed game scan no longer shows a count toast; scanning only clears a previous failure notice.
-- After staying hidden for a long time, the panel no longer reloads its content when reopened — it opens faster, with a slightly smaller resident memory footprint.
+- The "Keep Display On" quick tool is now labeled "屏幕常亮" in Chinese, matching the English wording.
 
 #### Known Issues
 
