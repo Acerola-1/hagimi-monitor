@@ -9,6 +9,7 @@ final class PanelDimensionRegistry {
     var panelWidth: CGFloat { environment.width }
     var panelHeaderHeight: CGFloat = 34
     var footerHeight: CGFloat = 34
+    var chromeStyle: PanelChromeStyle = .monitor
     var contentHeightCap: CGFloat = .infinity
 
     private(set) var orderedTopLevelIDs: [String] = []
@@ -116,7 +117,7 @@ final class PanelDimensionRegistry {
             contentHeightCap: contentHeightCap,
             orderedTopLevelIDs: orderedTopLevelIDs,
             sections: registeredSections,
-            childrenByParent: childrenByParent, childGroups: childGroups
+            childrenByParent: childrenByParent, childGroups: childGroups, chromeStyle: chromeStyle
         )
     }
 
@@ -143,7 +144,7 @@ final class PanelDimensionRegistry {
             contentHeightCap: contentHeightCap,
             orderedTopLevelIDs: orderedTopLevelIDs,
             sections: safeSections,
-            childrenByParent: [:]
+            childrenByParent: [:], chromeStyle: chromeStyle
         )
     }
 

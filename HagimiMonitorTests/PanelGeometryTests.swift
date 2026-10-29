@@ -3,6 +3,30 @@ import Testing
 @testable import HagimiMonitorDirect
 
 struct PanelGeometryTests {
+    @Test func contentOnlyPanelFitsTheCardWithoutOuterGapsAtEveryPhase() {
+        for width: CGFloat in [300, 340, 460] {
+            let registry = PanelDimensionRegistry(initialEnvironment: GeometryEnvironmentToken(
+                width: width, localeIdentifier: "zh_CN", dynamicTypeSize: "default", backingScale: 2, structureSignature: "display"))
+            registry.chromeStyle = .contentOnly
+            registry.panelHeaderHeight = 0
+            registry.footerHeight = 0
+            registry.contentHeightCap = 220
+            registry.configureStructure(topLevelIDs: ["display"])
+            registry.reportMeasurement(id: "display", headerHeight: 42, detailHeight: 180, revision: 1)
+            let snapshot = registry.makeSnapshot()!
+            #expect(snapshot.cardWidth == width)
+            #expect(snapshot.availableViewportCap == 220)
+            for phase: CGFloat in [0, 0.25, 0.5, 0.75, 1] {
+                let frame = PanelGeometrySolver.solve(snapshot: snapshot, phases: ["display": phase])
+                #expect(frame.cardFrames["display"]?.minY == 0)
+                #expect(frame.cardFrames["display"]?.width == width)
+                #expect(frame.windowContentSize.height == min(220, 42 + 180 * phase))
+                #expect(frame.windowContentSize.height == frame.viewportHeight)
+                #expect(frame.cardFrames["__footer__"] == nil)
+            }
+        }
+    }
+
     @Test func nestedInsetsAndReplacementEndpointsComposeAtEveryWidth() {
         for width: CGFloat in [300, 340, 460] {
             for expandedHeight: CGFloat in [50, 180] {

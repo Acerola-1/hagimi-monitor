@@ -95,11 +95,19 @@ struct DisplaySection: View {
 
     /// 本节展开区 key(与各显示器档案卡的 key 区分)。
     private static let sectionKey = "display"
+    #if DISPLAY_CONTROL
+    private var defaultControlsExpanded: Bool {
+        expandsControlsOnOpen || settings.displayControlsExpandedByDefault
+    }
+    #endif
+
 
     @EnvironmentObject private var expansion: PanelExpansionDriver
     @State private var isExpanded = false
     #if DISPLAY_CONTROL
-    @StateObject private var controller = DisplayControlController()
+    @ObservedObject var controller: DisplayControlController
+    var expandsControlsOnOpen = false
+    @State private var pollingOwner = UUID()
     /// 显示器只读信息(分辨率/刷新率/HDR/位深)缓存。这些值运行期基本不变,
     /// 只在显示器集合变化时重采;拖滑杆等高频 body 重算不再反复触发昂贵的
     /// IORegistry 枚举与 DDC 分类探测。
@@ -115,14 +123,14 @@ struct DisplaySection: View {
         #if DISPLAY_CONTROL
         controlsContent
             .onReceive(expansion.motion.hiddenPanelReset) {
-                isExpanded = settings.displayControlsExpandedByDefault
+                isExpanded = defaultControlsExpanded
                 animate(Self.sectionKey, isExpanded, false)
-                controller.setPolling(active: false)
+                controller.setPolling(active: false, owner: pollingOwner)
             }
             .onReceive(expansion.motion.$isSuspended.removeDuplicates()) { suspended in
                 guard !suspended, isPanelVisible else { return }
                 controller.refreshAsync()
-                controller.setPolling(active: isExpanded)
+                controller.setPolling(active: isExpanded, owner: pollingOwner)
             }
             .task(id: displayCollectionRequest) {
                 await collectDisplayInfo()
@@ -319,13 +327,12 @@ struct DisplaySection: View {
             }
         }
         .onAppear {
-            controller.attach(settings: settings)
             controller.refreshAsync()
             // 视图只创建一次(常驻 NSPanel),此处覆盖首次呼出前的默认展开。
             // 无补间直接同步驱动器相位,避免相位残留 0 导致内容高度为零。
-            isExpanded = settings.displayControlsExpandedByDefault
+            isExpanded = defaultControlsExpanded
             animate(Self.sectionKey, isExpanded, false)
-            controller.setPolling(active: isPanelVisible && isExpanded)
+            controller.setPolling(active: isPanelVisible && isExpanded, owner: pollingOwner)
         }
         // MonitorPanelView 只创建一次、常驻在 NSPanel 里,显隐只是窗口级 order,
         // 不会重新触发 onAppear——面板每次重新打开都要重新读一次 DDC 当前值。
@@ -343,18 +350,19 @@ struct DisplaySection: View {
             } else {
                 // 面板隐藏后重置为「默认展开」设置:不可见期间无补间直接同步,
                 // 下次呼出即已是设定的初始状态,与 MonitorPanelView 的重置时机一致。
-                isExpanded = settings.displayControlsExpandedByDefault
+                isExpanded = defaultControlsExpanded
                 animate(Self.sectionKey, isExpanded, false)
             }
-            controller.setPolling(active: newValue && isExpanded)
+            controller.setPolling(active: newValue && isExpanded, owner: pollingOwner)
         }
         .onChange(of: isExpanded) { _, newValue in
             if newValue {
                 controller.refreshAsync()
             }
-            controller.setPolling(active: isPanelVisible && newValue)
+            controller.setPolling(active: isPanelVisible && newValue, owner: pollingOwner)
         }
-        .onChange(of: settings.displayControlsExpandedByDefault) { _, newValue in
+        .onDisappear { controller.setPolling(active: false, owner: pollingOwner) }
+        .onChange(of: defaultControlsExpanded) { _, newValue in
             // 设置变更立即生效:面板隐藏则为下次呼出预置状态;
             // 钉住面板开着改设置时可见,与手动展开同一驱动源直接预览。
             guard isExpanded != newValue else { return }

@@ -18,6 +18,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var store: MonitorStore = MonitorStore()
     /// 启动期的订阅(通知开关)。AppDelegate 与 App 同生命周期,不留释放路径。
     private var startupCancellables = Set<AnyCancellable>()
+    #if DISPLAY_CONTROL
+    private(set) var displayMenuBarController: FluidPanelController?
+
+    private func updateDisplayMenuBarEntry(enabled: Bool) {
+        if enabled, displayMenuBarController == nil {
+            displayMenuBarController = FluidPanelController(store: store, contentScope: .displayControls) { [weak self] in
+                self?.displayMenuBarController?.dismissPanelForSettings()
+                SettingsWindowPresenter.open()
+            }
+        }
+        displayMenuBarController?.setMenuBarEntryEnabled(enabled)
+    }
+    #endif
 
     override init() {
         super.init()
@@ -61,7 +74,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         #endif
         if NativePanelMotionMode.testHost != nil || NativePanelMotionMode.testScreen != nil {
-            if NativePanelMotionMode.testHost == "pinned" {
+            if NativePanelMotionMode.testHost == "display-controls" {
+                #if DISPLAY_CONTROL
+                displayMenuBarController?.presentAnimationPrototype()
+                #endif
+            } else if NativePanelMotionMode.testHost == "pinned" {
                 pinnedPanelController.show()
             } else { fluidPanelController.presentAnimationPrototype() }
             return false
@@ -98,6 +115,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
             .store(in: &startupCancellables)
         _ = fluidPanelController
+        #if DISPLAY_CONTROL
+        store.settings.$displayControlMenuBarEnabled
+            .removeDuplicates()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in self?.updateDisplayMenuBarEntry(enabled: enabled) }
+            .store(in: &startupCancellables)
+        #endif
         #if DIRECT_DISTRIBUTION
         // Game HUD 装配:新用户总开关默认关闭,关闭态只保留设置订阅。
         _ = gameHUDCoordinator
@@ -201,7 +225,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         } else if Bundle.main.object(forInfoDictionaryKey: "HagimiPanelNativePreview") as? Bool == true,
            NativePanelMotionMode.testHost != nil || NativePanelMotionMode.testScreen != nil {
             DispatchQueue.main.async { [weak self] in
-                if NativePanelMotionMode.testHost == "pinned" { self?.pinnedPanelController.show() }
+                if NativePanelMotionMode.testHost == "display-controls" {
+                    #if DISPLAY_CONTROL
+                    self?.displayMenuBarController?.presentAnimationPrototype()
+                    #endif
+                } else if NativePanelMotionMode.testHost == "pinned" { self?.pinnedPanelController.show() }
                 else { self?.fluidPanelController.presentAnimationPrototype() }
             }
         }

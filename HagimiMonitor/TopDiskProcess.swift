@@ -66,6 +66,7 @@ nonisolated final class DiskSnapshotCursor: @unchecked Sendable {
         // responsiblePid -> (path, readDelta, writeDelta)
         var groups: [pid_t: (path: String, readDelta: UInt64, writeDelta: UInt64)] = [:]
         groups.reserveCapacity(pidCount)
+        let parentIndex = ProcessParentIndex()
 
         var currentSnapshot: [pid_t: (read: UInt64, write: UInt64)] = [:]
         currentSnapshot.reserveCapacity(pidCount)
@@ -93,8 +94,12 @@ nonisolated final class DiskSnapshotCursor: @unchecked Sendable {
 
             guard readDelta > 0 || writeDelta > 0 else { continue }
 
-            let responsiblePid = responsiblePidResolver(pid)
-            let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
+            let groupKey = processGroupKey(
+                for: pid,
+                responsiblePid: responsiblePidResolver(pid),
+                parentOf: { parentIndex.parent(of: $0) },
+                pathOf: { executablePath(for: $0) }
+            )
 
             if groups[groupKey] == nil {
                 groups[groupKey] = (path: executablePath(for: groupKey), readDelta: 0, writeDelta: 0)

@@ -380,7 +380,7 @@ struct GameHUDFPSTests {
     }
 
     @Test func quickToolsDecoupledFromGameHUD() throws {
-        // 1. 小工具枚举仅包含键盘锁定、防休眠、不息屏
+        // 1. 小工具枚举仅包含键盘锁定、系统防休眠、屏幕常亮
         let kinds = QuickToolKind.allCases
         #expect(kinds.count == 3)
         #expect(kinds.contains(.keyboardLock))

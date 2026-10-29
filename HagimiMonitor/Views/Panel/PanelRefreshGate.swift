@@ -13,7 +13,7 @@ import Foundation
 /// 钉住面板并存时互不牵动)。关闭必须晚于 store 的隐藏回调发布,保证
 /// isPanelVisible 变 false 的最后一次转发送达视图、驱动隐藏复位。
 final class PanelRefreshGate: ObservableObject {
-    private var isOpen = false
+    @Published private(set) var isOpen = false
     private var cancellable: AnyCancellable?
 
     init(store: MonitorStore) {
@@ -28,11 +28,11 @@ final class PanelRefreshGate: ObservableObject {
     func open() {
         guard !isOpen else { return }
         isOpen = true
-        objectWillChange.send()
     }
 
     /// 关闸:后续 store 发布不再失效面板树。幂等。
     func close() {
+        guard isOpen else { return }
         isOpen = false
     }
 }

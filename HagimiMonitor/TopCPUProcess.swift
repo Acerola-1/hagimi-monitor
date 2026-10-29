@@ -32,13 +32,18 @@ struct RawCPUProcess: Sendable {
 
 /// 把逐进程 CPU% 按宿主 App 合并、过滤系统进程、排序截断为 TOP N。
 nonisolated private func assembleTopCPU(perProcessCPU: [pid_t: Double], limit: Int, includeSystemProcesses: Bool) -> [RawCPUProcess] {
-    // 按 responsible pid 合并,首次遇到分组时立即捕获宿主路径
+    // 按宿主 App 合并,首次遇到分组时立即捕获宿主路径
     var groups: [pid_t: (path: String, totalCPU: Double)] = [:]
     groups.reserveCapacity(perProcessCPU.count)
+    let parentIndex = ProcessParentIndex()
 
     for (pid, cpuPercent) in perProcessCPU {
-        let responsiblePid = responsiblePidResolver(pid)
-        let groupKey: pid_t = responsiblePid > 0 ? responsiblePid : pid
+        let groupKey = processGroupKey(
+            for: pid,
+            responsiblePid: responsiblePidResolver(pid),
+            parentOf: { parentIndex.parent(of: $0) },
+            pathOf: { executablePath(for: $0) }
+        )
 
         if groups[groupKey] == nil {
             groups[groupKey] = (path: executablePath(for: groupKey), totalCPU: 0)

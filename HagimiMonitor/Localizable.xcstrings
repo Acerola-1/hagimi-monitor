@@ -7729,7 +7729,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "不息屏"
+            "value": "屏幕常亮"
           }
         }
       }
@@ -8593,6 +8593,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "显示系统进程"
+          }
+        }
+      }
+    },
+    "display.controls.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Controls"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示器控制"
+          }
+        }
+      }
+    },
+    "settings.display.menubar": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display control menu bar icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "独立显示器控制菜单栏图标"
+          }
+        }
+      }
+    },
+    "settings.display.menubar.subtitle": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open display controls directly from the menu bar. Independent of the main panel."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从菜单栏直接打开显示器控制，与主面板的显示开关独立。"
           }
         }
       }

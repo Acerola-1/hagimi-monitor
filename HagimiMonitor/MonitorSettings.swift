@@ -137,6 +137,7 @@ final class MonitorSettings: ObservableObject {
     @Published var menuBarMetricLayoutStyle: MenuBarMetricLayoutStyle = .icon
     @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
+    @Published var displayControlMenuBarEnabled: Bool = false
     @Published var displayControlsExpandedByDefault: Bool = false
     @Published var displayBrightnessControlEnabled: Bool = true
     @Published var displayVolumeControlEnabled: Bool = true
@@ -268,6 +269,7 @@ final class MonitorSettings: ObservableObject {
         #else
         displayModuleVisible = defaults.object(forKey: Keys.displayModuleVisible) as? Bool ?? true
         #endif
+        displayControlMenuBarEnabled = defaults.bool(forKey: Keys.displayControlMenuBarEnabled)
         displayControlsExpandedByDefault = defaults.object(forKey: Keys.displayControlsExpandedByDefault) as? Bool ?? false
         displayBrightnessControlEnabled = defaults.object(forKey: Keys.displayBrightnessControlEnabled) as? Bool ?? true
         displayVolumeControlEnabled = defaults.object(forKey: Keys.displayVolumeControlEnabled) as? Bool ?? true
@@ -1073,6 +1075,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $displayControlMenuBarEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.displayControlMenuBarEnabled)
+            }
+            .store(in: &cancellables)
+
         $displayControlsExpandedByDefault
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1399,6 +1408,7 @@ private enum Keys {
     static let legacyMenuBarMetricPrefixStyle = "settings.menuBar.metricPrefixStyle"
     static let defaultExpandedKinds = "settings.panel.defaultExpandedKinds"
     static let displayModuleVisible = "settings.display.moduleVisible"
+    static let displayControlMenuBarEnabled = "settings.display.menuBarEnabled"
     static let displayControlsExpandedByDefault = "settings.display.expandedByDefault"
     static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
