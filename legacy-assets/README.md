@@ -35,3 +35,7 @@
 | 目录 | 说明 |
 |---|---|
 | `site/` | docs/ja/ 全量快照:index.html、privacy.html、stats.html。2026-09-24 起日语不再作为支持语言,官网收缩为中英双语;根跳转页与隐私页语言切换中的日语入口已同步移除,gh-pages 线上的 ja/ 目录一并撤下 |
+
+## website-assets-2026-11（2026-11-02）
+
+官网与 README 旧截图 / GIF 归档，见 [website-assets-2026-11/README.md](website-assets-2026-11/README.md)。被 marketing-shots 新命名面板 / UI / 视频替代；图标资产未归档。
