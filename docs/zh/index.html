@@ -4,89 +4,42 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
-
 (function(){
-  var KEY='hagimi-theme';
-  try{
-    var stored=localStorage.getItem(KEY);
-    if(stored==='dark'||stored==='light') document.documentElement.dataset.theme=stored;
-  }catch(e){}
+  // 只跟随系统外观:不做手动切换,也不写入任何主题偏好。
   document.documentElement.classList.add('js');
+  try{ localStorage.removeItem('hagimi-theme'); }catch(e){}
   function systemTheme(){
     return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
   }
-  function resolved(){
-    var t=document.documentElement.dataset.theme;
-    return (t==='dark'||t==='light')?t:systemTheme();
-  }
   function applyImage(img){
-    var next=img.getAttribute('data-'+resolved());
+    var next=img.getAttribute('data-'+systemTheme());
     if(next && img.getAttribute('src')!==next) img.setAttribute('src', next);
   }
-  function applyImages(node){
-    if(!node || (node.nodeType!==1 && node.nodeType!==9)) return;
-    if(node.nodeType===1 && node.matches && node.matches('img[data-light]')) applyImage(node);
-    if(node.querySelectorAll) node.querySelectorAll('img[data-light]').forEach(applyImage);
+  function applyImages(root){
+    (root||document).querySelectorAll('img[data-light]').forEach(applyImage);
   }
   function syncVideos(){
-    var theme=resolved();
+    var theme=systemTheme();
     var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     document.querySelectorAll('.theme-vid video').forEach(function(v){
       var on=v.classList.contains('for-'+theme);
-      if(!on){
-        v.pause();
-        v.autoplay=false;
-        v.preload='none';
-        return;
-      }
+      if(!on){ v.pause(); v.autoplay=false; v.preload='none'; return; }
       v.muted=true;
-      if(reduce){
-        v.autoplay=false;
-        v.pause();
-        if(v.preload==='none') v.preload='metadata';
-        if(v.readyState<1) v.load();
-        return;
-      }
+      if(reduce){ v.autoplay=false; v.pause(); return; }
       if(v.preload==='none') v.preload='auto';
       var p=v.play();
       if(p&&p.catch) p.catch(function(){});
     });
   }
-  function syncToggle(){
-    var btn=document.getElementById('themeToggle');
-    if(!btn) return;
-    var dark=resolved()==='dark';
-    btn.setAttribute('aria-pressed', dark?'true':'false');
-    var label=dark?btn.getAttribute('data-label-light'):btn.getAttribute('data-label-dark');
-    if(label) btn.setAttribute('aria-label', label);
-  }
-  function applyAll(){
-    applyImages(document);
-    syncVideos();
-    syncToggle();
-  }
-  var mo=new MutationObserver(function(recs){
-    recs.forEach(function(r){
-      r.addedNodes.forEach(function(n){ applyImages(n); });
-    });
-  });
-  mo.observe(document.documentElement,{childList:true,subtree:true});
+  function applyAll(){ applyImages(document); syncVideos(); }
+  var mq=window.matchMedia('(prefers-color-scheme: dark)');
+  if(mq.addEventListener) mq.addEventListener('change', applyAll);
+  else if(mq.addListener) mq.addListener(applyAll);
+  var motion=window.matchMedia('(prefers-reduced-motion: reduce)');
+  if(motion.addEventListener) motion.addEventListener('change', syncVideos);
+  else if(motion.addListener) motion.addListener(syncVideos);
   document.addEventListener('DOMContentLoaded', function(){
     applyAll();
-    var btn=document.getElementById('themeToggle');
-    if(btn) btn.addEventListener('click', function(){
-      var next=resolved()==='dark'?'light':'dark';
-      document.documentElement.dataset.theme=next;
-      try{ localStorage.setItem(KEY, next); }catch(e){}
-      applyAll();
-    });
-    var mq=window.matchMedia('(prefers-color-scheme: dark)');
-    var onScheme=function(){ if(!document.documentElement.dataset.theme) applyAll(); };
-    if(mq.addEventListener) mq.addEventListener('change', onScheme);
-    else if(mq.addListener) mq.addListener(onScheme);
-    var motion=window.matchMedia('(prefers-reduced-motion: reduce)');
-    if(motion.addEventListener) motion.addEventListener('change', syncVideos);
-    else if(motion.addListener) motion.addListener(syncVideos);
     document.querySelectorAll('a[data-lang]').forEach(function(a){
       a.addEventListener('click', function(){
         try{ localStorage.setItem('hagimi-lang', a.getAttribute('data-lang')); }catch(e){}
@@ -94,7 +47,6 @@
     });
   });
 })();
-
 </script>
 <title>Hagimi Monitor — 你的 Mac，一眼即懂</title>
 <meta name="description" content="Hagimi Monitor 是一款优雅的 macOS 菜单栏系统监控工具，实时追踪 CPU、GPU、内存、存储、网络、电池、蓝牙与显示器状态，并内置数据统计报告与键盘锁定等快捷功能。">
@@ -116,6 +68,7 @@
   --hero-highlight:#42464b;
   --hero-rule:#c7c9cb;
   --compare-head:#fafafa;
+  --card-soft:rgba(0,0,0,.035);
   --danger:#c71f1a;
   --ring-well:rgba(0,0,0,.04);
   --btn-bg:#1d1d1f;
@@ -126,30 +79,9 @@
   --display:"SF Pro Display",system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
   --body:"SF Pro Text",system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
 }
-:root[data-theme="dark"]{
-  --bg:#1A1A1D;
-  --bg-elev:#1A1A1D;
-  --baked:#1A1A1D;
-  --ink:#f5f5f7;
-  --muted:#a1a1a6;
-  --accent:#4da3ff;
-  --accent-soft:rgba(77,163,255,.16);
-  --border:rgba(255,255,255,.14);
-  --green:#3dd68c;
-  --nav-bg:rgba(26,26,29,.82);
-  --card:#242428;
-  --hero-highlight:#d2d2d7;
-  --hero-rule:rgba(255,255,255,.18);
-  --compare-head:#222226;
-  --danger:#ff6b66;
-  --ring-well:rgba(255,255,255,.06);
-  --btn-bg:#f5f5f7;
-  --btn-ink:#1A1A1D;
-  --xhs-filter:invert(1);
-  color-scheme:dark;
-}
+
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme]){
+  :root{
     --bg:#1A1A1D;
     --bg-elev:#1A1A1D;
     --baked:#1A1A1D;
@@ -164,6 +96,7 @@
     --hero-highlight:#d2d2d7;
     --hero-rule:rgba(255,255,255,.18);
     --compare-head:#222226;
+    --card-soft:rgba(255,255,255,.05);
     --danger:#ff6b66;
     --ring-well:rgba(255,255,255,.06);
     --btn-bg:#f5f5f7;
@@ -224,11 +157,9 @@ img,video{max-width:100%;height:auto;}
 .theme-toggle:hover,.lang-link:hover{border-color:var(--muted);}
 .theme-toggle svg{width:16px;height:16px;}
 .theme-toggle .sun{display:none;}
-:root[data-theme="dark"] .theme-toggle .moon{display:none;}
-:root[data-theme="dark"] .theme-toggle .sun{display:block;}
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme]) .theme-toggle .moon{display:none;}
-  :root:not([data-theme]) .theme-toggle .sun{display:block;}
+  :root .theme-toggle .moon{display:none;}
+  :root .theme-toggle .sun{display:block;}
 }
 .brand-ring .track{fill:none;stroke:var(--border);stroke-width:1.35;}
 .brand-ring .arc{fill:none;stroke:var(--ink);stroke-width:2.2;stroke-linecap:round;}
@@ -253,18 +184,29 @@ html.js .fade-in.visible{opacity:1;transform:none;}
 .hero-highlights span{display:inline-flex;align-items:center;gap:9px;}
 .hero-highlights span+span{margin-left:16px;padding-left:16px;border-left:1px solid var(--hero-rule);}
 .hero-highlights span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);flex:none;}
-.hero-right{flex:0 0 380px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:10px;}
-.hero-vid{width:min(100%,340px);}
-.vid-cap{font-size:13px;color:var(--muted);text-align:center;}
+.hero-right{flex:0 0 470px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:16px;}
+.fan{position:relative;width:100%;max-width:470px;aspect-ratio:470/442;}
+.fan img{
+  position:absolute;left:50%;top:4px;width:74%;height:auto;margin-left:-37%;
+  filter:drop-shadow(0 16px 34px rgba(0,0,0,.14));
+  transition:transform .55s cubic-bezier(.34,1.56,.64,1),opacity .4s ease,filter .4s ease;
+  will-change:transform;
+}
+.fan .front{transform:translate(0,0) rotate(0) scale(1);z-index:3;}
+.fan .back{transform:translate(-64px,30px) rotate(-9deg) scale(.92);z-index:1;opacity:.95;}
+.fan .mid{transform:translate(64px,30px) rotate(9deg) scale(.92);z-index:2;opacity:.95;}
+.fan:hover .front{transform:translate(0,-10px) scale(1.03);filter:drop-shadow(0 26px 52px rgba(0,0,0,.2));}
+.fan:hover .back{transform:translate(-140px,-6px) rotate(-4deg) scale(1);opacity:1;}
+.fan:hover .mid{transform:translate(140px,-6px) rotate(4deg) scale(1);opacity:1;}
+@media (prefers-reduced-motion: reduce){.fan img{transition:none;}}
+.fan-cap{font-size:13px;color:var(--muted);text-align:center;}
 .theme-vid{display:grid;}
 .theme-vid video{grid-area:1/1;width:100%;height:auto;display:block;background:transparent;}
 .baked .theme-vid video,.baked .theme-shot{background:var(--baked);}
 .theme-vid .for-dark{display:none;}
-:root[data-theme="dark"] .theme-vid .for-light{display:none;}
-:root[data-theme="dark"] .theme-vid .for-dark{display:block;}
 @media (prefers-color-scheme: dark){
-  :root:not([data-theme]) .theme-vid .for-light{display:none;}
-  :root:not([data-theme]) .theme-vid .for-dark{display:block;}
+  :root .theme-vid .for-light{display:none;}
+  :root .theme-vid .for-dark{display:block;}
 }
 .theme-preview{margin-top:64px;scroll-margin-top:76px;}
 .theme-preview h2{font-size:clamp(32px,4vw,44px);}
@@ -344,8 +286,14 @@ html.js .fade-in.visible{opacity:1;transform:none;}
 .mod-head .lead,.block-head .lead{margin-top:14px;}
 .fine{margin-top:14px;font-size:13px;color:var(--muted);max-width:720px;}
 .mod-grid,.settings-grid{
-  display:grid;grid-template-columns:repeat(3,1fr);gap:28px 22px;margin-top:36px;
+  display:grid;grid-template-columns:repeat(3,1fr);gap:26px 22px;margin-top:36px;align-items:stretch;
 }
+.mod-card{
+  display:flex;flex-direction:column;height:100%;padding:14px 14px 16px;
+  background:var(--card-soft);border:1px solid var(--border);border-radius:20px;
+}
+.mod-card .theme-shot{border-radius:12px;}
+.mod-card figcaption{margin-top:auto;padding-top:14px;}
 .settings-grid{grid-template-columns:repeat(3,1fr);}
 .mod-card,.set-card,.thumb,.shot{min-width:0;}
 .pair{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
@@ -464,7 +412,6 @@ html.js .fade-in.visible{opacity:1;transform:none;}
         <li><a href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener" class="nav-github"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.67 5.56.67 11.83c0 5.01 3.24 9.26 7.74 10.76.57.1.78-.25.78-.55v-1.94c-3.15.68-3.81-1.52-3.81-1.52-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.69.08-.69 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.51-.29-5.16-1.26-5.16-5.6 0-1.24.44-2.25 1.17-3.04-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.15 1.16a10.95 10.95 0 0 1 5.74 0c2.18-1.47 3.14-1.16 3.14-1.16.63 1.57.24 2.73.12 3.02.73.79 1.16 1.8 1.16 3.04 0 4.35-2.65 5.31-5.17 5.59.41.36.77 1.06.77 2.14v3.17c0 .31.2.66.79.55 4.49-1.5 7.73-5.75 7.73-10.76C23.33 5.56 18.27.5 12 .5z"/></svg><span id="navGithubCount">★</span></a></li>
       </ul>
       <a class="lang-link" href="../en/" data-lang="en">EN</a>
-      <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" data-label-dark="切换到深色外观" data-label-light="切换到浅色外观" aria-label="切换到深色外观"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
     </div>
   </div>
 </nav>
@@ -493,18 +440,19 @@ html.js .fade-in.visible{opacity:1;transform:none;}
         </div>
       </div>
       <div class="hero-right fade-in">
-        <div class="hero-vid"><div class="theme-vid" aria-hidden="true">
-      <video class="for-light" muted loop playsinline preload="none" width="780" height="936" poster="../video/hero-light-poster.png"><source src="../video/hero-light.mp4" type="video/mp4"></video>
-      <video class="for-dark" muted loop playsinline preload="none" width="780" height="936" poster="../video/hero-dark-poster.png"><source src="../video/hero-dark.mp4" type="video/mp4"></video>
-    </div></div>
-        <p class="vid-cap">菜单栏里的实时监控面板</p>
+        <div class="fan" aria-hidden="true">
+          <img class="back" src="../images/zh/panel-overview-vibrant-dark.png" data-light="../images/zh/panel-overview-vibrant-dark.png" data-dark="../images/zh/panel-overview-vibrant-light.png" width="753" height="862" alt="" decoding="async">
+          <img class="mid" src="../images/zh/panel-overview-balanced-light.png" data-light="../images/zh/panel-overview-balanced-light.png" data-dark="../images/zh/panel-overview-balanced-dark.png" width="753" height="862" alt="" decoding="async">
+          <img class="front" src="../images/zh/panel-overview-vibrant-light.png" data-light="../images/zh/panel-overview-vibrant-light.png" data-dark="../images/zh/panel-overview-vibrant-dark.png" width="753" height="862" alt="" decoding="async">
+        </div>
+        <p class="fan-cap">活力 / 平衡两套配色，浅色与深色各有对应面板</p>
       </div>
     </div>
     <div class="theme-preview fade-in" id="themes">
       <div class="kicker">Balanced · Vibrant</div>
       <h2>两套主题，四种外观</h2>
-      <p class="lead">中性的平衡，或彩色玻璃的活力，各自都有浅色和深色。下面四张是配色预览，不随本页外观切换；再往下的功能截图会跟着当前浅色 / 深色走。</p>
-      <div class="thumb-grid"><figure class="thumb"><img src="../images/zh/panel-overview-balanced-light.png" width="747" height="856" alt="平衡配色，浅色" loading="lazy" decoding="async"><figcaption><b>平衡</b>浅色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-balanced-dark.png" width="753" height="862" alt="平衡配色，深色" loading="lazy" decoding="async"><figcaption><b>平衡</b>深色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-vibrant-light.png" width="747" height="856" alt="活力配色，浅色" loading="lazy" decoding="async"><figcaption><b>活力</b>浅色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-vibrant-dark.png" width="753" height="862" alt="活力配色，深色" loading="lazy" decoding="async"><figcaption><b>活力</b>深色</figcaption></figure></div>
+      <p class="lead">中性的平衡，或彩色玻璃的活力，各自都有浅色和深色。下面四张是配色预览，固定展示四种外观；再往下的功能截图会跟随系统的浅色 / 深色。</p>
+      <div class="thumb-grid"><figure class="thumb"><img src="../images/zh/panel-overview-balanced-light.png" width="753" height="862" alt="平衡配色，浅色" loading="lazy" decoding="async"><figcaption><b>平衡</b>浅色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-balanced-dark.png" width="753" height="862" alt="平衡配色，深色" loading="lazy" decoding="async"><figcaption><b>平衡</b>深色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-vibrant-light.png" width="753" height="862" alt="活力配色，浅色" loading="lazy" decoding="async"><figcaption><b>活力</b>浅色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-vibrant-dark.png" width="753" height="862" alt="活力配色，深色" loading="lazy" decoding="async"><figcaption><b>活力</b>深色</figcaption></figure></div>
     </div>
   </div>
 </section>
@@ -548,7 +496,7 @@ html.js .fade-in.visible{opacity:1;transform:none;}
       <p class="lead">菜单栏点开即可展开。下面是活力配色下的 CPU、GPU、内存、存储、网络和电源；蓝牙设备电量与显示器信息也在同一块面板里。</p>
       <p class="fine">温度、风扇转速，以及存储 / 网络的进程列表仅 GitHub 直连版提供。App Store 版受沙盒限制，没有这些读数。</p>
     </div>
-    <div class="mod-grid"><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-cpu-vibrant-light.png" data-dark="../images/zh/panel-cpu-vibrant-dark.png" width="747" height="1431" alt="CPU 模块：核心分组、热压力与进程列表" loading="lazy" decoding="async"><figcaption><b>CPU</b>系统、用户与空闲占用，P/E 核心分组和热压力，以及进程列表。逐核圆环和温度读取仅直连版提供；M6 与 M5 Pro/Max 会显示 S/P/E 三组。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-gpu-vibrant-light.png" data-dark="../images/zh/panel-gpu-vibrant-dark.png" width="747" height="1310" alt="GPU 模块：显存、渲染与分块、进程占用" loading="lazy" decoding="async"><figcaption><b>GPU</b>图形负载、渲染与分块、显存，以及按进程列出的占用。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-memory-vibrant-light.png" data-dark="../images/zh/panel-memory-vibrant-dark.png" width="747" height="1258" alt="内存模块：压力、交换、压缩与进程" loading="lazy" decoding="async"><figcaption><b>内存</b>已用容量、内存压力、交换与压缩内存，以及占用最高的进程。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-storage-vibrant-light.png" data-dark="../images/zh/panel-storage-vibrant-dark.png" width="747" height="1206" alt="存储模块：容量、读写与健康状态" loading="lazy" decoding="async"><figcaption><b>存储</b>系统盘容量、读写速率与 SMART 健康。按进程拆开的读写仅直连版提供。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-network-vibrant-light.png" data-dark="../images/zh/panel-network-vibrant-dark.png" width="747" height="1258" alt="网络模块：速率、Wi-Fi 信号与 IP" loading="lazy" decoding="async"><figcaption><b>网络</b>上传 / 下载速率、接口类型、Wi-Fi 信号与 IP。按进程拆开的流量仅直连版提供。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-battery-vibrant-light.png" data-dark="../images/zh/panel-battery-vibrant-dark.png" width="747" height="1327" alt="电源模块：电量、功耗与流向" loading="lazy" decoding="async"><figcaption><b>电源</b>电量、供电状态、整机与部件功耗，以及电源流向。</figcaption></figure></div>
+    <div class="mod-grid"><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-cpu-vibrant-light.png" data-dark="../images/zh/panel-cpu-vibrant-dark.png" width="753" height="1436" alt="CPU 模块：核心分组、热压力与进程列表" loading="lazy" decoding="async"><figcaption><b>CPU</b>系统、用户与空闲占用，P/E 核心分组和热压力，以及进程列表。逐核圆环和温度读取仅直连版提供；M6 与 M5 Pro/Max 会显示 S/P/E 三组。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-gpu-vibrant-light.png" data-dark="../images/zh/panel-gpu-vibrant-dark.png" width="753" height="1314" alt="GPU 模块：显存、渲染与分块、进程占用" loading="lazy" decoding="async"><figcaption><b>GPU</b>图形负载、渲染与分块、显存，以及按进程列出的占用。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-memory-vibrant-light.png" data-dark="../images/zh/panel-memory-vibrant-dark.png" width="753" height="1262" alt="内存模块：压力、交换、压缩与进程" loading="lazy" decoding="async"><figcaption><b>内存</b>已用容量、内存压力、交换与压缩内存，以及占用最高的进程。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-storage-vibrant-light.png" data-dark="../images/zh/panel-storage-vibrant-dark.png" width="753" height="1211" alt="存储模块：容量、读写与健康状态" loading="lazy" decoding="async"><figcaption><b>存储</b>系统盘容量、读写速率与 SMART 健康。按进程拆开的读写仅直连版提供。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-network-vibrant-light.png" data-dark="../images/zh/panel-network-vibrant-dark.png" width="753" height="1262" alt="网络模块：速率、Wi-Fi 信号与 IP" loading="lazy" decoding="async"><figcaption><b>网络</b>上传 / 下载速率、接口类型、Wi-Fi 信号与 IP。按进程拆开的流量仅直连版提供。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-battery-vibrant-light.png" data-dark="../images/zh/panel-battery-vibrant-dark.png" width="753" height="1330" alt="电源模块：电量、功耗与流向" loading="lazy" decoding="async"><figcaption><b>电源</b>电量、供电状态、整机与部件功耗，以及电源流向。</figcaption></figure></div>
   </div>
 </section>
 
@@ -559,11 +507,11 @@ html.js .fade-in.visible{opacity:1;transform:none;}
     <p class="lead">所有模块行与指标格支持长按拖动排序，拖起时浮起预览、落点实时归位；也可右键（触控板双指轻点）呼出菜单，按上下左右逐格移动，顺序随时可恢复。</p>
     <div class="pair">
       <figure class="col"><div class="theme-vid" aria-hidden="true">
-      <video class="for-light" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-drag-light.mp4" type="video/mp4"></video>
+      <video class="for-light" muted autoplay loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-drag-light.mp4" type="video/mp4"></video>
       <video class="for-dark" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-drag-dark.mp4" type="video/mp4"></video>
     </div><figcaption><b>长按拖动</b>拖起浮起预览，松手实时归位。</figcaption></figure>
       <figure class="col"><div class="theme-vid" aria-hidden="true">
-      <video class="for-light" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-menu-light.mp4" type="video/mp4"></video>
+      <video class="for-light" muted autoplay loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-menu-light.mp4" type="video/mp4"></video>
       <video class="for-dark" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-menu-dark.mp4" type="video/mp4"></video>
     </div><figcaption><b>菜单换位</b>右键呼出，上下左右逐格移动。</figcaption></figure>
     </div>
@@ -612,7 +560,7 @@ html.js .fade-in.visible{opacity:1;transform:none;}
         <h2>外接显示器控制</h2>
         <p class="lead">直连版可通过 DDC/CI 调节外接显示器的亮度、音量和对比度。是否可用取决于显示器、线材和连接方式；不支持的控制项不会显示为可用。显示器信息两个版本都能看，这组控制不在 App Store 版里。</p>
       </div>
-      <figure class="direct-shot"><img class="theme-shot" data-light="../images/zh/panel-display-controls-direct-light.png" data-dark="../images/zh/panel-display-controls-direct-dark.png" width="747" height="1298" alt="直连版显示器控制：外接显示器亮度、音量与对比度" loading="lazy" decoding="async"><figcaption><b>直连版</b>内置屏信息两个版本都有；外接屏的亮度、音量和对比度只在直连版。</figcaption></figure>
+      <figure class="direct-shot"><img class="theme-shot" data-light="../images/zh/panel-display-controls-direct-light.png" data-dark="../images/zh/panel-display-controls-direct-dark.png" width="753" height="1302" alt="直连版显示器控制：外接显示器亮度、音量与对比度" loading="lazy" decoding="async"><figcaption><b>直连版</b>内置屏信息两个版本都有；外接屏的亮度、音量和对比度只在直连版。</figcaption></figure>
     </div>
   </div>
 </section>
