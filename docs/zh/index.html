@@ -3,21 +3,174 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script>
+
+(function(){
+  var KEY='hagimi-theme';
+  try{
+    var stored=localStorage.getItem(KEY);
+    if(stored==='dark'||stored==='light') document.documentElement.dataset.theme=stored;
+  }catch(e){}
+  document.documentElement.classList.add('js');
+  function systemTheme(){
+    return window.matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';
+  }
+  function resolved(){
+    var t=document.documentElement.dataset.theme;
+    return (t==='dark'||t==='light')?t:systemTheme();
+  }
+  function applyImage(img){
+    var next=img.getAttribute('data-'+resolved());
+    if(next && img.getAttribute('src')!==next) img.setAttribute('src', next);
+  }
+  function applyImages(node){
+    if(!node || (node.nodeType!==1 && node.nodeType!==9)) return;
+    if(node.nodeType===1 && node.matches && node.matches('img[data-light]')) applyImage(node);
+    if(node.querySelectorAll) node.querySelectorAll('img[data-light]').forEach(applyImage);
+  }
+  function syncVideos(){
+    var theme=resolved();
+    var reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    document.querySelectorAll('.theme-vid video').forEach(function(v){
+      var on=v.classList.contains('for-'+theme);
+      if(!on){
+        v.pause();
+        v.autoplay=false;
+        v.preload='none';
+        return;
+      }
+      v.muted=true;
+      if(reduce){
+        v.autoplay=false;
+        v.pause();
+        if(v.preload==='none') v.preload='metadata';
+        if(v.readyState<1) v.load();
+        return;
+      }
+      if(v.preload==='none') v.preload='auto';
+      var p=v.play();
+      if(p&&p.catch) p.catch(function(){});
+    });
+  }
+  function syncToggle(){
+    var btn=document.getElementById('themeToggle');
+    if(!btn) return;
+    var dark=resolved()==='dark';
+    btn.setAttribute('aria-pressed', dark?'true':'false');
+    var label=dark?btn.getAttribute('data-label-light'):btn.getAttribute('data-label-dark');
+    if(label) btn.setAttribute('aria-label', label);
+  }
+  function applyAll(){
+    applyImages(document);
+    syncVideos();
+    syncToggle();
+  }
+  var mo=new MutationObserver(function(recs){
+    recs.forEach(function(r){
+      r.addedNodes.forEach(function(n){ applyImages(n); });
+    });
+  });
+  mo.observe(document.documentElement,{childList:true,subtree:true});
+  document.addEventListener('DOMContentLoaded', function(){
+    applyAll();
+    var btn=document.getElementById('themeToggle');
+    if(btn) btn.addEventListener('click', function(){
+      var next=resolved()==='dark'?'light':'dark';
+      document.documentElement.dataset.theme=next;
+      try{ localStorage.setItem(KEY, next); }catch(e){}
+      applyAll();
+    });
+    var mq=window.matchMedia('(prefers-color-scheme: dark)');
+    var onScheme=function(){ if(!document.documentElement.dataset.theme) applyAll(); };
+    if(mq.addEventListener) mq.addEventListener('change', onScheme);
+    else if(mq.addListener) mq.addListener(onScheme);
+    var motion=window.matchMedia('(prefers-reduced-motion: reduce)');
+    if(motion.addEventListener) motion.addEventListener('change', syncVideos);
+    else if(motion.addListener) motion.addListener(syncVideos);
+    document.querySelectorAll('a[data-lang]').forEach(function(a){
+      a.addEventListener('click', function(){
+        try{ localStorage.setItem('hagimi-lang', a.getAttribute('data-lang')); }catch(e){}
+      });
+    });
+  });
+})();
+
+</script>
 <title>Hagimi Monitor — 你的 Mac，一眼即懂</title>
 <meta name="description" content="Hagimi Monitor 是一款优雅的 macOS 菜单栏系统监控工具，实时追踪 CPU、GPU、内存、存储、网络、电池、蓝牙与显示器状态，并内置数据统计报告与键盘锁定等快捷功能。">
 <link rel="icon" type="image/png" href="../images/favicon-128.png" sizes="128x128">
 <style>
+
 :root{
   --bg:#f5f5f7;
+  --bg-elev:#ffffff;
+  --baked:#ffffff;
   --ink:#1d1d1f;
-  --accent:#0071e3;
-  --link:#0066cc;
-  --surface:#272729;
   --muted:#6e6e73;
+  --accent:#0071e3;
+  --accent-soft:rgba(0,113,227,.10);
   --border:#d2d2d7;
   --green:#20c997;
+  --nav-bg:rgba(245,245,247,.72);
+  --card:#ffffff;
+  --hero-highlight:#42464b;
+  --hero-rule:#c7c9cb;
+  --compare-head:#fafafa;
+  --danger:#c71f1a;
+  --ring-well:rgba(0,0,0,.04);
+  --btn-bg:#1d1d1f;
+  --btn-ink:#ffffff;
+  --xhs-filter:none;
+  --surface:#272729;
+  color-scheme:light;
   --display:"SF Pro Display",system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
   --body:"SF Pro Text",system-ui,-apple-system,"Segoe UI","Helvetica Neue",Arial,sans-serif;
+}
+:root[data-theme="dark"]{
+  --bg:#1A1A1D;
+  --bg-elev:#1A1A1D;
+  --baked:#1A1A1D;
+  --ink:#f5f5f7;
+  --muted:#a1a1a6;
+  --accent:#4da3ff;
+  --accent-soft:rgba(77,163,255,.16);
+  --border:rgba(255,255,255,.14);
+  --green:#3dd68c;
+  --nav-bg:rgba(26,26,29,.82);
+  --card:#242428;
+  --hero-highlight:#d2d2d7;
+  --hero-rule:rgba(255,255,255,.18);
+  --compare-head:#222226;
+  --danger:#ff6b66;
+  --ring-well:rgba(255,255,255,.06);
+  --btn-bg:#f5f5f7;
+  --btn-ink:#1A1A1D;
+  --xhs-filter:invert(1);
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]){
+    --bg:#1A1A1D;
+    --bg-elev:#1A1A1D;
+    --baked:#1A1A1D;
+    --ink:#f5f5f7;
+    --muted:#a1a1a6;
+    --accent:#4da3ff;
+    --accent-soft:rgba(77,163,255,.16);
+    --border:rgba(255,255,255,.14);
+    --green:#3dd68c;
+    --nav-bg:rgba(26,26,29,.82);
+    --card:#242428;
+    --hero-highlight:#d2d2d7;
+    --hero-rule:rgba(255,255,255,.18);
+    --compare-head:#222226;
+    --danger:#ff6b66;
+    --ring-well:rgba(255,255,255,.06);
+    --btn-bg:#f5f5f7;
+    --btn-ink:#1A1A1D;
+    --xhs-filter:invert(1);
+    color-scheme:dark;
+  }
 }
 *{box-sizing:border-box;margin:0;padding:0;}
 html{scroll-behavior:smooth;}
@@ -29,29 +182,27 @@ body{
   line-height:1.6;
   overflow-x:hidden;
 }
-
-/* ============ Header / Nav ============ */
+img,video{max-width:100%;height:auto;}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;}
 .nav{
   position:fixed;top:0;left:0;right:0;z-index:1000;
   padding:14px 0;
-  background:rgba(245,245,247,.72);
+  background:var(--nav-bg);
   backdrop-filter:blur(20px) saturate(180%);
   -webkit-backdrop-filter:blur(20px) saturate(180%);
   border-bottom:1px solid transparent;
   transition:border-color .3s ease, box-shadow .3s ease;
 }
-.nav.scrolled{
-  border-bottom-color:var(--border);
-  box-shadow:0 1px 12px rgba(0,0,0,.06);
-}
+.nav.scrolled{border-bottom-color:var(--border);box-shadow:0 1px 12px rgba(0,0,0,.06);}
 .nav-inner{
   max-width:1080px;margin:0 auto;padding:0 32px;
-  display:flex;align-items:center;justify-content:space-between;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;
 }
-.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);}
-.nav-brand .ring{width:30px;height:30px;}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);min-width:0;}
+.nav-brand .ring{width:30px;height:30px;flex:none;}
 .nav-brand .name{font-family:var(--display);font-weight:600;font-size:17px;letter-spacing:-.01em;}
-.nav-links{display:flex;align-items:center;gap:24px;list-style:none;}
+.nav-actions{display:flex;align-items:center;gap:12px;min-width:0;}
+.nav-links{display:flex;align-items:center;gap:20px;list-style:none;}
 .nav-links a{color:var(--muted);text-decoration:none;font-size:13px;font-weight:500;transition:color .2s;}
 .nav-links a:hover{color:var(--ink);}
 .nav-github{
@@ -60,224 +211,92 @@ body{
   font-size:12px;font-weight:500;color:var(--muted);
   text-decoration:none;transition:border-color .2s,color .2s;
 }
-.nav-github:hover{border-color:#999;color:var(--ink);}
+.nav-github:hover{border-color:var(--muted);color:var(--ink);}
 .nav-github svg{width:14px;height:14px;}
-
-/* ============ Sections shared ============ */
-section{padding:120px 0;}
+.theme-toggle,.lang-link{
+  display:inline-flex;align-items:center;justify-content:center;
+  height:34px;padding:0 8px;flex:none;
+  border:1px solid var(--border);border-radius:8px;
+  background:transparent;color:var(--ink);cursor:pointer;
+  text-decoration:none;font-size:12px;font-weight:650;
+}
+.theme-toggle{width:34px;padding:0;}
+.theme-toggle:hover,.lang-link:hover{border-color:var(--muted);}
+.theme-toggle svg{width:16px;height:16px;}
+.theme-toggle .sun{display:none;}
+:root[data-theme="dark"] .theme-toggle .moon{display:none;}
+:root[data-theme="dark"] .theme-toggle .sun{display:block;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]) .theme-toggle .moon{display:none;}
+  :root:not([data-theme]) .theme-toggle .sun{display:block;}
+}
+.brand-ring .track{fill:none;stroke:var(--border);stroke-width:1.35;}
+.brand-ring .arc{fill:none;stroke:var(--ink);stroke-width:2.2;stroke-linecap:round;}
+.brand-ring .dot{fill:var(--green);}
+section{padding:100px 0;scroll-margin-top:76px;}
 .section-inner{max-width:1080px;margin:0 auto;padding:0 32px;}
-.kicker{font-family:var(--body);font-size:16px;font-weight:500;color:var(--accent);letter-spacing:.02em;margin-bottom:10px;}
-h1{font-family:var(--display);font-weight:600;letter-spacing:-.025em;line-height:1.1;}
-h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:1.12;}
+.kicker{font-size:16px;font-weight:500;color:var(--accent);letter-spacing:.02em;margin-bottom:10px;}
+h1,h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:1.12;}
+h1{letter-spacing:-.025em;line-height:1.1;}
 .lead{font-size:18px;line-height:1.65;color:var(--muted);font-weight:400;max-width:640px;}
-
-/* Scroll fade-in */
-.fade-in{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease;}
-.fade-in.visible{opacity:1;transform:translateY(0);}
-
-/* ============ Hero ============ */
-.hero{
-  padding:142px 0 108px;
-  display:flex;align-items:center;
-  background:radial-gradient(circle at 78% 43%,rgba(50,195,107,.12),transparent 34%),linear-gradient(180deg,var(--bg),#fff);
-}
-.hero .section-inner{
-  display:flex;align-items:center;gap:32px;
-}
+.center{text-align:center;}
+.center .lead,.center .kicker{margin-left:auto;margin-right:auto;}
+html.js .fade-in{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease;}
+html.js .fade-in.visible{opacity:1;transform:none;}
+.baked{background:var(--baked);}
+.band{background:var(--bg-elev);}
+.hero{padding:132px 0 72px;}
+.hero-row{display:flex;align-items:center;gap:36px;}
 .hero-left{flex:1;min-width:0;display:flex;flex-direction:column;gap:20px;}
-.hero-left h1{font-size:clamp(44px,5.5vw,64px);}
-.hero-left .lead{margin-top:4px;}
-.hero-highlights{display:flex;flex-wrap:wrap;gap:10px 0;margin-top:8px;color:#42464b;font-size:14px;font-weight:600;}
-.hero-highlights span{display:inline-flex;align-items:center;gap:9px;white-space:nowrap;}
-.hero-highlights span+span{margin-left:16px;padding-left:16px;border-left:1px solid #c7c9cb;}
-.hero-highlights span::before{content:"";width:6px;height:6px;border-radius:50%;background:#25c665;flex:none;}
-.hero-right{flex:0 0 496px;display:flex;justify-content:center;align-items:center;}
-.fan{position:relative;width:480px;height:460px;overflow:visible;}
-.fan img{
-  position:absolute;width:340px;border-radius:20px;
-  box-shadow:0 16px 48px -12px rgba(29,29,31,.22);
-  transform-origin:center bottom;
-  left:50%;margin-left:-170px;
-  top:50%;margin-top:-240px;
-  clip-path:inset(0 round 20px);
-  transition:transform .55s cubic-bezier(.34,1.56,.64,1),opacity .4s ease,box-shadow .4s ease;
+.hero-left h1{font-size:clamp(40px,5.2vw,64px);}
+.hero-highlights{display:flex;flex-wrap:wrap;gap:10px 0;color:var(--hero-highlight);font-size:14px;font-weight:600;}
+.hero-highlights span{display:inline-flex;align-items:center;gap:9px;}
+.hero-highlights span+span{margin-left:16px;padding-left:16px;border-left:1px solid var(--hero-rule);}
+.hero-highlights span::before{content:"";width:6px;height:6px;border-radius:50%;background:var(--green);flex:none;}
+.hero-right{flex:0 0 380px;min-width:0;display:flex;flex-direction:column;align-items:center;gap:10px;}
+.hero-vid{width:min(100%,340px);}
+.vid-cap{font-size:13px;color:var(--muted);text-align:center;}
+.theme-vid{display:grid;}
+.theme-vid video{grid-area:1/1;width:100%;height:auto;display:block;background:transparent;}
+.baked .theme-vid video,.baked .theme-shot{background:var(--baked);}
+.theme-vid .for-dark{display:none;}
+:root[data-theme="dark"] .theme-vid .for-light{display:none;}
+:root[data-theme="dark"] .theme-vid .for-dark{display:block;}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme]) .theme-vid .for-light{display:none;}
+  :root:not([data-theme]) .theme-vid .for-dark{display:block;}
 }
-.fan .front{transform:translate(0,0) rotate(0deg) scale(1);z-index:3;}
-.fan .back{transform:translate(-58px,30px) rotate(-9deg) scale(.88);z-index:1;opacity:.82;}
-.fan .mid{transform:translate(58px,30px) rotate(9deg) scale(.88);z-index:2;opacity:.82;}
-/* Hover: fully separated, enlarged */
-.fan:hover .front{transform:translate(0,-5px) rotate(0deg) scale(1.02);box-shadow:0 24px 64px -16px rgba(29,29,31,.3);}
-.fan:hover .back{transform:translate(-175px,-5px) rotate(0deg) scale(1.02);opacity:1;box-shadow:0 24px 64px -16px rgba(29,29,31,.3);}
-.fan:hover .mid{transform:translate(175px,-5px) rotate(0deg) scale(1.02);opacity:1;box-shadow:0 24px 64px -16px rgba(29,29,31,.3);}
-
-/* ============ Lightweight ============ */
-.lightweight{text-align:center;background:#fff;}
-.lightweight h2{font-size:clamp(36px,5vw,54px);margin-top:14px;}
-.lightweight .lead{max-width:720px;margin:18px auto 0;font-size:19px;}
-.stats{display:flex;gap:48px;justify-content:center;margin-top:52px;flex-wrap:wrap;}
-.stat .n{font-family:var(--display);font-weight:600;font-size:clamp(40px,5vw,52px);letter-spacing:-.03em;}
-.stat .n small{font-size:24px;color:var(--muted);font-weight:500;}
-.stat .l{font-size:14px;color:var(--muted);margin-top:6px;letter-spacing:.02em;}
-.sep{width:1px;background:var(--border);align-self:stretch;}
-
-/* ============ Feature blocks ============ */
-.stack{display:flex;flex-direction:column;gap:28px;margin-top:44px;align-items:center;}
-.shot{
-  border:1px solid var(--border);border-radius:16px;overflow:hidden;
-  background:#fff;text-align:left;max-width:960px;width:100%;
+.theme-preview{margin-top:64px;scroll-margin-top:76px;}
+.theme-preview h2{font-size:clamp(32px,4vw,44px);}
+.theme-preview .lead{margin-top:12px;max-width:720px;}
+.thumb-grid{
+  display:grid;grid-template-columns:repeat(4,1fr);gap:18px;margin-top:28px;
 }
-.shot img{display:block;width:100%;height:auto;}
-.shot.narrow{max-width:360px;}
-.reorder-shots{flex-direction:row;justify-content:center;flex-wrap:wrap;}
-@media (max-width:820px){.reorder-shots{flex-direction:column;align-items:center;}}
-.shot .shot-cap{padding:14px 18px 16px;font-size:13px;color:var(--muted);line-height:1.5;}
-.shot .shot-cap b{display:block;color:var(--ink);font-weight:600;font-size:15px;margin-bottom:2px;}
-
-/* ============ Statistics showcase ============ */
-.stats-showcase{
-  background:#fff;
-  overflow:hidden;
+.thumb{min-width:0;}
+.thumb img,.theme-shot{width:100%;height:auto;display:block;}
+.thumb figcaption,.mod-card figcaption,.set-card figcaption,.shot figcaption,.col figcaption,.narrow-shot figcaption,.direct-shot figcaption{
+  margin-top:10px;font-size:13px;color:var(--muted);line-height:1.5;
 }
-.stats-showcase .lead{max-width:750px;margin-top:18px;}
-.stats-showcase h2{font-size:clamp(36px,5vw,54px);margin-top:14px;}
-.stats-showcase .shot{box-shadow:0 16px 40px rgba(29,29,31,.08);}
-.stats-showcase .shot:last-child{max-width:660px;}
-
-/* ============ Themes ============ */
-.themes .section-inner{display:flex;flex-direction:column;gap:36px;}
-.themes h2{font-size:clamp(34px,4.5vw,44px);}
-.themes-stage{display:flex;align-items:center;justify-content:center;gap:56px;flex-wrap:wrap;}
-.themes-card{display:flex;flex-direction:column;align-items:center;gap:14px;}
-.themes-card img{width:380px;border-radius:0;box-shadow:none;clip-path:inset(3px round 18px);}
-.themes-card.d img{box-shadow:none;}
-.themes-card .cap{font-size:15px;font-weight:500;text-align:center;}
-.themes-card .cap small{display:block;color:var(--muted);font-weight:400;font-size:13px;margin-top:2px;}
-.swap-icon{
-  width:52px;height:52px;border-radius:50%;
-  border:1px solid var(--border);background:#fff;
-  display:flex;align-items:center;justify-content:center;
-  color:var(--accent);flex:0 0 52px;
-  box-shadow:0 6px 20px -10px rgba(29,29,31,.25);
+.thumb figcaption b,.mod-card figcaption b,.set-card figcaption b,.shot figcaption b,.col figcaption b,.narrow-shot figcaption b,.direct-shot figcaption b{
+  display:block;color:var(--ink);font-weight:600;font-size:15px;margin-bottom:2px;
 }
-
-/* ============ Gallery ============ */
-.gallery{background:#fff;}
-.gallery h2{font-size:clamp(30px,4vw,40px);margin-bottom:32px;}
-.gallery-grid{
-  display:grid;grid-template-columns:repeat(4,1fr);
-  gap:18px;align-items:start;
-}
-.gallery-cell.center{grid-column:2/4;}
-.gallery-cell{display:flex;flex-direction:column;align-items:center;gap:10px;}
-.gallery-cell img{width:100%;border-radius:0;box-shadow:none;clip-path:inset(3px round 14px);}
-.gallery-cell.d img{box-shadow:none;}
-.gallery-cell .lab{font-size:13px;color:var(--muted);text-align:center;}
-.gallery-cell .lab b{color:var(--ink);display:block;font-weight:600;font-size:14px;}
-
-/* ============ Menu Bar Styles ============ */
-.bar-styles{padding:100px 0;}
-.bar-hero{display:flex;align-items:center;gap:64px;margin-bottom:64px;}
-.bar-ring-wrap{flex:0 0 260px;display:flex;justify-content:center;align-items:center;}
-.bar-ring-svg{width:240px;height:240px;}
-.bar-ring-track{fill:none;stroke:var(--border);stroke-width:10;}
-.bar-ring-arc{fill:none;stroke-width:12;stroke-linecap:round;transform-origin:center;transition:stroke .6s ease;}
-.bar-ring-center{font-family:var(--display);font-size:36px;font-weight:600;fill:var(--ink);text-anchor:middle;dominant-baseline:central;}
-.bar-ring-label{font-size:12px;fill:var(--muted);text-anchor:middle;}
-.bar-hero-text{flex:1;}
-.bar-hero-text h2{font-family:var(--display);font-size:clamp(28px,3.5vw,38px);font-weight:600;letter-spacing:-.02em;line-height:1.2;margin-bottom:14px;}
-.bar-hero-text .lead{font-size:16px;color:var(--muted);line-height:1.7;max-width:420px;}
-.bar-alt-title{font-size:14px;font-weight:600;color:var(--muted);letter-spacing:.03em;text-transform:uppercase;margin-bottom:20px;}
-.bar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;}
-.bar-card{
-  display:flex;flex-direction:column;align-items:center;
-  padding:20px 12px;border:1px solid var(--border);border-radius:14px;
-  background:#fff;height:100%;
-}
-.bar-card-img{flex:1;display:flex;align-items:center;justify-content:center;width:100%;}
-.bar-card img{width:100%;max-width:360px;border-radius:8px;}
-.bar-card-text{padding-top:14px;text-align:center;}
-.bar-card .bar-label{font-size:14px;font-weight:600;color:var(--ink);}
-.bar-card .bar-desc{font-size:12px;color:var(--muted);margin-top:4px;}
-@keyframes ring-pulse{0%,100%{opacity:1;}50%{opacity:.7;}}
-
-/* ============ Compare ============ */
-.compare h2{font-size:clamp(30px,4vw,40px);}
-.compare .lead{margin-top:14px;}
-.compare-scroll{overflow-x:auto;margin-top:36px;}
-.compare-table{
-  width:100%;min-width:560px;
-  border-collapse:separate;border-spacing:0;
-  background:#fff;border:1px solid var(--border);border-radius:14px;
-  overflow:hidden;
-}
-.compare-table th,.compare-table td{
-  padding:14px 20px;font-size:14px;text-align:center;
-  border-top:1px solid var(--border);
-}
-.compare-table thead th{border-top:none;background:#fafafa;font-weight:600;}
-.compare-table td:first-child,.compare-table th:first-child{text-align:left;}
-.compare-table td:first-child{font-weight:500;}
-.compare-yes{color:var(--green);font-weight:600;}
-.compare-no{color:#c71f1a;font-weight:600;}
-.compare-note{font-size:12px;color:var(--muted);margin-top:14px;}
-
-/* ============ Download ============ */
-.download{background:#fff;text-align:center;}
-.download h2{font-size:clamp(32px,4.5vw,46px);margin-bottom:16px;}
-.download .lead{margin:0 auto 36px;max-width:600px;}
-.download-actions{display:flex;gap:20px;justify-content:center;flex-wrap:wrap;margin-bottom:20px;}
-.btn-primary{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:14px 32px;white-space:nowrap;
-  background:var(--ink);color:#fff;
-  text-decoration:none;border-radius:8px;
-  font-size:15px;font-weight:600;
-  transition:transform .2s,box-shadow .2s;
-  box-shadow:0 4px 16px rgba(29,29,31,.2);
-}
-.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(29,29,31,.28);}
-.btn-primary svg{width:18px;height:18px;}
-.btn-store{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:14px 32px;white-space:nowrap;
-  background:#fff;color:var(--ink);
-  text-decoration:none;border-radius:8px;
-  font-size:15px;font-weight:600;
-  border:1px solid var(--border);
-  transition:border-color .2s,transform .2s;
-}
-.btn-store:hover{border-color:#999;transform:translateY(-2px);}
-.btn-store svg{width:18px;height:18px;}
-.download-note{font-size:13px;color:var(--muted);margin-top:8px;}
-.brew-hint{font-size:13px;color:var(--muted);margin:2px 0 12px;}
-.brew-install{
-  display:inline-flex;align-items:center;gap:10px;
-  background:var(--surface);color:#f5f5f7;
-  border:none;border-radius:10px;
-  padding:13px 20px;cursor:pointer;
-  font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
-  font-size:14px;letter-spacing:.01em;
-  transition:transform .2s,box-shadow .2s;
-  box-shadow:0 4px 16px rgba(29,29,31,.16);
-  min-width:0;max-width:100%;
-}
-.brew-install:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(29,29,31,.24);}
-.brew-install .prompt{color:#8e8e93;user-select:none;}
-.brew-install svg{width:15px;height:15px;opacity:.75;flex:none;}
-.brew-install .copied{display:none;color:var(--green);font-family:var(--body);font-size:13px;font-weight:500;}
-/* Hero 安装区：终端与上方按钮行同宽——宽度由按钮行决定（不写死像素），终端跟随 */
 .v3-install{display:flex;flex-direction:column;align-items:flex-start;min-width:0;max-width:100%;}
 .v3-stack{display:flex;flex-direction:column;align-items:stretch;width:fit-content;max-width:100%;}
-.v3-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px;}
-.v3-term{
-  margin-top:18px;width:100%;border-radius:12px;overflow:hidden;
-  background:#1d1d1f;box-shadow:0 14px 36px -14px rgba(0,0,0,.42);
+.v3-actions{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:4px;}
+.btn-primary,.btn-store{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:14px 28px;white-space:nowrap;text-decoration:none;border-radius:8px;
+  font-size:15px;font-weight:600;transition:transform .2s,box-shadow .2s,border-color .2s;
 }
+.btn-primary{background:var(--btn-bg);color:var(--btn-ink);box-shadow:0 4px 16px rgba(0,0,0,.18);}
+.btn-primary:hover{transform:translateY(-2px);}
+.btn-store{background:var(--card);color:var(--ink);border:1px solid var(--border);}
+.btn-store:hover{border-color:var(--muted);transform:translateY(-2px);}
+.btn-primary svg,.btn-store svg{width:18px;height:18px;}
+.v3-term{margin-top:18px;width:100%;border-radius:12px;overflow:hidden;background:#1d1d1f;box-shadow:0 14px 36px -14px rgba(0,0,0,.42);}
 .v3-bar{display:flex;align-items:center;gap:6px;padding:9px 12px;background:#2a2a2c;border-bottom:1px solid rgba(255,255,255,.07);}
 .v3-dot{width:10px;height:10px;border-radius:50%;flex:none;}
-.v3-dot.r{background:#ff5f57;}
-.v3-dot.y{background:#febc2e;}
-.v3-dot.g{background:#28c840;}
+.v3-dot.r{background:#ff5f57;}.v3-dot.y{background:#febc2e;}.v3-dot.g{background:#28c840;}
 .v3-title{margin-left:8px;font-size:11px;color:#8e8e93;letter-spacing:.03em;}
 .v3-body{
   display:flex;align-items:center;gap:10px;width:100%;
@@ -291,349 +310,313 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
   margin-left:auto;flex:none;display:inline-flex;align-items:center;gap:5px;
   font-family:var(--body);font-size:12px;font-weight:500;color:#c7c7cc;
   border:1px solid rgba(255,255,255,.18);border-radius:6px;padding:4px 9px;
-  transition:border-color .18s,color .18s,background .18s;
 }
-.v3-body:hover .v3-copy{border-color:rgba(255,255,255,.42);color:#fff;background:rgba(255,255,255,.07);}
+.v3-body:hover .v3-copy{border-color:rgba(255,255,255,.42);color:#fff;}
 .v3-copy svg{width:12px;height:12px;}
 .v3-body .copied{display:none;margin-left:auto;color:#4ade80;font-size:12px;}
 .v3-badge{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--muted);margin-top:14px;}
 .v3-badge svg{width:14px;height:14px;color:var(--green);flex:none;}
 .v3-note{font-size:12px;color:var(--muted);margin-top:14px;line-height:1.6;max-width:540px;}
-@media(max-width:430px){
-  .brew-install{font-size:12px;padding:12px 14px;gap:8px;}
+.bar-hero{display:flex;align-items:center;gap:56px;}
+.bar-ring-wrap{flex:0 0 240px;display:flex;justify-content:center;}
+.bar-ring-svg{width:220px;height:220px;color:var(--ink);}
+.bar-ring-svg .ring-track{fill:none;stroke:var(--border);stroke-width:5.4;}
+.bar-ring-svg .ring-well{fill:var(--ring-well);}
+.bar-copy{flex:1;min-width:0;}
+.bar-copy h2{font-size:clamp(28px,3.5vw,40px);margin-bottom:14px;}
+.bar-copy .lead{font-size:16px;}
+.bar-note{margin-top:14px;color:var(--accent);font-weight:500;font-size:14px;}
+.bar-alt{margin:48px 0 16px;font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--muted);}
+.bar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+.bar-card{
+  padding:18px 16px;border:1px solid var(--border);border-radius:14px;background:var(--card);min-width:0;
 }
-
-/* ============ Feedback ============ */
-.feedback{text-align:center;}
+.bar-card b{display:block;font-size:15px;margin-bottom:4px;}
+.bar-card span{font-size:13px;color:var(--muted);}
+.perf h2{font-size:clamp(36px,5vw,54px);}
+.perf .lead{max-width:720px;margin-top:16px;}
+.stats{display:flex;gap:40px;justify-content:center;margin-top:48px;flex-wrap:wrap;}
+.stat .n{font-family:var(--display);font-weight:600;font-size:clamp(36px,5vw,52px);letter-spacing:-.03em;}
+.stat .n small{font-size:22px;color:var(--muted);font-weight:500;}
+.stat .l{font-size:14px;color:var(--muted);margin-top:6px;}
+.sep{width:1px;background:var(--border);align-self:stretch;}
+.mod-head h2,.block-head h2{font-size:clamp(32px,4.5vw,48px);margin-top:4px;}
+.mod-head .lead,.block-head .lead{margin-top:14px;}
+.fine{margin-top:14px;font-size:13px;color:var(--muted);max-width:720px;}
+.mod-grid,.settings-grid{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:28px 22px;margin-top:36px;
+}
+.settings-grid{grid-template-columns:repeat(3,1fr);}
+.mod-card,.set-card,.thumb,.shot{min-width:0;}
+.pair{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-top:36px;}
+.pair .col{flex:1 1 260px;max-width:360px;min-width:0;}
+.stack{display:flex;flex-direction:column;gap:28px;align-items:center;margin-top:36px;}
+.stack .wide{width:min(100%,960px);}
+.stack .mid{width:min(100%,640px);}
+.narrow-shot{width:min(100%,380px);margin:28px auto 0;}
+.direct-row{display:flex;gap:40px;align-items:center;margin-top:8px;}
+.direct-copy{flex:1;min-width:0;}
+.direct-copy h2{font-size:clamp(32px,4vw,46px);margin:8px 0 14px;}
+.direct-shot{flex:0 0 320px;min-width:0;}
+.badge{
+  display:inline-block;font-size:12px;font-weight:650;letter-spacing:.03em;
+  color:var(--accent);background:var(--accent-soft);border-radius:999px;padding:4px 10px;
+}
+.compare h2{font-size:clamp(30px,4vw,40px);}
+.compare .lead{margin-top:14px;}
+.compare-scroll{overflow-x:auto;margin-top:28px;max-width:100%;}
+.compare-table{
+  width:100%;min-width:640px;border-collapse:separate;border-spacing:0;
+  background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;
+}
+.compare-table th,.compare-table td{
+  padding:13px 16px;font-size:14px;text-align:center;border-top:1px solid var(--border);
+}
+.compare-table thead th{border-top:none;background:var(--compare-head);font-weight:600;}
+.compare-table td:first-child,.compare-table th:first-child{text-align:left;}
+.compare-table td:first-child{font-weight:500;}
+.compare-yes{color:var(--green);font-weight:600;}
+.compare-no{color:var(--danger);font-weight:600;}
+.compare-note{font-size:12px;color:var(--muted);margin-top:14px;}
+.download h2{font-size:clamp(32px,4.5vw,46px);margin-bottom:16px;}
+.download .lead{margin:0 auto 32px;}
+.download-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;margin-bottom:18px;}
+.brew-hint{font-size:13px;color:var(--muted);margin:2px 0 12px;}
+.brew-install{
+  display:inline-flex;align-items:center;gap:10px;max-width:100%;
+  background:var(--surface);color:#f5f5f7;border:none;border-radius:10px;
+  padding:13px 18px;cursor:pointer;
+  font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;font-size:14px;
+}
+.brew-install .prompt{color:#8e8e93;}
+.brew-install svg{width:15px;height:15px;opacity:.75;flex:none;}
+.brew-install .copied{display:none;color:var(--green);font-family:var(--body);font-size:13px;}
+.download-note{font-size:13px;color:var(--muted);margin-top:16px;}
 .feedback h2{font-size:clamp(28px,4vw,36px);margin-bottom:12px;}
-.feedback .lead{margin:0 auto 32px;max-width:540px;}
+.feedback .lead{margin-bottom:28px;}
 .feedback-actions{display:flex;gap:16px;justify-content:center;flex-wrap:wrap;}
 .feedback-btn{
   display:inline-flex;align-items:center;justify-content:center;gap:8px;
-  padding:12px 32px;min-width:180px;
-  border:1px solid var(--border);border-radius:8px;
-  text-decoration:none;font-size:14px;font-weight:500;color:var(--ink);
-  background:#fff;transition:border-color .2s,transform .2s;
+  padding:12px 28px;min-width:180px;border:1px solid var(--border);border-radius:8px;
+  text-decoration:none;font-size:14px;font-weight:500;color:var(--ink);background:var(--card);
 }
-.feedback-btn:hover{border-color:#999;transform:translateY(-1px);}
+.feedback-btn:hover{border-color:var(--muted);}
 .feedback-btn svg{width:18px;height:18px;}
+.xhs{width:18px;height:18px;filter:var(--xhs-filter);}
 .feedback-hint{font-size:12px;color:var(--muted);margin-top:16px;}
-
-/* ============ Footer ============ */
-.footer{
-  padding:40px 0;border-top:1px solid var(--border);
-  font-size:13px;color:var(--muted);
-}
+.footer{padding:40px 0;border-top:1px solid var(--border);font-size:13px;color:var(--muted);}
 .footer-inner{
   max-width:1080px;margin:0 auto;padding:0 32px;
   display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;
 }
 .footer-brand{display:flex;align-items:center;gap:8px;text-decoration:none;color:var(--ink);font-weight:600;font-size:14px;}
 .footer-brand .ring{width:20px;height:20px;}
-.footer-links{display:flex;gap:20px;list-style:none;}
-.footer-links a{color:var(--muted);text-decoration:none;font-size:13px;transition:color .2s;}
+.footer-links{display:flex;gap:20px;list-style:none;flex-wrap:wrap;}
+.footer-links a{color:var(--muted);text-decoration:none;}
 .footer-links a:hover{color:var(--ink);}
-
-/* ============ Responsive ============ */
+.hero-row>*,.thumb-grid>*,.mod-grid>*,.settings-grid>*,.pair>*,.bar-grid>*,.direct-row>*{min-width:0;}
 @media(max-width:900px){
-  .hero .section-inner{flex-direction:column-reverse;text-align:center;gap:24px;}
-  .hero-right{flex:none;width:100%;}
-  .v3-actions,.hero-highlights{justify-content:center;}
+  .hero-row,.bar-hero,.direct-row{flex-direction:column;text-align:center;align-items:center;}
+  .direct-row{align-items:stretch;text-align:left;}
+  .hero-right,.bar-ring-wrap{flex:none;width:100%;}
+  .hero-highlights,.v3-actions{justify-content:center;}
   .v3-install{align-items:center;width:100%;}
   .v3-note{text-align:center;margin-left:auto;margin-right:auto;}
-  .fan{width:320px;height:320px;margin:0 auto;}
-  .fan img{width:200px;margin-left:-100px;margin-top:-150px;}
-  .fan .back{transform:translate(-36px,20px) rotate(-9deg) scale(.86);}
-  .fan .mid{transform:translate(36px,20px) rotate(9deg) scale(.86);}
-  .fan .front{transform:translate(0,0) rotate(0deg) scale(1);}
-  .fan:hover .back{transform:translate(-180px,-8px) rotate(0deg) scale(.84);}
-  .fan:hover .mid{transform:translate(180px,-8px) rotate(0deg) scale(.84);}
-  .fan:hover .front{transform:translate(0,-8px) rotate(0deg) scale(.84);}
-  .themes-stage{flex-direction:column;gap:32px;}
-  .swap-icon{display:none;}
-  .gallery-grid{grid-template-columns:repeat(2,1fr);}
-  .gallery-cell.center{grid-column:1/3;}
-  .stats{gap:28px;}
-  .bar-hero{flex-direction:column;text-align:center;gap:32px;}
-  .bar-ring-wrap{flex:none;}
-  .bar-grid{grid-template-columns:repeat(3,1fr);}
+  .bar-copy .lead{margin-left:auto;margin-right:auto;}
+  .thumb-grid,.mod-grid{grid-template-columns:1fr 1fr;}
+  .settings-grid{grid-template-columns:1fr 1fr;}
+  .direct-shot{flex:none;width:min(100%,340px);margin:0 auto;}
+}
+@media(max-width:820px){
+  .nav-links{display:none;}
 }
 @media(max-width:600px){
-  .nav-links{display:none;}
-  .hero{padding:100px 0 72px;}
-  .hero-highlights{justify-content:center;gap:6px 12px;}
+  .hero{padding:108px 0 56px;}
+  .hero-highlights{gap:8px 12px;justify-content:center;}
   .hero-highlights span+span{margin-left:0;padding-left:0;border-left:0;}
-  /* 按钮竖排后终端铺满整栏，不再跟随按钮行的 fit-content 宽度 */
   .v3-stack{width:100%;}
-  .v3-actions{flex-direction:column;align-items:stretch;}
-  .v3-actions .btn-primary,.v3-actions .btn-store{justify-content:center;}
-  .gallery-grid{grid-template-columns:1fr 1fr;}
-  .gallery-cell.center{grid-column:1/3;}
+  .v3-actions,.download-actions{flex-direction:column;align-items:stretch;}
   .bar-grid{grid-template-columns:1fr;}
-  .download-actions{flex-direction:column;align-items:center;}
+  section{padding:72px 0;}
+}
+@media(max-width:420px){
+  .nav-inner,.section-inner,.footer-inner{padding-left:16px;padding-right:16px;}
+  .thumb-grid,.mod-grid,.settings-grid{grid-template-columns:1fr;gap:22px;}
+  .stats{gap:18px;}
+  .sep{display:none;}
+  h1{font-size:36px;}
 }
 @media(prefers-reduced-motion:reduce){
   html{scroll-behavior:auto;}
-  .fade-in{opacity:1;transform:none;transition:none;}
-  .fan img,.btn-primary,.btn-store,.feedback-btn{transition:none;}
-  .fan:hover .front{transform:translate(0,0) rotate(0deg) scale(1);}
-  .fan:hover .back{transform:translate(-58px,30px) rotate(-9deg) scale(.88);opacity:.82;}
-  .fan:hover .mid{transform:translate(58px,30px) rotate(9deg) scale(.88);opacity:.82;}
+  html.js .fade-in{opacity:1;transform:none;transition:none;}
+  .btn-primary,.btn-store{transition:none;}
 }
+
 </style>
 </head>
 <body>
-
-<!-- Navigation -->
 <nav class="nav" id="nav">
   <div class="nav-inner">
-    <a href="#" class="nav-brand">
-      <svg class="ring" viewBox="0 0 18 18" aria-hidden="true">
-        <circle cx="9" cy="9" r="6.6" fill="none" stroke="#d2d2d7" stroke-width="1.35"/>
-        <path d="M 9 2.4 A 6.6 6.6 0 1 1 3.3 12.3" fill="none" stroke="#1d1d1f" stroke-width="2.2" stroke-linecap="round"/>
-        <circle cx="9" cy="9" r="2.4" fill="#20c997"/>
-      </svg>
-      <span class="name">Hagimi Monitor</span>
-    </a>
-    <ul class="nav-links">
-      <li><a href="#features">功能</a></li>
-      <li><a href="#themes">主题</a></li>
-      <li><a href="#download">下载</a></li>
-      <li>
-        <a href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener" class="nav-github">
-          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.73.5.67 5.56.67 11.83c0 5.01 3.24 9.26 7.74 10.76.57.1.78-.25.78-.55v-1.94c-3.15.68-3.81-1.52-3.81-1.52-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.69.08-.69 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.51-.29-5.16-1.26-5.16-5.6 0-1.24.44-2.25 1.17-3.04-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.15 1.16a10.95 10.95 0 0 1 5.74 0c2.18-1.47 3.14-1.16 3.14-1.16.63 1.57.24 2.73.12 3.02.73.79 1.16 1.8 1.16 3.04 0 4.35-2.65 5.31-5.17 5.59.41.36.77 1.06.77 2.14v3.17c0 .31.2.66.79.55 4.49-1.5 7.73-5.75 7.73-10.76C23.33 5.56 18.27.5 12 .5z"/></svg>
-          <span id="navGithubCount">★</span>
-        </a>
-      </li>
-    </ul>
+    <a href="#features" class="nav-brand"><svg class="ring brand-ring" viewBox="0 0 18 18" aria-hidden="true"><circle class="track" cx="9" cy="9" r="6.6"/><path class="arc" d="M 9 2.4 A 6.6 6.6 0 1 1 3.3 12.3"/><circle class="dot" cx="9" cy="9" r="2.4"/></svg><span class="name">Hagimi Monitor</span></a>
+    <div class="nav-actions">
+      <ul class="nav-links">
+        <li><a href="#features">功能</a></li><li><a href="#modules">模块</a></li><li><a href="#themes">主题</a></li><li><a href="#stats">统计</a></li><li><a href="#download">下载</a></li>
+        <li><a href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener" class="nav-github"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.67 5.56.67 11.83c0 5.01 3.24 9.26 7.74 10.76.57.1.78-.25.78-.55v-1.94c-3.15.68-3.81-1.52-3.81-1.52-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.69.08-.69 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.51-.29-5.16-1.26-5.16-5.6 0-1.24.44-2.25 1.17-3.04-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.15 1.16a10.95 10.95 0 0 1 5.74 0c2.18-1.47 3.14-1.16 3.14-1.16.63 1.57.24 2.73.12 3.02.73.79 1.16 1.8 1.16 3.04 0 4.35-2.65 5.31-5.17 5.59.41.36.77 1.06.77 2.14v3.17c0 .31.2.66.79.55 4.49-1.5 7.73-5.75 7.73-10.76C23.33 5.56 18.27.5 12 .5z"/></svg><span id="navGithubCount">★</span></a></li>
+      </ul>
+      <a class="lang-link" href="../en/" data-lang="en">EN</a>
+      <button type="button" class="theme-toggle" id="themeToggle" aria-pressed="false" data-label-dark="切换到深色外观" data-label-light="切换到浅色外观" aria-label="切换到深色外观"><svg class="moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 14.5A8.5 8.5 0 1 1 9.5 3 7 7 0 0 0 21 14.5z"/></svg><svg class="sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    </div>
   </div>
 </nav>
 
-<!-- Hero: 监测功能全面 -->
-<section class="hero" id="features">
+<section class="hero baked" id="features">
   <div class="section-inner">
-    <div class="hero-left fade-in">
-      <div class="kicker">八大监控模块，一屏尽览</div>
-      <h1>全方位监测<br>一目了然</h1>
-      <p class="lead">CPU、GPU、内存、存储、网络、电池、蓝牙、显示器——菜单栏轻点即展开实时面板，含折线趋势、占用进度与 Top 进程明细，并内置数据统计报告与快捷功能。</p>
-      <div class="hero-highlights" aria-label="功能概览">
-        <span>八大模块实时监测</span><span>历史统计报告</span><span>常用快捷控制</span>
-      </div>
-      <div class="v3-install">
-        <div class="v3-stack">
-          <div class="v3-actions">
-            <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              GitHub 免费下载
-            </a>
-            <a href="https://apps.apple.com/app/hagimimonitor/id6792169908" target="_blank" rel="noopener" class="btn-store">
-              <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.1.67.97 1.47 2.06 2.53 2.02 1.02-.04 1.4-.65 2.63-.65 1.23 0 1.57.65 2.65.63 1.09-.02 1.79-.99 2.46-1.97.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.24zM15.03 6.29c.56-.68.94-1.63.83-2.57-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.9.07 1.83-.46 2.4-1.13z"/></svg>
-              App Store 支持购买
-            </a>
-          </div>
-          <div class="v3-term">
-            <div class="v3-bar">
-              <span class="v3-dot r"></span><span class="v3-dot y"></span><span class="v3-dot g"></span>
-              <span class="v3-title">Homebrew</span>
+    <div class="hero-row">
+      <div class="hero-left fade-in">
+        <div class="kicker">八大监控模块，一屏尽览</div>
+        <h1>全方位监测<br>一目了然</h1>
+        <p class="lead">CPU、GPU、内存、存储、网络、电池、蓝牙、显示器——菜单栏轻点即展开实时面板，含折线趋势、占用进度与 Top 进程明细，并内置数据统计报告与快捷功能。</p>
+        <div class="hero-highlights"><span>八大模块实时监测</span><span>历史统计报告</span><span>常用快捷控制</span></div>
+        <div class="v3-install">
+          <div class="v3-stack">
+            <div class="v3-actions">
+              <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>GitHub 免费下载</a>
+              <a href="https://apps.apple.com/app/hagimimonitor/id6792169908" target="_blank" rel="noopener" class="btn-store"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.04c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.1.67.97 1.47 2.06 2.53 2.02 1.02-.04 1.4-.65 2.63-.65 1.23 0 1.57.65 2.65.63 1.09-.02 1.79-.99 2.46-1.97.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.24zM15.03 6.29c.56-.68.94-1.63.83-2.57-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.9.07 1.83-.46 2.4-1.13z"/></svg>App Store 支持购买</a>
             </div>
-            <button class="v3-body" type="button" data-copy title="点击复制安装命令" aria-label="复制 Homebrew 安装命令">
-              <span class="prompt">$</span>
-              <span class="cmd">brew install hagimimonitordirect</span>
-              <span class="v3-copy">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                复制
-              </span>
-              <span class="copied">已复制 ✓</span>
-            </button>
+            <div class="v3-term">
+              <div class="v3-bar"><span class="v3-dot r"></span><span class="v3-dot y"></span><span class="v3-dot g"></span><span class="v3-title">Homebrew</span></div>
+              <button class="v3-body" type="button" title="点击复制安装命令" aria-label="复制 Homebrew 安装命令"><span class="prompt">$</span><span class="cmd">brew install hagimimonitordirect</span><span class="v3-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>复制</span><span class="copied">已复制 ✓</span></button>
+            </div>
+            <div class="v3-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span>已收录于 Homebrew 官方 Cask 仓库 · 也可直接下载 DMG 手动安装</span></div>
           </div>
-          <div class="v3-badge">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-            已收录于 Homebrew 官方 Cask 仓库 · 也可直接下载 DMG 手动安装
-          </div>
+          <p class="v3-note">GitHub 版完全免费，版本更新最快、功能最全；App Store 版付费下载，且受沙盒限制，部分功能可能受影响。什么？你问为啥要花钱买一个功能不全的版本？其实我也推荐你下载 GitHub 版——App Store 版是我留的打赏渠道。感谢支持 (*^▽^*)</p>
         </div>
-        <p class="v3-note">GitHub 版完全免费，版本更新最快、功能最全；App Store 版付费下载，且受沙盒限制，部分功能可能受影响。什么？你问为啥要花钱买一个功能不全的版本？其实我也推荐你下载 GitHub 版——App Store 版是我留的打赏渠道。感谢支持 (*^▽^*)</p>
+      </div>
+      <div class="hero-right fade-in">
+        <div class="hero-vid"><div class="theme-vid" aria-hidden="true">
+      <video class="for-light" muted loop playsinline preload="none" width="780" height="936" poster="../video/hero-light-poster.png"><source src="../video/hero-light.mp4" type="video/mp4"></video>
+      <video class="for-dark" muted loop playsinline preload="none" width="780" height="936" poster="../video/hero-dark-poster.png"><source src="../video/hero-dark.mp4" type="video/mp4"></video>
+    </div></div>
+        <p class="vid-cap">菜单栏里的实时监控面板</p>
       </div>
     </div>
-    <div class="hero-right fade-in">
-      <div class="fan">
-        <img class="back" src="../images/vitality-dark.png" alt="Vibrant 深色主题面板">
-        <img class="mid" src="../images/balance-light.png" alt="Balanced 浅色主题面板">
-        <img class="front" src="../images/vitality-light.png" alt="Vibrant 浅色主题面板">
-      </div>
+    <div class="theme-preview fade-in" id="themes">
+      <div class="kicker">Balanced · Vibrant</div>
+      <h2>两套主题，四种外观</h2>
+      <p class="lead">中性的平衡，或彩色玻璃的活力，各自都有浅色和深色。下面四张是配色预览，不随本页外观切换；再往下的功能截图会跟着当前浅色 / 深色走。</p>
+      <div class="thumb-grid"><figure class="thumb"><img src="../images/zh/panel-overview-balanced-light.png" width="747" height="856" alt="平衡配色，浅色" loading="lazy" decoding="async"><figcaption><b>平衡</b>浅色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-balanced-dark.png" width="753" height="862" alt="平衡配色，深色" loading="lazy" decoding="async"><figcaption><b>平衡</b>深色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-vibrant-light.png" width="747" height="856" alt="活力配色，浅色" loading="lazy" decoding="async"><figcaption><b>活力</b>浅色</figcaption></figure><figure class="thumb"><img src="../images/zh/panel-overview-vibrant-dark.png" width="753" height="862" alt="活力配色，深色" loading="lazy" decoding="async"><figcaption><b>活力</b>深色</figcaption></figure></div>
     </div>
   </div>
 </section>
 
-<!-- Menu Bar Styles -->
 <section class="bar-styles" id="bar-styles">
   <div class="section-inner fade-in">
     <div class="bar-hero">
       <div class="bar-ring-wrap">
-        <svg class="bar-ring-svg" viewBox="0 0 120 120">
-          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="5.4"/>
-          <circle id="ringArc" cx="60" cy="60" r="50" fill="none"
-            stroke="#1d1d1f" stroke-width="8.8" stroke-linecap="round"
-            stroke-dasharray="314" stroke-dashoffset="220"
-            transform="rotate(-90 60 60)"/>
-          <circle cx="60" cy="60" r="19.2" fill="rgba(0,0,0,0.04)"/>
+        <svg class="bar-ring-svg" viewBox="0 0 120 120" aria-hidden="true">
+          <circle class="ring-track" cx="60" cy="60" r="50"/>
+          <circle id="ringArc" cx="60" cy="60" r="50" fill="none" stroke="currentColor" stroke-width="8.8" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="220" transform="rotate(-90 60 60)"/>
+          <circle class="ring-well" cx="60" cy="60" r="19.2"/>
           <circle id="ringDot" cx="60" cy="60" r="14" fill="#148057"/>
         </svg>
       </div>
-      <div class="bar-hero-text">
+      <div class="bar-copy">
         <h2>综合评估系统压力<br>精准反馈</h2>
         <p class="lead">负载环融合 CPU、GPU 与内存压力，通过 Softmax 聚合算法生成综合分数。颜色随负载状态实时变化——绿色空闲、青色工作、橙色繁忙、红色高压。</p>
-        <p class="lead" style="margin-top:14px;color:var(--accent);font-weight:500;font-size:14px;">如果你不喜欢，没关系——我们另有多种样式供选择 ↓</p>
+        <p class="bar-note">也可以换成图标、文字或紧凑三种单行样式，总宽不随数值跳动。</p>
       </div>
     </div>
-    <div class="bar-alt-title">其他菜单栏样式</div>
-    <div class="bar-grid">
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/图标.png" alt="图标模式"></div>
-        <div class="bar-card-text"><span class="bar-label">图标</span><br><span class="bar-desc">经典图标，简洁不打扰</span></div>
-      </div>
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/文字.png" alt="文字模式"></div>
-        <div class="bar-card-text"><span class="bar-label">文字</span><br><span class="bar-desc">数值直显，精确掌握使用率</span></div>
-      </div>
-      <div class="bar-card">
-        <div class="bar-card-img"><img src="../images/bar_img/紧凑.png" alt="紧凑模式"></div>
-        <div class="bar-card-text"><span class="bar-label">紧凑</span><br><span class="bar-desc">更窄占用，为小屏而生</span></div>
-      </div>
-    </div>
+    <div class="bar-alt">其他菜单栏样式</div>
+    <div class="bar-grid"><article class="bar-card"><b>图标</b><span>经典图标，简洁不打扰</span></article><article class="bar-card"><b>文字</b><span>数值直显，精确掌握使用率</span></article><article class="bar-card"><b>紧凑</b><span>更窄占用，为小屏而生</span></article></div>
   </div>
 </section>
 
-<script>
-(function(){
-  var arc = document.getElementById('ringArc');
-  var dot = document.getElementById('ringDot');
-  if(!arc||!dot) return;
-  var C = 2 * Math.PI * 50, load = 30, target = 30;
-  var colors = [[0,'#148057'],[25,'#008c6b'],[50,'#cc700f'],[78,'#c71f1a']];
-  function gc(l){ for(var i=colors.length-1;i>=0;i--){ if(l>=colors[i][0]) return colors[i][1]; } return colors[0][1]; }
-  function render(){ arc.setAttribute('stroke-dasharray',C.toFixed(1)); arc.setAttribute('stroke-dashoffset',(C-(load/100)*C).toFixed(1)); dot.setAttribute('fill',gc(load)); }
-  function step(){ var d=target-load; if(Math.abs(d)<.5){load=target;}else{load+=d*.12;} render(); requestAnimationFrame(step); }
-  function nt(){ target=Math.random()*85+5; setTimeout(nt,2000+Math.random()*3000); }
-  render();
-  if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    requestAnimationFrame(step); setTimeout(nt,1500);
-  }
-})();
-</script>
-
-<!-- Lightweight -->
-<section class="lightweight" id="lightweight">
+<section class="perf band center" id="lightweight">
   <div class="section-inner fade-in">
-    <svg class="ring" viewBox="0 0 18 18" style="width:88px;height:88px;margin:0 auto 12px;display:block;" aria-hidden="true">
-      <circle cx="9" cy="9" r="6.6" fill="none" stroke="#d2d2d7" stroke-width="1.1"/>
-      <path d="M 9 2.4 A 6.6 6.6 0 0 1 14.1 5.2" fill="none" stroke="#1d1d1f" stroke-width="2" stroke-linecap="round"/>
-      <circle cx="9" cy="9" r="2.2" fill="#20c997"/>
-    </svg>
     <div class="kicker">常驻菜单栏，几乎无感</div>
     <h2>轻量运行<br>不打扰你的 Mac</h2>
-    <p class="lead" style="text-align:center;">原生 Swift 打造，采样节流与主题缓存让它安静待在角落。需要时抬手即见，不需要时几乎察觉不到。</p>
-    <div class="stats">
-      <div class="stat"><div class="n">&lt;5<small>%</small></div><div class="l">静置 CPU 占用</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n">120<small>fps</small></div><div class="l">平滑动画上限</div></div>
-      <div class="sep"></div>
-      <div class="stat"><div class="n">1<small>次点击</small></div><div class="l">展开完整面板</div></div>
-    </div>
+    <p class="lead">原生 Swift 打造，采样节流与主题缓存让它安静待在角落。需要时抬手即见，不需要时几乎察觉不到。</p>
+    <div class="stats"><div class="stat"><div class="n">&lt;5<small>%</small></div><div class="l">静置 CPU 占用</div></div><div class="sep"></div><div class="stat"><div class="n">120<small>fps</small></div><div class="l">平滑动画上限</div></div><div class="sep"></div><div class="stat"><div class="n">1<small>次点击</small></div><div class="l">展开完整面板</div></div></div>
   </div>
 </section>
 
-<!-- Themes -->
-<section class="themes" id="themes">
+<section id="modules">
   <div class="section-inner fade-in">
-    <div>
-      <div class="kicker">Balanced · Vibrant · 明暗自适应</div>
-      <h2>两套主题，随心切换</h2>
-      <p class="lead">中性沉稳的 Balanced，或彩色玻璃的 Vibrant——跟随系统明暗自动适配，一键切换即时生效。</p>
+    <div class="mod-head">
+      <div class="kicker">展开即见详情</div>
+      <h2>点开一行，看完这块硬件</h2>
+      <p class="lead">菜单栏点开即可展开。下面是活力配色下的 CPU、GPU、内存、存储、网络和电源；蓝牙设备电量与显示器信息也在同一块面板里。</p>
+      <p class="fine">温度、风扇转速，以及存储 / 网络的进程列表仅 GitHub 直连版提供。App Store 版受沙盒限制，没有这些读数。</p>
     </div>
-    <div class="themes-stage">
-      <div class="themes-card">
-        <img src="../images/balance-light.png" alt="Balanced 浅色主题">
-        <div class="cap">Balanced<small>中性灰玻璃 · 浅色</small></div>
-      </div>
-      <div class="swap-icon">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3l4 4-4 4"/><path d="M21 7H8a5 5 0 0 0-5 5"/><path d="M7 21l-4-4 4-4"/><path d="M3 17h13a5 5 0 0 0 5-5"/></svg>
-      </div>
-      <div class="themes-card d">
-        <img src="../images/vitality-dark.png" alt="Vibrant 深色主题">
-        <div class="cap">Vibrant<small>彩色玻璃 · 深色</small></div>
-      </div>
-    </div>
+    <div class="mod-grid"><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-cpu-vibrant-light.png" data-dark="../images/zh/panel-cpu-vibrant-dark.png" width="747" height="1431" alt="CPU 模块：核心分组、热压力与进程列表" loading="lazy" decoding="async"><figcaption><b>CPU</b>系统、用户与空闲占用，P/E 核心分组和热压力，以及进程列表。逐核圆环和温度读取仅直连版提供；M6 与 M5 Pro/Max 会显示 S/P/E 三组。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-gpu-vibrant-light.png" data-dark="../images/zh/panel-gpu-vibrant-dark.png" width="747" height="1310" alt="GPU 模块：显存、渲染与分块、进程占用" loading="lazy" decoding="async"><figcaption><b>GPU</b>图形负载、渲染与分块、显存，以及按进程列出的占用。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-memory-vibrant-light.png" data-dark="../images/zh/panel-memory-vibrant-dark.png" width="747" height="1258" alt="内存模块：压力、交换、压缩与进程" loading="lazy" decoding="async"><figcaption><b>内存</b>已用容量、内存压力、交换与压缩内存，以及占用最高的进程。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-storage-vibrant-light.png" data-dark="../images/zh/panel-storage-vibrant-dark.png" width="747" height="1206" alt="存储模块：容量、读写与健康状态" loading="lazy" decoding="async"><figcaption><b>存储</b>系统盘容量、读写速率与 SMART 健康。按进程拆开的读写仅直连版提供。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-network-vibrant-light.png" data-dark="../images/zh/panel-network-vibrant-dark.png" width="747" height="1258" alt="网络模块：速率、Wi-Fi 信号与 IP" loading="lazy" decoding="async"><figcaption><b>网络</b>上传 / 下载速率、接口类型、Wi-Fi 信号与 IP。按进程拆开的流量仅直连版提供。</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/zh/panel-battery-vibrant-light.png" data-dark="../images/zh/panel-battery-vibrant-dark.png" width="747" height="1327" alt="电源模块：电量、功耗与流向" loading="lazy" decoding="async"><figcaption><b>电源</b>电量、供电状态、整机与部件功耗，以及电源流向。</figcaption></figure></div>
   </div>
 </section>
 
-<!-- Gallery: All Styles -->
-<section class="gallery">
-  <div class="section-inner fade-in">
-    <h2>每一种样式，都精心打磨</h2>
-    <div class="gallery-grid">
-      <div class="gallery-cell"><img src="../images/balance-light.png" alt="Balanced 浅色"><div class="lab"><b>Balanced</b>浅色</div></div>
-      <div class="gallery-cell d"><img src="../images/balance-dark.png" alt="Balanced 深色"><div class="lab"><b>Balanced</b>深色</div></div>
-      <div class="gallery-cell"><img src="../images/vitality-light.png" alt="Vibrant 浅色"><div class="lab"><b>Vibrant</b>浅色</div></div>
-      <div class="gallery-cell d"><img src="../images/vitality-dark.png" alt="Vibrant 深色"><div class="lab"><b>Vibrant</b>深色</div></div>
-      <div class="gallery-cell center"><img src="../images/detailed-data.png" alt="展开详情态"><div class="lab"><b>详情展开</b>Top 进程 · 明细</div></div>
-    </div>
-  </div>
-</section>
-
-<!-- Panel Reordering -->
-<section class="lightweight" id="reorder">
+<section class="baked center" id="reorder">
   <div class="section-inner fade-in">
     <div class="kicker">面板布局，随手编排</div>
     <h2>自定义排序</h2>
-    <p class="lead" style="text-align:center;max-width:720px;">所有模块行与指标格支持长按拖动排序，拖起时浮起预览、落点实时归位；也可右键（触控板双指轻点）呼出菜单，按上下左右逐格移动，顺序随时可恢复。</p>
-    <div class="stack reorder-shots">
-      <div class="shot narrow">
-        <img src="../images/panel-reorder-drag.gif" alt="长按拖动交换位置">
-        <div class="shot-cap"><b>长按拖动</b>拖起浮起预览，松手实时归位。</div>
-      </div>
-      <div class="shot narrow">
-        <img src="../images/panel-reorder-menu.gif" alt="菜单方向移动换位">
-        <div class="shot-cap"><b>菜单换位</b>右键呼出，上下左右逐格移动。</div>
-      </div>
+    <p class="lead">所有模块行与指标格支持长按拖动排序，拖起时浮起预览、落点实时归位；也可右键（触控板双指轻点）呼出菜单，按上下左右逐格移动，顺序随时可恢复。</p>
+    <div class="pair">
+      <figure class="col"><div class="theme-vid" aria-hidden="true">
+      <video class="for-light" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-drag-light.mp4" type="video/mp4"></video>
+      <video class="for-dark" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-drag-dark.mp4" type="video/mp4"></video>
+    </div><figcaption><b>长按拖动</b>拖起浮起预览，松手实时归位。</figcaption></figure>
+      <figure class="col"><div class="theme-vid" aria-hidden="true">
+      <video class="for-light" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-menu-light.mp4" type="video/mp4"></video>
+      <video class="for-dark" muted loop playsinline preload="none" width="780" height="936"><source src="../video/feature-reorder-menu-dark.mp4" type="video/mp4"></video>
+    </div><figcaption><b>菜单换位</b>右键呼出，上下左右逐格移动。</figcaption></figure>
     </div>
   </div>
 </section>
 
-<!-- Data Statistics -->
-<section class="stats-showcase" id="stats">
+<section class="band" id="stats">
   <div class="section-inner fade-in">
-    <div class="kicker">不止监控</div>
-    <h2>数据统计</h2>
-    <p class="lead">运行数据分层聚合入库，在原生数据报表中查看趋势曲线、热力图、健康评分与历史走势；需要时也可导出独立 HTML 文件。</p>
+    <div class="block-head">
+      <div class="kicker">不止监控</div>
+      <h2>数据统计</h2>
+      <p class="lead">运行数据分层聚合入库，在原生数据报表中查看趋势曲线、热力图、健康评分与历史走势；需要时也可导出独立 HTML 文件。</p>
+    </div>
     <div class="stack">
-      <div class="shot">
-        <img src="../images/stats-report.png" alt="原生数据统计报表">
-        <div class="shot-cap"><b>原生数据报表</b>健康评分、趋势曲线与热力图，默认展示今日，历史一键回看。</div>
-      </div>
-      <div class="shot">
-        <img src="../images/stats-settings.png" alt="数据统计设置页面">
-        <div class="shot-cap"><b>统计设置</b>分层聚合入库，数据随时可查、可管理。</div>
-      </div>
+      <figure class="shot wide"><img class="theme-shot" data-light="../images/zh/ui-stats-report-light.png" data-dark="../images/zh/ui-stats-report-dark.png" width="2984" height="2048" alt="原生数据统计报表" loading="lazy" decoding="async"><figcaption><b>原生数据报表</b>健康评分、趋势曲线与热力图。默认今日，可切换 7 天、30 天或一年。</figcaption></figure>
+      <figure class="shot mid"><img class="theme-shot" data-light="../images/zh/ui-settings-statistics-light.png" data-dark="../images/zh/ui-settings-statistics-dark.png" width="1544" height="1594" alt="数据统计设置" loading="lazy" decoding="async"><figcaption><b>统计设置</b>打开记录，查看今日、近 7 日、近 30 日的用量，并管理本地存储。</figcaption></figure>
     </div>
   </div>
 </section>
 
-<!-- Quick Tools -->
-<section class="lightweight" id="quicktools">
+<section id="settings">
+  <div class="section-inner fade-in">
+    <div class="block-head">
+      <div class="kicker">设置</div>
+      <h2>面板里显示什么，由你决定</h2>
+      <p class="lead">常规外观、各模块要展开的指标、快捷开关、Game HUD，以及关于页面。</p>
+    </div>
+    <div class="settings-grid"><figure class="set-card"><img class="theme-shot" data-light="../images/zh/ui-settings-general-light.png" data-dark="../images/zh/ui-settings-general-dark.png" width="1544" height="1594" alt="常规设置：语言、主题、配色与菜单栏" loading="lazy" decoding="async"><figcaption><b>常规</b>语言、浅色 / 深色、平衡或活力配色，以及菜单栏用负载环还是指标。</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/zh/ui-settings-cpu-light.png" data-dark="../images/zh/ui-settings-cpu-dark.png" width="1544" height="1594" alt="CPU 设置：图表样式与监测项目" loading="lazy" decoding="async"><figcaption><b>CPU</b>柱状图或折线图、默认展开哪些指标，以及是否显示进程排行。</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/zh/ui-settings-quick-tools-light.png" data-dark="../images/zh/ui-settings-quick-tools-dark.png" width="1544" height="1594" alt="小工具设置" loading="lazy" decoding="async"><figcaption><b>小工具</b>选择面板里出现哪些开关：键盘锁定、系统防休眠、屏幕常亮。</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/zh/ui-settings-game-hud-light.png" data-dark="../images/zh/ui-settings-game-hud-dark.png" width="1544" height="1594" alt="Game HUD 设置" loading="lazy" decoding="async"><figcaption><b>Game HUD</b>游戏时以顶部横条或卡片叠加帧率与系统占用，背景透明度可调。</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/zh/ui-settings-about-light.png" data-dark="../images/zh/ui-settings-about-dark.png" width="1544" height="1594" alt="关于页面" loading="lazy" decoding="async"><figcaption><b>关于</b>版本、检查更新、发行说明、开源软件声明，以及匿名使用数据开关。</figcaption></figure></div>
+  </div>
+</section>
+
+<section class="baked center" id="quicktools">
   <div class="section-inner fade-in">
     <div class="kicker">更多能力</div>
     <h2>快捷功能</h2>
-    <p class="lead" style="text-align:center;max-width:720px;">键盘锁定、系统防休眠、屏幕不息屏——常用操作一键开关，日常办公更省心。</p>
-    <div class="stack">
-      <div class="shot narrow">
-        <img src="../images/quick-tools.png" alt="快捷工具栏">
-        <div class="shot-cap"><b>快捷工具</b>键盘锁定、防休眠与不息屏，一键开启。</div>
+    <p class="lead">键盘锁定、系统防休眠、屏幕不息屏——常用操作从面板一键开关，激活状态会在面板头部点亮。</p>
+    <figure class="narrow-shot"><img class="theme-shot" data-light="../images/zh/ui-quick-tools-light.png" data-dark="../images/zh/ui-quick-tools-dark.png" width="752" height="1240" alt="快捷工具面板：键盘锁定、系统防休眠、屏幕常亮" loading="lazy" decoding="async"><figcaption><b>快捷工具</b>三个开关都在这块面板里。</figcaption></figure>
+  </div>
+</section>
+
+<section id="display-direct">
+  <div class="section-inner fade-in">
+    <div class="direct-row">
+      <div class="direct-copy">
+        <span class="badge">仅 GitHub 直连版</span>
+        <h2>外接显示器控制</h2>
+        <p class="lead">直连版可通过 DDC/CI 调节外接显示器的亮度、音量和对比度。是否可用取决于显示器、线材和连接方式；不支持的控制项不会显示为可用。显示器信息两个版本都能看，这组控制不在 App Store 版里。</p>
       </div>
+      <figure class="direct-shot"><img class="theme-shot" data-light="../images/zh/panel-display-controls-direct-light.png" data-dark="../images/zh/panel-display-controls-direct-dark.png" width="747" height="1298" alt="直连版显示器控制：外接显示器亮度、音量与对比度" loading="lazy" decoding="async"><figcaption><b>直连版</b>内置屏信息两个版本都有；外接屏的亮度、音量和对比度只在直连版。</figcaption></figure>
     </div>
   </div>
 </section>
 
-<!-- Compare -->
 <section class="compare" id="compare">
   <div class="section-inner fade-in">
     <div class="kicker">版本对比</div>
@@ -641,82 +624,44 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
     <p class="lead">GitHub 直连版功能完整；App Store 版受沙盒限制，部分功能不可用。</p>
     <div class="compare-scroll">
       <table class="compare-table">
-        <thead>
-          <tr><th>功能</th><th>GitHub 直连版</th><th>App Store 版</th></tr>
-        </thead>
-        <tbody>
-          <tr><td>八大监控模块（CPU / GPU / 内存 / 存储 / 网络 / 电池 / 蓝牙 / 显示器）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>数据统计 · 健康评分 · 事件检测（原生报表）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>快捷功能（键盘锁定 / 防休眠 / 不息屏）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>双主题 · 多种菜单栏样式</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>面板长按拖动排序 · 右键方向移动</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>CPU / 内存 TOP 进程列表</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr>
-          <tr><td>存储 / 网络 TOP 进程列表</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>温度传感器与风扇转速读取</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-          <tr><td>显示器控制（亮度 / 音量 / 对比度 · 媒体键）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr>
-        </tbody>
+        <thead><tr><th>功能</th><th>GitHub 直连版</th><th>App Store 版</th></tr></thead>
+        <tbody><tr><td>八大监控模块（CPU / GPU / 内存 / 存储 / 网络 / 电池 / 蓝牙 / 显示器）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr><tr><td>数据统计 · 健康评分 · 事件检测（原生报表）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr><tr><td>快捷功能（键盘锁定 / 防休眠 / 不息屏）</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr><tr><td>双主题 · 多种菜单栏样式</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr><tr><td>面板长按拖动排序 · 右键方向移动</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr><tr><td>CPU / 内存 TOP 进程列表</td><td class="compare-yes">✓</td><td class="compare-yes">✓</td></tr><tr><td>存储 / 网络 TOP 进程列表</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr><tr><td>温度传感器与风扇转速读取</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr><tr><td>显示器控制（亮度 / 音量 / 对比度 · 媒体键）</td><td class="compare-yes">✓</td><td class="compare-no">✕</td></tr></tbody>
       </table>
     </div>
     <p class="compare-note">由于 App Store 沙盒限制，部分功能无法在沙盒环境中正常工作，因此功能不完整。</p>
   </div>
 </section>
 
-<!-- Download -->
-<section class="download" id="download">
+<section class="download band center" id="download">
   <div class="section-inner fade-in">
     <div class="kicker">立即体验</div>
     <h2>准备好让你的 Mac<br>一目了然了吗？</h2>
-    <p class="lead" style="text-align:center;">免费下载，支持 macOS 15+ 及 Apple Silicon。</p>
+    <p class="lead">免费下载，支持 macOS 15+ 及 Apple Silicon。</p>
     <div class="download-actions">
-      <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-        GitHub 免费下载
-      </a>
-      <a href="https://apps.apple.com/app/hagimimonitor/id6792169908" target="_blank" rel="noopener" class="btn-store">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.1.67.97 1.47 2.06 2.53 2.02 1.02-.04 1.4-.65 2.63-.65 1.23 0 1.57.65 2.65.63 1.09-.02 1.79-.99 2.46-1.97.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.24zM15.03 6.29c.56-.68.94-1.63.83-2.57-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.9.07 1.83-.46 2.4-1.13z"/></svg>
-        App Store 支持购买
-      </a>
+      <a href="https://github.com/Acerola-1/hagimi-monitor/releases/latest" target="_blank" rel="noopener" class="btn-primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>GitHub 免费下载</a>
+      <a href="https://apps.apple.com/app/hagimimonitor/id6792169908" target="_blank" rel="noopener" class="btn-store"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M17.05 12.04c-.02-2.02 1.65-2.99 1.73-3.04-.94-1.38-2.41-1.57-2.93-1.59-1.25-.13-2.44.73-3.07.73-.63 0-1.61-.71-2.65-.69-1.36.02-2.62.79-3.32 2.01-1.42 2.46-.36 6.1 1.02 8.1.67.97 1.47 2.06 2.53 2.02 1.02-.04 1.4-.65 2.63-.65 1.23 0 1.57.65 2.65.63 1.09-.02 1.79-.99 2.46-1.97.77-1.13 1.09-2.22 1.11-2.28-.02-.01-2.13-.82-2.15-3.24zM15.03 6.29c.56-.68.94-1.63.83-2.57-.81.03-1.79.54-2.37 1.22-.52.6-.98 1.56-.86 2.48.9.07 1.83-.46 2.4-1.13z"/></svg>App Store 支持购买</a>
     </div>
     <p class="brew-hint">GitHub 版也可以通过 Homebrew 一行命令安装（点击复制）：</p>
-    <button class="brew-install" type="button" data-brew-cmd aria-label="复制 Homebrew 安装命令">
-      <span class="prompt">$</span><span>brew install hagimimonitordirect</span>
-      <svg class="brew-copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-      <span class="copied">已复制 ✓</span>
-    </button>
+    <button class="brew-install" type="button" aria-label="复制 Homebrew 安装命令"><span class="prompt">$</span><span>brew install hagimimonitordirect</span><svg class="brew-copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span class="copied">已复制 ✓</span></button>
     <p class="download-note">GitHub 开源免费，功能完整 · App Store 版是一份心意，感谢你的支持</p>
   </div>
 </section>
 
-<!-- Feedback -->
-<section class="feedback">
+<section class="feedback center">
   <div class="section-inner fade-in">
     <h2>遇到问题？告诉我们</h2>
-    <p class="lead" style="text-align:center;">发现 Bug、有功能建议，或使用中遇到困惑？欢迎反馈。</p>
+    <p class="lead">发现 Bug、有功能建议，或使用中遇到困惑？欢迎反馈。</p>
     <div class="feedback-actions">
-      <a href="https://github.com/Acerola-1/hagimi-monitor/issues/new/choose" target="_blank" rel="noopener" class="feedback-btn">
-        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .5C5.73.5.67 5.56.67 11.83c0 5.01 3.24 9.26 7.74 10.76.57.1.78-.25.78-.55v-1.94c-3.15.68-3.81-1.52-3.81-1.52-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.69.08-.69 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.51-.29-5.16-1.26-5.16-5.6 0-1.24.44-2.25 1.17-3.04-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.15 1.16a10.95 10.95 0 0 1 5.74 0c2.18-1.47 3.14-1.16 3.14-1.16.63 1.57.24 2.73.12 3.02.73.79 1.16 1.8 1.16 3.04 0 4.35-2.65 5.31-5.17 5.59.41.36.77 1.06.77 2.14v3.17c0 .31.2.66.79.55 4.49-1.5 7.73-5.75 7.73-10.76C23.33 5.56 18.27.5 12 .5z"/></svg>
-        GitHub Issue
-      </a>
-      <a href="https://www.xiaohongshu.com/user/profile/64a9325200000000110000a6" target="_blank" rel="noopener" class="feedback-btn">
-        <img src="https://cdn.simpleicons.org/xiaohongshu/1d1d1f" width="18" height="18" alt="">
-        小红书
-      </a>
+      <a href="https://github.com/Acerola-1/hagimi-monitor/issues/new/choose" target="_blank" rel="noopener" class="feedback-btn"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.73.5.67 5.56.67 11.83c0 5.01 3.24 9.26 7.74 10.76.57.1.78-.25.78-.55v-1.94c-3.15.68-3.81-1.52-3.81-1.52-.52-1.32-1.27-1.67-1.27-1.67-1.04-.71.08-.69.08-.69 1.15.08 1.76 1.18 1.76 1.18 1.02 1.76 2.69 1.25 3.34.96.1-.74.4-1.25.72-1.54-2.51-.29-5.16-1.26-5.16-5.6 0-1.24.44-2.25 1.17-3.04-.12-.29-.51-1.45.11-3.02 0 0 .96-.31 3.15 1.16a10.95 10.95 0 0 1 5.74 0c2.18-1.47 3.14-1.16 3.14-1.16.63 1.57.24 2.73.12 3.02.73.79 1.16 1.8 1.16 3.04 0 4.35-2.65 5.31-5.17 5.59.41.36.77 1.06.77 2.14v3.17c0 .31.2.66.79.55 4.49-1.5 7.73-5.75 7.73-10.76C23.33 5.56 18.27.5 12 .5z"/></svg>GitHub Issue</a>
+      <a href="https://www.xiaohongshu.com/user/profile/64a9325200000000110000a6" target="_blank" rel="noopener" class="feedback-btn"><img class="xhs" src="https://cdn.simpleicons.org/xiaohongshu/1d1d1f" width="18" height="18" alt="">小红书</a>
     </div>
     <p class="feedback-hint">技术类问题推荐走 GitHub Issue · 使用体验可在小红书留言</p>
   </div>
 </section>
 
-<!-- Footer -->
 <footer class="footer">
   <div class="footer-inner">
-    <a href="#" class="footer-brand">
-      <svg class="ring" viewBox="0 0 18 18" aria-hidden="true">
-        <circle cx="9" cy="9" r="6.6" fill="none" stroke="#d2d2d7" stroke-width="1.35"/>
-        <path d="M 9 2.4 A 6.6 6.6 0 1 1 3.3 12.3" fill="none" stroke="#1d1d1f" stroke-width="2.2" stroke-linecap="round"/>
-        <circle cx="9" cy="9" r="2.4" fill="#20c997"/>
-      </svg>
-      <span>Hagimi Monitor</span>
-    </a>
+    <a href="#features" class="footer-brand"><svg class="ring brand-ring" viewBox="0 0 18 18" aria-hidden="true"><circle class="track" cx="9" cy="9" r="6.6"/><path class="arc" d="M 9 2.4 A 6.6 6.6 0 1 1 3.3 12.3"/><circle class="dot" cx="9" cy="9" r="2.4"/></svg><span>Hagimi Monitor</span></a>
     <ul class="footer-links">
       <li><a href="stats.html">使用数据</a></li>
       <li><a href="https://github.com/Acerola-1/hagimi-monitor" target="_blank" rel="noopener">GitHub</a></li>
@@ -726,81 +671,95 @@ h2{font-family:var(--display);font-weight:600;letter-spacing:-.02em;line-height:
     <span>© 2026 Hagimi Monitor. All rights reserved.</span>
   </div>
 </footer>
-
 <script>
-// Nav scroll effect
-var nav = document.getElementById('nav');
-window.addEventListener('scroll', function() {
-  if (window.scrollY > 40) { nav.classList.add('scrolled'); }
-  else { nav.classList.remove('scrolled'); }
+
+(function(){
+  var arc=document.getElementById('ringArc');
+  var dot=document.getElementById('ringDot');
+  if(!arc||!dot) return;
+  var C=2*Math.PI*50, load=30, target=30;
+  var colors=[[0,'#148057'],[25,'#008c6b'],[50,'#cc700f'],[78,'#c71f1a']];
+  function gc(l){ for(var i=colors.length-1;i>=0;i--){ if(l>=colors[i][0]) return colors[i][1]; } return colors[0][1]; }
+  function render(){
+    arc.setAttribute('stroke-dasharray', C.toFixed(1));
+    arc.setAttribute('stroke-dashoffset', (C-(load/100)*C).toFixed(1));
+    dot.setAttribute('fill', gc(load));
+  }
+  function step(){
+    var d=target-load;
+    if(Math.abs(d)<.5) load=target; else load+=d*.12;
+    render();
+    requestAnimationFrame(step);
+  }
+  function nt(){ target=Math.random()*85+5; setTimeout(nt, 2000+Math.random()*3000); }
+  render();
+  if(!window.matchMedia('(prefers-reduced-motion: reduce)').matches){
+    requestAnimationFrame(step);
+    setTimeout(nt, 1500);
+  }
+})();
+var nav=document.getElementById('nav');
+window.addEventListener('scroll', function(){
+  if(window.scrollY>40) nav.classList.add('scrolled');
+  else nav.classList.remove('scrolled');
 });
-
-// Intersection Observer fade-in
-var observer = new IntersectionObserver(function(entries) {
-  entries.forEach(function(entry) {
-    if (entry.isIntersecting) { entry.target.classList.add('visible'); }
-  });
-}, { threshold: 0.12, rootMargin: '0px 0px -40px 0px' });
-document.querySelectorAll('.fade-in').forEach(function(el) { observer.observe(el); });
-
-// Smooth scroll for anchor links
-document.querySelectorAll('a[href^="#"]').forEach(function(a) {
-  a.addEventListener('click', function(e) {
-    var target = document.querySelector(this.getAttribute('href'));
-    if (target) { e.preventDefault(); target.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+var observer=new IntersectionObserver(function(entries){
+  entries.forEach(function(entry){ if(entry.isIntersecting) entry.target.classList.add('visible'); });
+},{threshold:0.12, rootMargin:'0px 0px -40px 0px'});
+document.querySelectorAll('.fade-in').forEach(function(el){ observer.observe(el); });
+document.querySelectorAll('a[href^="#"]').forEach(function(a){
+  a.addEventListener('click', function(e){
+    var id=this.getAttribute('href');
+    if(!id||id==='#') return;
+    var target=document.querySelector(id);
+    if(target){ e.preventDefault(); target.scrollIntoView({behavior:'smooth', block:'start'}); }
   });
 });
-
-// GitHub star count with localStorage cache
-(function() {
-  var KEY = 'hagimi-github-stars';
-  var TTL = 60 * 60 * 1000;
-  var el = document.getElementById('navGithubCount');
-  if (!el) return;
-  function fmt(n) { return n >= 1000 ? (n/1000).toFixed(1).replace(/\.0$/, '') + 'k' : String(n); }
-  var cached = null;
-  try { cached = JSON.parse(localStorage.getItem(KEY)); } catch(e) {}
-  if (cached && typeof cached.count === 'number') { el.textContent = fmt(cached.count); }
-  if (cached && Date.now() - cached.ts < TTL) return;
+(function(){
+  var KEY='hagimi-github-stars';
+  var TTL=60*60*1000;
+  var el=document.getElementById('navGithubCount');
+  if(!el) return;
+  function fmt(n){ return n>=1000?(n/1000).toFixed(1).replace(/\.0$/,'')+'k':String(n); }
+  var cached=null;
+  try{ cached=JSON.parse(localStorage.getItem(KEY)); }catch(e){}
+  if(cached && typeof cached.count==='number') el.textContent=fmt(cached.count);
+  if(cached && Date.now()-cached.ts<TTL) return;
   fetch('https://api.github.com/repos/Acerola-1/hagimi-monitor')
-    .then(function(r) { return r.ok ? r.json() : null; })
-    .then(function(d) {
-      if (!d || typeof d.stargazers_count !== 'number') return;
-      el.textContent = fmt(d.stargazers_count);
-      try { localStorage.setItem(KEY, JSON.stringify({ count: d.stargazers_count, ts: Date.now() })); } catch(e) {}
+    .then(function(r){ return r.ok?r.json():null; })
+    .then(function(d){
+      if(!d || typeof d.stargazers_count!=='number') return;
+      el.textContent=fmt(d.stargazers_count);
+      try{ localStorage.setItem(KEY, JSON.stringify({count:d.stargazers_count, ts:Date.now()})); }catch(e){}
     }).catch(function(){});
 })();
-
-// Copy Homebrew install command
-(function() {
-  var CMD = 'brew install hagimimonitordirect';
-  document.querySelectorAll('.v3-body, .brew-install').forEach(function(btn) {
-    var icon = btn.querySelector('.brew-copy-icon') || btn.querySelector('.v3-copy');
-    var copied = btn.querySelector('.copied');
-    function showCopied() {
-      if (icon) icon.style.display = 'none';
-      copied.style.display = 'inline-flex';
-      setTimeout(function() {
-        if (icon) icon.style.display = '';
-        copied.style.display = 'none';
+(function(){
+  var CMD='brew install hagimimonitordirect';
+  document.querySelectorAll('.v3-body, .brew-install').forEach(function(btn){
+    var icon=btn.querySelector('.brew-copy-icon')||btn.querySelector('.v3-copy');
+    var copied=btn.querySelector('.copied');
+    function showCopied(){
+      if(icon) icon.style.display='none';
+      copied.style.display='inline-flex';
+      setTimeout(function(){
+        if(icon) icon.style.display='';
+        copied.style.display='none';
       }, 1600);
     }
-    btn.addEventListener('click', function() {
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(CMD).then(showCopied).catch(function() {});
-      } else {
-        var ta = document.createElement('textarea');
-        ta.value = CMD;
-        ta.style.position = 'fixed';
-        ta.style.opacity = '0';
-        document.body.appendChild(ta);
-        ta.select();
-        try { if (document.execCommand('copy')) showCopied(); } catch (e) {}
+    btn.addEventListener('click', function(){
+      if(navigator.clipboard && window.isSecureContext){
+        navigator.clipboard.writeText(CMD).then(showCopied).catch(function(){});
+      }else{
+        var ta=document.createElement('textarea');
+        ta.value=CMD; ta.style.position='fixed'; ta.style.opacity='0';
+        document.body.appendChild(ta); ta.select();
+        try{ if(document.execCommand('copy')) showCopied(); }catch(e){}
         document.body.removeChild(ta);
       }
     });
   });
 })();
+
 </script>
 </body>
 </html>
