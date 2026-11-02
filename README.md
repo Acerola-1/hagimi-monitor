@@ -51,18 +51,21 @@ HagimiMonitor 内置语义化 Palette，模块色、玻璃背景、分隔线、�
 
 | 平衡 · 深色 | 平衡 · 浅色 |
 | --- | --- |
-| ![平衡深色主题](docs/images/balance-dark.png) | ![平衡浅色主题](docs/images/balance-light.png) |
+| <img src="docs/images/zh/panel-overview-balanced-dark.png" width="280" alt="平衡深色主题"> | <img src="docs/images/zh/panel-overview-balanced-light.png" width="280" alt="平衡浅色主题"> |
 
 | 活力 · 深色 | 活力 · 浅色 |
 | --- | --- |
-| ![活力深色主题](docs/images/vitality-dark.png) | ![活力浅色主题](docs/images/vitality-light.png) |
+| <img src="docs/images/zh/panel-overview-vibrant-dark.png" width="280" alt="活力深色主题"> | <img src="docs/images/zh/panel-overview-vibrant-light.png" width="280" alt="活力浅色主题"> |
 
 ### 展开即见详情
 
 默认状态保持紧凑，点击菜单栏后即可展开查看 CPU、GPU、内存、存储、网络、电池和显示器等模块的完整信息。
 
 <p align="center">
-  <img src="docs/images/detailed-data.png" width="430" alt="HagimiMonitor expanded rich metrics">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/zh/panel-details-vibrant-dark.png" />
+    <img src="docs/images/zh/panel-details-vibrant-light.png" width="280" alt="活力主题下展开的模块明细">
+  </picture>
 </p>
 
 ## 功能亮点
@@ -93,6 +96,10 @@ HagimiMonitor 内置语义化 Palette，模块色、玻璃背景、分隔线、�
 <p align="center">
   <img src="docs/images/panel-reorder-drag.gif" width="340" alt="长按拖动交换位置">&nbsp;&nbsp;
   <img src="docs/images/panel-reorder-menu.gif" width="340" alt="菜单方向移动换位">
+</p>
+
+<p align="center">
+  <a href="https://acerola-1.github.io/hagimi-monitor/zh/#reorder">官网</a>另有随浅色 / 深色切换的同内容视频。
 </p>
 
 ### 玻璃拟态与统一配色
