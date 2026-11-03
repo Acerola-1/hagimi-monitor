@@ -50,7 +50,7 @@ nonisolated enum StatisticsMetricDefinition: Sendable {
     enum UnitKind: Sendable, Equatable {
         /// 百分比(占用率)。
         case percent
-        /// 二进制容量(GiB/MiB)。
+        /// 内存容量。按 1024 换算，展示为 GB/MB/KB。
         case binaryCapacity
         /// 十进制吞吐(MB/s、GB/s)。
         case decimalRate
@@ -68,11 +68,11 @@ nonisolated enum StatisticsMetricDefinition: Sendable {
 
     // MARK: - 档位
 
-    /// 内存档位边界（1/2/4 GiB）。
+    /// 内存档位边界（1/2/4 × 1024³ 字节）。展示写成 GB，除数仍是 1024。
     static let memoryBands: [Band] = [
-        Band(lowerBound: 1 * gibibyte, label: "1 GiB"),
-        Band(lowerBound: 2 * gibibyte, label: "2 GiB"),
-        Band(lowerBound: 4 * gibibyte, label: "4 GiB"),
+        Band(lowerBound: 1 * gibibyte, label: "1 GB"),
+        Band(lowerBound: 2 * gibibyte, label: "2 GB"),
+        Band(lowerBound: 4 * gibibyte, label: "4 GB"),
     ]
 
     /// 网络档位边界（单位：MiB/s），展示时按十进制速率格式化。

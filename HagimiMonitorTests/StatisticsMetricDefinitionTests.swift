@@ -11,10 +11,10 @@ struct StatisticsMetricDefinitionTests {
 
     @Test func memoryBandBoundariesUseBinaryCapacityAndTopBandIsFourGiB() {
         // 5.8 GiB 必须落在 4 GiB+ 段，而不是旧实现里的「8 GB+」。
-        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 5.8 * gib)?.label == "4 GiB")
-        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 4 * gib)?.label == "4 GiB")
-        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 2 * gib)?.label == "2 GiB")
-        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 1 * gib)?.label == "1 GiB")
+        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 5.8 * gib)?.label == "4 GB")
+        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 4 * gib)?.label == "4 GB")
+        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 2 * gib)?.label == "2 GB")
+        #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 1 * gib)?.label == "1 GB")
         #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 1 * gib - 1) == nil)
         #expect(StatisticsMetricDefinition.band(for: .memory, rawValue: 0) == nil)
     }
@@ -116,9 +116,10 @@ struct StatisticsMetricDefinitionTests {
     }
 
     @Test func decimalVolumeAndBinaryCapacityDoNotShareDivisors() {
-        // 同一 156,000,000,000 字节：总量用十进制 GB，容量用二进制 GiB。
+        // 同一 156,000,000,000 字节都写成 GB：总量按 1000 是 156，内存按 1024 是 145。
         #expect(StatisticsDisplayFormat.decimalVolume(156_000_000_000) == "156 GB")
-        #expect(StatisticsDisplayFormat.binaryCapacity(156_000_000_000) == "145 GiB")
+        #expect(StatisticsDisplayFormat.binaryCapacity(156_000_000_000) == "145 GB")
+        #expect(!StatisticsDisplayFormat.binaryCapacity(156_000_000_000).contains("GiB"))
         // 1 MiB/s 的十进制表达。
         #expect(StatisticsDisplayFormat.decimalRate(StatisticsMetricDefinition.mebibyte) == "1.0 MB/s")
     }

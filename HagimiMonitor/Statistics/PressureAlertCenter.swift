@@ -103,8 +103,9 @@ final class PressureAlertCenter: ObservableObject {
             breakThreshold: Self.observationBreak
         )
         publishIfChanged()
+        let temperature = isSimulating ? nil : Self.cpuTemperatureCelsius(from: modules)
         for alert in alerts {
-            sendNotification(alert)
+            sendNotification(alert, temperatureCelsius: temperature)
         }
     }
 
@@ -159,17 +160,47 @@ final class PressureAlertCenter: ObservableObject {
         module.metrics.first { $0.name == name }?.numericValue
     }
 
+    /// CPU 温度（°C）。没有新鲜读数时不编一个温度进通知。
+    static func cpuTemperatureCelsius(from modules: [MonitorModule]) -> Double? {
+        for module in modules where module.kind == .cpu && !module.isPlaceholder {
+            if let value = numeric("temperature", in: module), value.isFinite {
+                return value
+            }
+        }
+        return nil
+    }
+
     // MARK: - 通知
 
-    private func sendNotification(_ alert: PressureAlertStateMachine.Alert) {
+    private func sendNotification(_ alert: PressureAlertStateMachine.Alert, temperatureCelsius: Double?) {
         let content = UNMutableNotificationContent()
+        let minutes = Int((Self.notificationSustain / 60).rounded())
         switch alert.kind {
         case .memory:
             content.title = String(localized: "alert.pressure.memory.title")
-            content.body = String(localized: "alert.pressure.memory.body \(levelName(alert))")
+            let level = String(localized: "memory-pressure.critical")
+            let format = String(localized: "alert.pressure.memory.body", defaultValue: "内存压力已达「%@」，并已持续 %lld 分钟。")
+            content.body = String(format: format, level, minutes)
         case .thermal:
-            content.title = String(localized: "alert.pressure.thermal.title")
-            content.body = String(localized: "alert.pressure.thermal.body \(levelName(alert))")
+            content.title = alert.level >= 3
+                ? String(localized: "alert.pressure.thermal.critical.title")
+                : String(localized: "alert.pressure.thermal.serious.title")
+            let level = alert.level >= 3
+                ? String(localized: "thermal-pressure.critical")
+                : String(localized: "thermal-pressure.serious")
+            if let temperatureCelsius {
+                let format = String(
+                    localized: "alert.pressure.thermal.body.temperature",
+                    defaultValue: "热压力已达「%@」，CPU %lld°C，已持续 %lld 分钟。"
+                )
+                content.body = String(format: format, level, Int(temperatureCelsius.rounded()), minutes)
+            } else {
+                let format = String(
+                    localized: "alert.pressure.thermal.body",
+                    defaultValue: "热压力已达「%@」，已持续 %lld 分钟。"
+                )
+                content.body = String(format: format, level, minutes)
+            }
         }
         // 压力告警用默认声音:critical 声音需专门 entitlement,留给事故级,
         // 不绕过用户的专注模式。
@@ -188,12 +219,4 @@ final class PressureAlertCenter: ObservableObject {
         }
     }
 
-    /// 通知只在严重档发出,档位名复用统计页同一批字符串。
-    private func levelName(_ alert: PressureAlertStateMachine.Alert) -> String {
-        switch (alert.kind, alert.level) {
-        case (.memory, _): String(localized: "memory-pressure.critical")
-        case (.thermal, 3): String(localized: "thermal-pressure.critical")
-        default: String(localized: "thermal-pressure.serious")
-        }
-    }
 }

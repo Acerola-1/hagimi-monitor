@@ -106,7 +106,7 @@ CPU 核心环的类别色由 MonitorPalette 独立拥有：活力配色用蓝色
 | 模块颜色 | `MonitorPalette.moduleTint(for:)` | 只用于展开详情的指标名称与用量行图标 |
 | 严重程度颜色 | `MonitorPalette.severityTint(for:)` | 只用于真实系统压力；普通应用高占用不染红 |
 | 字号层级 | 系统字体（body/callout/title3/caption） | 主读数用 body/callout 加等宽数字，不用 caption 承载关键数值 |
-| 数值格式 | `StatisticsDisplayFormat` | 容量二进制、速率与总量十进制、占比百分比，全表面同源 |
+| 数值格式 | `StatisticsDisplayFormat` | 内存按 1024 显示为 GB/MB，速率与总量用十进制 GB/MB，全表面同源 |
 | 门槛与档位 | `StatisticsMetricDefinition` | 判定与标签都从它生成，调用点不复制数字 |
 | 结论与质量 | `ReportPeriodConclusion` / `StatisticsDataQuality` | 结论只描述系统压力；估算与部分覆盖必须显式说明 |
 
@@ -119,7 +119,7 @@ CPU 核心环的类别色由 MonitorPalette 独立拥有：活力配色用蓝色
 
 历史系统压力和最近应用占用使用不同标题，不用应用高占用覆盖历史系统结论。模块颜色由 `MonitorPalette.moduleTint` 拥有，仅用于展开详情的指标名称；严重颜色属于真实系统压力，不给普通高占用应用重复增加红色标记。档位分布与零时长图例退出设置默认视图，完整事件和范围语义由 OpenSpec 后续报表任务实现。
 
-当前应用事件模型只提供高值观测次数和首次/最近时间，页面如实显示这些量，不把次数标成连续时长。应用内存使用 GiB/MiB，网络速率使用 MB/s。主指标暂按内存、CPU、GPU、网络选择，应用按身份排序以保留展开位置；容量相关门槛与严重度排序等待共享数据合同实现。DEBUG 示例只生成视图输入，并带明显标注，不注入共享事件或导出输入。
+当前应用事件模型只提供高值观测次数和首次/最近时间，页面如实显示这些量，不把次数标成连续时长。应用内存显示为 GB/MB，网络速率使用 MB/s。主指标暂按内存、CPU、GPU、网络选择，应用按身份排序以保留展开位置；容量相关门槛与严重度排序等待共享数据合同实现。DEBUG 示例只生成视图输入，并带明显标注，不注入共享事件或导出输入。
 
 ## Game HUD Controls
 

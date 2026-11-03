@@ -581,29 +581,52 @@ final class ProcessAlertCenter: ObservableObject {
     private func makeNotificationContent(
         for episode: ProcessAlertEpisode
     ) -> (identifier: String, title: String, body: String) {
-        let metricText: String
+        let titleFormat: String
         switch episode.metric {
-        case .cpu: metricText = "CPU"
-        case .gpu: metricText = "GPU"
-        case .memory: metricText = String(localized: "stats.process.metric.mem", defaultValue: "内存")
-        case .network: metricText = String(localized: "stats.process.metric.net", defaultValue: "网络")
+        case .memory:
+            titleFormat = String(localized: "alert.process.highload.memory.title", defaultValue: "%@ 内存占用偏高")
+        case .cpu:
+            titleFormat = String(localized: "alert.process.highload.cpu.title", defaultValue: "%@ 的 CPU 占用偏高")
+        case .gpu:
+            titleFormat = String(localized: "alert.process.highload.gpu.title", defaultValue: "%@ 的 GPU 占用偏高")
+        case .network:
+            titleFormat = String(localized: "alert.process.highload.network.title", defaultValue: "%@ 网络流量偏高")
         }
-
-        let titleFormat = String(localized: "alert.process.highload.title", defaultValue: "高负载进程提醒 · %@")
-        let title = String(format: titleFormat, episode.name)
-        let usageText = StatisticsDisplayFormat.applicationObservationValue(episode.averageUsage, metric: episode.metric)
         let bodyFormat = String(
             localized: "alert.process.highload.body",
-            defaultValue: "「%@」已持续约 %@ 占用 %@ %@，同期系统状态建议查看统计详情。"
+            defaultValue: "已持续 %@，平均约 %@。"
         )
-        let body = String(
-            format: bodyFormat,
-            episode.name,
-            StatisticsDisplayFormat.duration(episode.continuousHighSeconds),
-            metricText,
-            usageText
+        let copy = Self.highLoadNotificationCopy(
+            name: episode.name,
+            duration: StatisticsDisplayFormat.duration(episode.continuousHighSeconds),
+            usage: Self.notificationUsageText(
+                StatisticsDisplayFormat.applicationObservationValue(episode.averageUsage, metric: episode.metric)
+            ),
+            titleFormat: titleFormat,
+            bodyFormat: bodyFormat
         )
-        return (Self.notificationIdentifier(appKey: episode.appKey, metric: episode.metric), title, body)
+        return (Self.notificationIdentifier(appKey: episode.appKey, metric: episode.metric), copy.title, copy.body)
+    }
+
+    /// 高负载通知。标题说哪一项偏高，正文把持续时间和平均值分开，
+    /// 避免读成这段时间一直停在某个固定用量。
+    /// 时长已经是带单位的字符串，两个占位符都是 `%@`。
+    static func highLoadNotificationCopy(
+        name: String,
+        duration: String,
+        usage: String,
+        titleFormat: String,
+        bodyFormat: String
+    ) -> (title: String, body: String) {
+        (
+            String(format: titleFormat, name),
+            String(format: bodyFormat, duration, usage)
+        )
+    }
+
+    /// 「4.0 GB」在「平均约」后面读起来像精确到小数。整数部分已经够用时去掉 `.0`。
+    static func notificationUsageText(_ text: String) -> String {
+        text.replacingOccurrences(of: ".0 ", with: " ")
     }
 
     static func stateKey(appKey: String, metric: ProcessAlertEpisode.Metric) -> String {

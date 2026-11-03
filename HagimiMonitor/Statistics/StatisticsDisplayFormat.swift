@@ -84,15 +84,16 @@ nonisolated enum StatisticsDisplayFormat: Sendable {
         return String(format: "%.0f B/s", bytesPerSecond)
     }
 
-    /// 二进制容量(GiB/MiB),用于应用内存等按字节计量的资源。
+    /// 内存容量。按 1024 换算，面向用户写成 GB/MB/KB：这是内存容量的日常说法，
+    /// 与菜单栏内存读数一致。磁盘和流量仍走十进制 GB/MB，不经过这里。
     static func binaryCapacity(_ bytes: Double) -> String {
         guard bytes > 0 else { return "0 B" }
         let gib = bytes / 1_073_741_824
         if gib >= 1 {
-            return gib >= 10 ? String(format: "%.0f GiB", gib) : String(format: "%.1f GiB", gib)
+            return gib >= 10 ? String(format: "%.0f GB", gib) : String(format: "%.1f GB", gib)
         }
         let mib = bytes / 1_048_576
-        return mib >= 1 ? String(format: "%.0f MiB", mib) : String(format: "%.0f KiB", bytes / 1_024)
+        return mib >= 1 ? String(format: "%.0f MB", mib) : String(format: "%.0f KB", bytes / 1_024)
     }
 
     /// 应用观测的展示值。原始内存与网络速率为字节,CPU/GPU 为百分比;

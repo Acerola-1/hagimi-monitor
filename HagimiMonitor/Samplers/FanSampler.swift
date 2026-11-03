@@ -27,8 +27,7 @@ final class FanSampler {
     /// 当前所有风扇读数。fans 为空 = 该机无风扇或读取失败。
     @Published private(set) var fans: [FanInfo] = []
 
-    /// 当前风扇系统整体状态(取所有风扇中最差值)。每次采样后同步更新。
-    /// 告警服务订阅此值,在状态恶化时触发通知。
+    /// 当前风扇系统整体状态(取所有风扇中最差值)。每次采样后同步更新,供面板着色。
     @Published private(set) var status: FanStatus = .unknown
 
     /// SMC 读取器工厂:仅在 DISPLAY_CONTROL(直连版)下创建 SMCReader。
@@ -84,7 +83,7 @@ final class FanSampler {
         if newFans != fans {
             fans = newFans
         }
-        // 同步更新整体状态(取最差风扇状态),供告警服务订阅。
+        // 同步更新整体状态(取最差风扇状态),供面板着色。
         let newStatus = FanInfo.overallStatus(of: newFans)
         if newStatus != status {
             status = newStatus
