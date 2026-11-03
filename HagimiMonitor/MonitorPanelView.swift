@@ -3110,7 +3110,7 @@ private struct BluetoothGlassRow: View, Equatable {
                 Spacer(minLength: 8)
 
                 // 行尾不放电量数值:多设备时「最低电量」归属不明,易误读;
-                // 与显示器模块同款展开箭头,设备明细全在展开区。
+                // 设备明细在展开区,行尾用箭头标出可展开。
                 // 无设备时无内容可展开,箭头隐藏(显占位保持行高稳定)。
                 Image(systemName: "chevron.down")
                     .font(.caption2.weight(.bold))
