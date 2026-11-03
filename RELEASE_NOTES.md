@@ -2,51 +2,53 @@
 
 ### 中文
 
-本次更新新增独立的显示器控制菜单栏入口，并修正了部分应用的进程占用无法正确合并统计的问题。
-
-#### 新功能
-
-- 设置 → 显示器新增「独立显示器控制菜单栏图标」开关（默认关闭）：开启后可从菜单栏直接打开显示器控制，无需先展开主面板；独立窗口按卡片内容贴合，与主面板的显示开关互不影响。
-
 #### 修复
 
-- 修复部分应用（Chromium / Electron 系浏览器与客户端）的 Helper 子进程未按宿主应用合并统计的问题。此前这类应用在内存、CPU、GPU、磁盘、网络与能耗排行中会被拆成多条，合计占用被低估，甚至完全不显示。
+- 进程排行不再把装在 `/usr/local` 下的程序当成系统进程藏起来。Apple 容器会单独列出，内存占用不再整批消失。
 
 #### 优化与体验
 
-- 小工具「不息屏」更名为「屏幕常亮」，与英文 Keep Display On 对应，含义更直白。
+- 深色面板压暗：平衡配色的行底不再发白，行内白罩、指标格和底部按钮都收淡，文字更清楚。
+- 浅色面板压深文字，行内白罩和指标格收淡；网络、存储、电源主行上的读数底仍保持清楚的轮廓。
+- 长按拖动排序时，浮起的卡片去掉亮色描边，边缘用淡出的阴影和面板接上。
+- 面板隐藏后，不再继续查没人在看的温度、公网 IP 和蓝牙信息；重新打开时显示更稳。
 
 #### 目前已知的问题
 
-以下问题本版尚未修复，仍在跟进：
+##### 正在修复
 
-- Apple Watch 无法正常显示电量余量（#131 · 修复中）：已能读取连接数据，但取不到准确的电量读数。
-- Mac mini 无法正常显示能耗（#106 · 待解决）：手头没有对应设备，暂时无法验证。
-- 开启代理软件 TUN 模式后网络显示未连接（#98 · 未复现）：本机开启 TUN 模式未出现该问题。
-- MacBook Air M4 无法正常显示充电功率（#86 · 待解决）：手头没有对应设备，暂时无法验证。
+- Apple Watch 无法正常显示电量余量（#131）：已能读取连接数据，但取不到准确的电量读数。
+
+##### 未修复
+
+- Mac mini 无法正常显示能耗（#106）：手头没有对应设备，暂时无法验证。
+- 开启代理软件 TUN 模式后网络显示未连接（#98）：本机开启 TUN 模式未出现该问题。
+- MacBook Air M4 无法正常显示充电功率（#86）：手头没有对应设备，暂时无法验证。
 
 ### English
 
-This release adds a standalone display-control menu bar entry and fixes process usage that was not merged correctly for some apps.
-
-#### New Features
-
-- Settings → Display gains a "Standalone display control menu bar icon" switch (off by default): when enabled, display controls open directly from the menu bar without expanding the main panel; the standalone window fits its card content and is independent of the main panel's display switch.
+This release darkens the dark panel, deepens light-mode text, and softens the card that lifts while reordering.
 
 #### Fixes
 
-- Fixed Helper processes of some apps (Chromium / Electron-based browsers and clients) not being merged under their host app. These apps could appear as several separate rows across memory, CPU, GPU, disk, network, and energy rankings, so their total usage was understated or missing entirely.
+- Process rankings no longer hide programs installed under `/usr/local` by treating them as system processes. Apple containers are listed on their own, so their memory use no longer disappears as a batch.
 
 #### Improvements
 
-- The "Keep Display On" quick tool is now labeled "屏幕常亮" in Chinese, matching the English wording.
+- Dark mode is dimmed: balanced row backgrounds are no longer washed out, and the white veil, metric chips, and footer buttons are lighter so the text reads more clearly.
+- Light mode uses deeper text. The white veil and metric chips are lighter, while the reading wells on the Network, Storage, and Power rows keep a clear edge.
+- While reordering with a long press, the lifted card no longer has a bright tinted outline. A soft shadow blends its edge into the panel.
+- While the panel is hidden, the app stops checking temperature, public IP, and Bluetooth details that nothing is showing. Reopening the panel is more stable.
 
 #### Known Issues
 
-The following are still open in this release:
+##### In progress
 
-- Apple Watch does not show the correct battery level (#131 · in progress): the connection data can be read, but not an accurate battery level.
-- Mac mini does not show power consumption (#106 · open): no device available for verification yet.
-- Network shows as disconnected after a proxy app enables TUN mode (#98 · not reproduced): enabling TUN mode locally does not trigger it.
-- MacBook Air M4 does not show charging power (#86 · open): no device available for verification yet.
+- Apple Watch does not show the correct battery level (#131): the connection data can be read, but not an accurate battery level.
+
+##### Open
+
+- Mac mini does not show power consumption (#106): no device available for verification yet.
+- Network shows as disconnected after a proxy app enables TUN mode (#98): enabling TUN mode locally does not trigger it.
+- MacBook Air M4 does not show charging power (#86): no device available for verification yet.
 
