@@ -51,6 +51,7 @@ struct NetworkHeaderPills: View {
 }
 
 /// 一层浅底承载成对读数，避免重复的独立轮廓与主行争夺视觉重点。
+/// 这块用 `rowGrooveFill`，浅色比指标格更深，收起时仍看得出边界。
 struct PairedHeaderReadings<Content: View>: View {
     let theme: MonitorPanelTheme
     let content: Content
@@ -67,7 +68,7 @@ struct PairedHeaderReadings<Content: View>: View {
         .fixedSize(horizontal: true, vertical: false)
         .background {
             RoundedRectangle(cornerRadius: RowHeaderPillMetrics.cornerRadius, style: .continuous)
-                .fill(theme.trackFill)
+                .fill(theme.rowGrooveFill)
         }
     }
 }

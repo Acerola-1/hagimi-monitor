@@ -2567,6 +2567,10 @@ struct MonitorPanelTheme {
         palette.trackFill
     }
 
+    var rowGrooveFill: Color {
+        palette.rowGrooveFill
+    }
+
     func liveDot(for loadLevel: MenuBarComputeLoadLevel) -> Color {
         palette.liveDot(for: loadLevel)
     }

@@ -25,7 +25,7 @@ struct MonitorPalette {
         isDark ? Color.white.opacity(0.78) : Color(hex: 0x3E4756)
     }
 
-    /// 指标格和各类凹槽共用。深色用 3% 白，浅色用同一块深石板的 5%。
+    /// 指标格、进度槽和展开区内衬共用。深色用 3% 白，浅色用同一块深石板的 5%。
     /// 调试构建可用 `-HagimiTrackFill` 覆盖当前外观下的浓度。
     var trackFill: Color {
         if isDark {
@@ -34,6 +34,12 @@ struct MonitorPalette {
         }
         let opacity = TemporaryInstanceOverrides.trackFillOpacity ?? 0.05
         return Color(hex: 0x3C485A).opacity(opacity)
+    }
+
+    /// 主行成对读数的浅底。浅色这块比指标格更需要轮廓，用 8% 深石板；深色仍跟指标格走。
+    var rowGrooveFill: Color {
+        guard !isDark else { return trackFill }
+        return Color(hex: 0x3C485A).opacity(0.08)
     }
 
     /// 毛玻璃按钮描边。明暗和两种配色共用 10% 白。
