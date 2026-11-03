@@ -322,13 +322,8 @@ struct PanelReorderGhost: View {
         session.scope == .modules ? MonitorConstants.rowCornerRadius : 7
     }
 
-    private var accent: Color {
-        if let kind = session.scope.moduleKind
-            ?? (session.scope == .modules ? MonitorKind(rawValue: session.id) : nil) {
-            theme.moduleTint(for: kind)
-        } else {
-            theme.palette.displayTint
-        }
+    private var isDark: Bool {
+        theme.palette.colorScheme == .dark
     }
 
     var body: some View {
@@ -365,11 +360,18 @@ struct PanelReorderGhost: View {
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+            .compositingGroup()
+            .background {
+                // 浮起边缘用淡出的阴影与面板衔接，细线标出玻璃厚度。
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .fill(Color.black.opacity(isDark ? 0.26 : 0.10))
+                    .blur(radius: 16)
+                    .offset(y: 7)
+            }
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(accent.opacity(0.38), lineWidth: 1)
+                    .strokeBorder(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
             }
-            .compositingGroup()
             .overlay(alignment: .bottomLeading) {
                 if !session.valid {
                     Text(String(localized: "panel.reorder.invalid-drop"))
@@ -380,7 +382,6 @@ struct PanelReorderGhost: View {
                         .offset(y: 21)
                 }
             }
-            .shadow(color: .black.opacity(0.32), radius: 14, y: 7)
             .scaleEffect(1.035)
             .position(x: pointer.location.x - session.grabOffset.x
                           + session.sourceFrame.width / 2 - origin.x,
