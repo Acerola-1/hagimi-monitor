@@ -129,7 +129,7 @@ h2 { font-size: var(--s-heading); max-width: 18em; }
 figcaption { margin-top: 10px; }
 figcaption b { display: block; color: var(--ink); font-size: var(--s-body); font-weight: 600; margin-bottom: 2px; }
 
-.hero { padding: 112px 0 72px; }
+.hero { padding: 112px 24px 72px; }
 .hero-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(320px, 500px);
@@ -366,6 +366,7 @@ figcaption b { display: block; color: var(--ink); font-size: var(--s-body); font
 
 @media (max-width: 640px) {
   .nav-inner, .footer-inner { width: min(1120px, calc(100% - 32px)); }
+  .hero { padding-left: 16px; padding-right: 16px; }
   .legal { padding: 104px 16px 64px; }
   section { padding: 72px 16px; }
   .mod-grid, .settings-grid, .bar-grid { grid-template-columns: 1fr; }
