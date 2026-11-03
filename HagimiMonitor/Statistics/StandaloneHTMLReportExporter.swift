@@ -127,7 +127,7 @@ nonisolated enum StandaloneHTMLReportExporter {
         } catch {
             throw StatisticsReportError.encodingFailed(error)
         }
-        var escapedJSON = json
+        let escapedJSON = json
             .replacingOccurrences(of: "</", with: "<\\/")
             .replacingOccurrences(of: "<!--", with: "<\\!--")
             .replacingOccurrences(of: "\u{2028}", with: "\\u2028")
@@ -597,15 +597,7 @@ nonisolated enum StandaloneHTMLReportExporter {
     }
 
     nonisolated static func modelName() -> String {
-        var size = 0
-        guard sysctlbyname("hw.model", nil, &size, nil, 0) == 0, size > 0 else {
-            return "Mac"
-        }
-        var buffer = [CChar](repeating: 0, count: size)
-        guard sysctlbyname("hw.model", &buffer, &size, nil, 0) == 0 else {
-            return "Mac"
-        }
-        return String(cString: buffer)
+        HardwareSysctl.string("hw.model") ?? "Mac"
     }
 }
 

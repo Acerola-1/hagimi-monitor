@@ -587,6 +587,9 @@ final class MonitorStore: ObservableObject {
 
     private var allModules: [MonitorModule]
     private let refreshSchedule = MonitorRefreshSchedule()
+    /// Game HUD 正在显示且勾选 CPU 温度时的独立温度消费者。由 AppDelegate
+    /// 从 HUD 协调器与设置接线;主面板关闭、菜单栏不含温度时仍要保留温度采样。
+    private var gameHUDRequiresTemperature = false
 
     #if DIRECT_DISTRIBUTION
     /// Game HUD 的硬件快照源:与采样管线同源,不新增采样器。
@@ -658,6 +661,9 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         self.statisticsRecorder = statisticsRecorder ?? StatisticsRecorder(recordingEnabled: settings.statisticsEnabled)
         allModules = initialModules
         modules = initialModules.filter { settings.isVisible($0.kind) }
+        // 采样器默认允许读取/查询;首轮采样前先同步门控,
+        // 让面板仍关闭的冷启动直接使用最终状态。
+        syncIdleProbeGating()
         advance(kinds: MonitorKind.samplerBackedCases)
         refreshSchedule.markRefreshed(MonitorKind.samplerBackedCases, at: Date())
         settings.objectWillChange
@@ -754,9 +760,9 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             }
             .store(in: &cancellables)
 
-        // 蓝牙采样随模块可见性启停:行被用户隐藏后,10s profiler 探针与
-        // BLE 常驻连接只有成本;蓝牙无风扇那样的后台告警刚需,不适用「启动
-        // 即常驻」。重新勾选时 start() 幂等重建全部管线。
+        // 蓝牙采样随模块可见性启停:行被用户隐藏后,连断监听、BLE 和
+        // profiler 全部停掉。行还开着但面板都关上时,连断和 IO 清单继续,
+        // 周期性 system_profiler 不跑。重新勾选时 start() 幂等重建管线。
         settings.$visibleKinds
             .map { $0.contains(.bluetooth) }
             .removeDuplicates()
@@ -772,12 +778,32 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
                 } else {
                     self.bluetoothSampler.stop()
                 }
+                self.syncIdleProbeGating()
             }
             .store(in: &cancellables)
 
         if settings.isVisible(.bluetooth) {
             bluetoothSampler.start()
         }
+        syncIdleProbeGating()
+        settings.$menuBarMetricKinds
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.syncIdleProbeGating()
+            }
+            .store(in: &cancellables)
+        settings.$menuBarDisplayMode
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.syncIdleProbeGating()
+            }
+            .store(in: &cancellables)
+        settings.$enabledMetrics
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.syncIdleProbeGating()
+            }
+            .store(in: &cancellables)
 
         startStatisticsProcessSampling()
     }
@@ -922,6 +948,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             startProcSampleTimer()
             refreshAllProcesses()
         }
+        syncIdleProbeGating()
     }
 
     /// 面板消失时调用:移除来源。当所有面板均收起时，暂停 2 秒高频定时器并清空 TOP 进程列表，切断后台开销。
@@ -935,6 +962,37 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             stopProcSampleTimer()
             clearProcesses()
         }
+        syncIdleProbeGating()
+    }
+
+    #if DIRECT_DISTRIBUTION
+    /// Game HUD 是独立于主面板的温度消费者:浮窗显示且勾选温度时仍按原节奏读取。
+    /// 由 AppDelegate 组合协调器状态与 HUD 指标设置后写入,store 不反向依赖 HUD 对象。
+    func setGameHUDRequiresTemperature(_ required: Bool) {
+        guard gameHUDRequiresTemperature != required else { return }
+        gameHUDRequiresTemperature = required
+        syncIdleProbeGating()
+    }
+    #endif
+
+    /// 面板全部隐藏时停掉无人查看的探针:公网 IP 请求、蓝牙周期性画像,
+    /// 以及菜单栏与 Game HUD 都不需要的 SMC 温度键。CPU 占用、风扇告警保持原样。
+    private func syncIdleProbeGating() {
+        let panelOpen = !visiblePanelKinds.isEmpty
+        sampler.setTemperatureReadsEnabled(IdleProbeGating.temperatureReadsEnabled(
+            panelVisible: panelOpen,
+            menuBarShowsMetrics: settings.menuBarDisplayMode == .metrics,
+            menuBarTemperatureSelected: settings.isMenuBarMetricSelected(.cpuTemperature),
+            gameHUDActive: gameHUDRequiresTemperature
+        ))
+        sampler.setPublicIPQueriesEnabled(IdleProbeGating.publicIPQueriesEnabled(
+            panelVisible: panelOpen,
+            metricEnabled: settings.isMetricEnabled("public-ip", for: .network)
+        ))
+        bluetoothSampler.setProfilerPollingEnabled(IdleProbeGating.bluetoothProfilerPollingEnabled(
+            panelVisible: panelOpen,
+            bluetoothVisible: settings.isVisible(.bluetooth)
+        ))
     }
 
     /// 由 SwiftUI 侧在每次展开/收起起点调用:置位动画截止时刻。

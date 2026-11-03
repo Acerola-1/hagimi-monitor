@@ -27,7 +27,11 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
         coreClusters.superCore.union(coreClusters.performance)
     }
     #if DISPLAY_CONTROL
-    private let smcReader: SMCReader? = SMCReader()
+    private let smcReader: (any CPUTemperatureReading)?
+    private let temperatureReadLock = NSLock()
+    /// 任一温度消费者需要时才读 SMC 温度键。占用采样不受这个开关影响。
+    private var temperatureReadsEnabled = true
+    private var lastTemperatureCelsius: Double?
     #endif
     private let uptimeFormatter: DateComponentsFormatter = {
         let formatter = DateComponentsFormatter()
@@ -36,6 +40,12 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
         formatter.allowedUnits = [.day, .hour, .minute]
         return formatter
     }()
+
+    #if DISPLAY_CONTROL
+    init(smcReader: (any CPUTemperatureReading)? = SMCReader()) {
+        self.smcReader = smcReader
+    }
+    #endif
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         let info = hostCPULoadInfo()
@@ -140,9 +150,17 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
         }
 
         #if DISPLAY_CONTROL
-        let cpuTemp = smcReader?.cpuTemperature()
+        let temperature = currentTemperature()
+        let cpuTemp = temperature.value
         let temperatureValue = cpuTemp.map { "\(String(format: "%.0f", $0))°C" } ?? "--"
-        resultMetrics.append(MonitorMetric(name: "temperature", value: temperatureValue, numericValue: cpuTemp, unit: "°C"))
+        // 门控关闭时保留旧字符串供重新打开前占位,缓存值不作为本帧新观测:
+        // numericValue 是统计累计口径,只承载本次真实读取。
+        resultMetrics.append(MonitorMetric(
+            name: "temperature",
+            value: temperatureValue,
+            numericValue: temperature.isFresh ? cpuTemp : nil,
+            unit: "°C"
+        ))
         #endif
 
         return MonitorModule(
@@ -154,6 +172,27 @@ nonisolated final class CPUSampler: MonitorSampler, @unchecked Sendable {
             cpuCoreDetail: cpuCoreDetail
         )
     }
+
+    func setTemperatureReadsEnabled(_ enabled: Bool) {
+        #if DISPLAY_CONTROL
+        temperatureReadLock.lock()
+        temperatureReadsEnabled = enabled
+        temperatureReadLock.unlock()
+        #endif
+    }
+
+    #if DISPLAY_CONTROL
+    /// `isFresh` 区分真实读取与仅供展示的缓存值;后者不进入统计或历史聚合。
+    private func currentTemperature() -> (value: Double?, isFresh: Bool) {
+        temperatureReadLock.lock()
+        let shouldRead = temperatureReadsEnabled
+        temperatureReadLock.unlock()
+        guard shouldRead else { return (lastTemperatureCelsius, false) }
+        let value = smcReader?.cpuTemperature()
+        lastTemperatureCelsius = value
+        return (value, true)
+    }
+    #endif
 
     private func hostCPULoadInfo() -> host_cpu_load_info? {
         let count = mach_msg_type_number_t(MemoryLayout<host_cpu_load_info>.stride / MemoryLayout<integer_t>.stride)

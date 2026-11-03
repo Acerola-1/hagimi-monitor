@@ -125,6 +125,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         #if DIRECT_DISTRIBUTION
         // Game HUD 装配:新用户总开关默认关闭,关闭态只保留设置订阅。
         _ = gameHUDCoordinator
+        // 浮窗显隐不走负载动画,徽章要在同一轮界面更新里跟上。
+        fluidPanelController.observeGameHUDBadge(gameHUDCoordinator)
+        // Game HUD 也是独立温度消费者:正在显示且勾选温度时,主面板关闭、
+        // 菜单栏不含温度也继续读取 SMC 温度。
+        Publishers.CombineLatest(
+            gameHUDCoordinator.$isShowing,
+            store.settings.$gameHUDEnabledMetricIDs
+        )
+        .map { isShowing, ids in isShowing && ids.contains(.cpuTemperature) }
+        .removeDuplicates()
+        .receive(on: DispatchQueue.main)
+        .sink { [weak store] required in
+            store?.setGameHUDRequiresTemperature(required)
+        }
+        .store(in: &startupCancellables)
         // 游戏扫描监听:受总开关门控驱动启动/停止。
         store.settings.$gameHUDMasterEnabled
             .receive(on: DispatchQueue.main)

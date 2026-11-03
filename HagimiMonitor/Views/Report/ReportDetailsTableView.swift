@@ -161,7 +161,7 @@ struct ReportDetailsTableView: View {
                 }
                 .pickerStyle(.menu)
                 .frame(width: 70)
-                .onChange(of: pageSize) { _ in
+                .onChange(of: pageSize) { _, _ in
                     currentPage = 0
                 }
             }

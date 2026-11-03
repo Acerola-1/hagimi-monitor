@@ -218,11 +218,10 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
             return
         }
         awaitingGeometry = false
-        let intrinsic = hostingView?.intrinsicContentSize ?? .zero
-        let size: CGSize
-
-            size = CGSize(width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
-                height: (currentScreen() ?? NSScreen.main)?.visibleFrame.height ?? 800)
+        let size = CGSize(
+            width: MonitorConstants.panelIdealWidth + MonitorConstants.panelNativeShadowInset * 2,
+            height: (currentScreen() ?? NSScreen.main)?.visibleFrame.height ?? 800
+        )
 
 
         // 读取记忆位置,无历史值则用默认位置（主屏右上角）。

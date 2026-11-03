@@ -1,5 +1,15 @@
 import AppKit
 
+/// 菜单栏右上角徽章的互斥语义:告警优先,其次 Game HUD;两者都不显示时不加覆盖层。
+nonisolated struct MenuBarBadgePresentation: Equatable, Sendable {
+    let showsAlert: Bool
+    let showsHUDBadge: Bool
+
+    var drawsAlert: Bool { showsAlert }
+    var drawsHUD: Bool { showsHUDBadge && !showsAlert }
+    var needsOverlay: Bool { drawsAlert || drawsHUD }
+}
+
 /// 菜单栏图标右上角的 Game HUD 徽章:HUD 显示中时出现,紫色(与工具区
 /// Game HUD 磁贴点亮色同源)。几何与 `MenuBarAlertBadge` 完全一致,仅
 /// 颜色不同;两者互斥绘制(告警红点优先),避免两枚叠在同一位。

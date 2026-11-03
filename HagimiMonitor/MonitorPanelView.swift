@@ -164,23 +164,23 @@ struct MonitorPanelView: View {
             // 钉住面板开着改设置时可见,直接预览展开/收起效果。
             applyDefaultExpansion()
         }
-        .onAppear {
+        .onAppear { [weak store] in
             // 展开弹簧尚未收敛时不启动拖动，避免把过渡帧高度冻结为面板高度。
-            panelReorder.canBegin = { [weak store] in
-                store?.isExpansionAnimating == false
+            // store 与本视图同寿命,外层弱捕获解开后内层直接用;再写弱捕获会被外层强引用抵消,只触发警告。
+            guard let store else { return }
+            panelReorder.canBegin = {
+                store.isExpansionAnimating == false
             }
             let motion = panelExpansion.motion
-            let monitorStore = store
             motion.submissionAdapter = motionAdapter
-            motion.onMotionFrame = { [weak monitorStore] in
-                monitorStore?.beginExpansionAnimation(duration: MonitorConstants.panelNativeMotionDuration)
+            motion.onMotionFrame = {
+                store.beginExpansionAnimation(duration: MonitorConstants.panelNativeMotionDuration)
             }
 
             motionAdapter?.bindMotion(motion)
             let expansion = $expandedKinds
-            motion.resetForHiddenPanel = { [weak monitorStore, weak motion] in
-                guard let monitorStore else { return }
-                let target = monitorStore.settings.defaultExpandedKinds.intersection(monitorStore.modules.map(\.kind))
+            motion.resetForHiddenPanel = { [weak motion] in
+                let target = store.settings.defaultExpandedKinds.intersection(store.modules.map(\.kind))
                 expansion.wrappedValue = target
                 motion?.hiddenPanelReset.send()
                 motion?.setInstantly(

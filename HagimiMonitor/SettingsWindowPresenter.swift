@@ -130,9 +130,7 @@ enum SettingsWindowPresenter {
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        let toolbar = NSToolbar(identifier: "SettingsToolbar")
-        toolbar.showsBaselineSeparator = false
-        window.toolbar = toolbar
+        window.toolbar = NSToolbar(identifier: "SettingsToolbar")
         window.toolbarStyle = .unified
 
         window.isMovableByWindowBackground = true

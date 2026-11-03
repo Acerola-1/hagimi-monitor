@@ -6,14 +6,34 @@ struct SystemMonitorSnapshot: Sendable {
 }
 
 nonisolated final class SystemMonitorSampler: Sendable {
-    private let samplers: [MonitorKind: MonitorSampler] = [
-        .cpu: CPUSampler(),
-        .gpu: GPUSampler(),
-        .memory: MemorySampler(),
-        .storage: StorageSampler(),
-        .network: NetworkSampler(),
-        .battery: BatterySampler()
-    ]
+    private let cpuSampler: CPUSampler
+    private let networkSampler: NetworkSampler
+    private let samplers: [MonitorKind: MonitorSampler]
+
+    init() {
+        let cpu = CPUSampler()
+        let network = NetworkSampler()
+        cpuSampler = cpu
+        networkSampler = network
+        samplers = [
+            .cpu: cpu,
+            .gpu: GPUSampler(),
+            .memory: MemorySampler(),
+            .storage: StorageSampler(),
+            .network: network,
+            .battery: BatterySampler()
+        ]
+    }
+
+    /// 菜单栏含 CPU 温度,或任一面板可见时为 true。false 时 CPU 占用照常采样,只是不读温度键。
+    func setTemperatureReadsEnabled(_ enabled: Bool) {
+        cpuSampler.setTemperatureReadsEnabled(enabled)
+    }
+
+    /// 有面板可见且公网 IP 指标仍开启时为 true。
+    func setPublicIPQueriesEnabled(_ enabled: Bool) {
+        networkSampler.setPublicIPQueriesEnabled(enabled)
+    }
 
     func sample(previousModules: [MonitorModule]) -> Result<SystemMonitorSnapshot, SamplingError> {
         sample(kinds: MonitorKind.samplerBackedCases, previousModules: previousModules)

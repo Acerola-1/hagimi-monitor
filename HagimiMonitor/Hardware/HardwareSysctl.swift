@@ -14,8 +14,12 @@ nonisolated enum HardwareSysctl {
         guard sysctlbyname(name, nil, &size, nil, 0) == 0, size > 0 else { return nil }
         var buffer = [CChar](repeating: 0, count: size + 1)
         guard sysctlbyname(name, &buffer, &size, nil, 0) == 0 else { return nil }
-        let text = String(cString: buffer).trimmingCharacters(in: .whitespacesAndNewlines)
-        return text.isEmpty ? nil : text
+        guard let text = buffer.withUnsafeBufferPointer({ pointer in
+            pointer.baseAddress.flatMap { String(validatingCString: $0) }
+        })?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
+            return nil
+        }
+        return text
     }
 
     /// 按 sysctl 自己报的宽度读取,归一成 Int64。
@@ -53,8 +57,10 @@ nonisolated enum HardwareSysctl {
 
     /// 原始字节型(如 `kern.boottime` 的 timeval)。
     static func raw<T>(_ name: String, into value: inout T) -> Bool {
-        var size = MemoryLayout<T>.size
-        return sysctlbyname(name, &value, &size, nil, 0) == 0
+        withUnsafeMutableBytes(of: &value) { buffer in
+            var size = buffer.count
+            return sysctlbyname(name, buffer.baseAddress, &size, nil, 0) == 0
+        }
     }
 
     /// 枚举某个前缀下的所有子键名(如 `hw.optional` → `hw.optional.arm.FEAT_SVE`)。
@@ -88,7 +94,13 @@ nonisolated enum HardwareSysctl {
             let named = nameQuery.withUnsafeMutableBufferPointer { buffer in
                 sysctl(buffer.baseAddress, UInt32(buffer.count), &nameBuffer, &nameSize, nil, 0)
             }
-            if named == 0 { names.append(String(cString: nameBuffer)) }
+            if named == 0,
+               let name = nameBuffer.withUnsafeBufferPointer({ pointer in
+                   pointer.baseAddress.flatMap { String(validatingCString: $0) }
+               }),
+               !name.isEmpty {
+                names.append(name)
+            }
             current = oid
         }
         return names

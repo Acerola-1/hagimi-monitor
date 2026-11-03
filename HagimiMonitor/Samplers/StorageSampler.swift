@@ -83,7 +83,7 @@ nonisolated final class StorageSampler: MonitorSampler, @unchecked Sendable {
         guard let disk = DADiskCreateFromVolumePath(kCFAllocatorDefault, session, rootURL as CFURL),
               let bsdName = DADiskGetBSDName(disk) else { return nil }
 
-        let bsdString = String(cString: bsdName)
+        guard let bsdString = String(validatingCString: bsdName), !bsdString.isEmpty else { return nil }
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOBSDNameMatching(kIOMainPortDefault, 0, bsdString))
         guard service != 0 else { return nil }
         defer { IOObjectRelease(service) }

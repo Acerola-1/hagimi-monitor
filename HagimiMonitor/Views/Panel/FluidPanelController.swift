@@ -88,6 +88,15 @@ enum FluidPanelStatusItemRoute: Equatable, Sendable {
     }
 }
 
+/// 指标(文本)模式快照的去重键。HUD 显隐也参与比较:数值未变时徽章起灭仍会重绘。
+struct MenuBarMetricsRenderKey: Equatable {
+    let items: [MenuBarMetricItem]
+    let isDark: Bool
+    let layout: MenuBarMetricLayoutStyle
+    let scale: CGFloat
+    let badge: MenuBarBadgePresentation
+}
+
 enum FluidPanelDismissalSource: Equatable, Sendable {
     case userAction
     case systemEnd
@@ -158,17 +167,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private let layoutMetrics = FluidPanelLayoutMetrics()
 
     /// 指标(文本)模式下,上一次成功栅格化所用的关键输入。$modules 每秒发布(网络字节
-    /// 几乎每秒都变),但格式化后的菜单栏指标文本往往不变;文字/外观/布局/scale 全等时
-    /// 据此跳过 ImageRenderer 快照,消除「指标模式每秒重绘」这一常驻 CPU 热点。
-    private struct MetricsRenderKey: Equatable {
-        let items: [MenuBarMetricItem]
-        let isDark: Bool
-        let layout: MenuBarMetricLayoutStyle
-        let scale: CGFloat
-        /// 告警红点开关:数值不变而红点起灭时也要重栅格化。
-        let showsAlert: Bool
-    }
-    private var lastMetricsRenderKey: MetricsRenderKey?
+    /// 几乎每秒都变),但格式化后的菜单栏指标文本往往不变;文字/外观/布局/scale/徽章
+    /// 全等时据此跳过 ImageRenderer 快照,消除「指标模式每秒重绘」这一常驻 CPU 热点。
+    private var lastMetricsRenderKey: MenuBarMetricsRenderKey?
 
     /// 面板与菜单栏按钮左边缘对齐时,补偿窗口阴影/边框带来的 2pt 偏移。
     private static let windowBorderSize: CGFloat = 2
@@ -744,6 +745,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.setFrame(newFrame, display: display)
     }
 
+    #if DIRECT_DISTRIBUTION
+    /// Game HUD 显隐不经过负载动画。订阅后徽章与浮窗同一轮界面更新,不用等下一拍采样。
+    func observeGameHUDBadge(_ coordinator: GameHUDCoordinator) {
+        coordinator.$isShowing
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.refreshStatusItemImage()
+            }
+            .store(in: &cancellables)
+    }
+    #endif
+
     /// 构造状态项 label 视图:内嵌尺寸读取器,内容宽度变化时更新 `statusItem.length`,
     /// 使 variableLength 状态项宽度精确跟随图标/文字固有宽度(否则 button 会塌成默认窄宽,
     /// 图标被挤)。水平留白模拟系统 MenuBarExtra 的边距。
@@ -802,12 +815,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             ?? NSScreen.main?.backingScaleFactor ?? 2
         // 横排总宽由布局引擎按指标集合静态算死,与实时数值无关:
         // 无论数值怎么变,快照宽度恒定、statusItem.length 不动、不推挤邻居图标。
-        let renderKey = MetricsRenderKey(
+        let badge = MenuBarBadgePresentation(showsAlert: showsAlert, showsHUDBadge: showsHUDBadge)
+        let renderKey = MenuBarMetricsRenderKey(
             items: store.menuBarMetricItems,
             isDark: isDark,
             layout: store.settings.menuBarMetricLayoutStyle,
             scale: scale,
-            showsAlert: showsAlert
+            badge: badge
         )
         guard renderKey != lastMetricsRenderKey else { return }
 
@@ -837,12 +851,16 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let base = NSImage(cgImage: cgImage, size: pointSize)
             base.isTemplate = false
             let image: NSImage
-            if showsAlert {
-                // 指标模式的红点是后处理盖上去的:标签本身不含告警状态,
-                // 快照宽度不变,状态项长度也不受影响。
+            if badge.needsOverlay {
+                // 徽章是后处理盖上去的:标签本身不含告警/HUD 状态,
+                // 快照宽度不变,状态项长度也不受影响。告警优先于 HUD。
                 image = NSImage(size: pointSize, flipped: false) { rect in
                     base.draw(in: rect)
-                    MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
+                    if badge.drawsAlert {
+                        MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
+                    } else if badge.drawsHUD {
+                        MenuBarHUDBadge.draw(in: rect, darkMode: isDark)
+                    }
                     return true
                 }
                 image.isTemplate = false

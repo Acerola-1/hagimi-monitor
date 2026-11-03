@@ -52,10 +52,65 @@ enum BluetoothControllerState {
     case off
 }
 
+/// 蓝牙周期画像的启停与在飞调度。重开时若上一轮画像尚未结束,只记一个待补查,
+/// 由旧回调结束时立即续跑;关闭会丢弃待补查但允许已启动的进程自然结束。
+nonisolated struct ProfilerProbeState {
+    private(set) var isEnabled = false
+    private(set) var isInFlight = false
+    private(set) var hasPendingRequest = false
+
+    /// 返回本次是否需要立即启动。这里不预占 `isInFlight`;启动权由
+    /// `probeProfiler` 的 `request()` 取得,状态机不会先占后被入口判成“已在飞”。
+    mutating func setEnabled(_ enabled: Bool) -> Bool {
+        guard isEnabled != enabled else { return false }
+        isEnabled = enabled
+        guard enabled else {
+            hasPendingRequest = false
+            return false
+        }
+        guard !isInFlight else {
+            hasPendingRequest = true
+            return false
+        }
+        return true
+    }
+
+    /// `queueIfBusy` 仅用于显式补查;周期定时器撞上在飞画像时不需要额外排队。
+    mutating func request(queueIfBusy: Bool = true) -> Bool {
+        guard isEnabled else {
+            hasPendingRequest = false
+            return false
+        }
+        guard !isInFlight else {
+            if queueIfBusy { hasPendingRequest = true }
+            return false
+        }
+        isInFlight = true
+        hasPendingRequest = false
+        return true
+    }
+
+    /// 当前画像结束。返回 true 表示存在被吞掉的补查,应立即再跑一次。
+    mutating func finish() -> Bool {
+        isInFlight = false
+        let shouldContinue = hasPendingRequest && isEnabled
+        hasPendingRequest = false
+        return shouldContinue
+    }
+
+    mutating func reset() {
+        isEnabled = false
+        isInFlight = false
+        hasPendingRequest = false
+    }
+}
+
 final class BluetoothBatterySampler: NSObject {
     /// 兜底轮询周期:连断变化由 IOBluetooth 通知即时驱动,此周期仅覆盖
     /// 通知遗漏场景(如设备休眠导致的静默链路变化)。
     private static let sampleInterval: TimeInterval = 10
+    /// 周期性 system_profiler 只在有面板可见时跑。连断事件和 IO 清单刷新不受这个开关影响。
+    private var profilerProbeState = ProfilerProbeState()
     /// system_profiler 正常数百毫秒返回,个别蓝牙控制器无响应时可能挂起,
     /// 超过此时长终止进程并放弃本次结果。
     nonisolated private static let probeTimeout: DispatchTimeInterval = .seconds(8)
@@ -109,8 +164,6 @@ final class BluetoothBatterySampler: NSObject {
     private var batteryRetryWorksByAddress: [String: [DispatchWorkItem]] = [:]
     /// 最近一轮 IOBluetooth 清单的地址集,用于识别「新连接」的设备。
     private var previouslySeenAddresses: Set<String> = []
-    /// 探针在飞标记:避免同一时间多个 system_profiler 进程堆积。
-    private var probeInFlight = false
     /// 探针纪元:CB 报告蓝牙关闭时递增,在飞探针捕获启动时的纪元,
     /// 完成回调纪元不匹配即丢弃——防止关机前启动的探针把陈旧 attrib_on
     /// 以更新的时间戳写回,翻转已确定的关闭状态。
@@ -208,7 +261,9 @@ final class BluetoothBatterySampler: NSObject {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
                     guard let self, self.sessionGeneration == capturedGeneration else { return }
                     self.refreshIO()
-                    self.probeProfiler()
+                    if self.profilerProbeState.isEnabled {
+                        self.probeProfiler()
+                    }
                 }
             }
             self.publishMerged()
@@ -223,17 +278,30 @@ final class BluetoothBatterySampler: NSObject {
         connectObserver = IOBluetoothDevice.register(
             forConnectNotifications: self, selector: #selector(ioDeviceDidConnect(_:device:))
         )
-        // 快速路径先行(微秒级,面板首开即有清单),profiler 异步补充电量。
+        // 快速路径先行(微秒级,面板首开即有清单)。周期性 profiler 只在面板可见时补电量。
         refreshIO()
         // 启动时已连接的设备不算「新连接」,后续重试只针对事件驱动的新设备。
         previouslySeenAddresses = Set(ioDevices.map(\.address))
-        probeProfiler()
         timer = Timer.publish(every: Self.sampleInterval, on: .main, in: .common)
             .autoconnect()
             .sink { [weak self] _ in
-                self?.refreshIO()
-                self?.probeProfiler()
+                guard let self else { return }
+                self.refreshIO()
+                guard self.profilerProbeState.isEnabled else { return }
+                self.probeProfiler(queueIfBusy: false)
             }
+        // timer 是 probeProfiler 的运行态前提;先安装再补首帧画像。
+        if profilerProbeState.isEnabled {
+            probeProfiler()
+        }
+    }
+
+    /// 有面板可见且蓝牙行仍开启时为 true。从关到开补一次画像;若旧画像仍在飞,
+    /// 状态机会排队一次并在旧回调收尾后立即续跑。关掉后定时器只刷新 IO 清单。
+    func setProfilerPollingEnabled(_ enabled: Bool) {
+        if profilerProbeState.setEnabled(enabled) {
+            probeProfiler()
+        }
     }
 
     /// 面板可见时激活 CoreBluetooth:授权未决时创建 central 即触发系统
@@ -252,6 +320,8 @@ final class BluetoothBatterySampler: NSObject {
 
     func stop() {
         // 递增 generation,使所有在飞异步回调失效(探针/BLE/防抖/重试)。
+        // 关掉周期性画像;下次 start() 在面板仍隐藏时不会补跑 system_profiler。
+        profilerProbeState.reset()
         sessionGeneration += 1
         timer?.cancel()
         timer = nil
@@ -282,7 +352,6 @@ final class BluetoothBatterySampler: NSObject {
         pairedAudioDevices = []
         cbControllerOn = nil
         cbControllerUpdatedAt = nil
-        probeInFlight = false
         probeEpoch += 1
         bleReader.stop()
         publishMerged()
@@ -303,9 +372,8 @@ final class BluetoothBatterySampler: NSObject {
     /// 慢速路径:system_profiler 探针(数百毫秒~8s)后台执行,结果回主线程
     /// 补充合并。失败时保留最近一次成功快照,不清空 profiler 设备。
     /// 同一时间只允许一个探针在飞,避免进程堆积。
-    private func probeProfiler() {
-        guard !probeInFlight else { return }
-        probeInFlight = true
+    private func probeProfiler(queueIfBusy: Bool = true) {
+        guard timer != nil, profilerProbeState.request(queueIfBusy: queueIfBusy) else { return }
         let capturedGeneration = sessionGeneration
         let capturedEpoch = probeEpoch
         queue.async { [weak self] in
@@ -322,12 +390,14 @@ final class BluetoothBatterySampler: NSObject {
                 // generation 不匹配:stop() 已发生,丢弃迟到探针结果。
                 guard self.sessionGeneration == capturedGeneration else { return }
                 // 纪元不匹配:探针启动后蓝牙被关闭,关机前的 attrib_on 不是
-                // 有效证据,丢弃;探针在飞期已由新一轮探针接管。
+                // 有效证据,丢弃;若期间重开且已排队补查,立即续跑。
                 guard self.probeEpoch == capturedEpoch else {
-                    self.probeInFlight = false
+                    if self.profilerProbeState.finish() {
+                        self.probeProfiler()
+                    }
                     return
                 }
-                self.probeInFlight = false
+                let shouldContinue = self.profilerProbeState.finish()
                 self.pmsetDevices = pmsetList
                 self.pmsetObservedAt = powerSourceObservedAt
                 switch outcome {
@@ -345,6 +415,9 @@ final class BluetoothBatterySampler: NSObject {
                     AppLogger.sampler.info("Bluetooth probe failure: keeping last known snapshot")
                 }
                 self.publishMerged()
+                if shouldContinue {
+                    self.probeProfiler()
+                }
             }
         }
     }

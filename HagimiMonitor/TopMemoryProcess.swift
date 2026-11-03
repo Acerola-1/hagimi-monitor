@@ -81,7 +81,10 @@ nonisolated let responsiblePidResolver: ResponsiblePidFunction = {
 nonisolated func executablePath(for pid: pid_t) -> String {
     var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
     let length = proc_pidpath(pid, &buffer, UInt32(MAXPATHLEN))
-    return length > 0 ? String(cString: buffer) : ""
+    guard length > 0 else { return "" }
+    return buffer.withUnsafeBufferPointer { pointer in
+        pointer.baseAddress.flatMap { String(validatingCString: $0) }
+    } ?? ""
 }
 
 /// 读取单个进程的内存占用。

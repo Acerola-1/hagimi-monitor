@@ -158,7 +158,7 @@ final class NativePanelContentHost: NativePanelFlippedView {
     }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        let path = (maskShape.presentation() as? CAShapeLayer)?.path ?? maskShape.path
+        let path = maskShape.presentation()?.path ?? maskShape.path
         guard path?.contains(local) == true else { return nil }
         return super.hitTest(point)
     }
