@@ -2472,12 +2472,12 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
     }
 }
 
-/// 行卡常驻白色提亮:白亮观感固化为常态底色。
-/// 提亮层挂 background,落在玻璃底与卡片内容之间——只提亮玻璃、不洗文字。
-/// 亮色 0.15 / 暗色 0.08(暗色玻璃对白敏感,低浓度即可)。
+/// 行卡白罩挂在 background,落在玻璃底与卡片内容之间——只提亮玻璃、不洗文字。
+/// 浓度按配色取 `cardBrightenOpacity`:深色平衡更低,避免把中性深底重新抬白。
 private struct PanelCardBrightenModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.nativePanelOwnsCardBackdrop) private var ownsBackdrop
+    @Environment(\.panelReorderSettings) private var settings
 
     @ViewBuilder func body(content: Content) -> some View {
         if ownsBackdrop { content }
@@ -2485,7 +2485,10 @@ private struct PanelCardBrightenModifier: ViewModifier {
         content
             .background {
                 RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(MonitorPalette(preference: .balanced, colorScheme: colorScheme).cardBrightenOpacity))
+                    .fill(Color.white.opacity(MonitorPalette(
+                        preference: settings?.colorSchemePreference ?? .balanced,
+                        colorScheme: colorScheme
+                    ).cardBrightenOpacity))
                     .allowsHitTesting(false)
             }
         }

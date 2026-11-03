@@ -158,8 +158,12 @@ struct MonitorPalette {
         isDark ? 0.16 : 0.08
     }
 
-    /// 内容和原生底座共用提亮强度，保持材质层次一致。
-    var cardBrightenOpacity: Double { isDark ? 0.08 : 0.15 }
+    /// 行卡白罩，内容和原生底座共用，保持材质层次一致。
+    /// 深色平衡的行底已经压暗，白罩再低一档，避免把深底重新抬灰。
+    var cardBrightenOpacity: Double {
+        if isDark, preference == .balanced { return 0.03 }
+        return isDark ? 0.08 : 0.15
+    }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
         switch preference {
@@ -197,8 +201,11 @@ struct MonitorPalette {
         }
     }
 
+    /// 平衡行的中性玻璃。深色用较重的黑罩把毛玻璃压暗，展开区小字落在深底上；
+    /// 浅色用低浓度石板色，只和窗口分开一层。
     var neutralGlassTint: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
+        if isDark { return Color.black.opacity(0.22) }
+        return Color(hex: 0x7A91B4).opacity(0.06)
     }
 
     private var neutralSeparator: Color {
