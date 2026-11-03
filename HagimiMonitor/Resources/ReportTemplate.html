@@ -1566,16 +1566,20 @@
         headTimeSub = prefix + headTimeSub;
       }
 
-      // 应用告警的原始值是字节(内存)与字节每秒(网络)，与设置页共享同一单位合同:
-      // 容量用二进制 GiB/MiB，速率用十进制 MB/s。此前这里按 MiB 处理内存，
-      // 一旦上层改用原始字节就会差 6 个数量级。
+      // 应用告警的原始值是字节(内存)与字节每秒(网络)，与 Swift 侧同一套展示:
+      // 内存按 1024 换算，写成 GB/MB/KB；速率用十进制 MB/s。
       function formatCapacity(bytes) {
-        if (!bytes) return "0 MiB";
-        if (bytes >= 1073741824) {
-          const gib = Math.round(bytes / 107374182.4) / 10;
-          return (gib % 1 === 0 ? gib.toFixed(0) : gib.toFixed(1)) + " GiB";
+        if (!bytes || bytes <= 0) return "0 B";
+        const gib = bytes / 1073741824;
+        if (gib >= 1) {
+          const text = gib >= 10
+            ? String(Math.round(gib))
+            : (Math.round(gib * 10) / 10).toFixed(1);
+          return text + " GB";
         }
-        return Math.round(bytes / 1048576) + " MiB";
+        const mib = bytes / 1048576;
+        if (mib >= 1) return Math.round(mib) + " MB";
+        return Math.round(bytes / 1024) + " KB";
       }
       function formatRateDecimal(bytesPerSecond) {
         if (!bytesPerSecond) return "0 B/s";
@@ -1625,8 +1629,8 @@
           timeRange = (isZh ? "持续 " : "Duration ") + formatDuration(alert.durationSeconds);
         }
 
-        // 档位标签来自 Swift 侧的指标定义，模板不再硬编码边界数字：
-        // 此前这里写的是「2-4 GB / 4-8 GB / 8 GB+」，与真实的 1/2/4 GiB 边界矛盾。
+        // 档位标签来自 Swift 侧的指标定义，模板不再硬编码边界数字。
+        // 内存边界是 1/2/4 × 1024³ 字节，标签写成 1.0 GB / 2.0 GB / 4.0 GB。
         const bandNames = alert.bandLabels || [];
         const t1Name = bandNames[0] || "—", t2Name = bandNames[1] || "—", t3Name = bandNames[2] || "—";
         // tier*Seconds 是有效覆盖秒数，不是观测次数；展示成时长。

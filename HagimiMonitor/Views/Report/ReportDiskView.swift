@@ -198,8 +198,8 @@ struct ReportDiskView: View {
 
                 Chart {
                     ForEach(daily) { item in
-                        let readGB = item.readBytes / (1024 * 1024 * 1024)
-                        let writeGB = item.writeBytes / (1024 * 1024 * 1024)
+                        let readGB = item.readBytes / 1_000_000_000
+                        let writeGB = item.writeBytes / 1_000_000_000
 
                         BarMark(
                             x: .value("Date", item.dateText),

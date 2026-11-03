@@ -289,7 +289,8 @@ nonisolated struct MonitorMetric: Identifiable, Equatable, Sendable {
     var id: String { name }
 }
 
-/// 风扇运行状态。基于 RPM 与 min/max 范围判断,用于告警门控与面板着色。
+/// 风扇运行状态。基于 RPM 与 min/max 范围判断,只用于面板着色。
+/// 转速高不单独发通知:热压力由系统档位通知,风扇不另作判断。
 /// 判断规则见 `FanInfo.status`。
 nonisolated enum FanStatus: Equatable, Comparable, Sendable {
     /// 实测停转，不单凭零转速推断故障或正常休眠。
@@ -641,7 +642,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     /// 当前所有风扇读数。fans 为空 = 该机无风扇 / 读取失败 / 面板未启动采样。
     /// 由 fanSampler.$fans Combine sink 同步更新。
     @Published private(set) var fans: [FanInfo] = []
-    /// 风扇系统整体状态(由 FanSampler 发布,告警服务与面板着色订阅)。
+    /// 风扇系统整体状态(由 FanSampler 发布,供面板着色)。
     @Published private(set) var fanStatus: FanStatus = .unknown
     /// 目标机型是否有风扇(由 FNum 启动时一次性检测决定)。
     /// UI 用此值决定:面板是否插入风扇行、设置选单是否显示风扇选项。
@@ -727,7 +728,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             }
             .store(in: &cancellables)
 
-        // 风扇状态订阅:同步到 store.fanStatus,供面板着色与告警服务使用。
+        // 风扇状态订阅:同步到 store.fanStatus,供面板着色。
         fanSampler.$status
             .receive(on: DispatchQueue.main)
             .sink { [weak self] newStatus in
@@ -737,10 +738,9 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             .store(in: &cancellables)
 
         // 风扇后台采样:启动即常驻,不随面板显隐启停。
-        // 原因:告警服务需在面板关闭时也能检测风扇异常(停转/过载)并通知用户。
+        // 菜单栏风扇读数和统计都读这一路。
         // SMC 读取(FNum/F0Ac)极轻量(单次 IOConnectCall),2s 周期对功耗无感。
         fanSampler.start()
-        FanAlertService.shared.attach(to: fanSampler, settings: settings)
 
         // 蓝牙设备电量:独立采样器(IOBluetooth 连断事件驱动 + profiler 10s 兜底
         // 轮询,高成本源后台执行),结果经 Combine 回主线程。
@@ -976,7 +976,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     #endif
 
     /// 面板全部隐藏时停掉无人查看的探针:公网 IP 请求、蓝牙周期性画像,
-    /// 以及菜单栏与 Game HUD 都不需要的 SMC 温度键。CPU 占用、风扇告警保持原样。
+    /// 以及菜单栏与 Game HUD 都不需要的 SMC 温度键。CPU 占用、风扇采样保持原样。
     private func syncIdleProbeGating() {
         let panelOpen = !visiblePanelKinds.isEmpty
         sampler.setTemperatureReadsEnabled(IdleProbeGating.temperatureReadsEnabled(

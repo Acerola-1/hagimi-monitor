@@ -1552,18 +1552,18 @@
         }
       }
     },
-    "alert.pressure.memory.body %@": {
+    "alert.pressure.memory.body": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Memory pressure reached the “%@” level."
+            "value": "Memory pressure is at “%@”, and has stayed there for %lld min."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "内存压力已达「%@」档。"
+            "value": "内存压力已达「%@」，并已持续 %lld 分钟。"
           }
         }
       }
@@ -1573,45 +1573,77 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "High Memory Pressure"
+            "value": "Memory is tight"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "内存压力过高"
+            "value": "内存比较紧张"
           }
         }
       }
     },
-    "alert.pressure.thermal.body %@": {
+    "alert.pressure.thermal.body": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "System thermal state reached the “%@” level."
+            "value": "Thermal pressure is at “%@”, and has stayed there for %lld min."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统热状态已达「%@」档。"
+            "value": "热压力已达「%@」，已持续 %lld 分钟。"
           }
         }
       }
     },
-    "alert.pressure.thermal.title": {
+    "alert.pressure.thermal.body.temperature": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "High Thermal Pressure"
+            "value": "Thermal pressure is at “%@”. CPU is %lld°C, and this has lasted %lld min."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统热压力过高"
+            "value": "热压力已达「%@」，CPU %lld°C，已持续 %lld 分钟。"
+          }
+        }
+      }
+    },
+    "alert.pressure.thermal.serious.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac is getting warm"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "机器温度偏高"
+          }
+        }
+      }
+    },
+    "alert.pressure.thermal.critical.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Mac is very hot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "机器很热"
           }
         }
       }
@@ -3294,102 +3326,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "昨天"
-          }
-        }
-      }
-    },
-    "fan.alert.fault.body %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fan reading exceeds the reported range. Max RPM: %lld"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "风扇读数超出上报范围。最高读数：%lld RPM"
-          }
-        }
-      }
-    },
-    "fan.alert.fault.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Unusual Fan Reading"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "风扇读数异常"
-          }
-        }
-      }
-    },
-    "fan.alert.recovery.body %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fan speed returned to normal. Max RPM: %lld"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "风扇转速已恢复正常。最大转速：%lld RPM"
-          }
-        }
-      }
-    },
-    "fan.alert.recovery.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fan Normal"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "风扇恢复正常"
-          }
-        }
-      }
-    },
-    "fan.alert.warning.body %lld": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fan near maximum speed. Max RPM: %lld"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "风扇接近最大转速。最大转速：%lld RPM"
-          }
-        }
-      }
-    },
-    "fan.alert.warning.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Fan Running High"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "风扇转速过高"
           }
         }
       }
@@ -20100,18 +20036,66 @@
         }
       }
     },
-    "alert.process.highload.title": {
+    "alert.process.highload.memory.title": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "High Load Alert · %@"
+            "value": "%@’s memory use is high"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "高负载进程提醒 · %@"
+            "value": "%@ 内存占用偏高"
+          }
+        }
+      }
+    },
+    "alert.process.highload.cpu.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@’s CPU use is high"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的 CPU 占用偏高"
+          }
+        }
+      }
+    },
+    "alert.process.highload.gpu.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@’s GPU use is high"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的 GPU 占用偏高"
+          }
+        }
+      }
+    },
+    "alert.process.highload.network.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@’s network traffic is high"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 网络流量偏高"
           }
         }
       }
@@ -20121,13 +20105,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "%@ has been using %@ %@ for %d minutes, placing sustained load on the system."
+            "value": "High for %@, averaging about %@."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "「%@」已持续 %d 分钟占用 %@ %@，正在产生持续系统压力。"
+            "value": "已持续 %@，平均约 %@。"
           }
         }
       }

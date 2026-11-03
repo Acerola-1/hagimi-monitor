@@ -464,7 +464,7 @@ struct ReportDetailsTableView: View {
             // 网络下行速率
             cell(
                 text: row.netDown != nil ? ReportUIHelper.formatBytesRate(downRate) : "—",
-                fullText: row.netDown != nil ? String(format: "网络下行速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(downRate), ReportUIHelper.formatBytes(row.netDown ?? 0), row.netDownPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无下行网络流量",
+                fullText: row.netDown != nil ? String(format: "网络下行速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(downRate), ReportUIHelper.formatVolume(row.netDown ?? 0), row.netDownPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无下行网络流量",
                 width: 80,
                 alignment: .trailing
             )
@@ -472,7 +472,7 @@ struct ReportDetailsTableView: View {
             // 网络上传速率
             cell(
                 text: row.netUp != nil ? ReportUIHelper.formatBytesRate(upRate) : "—",
-                fullText: row.netUp != nil ? String(format: "网络上行速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(upRate), ReportUIHelper.formatBytes(row.netUp ?? 0), row.netUpPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无上行网络流量",
+                fullText: row.netUp != nil ? String(format: "网络上行速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(upRate), ReportUIHelper.formatVolume(row.netUp ?? 0), row.netUpPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无上行网络流量",
                 width: 80,
                 alignment: .trailing
             )
@@ -480,7 +480,7 @@ struct ReportDetailsTableView: View {
             // 磁盘读速
             cell(
                 text: row.diskRead != nil ? ReportUIHelper.formatBytesRate(readRate) : "—",
-                fullText: row.diskRead != nil ? String(format: "磁盘读取速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(readRate), ReportUIHelper.formatBytes(row.diskRead ?? 0), row.diskReadPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无磁盘读取活动",
+                fullText: row.diskRead != nil ? String(format: "磁盘读取速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(readRate), ReportUIHelper.formatVolume(row.diskRead ?? 0), row.diskReadPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无磁盘读取活动",
                 width: 80,
                 alignment: .trailing
             )
@@ -488,7 +488,7 @@ struct ReportDetailsTableView: View {
             // 磁盘写速
             cell(
                 text: row.diskWrite != nil ? ReportUIHelper.formatBytesRate(writeRate) : "—",
-                fullText: row.diskWrite != nil ? String(format: "磁盘写入速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(writeRate), ReportUIHelper.formatBytes(row.diskWrite ?? 0), row.diskWritePeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无磁盘写入活动",
+                fullText: row.diskWrite != nil ? String(format: "磁盘写入速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(writeRate), ReportUIHelper.formatVolume(row.diskWrite ?? 0), row.diskWritePeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无磁盘写入活动",
                 width: 80,
                 alignment: .trailing
             )

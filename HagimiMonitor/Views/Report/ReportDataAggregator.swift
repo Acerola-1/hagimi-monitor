@@ -864,12 +864,12 @@ nonisolated enum ReportDataAggregator: Sendable {
 
         let diskList = isDirect ? makeList(
             getValue: { $0.val.diskReadBytes + $0.val.diskWriteBytes },
-            format: { ReportUIHelper.formatBytes($0) },
+            format: { ReportUIHelper.formatVolume($0) },
             getTierHint: { item in
                 let val = item.val
                 let readPrefix = String(localized: "stats.r.prefixRead", defaultValue: "读")
                 let writePrefix = String(localized: "stats.r.prefixWrite", defaultValue: "写")
-                return "\(readPrefix) \(ReportUIHelper.formatBytes(val.diskReadBytes)) · \(writePrefix) \(ReportUIHelper.formatBytes(val.diskWriteBytes))"
+                return "\(readPrefix) \(ReportUIHelper.formatVolume(val.diskReadBytes)) · \(writePrefix) \(ReportUIHelper.formatVolume(val.diskWriteBytes))"
             },
             getPeak: { $0.diskReadBytes + $0.diskWriteBytes },
             minThreshold: 1024,
@@ -878,10 +878,10 @@ nonisolated enum ReportDataAggregator: Sendable {
 
         let netList = isDirect ? makeList(
             getValue: { $0.val.netDownBytes + $0.val.netUpBytes },
-            format: { ReportUIHelper.formatBytes($0) },
+            format: { ReportUIHelper.formatVolume($0) },
             getTierHint: { item in
                 let val = item.val
-                return "↓ \(ReportUIHelper.formatBytes(val.netDownBytes)) · ↑ \(ReportUIHelper.formatBytes(val.netUpBytes))"
+                return "↓ \(ReportUIHelper.formatVolume(val.netDownBytes)) · ↑ \(ReportUIHelper.formatVolume(val.netUpBytes))"
             },
             getPeak: { $0.netDownBytes + $0.netUpBytes },
             minThreshold: 1024,
@@ -1226,7 +1226,7 @@ nonisolated enum ReportDataAggregator: Sendable {
         if diskR > 0 || diskW > 0 {
             let totalDisk = diskR + diskW
             let peakR = maximum(of: rows, keyPath: \.diskReadPeak)
-            var detail = "累计完成读写 \(ReportUIHelper.formatBytes(totalDisk))（读 \(ReportUIHelper.formatBytes(diskR))，写 \(ReportUIHelper.formatBytes(diskW))）"
+            var detail = "累计完成读写 \(ReportUIHelper.formatVolume(totalDisk))（读 \(ReportUIHelper.formatVolume(diskR))，写 \(ReportUIHelper.formatVolume(diskW))）"
             if let peakR, peakR > 10 * 1024 * 1024 {
                 detail += "，突发读峰值达到 \(ReportUIHelper.formatBytesRate(peakR))"
             }
@@ -1239,7 +1239,7 @@ nonisolated enum ReportDataAggregator: Sendable {
         if netDown > 0 || netUp > 0 {
             let totalNet = netDown + netUp
             let peakDown = maximum(of: rows, keyPath: \.netDownPeak)
-            var detail = "双向网络流量合计 \(ReportUIHelper.formatBytes(totalNet))（下行 \(ReportUIHelper.formatBytes(netDown))，上行 \(ReportUIHelper.formatBytes(netUp))）"
+            var detail = "双向网络流量合计 \(ReportUIHelper.formatVolume(totalNet))（下行 \(ReportUIHelper.formatVolume(netDown))，上行 \(ReportUIHelper.formatVolume(netUp))）"
             if let peakDown, peakDown > 1 * 1024 * 1024 {
                 detail += "，下行突发峰值 \(ReportUIHelper.formatBytesRate(peakDown))"
             }

@@ -52,8 +52,8 @@ struct StatisticsApplicationObservationTests {
     @Test func displayKeepsMulticorePercentCapacityUnitsAndMissingValues() {
         #expect(StatisticsDisplayFormat.applicationObservationValue(240, metric: .cpu) == "240%")
         // 内存以原始字节计量:5.8 GiB 落在 4 GiB+ 段,不再是 8 GiB+。
-        #expect(StatisticsDisplayFormat.applicationObservationValue(5.8 * StatisticsMetricDefinition.gibibyte, metric: .memory) == "5.8 GiB")
-        #expect(StatisticsDisplayFormat.applicationObservationValue(512 * StatisticsMetricDefinition.mebibyte, metric: .memory) == "512 MiB")
+        #expect(StatisticsDisplayFormat.applicationObservationValue(5.8 * StatisticsMetricDefinition.gibibyte, metric: .memory) == "5.8 GB")
+        #expect(StatisticsDisplayFormat.applicationObservationValue(512 * StatisticsMetricDefinition.mebibyte, metric: .memory) == "512 MB")
         #expect(StatisticsDisplayFormat.applicationObservationValue(.nan, metric: .gpu) == "—")
         #expect(StatisticsDisplayFormat.applicationObservationValue(-1, metric: .network) == "—")
     }

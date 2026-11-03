@@ -57,28 +57,16 @@ TBD - created by archiving change add-fan-rpm-metric. Update Purpose after archi
 - **THEN** `FanSampler.status` 发布为 warning
 - **AND** `MonitorStore.fanStatus` 同步更新为 warning
 
-### Requirement: 风扇异常告警
-`FanAlertService` MUST 订阅 `FanSampler.$status`，在状态「升级」（更严重）时发送 macOS 用户通知；同一级别 MUST NOT 重复通知；状态从 `warning`/`fault` 恢复到 `normal` 时 MUST 发送恢复通知；`unknown` 状态 MUST NOT 触发任何通知。首次 attach 时 MUST 请求 `UNUserNotificationCenter` 授权（.alert + .sound），被拒后静默跳过。`fault` 告警 MUST 使用 `.defaultCritical` 声音，`warning` 告警 MUST 使用 `.default` 声音。通知正文 MUST 含当前 max RPM 数据。
+### Requirement: 风扇不发通知
+风扇转速 SHALL NOT 触发用户通知。转速高、接近上限、读数超出传感器上限，都只留在面板上。热压力由系统热压力档位另行通知。
 
-#### Scenario: 状态升级触发告警
-- **WHEN** 风扇状态从 normal 升级到 warning
-- **THEN** 发送 warning 通知，使用 `.default` 声音，正文含当前 max RPM
+#### Scenario: 转速升高不通知
+- **WHEN** 风扇从正常转速升到接近或达到传感器上报的上限
+- **THEN** 不发送风扇通知
 
-#### Scenario: 同级别不重复
-- **WHEN** 风扇状态持续为 warning（多次采样）
-- **THEN** 仅首次升级时通知一次，不重复发送
-
-#### Scenario: 恢复通知
-- **WHEN** 风扇状态从 warning 恢复到 normal
-- **THEN** 发送恢复通知
-
-#### Scenario: unknown 不告警
-- **WHEN** 状态为 unknown
-- **THEN** 不触发任何通知
-
-#### Scenario: 授权被拒静默
-- **WHEN** 用户拒绝通知授权
-- **THEN** 不发送通知且不崩溃
+#### Scenario: 读数超出上限不通知
+- **WHEN** 当前转速高于传感器上报的上限
+- **THEN** 不发送风扇通知
 
 ### Requirement: 菜单栏风扇指标
 `MenuBarMetricKind.fanSpeed` MUST 在 `fanAvailable == true` 时出现在 `userSelectableCases(hasFan:)` 列表，`fanAvailable == false` 时 MUST NOT 出现。`MenuBarMetricFormatter.fanRPM(_:)` MUST 输出 4 字符右对齐数字（`%4d` 格式，> 9999 cap 到 9999，nil 走 `unavailable` 占位）。菜单栏渲染 MUST 沿用 `MenuBarStatusLabel` 的 4 字符定宽 + 等宽数字机制，数字变化 MUST NOT 引起菜单栏宽度抖动。
@@ -132,11 +120,11 @@ TBD - created by archiving change add-fan-rpm-metric. Update Purpose after archi
 - **AND** 菜单栏显示 unavailable 占位而非崩溃
 
 ### Requirement: 风扇文案本地化
-所有新用户可见字符串 MUST 提供中英文双语支持，包括：菜单栏/面板字符串（`menu-bar-metric.fan-speed` / `menu-bar-metric-prefix.fan-speed` / `panel.module.fan` / `panel.fan.unavailable`）、风扇状态标题（`fan.status.normal` / `fan.status.warning` / `fan.status.fault` / `fan.status.unknown`）、告警通知标题与正文（`fan.alert.fault.title` / `fan.alert.fault.body` / `fan.alert.warning.title` / `fan.alert.warning.body` / `fan.alert.recovery.title` / `fan.alert.recovery.body`）。
+所有新用户可见字符串 MUST 提供中英文双语支持，包括：菜单栏/面板字符串（`menu-bar-metric.fan-speed` / `menu-bar-metric-prefix.fan-speed` / `panel.module.fan` / `panel.fan.unavailable`）、风扇状态标题（`fan.status.normal` / `fan.status.warning` / `fan.status.fault` / `fan.status.unknown`）。
 
 #### Scenario: 中英文环境切换
 - **WHEN** 系统语言为英文 / 简体中文
-- **THEN** 菜单栏、面板、状态标题、告警通知均显示对应语言文案
+- **THEN** 菜单栏、面板、状态标题均显示对应语言文案
 
 ### Requirement: 风扇功能测试覆盖
 风扇功能 MUST 有单元/集成测试覆盖：`FanInfo.status` 全状态分支及边界值；`FanInfo.overallStatus(of:)` 空数组/单风扇/多风扇最差值聚合；`FanStatus` Comparable 排序与 severity 映射；`FanSampler` 注入 `MockFanSMCReader` 验证 available 门控/采样输出/命名规则/状态更新；`MenuBarMetricFormatter.fanRPM` 正常值/nil/0/9999/>9999 cap；`userSelectableCases(hasFan:)` hasFan=true/false 过滤行为。

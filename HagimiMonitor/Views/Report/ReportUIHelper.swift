@@ -63,7 +63,7 @@ enum ReportUIHelper {
         StatisticsDisplayFormat.decimalRate(bytesPerSec)
     }
 
-    /// 二进制容量（GiB/MiB），用于内存、显存这类按字节计量的资源。
+    /// 内存容量（GB/MB，按 1024 换算），用于内存、显存这类按字节计量的资源。
     nonisolated static func formatBytes(_ bytes: Double) -> String {
         StatisticsDisplayFormat.binaryCapacity(bytes)
     }

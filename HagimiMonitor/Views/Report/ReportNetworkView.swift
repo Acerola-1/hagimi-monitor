@@ -234,7 +234,7 @@ struct ReportNetworkView: View {
                                 .foregroundStyle(Color.secondary.opacity(0.15))
                             AxisValueLabel {
                                 if let bytes = val.as(Double.self) {
-                                    Text(ReportUIHelper.formatBytes(bytes))
+                                    Text(ReportUIHelper.formatVolume(bytes))
                                         .font(.system(size: 10))
                                         .foregroundStyle(.secondary)
                                 }

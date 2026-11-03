@@ -217,9 +217,9 @@ struct EpisodeTierDurationTests {
     }
 
     @Test func bandLabelsComeFromSharedDefinition() {
-        // 内存档位是真实的 1/2/4 GiB，不是旧模板里的 2–4 / 4–8 / 8+ GB。
+        // 内存档位是 1/2/4 × 1024³ 字节，展示为 GB，不是旧模板里的 8+。
         let memory = StandaloneHTMLReportExporter.bandLabels(for: .memory)
-        #expect(memory == ["1.0 GiB", "2.0 GiB", "4.0 GiB"])
+        #expect(memory == ["1.0 GB", "2.0 GB", "4.0 GB"])
         #expect(memory.contains { $0.contains("8") } == false)
 
         // 网络标签是十进制单位（原始边界是 MiB/s）。
