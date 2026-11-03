@@ -2481,7 +2481,7 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
 }
 
 /// 行卡白罩挂在 background,落在玻璃底与卡片内容之间——只提亮玻璃、不洗文字。
-/// 浓度取 `cardBrightenOpacity`:深色统一 1%,避免把展开区重新抬白。
+/// 浓度取 `cardBrightenOpacity`:深色统一 1%,浅色 5%,避免把展开区重新抬白。
 private struct PanelCardBrightenModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.nativePanelOwnsCardBackdrop) private var ownsBackdrop
