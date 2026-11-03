@@ -51,18 +51,21 @@ HagimiMonitor includes a semantic Palette. Module colors, glass backgrounds, div
 
 | Balanced · Dark | Balanced · Light |
 | --- | --- |
-| ![Balanced dark theme](docs/images/balance-dark.png) | ![Balanced light theme](docs/images/balance-light.png) |
+| <img src="docs/images/en/panel-overview-balanced-dark.png" width="280" alt="Balanced dark theme"> | <img src="docs/images/en/panel-overview-balanced-light.png" width="280" alt="Balanced light theme"> |
 
 | Vibrant · Dark | Vibrant · Light |
 | --- | --- |
-| ![Vibrant dark theme](docs/images/vitality-dark.png) | ![Vibrant light theme](docs/images/vitality-light.png) |
+| <img src="docs/images/en/panel-overview-vibrant-dark.png" width="280" alt="Vibrant dark theme"> | <img src="docs/images/en/panel-overview-vibrant-light.png" width="280" alt="Vibrant light theme"> |
 
 ### Expand for Details
 
 The default state stays compact. Click the menu bar item to expand complete details for CPU, GPU, memory, storage, network, battery, displays, and more.
 
 <p align="center">
-  <img src="docs/images/detailed-data.png" width="430" alt="HagimiMonitor expanded rich metrics">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/images/en/panel-details-vibrant-dark.png" />
+    <img src="docs/images/en/panel-details-vibrant-light.png" width="280" alt="Vibrant theme with a module expanded">
+  </picture>
 </p>
 
 ## Highlights
@@ -93,6 +96,10 @@ Every module row and metric cell in the panel supports long-press drag to reorde
 <p align="center">
   <img src="docs/images/panel-reorder-drag.gif" width="340" alt="Long-press drag to swap rows">&nbsp;&nbsp;
   <img src="docs/images/panel-reorder-menu.gif" width="340" alt="Move rows via context menu">
+</p>
+
+<p align="center">
+  The <a href="https://acerola-1.github.io/hagimi-monitor/en/#reorder">website</a> also has the same demos as light and dark videos.
 </p>
 
 ### Glass UI and Unified Colors

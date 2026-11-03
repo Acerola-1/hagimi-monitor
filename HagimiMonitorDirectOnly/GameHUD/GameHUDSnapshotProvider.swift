@@ -176,7 +176,11 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
         case .systemPower:
             return module.metrics.first { $0.name == "power" }?.value
         case .cpuTemperature:
-            guard let temp = module.metrics.first(where: { $0.name == "temperature" })?.value else { return nil }
+            // 门控关闭期间主面板可保留旧温度占位;HUD 只把真实 SMC 读取作为实时值,
+            // numericValue 为空时首帧显示缺失而不是缓存值。
+            guard let metric = module.metrics.first(where: { $0.name == "temperature" }),
+                  metric.numericValue != nil else { return nil }
+            let temp = metric.value
             let thermalLevel: String
             let rawLevel = module.metrics.first(where: { $0.name == "thermal-pressure" })?.value
             switch rawLevel {

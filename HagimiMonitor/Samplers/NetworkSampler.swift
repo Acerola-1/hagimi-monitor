@@ -3,6 +3,45 @@ import Foundation
 import OSLog
 import SystemConfiguration
 
+/// 公网 IP 查询的启用与在飞状态。每次关闭令旧请求失效:旧回调携带的
+/// generation 不再相等,不会清除新一轮的在飞标记,也不会继续尝试备用源。
+nonisolated struct PublicIPQueryState {
+    private(set) var isEnabled = true
+    private(set) var isRefreshing = false
+    private(set) var generation: UInt64 = 0
+
+    /// 返回本次应启动的新请求代次;关闭或重复设置返回 nil。
+    mutating func setEnabled(_ enabled: Bool) -> UInt64? {
+        guard isEnabled != enabled else { return nil }
+        isEnabled = enabled
+        guard enabled else {
+            generation &+= 1
+            isRefreshing = false
+            return nil
+        }
+        return beginRefresh()
+    }
+
+    /// 仅当前启用代次且没有在飞请求时开始;重复采样不会叠加请求。
+    mutating func beginRefresh() -> UInt64? {
+        guard isEnabled, !isRefreshing else { return nil }
+        isRefreshing = true
+        return generation
+    }
+
+    func isCurrent(_ requestGeneration: UInt64) -> Bool {
+        isEnabled && requestGeneration == generation
+    }
+
+    /// 仅当前代次可结束并清在飞标记;旧回调不影响新一轮状态。
+    @discardableResult
+    mutating func finish(_ requestGeneration: UInt64) -> Bool {
+        guard requestGeneration == generation else { return false }
+        isRefreshing = false
+        return true
+    }
+}
+
 /// 采样器由 SystemMonitorSampler 持有并在串行采样循环中调用，内部状态单线程顺序更新。
 nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
     var kind: MonitorKind { .network }
@@ -11,7 +50,8 @@ nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
     private var publicIPCache: (ip: String, timestamp: Date)?
     private let publicIPRefreshInterval: TimeInterval = 30
     private let publicIPLock = NSLock()
-    private var isRefreshingPublicIP = false
+    /// 默认开启以保持直接调用采样器的原有行为;MonitorStore 在面板隐藏时关闭。
+    private var publicIPQueryState = PublicIPQueryState()
     private var interfaceTypeCache: [String: CFString] = [:]
     private var interfaceTypeCacheDate: Date?
     private let interfaceTypeRefreshInterval: TimeInterval = 30
@@ -105,7 +145,9 @@ nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
                 continue
             }
 
-            let name = String(cString: interface.ifa_name)
+            guard let name = String(validatingCString: interface.ifa_name), !name.isEmpty else {
+                continue
+            }
             guard !shouldIgnoreInterface(name) else {
                 continue
             }
@@ -176,24 +218,41 @@ nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
         return name
     }
 
+    /// 面板可见且公网 IP 指标仍开启时才允许发请求。关掉时保留上次成功值,不再新开连接。
+    /// 从关到开时把缓存时间标成过期,让这次切换立刻重查,而不是等满 30 秒。
+    func setPublicIPQueriesEnabled(_ enabled: Bool) {
+        publicIPLock.lock()
+        let wasEnabled = publicIPQueryState.isEnabled
+        if enabled && !wasEnabled, let cache = publicIPCache {
+            publicIPCache = (cache.ip, .distantPast)
+        }
+        let requestGeneration = publicIPQueryState.setEnabled(enabled)
+        publicIPLock.unlock()
+        if let requestGeneration {
+            refreshPublicIP(startedAt: Date(), generation: requestGeneration)
+        }
+    }
+
     private func cachedPublicIP() -> String {
         let now = Date()
 
         publicIPLock.lock()
+        guard publicIPQueryState.isEnabled else {
+            let cachedValue = publicIPCache?.ip ?? "--"
+            publicIPLock.unlock()
+            return cachedValue
+        }
         if let cache = publicIPCache, now.timeIntervalSince(cache.timestamp) < publicIPRefreshInterval {
             publicIPLock.unlock()
             return cache.ip
         }
 
         let cachedValue = publicIPCache?.ip ?? "--"
-        let shouldRefresh = !isRefreshingPublicIP
-        if shouldRefresh {
-            isRefreshingPublicIP = true
-        }
+        let requestGeneration = publicIPQueryState.beginRefresh()
         publicIPLock.unlock()
 
-        if shouldRefresh {
-            refreshPublicIP(startedAt: now)
+        if let requestGeneration {
+            refreshPublicIP(startedAt: now, generation: requestGeneration)
         }
 
         return cachedValue
@@ -220,17 +279,24 @@ nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
         }
     }
 
-    private func refreshPublicIP(startedAt: Date) {
-        fetchPublicIPFrom(providers: Self.publicIPProviders, startedAt: startedAt)
+    private func refreshPublicIP(startedAt: Date, generation: UInt64) {
+        fetchPublicIPFrom(providers: Self.publicIPProviders, startedAt: startedAt, generation: generation)
     }
 
-    private func fetchPublicIPFrom(providers: [String], startedAt: Date) {
+    private func fetchPublicIPFrom(providers: [String], startedAt: Date, generation: UInt64) {
+        publicIPLock.lock()
+        let isCurrent = publicIPQueryState.isCurrent(generation)
+        publicIPLock.unlock()
+        // 关闭后旧代次不再顺着备用服务开新请求,也不会清除新一轮的启用/在飞状态。
+        guard isCurrent else { return }
         guard let provider = providers.first else {
             // 所有源都失败，保留旧缓存
             AppLogger.sampler.error("Public IP refresh failed: all providers exhausted")
             publicIPLock.lock()
-            publicIPCache = (publicIPCache?.ip ?? "--", startedAt)
-            isRefreshingPublicIP = false
+            if publicIPQueryState.isCurrent(generation) {
+                publicIPCache = (publicIPCache?.ip ?? "--", startedAt)
+                publicIPQueryState.finish(generation)
+            }
             publicIPLock.unlock()
             return
         }
@@ -249,8 +315,10 @@ nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
 
             if let ip, Self.isValidIP(ip) {
                 publicIPLock.lock()
-                publicIPCache = (ip, Date())
-                isRefreshingPublicIP = false
+                if publicIPQueryState.isCurrent(generation) {
+                    publicIPCache = (ip, Date())
+                    publicIPQueryState.finish(generation)
+                }
                 publicIPLock.unlock()
             } else {
                 if let error {
@@ -258,8 +326,8 @@ nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
                 } else {
                     AppLogger.sampler.warning("Public IP provider \(provider) returned invalid response")
                 }
-                // 当前源失败，尝试下一个
-                fetchPublicIPFrom(providers: remaining, startedAt: startedAt)
+                // 当前源失败，尝试下一个;旧代次由入口守卫直接丢弃。
+                fetchPublicIPFrom(providers: remaining, startedAt: startedAt, generation: generation)
             }
         }
         task.resume()
@@ -353,8 +421,9 @@ nonisolated final class NetworkSampler: MonitorSampler, @unchecked Sendable {
             return nil
         }
 
-        let address = String(cString: host)
-        guard !address.isEmpty, !address.hasPrefix("fe80:") else {
+        guard let address = host.withUnsafeBufferPointer({ pointer in
+            pointer.baseAddress.flatMap { String(validatingCString: $0) }
+        }), !address.isEmpty, !address.hasPrefix("fe80:") else {
             return nil
         }
         return address

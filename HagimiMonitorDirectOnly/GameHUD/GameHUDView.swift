@@ -128,15 +128,9 @@ struct GameHUDView: View {
         return "macOS \(v.majorVersion).\(v.minorVersion)"
     }
 
-    /// 芯片型号(如 "Apple M4"):sysctl machdep.cpu.brand_string 精简。
+    /// 芯片型号(如 "Apple M4"):sysctl machdep.cpu.brand_string。读不到时用占位。
     private var chipName: String {
-        var size = 0
-        sysctlbyname("machdep.cpu.brand_string", nil, &size, nil, 0)
-        guard size > 0 else { return "Apple Silicon" }
-        var name = [CChar](repeating: 0, count: size)
-        sysctlbyname("machdep.cpu.brand_string", &name, &size, nil, 0)
-        let full = String(cString: name)
-        return full
+        HardwareSysctl.string("machdep.cpu.brand_string") ?? "Apple Silicon"
     }
 
     private var enabledIDs: Set<GameHUDMetricID> {

@@ -164,23 +164,23 @@ struct MonitorPanelView: View {
             // 钉住面板开着改设置时可见,直接预览展开/收起效果。
             applyDefaultExpansion()
         }
-        .onAppear {
+        .onAppear { [weak store] in
             // 展开弹簧尚未收敛时不启动拖动，避免把过渡帧高度冻结为面板高度。
-            panelReorder.canBegin = { [weak store] in
-                store?.isExpansionAnimating == false
+            // store 与本视图同寿命,外层弱捕获解开后内层直接用;再写弱捕获会被外层强引用抵消,只触发警告。
+            guard let store else { return }
+            panelReorder.canBegin = {
+                store.isExpansionAnimating == false
             }
             let motion = panelExpansion.motion
-            let monitorStore = store
             motion.submissionAdapter = motionAdapter
-            motion.onMotionFrame = { [weak monitorStore] in
-                monitorStore?.beginExpansionAnimation(duration: MonitorConstants.panelNativeMotionDuration)
+            motion.onMotionFrame = {
+                store.beginExpansionAnimation(duration: MonitorConstants.panelNativeMotionDuration)
             }
 
             motionAdapter?.bindMotion(motion)
             let expansion = $expandedKinds
-            motion.resetForHiddenPanel = { [weak monitorStore, weak motion] in
-                guard let monitorStore else { return }
-                let target = monitorStore.settings.defaultExpandedKinds.intersection(monitorStore.modules.map(\.kind))
+            motion.resetForHiddenPanel = { [weak motion] in
+                let target = store.settings.defaultExpandedKinds.intersection(store.modules.map(\.kind))
                 expansion.wrappedValue = target
                 motion?.hiddenPanelReset.send()
                 motion?.setInstantly(
@@ -399,6 +399,14 @@ struct MonitorPanelView: View {
                 Text(String(localized: "SYSTEM · LIVE"))
                     .monitorPanelLabelFont(tracking: 1.1)
                     .foregroundStyle(theme.captionText)
+
+                if let mark = TemporaryInstanceOverrides.label {
+                    Text(mark)
+                        .monitorPanelLabelFont(tracking: 0.2)
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .padding(.leading, 6)
+                }
 
                 Spacer(minLength: 0)
             }
@@ -2472,12 +2480,12 @@ private func parseLegacyExternalVolumes(_ context: String) -> [StorageVolumeInfo
     }
 }
 
-/// 行卡常驻白色提亮:白亮观感固化为常态底色。
-/// 提亮层挂 background,落在玻璃底与卡片内容之间——只提亮玻璃、不洗文字。
-/// 亮色 0.15 / 暗色 0.08(暗色玻璃对白敏感,低浓度即可)。
+/// 行卡白罩挂在 background,落在玻璃底与卡片内容之间——只提亮玻璃、不洗文字。
+/// 浓度取 `cardBrightenOpacity`:深色统一 1%,浅色 5%,避免把展开区重新抬白。
 private struct PanelCardBrightenModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.nativePanelOwnsCardBackdrop) private var ownsBackdrop
+    @Environment(\.panelReorderSettings) private var settings
 
     @ViewBuilder func body(content: Content) -> some View {
         if ownsBackdrop { content }
@@ -2485,7 +2493,10 @@ private struct PanelCardBrightenModifier: ViewModifier {
         content
             .background {
                 RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
-                    .fill(Color.white.opacity(MonitorPalette(preference: .balanced, colorScheme: colorScheme).cardBrightenOpacity))
+                    .fill(Color.white.opacity(MonitorPalette(
+                        preference: settings?.colorSchemePreference ?? .balanced,
+                        colorScheme: colorScheme
+                    ).cardBrightenOpacity))
                     .allowsHitTesting(false)
             }
         }
@@ -2554,6 +2565,10 @@ struct MonitorPanelTheme {
 
     var trackFill: Color {
         palette.trackFill
+    }
+
+    var rowGrooveFill: Color {
+        palette.rowGrooveFill
     }
 
     func liveDot(for loadLevel: MenuBarComputeLoadLevel) -> Color {

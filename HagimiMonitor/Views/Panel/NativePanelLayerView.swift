@@ -158,7 +158,7 @@ final class NativePanelContentHost: NativePanelFlippedView {
     }
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        let path = (maskShape.presentation() as? CAShapeLayer)?.path ?? maskShape.path
+        let path = maskShape.presentation()?.path ?? maskShape.path
         guard path?.contains(local) == true else { return nil }
         return super.hitTest(point)
     }
@@ -828,7 +828,8 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         let appearanceName: NSAppearance.Name = dark ? .darkAqua : .aqua
         if effect.appearance?.name != appearanceName { effect.appearance = NSAppearance(named: appearanceName) }
         CATransaction.begin(); CATransaction.setDisableActions(true)
-        tint.backgroundColor = (dark ? NSColor.black.withAlphaComponent(0.35) : NSColor.white.withAlphaComponent(0.45)).cgColor
+        let lightVeil = TemporaryInstanceOverrides.lightSurfaceVeilOpacity ?? 0.45
+        tint.backgroundColor = (dark ? NSColor.black.withAlphaComponent(0.35) : NSColor.white.withAlphaComponent(lightVeil)).cgColor
         outline.strokeColor = (dark ? NSColor.white.withAlphaComponent(0.28) : NSColor.black.withAlphaComponent(0.25)).cgColor
         contourShadow.shadowOpacity = dark ? 0.4 : 0.22
         contourShadow.frame = surface.frame; outline.frame = surface.frame

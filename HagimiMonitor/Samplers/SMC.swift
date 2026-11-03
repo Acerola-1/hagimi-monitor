@@ -1,12 +1,20 @@
 import Foundation
 import IOKit
 
+/// CPU 温度最小读取契约。SMC 是生产实现,其他读取器可实现同一接口。
+nonisolated protocol CPUTemperatureReading: AnyObject, Sendable {
+    func cpuTemperature() -> Double?
+}
+
 /// SMC 只读访问器。
 /// 安全不变式：通过内部私有 NSLock 互斥保护底层 Mach 端口（io_connect_t）的 IOConnectCallStructMethod 调用，
 /// 对外提供线程安全的只读属性访问契约。
-nonisolated final class SMCReader: FanSMCReading, @unchecked Sendable {
+nonisolated final class SMCReader: FanSMCReading, CPUTemperatureReading, @unchecked Sendable {
     private let lock = NSLock()
     private let conn: io_connect_t
+    /// FNum 是这台机器的风扇个数，运行期不变。首次读到大于 0 的值后复用，
+    /// 后续转速采样不再为了个数反复读同一个键。
+    private var cachedFanCount: Int?
     private static let temperatureKeys = [
         "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"
     ]
@@ -54,11 +62,21 @@ nonisolated final class SMCReader: FanSMCReading, @unchecked Sendable {
     }
 
     /// 读取 SMC key `FNum`,返回机器物理风扇数。无风扇机型或读取失败时返回 nil。
-    /// FNum 是机器静态属性,启动时读一次缓存即可,无需每次采样都读。
+    /// 个数是机器静态属性:成功读到一次后缓存,`allFans()` / `maxFanRPM()` 不再重读。
     func fanCount() -> Int? {
+        lock.lock()
+        if let cachedFanCount {
+            lock.unlock()
+            return cachedFanCount
+        }
+        lock.unlock()
         guard let raw = readValue("FNum") else { return nil }
         let count = Int(raw)
-        return count > 0 ? count : nil
+        guard count > 0 else { return nil }
+        lock.lock()
+        cachedFanCount = count
+        lock.unlock()
+        return count
     }
 
     /// 读取所有风扇的当前 RPM,返回最大 RPM。任一风扇读取失败跳过(不抛错);

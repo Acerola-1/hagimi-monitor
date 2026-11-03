@@ -63,6 +63,8 @@ nonisolated enum AppIdentityResolver: Sendable {
         var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN) * 4)
         let length = proc_pidpath(pid, &buffer, UInt32(buffer.count))
         guard length > 0 else { return nil }
-        return String(cString: buffer)
+        return buffer.withUnsafeBufferPointer { pointer in
+            pointer.baseAddress.flatMap { String(validatingCString: $0) }
+        }.flatMap { $0.isEmpty ? nil : $0 }
     }
 }

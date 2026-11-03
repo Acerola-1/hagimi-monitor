@@ -12,20 +12,39 @@ struct MonitorPalette {
         isDark ? Color.white.opacity(0.96) : Color(hex: 0x171D2A)
     }
 
+    /// 浅色数字、次要文字和标签逐级压深，避免在亮玻璃上发飘。标题仍是 #171D2A。
     var valueText: Color {
-        isDark ? Color.white.opacity(0.90) : Color(hex: 0x2F3747)
+        isDark ? Color.white.opacity(0.90) : Color(hex: 0x222938)
     }
 
     var secondaryText: Color {
-        isDark ? Color.white.opacity(0.82) : Color(hex: 0x465164)
+        isDark ? Color.white.opacity(0.82) : Color(hex: 0x343C4A)
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.78) : Color(hex: 0x4E5868)
+        isDark ? Color.white.opacity(0.78) : Color(hex: 0x3E4756)
     }
 
+    /// 指标格、进度槽和展开区内衬共用。深色用 3% 白，浅色用同一块深石板的 5%。
+    /// 调试构建可用 `-HagimiTrackFill` 覆盖当前外观下的浓度。
     var trackFill: Color {
-        isDark ? Color.white.opacity(0.08) : Color(hex: 0x3C485A).opacity(0.08)
+        if isDark {
+            let opacity = TemporaryInstanceOverrides.trackFillOpacity ?? 0.03
+            return Color.white.opacity(opacity)
+        }
+        let opacity = TemporaryInstanceOverrides.trackFillOpacity ?? 0.05
+        return Color(hex: 0x3C485A).opacity(opacity)
+    }
+
+    /// 主行成对读数的浅底。浅色这块比指标格更需要轮廓，用 8% 深石板；深色仍跟指标格走。
+    var rowGrooveFill: Color {
+        guard !isDark else { return trackFill }
+        return Color(hex: 0x3C485A).opacity(0.08)
+    }
+
+    /// 毛玻璃按钮描边。明暗和两种配色共用 10% 白。
+    var materialButtonStroke: Color {
+        Color.white.opacity(0.10)
     }
 
     func liveDot(for loadLevel: MenuBarComputeLoadLevel) -> Color {
@@ -158,8 +177,13 @@ struct MonitorPalette {
         isDark ? 0.16 : 0.08
     }
 
-    /// 内容和原生底座共用提亮强度，保持材质层次一致。
-    var cardBrightenOpacity: Double { isDark ? 0.08 : 0.15 }
+    /// 行卡白罩，内容和原生底座共用，保持材质层次一致。
+    /// 深色统一 1%，展开区少被抬白。浅色 5%，把薄玻璃收成磨砂卡片，又不过度抬白。
+    /// 调试构建可用 `-HagimiCardBrighten` 覆盖浅色这一层。
+    var cardBrightenOpacity: Double {
+        if isDark { return 0.01 }
+        return TemporaryInstanceOverrides.lightCardBrightenOpacity ?? 0.05
+    }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
         switch preference {
@@ -197,8 +221,11 @@ struct MonitorPalette {
         }
     }
 
+    /// 平衡行的中性玻璃。深色用较重的黑罩把毛玻璃压暗，展开区小字落在深底上；
+    /// 浅色用低浓度石板色，只和窗口分开一层。
     var neutralGlassTint: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.12 : 0.06)
+        if isDark { return Color.black.opacity(0.22) }
+        return Color(hex: 0x7A91B4).opacity(0.06)
     }
 
     private var neutralSeparator: Color {
@@ -250,6 +277,53 @@ struct MonitorPalette {
             // Bluetooth SIG 官方蓝。
             Color(hex: 0x0082FC)
         }
+    }
+}
+
+/// 调试构建用来区分并排打开的临时实例。
+/// `-HagimiInstanceLabel` 显示在面板标题旁；`-HagimiTrackFill` 覆盖当前外观下指标格和凹槽的浓度；
+/// `-HagimiSurfaceVeil` 覆盖浅色窗口白罩；`-HagimiCardBrighten` 覆盖浅色行卡白罩。正式包不读这些参数。
+enum TemporaryInstanceOverrides {
+    static var label: String? {
+        #if DEBUG
+        let value = UserDefaults.standard.string(forKey: "HagimiInstanceLabel") ?? ""
+        return value.isEmpty ? nil : value
+        #else
+        return nil
+        #endif
+    }
+
+    static var trackFillOpacity: Double? {
+        #if DEBUG
+        guard UserDefaults.standard.object(forKey: "HagimiTrackFill") != nil else { return nil }
+        let value = UserDefaults.standard.double(forKey: "HagimiTrackFill")
+        guard value >= 0, value <= 1 else { return nil }
+        return value
+        #else
+        return nil
+        #endif
+    }
+
+    static var lightCardBrightenOpacity: Double? {
+        #if DEBUG
+        guard UserDefaults.standard.object(forKey: "HagimiCardBrighten") != nil else { return nil }
+        let value = UserDefaults.standard.double(forKey: "HagimiCardBrighten")
+        guard value >= 0, value <= 1 else { return nil }
+        return value
+        #else
+        return nil
+        #endif
+    }
+
+    static var lightSurfaceVeilOpacity: Double? {
+        #if DEBUG
+        guard UserDefaults.standard.object(forKey: "HagimiSurfaceVeil") != nil else { return nil }
+        let value = UserDefaults.standard.double(forKey: "HagimiSurfaceVeil")
+        guard value >= 0, value <= 1 else { return nil }
+        return value
+        #else
+        return nil
+        #endif
     }
 }
 

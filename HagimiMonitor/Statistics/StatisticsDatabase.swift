@@ -309,7 +309,7 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
             let openResult = sqlite3_open_v2(url.path, &handle, flags, nil)
             guard openResult == SQLITE_OK, let handle else {
                 if let handle {
-                    AppLogger.sampler.error("Statistics database open failed (\(openResult)): \(String(cString: sqlite3_errmsg(handle)))")
+                    AppLogger.sampler.error("Statistics database open failed (\(openResult)): \(String(validatingCString: sqlite3_errmsg(handle)) ?? "unknown")")
                     sqlite3_close_v2(handle)
                     self.handle = nil
                 } else {
@@ -613,7 +613,11 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
         var names: Set<String> = []
         while sqlite3_step(statement) == SQLITE_ROW {
             let name = sqlite3_column_text(statement, 1)
-            if let name { names.insert(String(cString: name)) }
+            if let name,
+               let column = String(validatingCString: UnsafeRawPointer(name).assumingMemoryBound(to: CChar.self)),
+               !column.isEmpty {
+                names.insert(column)
+            }
         }
         return names
     }
@@ -623,7 +627,7 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
         var errorText: UnsafeMutablePointer<CChar>?
         guard sqlite3_exec(handle, sql, nil, nil, &errorText) == SQLITE_OK else {
             if let errorText {
-                AppLogger.sampler.error("Statistics SQL failed: \(String(cString: errorText)) — \(sql)")
+                AppLogger.sampler.error("Statistics SQL failed: \(String(validatingCString: errorText) ?? "unknown") — \(sql)")
                 sqlite3_free(errorText)
             }
             return
@@ -657,7 +661,7 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
         }
         sqlite3_bind_int64(statement, Int32(row.values.count + 2), Int64(row.n))
         guard sqlite3_step(statement) == SQLITE_DONE else {
-            AppLogger.sampler.error("Statistics insert failed: \(String(cString: sqlite3_errmsg(handle)))")
+            AppLogger.sampler.error("Statistics insert failed: \(String(validatingCString: sqlite3_errmsg(handle)) ?? "unknown")")
             return
         }
     }

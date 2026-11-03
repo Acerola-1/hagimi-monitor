@@ -147,12 +147,12 @@ nonisolated func enrichDisk(_ rawProcesses: [RawDiskProcess]) -> [TopDiskProcess
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 
-        let name: String
-        if let localized = app?.localizedName, !localized.isEmpty {
-            name = localized
-        } else {
-            name = raw.fallbackName
-        }
+        let name = topProcessDisplayName(
+            pid: raw.pid,
+            path: raw.path,
+            fallbackName: raw.fallbackName,
+            localizedName: app?.localizedName
+        )
 
         let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)
 

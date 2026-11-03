@@ -230,12 +230,12 @@ nonisolated func enrichNetwork(_ rawProcesses: [RawNetworkProcess]) -> [TopNetwo
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 
-        let name: String
-        if let localized = app?.localizedName, !localized.isEmpty {
-            name = localized
-        } else {
-            name = raw.name
-        }
+        let name = topProcessDisplayName(
+            pid: raw.pid,
+            path: raw.path,
+            fallbackName: raw.name,
+            localizedName: app?.localizedName
+        )
 
         let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)
 

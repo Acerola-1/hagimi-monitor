@@ -37,12 +37,16 @@ nonisolated let systemProcessPathPrefixes: [String] = [
 ]
 
 /// 系统进程判定:常驻白名单(alwaysVisibleSystemAppMarkers)放行,否则系统路径排除。
-/// 五类 TOP 采样(CPU/内存/GPU/磁盘/网络)共用,避免口径分叉——路径空表示
-/// 宿主已退出的孤儿分组,也视为系统进程。
+/// 五类 TOP 采样(CPU/内存/GPU/磁盘/网络)共用,避免口径分叉。调用方传入的必须是
+/// 分组后的宿主路径:组内虚机即使位于 /System,也不单独决定这一组的去留。
+/// 路径空表示宿主已退出的孤儿分组,也视为系统进程。
+/// `/usr/local/` 是 Data 卷上的第三方安装位,要在 `/usr/` 前缀之前放行,否则
+/// Apple container 这类本地软件会被当成操作系统丢掉。
 nonisolated func isSystemProcessPath(_ path: String, includeSystemProcesses: Bool) -> Bool {
     if includeSystemProcesses { return false }
     let isAlwaysVisible = alwaysVisibleSystemAppMarkers.contains { path.contains($0) }
     if isAlwaysVisible { return false }
+    if path.hasPrefix("/usr/local/") { return false }
     return path.isEmpty || systemProcessPathPrefixes.contains { path.hasPrefix($0) }
 }
 
@@ -77,7 +81,10 @@ nonisolated let responsiblePidResolver: ResponsiblePidFunction = {
 nonisolated func executablePath(for pid: pid_t) -> String {
     var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
     let length = proc_pidpath(pid, &buffer, UInt32(MAXPATHLEN))
-    return length > 0 ? String(cString: buffer) : ""
+    guard length > 0 else { return "" }
+    return buffer.withUnsafeBufferPointer { pointer in
+        pointer.baseAddress.flatMap { String(validatingCString: $0) }
+    } ?? ""
 }
 
 /// 读取单个进程的内存占用。
@@ -224,13 +231,12 @@ nonisolated func enrich(_ rawProcesses: [RawMemoryProcess]) -> [TopMemoryProcess
     return rawProcesses.map { raw in
         let app = NSRunningApplication(processIdentifier: pid_t(raw.pid))
 
-        // 本地化名优先(如"谷歌浏览器"),否则用路径兜底名。
-        let name: String
-        if let localized = app?.localizedName, !localized.isEmpty {
-            name = localized
-        } else {
-            name = raw.fallbackName
-        }
+        let name = topProcessDisplayName(
+            pid: raw.pid,
+            path: raw.path,
+            fallbackName: raw.fallbackName,
+            localizedName: app?.localizedName
+        )
 
         // 图标:走共享的降采样缓存,产出固定 16pt 小位图,避免持有大图 rep。
         let icon = ProcessIconCache.icon(forPID: pid_t(raw.pid), path: raw.path)

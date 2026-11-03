@@ -13,7 +13,7 @@ struct SparklineChart: View {
 
     var body: some View {
         Canvas { context, size in
-            let points = Array(samples.suffix(24))
+            let points = Array(samples.suffix(MonitorConstants.sparklineMaxPoints))
             guard points.count > 1 else { return }
 
             let stepX = size.width / CGFloat(points.count - 1)

@@ -448,7 +448,7 @@ private nonisolated final class Arm64DDCMatcher {
                     service: service,
                     serviceLocation: registryService.serviceLocation,
                     matchScore: score,
-                    chipAddress: registryService.isMCDP29XX ? 0xB7 : 0x37
+                    chipAddress: MCDP29XXAddress.chipAddress(isMCDP29XX: registryService.isMCDP29XX)
                 )
                 candidatesByScore[score, default: []].append(candidate)
             }
@@ -546,7 +546,10 @@ private nonisolated final class Arm64DDCMatcher {
                 return nil
             }
 
-            let name = String(cString: namePointer)
+            guard let name = String(validatingCString: namePointer), !name.isEmpty else {
+                IOObjectRelease(entry)
+                continue
+            }
             if names.contains(where: { name.contains($0) }) {
                 return (name, entry)
             }
@@ -571,7 +574,9 @@ private nonisolated final class Arm64DDCMatcher {
             path.deallocate()
         }
         if IORegistryEntryGetPath(entry, kIOServicePlane, path) == KERN_SUCCESS {
-            service.ioDisplayLocation = String(cString: path)
+            if let location = String(validatingCString: path), !location.isEmpty {
+                service.ioDisplayLocation = location
+            }
         }
 
         if let unmanagedAttributes = IORegistryEntryCreateCFProperty(
