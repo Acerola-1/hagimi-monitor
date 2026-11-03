@@ -272,9 +272,11 @@ html.js .fade-in.visible{opacity:1;transform:none;}
 .bar-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
 .bar-card{
   padding:18px 16px;border:1px solid var(--border);border-radius:14px;background:var(--card);min-width:0;
+  text-align:center;
 }
+.bar-card .theme-shot{width:auto;height:40px;max-width:100%;margin:0 auto 14px;border-radius:6px;}
 .bar-card b{display:block;font-size:15px;margin-bottom:4px;}
-.bar-card span{font-size:13px;color:var(--muted);}
+.bar-card span{display:block;font-size:13px;color:var(--muted);}
 .perf h2{font-size:clamp(36px,5vw,54px);}
 .perf .lead{max-width:720px;margin-top:16px;}
 .stats{display:flex;gap:40px;justify-content:center;margin-top:48px;flex-wrap:wrap;}
@@ -434,9 +436,7 @@ html.js .fade-in.visible{opacity:1;transform:none;}
               <div class="v3-bar"><span class="v3-dot r"></span><span class="v3-dot y"></span><span class="v3-dot g"></span><span class="v3-title">Homebrew</span></div>
               <button class="v3-body" type="button" title="Click to copy the install command" aria-label="Copy Homebrew install command"><span class="prompt">$</span><span class="cmd">brew install hagimimonitordirect</span><span class="v3-copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>Copy</span><span class="copied">Copied ✓</span></button>
             </div>
-            <div class="v3-badge"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg><span>Available in the official Homebrew Cask repo · or download the DMG manually</span></div>
           </div>
-          <p class="v3-note">The GitHub version is completely free, with the fastest updates and the most features. The App Store version is a paid download and is sandboxed, so some features may be unavailable. Wait — why pay for a version with fewer features? Honestly, I'd recommend the GitHub version too. The App Store version is my little tip jar. Thanks for your support! (*^▽^*)</p>
         </div>
       </div>
       <div class="hero-right fade-in">
@@ -445,13 +445,11 @@ html.js .fade-in.visible{opacity:1;transform:none;}
           <img class="mid" src="../images/en/panel-overview-balanced-light.png" data-light="../images/en/panel-overview-balanced-light.png" data-dark="../images/en/panel-overview-balanced-dark.png" width="753" height="862" alt="" decoding="async">
           <img class="front" src="../images/en/panel-overview-vibrant-light.png" data-light="../images/en/panel-overview-vibrant-light.png" data-dark="../images/en/panel-overview-vibrant-dark.png" width="753" height="862" alt="" decoding="async">
         </div>
-        <p class="fan-cap">Vibrant and Balanced, each with its own light and dark panel</p>
       </div>
     </div>
     <div class="theme-preview fade-in" id="themes">
       <div class="kicker">Balanced · Vibrant</div>
       <h2>Two themes, four appearances</h2>
-      <p class="lead">Calm Balanced, or colorful glass Vibrant — each in light and dark. These four previews stay as they are; the feature shots below follow your system's light or dark appearance.</p>
       <div class="thumb-grid"><figure class="thumb"><img src="../images/en/panel-overview-balanced-light.png" width="753" height="862" alt="Balanced palette, light" loading="lazy" decoding="async"><figcaption><b>Balanced</b>Light</figcaption></figure><figure class="thumb"><img src="../images/en/panel-overview-balanced-dark.png" width="753" height="862" alt="Balanced palette, dark" loading="lazy" decoding="async"><figcaption><b>Balanced</b>Dark</figcaption></figure><figure class="thumb"><img src="../images/en/panel-overview-vibrant-light.png" width="753" height="862" alt="Vibrant palette, light" loading="lazy" decoding="async"><figcaption><b>Vibrant</b>Light</figcaption></figure><figure class="thumb"><img src="../images/en/panel-overview-vibrant-dark.png" width="753" height="862" alt="Vibrant palette, dark" loading="lazy" decoding="async"><figcaption><b>Vibrant</b>Dark</figcaption></figure></div>
     </div>
   </div>
@@ -470,12 +468,11 @@ html.js .fade-in.visible{opacity:1;transform:none;}
       </div>
       <div class="bar-copy">
         <h2>One Score for<br>System Pressure</h2>
-        <p class="lead">The load ring blends CPU, GPU, and memory pressure into a single score via Softmax aggregation. Color shifts with load — green when idle, teal when working, orange when busy, red when stressed.</p>
-        <p class="bar-note">Icon, text, and compact single-line layouts are there too, with a static width that does not jitter.</p>
+        <p class="lead">The load ring blends CPU, GPU, and memory pressure into a single score via Softmax aggregation.</p>
       </div>
     </div>
     <div class="bar-alt">Other menu bar styles</div>
-    <div class="bar-grid"><article class="bar-card"><b>Icon</b><span>Classic icon, clean and minimal</span></article><article class="bar-card"><b>Text</b><span>Numeric display for precise readings</span></article><article class="bar-card"><b>Compact</b><span>Narrower footprint for smaller screens</span></article></div>
+    <div class="bar-grid"><article class="bar-card"><img class="theme-shot" data-light="../images/en/menubar-icon-light.png" data-dark="../images/en/menubar-icon-dark.png" width="304" height="60" alt="Icon menu bar style" loading="lazy" decoding="async"><b>Icon</b><span>Classic icon, clean and minimal</span></article><article class="bar-card"><img class="theme-shot" data-light="../images/en/menubar-text-light.png" data-dark="../images/en/menubar-text-dark.png" width="378" height="60" alt="Text menu bar style" loading="lazy" decoding="async"><b>Text</b><span>Numeric display for precise readings</span></article><article class="bar-card"><img class="theme-shot" data-light="../images/en/menubar-compact-light.png" data-dark="../images/en/menubar-compact-dark.png" width="222" height="60" alt="Compact menu bar style" loading="lazy" decoding="async"><b>Compact</b><span>Narrower footprint for smaller screens</span></article></div>
   </div>
 </section>
 
@@ -484,7 +481,7 @@ html.js .fade-in.visible{opacity:1;transform:none;}
     <div class="kicker">Lives in the menu bar, barely noticeable</div>
     <h2>Lightweight<br>Won't Slow Your Mac</h2>
     <p class="lead">Built with native Swift. Throttled sampling and theme caching keep it quietly in the corner — there when you need it, easy to ignore when you don't.</p>
-    <div class="stats"><div class="stat"><div class="n">&lt;5<small>%</small></div><div class="l">Idle CPU usage</div></div><div class="sep"></div><div class="stat"><div class="n">120<small>fps</small></div><div class="l">Smooth animation cap</div></div><div class="sep"></div><div class="stat"><div class="n">1<small>click</small></div><div class="l">Opens the full panel</div></div></div>
+    <div class="stats"><div class="stat"><div class="n">&lt;5<small>%</small></div><div class="l">Idle CPU usage</div></div><div class="sep"></div><div class="stat"><div class="n">120<small>fps</small></div><div class="l">Smooth animation cap</div></div><div class="sep"></div><div class="stat"><div class="n">&lt;7<small>Mb</small></div><div class="l">Small, yet complete</div></div></div>
   </div>
 </section>
 
@@ -492,11 +489,9 @@ html.js .fade-in.visible{opacity:1;transform:none;}
   <div class="section-inner fade-in">
     <div class="mod-head">
       <div class="kicker">Expand for the details</div>
-      <h2>Open a row, see that hardware</h2>
-      <p class="lead">A click on the menu bar opens the panel. Below are CPU, GPU, memory, storage, network, and power in the Vibrant palette. Bluetooth battery and display info live in the same panel.</p>
-      <p class="fine">Temperature, fan speed, and the storage / network process lists are GitHub direct edition only. The App Store edition cannot read them inside the sandbox.</p>
+      <h2>One click, everything in view</h2>
     </div>
-    <div class="mod-grid"><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-cpu-vibrant-light.png" data-dark="../images/en/panel-cpu-vibrant-dark.png" width="753" height="1436" alt="CPU module: core groups, thermal pressure, and processes" loading="lazy" decoding="async"><figcaption><b>CPU</b>System, user, and idle usage, P/E core groups, thermal pressure, and the process list. Per-core rings and temperature are direct edition only. M6 and M5 Pro/Max show S/P/E groups.</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-gpu-vibrant-light.png" data-dark="../images/en/panel-gpu-vibrant-dark.png" width="753" height="1314" alt="GPU module: VRAM, render and tiler, per-process usage" loading="lazy" decoding="async"><figcaption><b>GPU</b>Graphics load, render and tiler performance, VRAM, and per-process usage.</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-memory-vibrant-light.png" data-dark="../images/en/panel-memory-vibrant-dark.png" width="753" height="1314" alt="Memory module: pressure, swap, compression, and processes" loading="lazy" decoding="async"><figcaption><b>Memory</b>Used memory, pressure, swap, compressed memory, and the processes using the most.</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-storage-vibrant-light.png" data-dark="../images/en/panel-storage-vibrant-dark.png" width="753" height="1211" alt="Storage module: capacity, throughput, and health" loading="lazy" decoding="async"><figcaption><b>Storage</b>System disk capacity, read / write rates, and SMART health. Per-process read/write is direct edition only.</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-network-vibrant-light.png" data-dark="../images/en/panel-network-vibrant-dark.png" width="753" height="1262" alt="Network module: rates, Wi-Fi signal, and IP" loading="lazy" decoding="async"><figcaption><b>Network</b>Upload and download rates, interface type, Wi-Fi signal, and IP info. Per-process traffic is direct edition only.</figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-battery-vibrant-light.png" data-dark="../images/en/panel-battery-vibrant-dark.png" width="753" height="1330" alt="Power module: charge, draw, and flow" loading="lazy" decoding="async"><figcaption><b>Power</b>Charge level, power source, machine and component draw, and how power flows.</figcaption></figure></div>
+    <div class="mod-grid"><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-cpu-vibrant-light.png" data-dark="../images/en/panel-cpu-vibrant-dark.png" width="753" height="1436" alt="CPU module: core groups, thermal pressure, and processes" loading="lazy" decoding="async"><figcaption><b>CPU</b></figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-gpu-vibrant-light.png" data-dark="../images/en/panel-gpu-vibrant-dark.png" width="753" height="1314" alt="GPU module: VRAM, render and tiler, per-process usage" loading="lazy" decoding="async"><figcaption><b>GPU</b></figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-memory-vibrant-light.png" data-dark="../images/en/panel-memory-vibrant-dark.png" width="753" height="1314" alt="Memory module: pressure, swap, compression, and processes" loading="lazy" decoding="async"><figcaption><b>Memory</b></figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-storage-vibrant-light.png" data-dark="../images/en/panel-storage-vibrant-dark.png" width="753" height="1211" alt="Storage module: capacity, throughput, and health" loading="lazy" decoding="async"><figcaption><b>Storage</b></figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-network-vibrant-light.png" data-dark="../images/en/panel-network-vibrant-dark.png" width="753" height="1262" alt="Network module: rates, Wi-Fi signal, and IP" loading="lazy" decoding="async"><figcaption><b>Network</b></figcaption></figure><figure class="mod-card"><img class="theme-shot" data-light="../images/en/panel-battery-vibrant-light.png" data-dark="../images/en/panel-battery-vibrant-dark.png" width="753" height="1330" alt="Power module: charge, draw, and flow" loading="lazy" decoding="async"><figcaption><b>Power</b></figcaption></figure></div>
   </div>
 </section>
 
@@ -527,7 +522,7 @@ html.js .fade-in.visible{opacity:1;transform:none;}
     </div>
     <div class="stack">
       <figure class="shot wide"><img class="theme-shot" data-light="../images/en/ui-stats-report-light.png" data-dark="../images/en/ui-stats-report-dark.png" width="2984" height="2048" alt="Native statistics report" loading="lazy" decoding="async"><figcaption><b>Native report</b>Health score, trend curves, and heatmaps. Defaults to today; switch to 7 days, 30 days, or a year.</figcaption></figure>
-      <figure class="shot mid"><img class="theme-shot" data-light="../images/en/ui-settings-statistics-light.png" data-dark="../images/en/ui-settings-statistics-dark.png" width="1544" height="1594" alt="Statistics settings" loading="lazy" decoding="async"><figcaption><b>Statistics settings</b>Turn recording on, review today, 7 days, and 30 days, and manage local storage.</figcaption></figure>
+      <figure class="shot mid"><img class="theme-shot" data-light="../images/en/ui-settings-statistics-light.png" data-dark="../images/en/ui-settings-statistics-dark.png" width="1544" height="1594" alt="Statistics settings" loading="lazy" decoding="async"></figure>
     </div>
   </div>
 </section>
@@ -537,9 +532,8 @@ html.js .fade-in.visible{opacity:1;transform:none;}
     <div class="block-head">
       <div class="kicker">Settings</div>
       <h2>Choose what the panel shows</h2>
-      <p class="lead">General appearance, which metrics each module expands, quick tools, Game HUD, and About.</p>
     </div>
-    <div class="settings-grid"><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-general-light.png" data-dark="../images/en/ui-settings-general-dark.png" width="1544" height="1594" alt="General settings: language, theme, palette, and menu bar" loading="lazy" decoding="async"><figcaption><b>General</b>Language, light or dark, Balanced or Vibrant, and whether the menu bar shows the load ring or metrics.</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-cpu-light.png" data-dark="../images/en/ui-settings-cpu-dark.png" width="1544" height="1594" alt="CPU settings: chart style and metrics" loading="lazy" decoding="async"><figcaption><b>CPU</b>Bar or line chart, which metrics start expanded, and whether the process ranking is shown.</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-quick-tools-light.png" data-dark="../images/en/ui-settings-quick-tools-dark.png" width="1544" height="1594" alt="Quick tools settings" loading="lazy" decoding="async"><figcaption><b>Quick Tools</b>Choose which switches appear in the panel: keyboard lock, sleep prevention, and display awake.</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-game-hud-light.png" data-dark="../images/en/ui-settings-game-hud-dark.png" width="1544" height="1594" alt="Game HUD settings" loading="lazy" decoding="async"><figcaption><b>Game HUD</b>While a game is in front, overlay frame rate and system usage as a top bar or a card, with adjustable background opacity.</figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-about-light.png" data-dark="../images/en/ui-settings-about-dark.png" width="1544" height="1594" alt="About page" loading="lazy" decoding="async"><figcaption><b>About</b>Version, update check, release notes, open-source notices, and the anonymous usage toggle.</figcaption></figure></div>
+    <div class="settings-grid"><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-general-light.png" data-dark="../images/en/ui-settings-general-dark.png" width="1544" height="1594" alt="General settings: language, theme, palette, and menu bar" loading="lazy" decoding="async"><figcaption><b>General</b></figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-cpu-light.png" data-dark="../images/en/ui-settings-cpu-dark.png" width="1544" height="1594" alt="CPU settings: chart style and metrics" loading="lazy" decoding="async"><figcaption><b>CPU</b></figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-quick-tools-light.png" data-dark="../images/en/ui-settings-quick-tools-dark.png" width="1544" height="1594" alt="Quick tools settings" loading="lazy" decoding="async"><figcaption><b>Quick Tools</b></figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-game-hud-light.png" data-dark="../images/en/ui-settings-game-hud-dark.png" width="1544" height="1594" alt="Game HUD settings" loading="lazy" decoding="async"><figcaption><b>Game HUD</b></figcaption></figure><figure class="set-card"><img class="theme-shot" data-light="../images/en/ui-settings-about-light.png" data-dark="../images/en/ui-settings-about-dark.png" width="1544" height="1594" alt="About page" loading="lazy" decoding="async"><figcaption><b>About</b></figcaption></figure></div>
   </div>
 </section>
 
@@ -547,8 +541,8 @@ html.js .fade-in.visible{opacity:1;transform:none;}
   <div class="section-inner fade-in">
     <div class="kicker">More capabilities</div>
     <h2>Quick Tools</h2>
-    <p class="lead">Keyboard lock, sleep prevention, and display-awake — toggle them from the panel. Active tools light up in the panel header.</p>
-    <figure class="narrow-shot"><img class="theme-shot" data-light="../images/en/ui-quick-tools-light.png" data-dark="../images/en/ui-quick-tools-dark.png" width="752" height="1240" alt="Quick tools panel: keyboard lock, sleep prevention, and display awake" loading="lazy" decoding="async"><figcaption><b>Quick tools</b>All three switches live in this panel.</figcaption></figure>
+    <p class="lead">Keyboard lock, sleep prevention, and display-awake — toggle them from the panel.</p>
+    <figure class="narrow-shot"><img class="theme-shot" data-light="../images/en/ui-quick-tools-light.png" data-dark="../images/en/ui-quick-tools-dark.png" width="752" height="1240" alt="Quick tools panel: keyboard lock, sleep prevention, and display awake" loading="lazy" decoding="async"><figcaption><b>Quick tools</b></figcaption></figure>
   </div>
 </section>
 
@@ -558,7 +552,7 @@ html.js .fade-in.visible{opacity:1;transform:none;}
       <div class="direct-copy">
         <span class="badge">GitHub direct edition only</span>
         <h2>External display control</h2>
-        <p class="lead">The direct edition adjusts brightness, volume, and contrast on external displays over DDC/CI. Whether a control appears depends on the display, cable, and connection; unsupported controls are not shown as available. Display information is in both editions. These controls are not in the App Store edition.</p>
+        <p class="lead">Adjust brightness, volume, and contrast on external displays over DDC/CI.</p>
       </div>
       <figure class="direct-shot"><img class="theme-shot" data-light="../images/en/panel-display-controls-direct-light.png" data-dark="../images/en/panel-display-controls-direct-dark.png" width="753" height="1302" alt="Direct edition display controls: external brightness, volume, and contrast" loading="lazy" decoding="async"><figcaption><b>Direct edition</b>Built-in display info is in both editions. External brightness, volume, and contrast are direct edition only.</figcaption></figure>
     </div>
