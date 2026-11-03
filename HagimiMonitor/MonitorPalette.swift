@@ -24,8 +24,18 @@ struct MonitorPalette {
         isDark ? Color.white.opacity(0.78) : Color(hex: 0x4E5868)
     }
 
+    /// 指标格和各类凹槽共用。深色用 3% 白。调试构建可用 `-HagimiTrackFill` 覆盖，方便并排比较。
     var trackFill: Color {
-        isDark ? Color.white.opacity(0.08) : Color(hex: 0x3C485A).opacity(0.08)
+        if isDark {
+            let opacity = TemporaryInstanceOverrides.trackFillOpacity ?? 0.03
+            return Color.white.opacity(opacity)
+        }
+        return Color(hex: 0x3C485A).opacity(0.08)
+    }
+
+    /// 毛玻璃按钮描边。明暗和两种配色共用 10% 白。
+    var materialButtonStroke: Color {
+        Color.white.opacity(0.10)
     }
 
     func liveDot(for loadLevel: MenuBarComputeLoadLevel) -> Color {
@@ -159,10 +169,9 @@ struct MonitorPalette {
     }
 
     /// 行卡白罩，内容和原生底座共用，保持材质层次一致。
-    /// 深色平衡的行底已经压暗，白罩再低一档，避免把深底重新抬灰。
+    /// 深色统一 1%，展开区少被抬白。浅色仍是 15%，用来把薄玻璃收成磨砂卡片。
     var cardBrightenOpacity: Double {
-        if isDark, preference == .balanced { return 0.03 }
-        return isDark ? 0.08 : 0.15
+        isDark ? 0.01 : 0.15
     }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
@@ -257,6 +266,31 @@ struct MonitorPalette {
             // Bluetooth SIG 官方蓝。
             Color(hex: 0x0082FC)
         }
+    }
+}
+
+/// 调试构建用来区分并排打开的临时实例。
+/// `-HagimiInstanceLabel` 显示在面板标题旁；`-HagimiTrackFill` 覆盖深色指标格和凹槽的白浓度。
+/// 正式包不读这两个参数。
+enum TemporaryInstanceOverrides {
+    static var label: String? {
+        #if DEBUG
+        let value = UserDefaults.standard.string(forKey: "HagimiInstanceLabel") ?? ""
+        return value.isEmpty ? nil : value
+        #else
+        return nil
+        #endif
+    }
+
+    static var trackFillOpacity: Double? {
+        #if DEBUG
+        guard UserDefaults.standard.object(forKey: "HagimiTrackFill") != nil else { return nil }
+        let value = UserDefaults.standard.double(forKey: "HagimiTrackFill")
+        guard value >= 0, value <= 1 else { return nil }
+        return value
+        #else
+        return nil
+        #endif
     }
 }
 

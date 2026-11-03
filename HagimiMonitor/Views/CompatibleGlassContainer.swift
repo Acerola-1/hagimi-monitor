@@ -146,9 +146,9 @@ extension View {
 
 // MARK: - macOS 15 毛玻璃按钮样式
 
-/// 面板底部按钮样式:毛玻璃材质卡片,与面板各行同款的 `.menu` +
-/// `.withinWindow` 毛玻璃与 `rowCornerRadius` 圆角,融为一体、
-/// 深浅模式下基调一致。
+/// 面板底部按钮样式:毛玻璃材质卡片，圆角与行卡相同。
+/// 深色铺上与平衡行玻璃相同的 22% 黑，避免裸玻璃在深色窗口上发亮。
+/// 描边用 `materialButtonStroke`，所有这种按钮共用。
 private struct PanelMaterialButtonStyle: ButtonStyle {
     let minimumHeight: CGFloat?
     @Environment(\.colorScheme) private var colorScheme
@@ -170,7 +170,8 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
             .background {
                 VisualEffectView(material: .menu, blendingMode: .withinWindow)
                     .overlay {
-                        // 仅悬浮改变底色，按下与松开保持当前外观。
+                        shape.fill(palette.neutralGlassTint)
+                            .allowsHitTesting(false)
                         shape.fill(palette.trackFill.opacity(isHovering ? 1 : 0))
                             .allowsHitTesting(false)
                             .animation(.easeOut(duration: 0.12), value: isHovering)
@@ -178,7 +179,7 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
                     .clipShape(shape)
             }
             .overlay(
-                shape.strokeBorder(Color.white.opacity(0.12), lineWidth: 0.5)
+                shape.strokeBorder(palette.materialButtonStroke, lineWidth: 0.5)
             )
             .contentShape(shape)
             .onHover { isHovering = $0 }
