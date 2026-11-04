@@ -73,7 +73,10 @@ extension Notification.Name {
 }
 #endif
 
-/// 显示器区块,两渠道单一实现:行头「N 台 · 外接 M」+ 可展开明细。
+/// 显示器区块,两渠道单一实现:行头 + 可展开明细。
+/// 直连渠道可见显示器为一到两台时,行头右侧是与网络/电源同几何的成对读数,
+/// 右缘对齐,不设展开箭头,整行点击展开。短名区分设备,数值是已知亮度。
+/// 三台及以上显示台数,避免读数撑出这一行。
 /// 沙盒渠道为只读信息行(基础四项 + 逐台档案);直连渠道的展开区并入
 /// DDC 亮度/音量/对比度控制,控制器与桥接层依赖非沙盒 API,位于
 /// HagimiMonitorDirectOnly 的 DisplayControlController。
@@ -251,6 +254,7 @@ struct DisplaySection: View {
         let hasControls = settings.displayBrightnessControlEnabled
             || settings.displayVolumeControlEnabled
             || settings.displayContrastControlEnabled
+        let showsDeviceReadings = hasControls && (1...2).contains(visibleDisplays.count)
 
         return PanelCardStack(measurementKey: "display") {
             HStack(spacing: 10) {
@@ -264,23 +268,27 @@ struct DisplaySection: View {
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(palette.primaryText)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
 
-                Text(summary(for: visibleDisplays, hasControls: hasControls))
-                    .monitorPanelRoundedFont(weight: .semibold)
-                    .foregroundStyle(palette.valueText)
-                    .lineLimit(1)
+                if showsDeviceReadings {
+                    Spacer(minLength: 4)
+                    DisplayRowHeaderPills(
+                        readings: deviceReadings(for: visibleDisplays),
+                        theme: theme
+                    )
+                    .layoutPriority(2)
+                } else {
+                    Text(summary(for: visibleDisplays, hasControls: hasControls))
+                        .monitorPanelRoundedFont(weight: .semibold)
+                        .foregroundStyle(palette.valueText)
+                        .lineLimit(1)
 
-                Spacer(minLength: 8)
-
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(palette.captionText)
-                    .frame(width: 18, height: 18)
-                    .modifier(DisplayExpansionRotation(id: Self.sectionKey, expanded: isExpanded,
-                                                       collapsedAngle: -90, expandedAngle: 0))
+                    Spacer(minLength: 8)
+                }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.leading, 10)
+            .padding(.trailing, showsDeviceReadings ? RowHeaderPillMetrics.trailingPadding : 10)
+            .padding(.vertical, showsDeviceReadings ? RowHeaderPillMetrics.verticalPadding : 8)
             .panelRowHeaderHeight()
             .panelMeasure("row:display")
             .contentShape(Rectangle())
@@ -290,7 +298,7 @@ struct DisplaySection: View {
             // 无障碍语义与其余模块行同款。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(String(localized: "kind.display"))
-            .accessibilityValue(summary(for: visibleDisplays, hasControls: hasControls))
+            .accessibilityValue(rowAccessibilityValue(for: visibleDisplays, hasControls: hasControls))
             .accessibilityHint(!visibleDisplays.isEmpty ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
@@ -465,6 +473,40 @@ struct DisplaySection: View {
 
         let unitCount = String(localized: "display.unit-count")
         return unitCount.isEmpty ? "\(displays.count)" : "\(displays.count) \(unitCount)"
+    }
+
+    /// 行头药丸:短名区分设备,数值只用已经读到的亮度。读数未返回时保持缺失,
+    /// 不把控制器的回退默认值显示成真实亮度。
+    private func deviceReadings(for displays: [ControlledDisplay]) -> [(title: String, value: String)] {
+        displays.map { display in
+            let value: String
+            if let brightness = controller.optionalValue(for: .brightness, displayID: display.id) {
+                value = "\(Int(brightness.rounded()))%"
+            } else {
+                value = "--"
+            }
+            return (shortDisplayTitle(display), value)
+        }
+    }
+
+    private func shortDisplayTitle(_ display: ControlledDisplay) -> String {
+        if display.isBuiltIn {
+            return String(localized: "display.built-in")
+        }
+        let token = display.name.split(whereSeparator: \.isWhitespace).first.map(String.init) ?? display.name
+        let limit = 8
+        guard token.count > limit else { return token }
+        return String(token.prefix(limit - 1)) + "…"
+    }
+
+    private func rowAccessibilityValue(for displays: [ControlledDisplay], hasControls: Bool) -> String {
+        guard hasControls, (1...2).contains(displays.count) else {
+            return summary(for: displays, hasControls: hasControls)
+        }
+        let brightness = String(localized: "display.control.brightness")
+        return deviceReadings(for: displays)
+            .map { "\($0.title) \(brightness) \($0.value)" }
+            .joined(separator: ", ")
     }
 
     #endif
@@ -1228,6 +1270,46 @@ enum DisplayAttributesProbe {
 }
 
 #if DISPLAY_CONTROL
+/// 行头成对读数。标题位区分设备,数值旁的太阳与展开区亮度滑杆同一符号。
+private struct DisplayRowHeaderPills: View {
+    let readings: [(title: String, value: String)]
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        PairedHeaderReadings(theme: theme) {
+            ForEach(Array(readings.enumerated()), id: \.offset) { _, reading in
+                DisplayBrightnessPill(title: reading.title, value: reading.value, theme: theme)
+            }
+        }
+    }
+}
+
+private struct DisplayBrightnessPill: View {
+    let title: String
+    let value: String
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text(title)
+                .font(.system(size: RowHeaderPillMetrics.labelSize))
+                .foregroundStyle(theme.secondaryText.opacity(0.72))
+                .lineLimit(1)
+            HStack(spacing: 2) {
+                Image(systemName: "sun.max")
+                    .font(.system(size: 8, weight: .semibold))
+                Text(value)
+                    .font(.system(size: RowHeaderPillMetrics.valueSize, weight: .medium))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(theme.secondaryText)
+        }
+        .padding(.horizontal, RowHeaderPillMetrics.horizontalPadding)
+        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
+        .help(String(localized: "display.control.brightness"))
+    }
+}
+
 /// 直连渠道单台显示器的控制组卡,两种形态经档案角标切换:
 /// 收起态 = 图标 + 名称 + 内建/外接角标 + 一行摘要(分辨率 · 刷新率 ·
 /// HDR 开启时 · 位深)+ 控制滑杆;展开态 = 完整信息(基础四项 + 档案 +
