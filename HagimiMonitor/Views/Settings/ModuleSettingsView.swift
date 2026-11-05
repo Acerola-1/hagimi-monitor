@@ -26,7 +26,7 @@ struct ModuleSettingsView: View {
         SettingsPage {
             SettingsGroup {
                 SettingsRow(title: String(localized: "settings.show-in-panel")) {
-                    Toggle("", isOn: Binding(
+                    Toggle(String(localized: "settings.show-in-panel"), isOn: Binding(
                         get: { settings.isVisible(kind) },
                         set: { settings.setVisible($0, for: kind) }
                     ))
@@ -52,7 +52,7 @@ struct ModuleSettingsView: View {
                     title: String(localized: "settings.expand-by-default"),
                     subtitle: String(localized: "settings.expand-by-default.subtitle")
                 ) {
-                    Toggle("", isOn: Binding(
+                    Toggle(String(localized: "settings.expand-by-default"), isOn: Binding(
                         get: { settings.isExpandedByDefault(kind) },
                         set: { settings.setExpandedByDefault($0, for: kind) }
                     ))
@@ -139,7 +139,7 @@ struct ModuleSettingsView: View {
 
                     // 内存列表数据源(sysctl + proc_pidinfo)沙盒可用,双渠道均开放设置。
                     SettingsRow(title: String(localized: "settings.show-memory-processes")) {
-                        Toggle("", isOn: $settings.showMemoryProcesses)
+                        Toggle(String(localized: "settings.show-memory-processes"), isOn: $settings.showMemoryProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -147,7 +147,7 @@ struct ModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.memory.show-system-processes")) {
-                        Toggle("", isOn: $settings.memoryShowSystemProcesses)
+                        Toggle(String(localized: "settings.memory.show-system-processes"), isOn: $settings.memoryShowSystemProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -159,7 +159,7 @@ struct ModuleSettingsView: View {
             if kind == .cpu {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-cpu-processes")) {
-                        Toggle("", isOn: $settings.showCPUProcesses)
+                        Toggle(String(localized: "settings.show-cpu-processes"), isOn: $settings.showCPUProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -167,7 +167,7 @@ struct ModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.cpu.show-system-processes")) {
-                        Toggle("", isOn: $settings.cpuShowSystemProcesses)
+                        Toggle(String(localized: "settings.cpu.show-system-processes"), isOn: $settings.cpuShowSystemProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -179,7 +179,7 @@ struct ModuleSettingsView: View {
             if kind == .gpu {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-gpu-processes")) {
-                        Toggle("", isOn: $settings.showGPUProcesses)
+                        Toggle(String(localized: "settings.show-gpu-processes"), isOn: $settings.showGPUProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -187,7 +187,7 @@ struct ModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.gpu.show-system-processes")) {
-                        Toggle("", isOn: $settings.gpuShowSystemProcesses)
+                        Toggle(String(localized: "settings.gpu.show-system-processes"), isOn: $settings.gpuShowSystemProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -200,7 +200,7 @@ struct ModuleSettingsView: View {
             if kind == .storage {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-disk-processes")) {
-                        Toggle("", isOn: $settings.showDiskProcesses)
+                        Toggle(String(localized: "settings.show-disk-processes"), isOn: $settings.showDiskProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -208,7 +208,7 @@ struct ModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.disk.show-system-processes")) {
-                        Toggle("", isOn: $settings.diskShowSystemProcesses)
+                        Toggle(String(localized: "settings.disk.show-system-processes"), isOn: $settings.diskShowSystemProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -221,7 +221,7 @@ struct ModuleSettingsView: View {
             if kind == .network {
                 SettingsGroup {
                     SettingsRow(title: String(localized: "settings.show-network-processes")) {
-                        Toggle("", isOn: $settings.showNetworkProcesses)
+                        Toggle(String(localized: "settings.show-network-processes"), isOn: $settings.showNetworkProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -229,7 +229,7 @@ struct ModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.network.show-system-processes")) {
-                        Toggle("", isOn: $settings.networkShowSystemProcesses)
+                        Toggle(String(localized: "settings.network.show-system-processes"), isOn: $settings.networkShowSystemProcesses)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -340,7 +340,7 @@ struct DisplayModuleSettingsView: View {
         SettingsPage {
             SettingsGroup {
                 SettingsRow(title: String(localized: "settings.show-in-panel")) {
-                    Toggle("", isOn: $settings.displayModuleVisible)
+                    Toggle(String(localized: "settings.show-in-panel"), isOn: $settings.displayModuleVisible)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
@@ -359,7 +359,7 @@ struct DisplayModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.include-built-in")) {
-                        Toggle("", isOn: $settings.showBuiltInDisplays)
+                        Toggle(String(localized: "settings.include-built-in"), isOn: $settings.showBuiltInDisplays)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -370,7 +370,7 @@ struct DisplayModuleSettingsView: View {
                             title: String(localized: "settings.expand-by-default"),
                             subtitle: String(localized: "settings.expand-by-default.subtitle")
                         ) {
-                            Toggle("", isOn: $settings.displayControlsExpandedByDefault)
+                            Toggle(String(localized: "settings.expand-by-default"), isOn: $settings.displayControlsExpandedByDefault)
                                 .toggleStyle(.switch)
                                 .labelsHidden()
                         }
@@ -382,7 +382,7 @@ struct DisplayModuleSettingsView: View {
             if settings.displayModuleVisible || settings.displayControlMenuBarEnabled {
                 SettingsGroup(String(localized: "settings.controls")) {
                     SettingsRow(title: String(localized: "settings.brightness")) {
-                        Toggle("", isOn: $settings.displayBrightnessControlEnabled)
+                        Toggle(String(localized: "settings.brightness"), isOn: $settings.displayBrightnessControlEnabled)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -390,7 +390,7 @@ struct DisplayModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.volume")) {
-                        Toggle("", isOn: $settings.displayVolumeControlEnabled)
+                        Toggle(String(localized: "settings.volume"), isOn: $settings.displayVolumeControlEnabled)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -398,7 +398,7 @@ struct DisplayModuleSettingsView: View {
                     SettingsDivider()
 
                     SettingsRow(title: String(localized: "settings.contrast")) {
-                        Toggle("", isOn: $settings.displayContrastControlEnabled)
+                        Toggle(String(localized: "settings.contrast"), isOn: $settings.displayContrastControlEnabled)
                             .toggleStyle(.switch)
                             .labelsHidden()
                     }
@@ -425,7 +425,7 @@ struct DisplayInfoSettingsView: View {
         SettingsPage {
             SettingsGroup {
                 SettingsRow(title: String(localized: "settings.show-in-panel")) {
-                    Toggle("", isOn: $settings.displayModuleVisible)
+                    Toggle(String(localized: "settings.show-in-panel"), isOn: $settings.displayModuleVisible)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }

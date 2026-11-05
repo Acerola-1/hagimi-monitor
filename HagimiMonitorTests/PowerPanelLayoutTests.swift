@@ -6,6 +6,28 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct PowerPanelLayoutTests {
+    @Test func selectedPowerControlsMeetSmallTextContrastInBothThemes() throws {
+        func luminance(_ color: Color) throws -> Double {
+            let rgb = try #require(NSColor(color).usingColorSpace(.sRGB))
+            func linear(_ channel: CGFloat) -> Double {
+                let value = Double(channel)
+                return value <= 0.04045 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+            }
+            return 0.2126 * linear(rgb.redComponent)
+                + 0.7152 * linear(rgb.greenComponent)
+                + 0.0722 * linear(rgb.blueComponent)
+        }
+        let foreground = try luminance(MonitorPalette.selectedControlForeground)
+        for preference in [MonitorColorSchemePreference.balanced, .vibrant] {
+            for scheme in [ColorScheme.light, .dark] {
+                let palette = MonitorPalette(preference: preference, colorScheme: scheme)
+                let background = try luminance(palette.moduleTint(for: .battery))
+                let contrast = (max(foreground, background) + 0.05) / (min(foreground, background) + 0.05)
+                #expect(contrast >= 4.5)
+            }
+        }
+    }
+
     private final class RowMeasurement {
         var size: CGSize?
         var networkSize: CGSize?

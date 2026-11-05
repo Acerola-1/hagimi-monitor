@@ -8,7 +8,13 @@ struct ReportMemoryView: View {
     @State private var selectedDate: Date?
     @State private var selectedPressureDate: Date?
 
-    private let memColor = ReportUIHelper.memoryColor
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+    private var palette: MonitorPalette {
+        MonitorPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
+
+    private var memColor: Color { palette.moduleTint(for: .memory) }
     private let compColor = Color(hex: 0xEC4899)
     private let pressureColor = Color(hex: 0xEF4444)
     private let swapColor = ReportUIHelper.swapColor

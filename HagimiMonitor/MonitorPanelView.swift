@@ -30,6 +30,7 @@ struct MonitorPanelView: View {
     /// 让统计入口的红点即时起灭。
     @ObservedObject private var alerts = PressureAlertCenter.shared
     private let showsQuickPanelControls: Bool
+    private let dismissMenuBarPanel: @MainActor () -> Void
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.fluidOpenSettings) private var fluidOpenSettings
     /// 内容总高度上限(由 FluidPanelController 注入,钉住面板等其他宿主为 .infinity)。
@@ -45,19 +46,23 @@ struct MonitorPanelView: View {
     /// 经 environmentObject 注入子树;每个面板(菜单栏/钉住)各自持有,
     /// 展开动画互不牵动。
     @StateObject private var panelExpansion = PanelExpansionDriver()
-    @StateObject private var panelReorder = PanelReorderController()
+    @StateObject private var panelReorder: PanelReorderController
     /// 显示器模块(包含内嵌档案)动画状态凭据:供 MonitorPanelView 在子区块动画时将整体布局并入 withAnimation 事务
     @State private var displaySectionMotionTicket: Int = 0
     @Environment(\.panelMotionAdapter) private var motionAdapter
 
     init(store: MonitorStore, refreshGate: PanelRefreshGate, quickPanelPresentation: QuickPanelPresentation? = nil,
-         contentScope: MonitorPanelContentScope = .systemMonitor) {
+         contentScope: MonitorPanelContentScope = .systemMonitor,
+         reorderController: PanelReorderController? = nil,
+         dismissMenuBarPanel: @escaping @MainActor () -> Void = {}) {
         self.store = store
         self.contentScope = contentScope
+        _panelReorder = StateObject(wrappedValue: reorderController ?? PanelReorderController())
         _refreshGate = ObservedObject(wrappedValue: refreshGate)
         let presentation = quickPanelPresentation ?? QuickPanelPresentation()
         _quickPanelPresentation = ObservedObject(wrappedValue: presentation)
         showsQuickPanelControls = quickPanelPresentation != nil
+        self.dismissMenuBarPanel = dismissMenuBarPanel
     }
 
     private var maxContentHeight: CGFloat {
@@ -213,7 +218,8 @@ struct MonitorPanelView: View {
         .environmentObject(panelExpansion)
         .environment(\.panelReorderController, contentScope == .systemMonitor ? panelReorder : nil)
         .environment(\.panelReorderSettings, store.settings)
-        .onExitCommand { panelReorder.cancel() }
+        .background(NativePanelEscapeHandler(action: handleExitCommand))
+        .onExitCommand(perform: handleExitCommand)
         .onDisappear { panelReorder.cancel() }
         .task {
             guard isPanelBenchmark, !showsQuickPanelControls || isFullPanelBenchmark else { return }
@@ -294,6 +300,28 @@ struct MonitorPanelView: View {
                 else { AppDelegate.shared?.fluidPanelController.dismissPanelForSettings() }
                 NSLog("[panel-bench] hidden panel-visible=%d", store.isPanelVisible ? 1 : 0)
             }
+        }
+    }
+
+    private func handleExitCommand() {
+        if panelReorder.session != nil {
+            #if DEBUG
+            PanelUXAcceptanceProbe.record("escape.cancel-reorder")
+            #endif
+            panelReorder.cancel()
+        } else if QuickToolsStore.shared.isPopoverPresented {
+            QuickToolsStore.shared.popoverPresenter.dismiss()
+        } else if showsQuickPanelControls, quickPanelPresentation.isPinned == false {
+            #if DEBUG
+            PanelUXAcceptanceProbe.record("escape.close-transient")
+            #endif
+            quickPanelPresentation.close()
+        } else if !showsQuickPanelControls {
+            dismissMenuBarPanel()
+        } else {
+            #if DEBUG
+            PanelUXAcceptanceProbe.record("escape.keep-pinned")
+            #endif
         }
     }
 
@@ -892,6 +920,10 @@ private struct PanelHeaderToolBadges: View {
 // MARK: - Metric Row
 
 private struct MetricGlassRow: View, Equatable {
+    @Environment(\.isEnabled) private var isEnabled
+    @FocusState private var isHeaderFocused: Bool
+    @State private var showsKeyboardFocus = false
+
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let detail: String
@@ -1010,6 +1042,7 @@ private struct MetricGlassRow: View, Equatable {
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
             .onTapGesture {
+                showsKeyboardFocus = false
                 // 单风扇时主行已展示 RPM,无展开内容,点击不切换展开状态。
                 guard detailAvailable else { return }
                 toggleExpansion?()
@@ -1018,11 +1051,44 @@ private struct MetricGlassRow: View, Equatable {
             // 暴露按钮语义与展开/收起提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(module.kind.title)
-            .accessibilityValue(rowAccessibilityValue)
+            .accessibilityValue(detailAvailable
+                ? "\(rowAccessibilityValue), \(String(localized: isExpanded ? "panel.row.expanded" : "panel.row.collapsed"))"
+                : rowAccessibilityValue)
             .accessibilityHint(detailAvailable ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(detailAvailable ? .isButton : [])
+            .accessibilityAction {
+                guard detailAvailable else { return }
+                toggleExpansion?()
+            }
+            .focusable(detailAvailable && isEnabled)
+            .focusEffectDisabled()
+            .focused($isHeaderFocused)
+            .onChange(of: isHeaderFocused) { _, focused in
+                // 鼠标保留激活能力；仅键盘或辅助导航显示行内焦点轮廓。
+                switch NSApp.currentEvent?.type {
+                case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp:
+                    showsKeyboardFocus = false
+                default:
+                    showsKeyboardFocus = focused
+                }
+            }
+            .onKeyPress(.space) {
+                guard detailAvailable else { return .ignored }
+                showsKeyboardFocus = true
+                toggleExpansion?()
+                return .handled
+            }
+            .overlay {
+                if isHeaderFocused && showsKeyboardFocus {
+                    RoundedRectangle(cornerRadius: CGFloat(MonitorConstants.rowCornerRadius), style: .continuous)
+                        .inset(by: 1)
+                        .strokeBorder(theme.primaryText, lineWidth: 1.5)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
             .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
@@ -1299,8 +1365,8 @@ private struct CoreRingFlowLayout: Layout {
     /// 按可用宽度分行,并为每一行按自身环数计算铺满整行的间隙;
     /// 单环行间隙无意义,由摆放阶段居中处理。
     private func arrange(count: Int, width: CGFloat) -> (rows: [[Int]], spacings: [CGFloat]) {
-        guard count > 0, width > 0 else { return ([], []) }
-        let perRow = max(1, Int(floor((width + minSpacing) / (ringSize + minSpacing))))
+        guard count > 0, width.isFinite, width > 0 else { return ([], []) }
+        let perRow = Int(min(CGFloat(count), max(1, floor((width + minSpacing) / (ringSize + minSpacing)))))
         var rows: [[Int]] = []
         var index = 0
         while index < count {
@@ -1315,7 +1381,9 @@ private struct CoreRingFlowLayout: Layout {
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.replacingUnspecifiedDimensions(by: CGSize(width: 240, height: ringSize)).width
+        let proposedWidth = proposal.replacingUnspecifiedDimensions(by: CGSize(width: 240, height: ringSize)).width
+        // SwiftUI 会用无限宽提议探测理想尺寸，不能将其作为分行数量转换为整数。
+        let width = proposedWidth.isFinite ? max(0, proposedWidth) : 240
         let (rows, _) = arrange(count: subviews.count, width: width)
         let height = CGFloat(rows.count) * ringSize + CGFloat(max(0, rows.count - 1)) * rowGap
         return CGSize(width: width, height: height)
@@ -1501,15 +1569,11 @@ struct MetricDetailGrid: View {
                 splitValue(temperature, text: localizedMetricValue(kind: kind, metric: temperature))
                     .help(localizedMetricValue(kind: kind, metric: temperature))
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        copyToPasteboard(temperature.value)
-                    }
+                    .modifier(MetricCopyFeedback(value: temperature.value, label: String(localized: "menu-bar-metric.cpu-temperature"), displayValue: localizedMetricValue(kind: kind, metric: temperature)))
                 splitValue(thermal, text: localizedMetricValue(kind: kind, metric: thermal))
                     .help(localizedMetricValue(kind: kind, metric: thermal))
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        copyToPasteboard(thermal.value)
-                    }
+                    .modifier(MetricCopyFeedback(value: thermal.value, label: localizedMetricName(kind: kind, id: thermal.name), displayValue: localizedMetricValue(kind: kind, metric: thermal)))
             }
         )
     }
@@ -1548,9 +1612,7 @@ struct MetricDetailGrid: View {
                 splitValue(metric, text: valueText)
                     .help(valueText)
                     .contentShape(Rectangle())
-                    .onTapGesture {
-                        copyToPasteboard(metric.value)
-                    }
+                    .modifier(MetricCopyFeedback(value: metric.value, label: labelText, displayValue: valueText))
             }
         ))
     }
@@ -2106,6 +2168,7 @@ struct BatteryGlassRow: View, Equatable {
                                 items: availableTabs,
                                 icon: { $0.icon },
                                 tooltip: { $0.title },
+                                accessibilityGroupName: String(localized: "panel.power-pages"),
                                 tint: tint,
                                 theme: theme
                             )
@@ -2619,9 +2682,56 @@ enum ThemeCache {
     }
 }
 
-private func copyToPasteboard(_ string: String) {
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(string, forType: .string)
+private struct MetricCopyFeedback: ViewModifier {
+    @Environment(\.isEnabled) private var isEnabled
+    let value: String
+    let label: String
+    let displayValue: String
+    @State private var copyID: UUID?
+
+    func body(content: Content) -> some View {
+        content
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(label)
+            .accessibilityValue(displayValue)
+            .help(String(localized: "panel.copy-value"))
+            .onTapGesture(perform: copy)
+            .focusable(isEnabled)
+            .onKeyPress(keys: ["c"], phases: .down) { press in
+                guard isEnabled, press.modifiers == .command else { return .ignored }
+                copy()
+                return .handled
+            }
+            .accessibilityAction(named: Text(String(localized: "panel.copy-value")), copy)
+            .overlay(alignment: .topTrailing) {
+                if copyID != nil {
+                    Text(String(localized: "panel.copied"))
+                        .font(.caption)
+                        .padding(4)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
+                        .allowsHitTesting(false)
+                }
+            }
+            .task(id: copyID) {
+                guard copyID != nil else { return }
+                do {
+                    try await Task.sleep(for: .seconds(1))
+                    copyID = nil
+                } catch {}
+            }
+    }
+
+    private func copy() {
+        guard isEnabled else { return }
+        NSPasteboard.general.clearContents()
+        guard NSPasteboard.general.setString(value, forType: .string) else { return }
+        copyID = UUID()
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+            userInfo: [
+                .announcement: String(localized: "panel.copied"),
+                .priority: NSAccessibilityPriorityLevel.medium.rawValue
+            ])
+    }
 }
 
 // MARK: - Top Processes (通用列表)

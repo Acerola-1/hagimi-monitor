@@ -26,6 +26,19 @@ struct ReportExportContextTests {
         #expect(viewModel.committedExportRange() == nil)
     }
 
+    @MainActor
+    @Test func missingRecorderEndsLoadingWithRecoverableFailure() {
+        let viewModel = NativeReportViewModel(recorder: nil)
+        viewModel.load()
+        #expect(!viewModel.isLoading)
+        #expect(viewModel.loadFailed)
+        #expect(viewModel.snapshot == nil)
+        #expect(viewModel.committedExportRange() == nil)
+        viewModel.refreshCurrentReport()
+        #expect(viewModel.loadFailed)
+        #expect(!viewModel.isLoading)
+    }
+
     @Test func weekExportBoundsMatchSettingsAndNativeReport() {
         let now = date("2026-10-01 18:00")
         // 三处必须给出同一起点：设置页窗口、原生报表、导出。

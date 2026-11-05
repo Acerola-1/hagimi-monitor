@@ -2,6 +2,7 @@ import AppKit
 import Combine
 import KeyboardShortcuts
 import SwiftUI
+import ServiceManagement
 
 struct GeneralSettingsView: View {
     @ObservedObject var settings: MonitorSettings
@@ -20,10 +21,20 @@ struct GeneralSettingsView: View {
             UsageCheckinCard(recorder: store.statisticsRecorder)
 
             SettingsGroup {
-                SettingsRow(title: String(localized: "settings.launch-at-login")) {
-                    Toggle("", isOn: $settings.launchAtLogin)
+                SettingsRow(
+                    title: String(localized: "settings.launch-at-login"),
+                    subtitle: settings.launchAtLoginError ?? (settings.launchAtLoginNeedsApproval
+                        ? String(localized: "settings.login-item.approval") : nil)
+                ) {
+                    Toggle(String(localized: "settings.launch-at-login"), isOn: $settings.launchAtLogin)
                         .toggleStyle(.switch)
                         .labelsHidden()
+                }
+
+                if settings.launchAtLoginNeedsApproval {
+                    Button(String(localized: "settings.login-item.open")) {
+                        SMAppService.openSystemSettingsLoginItems()
+                    }
                 }
 
                 SettingsDivider()
@@ -69,23 +80,6 @@ struct GeneralSettingsView: View {
                     .labelsHidden()
                     .compatibleTabPickerStyle()
                     .frame(width: Self.segmentedPickerWidth)
-                }
-
-                if #available(macOS 26, *) {
-                    SettingsDivider()
-
-                    // 功能仍在测试:整行锁定为不可用态,已保存的偏好原值
-                    // 保留、不被改写,放开时移除 disabled 即恢复。
-                    SettingsRow(
-                        title: String(localized: "settings.liquid-glass"),
-                        subtitle: String(localized: "settings.liquid-glass.subtitle")
-                    ) {
-                        Toggle("", isOn: $settings.liquidGlassEnabled)
-                            .toggleStyle(.switch)
-                            .labelsHidden()
-                            .disabled(true)
-                    }
-                    .opacity(0.45)
                 }
             }
 
@@ -170,6 +164,15 @@ private struct QuickAccessShortcutRecorder: View {
             model.stopRecording()
         }
         .onDisappear { model.stopRecording() }
+        .alert(String(localized: "settings.quick-access.conflict-title"), isPresented: Binding(
+            get: { model.conflictMessage != nil },
+            set: { if !$0 { model.conflictMessage = nil } }
+        )) {
+            Button(String(localized: "settings.quick-access.record")) { model.startRecording() }
+            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
+        } message: {
+            Text(model.conflictMessage ?? "")
+        }
     }
 
     @ViewBuilder
@@ -212,6 +215,7 @@ private struct QuickAccessShortcutRecorder: View {
 private final class QuickAccessShortcutModel: ObservableObject {
     @Published private(set) var shortcut: KeyboardShortcuts.Shortcut?
     @Published private(set) var isRecording = false
+    @Published var conflictMessage: String?
 
     private let name = KeyboardShortcuts.Name.togglePinnedPanel
     private var monitor: Any?
@@ -234,7 +238,8 @@ private final class QuickAccessShortcutModel: ObservableObject {
         // 防止录制时按下当前组合直接触发面板。
         KeyboardShortcuts.disable(name)
         monitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in
-            self?.handle(event) ?? event
+            guard let self else { return event }
+            return self.handle(event)
         }
     }
 
@@ -284,6 +289,11 @@ private final class QuickAccessShortcutModel: ObservableObject {
             return nil
         }
 
+        if let conflict = QuickAccessShortcutConflict.message(for: recorded, event: event) {
+            stopRecording()
+            conflictMessage = conflict
+            return nil
+        }
         KeyboardShortcuts.setShortcut(recorded, for: name)
         shortcut = recorded
         stopRecording()
@@ -737,5 +747,30 @@ struct UsageCheckinCard: View {
         let components = DateComponents(year: Int(key / 10_000), month: Int(key % 10_000 / 100), day: Int(key % 100))
         guard let date = Calendar.current.date(from: components) else { return "" }
         return date.formatted(.dateTime.year().month().day())
+    }
+}
+
+/// 录制校验只依赖系统已公开的占用信息与当前菜单。
+enum QuickAccessShortcutConflict {
+    static func message(for shortcut: KeyboardShortcuts.Shortcut, event: NSEvent) -> String? {
+        if shortcut.isTakenBySystem {
+            return String(localized: "settings.quick-access.system-conflict")
+        }
+        let flags = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        let key = event.charactersIgnoringModifiers?.lowercased() ?? ""
+        if key == "q", flags == .command {
+            return String(localized: "settings.quick-access.menu-conflict")
+        }
+        func matches(_ menu: NSMenu) -> Bool {
+            menu.items.contains { item in
+                if let submenu = item.submenu, matches(submenu) { return true }
+                return !item.keyEquivalent.isEmpty && item.keyEquivalent.lowercased() == key
+                    && item.keyEquivalentModifierMask.intersection([.command, .control, .option, .shift]) == flags
+            }
+        }
+        if let menu = NSApp.mainMenu, matches(menu) {
+            return String(localized: "settings.quick-access.menu-conflict")
+        }
+        return nil
     }
 }

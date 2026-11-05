@@ -347,6 +347,20 @@ nonisolated final class StatisticsDatabase: @unchecked Sendable {
         }
     }
 
+    /// 只检查查询入口与表结构是否可用，避免把打不开的库解释为空记录。
+    var isReadable: Bool {
+        queue.sync {
+            guard let handle else { return false }
+            var statement: OpaquePointer?
+            let columns = (["t", "n"] + StatisticsRow.columns.map(\.name)).joined(separator: ",")
+            let query = ["minute", "hour", "day"].map { "SELECT \(columns) FROM stats_\($0)" }
+                .joined(separator: " UNION ALL ") + " LIMIT 0"
+            let result = sqlite3_prepare_v2(handle, query, -1, &statement, nil)
+            defer { if let statement { sqlite3_finalize(statement) } }
+            return result == SQLITE_OK
+        }
+    }
+
     // MARK: - 写入与维护
 
     /// 插入(或覆盖)一行分钟数据。

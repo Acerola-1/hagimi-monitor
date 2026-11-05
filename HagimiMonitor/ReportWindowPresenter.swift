@@ -13,7 +13,9 @@ import WebKit
 /// 导出 HTML 与打印作为独立服务，仅在用户明确触发时按需执行。
 @MainActor
 enum ReportWindowPresenter {
+    static let commandState = ReportCommandState()
     private static var window: NSWindow?
+    private static var exportBusy = false
     private static var viewModel: NativeReportViewModel?
     private static var windowDelegate: ReportWindowDelegate?
     private static var themeCancellable: AnyCancellable?
@@ -21,6 +23,13 @@ enum ReportWindowPresenter {
     private static var printSessionID: UUID?
     private static var printGenerationTask: Task<Void, Never>?
     private static var printGenerationID: UUID?
+
+    static func refreshCommands() {
+        commandState.isAvailable = window != nil && NSApp.keyWindow === window
+            && viewModel?.committedExportRange() != nil
+            && !exportBusy && window?.attachedSheet == nil
+            && printSession == nil && printGenerationTask == nil
+    }
 
     private static let contentRect = NSRect(x: 0, y: 0, width: 1380, height: 880)
     private static let windowStyleMask: NSWindow.StyleMask = [.titled, .closable, .miniaturizable, .resizable]
@@ -55,16 +64,20 @@ enum ReportWindowPresenter {
 
     /// 另存为导出独立 HTML 文件（按需生成）
     static func exportCurrentReport() {
-        guard let snapshot = viewModel?.snapshot else { return }
+        guard let snapshot = viewModel?.snapshot,
+              let committedRange = viewModel?.committedExportRange() else { return }
+        guard !exportBusy, printGenerationTask == nil, printSession == nil else { return }
+        exportBusy = true
+        refreshCommands()
         let savePanel = NSSavePanel()
         savePanel.allowedContentTypes = [.html]
         savePanel.nameFieldStringValue = "HagimiMonitor-Report.html"
-        savePanel.title = String(localized: "stats.report.export.title", defaultValue: "导出硬件规格档案")
+        savePanel.title = String(localized: "stats.report.export.title", defaultValue: "导出统计报表")
 
         // 携带用户当前提交的范围。
-        let committedRange = viewModel?.committedExportRange()
         let performExport: (URL) -> Void = { targetURL in
             Task { @MainActor in
+                defer { exportBusy = false; refreshCommands() }
                 do {
                     let didStartAccess = targetURL.startAccessingSecurityScopedResource()
                     defer {
@@ -87,27 +100,35 @@ enum ReportWindowPresenter {
 
         if let window {
             savePanel.beginSheetModal(for: window) { response in
-                guard response == .OK, let targetURL = savePanel.url else { return }
+                guard response == .OK, let targetURL = savePanel.url else {
+                    exportBusy = false
+                    refreshCommands()
+                    return
+                }
                 performExport(targetURL)
             }
         } else if savePanel.runModal() == .OK, let targetURL = savePanel.url {
             performExport(targetURL)
+        } else {
+            exportBusy = false
+            refreshCommands()
         }
     }
 
     /// 触发报表打印：按需临时创建 WebKit 打印操作，完成后立即销毁，日常查看无 WebKit 常驻。
     static func printCurrentReport() {
-        guard printGenerationTask == nil, printSession == nil,
-              let snapshot = viewModel?.snapshot else { return }
+        guard !exportBusy, printGenerationTask == nil, printSession == nil,
+              let snapshot = viewModel?.snapshot,
+              let committedRange = viewModel?.committedExportRange() else { return }
         let generationID = UUID()
         printGenerationID = generationID
         // 打印使用用户当前提交的范围。
-        let committedRange = viewModel?.committedExportRange()
         let generationTask = Task { @MainActor in
             defer {
                 if printGenerationID == generationID {
                     printGenerationTask = nil
                     printGenerationID = nil
+                    refreshCommands()
                 }
             }
             do {
@@ -130,9 +151,11 @@ enum ReportWindowPresenter {
                 presentPrintSession(fileURL: fileURL)
             } catch {
                 AppLogger.settings.error("Print generation failed: \(String(describing: error), privacy: .public)")
+                if !Task.isCancelled { presentOutputError(error) }
             }
         }
         printGenerationTask = generationTask
+        refreshCommands()
     }
 
     /// 组装导出或打印所需的单文件 HTML。调用方负责把它放到后台任务。
@@ -160,6 +183,11 @@ enum ReportWindowPresenter {
     }
 
     /// 按需启动一次性临时 WebKit 打印流程并在结束后彻底销毁。
+    private static func presentOutputError(_ error: Error) {
+        guard let window, window.isVisible, window.attachedSheet == nil else { return }
+        NSAlert(error: error).beginSheetModal(for: window)
+    }
+
     private static func presentPrintSession(fileURL: URL) {
         if let staleSession = printSession {
             staleSession.finish()
@@ -173,9 +201,11 @@ enum ReportWindowPresenter {
         let session = TransientReportPrintSession(
             fileURL: fileURL,
             parentWindow: window,
+            onFailure: { presentOutputError($0) },
             onFinish: {
                 guard ReportWindowPresenter.printSessionID == sessionID else { return }
                 ReportWindowPresenter.printSession = nil
+                ReportWindowPresenter.refreshCommands()
                 ReportWindowPresenter.printSessionID = nil
             }
         )
@@ -190,6 +220,7 @@ enum ReportWindowPresenter {
 
         let vm = NativeReportViewModel(recorder: recorder)
         self.viewModel = vm
+        commandState.observe(vm)
 
         let rootView = NativeReportView(
             viewModel: vm,
@@ -248,6 +279,7 @@ enum ReportWindowPresenter {
         viewModel?.teardown()
         viewModel = nil
         window = nil
+        refreshCommands()
         windowDelegate = nil
         themeCancellable?.cancel()
         themeCancellable = nil
@@ -383,6 +415,7 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
     private(set) var cleanupCount = 0
 
     private weak var parentWindow: NSWindow?
+    private let onFailure: (Error) -> Void
     private let onFinish: () -> Void
     private let webViewFactory: WebViewFactory
     private let pageLoader: PageLoader
@@ -404,12 +437,14 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
         pageLoader: @escaping PageLoader = { webView, fileURL in
             webView.loadFileURL(fileURL, allowingReadAccessTo: fileURL.deletingLastPathComponent())
         },
+        onFailure: @escaping (Error) -> Void = { _ in },
         onFinish: @escaping () -> Void = {}
     ) {
         self.fileURL = fileURL
         self.parentWindow = parentWindow
         self.webViewFactory = webViewFactory
         self.pageLoader = pageLoader
+        self.onFailure = onFailure
         self.onFinish = onFinish
         super.init()
     }
@@ -490,13 +525,14 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
 
     nonisolated func webViewWebContentProcessDidTerminate(_ webView: WKWebView) {
         Task { @MainActor [weak self] in
-            self?.finish()
+            self?.fail(NSError(domain: "HagimiReportPrint", code: 2,
+                userInfo: [NSLocalizedDescriptionKey: String(localized: "stats.report.print-interrupted")]))
         }
     }
 
     private func pageDidFinish() {
         guard state == .loading, let webView else { return }
-        webView.evaluateJavaScript("enterPrintMode(); true") { [weak self] _, error in
+        webView.evaluateJavaScript("window.dispatchEvent(new Event('beforeprint')); true") { [weak self] _, error in
             Task { @MainActor [weak self] in
                 guard let self, self.state == .loading else { return }
                 if let error {
@@ -540,24 +576,30 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
         printOperation.showsPrintPanel = true
         printOperation.showsProgressPanel = true
         self.printOperation = printOperation
-        defer { finish() }
         if let parentWindow {
-            printOperation.runModal(for: parentWindow, delegate: nil, didRun: nil, contextInfo: nil)
+            printOperation.runModal(for: parentWindow, delegate: self,
+                didRun: #selector(printOperationDidRun(_:success:contextInfo:)), contextInfo: nil)
         } else {
             printOperation.run()
+            finish()
         }
+    }
+
+    @objc private func printOperationDidRun(_ operation: NSPrintOperation, success: Bool,
+                                            contextInfo: UnsafeMutableRawPointer?) {
+        finish()
     }
 
     private func navigationFailed(_ error: Error) {
         guard state != .finished else { return }
         AppLogger.settings.error("Transient print navigation failed: \(String(describing: error), privacy: .public)")
-        finish()
+        fail(error)
     }
 
     private func scriptFailed(_ error: Error) {
         guard state != .finished else { return }
         AppLogger.settings.error("Transient print script failed: \(String(describing: error), privacy: .public)")
-        finish()
+        fail(error)
     }
 
     private func scheduleLoadingTimeout() {
@@ -576,6 +618,36 @@ final class TransientReportPrintSession: NSObject, WKNavigationDelegate {
     func handleLoadingTimeout() {
         guard state == .loading else { return }
         AppLogger.settings.error("Transient print loading timed out")
+        fail(NSError(domain: "HagimiReportPrint", code: 1,
+            userInfo: [NSLocalizedDescriptionKey: String(localized: "stats.report.print-timeout")]))
+    }
+
+    private func fail(_ error: Error) {
+        guard state != .finished else { return }
+        onFailure(error)
         finish()
+    }
+}
+
+
+/// 菜单和工具栏共享当前窗口的可执行状态。
+@MainActor
+final class ReportCommandState: ObservableObject {
+    @Published var isAvailable = false
+    private var subscriptions = Set<AnyCancellable>()
+    private var modelSubscription: AnyCancellable?
+
+    init() {
+        NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)
+            .merge(with: NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification))
+            .receive(on: RunLoop.main)
+            .sink { _ in ReportWindowPresenter.refreshCommands() }
+            .store(in: &subscriptions)
+    }
+
+    func observe(_ model: NativeReportViewModel) {
+        modelSubscription = model.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { _ in ReportWindowPresenter.refreshCommands() }
     }
 }

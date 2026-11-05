@@ -36,13 +36,20 @@ struct ReportThermalView: View {
 
     private var kpiSummaryRow: some View {
         let th = viewModel.rangeModel?.thermal
-        let hasFans = th?.hasFans ?? false
+        let fanReadout = ReportFanReadoutState.resolve(
+            hasFans: th?.hasFans ?? false,
+            sensorAvailable: th?.fanSensorAvailable ?? false,
+            averageRPM: th?.fanAvgRPM,
+            peakRPM: th?.fanMaxRPM
+        )
 
         return HStack(spacing: 12) {
             ReportKpiCard(
                 title: String(localized: "stats.r.secThermal", defaultValue: "系统热状态"),
                 value: ReportUIHelper.thermalStateLabel(th?.cpuThermalAvg),
-                caption: th?.cpuThermalAvg.map { String(format: "平均 %.1f 级", $0) },
+                caption: th?.cpuThermalAvg.map { level in
+                    String(localized: "stats.r.thermalAverage \(String(format: "%.1f", level))")
+                },
                 color: (th?.cpuThermalAvg ?? 0) > 0.5 ? tempColor : Color(hex: 0x34C759)
             )
             ReportKpiCard(
@@ -51,37 +58,48 @@ struct ReportThermalView: View {
                 caption: nil,
                 color: tempColor
             )
-            if hasFans {
-                if th?.fanSensorAvailable == false {
-                    ReportKpiCard(
-                        title: String(localized: "stats.r.sAvgFan", defaultValue: "风扇转速"),
-                        value: "沙盒受限",
-                        caption: "需直连版权限",
-                        color: .secondary
-                    )
-                } else if th?.fanMaxRPM == nil || th?.fanMaxRPM == 0 {
-                    ReportKpiCard(
-                        title: String(localized: "stats.r.sAvgFan", defaultValue: "风扇转速"),
-                        value: "0 RPM",
-                        caption: "当前静音停转",
-                        color: Color(hex: 0x34C759)
-                    )
-                } else {
-                    ReportKpiCard(
-                        title: String(localized: "stats.r.sAvgFan", defaultValue: "风扇平均转速"),
-                        value: th?.fanAvgRPM.map { String(format: "%.0f RPM", $0) } ?? "—",
-                        caption: th?.fanMaxRPM.map { "峰 " + String(format: "%.0f", $0) },
-                        color: fanColor
-                    )
-                }
-            } else {
-                ReportKpiCard(
-                    title: String(localized: "stats.r.fanStatus", defaultValue: "风扇模组"),
-                    value: "被动散热",
-                    caption: "无物理风扇",
-                    color: .secondary
-                )
-            }
+            fanKpiCard(for: fanReadout)
+        }
+    }
+
+    @ViewBuilder
+    private func fanKpiCard(for state: ReportFanReadoutState) -> some View {
+        switch state {
+        case .fanless:
+            ReportKpiCard(
+                title: String(localized: "stats.r.fanStatus"),
+                value: String(localized: "stats.r.fanlessTitle"),
+                caption: String(localized: "stats.r.fanlessSubtitle"),
+                color: .secondary
+            )
+        case .unavailable:
+            ReportKpiCard(
+                title: String(localized: "stats.r.sAvgFan"),
+                value: String(localized: "stats.r.fanUnavailableValue"),
+                caption: String(localized: "stats.r.fanUnavailableCaption"),
+                color: .secondary
+            )
+        case .noHistory:
+            ReportKpiCard(
+                title: String(localized: "stats.r.sAvgFan"),
+                value: String(localized: "stats.r.fanNoHistoryValue"),
+                caption: String(localized: "stats.r.fanNoHistoryCaption"),
+                color: .secondary
+            )
+        case .stopped:
+            ReportKpiCard(
+                title: String(localized: "stats.r.sAvgFan"),
+                value: "0 RPM",
+                caption: String(localized: "stats.r.fanStoppedCaption"),
+                color: Color(hex: 0x34C759)
+            )
+        case let .measured(averageRPM, peakRPM):
+            ReportKpiCard(
+                title: String(localized: "stats.r.sAvgFan"),
+                value: averageRPM.map { String(format: "%.0f RPM", $0) } ?? "—",
+                caption: peakRPM.map { String(localized: "stats.r.fanPeak \(String(format: "%.0f", $0))") },
+                color: fanColor
+            )
         }
     }
 
@@ -313,7 +331,7 @@ struct ReportThermalView: View {
             icon: "fan.fill"
         ) {
             if fanPoints.isEmpty {
-                ReportEmptyPlaceholder(text: String(localized: "stats.r.fanZeroDesc", defaultValue: "当前设备具备物理风扇，所选时间范围内风扇均处于 0 RPM 静音停转状态"))
+                ReportEmptyPlaceholder(text: String(localized: "stats.r.fanNoTrend"))
             } else {
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 16) {
@@ -391,7 +409,7 @@ struct ReportThermalView: View {
                     .foregroundStyle(.secondary)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "stats.r.fanSandboxDesc", defaultValue: "系统检测到物理风扇模组存在，但在 App Store 沙盒权限限制下，应用无法直接读取 Apple SMC 传感器中的实时转速数据。"))
+                    Text(String(localized: "stats.r.fanUnavailableDescription"))
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                 }
@@ -418,5 +436,27 @@ struct ReportThermalView: View {
             }
             .padding(.vertical, 8)
         }
+    }
+}
+
+/// 将设备能力和所选时段的实测结果分开映射，缺失记录不再解释成零转速。
+enum ReportFanReadoutState: Equatable {
+    case fanless
+    case unavailable
+    case noHistory
+    case stopped
+    case measured(averageRPM: Double?, peakRPM: Double?)
+
+    static func resolve(
+        hasFans: Bool,
+        sensorAvailable: Bool,
+        averageRPM: Double?,
+        peakRPM: Double?
+    ) -> Self {
+        guard hasFans else { return .fanless }
+        guard sensorAvailable else { return .unavailable }
+        guard averageRPM != nil || peakRPM != nil else { return .noHistory }
+        if peakRPM == 0, averageRPM == nil || averageRPM == 0 { return .stopped }
+        return .measured(averageRPM: averageRPM, peakRPM: peakRPM)
     }
 }

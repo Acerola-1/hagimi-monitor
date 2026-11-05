@@ -85,8 +85,8 @@ struct ReportPowerView: View {
             } else {
                 ReportKpiCard(
                     title: String(localized: "stats.r.powerSupply", defaultValue: "供电状态"),
-                    value: "AC 交流供电",
-                    caption: "台式机形态",
+                    value: String(localized: "stats.r.acPower"),
+                    caption: String(localized: "stats.r.desktopMacFormFactor"),
                     color: .secondary
                 )
             }

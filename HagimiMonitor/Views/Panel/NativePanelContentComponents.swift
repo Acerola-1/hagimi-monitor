@@ -148,6 +148,7 @@ struct SingleHostDetail<Content: View>: View {
                     value: ["available:" + id: CGSize(width: available ? 1 : 0, height: 0)])
             }
             .allowsHitTesting(available && isExpanded)
+            .disabled(!available || !isExpanded)
             .accessibilityHidden(!available || !isExpanded)
 
     }

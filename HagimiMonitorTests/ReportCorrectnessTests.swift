@@ -143,6 +143,63 @@ struct ReportCorrectnessTests {
         #expect(fanlessMetrics.hasFans == false)
     }
 
+    @Test func r04FanReadoutSeparatesCapabilityAndSelectedRangeHistory() {
+        #expect(ReportFanReadoutState.resolve(
+            hasFans: false,
+            sensorAvailable: false,
+            averageRPM: 0,
+            peakRPM: 0
+        ) == .fanless)
+        #expect(ReportFanReadoutState.resolve(
+            hasFans: true,
+            sensorAvailable: false,
+            averageRPM: nil,
+            peakRPM: nil
+        ) == .unavailable)
+        #expect(ReportFanReadoutState.resolve(
+            hasFans: true,
+            sensorAvailable: true,
+            averageRPM: nil,
+            peakRPM: nil
+        ) == .noHistory)
+        #expect(ReportFanReadoutState.resolve(
+            hasFans: true,
+            sensorAvailable: true,
+            averageRPM: 0,
+            peakRPM: 0
+        ) == .stopped)
+        #expect(ReportFanReadoutState.resolve(
+            hasFans: true,
+            sensorAvailable: true,
+            averageRPM: 1_200,
+            peakRPM: 1_800
+        ) == .measured(averageRPM: 1_200, peakRPM: 1_800))
+    }
+
+    @Test func fanAverageWithoutPeakStillCountsAsHistoricalEvidence() {
+        #expect(ReportFanReadoutState.resolve(
+            hasFans: true, sensorAvailable: true, averageRPM: 1200, peakRPM: nil
+        ) == .measured(averageRPM: 1200, peakRPM: nil))
+    }
+
+    @Test func episodeObservedRangeLocalizesTwoIndependentEndpoints() {
+        let ranges = [
+            ("11-04 08:15", "11-04 08:45"),
+            ("11-04 23:55", "11-05 00:15"),
+            ("11-04 08:15", "11-04 08:16")
+        ]
+        for (start, end) in ranges {
+            for language in ["en", "zh-Hans"] {
+                let text = ReportAppsView.episodeObservedRangeText(
+                    start: start, end: end, locale: Locale(identifier: language))
+                #expect(text.contains(start))
+                #expect(text.contains(end))
+                #expect(!text.contains("stats.r.episodeObserved"))
+                #expect(!text.contains("%@"))
+            }
+        }
+    }
+
     // MARK: - R05: 热状态 0~3 档位映射
 
     @Test func r05ThermalStatePreservesLevelSemanticsWithoutMultiplying100() {

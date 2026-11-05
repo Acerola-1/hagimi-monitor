@@ -116,6 +116,18 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
         activeAnchor = anchor
         QuickToolsStore.shared.isPopoverPresented = true
         popover.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .minY)
+        #if DEBUG
+        PanelUXAcceptanceProbe.record("tools.show", visible: popover.isShown)
+        #endif
+    }
+
+    func isPresented(from window: NSWindow) -> Bool {
+        popover.isShown && activeAnchor?.view?.window === window
+    }
+
+    func contains(_ window: NSWindow?, from parent: NSWindow) -> Bool {
+        isPresented(from: parent) && window != nil
+            && window === hostingController?.view.window
     }
 
     func dismiss() {
@@ -143,6 +155,9 @@ final class QuickToolsPopoverPresenter: NSObject, NSPopoverDelegate {
             hostingController = nil
             activeAnchor = nil
             onClosed()
+            #if DEBUG
+            PanelUXAcceptanceProbe.record("tools.close", visible: popover.isShown)
+            #endif
         }
     }
 

@@ -198,6 +198,7 @@ struct ModuleRowPreview: View {
                     items: BatteryPageTab.previewCases,
                     icon: { $0.icon },
                     tooltip: { $0.title },
+                    accessibilityGroupName: String(localized: "panel.power-pages"),
                     tint: tint,
                     theme: theme
                 )

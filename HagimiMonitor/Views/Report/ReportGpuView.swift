@@ -8,7 +8,13 @@ struct ReportGpuView: View {
     @State private var selectedDate: Date?
     @State private var selectedVramDate: Date?
 
-    private let gpuColor = ReportUIHelper.gpuColor
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+    private var palette: MonitorPalette {
+        MonitorPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
+
+    private var gpuColor: Color { palette.moduleTint(for: .gpu) }
     private let peakColor = ReportUIHelper.peakColor
     private let vramColor = Color(hex: 0x8B5CF6)
 

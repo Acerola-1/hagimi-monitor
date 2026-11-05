@@ -18,6 +18,18 @@ struct NativeReportView: View {
                 onExport: onExport
             )
 
+            if viewModel.loadFailed {
+                HStack {
+                    Text(String(localized: "stats.report.read-failed"))
+                    if let capturedAt = viewModel.snapshot?.capturedAt {
+                        Text(capturedAt, style: .date)
+                        Text(capturedAt, style: .time)
+                    }
+                    Button(String(localized: "stats.report.retry"), action: onReload)
+                }
+                .padding()
+            }
+
             // 下方主工作区：左侧模块导航 + 右侧内容容器
             HStack(spacing: 0) {
                 ReportSidebarView(selectedModule: $viewModel.selectedModule)
@@ -32,6 +44,9 @@ struct NativeReportView: View {
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    } else if viewModel.loadFailed && viewModel.snapshot == nil {
+                        Text(String(localized: "stats.report.unavailable"))
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     } else {
                         if viewModel.selectedModule == .details {
                             ReportDetailsTableView(viewModel: viewModel)

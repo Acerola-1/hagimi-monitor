@@ -5,7 +5,7 @@ enum RowHeaderPillMetrics {
     static let width: CGFloat = 70
     static let height: CGFloat = 26
     static let cornerRadius = CGFloat(MonitorConstants.rowCornerRadius) - verticalPadding
-    static let labelSize: CGFloat = 9
+    static let labelSize: CGFloat = 10
     static let valueSize: CGFloat = 10
     static let horizontalPadding: CGFloat = 5
     static let verticalPadding = (MonitorConstants.panelRowHeaderHeight - height) / 2

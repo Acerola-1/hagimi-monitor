@@ -7,6 +7,86 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct NativePanelHostingTests {
+    @Test func escapeDuringActiveReorderCancelsOnlyDragBeforeDismissingItsHost() async throws {
+        let domain = "escape-active-order-\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: domain))
+        defaults.set(false, forKey: "settings.statistics.enabled")
+        defaults.set(["cpu", "gpu"], forKey: "settings.visibleKinds")
+        defer { defaults.removePersistentDomain(forName: domain) }
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(domain)
+        let settings = MonitorSettings(defaults: defaults)
+        let recorder = StatisticsRecorder(databaseURL: directory.appendingPathComponent("metrics.sqlite3"),
+            processStoreDirectory: directory.appendingPathComponent("processes"),
+            processAlertCenter: ProcessAlertCenter(), recordingEnabled: false)
+        let store = MonitorStore(settings: settings, statisticsRecorder: recorder)
+        let reorder = PanelReorderController()
+        let gate = PanelRefreshGate(store: store)
+        var dismissals = 0
+        let root = MonitorPanelView(store: store, refreshGate: gate, reorderController: reorder,
+            dismissMenuBarPanel: { dismissals += 1 })
+        let host = NSHostingView(rootView: root)
+        let window = NativePanelWindow(contentRect: CGRect(x: -10000, y: -10000, width: 380, height: 600),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        window.contentView = host
+        window.orderFrontRegardless()
+        defer { window.orderOut(nil); window.contentView = nil; gate.close() }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+        while window.escapeAction == nil && ContinuousClock.now < deadline {
+            host.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(window.escapeAction != nil)
+        reorder.register(scope: .modules, id: "cpu", title: "CPU", span: 2,
+            frame: CGRect(x: 0, y: 0, width: 340, height: 34))
+        reorder.register(scope: .modules, id: "gpu", title: "GPU", span: 2,
+            frame: CGRect(x: 0, y: 40, width: 340, height: 34))
+        reorder.canBegin = { true }
+        let originalOrder = settings.panelOrder(for: .modules)
+        reorder.begin(scope: .modules, id: "cpu", location: CGPoint(x: 10, y: 10), settings: settings)
+        reorder.update(location: CGPoint(x: 10, y: 72))
+        #expect(reorder.session != nil)
+        let escape = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 0, windowNumber: window.windowNumber, context: nil,
+            characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}", isARepeat: false, keyCode: 53))
+        window.sendEvent(escape)
+        #expect(reorder.session == nil)
+        #expect(dismissals == 0)
+        #expect(window.isVisible)
+        #expect(settings.panelOrder(for: .modules) == originalOrder)
+        window.sendEvent(escape)
+        #expect(dismissals == 1)
+    }
+
+    @Test func escapeRoutesOnceAcrossIndependentHostingViewsAndReleasesItsAnchor() throws {
+        let window = NativePanelWindow(contentRect: CGRect(x: -10000, y: -10000, width: 340, height: 200),
+            styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        let root = NSView(frame: CGRect(x: 0, y: 0, width: 340, height: 200))
+        window.contentView = root
+        defer { window.orderOut(nil); window.contentView = nil }
+        let child = NSHostingView(rootView: Text("Independent detail host").focusable())
+        root.addSubview(child)
+        var count = 0
+        var anchor: NativePanelEscapeHandler.Anchor? = .init(action: { count += 1 })
+        root.addSubview(try #require(anchor))
+        window.makeFirstResponder(child)
+        func event(_ type: NSEvent.EventType, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
+            try #require(NSEvent.keyEvent(with: type, location: .zero, modifierFlags: flags,
+                timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                characters: "\u{1B}", charactersIgnoringModifiers: "\u{1B}", isARepeat: false, keyCode: 53))
+        }
+        window.sendEvent(try event(.keyDown))
+        #expect(count == 1)
+        window.sendEvent(try event(.keyUp))
+        window.sendEvent(try event(.keyDown, flags: .command))
+        #expect(count == 1)
+        anchor?.action = { count += 10 }
+        window.sendEvent(try event(.keyDown))
+        #expect(count == 11)
+        anchor?.removeFromSuperview()
+        anchor = nil
+        #expect(window.escapeAction == nil)
+    }
+
     @Test func contentOnlySurfaceRemovesReservedChromeAndRestoresMonitorLayout() async throws {
         let registry = PanelDimensionRegistry(initialEnvironment: GeometryEnvironmentToken(width: 340,
             localeIdentifier: "en", dynamicTypeSize: "default", backingScale: 2, structureSignature: ""))
@@ -41,6 +121,7 @@ struct NativePanelHostingTests {
     private final class RenderProbe {
         var values: [Int] = []
         var locales: [String] = []
+        var enabledStates: [Bool] = []
     }
 
     private struct VersionedCard: View, Equatable {
@@ -48,10 +129,12 @@ struct NativePanelHostingTests {
         let value: Int
         let height: CGFloat
         @Environment(\.locale) private var locale
+        @Environment(\.isEnabled) private var isEnabled
         static func == (lhs: Self, rhs: Self) -> Bool { lhs.value == rhs.value && lhs.height == rhs.height }
         var body: some View {
             let _ = probe.values.append(value)
             let _ = probe.locales.append(locale.identifier)
+            let _ = probe.enabledStates.append(isEnabled)
             VStack(spacing: 0) {
                 Text("\(value)").frame(height: 34)
                 Color.clear.frame(height: height)
@@ -109,6 +192,36 @@ struct NativePanelHostingTests {
         update(1, height: 140)
         try await settle { probe.locales.last == "zh_CN" }
         #expect(probe.locales.last == "zh_CN", "同值内容仍须接收排版环境变化")
+        environment.isEnabled = false
+        update(1, height: 140)
+        try await settle { probe.enabledStates.last == false }
+        #expect(surface.contentHost(for: "cpu") === node)
+        environment.isEnabled = true
+        update(1, height: 140)
+        try await settle { probe.enabledStates.last == true }
+        #expect(surface.contentHost(for: "cpu") === node)
+    }
+
+    @Test func collapsedDetailsDisableControlsWithoutDiscardingTheirMeasuredContent() {
+        let probe = RenderProbe()
+        func detail(expanded: Bool, available: Bool) -> some View {
+            SingleHostDetail(id: "cpu", isExpanded: expanded, available: available,
+                content: VersionedCard(probe: probe, value: 1, height: 100))
+        }
+        let host = NSHostingView(rootView: detail(expanded: false, available: true))
+        host.frame.size = CGSize(width: 328, height: 300)
+        host.layoutSubtreeIfNeeded()
+        let collapsedHeight = host.fittingSize.height
+        #expect(probe.enabledStates.last == false)
+        #expect(collapsedHeight > 100)
+        host.rootView = detail(expanded: true, available: true)
+        host.layoutSubtreeIfNeeded()
+        #expect(probe.enabledStates.last == true)
+        #expect(host.fittingSize.height == collapsedHeight)
+        host.rootView = detail(expanded: true, available: false)
+        host.layoutSubtreeIfNeeded()
+        #expect(probe.enabledStates.last == false)
+        #expect(host.fittingSize.height == collapsedHeight)
     }
 
     nonisolated private final class MeasurementProbe: @unchecked Sendable {

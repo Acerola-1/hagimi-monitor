@@ -135,6 +135,7 @@ enum SettingsWindowPresenter {
 
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
+        window.autorecalculatesKeyViewLoop = true
         window.delegate = resizeDelegate
 
         // SwiftUI 宿主以子控制器形式嵌入普通 AppKit 容器:直接作为

@@ -103,14 +103,14 @@ struct StatisticsSettingsView: View {
     private var recordToggleGroup: some View {
         SettingsGroup {
             SettingsRow(title: String(localized: "stats.settings.toggle")) {
-                Toggle("", isOn: $settings.statisticsEnabled)
+                Toggle(String(localized: "stats.settings.toggle"), isOn: $settings.statisticsEnabled)
                     .labelsHidden()
                     .toggleStyle(.switch)
             }
             if settings.statisticsEnabled {
                 SettingsDivider()
                 SettingsRow(title: String(localized: "stats.settings.notifications", defaultValue: "推送异常警报通知")) {
-                    Toggle("", isOn: $settings.alertNotificationsEnabled)
+                    Toggle(String(localized: "stats.settings.notifications", defaultValue: "推送异常警报通知"), isOn: $settings.alertNotificationsEnabled)
                         .labelsHidden()
                         .toggleStyle(.switch)
                 }
