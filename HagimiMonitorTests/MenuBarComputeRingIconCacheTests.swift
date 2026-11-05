@@ -68,4 +68,15 @@ struct MenuBarComputeRingIconCacheTests {
         let hud = MenuBarComputeRingIcon.image(load: 50, darkMode: true, showsHUDBadge: true)
         #expect(hud !== alert)
     }
+    @Test("Recovery colors at the same load use separate cache entries")
+    func coreLevelIsKeyed() {
+        for dark in [false, true] {
+            let normal = MenuBarComputeRingIcon.image(load: 49, darkMode: dark, coreLevel: .normal)
+            let busy = MenuBarComputeRingIcon.image(load: 49, darkMode: dark, coreLevel: .busy)
+            #expect(normal !== busy)
+            #expect(busy === MenuBarComputeRingIcon.image(load: 49, darkMode: dark, coreLevel: .busy))
+            let stressed = MenuBarComputeRingIcon.image(load: 77, darkMode: dark, coreLevel: .stressed)
+            #expect(stressed !== MenuBarComputeRingIcon.image(load: 77, darkMode: dark, coreLevel: .busy))
+        }
+    }
 }

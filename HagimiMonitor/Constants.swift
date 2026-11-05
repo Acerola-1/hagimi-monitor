@@ -17,7 +17,7 @@ nonisolated enum MonitorConstants {
     // 小尺寸图标只在跨整数桶时发布；24Hz 是采样上限，稳定后停止。
     static let menuBarLoadSmoothFrameInterval = 1.0 / 24.0
     static let menuBarLoadLevelBoundaries = [25.0, 50.0, 78.0]
-    static let menuBarLoadColorBlendHalfWidth = 4.0
+    static let menuBarCoreRecoveryMargin = 3.0
 
     // MARK: - Panel Dimensions
     static let panelMinWidth: Double = 300

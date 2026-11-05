@@ -799,6 +799,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let image = MenuBarComputeRingIcon.image(
                 load: displayedLoad ?? store.loadAnimator.displayedComputeLoad,
                 darkMode: isDark,
+                coreLevel: store.loadAnimator.displayedCoreLevel,
                 showsAlert: showsAlert,
                 showsHUDBadge: showsHUDBadge
             )

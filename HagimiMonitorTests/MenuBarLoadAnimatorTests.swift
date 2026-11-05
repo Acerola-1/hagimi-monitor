@@ -142,16 +142,38 @@ struct MenuBarLoadAnimatorTests {
         #expect(before != after)
     }
 
-    @Test func colorIsContinuousAcrossEveryLevelBoundary() throws {
-        for dark in [false, true] {
-            for boundary in MonitorConstants.menuBarLoadLevelBoundaries {
-                let before = try #require(MenuBarComputeLoadLevel.ringColor(for: boundary - 0.001, darkMode: dark).usingColorSpace(.deviceRGB))
-                let after = try #require(MenuBarComputeLoadLevel.ringColor(for: boundary + 0.001, darkMode: dark).usingColorSpace(.deviceRGB))
-                #expect(abs(before.redComponent - after.redComponent) < 0.001)
-                #expect(abs(before.greenComponent - after.greenComponent) < 0.001)
-                #expect(abs(before.blueComponent - after.blueComponent) < 0.001)
-            }
+    @Test func coreLevelUsesRecoveryMarginsThroughNormalEntryPoint() {
+        let frames = Frames()
+        let animator = animator(frames, reduced: true)
+        let samples: [(Double, MenuBarCoreLevel)] = [
+            (49, .normal), (50, .busy), (49, .busy), (48, .busy), (47, .normal),
+            (78, .stressed), (77, .stressed), (76, .stressed), (75, .busy),
+            (20, .normal), (95, .stressed), (0, .normal)
+        ]
+        for (load, expected) in samples {
+            animator.updateTarget(load)
+            #expect(animator.displayedCoreLevel == expected)
         }
+        #expect(frames.starts == 0)
+    }
+
+    @Test func coreLevelFollowsDisplayedFramesAndIsReadyForSubscribers() {
+        let frames = Frames()
+        let animator = animator(frames)
+        var previousLevel = MenuBarCoreLevel.normal
+        let subscription = animator.$displayedComputeLoad.sink { load in
+            let expected = previousLevel.updated(for: load)
+            #expect(animator.displayedCoreLevel == expected)
+            previousLevel = expected
+        }
+        animator.updateTarget(90)
+        #expect(animator.displayedCoreLevel == .normal)
+        for _ in 0..<48 { frames.fire(after: 1.0 / 24) }
+        #expect(animator.displayedCoreLevel == .stressed)
+        animator.updateTarget(0)
+        for _ in 0..<48 { frames.fire(after: 1.0 / 24) }
+        #expect(animator.displayedCoreLevel == .normal)
+        withExtendedLifetime(subscription) {}
     }
 
     @Test func aggregateRemainsMonotonicAndBetweenMeanAndMaximum() {
