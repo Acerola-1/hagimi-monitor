@@ -127,15 +127,7 @@ struct MonitorPanelView: View {
             height: panelReorder.session == nil || preDragContentHeight == 0
                 ? nil : preDragContentHeight, alignment: .top
         )
-        .overlay {
-            // 点一下后弹出的 RunCat 致谢卡片(面板内 overlay,避免系统 sheet 抢焦点关面板)。
-            if cameoModel.showThanks {
-                CatThanksCard(onClose: { cameoModel.showThanks = false })
-                    .transition(.opacity)
-            }
-        }
         .overlay { reorderGhost(theme: theme) }
-        .animation(.easeInOut(duration: 0.2), value: cameoModel.showThanks)
         .background(TransparentWindowBackground(colorSchemeOverride: store.settings.themePreference.colorScheme))
         .onChange(of: store.isPanelVisible) { _, visible in
             // 面板隐藏后重置为各模块的「默认展开」设置:不可见期间直接赋值(无动画),
@@ -467,8 +459,12 @@ struct MonitorPanelView: View {
                         if cameoModel.isVisible {
                             HeaderCatCameo(
                                 model: cameoModel,
-                                tint: theme.captionText
+                                tint: theme.captionText,
+                                onOpenRepository: dismissMenuBarPanel
                             )
+                            // 帧图几乎贴齐右缘，工具按钮却有 22pt 点击盒。
+                            // 补 6pt 后，小猫到图标的空隙才和后面图标彼此的空隙接近。
+                            .padding(.trailing, 6)
                         }
                         PanelHeaderToolBadges(settings: store.settings, theme: theme)
                         statsEntryButton(theme: theme)

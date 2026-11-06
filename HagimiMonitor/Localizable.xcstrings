@@ -2820,66 +2820,18 @@
         }
       }
     },
-    "cat-cameo.thanks.body": {
+    "cat-cameo.open": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This project began as an attempt to build a better RunCat — yet this little cat remains its soul, beyond imitation. Please support the original project."
+            "value": "Open the RunCat repository"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个项目的起因，就是想做一个更好的 RunCat——但这只小猫始终是它的灵魂，无法超越。欢迎去支持原项目。"
-          }
-        }
-      }
-    },
-    "cat-cameo.thanks.close": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Got it"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "好的"
-          }
-        }
-      }
-    },
-    "cat-cameo.thanks.support": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Support RunCat"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "支持 RunCat"
-          }
-        }
-      }
-    },
-    "cat-cameo.thanks.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meow — you found me!"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "喵～被你发现啦"
+            "value": "打开 RunCat 仓库"
           }
         }
       }
