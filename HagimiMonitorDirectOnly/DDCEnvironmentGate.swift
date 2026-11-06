@@ -28,6 +28,13 @@ nonisolated final class DDCEnvironmentGate: NSObject, @unchecked Sendable {
     private let runtime: DDCGateRuntime
 
     private var changeHandlers: [UUID: @Sendable () -> Void] = [:]
+    private var topologyHandlers: [UUID: @Sendable (CGDirectDisplayID?, CGDisplayChangeSummaryFlags) -> Void] = [:]
+    private var systemSleeping = false
+    private var shuttingDown = false
+    var isShuttingDown: Bool { lock.withLock { shuttingDown } }
+
+    /// 拓扑救援只避让系统睡眠，不受单个显示器睡眠的 DDC 门禁阻断。
+    var isSystemSleeping: Bool { lock.withLock { systemSleeping } }
 
     /// 生产环境用默认时长并注册系统观察者。测试可注入更短时长并跳过系统注册,
     /// 通过 `handleWillSleep()`/`handleDidWake()`/`handleReconfigure(flags:)` 手动触发。
@@ -53,6 +60,7 @@ nonisolated final class DDCEnvironmentGate: NSObject, @unchecked Sendable {
         }
         guard registerSystemObservers else { return }
         let center = NSWorkspace.shared.notificationCenter
+        center.addObserver(self, selector: #selector(handleWillPowerOff), name: NSWorkspace.willPowerOffNotification, object: nil)
         center.addObserver(
             self,
             selector: #selector(handleWillSleep),
@@ -78,6 +86,8 @@ nonisolated final class DDCEnvironmentGate: NSObject, @unchecked Sendable {
             object: nil
         )
         CGDisplayRegisterReconfigurationCallback(Self.cgCallback, nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(handleScreenParameters),
+            name: NSApplication.didChangeScreenParametersNotification, object: nil)
     }
 
     // MARK: - Suppression state
@@ -108,29 +118,53 @@ nonisolated final class DDCEnvironmentGate: NSObject, @unchecked Sendable {
         lock.unlock()
     }
 
+    /// 连接救援不能等 DDC 门禁解除：拔屏可能同时进入持续的显示器睡眠状态。
+    func addTopologyHandler(_ handler: @escaping @Sendable (CGDirectDisplayID?, CGDisplayChangeSummaryFlags) -> Void) -> UUID {
+        let token = UUID()
+        lock.withLock { topologyHandlers[token] = handler }
+        return token
+    }
+
+    func removeTopologyHandler(_ token: UUID) { _ = lock.withLock { topologyHandlers.removeValue(forKey: token) } }
+
+    private func fireTopologyHandlers(displayID: CGDirectDisplayID? = nil, flags: CGDisplayChangeSummaryFlags = []) {
+        let handlers = lock.withLock { Array(topologyHandlers.values) }
+        for handler in handlers { handler(displayID, flags) }
+    }
+
     // MARK: - Event handlers
 
     @objc func handleWillSleep() {
+        lock.withLock { systemSleeping = true }
         runtime.systemSleepStarted()
     }
 
+    @objc func handleWillPowerOff() { lock.withLock { shuttingDown = true } }
+
     @objc func handleDidWake() {
+        lock.withLock { systemSleeping = false }
         runtime.systemWakeStarted()
+        fireTopologyHandlers()
     }
 
     @objc func handleDisplayWillSleep() {
         runtime.displaySleepStarted()
+        fireTopologyHandlers()
     }
 
     @objc func handleDisplayDidWake() {
         runtime.displayWakeStarted()
+        fireTopologyHandlers()
     }
 
-    func handleReconfigure(flags: CGDisplayChangeSummaryFlags) {
+    @objc private func handleScreenParameters() { fireTopologyHandlers() }
+
+    func handleReconfigure(displayID: CGDirectDisplayID? = nil, flags: CGDisplayChangeSummaryFlags) {
         if flags.contains(.beginConfigurationFlag) {
             runtime.reconfigureStarted()
         } else {
             runtime.reconfigureCompleted()
+            fireTopologyHandlers(displayID: displayID, flags: flags)
         }
     }
 
@@ -148,7 +182,7 @@ nonisolated final class DDCEnvironmentGate: NSObject, @unchecked Sendable {
     // MARK: - CG callback
 
     // C 函数指针不依赖实例上下文;单例在回调触发时必已完成初始化。
-    private nonisolated static let cgCallback: CGDisplayReconfigurationCallBack = { _, flags, _ in
-        DDCEnvironmentGate.shared.handleReconfigure(flags: flags)
+    private nonisolated static let cgCallback: CGDisplayReconfigurationCallBack = { displayID, flags, _ in
+        DDCEnvironmentGate.shared.handleReconfigure(displayID: displayID, flags: flags)
     }
 }

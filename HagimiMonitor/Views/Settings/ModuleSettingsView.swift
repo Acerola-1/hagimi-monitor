@@ -48,10 +48,7 @@ struct ModuleSettingsView: View {
             SettingsGroup(String(localized: "settings.metrics")) {
                 // 「默认展开」融入「监测项目」卡:开关决定是否自动摊开,网格决定摊开后显示哪些项,
                 // 一张卡承载「展开 →(下列)监测项目」的因果整体。
-                SettingsRow(
-                    title: String(localized: "settings.expand-by-default"),
-                    subtitle: String(localized: "settings.expand-by-default.subtitle")
-                ) {
+                SettingsRow(title: String(localized: "settings.expand-by-default")) {
                     Toggle(String(localized: "settings.expand-by-default"), isOn: Binding(
                         get: { settings.isExpandedByDefault(kind) },
                         set: { settings.setExpandedByDefault($0, for: kind) }
@@ -355,25 +352,12 @@ struct DisplayModuleSettingsView: View {
                         .labelsHidden()
                 }
 
-                if settings.displayModuleVisible || settings.displayControlMenuBarEnabled {
+                if settings.displayModuleVisible {
                     SettingsDivider()
-
-                    SettingsRow(title: String(localized: "settings.include-built-in")) {
-                        Toggle(String(localized: "settings.include-built-in"), isOn: $settings.showBuiltInDisplays)
+                    SettingsRow(title: String(localized: "settings.expand-by-default")) {
+                        Toggle(String(localized: "settings.expand-by-default"), isOn: $settings.displayControlsExpandedByDefault)
                             .toggleStyle(.switch)
                             .labelsHidden()
-                    }
-
-                    if settings.displayModuleVisible {
-                        SettingsDivider()
-                        SettingsRow(
-                            title: String(localized: "settings.expand-by-default"),
-                            subtitle: String(localized: "settings.expand-by-default.subtitle")
-                        ) {
-                            Toggle(String(localized: "settings.expand-by-default"), isOn: $settings.displayControlsExpandedByDefault)
-                                .toggleStyle(.switch)
-                                .labelsHidden()
-                        }
                     }
                 }
             }

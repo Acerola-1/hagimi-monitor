@@ -139,7 +139,6 @@ final class MonitorSettings: ObservableObject {
     @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
     @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
     @Published var menuBarMetricLayoutStyle: MenuBarMetricLayoutStyle = .icon
-    @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
     @Published var displayControlMenuBarEnabled: Bool = false
     @Published var displayControlsExpandedByDefault: Bool = false
@@ -276,7 +275,6 @@ final class MonitorSettings: ObservableObject {
             defaults.array(forKey: Keys.menuBarMetricKinds) as? [String]
         )
 
-        showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
         // 默认值分渠道:Direct 的控制区是 Beta 选择性能力,默认关;
         // App Store 的信息行默认展示。两渠道 Bundle ID 不同,UserDefaults 独立。
         #if DISPLAY_CONTROL
@@ -1070,13 +1068,6 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
-        $showBuiltInDisplays
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.showBuiltInDisplays)
-            }
-            .store(in: &cancellables)
-
         $displayModuleVisible
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1423,7 +1414,6 @@ private enum Keys {
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let displayControlMenuBarEnabled = "settings.display.menuBarEnabled"
     static let displayControlsExpandedByDefault = "settings.display.expandedByDefault"
-    static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
     static let displayVolumeControlEnabled = "settings.display.volumeControlEnabled"
     static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"

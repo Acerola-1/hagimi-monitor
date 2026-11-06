@@ -30,7 +30,17 @@ nonisolated final class DisplayControlEngine: @unchecked Sendable {
     private var throttleTimers: [UUID: [DisplayControlKind: ScheduledWorkHandle]] = [:]
     private var confirmTimers: [UUID: [DisplayControlKind: ScheduledWorkHandle]] = [:]
     /// 全局 in-flight:底层尚未返回时不再提交新 transaction。
-    private var inFlight: InFlightTransaction?
+    private var inFlight: InFlightTransaction? {
+        didSet {
+            if inFlight == nil {
+                let waiters = topologyWaiters
+                topologyWaiters.removeAll()
+                for waiter in waiters.values { waiter(true) }
+            }
+        }
+    }
+    private var topologySuspended = false
+    private var topologyWaiters: [UUID: @Sendable (Bool) -> Void] = [:]
     /// 超时等待后通道 stalled:不再提交新事务,直到真实返回。
     private var channelStalled = false
     private var recoveryAttempt = 0
@@ -98,6 +108,7 @@ nonisolated final class DisplayControlEngine: @unchecked Sendable {
     /// 同 token 但服务对象替换同样视为失效,迟到回调不会改变当前连接。
     func replaceConnections(_ newConnections: [DisplayConnection]) {
         queue.async {
+            self.topologySuspended = false
             let oldTokens = Set(self.connections.keys)
             let newTokens = Set(newConnections.map { $0.token })
             for token in oldTokens.subtracting(newTokens) {
@@ -114,6 +125,21 @@ nonisolated final class DisplayControlEngine: @unchecked Sendable {
                 self.connections.removeValue(forKey: token)
             }
             self.publishSnapshot()
+        }
+    }
+
+    /// 不取消正在内核中执行的 I/O；待其真实返回后才允许拓扑写入。
+    func suspendForTopologyChange(completion: @escaping @Sendable (Bool) -> Void) {
+        queue.async {
+            self.topologySuspended = true
+            for token in self.connections.keys { self.clearTransientState(for: token) }
+            self.connections.removeAll()
+            if self.inFlight == nil { completion(true); return }
+            let id = UUID()
+            self.topologyWaiters[id] = completion
+            self.queue.asyncAfter(deadline: .now() + 5) {
+                self.topologyWaiters.removeValue(forKey: id)?(false)
+            }
         }
     }
 
@@ -225,6 +251,7 @@ nonisolated final class DisplayControlEngine: @unchecked Sendable {
 
     /// 推进调度:写优先于读;全局单 in-flight;stalled 通道不提交。
     private func drain() {
+        guard !topologySuspended else { return }
         if channelStalled || recoveryTimer != nil { return }
         guard inFlight == nil else { return }
 

@@ -12,14 +12,33 @@ import Foundation
 nonisolated final class DisplayPersistence: @unchecked Sendable {
     static let shared = DisplayPersistence()
     private let defaults: UserDefaults
+    private let connectionJournalURL: URL
 
     /// v2 命名空间前缀。
     static let v2Prefix = "displayControl2"
     /// v1 前缀(仅迁移读取)。
     static let v1Prefix = "displayControl"
 
-    init(defaults: UserDefaults = .standard) {
+    init(defaults: UserDefaults = .standard, connectionJournalURL: URL? = nil) {
         self.defaults = defaults
+        self.connectionJournalURL = connectionJournalURL ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent(Bundle.main.bundleIdentifier ?? "HagimiMonitorDirect", isDirectory: true)
+            .appendingPathComponent("display-connections.json")
+    }
+
+    func loadConnectionState() throws -> DisplayConnectionState {
+        guard FileManager.default.fileExists(atPath: connectionJournalURL.path) else { return DisplayConnectionState() }
+        let state = try JSONDecoder().decode(DisplayConnectionState.self, from: Data(contentsOf: connectionJournalURL))
+        guard state.schema == 1 else { throw DisplayConnectionIssue.storage }
+        return state
+    }
+
+    /// 操作基线先落盘，失败必须传递给调用者，不能继续新增停用。
+    func saveConnectionState(_ state: DisplayConnectionState) throws {
+        guard state.schema == 1 else { throw DisplayConnectionIssue.storage }
+        try FileManager.default.createDirectory(at: connectionJournalURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try JSONEncoder().encode(state).write(to: connectionJournalURL, options: .atomic)
+        defaults.set(state.records.filter(\.wantsDisabled).map { $0.id.uuidString }, forKey: "displayControl2.connection.disabled")
     }
 
     // MARK: - v2 读写
