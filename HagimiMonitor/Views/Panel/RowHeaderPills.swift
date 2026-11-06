@@ -3,7 +3,8 @@ import SwiftUI
 /// 成对读数共用标签、数值与几何，网络和电源行保持一致的高度和右缘对齐。
 enum RowHeaderPillMetrics {
     static let width: CGFloat = 70
-    static let height: CGFloat = 26
+    /// 行头 34 里浅底高 30，上、下、右各留 2pt。读数落在槽内，不顶着圆角。
+    static let height: CGFloat = 30
     static let cornerRadius = CGFloat(MonitorConstants.rowCornerRadius) - verticalPadding
     static let labelSize: CGFloat = 10
     static let valueSize: CGFloat = 10
