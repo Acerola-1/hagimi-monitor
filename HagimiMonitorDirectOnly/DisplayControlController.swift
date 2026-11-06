@@ -8,12 +8,25 @@ import SwiftUI
 /// 串行写入 worker、显示器模型与检测服务。UI 层在共享的
 /// DisplaySection(两渠道单一实现),经 `#if DISPLAY_CONTROL` 引用本文件。
 
+nonisolated protocol DisplayControlBackend: Sendable {
+    func displays() -> [ControlledDisplay]
+    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome
+    func makeEngineTransport() -> any DDCTransport
+    func engineConnections(for displays: [ControlledDisplay]) -> [DisplayConnection]
+    func invalidateConnectionTokens()
+}
+
 @MainActor
 final class DisplayControlController: ObservableObject {
     @Published private(set) var displays: [ControlledDisplay] = []
+    let connections: DisplayConnectionCoordinator
+    private var connectionObservation: AnyCancellable?
+    private var connectionTransition = false
+    private var refreshGeneration = 0
+    private var activeEngineTokens: Set<UUID> = []
     @Published private var pendingValues: [CGDirectDisplayID: [DisplayControlKind: Double]] = [:]
 
-    private let service = DisplayControlService()
+    private let service: any DisplayControlBackend
     private let worker = DisplayControlWorker.shared
     private let changeObserver = DisplayChangeObserver()
     private let audioOutputObserver = AudioOutputChangeObserver()
@@ -64,19 +77,56 @@ final class DisplayControlController: ObservableObject {
     }
     private var mediaKeyPlanInputs: MediaKeyPlanInputs?
 
-    init() {
-        changeObserver.start { [weak self] in
-            MainActor.assumeIsolated {
-                self?.refreshAsync()
+    init(connections: DisplayConnectionCoordinator = DisplayConnectionCoordinator(),
+         backend: (any DisplayControlBackend)? = nil, observeChanges: Bool = true) {
+        self.connections = connections
+        self.service = backend ?? DisplayControlService()
+        connectionObservation = connections.objectWillChange.sink { [weak self] _ in self?.objectWillChange.send() }
+        connections.willChange = { [weak self] _ in
+            guard let self else { return false }
+            await self.connections.cacheControls(self.displays)
+            self.invalidateParameterSession()
+            return await withCheckedContinuation { continuation in
+                let latch = DisplayTopologyPreparation(continuation: continuation)
+                self.worker.prepareForTopologyChange { latch.arrive(true) }
+                self.engine.suspendForTopologyChange { latch.arrive($0) }
+                DispatchQueue.global().asyncAfter(deadline: .now() + 5) { latch.arrive(false) }
             }
         }
-        // 默认音频输出设备变化(切 AirPods/内建扬声器/外接屏喇叭等)时,
-        // 重新评估音量键接管策略。轻量刷新,不做全量 DDC 重扫。
-        audioOutputObserver.start { [weak self] in
-            MainActor.assumeIsolated {
-                self?.mediaKeyController.refresh()
+        connections.willRecover = { [weak self] in
+            guard let self else { return }
+            self.invalidateParameterSession()
+            self.worker.prepareForTopologyChange {}
+            self.engine.suspendForTopologyChange { _ in }
+        }
+        connections.didChange = { [weak self] in
+            self?.connectionTransition = false
+            self?.refreshAsync()
+        }
+        if observeChanges {
+            changeObserver.startSafety { [weak self] displayID, flags in
+                DispatchQueue.main.async { self?.connections.topologyChanged(displayID: displayID, flags: flags) }
+            }
+            changeObserver.start { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.refreshAsync()
+                    self?.connections.refresh(recoverIfNeeded: true)
+                }
+            }
+            // 默认音频输出设备变化(切 AirPods/内建扬声器/外接屏喇叭等)时,
+            // 重新评估音量键接管策略。轻量刷新,不做全量 DDC 重扫。
+            audioOutputObserver.start { [weak self] in
+                MainActor.assumeIsolated {
+                    self?.mediaKeyController.refresh()
+                }
             }
         }
+    }
+
+    private func invalidateParameterSession() {
+        connectionTransition = true; refreshGeneration += 1
+        pendingValues.removeAll(); recentlySetValues.removeAll(); suppressedWrites.removeAll()
+        activeEngineTokens.removeAll(); service.invalidateConnectionTokens()
     }
 
     func attach(settings: MonitorSettings) {
@@ -146,9 +196,13 @@ final class DisplayControlController: ObservableObject {
     }
 
     func refreshAsync() {
+        guard !connectionTransition else { return }
+        refreshGeneration += 1
+        let request = refreshGeneration
         let previousIDs = Set(displays.map { $0.id })
         worker.refresh(service: service) { detectedDisplays in
             DispatchQueue.main.async {
+                guard request == self.refreshGeneration, !self.connectionTransition else { return }
                 AppLogger.ui.info("Display refresh completed, found \(detectedDisplays.count) displays")
                 let detectedIDs = Set(detectedDisplays.map { $0.id })
                 // 已移除的显示器:清理 worker 去重状态,避免同 ID 重新接入时
@@ -165,6 +219,7 @@ final class DisplayControlController: ObservableObject {
                     self.seedFallbackValues(for: display)
                 }
                 let connections = self.service.engineConnections(for: detectedDisplays)
+                self.activeEngineTokens = Set(connections.map(\.token))
                 self.engine.replaceConnections(connections)
                 for connection in connections {
                     self.engine.enqueueRead(
@@ -216,6 +271,14 @@ final class DisplayControlController: ObservableObject {
     }
 
     func setValueAsync(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) {
+        guard !connectionTransition, !connections.isBusy else { return }
+        if connections.hasStarted {
+            guard let entry = connections.entries.first(where: { $0.screen?.id == displayID }),
+                  entry.canWriteParameters,
+                  let live = displays.first(where: { $0.id == displayID }),
+                  live.connectionIdentity?.matches(entry.record.identity) == true else { return }
+        }
+        if let entry = connections.entries.first(where: { $0.screen?.id == displayID }), !entry.canWriteParameters { return }
         let clampedValue = min(100, max(0, value))
         guard let display = displays.first(where: { $0.id == displayID }) else {
             AppLogger.ui.error("Display not found for setValue: \(displayID)")
@@ -237,9 +300,11 @@ final class DisplayControlController: ObservableObject {
             return
         }
 
+        let requestGeneration = refreshGeneration
         worker.setValue(clampedValue, for: key, display: display, service: service) { [weak self] result in
             Task { @MainActor in
-                self?.handleWriteResult(result)
+                guard let self, !self.connectionTransition, self.refreshGeneration == requestGeneration else { return }
+                self.handleWriteResult(result)
             }
         }
     }
@@ -263,7 +328,9 @@ final class DisplayControlController: ObservableObject {
     }
 
     private func applyEngineSnapshot(_ snapshot: DisplayControlEngine.Snapshot) {
+        guard !connectionTransition else { return }
         for connection in snapshot.connections {
+            guard activeEngineTokens.contains(connection.token) else { continue }
             guard let display = displays.first(where: { $0.id == connection.displayID }) else { continue }
             guard let states = snapshot.states[connection.token] else { continue }
             for (control, state) in states {
@@ -357,8 +424,20 @@ private nonisolated final class DisplayControlWorker: @unchecked Sendable {
     private var pendingWrites: [ControlKey: Double] = [:]
     private var debounceTimers: [ControlKey: DispatchWorkItem] = [:]
     private let debounceInterval: DispatchTimeInterval = .milliseconds(150)
+    private let generationLock = NSLock()
+    private var generation = 0
 
-    func refresh(service: DisplayControlService, completion: @escaping @Sendable ([ControlledDisplay]) -> Void) {
+    func prepareForTopologyChange(completion: @escaping @Sendable () -> Void) {
+        generationLock.withLock { generation += 1 }
+        queue.async {
+            for timer in self.debounceTimers.values { timer.cancel() }
+            self.debounceTimers.removeAll()
+            self.pendingWrites.removeAll()
+            completion()
+        }
+    }
+
+    func refresh(service: any DisplayControlBackend, completion: @escaping @Sendable ([ControlledDisplay]) -> Void) {
         queue.async {
             completion(service.displays())
         }
@@ -368,14 +447,17 @@ private nonisolated final class DisplayControlWorker: @unchecked Sendable {
         _ value: Double,
         for key: ControlKey,
         display: ControlledDisplay,
-        service: DisplayControlService,
+        service: any DisplayControlBackend,
         completion: @escaping @Sendable (DisplayWriteResult) -> Void
     ) {
+        let requestGeneration = generationLock.withLock { generation }
         queue.async {
+            guard self.generationLock.withLock({ self.generation == requestGeneration }) else { return }
             self.pendingWrites[key] = value
 
             self.debounceTimers[key]?.cancel()
             let timer = DispatchWorkItem { [service, display, key, completion] in
+                guard self.generationLock.withLock({ self.generation == requestGeneration }) else { return }
                 guard let latestValue = self.pendingWrites.removeValue(forKey: key) else {
                     return
                 }
@@ -451,6 +533,7 @@ nonisolated struct ControlledDisplay: Identifiable, Sendable {
     var brightness: Double
     var volume: Double
     var contrast: Double
+    var connectionIdentity: DisplayConnectionIdentity? = nil
 
     func supports(_ control: DisplayControlKind) -> Bool {
         switch control {
@@ -513,7 +596,7 @@ nonisolated struct ControlledDisplay: Identifiable, Sendable {
 }
 
 /// 内部通过 NSLock 保护 engineTokens 字典，底层 DDC 与 DisplayServices 桥均具备并发安全保障。
-private nonisolated final class DisplayControlService: @unchecked Sendable {
+private nonisolated final class DisplayControlService: DisplayControlBackend, @unchecked Sendable {
     private let displayServices = DisplayServicesBridge()
     private let ddc = DisplayDDCBridge()
     private let classifier = DisplayClassifier()
@@ -521,6 +604,8 @@ private nonisolated final class DisplayControlService: @unchecked Sendable {
     private let persistence = DisplayPersistence.shared
     private let lock = NSLock()
     private var engineTokens: [String: UUID] = [:]
+
+    func invalidateConnectionTokens() { lock.withLock { engineTokens.removeAll() } }
 
     func makeEngineTransport() -> DDCTransport {
         DisplayDDCTransport(bridge: ddc)
@@ -540,7 +625,7 @@ private nonisolated final class DisplayControlService: @unchecked Sendable {
                 edidUUID: nil,
                 isBuiltIn: display.isBuiltIn
             )
-            let key = "(display.id).(handle.identity).(handle.chipAddress)"
+            let key = "\(display.id).\(handle.identity).\(handle.chipAddress)"
             let token = lock.withLock {
                 if let existing = engineTokens[key] {
                     return existing
@@ -572,6 +657,7 @@ private nonisolated final class DisplayControlService: @unchecked Sendable {
         ddc.refresh(displayIDs: displayIDs)
 
         let result = displayIDs.compactMap { id -> ControlledDisplay? in
+            let connectionIdentity = DisplayConnectionBridge.identity(for: id)
             let kind = classifier.classify(displayID: id)
 
             if kind == .virtual || kind == .dummy || kind == .unsupported {
@@ -640,7 +726,8 @@ private nonisolated final class DisplayControlService: @unchecked Sendable {
                     ?? 40,
                 contrast: contrastProbe?.value
                     ?? storedContrast
-                    ?? 75
+                    ?? 75,
+                connectionIdentity: connectionIdentity
             )
         }
 
@@ -757,5 +844,23 @@ private nonisolated final class DisplayServicesBridge: Sendable {
     func setBrightness(displayID: CGDirectDisplayID, value: Float) -> Bool {
         let clampedValue = min(1, max(0, value))
         return DisplayServicesSetBrightness(displayID, clampedValue) == 0
+    }
+}
+
+/// 两条 I/O 队列均静止才放行，超时只拒绝拓扑请求，不宣称已取消底层调用。
+private nonisolated final class DisplayTopologyPreparation: @unchecked Sendable {
+    private let lock = NSLock()
+    private var remaining = 2
+    private var continuation: CheckedContinuation<Bool, Never>?
+    init(continuation: CheckedContinuation<Bool, Never>) { self.continuation = continuation }
+    func arrive(_ success: Bool) {
+        let result: (CheckedContinuation<Bool, Never>, Bool)? = lock.withLock {
+            guard let continuation else { return nil }
+            if success { remaining -= 1 }
+            guard !success || remaining == 0 else { return nil }
+            self.continuation = nil
+            return (continuation, success)
+        }
+        if let result { result.0.resume(returning: result.1) }
     }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 /// 报表窗口顶部工具条：包含机型信息、时间范围选择器、自定义日历浮窗、粒度指示与操作按钮。
 struct ReportTopBarView: View {
     @ObservedObject var viewModel: NativeReportViewModel
+    @ObservedObject private var reportCommands = ReportWindowPresenter.commandState
     let onReload: () -> Void
     let onPrint: () -> Void
     let onExport: () -> Void
@@ -96,6 +97,7 @@ struct ReportTopBarView: View {
                         .font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.plain)
+                .disabled(!reportCommands.isAvailable)
                 .help(String(localized: "stats.report.toolbar.print.tooltip", defaultValue: "打印或保存为 PDF"))
                 .accessibilityLabel(Text(String(localized: "stats.report.toolbar.print.tooltip")))
                 .frame(width: 26, height: 26)
@@ -106,6 +108,7 @@ struct ReportTopBarView: View {
                         .font(.system(size: 12, weight: .medium))
                 }
                 .buttonStyle(.plain)
+                .disabled(!reportCommands.isAvailable)
                 .help(String(localized: "stats.report.toolbar.export.tooltip", defaultValue: "另存为 HTML 文件"))
                 .accessibilityLabel(Text(String(localized: "stats.report.toolbar.export.tooltip")))
                 .frame(width: 26, height: 26)

@@ -17,7 +17,7 @@ struct QuickToolsSettingsView: View {
         SettingsPage {
             SettingsGroup {
                 SettingsRow(title: String(localized: "settings.show-in-panel")) {
-                    Toggle("", isOn: $settings.quickToolsVisible)
+                    Toggle(String(localized: "settings.show-in-panel"), isOn: $settings.quickToolsVisible)
                         .toggleStyle(.switch)
                         .labelsHidden()
                 }
@@ -26,7 +26,7 @@ struct QuickToolsSettingsView: View {
             // 入口关闭后,工具列表失去意义,直接隐藏(与模块页一致)。
             if settings.quickToolsVisible {
                 VStack(alignment: .leading, spacing: 9) {
-                    SettingsGroupTitle(String(localized: "settings.quick-tools.group"))
+                    SettingsGroupTitle(String(localized: "settings.quick-tools.visible-group"))
                     VStack(spacing: 8) {
                         ForEach(QuickToolKind.allCases, id: \.self) { kind in
                             QuickToolCard(
@@ -149,7 +149,7 @@ private struct QuickToolCard: View {
     /// 三张卡片的开关右内衬一致,整张卡只有一条控制列。
     @ViewBuilder
     private var trailingControl: some View {
-        Toggle(String(localized: kind.titleKey), isOn: Binding(
+        Toggle(String(localized: "settings.quick-tools.show-tool \(String(localized: kind.titleKey))"), isOn: Binding(
             get: { settings.isQuickToolVisible(kind) },
             set: { settings.setQuickToolVisible($0, for: kind) }
         ))

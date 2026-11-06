@@ -88,7 +88,7 @@ struct AboutSettingsView: View {
                 }
 
                 SettingsRow(title: String(localized: "about.telemetry"), subtitle: String(localized: "about.telemetry.detail")) {
-                    Toggle("", isOn: Binding(
+                    Toggle(String(localized: "about.telemetry"), isOn: Binding(
                         get: { UsageReporter.shared.isEnabled },
                         set: { UsageReporter.shared.isEnabled = $0 }
                     ))

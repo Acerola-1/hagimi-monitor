@@ -282,6 +282,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.delegate = self
+        panel.autorecalculatesKeyViewLoop = true
 
         // 隐藏标题栏,做出无边框外观(保留 `.titled` 的窗口行为)。
         panel.titleVisibility = .hidden
@@ -296,7 +297,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.contentView = glassHost
 
         // 面板内容:MonitorPanelView 通过自定义环境键获取 openSettings 闭包与内容高度上限。
-        let root = FluidPanelRootView(store: store, refreshGate: panelRefreshGate, metrics: layoutMetrics, contentScope: contentScope)
+        let root = FluidPanelRootView(store: store, refreshGate: panelRefreshGate, metrics: layoutMetrics,
+            contentScope: contentScope, dismiss: { [weak self] in self?.dismissPanel(source: .userAction) })
             .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action(openSettingsAction))
             .environment(\.panelMotionAdapter, self)
             .ignoresSafeArea()
@@ -589,6 +591,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
         panelMotion?.nativeLayer.panelDidShow()
         if contentScope == .systemMonitor { store.panelDidAppear() }
+        #if DEBUG
+        PanelUXAcceptanceProbe.record("menu.show", visible: panel.isVisible)
+        #endif
         panelRefreshGate.open()
     }
 
@@ -663,6 +668,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         guard generation == dismissGeneration else { return }
         panel.orderOut(nil)
         panelMotion?.resetForHiddenPanel?()
+        #if DEBUG
+        PanelUXAcceptanceProbe.record("menu.hide", visible: panel.isVisible)
+        #endif
         panel.alphaValue = 1
         if #unavailable(macOS 27.0) {
             statusItem.button?.highlight(false)
@@ -791,6 +799,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let image = MenuBarComputeRingIcon.image(
                 load: displayedLoad ?? store.loadAnimator.displayedComputeLoad,
                 darkMode: isDark,
+                coreLevel: store.loadAnimator.displayedCoreLevel,
                 showsAlert: showsAlert,
                 showsHUDBadge: showsHUDBadge
             )
@@ -927,9 +936,11 @@ private struct FluidPanelRootView: View {
     let refreshGate: PanelRefreshGate
     @ObservedObject var metrics: FluidPanelLayoutMetrics
     let contentScope: MonitorPanelContentScope
+    let dismiss: @MainActor () -> Void
 
     var body: some View {
-        MonitorPanelView(store: store, refreshGate: refreshGate, contentScope: contentScope)
+        MonitorPanelView(store: store, refreshGate: refreshGate, contentScope: contentScope,
+                         dismissMenuBarPanel: dismiss)
             .environment(\.panelMaxContentHeight, metrics.maxContentHeight)
     }
 }

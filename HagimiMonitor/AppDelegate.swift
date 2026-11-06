@@ -20,6 +20,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var startupCancellables = Set<AnyCancellable>()
     #if DISPLAY_CONTROL
     private(set) var displayMenuBarController: FluidPanelController?
+    private let displayTermination = DisplayConnectionTermination()
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        let connections = store.displayControlController.connections
+        guard connections.hasStarted else { return .terminateNow }
+        displayTermination.begin(restore: { await connections.prepareToQuit() }, reply: {
+            sender.reply(toApplicationShouldTerminate: true)
+        })
+        return .terminateLater
+    }
 
     private func updateDisplayMenuBarEntry(enabled: Bool) {
         if enabled, displayMenuBarController == nil {
@@ -102,6 +112,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // 快捷键面板则延迟到首次按下快捷键时再创建(见下方 onKeyUp),
         // 避免开机就构建第二棵完整的 SwiftUI 面板视图树、白白常驻内存。
         _ = store
+        #if DISPLAY_CONTROL
+        // 测试宿主不读取或重新应用用户真实的连接偏好；连接测试使用注入执行器。
+        if NSClassFromString("XCTestCase") == nil,
+           !ProcessInfo.processInfo.environment.keys.contains(where: { $0.hasPrefix("XCTest") }) {
+            store.displayControlController.connections.start()
+        }
+        #endif
         // 实时压力告警:订阅采样、记录开关与通知开关,驱动红点与系统通知。
         PressureAlertCenter.shared.attach(to: store)
         ProcessAlertCenter.shared.attach(to: store)

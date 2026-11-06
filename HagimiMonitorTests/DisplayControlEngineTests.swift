@@ -44,6 +44,39 @@ struct DisplayControlEngineTests {
 
     // MARK: - 1.4/A2 回归:外部改值后设回
 
+    @Test func topologyBarrierWaitsForRealIOAndDiscardsOldPendingWrites() async throws {
+        let transport = FakeDDCTransport()
+        transport.blockWrites = true
+        let clock = VirtualMonotonicClock()
+        let engine = DisplayControlEngine(clock: clock, transport: transport, callDeadline: 0.1)
+        let old = makeConnection()
+        engine.replaceConnections([old])
+        await runWrite(engine, clock: clock, token: old.token, control: .brightness, value: 35)
+        #expect(transport.writeCount() == 1)
+        engine.enqueueWrite(token: old.token, control: .volume, value: 80, final: true)
+        await settle(engine)
+
+        let prepared = TestBox<Bool?>(nil)
+        engine.suspendForTopologyChange { prepared.value = $0 }
+        await settle(engine)
+        clock.advance(by: 1)
+        await settle(engine)
+        #expect(prepared.value == nil, "逻辑超时不能替代底层 I/O 的真实返回")
+        transport.releaseBlockedCalls()
+        await settle(engine)
+        #expect(prepared.value == true)
+        #expect(transport.writeCount() == 1, "拓扑切换必须丢弃尚未提交的旧目标")
+
+        transport.blockWrites = false
+        let replacement = makeConnection()
+        engine.replaceConnections([replacement])
+        await runWrite(engine, clock: clock, token: old.token, control: .brightness, value: 95)
+        #expect(transport.writeCount() == 1, "旧代次恢复后也不能重新进入队列")
+        await runWrite(engine, clock: clock, token: replacement.token, control: .brightness, value: 45)
+        #expect(transport.writeCount() == 2)
+        #expect(transport.writes.last?.value == 45)
+    }
+
     /// 应用设 50 → 外部(显示器按钮)改 80 → 应用再设 50:
     /// 第二次 50 必须真正到达底层(旧 lastWrittenValues 永久去重会吞掉这次写)。
     @Test func repeatedSetAfterExternalChangeReachesTransport() async throws {

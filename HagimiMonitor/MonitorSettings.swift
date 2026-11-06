@@ -126,7 +126,11 @@ enum AppLanguagePreference: String, CaseIterable, Identifiable {
 }
 
 final class MonitorSettings: ObservableObject {
-    @Published var launchAtLogin: Bool = false
+    @Published var launchAtLogin: Bool = false {
+        didSet { persistLaunchAtLogin(launchAtLogin) }
+    }
+    @Published private(set) var launchAtLoginError: String?
+    @Published private(set) var launchAtLoginNeedsApproval = false
     @Published var languagePreference: AppLanguagePreference = .system
     @Published var themePreference: AppThemePreference = .system
     @Published var colorSchemePreference: MonitorColorSchemePreference = .vibrant
@@ -135,7 +139,6 @@ final class MonitorSettings: ObservableObject {
     @Published var menuBarDisplayMode: MenuBarDisplayMode = .ring
     @Published private(set) var menuBarMetricKinds: [MenuBarMetricKind] = MenuBarMetricKind.defaultSelection
     @Published var menuBarMetricLayoutStyle: MenuBarMetricLayoutStyle = .icon
-    @Published var showBuiltInDisplays: Bool = true
     @Published var displayModuleVisible: Bool = false
     @Published var displayControlMenuBarEnabled: Bool = false
     @Published var displayControlsExpandedByDefault: Bool = false
@@ -208,12 +211,23 @@ final class MonitorSettings: ObservableObject {
     @Published var pinnedPanelOriginX: Double? = nil
     @Published var pinnedPanelOriginY: Double? = nil
 
+    private let loginItemStatus: () -> SMAppService.Status
+    private let setLoginItemEnabled: (Bool) throws -> Void
     private let defaults: UserDefaults
     private var isUpdatingLaunchAtLogin = false
     private var cancellables = Set<AnyCancellable>()
 
-    init(defaults: UserDefaults = .standard) {
+    init(
+        defaults: UserDefaults = .standard,
+        loginItemStatus: @escaping () -> SMAppService.Status = { SMAppService.mainApp.status },
+        setLoginItemEnabled: @escaping (Bool) throws -> Void = { enabled in
+            if enabled { try SMAppService.mainApp.register() }
+            else { try SMAppService.mainApp.unregister() }
+        }
+    ) {
         self.defaults = defaults
+        self.loginItemStatus = loginItemStatus
+        self.setLoginItemEnabled = setLoginItemEnabled
 
         #if DIRECT_DISTRIBUTION
         // 必须在任何迁移写入之前取快照:新用户第二次启动时已被写入迁移标记,
@@ -261,7 +275,6 @@ final class MonitorSettings: ObservableObject {
             defaults.array(forKey: Keys.menuBarMetricKinds) as? [String]
         )
 
-        showBuiltInDisplays = defaults.object(forKey: Keys.showBuiltInDisplays) as? Bool ?? true
         // 默认值分渠道:Direct 的控制区是 Beta 选择性能力,默认关;
         // App Store 的信息行默认展示。两渠道 Bundle ID 不同,UserDefaults 独立。
         #if DISPLAY_CONTROL
@@ -584,7 +597,8 @@ final class MonitorSettings: ObservableObject {
         gameHUDPresentationStyle = GameHUDPresentationStyle(fromStored: defaults.string(forKey: Keys.gameHUDPresentationStyle) ?? "")
         #endif
 
-        launchAtLogin = SMAppService.mainApp.status == .enabled
+        launchAtLogin = loginItemStatus() == .enabled
+        launchAtLoginNeedsApproval = loginItemStatus() == .requiresApproval
 
         setupBindings()
     }
@@ -995,13 +1009,6 @@ final class MonitorSettings: ObservableObject {
     }
 
     private func setupBindings() {
-        $launchAtLogin
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persistLaunchAtLogin(newValue)
-            }
-            .store(in: &cancellables)
-
         $languagePreference
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1058,13 +1065,6 @@ final class MonitorSettings: ObservableObject {
             .dropFirst()
             .sink { [weak self] newValue in
                 self?.persist(newValue.rawValue, forKey: Keys.menuBarMetricLayoutStyle)
-            }
-            .store(in: &cancellables)
-
-        $showBuiltInDisplays
-            .dropFirst()
-            .sink { [weak self] newValue in
-                self?.persist(newValue, forKey: Keys.showBuiltInDisplays)
             }
             .store(in: &cancellables)
 
@@ -1379,19 +1379,23 @@ final class MonitorSettings: ObservableObject {
     }
 
     private func updateLaunchAtLogin(_ newValue: Bool) {
+        guard !isUpdatingLaunchAtLogin else { return }
+        isUpdatingLaunchAtLogin = true
+        defer { isUpdatingLaunchAtLogin = false }
+        launchAtLoginError = nil
         do {
-            if newValue {
-                if SMAppService.mainApp.status != .enabled {
-                    try SMAppService.mainApp.register()
-                }
-            } else if SMAppService.mainApp.status == .enabled {
-                try SMAppService.mainApp.unregister()
+            let status = loginItemStatus()
+            if newValue, status != .enabled, status != .requiresApproval {
+                try setLoginItemEnabled(true)
+            } else if !newValue, status == .enabled || status == .requiresApproval {
+                try setLoginItemEnabled(false)
             }
         } catch {
-            isUpdatingLaunchAtLogin = true
-            launchAtLogin.toggle()
-            isUpdatingLaunchAtLogin = false
+            launchAtLoginError = String(localized: "settings.login-item.failed")
         }
+        let status = loginItemStatus()
+        launchAtLoginNeedsApproval = status == .requiresApproval
+        launchAtLogin = status == .enabled
     }
 }
 
@@ -1410,7 +1414,6 @@ private enum Keys {
     static let displayModuleVisible = "settings.display.moduleVisible"
     static let displayControlMenuBarEnabled = "settings.display.menuBarEnabled"
     static let displayControlsExpandedByDefault = "settings.display.expandedByDefault"
-    static let showBuiltInDisplays = "settings.display.showBuiltInDisplays"
     static let displayBrightnessControlEnabled = "settings.display.brightnessControlEnabled"
     static let displayVolumeControlEnabled = "settings.display.volumeControlEnabled"
     static let displayContrastControlEnabled = "settings.display.contrastControlEnabled"

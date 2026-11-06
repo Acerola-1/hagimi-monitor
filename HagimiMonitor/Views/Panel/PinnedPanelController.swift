@@ -105,6 +105,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
         panel.delegate = self
+        panel.autorecalculatesKeyViewLoop = true
 
         // 隐藏标题栏,做出无边框外观。
         panel.titleVisibility = .hidden
@@ -151,6 +152,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private func installEventMonitor() {
         let local = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
             guard let self, event.window !== self.panel else { return event }
+            guard !QuickToolsStore.shared.popoverPresenter.contains(event.window, from: self.panel) else {
+                return event
+            }
             self.dismissIfTransient()
             return event
         }
@@ -181,6 +185,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     }
 
     private func dismissIfTransient() {
+        #if DEBUG
+        PanelUXAcceptanceProbe.record("quick.outside", visible: panel.isVisible, pinned: presentation.isPinned)
+        #endif
         guard !presentation.isPinned else { return }
         hide(resetPin: false)
     }
@@ -258,10 +265,15 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
 panelMotion?.nativeLayer.panelDidShow()
 
         store.panelDidAppear(.pinned)
+        #if DEBUG
+        PanelUXAcceptanceProbe.record("quick.show", visible: panel.isVisible, pinned: presentation.isPinned)
+        #endif
     }
 
     /// 隐藏快捷键面板；关闭后重置为普通状态。
     func hide(resetPin: Bool = true) {
+        let tools = QuickToolsStore.shared.popoverPresenter
+        if tools.isPresented(from: panel) { tools.dismiss() }
         if awaitingGeometry {
             awaitingGeometry = false
             panelMotion?.suspend()
@@ -273,6 +285,9 @@ panel.orderOut(nil)
         panelMotion?.suspend()
 panel.orderOut(nil)
         panelMotion?.resetForHiddenPanel?()
+        #if DEBUG
+        PanelUXAcceptanceProbe.record("quick.hide", visible: panel.isVisible, pinned: presentation.isPinned)
+        #endif
         store.panelDidDisappear(.pinned)
         if resetPin {
             presentation.resetPin()
@@ -349,7 +364,13 @@ panel.orderOut(nil)
 
     nonisolated func windowDidResignKey(_ notification: Notification) {
         MainActor.assumeIsolated {
-            dismissIfTransient()
+            // 等待 AppKit 完成 key 窗口交接，再判断是否移入所属子浮层。
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.panel.isVisible, !self.panel.isKeyWindow else { return }
+                let tools = QuickToolsStore.shared.popoverPresenter
+                guard !tools.contains(NSApp.keyWindow, from: self.panel) else { return }
+                self.dismissIfTransient()
+            }
         }
     }
 }

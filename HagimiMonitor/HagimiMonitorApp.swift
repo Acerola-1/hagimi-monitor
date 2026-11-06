@@ -34,7 +34,15 @@ struct HagimiMonitorApp: App {
 // MARK: - Menu Commands
 
 struct AppMenuCommands: Commands {
+    @ObservedObject private var reportCommands = ReportWindowPresenter.commandState
     var body: some Commands {
+        CommandGroup(replacing: .printItem) {
+            Button(String(localized: "menu.print-report")) { ReportWindowPresenter.printCurrentReport() }
+                .keyboardShortcut("p", modifiers: .command)
+                .disabled(!reportCommands.isAvailable)
+            Button(String(localized: "menu.export-report")) { ReportWindowPresenter.exportCurrentReport() }
+                .disabled(!reportCommands.isAvailable)
+        }
         CommandGroup(replacing: .appInfo) {
             Button(String(localized: "menu.about")) {
                 SettingsWindowPresenter.open(tab: .about)

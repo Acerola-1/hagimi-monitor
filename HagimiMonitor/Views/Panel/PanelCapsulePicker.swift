@@ -2,9 +2,9 @@ import SwiftUI
 
 /// 面板内紧凑型胶囊切换器 (Mini Pill Tabs / Segmented Control)。
 ///
-/// 设计语言严格遵循液态玻璃与面板规范:
+/// 沿用面板的紧凑控件样式:
 /// - 静置态:圆角 3.5pt 的 `theme.trackFill` 衬底与 `theme.captionText` 弱对比字;
-/// - 激活态:模块品牌色 `tint` 纯色圆角块与白色粗体文字;
+/// - 激活态:模块色填充与独立的高对比前景;
 /// - 交互动效:解析弹簧(`MonitorConstants.panelExpansionSpringResponse` / `panelExpansionSpringDamping`)无阶平滑过渡;
 /// - 显示形态:支持文字胶囊或紧凑 SF Symbol 图标胶囊（跨语言无溢出），带原生 `.help` 悬浮气泡;
 /// - 适用场景:行卡片标题右侧或展开区顶部的子视图切换(如时域切换、图表模式切换、多页翻页等)。
@@ -14,6 +14,7 @@ struct PanelCapsulePicker<T: Hashable & Identifiable>: View {
     var title: ((T) -> String)? = nil
     var icon: ((T) -> String)? = nil
     var tooltip: ((T) -> String)? = nil
+    var accessibilityGroupName: String = ""
     let tint: Color
     let theme: MonitorPanelTheme
 
@@ -33,15 +34,15 @@ struct PanelCapsulePicker<T: Hashable & Identifiable>: View {
                         if let iconName = icon?(item) {
                             Image(systemName: iconName)
                                 .font(.system(size: 8.5, weight: isSelected ? .bold : .medium))
-                                .frame(width: 20, height: 16)
+                                .frame(width: 20, height: 20)
                         } else if let titleText = title?(item) {
                             Text(titleText)
-                                .font(.system(size: 9, weight: isSelected ? .bold : .medium))
+                                .font(.system(size: 10, weight: isSelected ? .bold : .medium))
                                 .padding(.horizontal, 5)
-                                .frame(minWidth: 18, minHeight: 16, maxHeight: 16)
+                                .frame(minWidth: 20, minHeight: 20, maxHeight: 20)
                         }
                     }
-                    .foregroundStyle(isSelected ? Color.white : theme.captionText)
+                    .foregroundStyle(isSelected ? MonitorPalette.selectedControlForeground : theme.captionText)
                     .background(
                         RoundedRectangle(cornerRadius: 3.5, style: .continuous)
                             .fill(isSelected ? tint : theme.trackFill)
@@ -49,8 +50,13 @@ struct PanelCapsulePicker<T: Hashable & Identifiable>: View {
                 }
                 .buttonStyle(.plain)
                 .help(tooltip?(item) ?? title?(item) ?? "")
+                .accessibilityLabel(tooltip?(item) ?? title?(item) ?? "")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+
             }
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityGroupName)
     }
 }
 
@@ -61,6 +67,7 @@ extension PanelCapsulePicker {
         items: [T],
         title: @escaping (T) -> String,
         tooltip: ((T) -> String)? = nil,
+        accessibilityGroupName: String = "",
         tint: Color,
         theme: MonitorPanelTheme
     ) {
@@ -69,6 +76,7 @@ extension PanelCapsulePicker {
         self.title = title
         self.icon = nil
         self.tooltip = tooltip
+        self.accessibilityGroupName = accessibilityGroupName
         self.tint = tint
         self.theme = theme
     }
@@ -79,6 +87,7 @@ extension PanelCapsulePicker {
         items: [T],
         icon: @escaping (T) -> String,
         tooltip: ((T) -> String)? = nil,
+        accessibilityGroupName: String = "",
         tint: Color,
         theme: MonitorPanelTheme
     ) {
@@ -87,6 +96,7 @@ extension PanelCapsulePicker {
         self.title = nil
         self.icon = icon
         self.tooltip = tooltip
+        self.accessibilityGroupName = accessibilityGroupName
         self.tint = tint
         self.theme = theme
     }
@@ -98,6 +108,7 @@ extension PanelCapsulePicker where T: CaseIterable {
         selection: Binding<T>,
         title: @escaping (T) -> String,
         tooltip: ((T) -> String)? = nil,
+        accessibilityGroupName: String = "",
         tint: Color,
         theme: MonitorPanelTheme
     ) {
@@ -106,6 +117,7 @@ extension PanelCapsulePicker where T: CaseIterable {
             items: Array(T.allCases),
             title: title,
             tooltip: tooltip,
+            accessibilityGroupName: accessibilityGroupName,
             tint: tint,
             theme: theme
         )
@@ -116,6 +128,7 @@ extension PanelCapsulePicker where T: CaseIterable {
         selection: Binding<T>,
         icon: @escaping (T) -> String,
         tooltip: ((T) -> String)? = nil,
+        accessibilityGroupName: String = "",
         tint: Color,
         theme: MonitorPanelTheme
     ) {
@@ -124,6 +137,7 @@ extension PanelCapsulePicker where T: CaseIterable {
             items: Array(T.allCases),
             icon: icon,
             tooltip: tooltip,
+            accessibilityGroupName: accessibilityGroupName,
             tint: tint,
             theme: theme
         )

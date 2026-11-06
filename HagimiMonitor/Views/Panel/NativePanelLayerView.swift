@@ -4,12 +4,47 @@ import SwiftUI
 import QuartzCore
 
 final class NativePanelWindow: NSPanel {
+    var escapeAction: (() -> Void)?
     override var canBecomeKey: Bool { true }
+    override func sendEvent(_ event: NSEvent) {
+        // 明细各自拥有 NSHostingView，SwiftUI 命令不会跨这些宿主自动冒泡。
+        // 只接管本窗口收到的无修饰 Esc，所有退出层级仍交给面板根视图决定。
+        if event.type == .keyDown, event.keyCode == 53,
+           event.modifierFlags.intersection([.command, .control, .option, .shift]).isEmpty,
+           let escapeAction {
+            escapeAction()
+            return
+        }
+        super.sendEvent(event)
+    }
     override func setFrame(_ frameRect: NSRect, display flag: Bool) {
         if NativePanelMotionMode.diagnostics {
             NSLog("[panel-window] width=%.1f height=%.1f", frameRect.width, frameRect.height)
         }
         super.setFrame(frameRect, display: flag)
+    }
+}
+
+struct NativePanelEscapeHandler: NSViewRepresentable {
+    let action: () -> Void
+    func makeNSView(context: Context) -> Anchor { Anchor(action: action) }
+    func updateNSView(_ view: Anchor, context: Context) { view.action = action }
+
+    final class Anchor: NSView {
+        var action: () -> Void
+        private weak var installedWindow: NativePanelWindow?
+        init(action: @escaping () -> Void) { self.action = action; super.init(frame: .zero) }
+        required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if installedWindow !== newWindow { installedWindow?.escapeAction = nil }
+            super.viewWillMove(toWindow: newWindow)
+        }
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            installedWindow = window as? NativePanelWindow
+            installedWindow?.escapeAction = { [weak self] in self?.action() }
+        }
     }
 }
 
@@ -54,6 +89,7 @@ private struct NativePanelEnvironmentBridge: ViewModifier {
             .environment(\.dynamicTypeSize, values.dynamicTypeSize)
             .environment(\.displayScale, values.displayScale)
             .environment(\.font, values.font)
+            .environment(\.isEnabled, values.isEnabled)
             .environment(\.panelReorderController, values.panelReorderController)
             .environment(\.panelReorderSettings, values.panelReorderSettings)
             .environment(\.fluidOpenSettings, values.fluidOpenSettings)
@@ -425,6 +461,7 @@ fileprivate struct NativePanelHostEnvironment: Equatable {
     let cap: CGFloat
     let width: CGFloat
     let ownsBackdrop: Bool
+    let isEnabled: Bool
     let reorder: ObjectIdentifier?
     let settings: ObjectIdentifier?
     let expansion: ObjectIdentifier?
@@ -434,91 +471,10 @@ fileprivate struct NativePanelHostEnvironment: Equatable {
         typeSize = values.dynamicTypeSize; scale = values.displayScale; font = values.font
         cap = values.panelMaxContentHeight; width = values.nativePanelContentWidth
         ownsBackdrop = values.nativePanelOwnsCardBackdrop
+        isEnabled = values.isEnabled
         reorder = values.panelReorderController.map(ObjectIdentifier.init)
         settings = values.panelReorderSettings.map(ObjectIdentifier.init)
         expansion = values.nativePanelExpansion.map(ObjectIdentifier.init)
-    }
-}
-
-private final class NativePanelRotationHost: NativePanelFlippedView, NativePanelLayerRenderer {
-    let motion: SingleHostMotionCoordinator
-    let id: String
-    let hosting = NSHostingView(rootView: AnyView(EmptyView()))
-    var collapsed: Double = 0
-    var expanded: Double = 90
-    var measuredSize = CGSize(width: 12, height: 12)
-    var registration: UUID?
-    var updateTicket: UInt = 0
-    private var rotationBounds = CGRect.zero
-    init(motion: SingleHostMotionCoordinator, id: String) {
-        self.motion = motion; self.id = id
-        super.init(frame: .zero)
-        wantsLayer = true
-        hosting.wantsLayer = true; hosting.sizingOptions = [.intrinsicContentSize]
-        addSubview(hosting)
-        registration = motion.nativeLayer.register(self)
-    }
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override var intrinsicContentSize: NSSize { measuredSize }
-    override func layout() {
-        super.layout()
-        hosting.frame = bounds
-        if rotationBounds != bounds {
-            rotationBounds = bounds
-            if let plan = motion.nativeLayer.plan { applyNativePlan(plan) }
-        }
-    }
-    func update(content: AnyView, environment: EnvironmentValues, collapsed: Double, expanded: Double) {
-        updateTicket &+= 1; let ticket = updateTicket
-        DispatchQueue.main.async { [weak self] in
-            guard let self, ticket == self.updateTicket else { return }
-            self.collapsed = collapsed; self.expanded = expanded
-            self.hosting.rootView = AnyView(content.modifier(NativePanelEnvironmentBridge(values: environment)))
-            self.hosting.layoutSubtreeIfNeeded()
-            self.measuredSize = self.hosting.fittingSize
-            self.invalidateIntrinsicContentSize()
-            if let plan = self.motion.nativeLayer.plan { self.applyNativePlan(plan) }
-        }
-    }
-    func applyNativePlan(_ plan: NativePanelAnimationPlan) {
-        guard let layer else { return }
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        // AppKit 的宿主图层锚点在原点；显式绕内容中心转动，避免角标旋出自己的布局框。
-        let center = CGPoint(x: bounds.midX - layer.bounds.width * layer.anchorPoint.x,
-                             y: bounds.midY - layer.bounds.height * layer.anchorPoint.y)
-        nativeAnimate(layer, key: "sublayerTransform", values: plan.samples.map {
-            let angle = (collapsed + (expanded - collapsed) * Double($0.phases[id] ?? 0)) * .pi / 180
-            var transform = CATransform3DMakeRotation(angle, 0, 0, 1)
-            transform.m41 = center.x * (1 - cos(angle)) + center.y * sin(angle)
-            transform.m42 = center.y * (1 - cos(angle)) - center.x * sin(angle)
-            return NSValue(caTransform3D: transform)
-        }, plan: plan)
-        CATransaction.commit()
-    }
-    func stopNativeMotion() {
-        CATransaction.begin(); CATransaction.setDisableActions(true)
-        if let layer { nativeFreeze(layer, keys: ["sublayerTransform"]) }
-        CATransaction.commit()
-    }
-}
-
-struct NativePanelRotationView: NSViewRepresentable {
-    let motion: SingleHostMotionCoordinator
-    let id: String
-    let collapsed: Double
-    let expanded: Double
-    let content: AnyView
-    func makeNSView(context: Context) -> NSView { NativePanelRotationHost(motion: motion, id: id) }
-    func updateNSView(_ view: NSView, context: Context) {
-        (view as? NativePanelRotationHost)?.update(content: content, environment: context.environment, collapsed: collapsed, expanded: expanded)
-    }
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSView, context: Context) -> CGSize? {
-        nsView.intrinsicContentSize
-    }
-    static func dismantleNSView(_ view: NSView, coordinator: ()) {
-        guard let node = view as? NativePanelRotationHost else { return }
-        node.updateTicket &+= 1
-        if let key = node.registration { node.motion.nativeLayer.unregister(key, owner: "rotation:" + node.id) }
     }
 }
 
@@ -537,6 +493,7 @@ struct NativePanelChildren: View {
                     "detail:" + id: .zero, "available:" + id: CGSize(width: group.ids.isEmpty ? 0 : 1, height: 0)])
         }
         .accessibilityHidden(!isExpanded)
+        .disabled(!isExpanded)
     }
 }
 
@@ -578,10 +535,10 @@ private final class NativePanelReplacementView: NativePanelFlippedView, NativePa
         contentWidth = width
         collapsed.rootView = AnyView(content.modifier(NativePanelEnvironmentBridge(values: environment))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .allowsHitTesting(!isExpanded).accessibilityHidden(isExpanded))
+            .allowsHitTesting(!isExpanded).disabled(isExpanded).accessibilityHidden(isExpanded))
         expanded.rootView = AnyView(archive.modifier(NativePanelEnvironmentBridge(values: environment))
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .allowsHitTesting(isExpanded).accessibilityHidden(!isExpanded))
+            .allowsHitTesting(isExpanded).disabled(!isExpanded).accessibilityHidden(!isExpanded))
         measure(width: width)
         if let plan = motion.nativeLayer.plan { applyNativePlan(plan) }
     }

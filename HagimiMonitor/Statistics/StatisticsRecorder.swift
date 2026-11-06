@@ -71,7 +71,7 @@ nonisolated struct StatisticsReportDataProvider: Sendable {
     /// 读取报表的三层指标行。测试也通过 provider 验证真实报表读取口径,
     /// 避免在 `StatisticsRecorder` 上保留一套仅供测试使用的重复查询入口。
     func loadMetricRows(now: Date) -> (minutes: [StatisticsRow], hours: [StatisticsRow], days: [StatisticsRow])? {
-        guard let database else { return nil }
+        guard let database, database.isReadable else { return nil }
 
         let minutesFrom = now.addingTimeInterval(-48 * 3600)
         let hoursFrom = now.addingTimeInterval(-60 * 86400)
@@ -157,6 +157,18 @@ nonisolated private final class StatisticsStorage: @unchecked Sendable {
         storedProcessStore?.interruptPersistedOngoing(reason: ProcessAlertEpisode.EndReason.replaced.rawValue)
     }
 
+    /// 仅用户主动读概览/报表时重试，周期采样继续复用当前实例。
+    func retryDatabaseIfNeeded() {
+        lock.withLock {
+            guard initialized else {
+                prepareLocked()
+                return
+            }
+            guard storedDatabase?.isReadable == false, let databaseURL else { return }
+            storedDatabase = StatisticsDatabase(url: databaseURL, calendar: calendar)
+        }
+    }
+
     var database: StatisticsDatabase? {
         lock.withLock { prepareLocked(); return storedDatabase }
     }
@@ -179,6 +191,7 @@ final class StatisticsRecorder: ObservableObject {
     /// 从最早一条记录至今的自然日数(0 = 尚无任何数据)。
     @Published private(set) var recordDays = 0
     /// 本地存储占用快照(统计库/应用统计库/系统开销),随概览一起刷新。
+    @Published private(set) var storageReadFailed = false
     @Published private(set) var storageInfo: StorageInfo?
     /// 本 App 使用打卡:累计活跃天数与截至今日的连续天数。
     @Published private(set) var usageTotalDays = 0
@@ -866,6 +879,7 @@ final class StatisticsRecorder: ObservableObject {
                 DispatchQueue.main.async(execute: completion)
                 return
             }
+            self.storage.retryDatabaseIfNeeded()
             self.refreshOverview(completion: completion)
         }
     }
@@ -874,8 +888,9 @@ final class StatisticsRecorder: ObservableObject {
     nonisolated private func refreshOverview(
         completion: @escaping @MainActor @Sendable () -> Void = {}
     ) {
-        guard let database else {
-            DispatchQueue.main.async {
+        guard let database, database.isReadable else {
+            DispatchQueue.main.async { [weak self] in
+                self?.storageReadFailed = true
                 completion()
             }
             return
@@ -926,6 +941,7 @@ final class StatisticsRecorder: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             if let self {
                 self.rangeRows = rows
+                self.storageReadFailed = false
                 self.storageInfo = storage
                 self.recordDays = recordDays
                 self.usageTotalDays = usageTotal
@@ -971,7 +987,8 @@ final class StatisticsRecorder: ObservableObject {
 
     /// 提供一个只包含后台安全句柄的报表读取器,避免把 MainActor 状态对象送进 detached task。
     nonisolated func reportDataProvider() -> StatisticsReportDataProvider {
-        StatisticsReportDataProvider(database: database, processStore: processStore, calendar: calendar)
+        storage.retryDatabaseIfNeeded()
+        return StatisticsReportDataProvider(database: database, processStore: processStore, calendar: calendar)
     }
 
     // MARK: - 存储管理

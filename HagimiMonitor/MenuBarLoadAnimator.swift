@@ -27,6 +27,7 @@ nonisolated struct MenuBarLoadMotion {
 @MainActor
 final class MenuBarLoadAnimator: ObservableObject {
     @Published private(set) var displayedComputeLoad = 0.0
+    private(set) var displayedCoreLevel = MenuBarCoreLevel.normal
     private var motion: MenuBarLoadMotion
     private var smoothingTimerCancellable: AnyCancellable?
     private var animationEnabled = true
@@ -52,7 +53,8 @@ final class MenuBarLoadAnimator: ObservableObject {
 
     func updateTarget(_ value: Double) {
         let target = min(100, max(0, value))
-        guard ComputeLoadModel.shouldUpdateMenuBarTarget(currentTarget: motion.target, nextTarget: target) else { return }
+        guard ComputeLoadModel.shouldUpdateMenuBarTarget(currentTarget: motion.target, nextTarget: target)
+            || displayedCoreLevel.updated(for: target) != displayedCoreLevel else { return }
         let time = now()
         let current = motion.sample(at: time)
         motion = MenuBarLoadMotion(start: current.position, target: target, velocity: current.velocity,
@@ -100,7 +102,10 @@ final class MenuBarLoadAnimator: ObservableObject {
 
     private func publish(_ load: Double) {
         let bucket = min(100, max(0, load)).rounded()
-        if bucket != displayedComputeLoad { displayedComputeLoad = bucket }
+        guard bucket != displayedComputeLoad else { return }
+        // 先提交档位，让 Published 的同步订阅拿到同一帧的负载与颜色。
+        displayedCoreLevel = displayedCoreLevel.updated(for: bucket)
+        displayedComputeLoad = bucket
     }
 
     private func settle() {

@@ -230,6 +230,7 @@ final class NativeReportViewModel: ObservableObject {
     @Published var selectedRange: ReportTimeRange = NativeReportViewModel.initialRange
     @Published private(set) var snapshot: ReportSnapshot?
     @Published private(set) var rangeModel: ReportActiveRangeModel?
+    @Published private(set) var loadFailed = false
     @Published private(set) var isLoading: Bool = true
     /// 硬件清单仍在后台采集。统计已可用，只有依赖硬件事实的区域需要显示加载态。
     @Published private(set) var isHardwareLoading: Bool = false
@@ -258,16 +259,35 @@ final class NativeReportViewModel: ObservableObject {
     /// 独立的 1 秒实时更新源，供右栏硬件观察
     let liveSource = ReportLiveHardwareSource()
 
+    typealias SnapshotLoader = @Sendable (Date, [ProcessAlertEpisode]) -> StatisticsReportSnapshotInput?
+    private let snapshotLoader: SnapshotLoader?
     private weak var recorder: StatisticsRecorder?
     private var aggregateTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var currentRequestID = UUID()
     private var isClosed = false
 
-    init(recorder: StatisticsRecorder?) {
+    init(recorder: StatisticsRecorder?, snapshotLoader: SnapshotLoader? = nil) {
         self.recorder = recorder
+        self.snapshotLoader = snapshotLoader
         liveSource.setActiveModule(selectedModule)
     }
+
+    #if DEBUG
+    /// 原生预览使用确定快照，不启动采样、存储读取或当前机器的硬件探针。
+    convenience init(previewSnapshot: ReportSnapshot?, hardwareHasBattery: Bool,
+                     hardwareHasFans: Bool, loadFailed: Bool = false) {
+        self.init(recorder: nil)
+        snapshot = previewSnapshot
+        if let previewSnapshot {
+            rangeModel = ReportDataAggregator.aggregate(snapshot: previewSnapshot, range: selectedRange,
+                now: previewSnapshot.capturedAt, hardwareHasBattery: hardwareHasBattery,
+                hardwareHasFans: hardwareHasFans, fanSensorAvailable: previewSnapshot.meta.isDirect)
+        }
+        isLoading = false
+        self.loadFailed = loadFailed
+    }
+    #endif
 
     // MARK: - 生命周期与加载
 
@@ -299,17 +319,27 @@ final class NativeReportViewModel: ObservableObject {
 
     /// 以当前上下文重新加载（不清除深链目标）。
     private func reload() {
-        guard let recorder, !isClosed else {
+        aggregateTask?.cancel()
+        aggregateTask = nil
+        isAggregating = false
+        isHardwareLoading = false
+        let recorder = self.recorder
+        guard !isClosed, recorder != nil || snapshotLoader != nil else {
             self.isLoading = false
+            self.loadFailed = true
             return
         }
 
+        loadFailed = false
         isLoading = true
         let requestID = UUID()
         self.currentRequestID = requestID
 
         let now = Date()
-        let recordDays = recorder.recordDays
+        let recordDays = recorder?.recordDays ?? 0
+        let loadInput: SnapshotLoader = snapshotLoader ?? { [recorder] now, alerts in
+            recorder?.reportDataProvider().load(now: now, alerts: alerts)
+        }
         let targetRange = selectedRange
         // ProcessAlertCenter 是 MainActor 状态;只复制不可变值,后台不直接访问它。
         let alertSnapshot = ProcessAlertCenter.shared.activeAlerts + ProcessAlertCenter.shared.recentAlerts
@@ -320,12 +350,12 @@ final class NativeReportViewModel: ObservableObject {
         loadTask = Task.detached(priority: .userInitiated) { [weak self] in
             guard !Task.isCancelled else { return }
             // 首次历史读取可能打开存储容器，句柄准备也留在后台。
-            let dataProvider = recorder.reportDataProvider()
-            guard let input = dataProvider.load(now: now, alerts: alertSnapshot) else {
+            guard let input = loadInput(now, alertSnapshot) else {
                 guard !Task.isCancelled else { return }
                 await MainActor.run {
                     guard let self, self.currentRequestID == requestID, !self.isClosed else { return }
                     self.isLoading = false
+                    self.loadFailed = true
                     self.isHardwareLoading = false
                 }
                 return
@@ -417,7 +447,7 @@ final class NativeReportViewModel: ObservableObject {
     /// 供打印与 HTML 导出使用，保证离线文件打开时先落在用户正在看的时间段，
     /// 而不是回退到默认的今日。
     func committedExportRange() -> (label: String, from: Date, to: Date)? {
-        guard let model = rangeModel else { return nil }
+        guard !isLoading, !isAggregating, !loadFailed, let model = rangeModel else { return nil }
         return (model.range.label, model.from, model.to)
     }
 
@@ -444,13 +474,21 @@ final class NativeReportViewModel: ObservableObject {
     func selectRange(_ range: ReportTimeRange) {
         guard selectedRange != range || rangeModel == nil else { return }
         selectedRange = range
-        recomputeActiveRange()
+        if isLoading {
+            reload()
+        } else {
+            recomputeActiveRange()
+        }
     }
 
     /// 应用自定义时间范围
     func applyCustomRange(from: Date, to: Date) {
         selectedRange = .custom(from: from, to: to)
-        recomputeActiveRange()
+        if isLoading {
+            reload()
+        } else {
+            recomputeActiveRange()
+        }
     }
 
     private func recomputeActiveRange() {

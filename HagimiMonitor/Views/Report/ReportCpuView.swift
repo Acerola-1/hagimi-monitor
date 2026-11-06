@@ -7,10 +7,16 @@ struct ReportCpuView: View {
     @ObservedObject var viewModel: NativeReportViewModel
     @State private var selectedDate: Date?
 
-    private let cpuColor = ReportUIHelper.cpuColor
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+    private var palette: MonitorPalette {
+        MonitorPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
+
+    private var cpuColor: Color { palette.moduleTint(for: .cpu) }
     private let peakColor = ReportUIHelper.peakColor
-    private let pCoreColor = ReportUIHelper.cpuColor
-    private let eCoreColor = Color(hex: 0x4A90E2)
+    private var pCoreColor: Color { palette.performanceCoreTint }
+    private var eCoreColor: Color { palette.efficiencyCoreTint }
 
     var body: some View {
         HStack(alignment: .top, spacing: 18) {

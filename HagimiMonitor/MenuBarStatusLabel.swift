@@ -27,7 +27,11 @@ struct MenuBarLoadRingPreview: View {
     var side: CGFloat = 21
 
     var body: some View {
-        Image(nsImage: MenuBarComputeRingIcon.image(load: animator.displayedComputeLoad, darkMode: darkMode))
+        Image(nsImage: MenuBarComputeRingIcon.image(
+            load: animator.displayedComputeLoad,
+            darkMode: darkMode,
+            coreLevel: animator.displayedCoreLevel
+        ))
             .resizable()
             .frame(width: side, height: side)
     }

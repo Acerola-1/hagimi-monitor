@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 
 /// 显示器/电源变化的订阅者。实际的 CG 重配置回调与睡眠/唤醒监听已统一收敛到
 /// `DDCEnvironmentGate`(避免重复注册两套 CG 回调);此类只负责把 `onChange`
@@ -12,6 +13,11 @@ final class DisplayChangeObserver {
         cleanupBox.token = DDCEnvironmentGate.shared.addChangeHandler(onChange)
     }
 
+    func startSafety(onChange: @escaping @Sendable (CGDirectDisplayID?, CGDisplayChangeSummaryFlags) -> Void) {
+        guard cleanupBox.topologyToken == nil else { return }
+        cleanupBox.topologyToken = DDCEnvironmentGate.shared.addTopologyHandler(onChange)
+    }
+
     func stop() {
         cleanupBox.cleanup()
     }
@@ -20,12 +26,15 @@ final class DisplayChangeObserver {
 /// 线程安全清理容器：在 deinit 阶段注销 DDCEnvironmentGate 的变更监听。
 private nonisolated final class DisplayChangeObserverCleanupBox: @unchecked Sendable {
     var token: UUID?
+    var topologyToken: UUID?
 
     nonisolated func cleanup() {
         if let token {
             DDCEnvironmentGate.shared.removeChangeHandler(token)
         }
         self.token = nil
+        if let topologyToken { DDCEnvironmentGate.shared.removeTopologyHandler(topologyToken) }
+        topologyToken = nil
     }
 
     deinit {

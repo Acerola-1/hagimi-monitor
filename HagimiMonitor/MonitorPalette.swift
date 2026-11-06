@@ -1,6 +1,9 @@
 import SwiftUI
 
 struct MonitorPalette {
+    /// 模块实色上的控件前景，明暗外观共用以稳定对比。
+    static let selectedControlForeground = Color(hex: 0x171D2A)
+
     let preference: MonitorColorSchemePreference
     let colorScheme: ColorScheme
 

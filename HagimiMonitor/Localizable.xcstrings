@@ -1,6 +1,518 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "stats.r.fanNoTrend": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选时段没有可绘制的风扇趋势"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No fan trend can be plotted for the selected period"
+          }
+        }
+      }
+    },
+    "stats.report.print-interrupted": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打印准备已中断，请重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print preparation was interrupted. Please try again."
+          }
+        }
+      }
+    },
+    "stats.report.print-timeout": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "准备打印超时，请重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print preparation timed out. Please try again."
+          }
+        }
+      }
+    },
+    "panel.row.collapsed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已收起"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapsed"
+          }
+        }
+      }
+    },
+    "panel.row.expanded": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已展开"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expanded"
+          }
+        }
+      }
+    },
+    "menu.export-report": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出 HTML…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export HTML…"
+          }
+        }
+      }
+    },
+    "menu.print-report": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打印…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Print…"
+          }
+        }
+      }
+    },
+    "panel.copied": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复制"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied"
+          }
+        }
+      }
+    },
+    "panel.copy-value": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击复制数值（⌘C）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click to copy value (⌘C)"
+          }
+        }
+      }
+    },
+    "settings.login-item.open": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开登录项设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Login Items Settings"
+          }
+        }
+      }
+    },
+    "settings.login-item.approval": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在系统设置的登录项中允许此应用。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow this app in Login Items in System Settings."
+          }
+        }
+      }
+    },
+    "settings.login-item.failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能更新开机自启，请重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not update launch at login. Please try again."
+          }
+        }
+      }
+    },
+    "settings.quick-access.menu-conflict": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个组合用于现有菜单命令，请换一个快捷键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This shortcut is used by a menu command. Choose another combination."
+          }
+        }
+      }
+    },
+    "settings.quick-access.system-conflict": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个组合已由系统使用，请换一个快捷键。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This shortcut is used by the system. Choose another combination."
+          }
+        }
+      }
+    },
+    "settings.quick-access.conflict-title": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "换一个快捷键"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose another shortcut"
+          }
+        }
+      }
+    },
+    "stats.r.desktopMacFormFactor": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无内置电池的桌面 Mac"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desktop Mac with no built-in battery"
+          }
+        }
+      }
+    },
+    "stats.r.acPower": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "交流供电"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AC power"
+          }
+        }
+      }
+    },
+    "stats.r.fanPeak %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值 %@ RPM"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Peak %@ RPM"
+          }
+        }
+      }
+    },
+    "stats.r.fanStoppedCaption": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选时段记录为 0 RPM"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded at 0 RPM during the selected period"
+          }
+        }
+      }
+    },
+    "stats.r.fanUnavailableDescription": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检测到物理风扇，但当前版本无法读取转速传感器。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A physical fan is present, but this app version cannot read its speed sensor."
+          }
+        }
+      }
+    },
+    "stats.r.fanUnavailableCaption": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前版本无法读取风扇转速"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fan speed cannot be read in this app version"
+          }
+        }
+      }
+    },
+    "stats.r.fanUnavailableValue": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable"
+          }
+        }
+      }
+    },
+    "stats.r.fanNoHistoryCaption": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选时段内无有效风扇转速记录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No valid fan speed readings in the selected period"
+          }
+        }
+      }
+    },
+    "stats.r.fanNoHistoryValue": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无记录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No data"
+          }
+        }
+      }
+    },
+    "stats.r.thermalAverage %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平均 %@ 级"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average %@ level"
+          }
+        }
+      }
+    },
+    "stats.r.episodeObserved %@ – %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有效观测 %@ – %@"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observed %@ – %@"
+          }
+        }
+      }
+    },
+    "stats.report.unavailable": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时无法读取数据，请重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data is temporarily unavailable. Please try again."
+          }
+        }
+      }
+    },
+    "stats.report.retry": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry"
+          }
+        }
+      }
+    },
+    "stats.report.read-failed": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新失败，正在显示上次快照"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update failed. Showing the previous snapshot."
+          }
+        }
+      }
+    },
+    "settings.quick-tools.show-tool %@": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示%@工具"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show %@ tool"
+          }
+        }
+      }
+    },
+    "settings.quick-tools.visible-group": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在工具面板中显示"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show in the tools panel"
+          }
+        }
+      }
+    },
+    "panel.power-pages": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电源详情分页"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power detail pages"
+          }
+        }
+      }
+    },
     "settings.panel.chart-type": {
       "extractionState": "manual",
       "localizations": {
@@ -460,7 +972,7 @@
         }
       }
     },
-    "stats.r.navOverviewGroup" : {
+    "stats.r.navOverviewGroup": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -477,7 +989,7 @@
         }
       }
     },
-    "stats.r.navMonitoringGroup" : {
+    "stats.r.navMonitoringGroup": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -494,7 +1006,7 @@
         }
       }
     },
-    "stats.r.navAnalysisGroup" : {
+    "stats.r.navAnalysisGroup": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -511,7 +1023,7 @@
         }
       }
     },
-    "stats.r.navHardwareGroup" : {
+    "stats.r.navHardwareGroup": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -528,7 +1040,7 @@
         }
       }
     },
-    "report.ui.peakPower" : {
+    "report.ui.peakPower": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -545,7 +1057,7 @@
         }
       }
     },
-    "report.ui.peakDownload" : {
+    "report.ui.peakDownload": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -562,7 +1074,7 @@
         }
       }
     },
-    "report.ui.peakRead" : {
+    "report.ui.peakRead": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -579,7 +1091,7 @@
         }
       }
     },
-    "report.ui.fanSpeed" : {
+    "report.ui.fanSpeed": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -596,7 +1108,7 @@
         }
       }
     },
-    "report.ui.fanless" : {
+    "report.ui.fanless": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -613,7 +1125,7 @@
         }
       }
     },
-    "report.ui.topCPU" : {
+    "report.ui.topCPU": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -630,7 +1142,7 @@
         }
       }
     },
-    "report.ui.rankDetails" : {
+    "report.ui.rankDetails": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -647,7 +1159,7 @@
         }
       }
     },
-    "report.ui.highLoad" : {
+    "report.ui.highLoad": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -664,7 +1176,7 @@
         }
       }
     },
-    "report.ui.peakUsage" : {
+    "report.ui.peakUsage": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -681,7 +1193,7 @@
         }
       }
     },
-    "report.ui.avgPressure" : {
+    "report.ui.avgPressure": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -698,7 +1210,7 @@
         }
       }
     },
-    "report.ui.peakMemory" : {
+    "report.ui.peakMemory": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -715,7 +1227,7 @@
         }
       }
     },
-    "report.ui.diskTotal" : {
+    "report.ui.diskTotal": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -732,7 +1244,7 @@
         }
       }
     },
-    "report.ui.device" : {
+    "report.ui.device": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -749,7 +1261,7 @@
         }
       }
     },
-    "stats.report.includeSystemApps" : {
+    "stats.report.includeSystemApps": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -766,7 +1278,7 @@
         }
       }
     },
-    "report.ui.days" : {
+    "report.ui.days": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -783,7 +1295,7 @@
         }
       }
     },
-    "report.ui.thisMonth" : {
+    "report.ui.thisMonth": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -800,7 +1312,7 @@
         }
       }
     },
-    "report.ui.yesterday" : {
+    "report.ui.yesterday": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -817,7 +1329,7 @@
         }
       }
     },
-    "report.ui.copyValue" : {
+    "report.ui.copyValue": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -834,7 +1346,7 @@
         }
       }
     },
-    "report.ui.copyGroup" : {
+    "report.ui.copyGroup": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -851,7 +1363,7 @@
         }
       }
     },
-    "report.ui.windowTitle" : {
+    "report.ui.windowTitle": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -868,7 +1380,7 @@
         }
       }
     },
-    "report.ui.timeRange" : {
+    "report.ui.timeRange": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -885,7 +1397,7 @@
         }
       }
     },
-    "report.ui.hardwareCategory" : {
+    "report.ui.hardwareCategory": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -902,7 +1414,7 @@
         }
       }
     },
-    "report.ui.apply" : {
+    "report.ui.apply": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -919,7 +1431,7 @@
         }
       }
     },
-    "report.ui.cancel" : {
+    "report.ui.cancel": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -936,7 +1448,7 @@
         }
       }
     },
-    "report.ui.overview" : {
+    "report.ui.overview": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -953,7 +1465,7 @@
         }
       }
     },
-    "report.ui.updating" : {
+    "report.ui.updating": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -970,7 +1482,7 @@
         }
       }
     },
-    "report.ui.historical" : {
+    "report.ui.historical": {
       "extractionState": "manual",
       "localizations": {
         "en": {
@@ -2116,66 +2628,18 @@
         }
       }
     },
-    "cat-cameo.thanks.body": {
+    "cat-cameo.open": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "This project began as an attempt to build a better RunCat — yet this little cat remains its soul, beyond imitation. Please support the original project."
+            "value": "Open the RunCat repository"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "这个项目的起因，就是想做一个更好的 RunCat——但这只小猫始终是它的灵魂，无法超越。欢迎去支持原项目。"
-          }
-        }
-      }
-    },
-    "cat-cameo.thanks.close": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Got it"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "好的"
-          }
-        }
-      }
-    },
-    "cat-cameo.thanks.support": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Support RunCat"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "支持 RunCat"
-          }
-        }
-      }
-    },
-    "cat-cameo.thanks.title": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Meow — you found me!"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "喵～被你发现啦"
+            "value": "打开 RunCat 仓库"
           }
         }
       }
@@ -2468,6 +2932,22 @@
         }
       }
     },
+    "display.archive.collapse-hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click to hide details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击可以收起详细信息"
+          }
+        }
+      }
+    },
     "display.archive.basic": {
       "localizations": {
         "en": {
@@ -2500,6 +2980,22 @@
         }
       }
     },
+    "display.archive.expand-hint": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Click to expand and view details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点击可以展开查看详细信息"
+          }
+        }
+      }
+    },
     "display.archive.copy": {
       "localizations": {
         "en": {
@@ -2516,22 +3012,6 @@
         }
       }
     },
-    "display.archive.hide": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Hide"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "收起"
-          }
-        }
-      }
-    },
     "display.archive.identity": {
       "localizations": {
         "en": {
@@ -2544,22 +3024,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "身份档案"
-          }
-        }
-      }
-    },
-    "display.archive.show": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Details"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "详情"
           }
         }
       }
@@ -2608,6 +3072,262 @@
           "stringUnit": {
             "state": "translated",
             "value": "此显示器不支持该项控制。"
+          }
+        }
+      }
+    },
+    "display.connection.disable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "停用"
+          }
+        }
+      }
+    },
+    "display.connection.enable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用"
+          }
+        }
+      }
+    },
+    "display.connection.issue.ambiguous": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The target display could not be identified uniquely. No change was made."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法唯一确认目标显示器，未执行操作。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.failed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The display operation failed. Try reconnecting it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示器操作失败，可尝试重新连接。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.interrupted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The previous run or display operation was interrupted. Display recovery was attempted first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次运行或显示器操作未正常结束，已优先尝试恢复屏幕。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.lastScreen": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "At least one usable physical display must remain connected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "至少需要保留一块可用的物理屏幕。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.mirrorConflict": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The display is connected. Its previous mirror arrangement was not restored to preserve newer settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏幕已连接；为保留后来的设置，未恢复原镜像关系。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.storage": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovery information could not be saved. Automatic disconnection is paused."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存恢复记录，已暂停自动停用。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.unavailable": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display connection control is unavailable on this system."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前系统不支持显示器连接控制。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.unconfirmed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The display state could not be confirmed. Check the screen and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未能确认显示器状态，请检查屏幕后重试。"
+          }
+        }
+      }
+    },
+    "display.connection.issue.waiting": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try again when the display and system are ready."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待显示器或系统就绪后重试。"
+          }
+        }
+      }
+    },
+    "display.connection.state.absent": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for the display to connect"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待显示器连接"
+          }
+        }
+      }
+    },
+    "display.connection.state.connected": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已连接"
+          }
+        }
+      }
+    },
+    "display.connection.state.disabled": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Disabled"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已停用"
+          }
+        }
+      }
+    },
+    "display.connection.state.unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Connection state is unknown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确认连接状态"
+          }
+        }
+      }
+    },
+    "display.connection.working": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switching display"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在切换显示器"
           }
         }
       }
@@ -2752,22 +3472,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "未发现显示器"
-          }
-        }
-      }
-    },
-    "display.no-external-displays": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No external displays found"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "未发现外接显示器"
           }
         }
       }
@@ -4092,34 +4796,18 @@
         }
       }
     },
-    "mediaKey.permission-explanation": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Used only to intercept brightness/volume key events. Other keystrokes are not read."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "仅用于拦截亮度/音量按键事件，不会读取键盘输入或其他按键。"
-          }
-        }
-      }
-    },
     "mediaKey.permission-title": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Accessibility"
+            "value": "Accessibility (Only intercepts brightness and volume key events)"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "辅助功能权限"
+            "value": "辅助功能权限（仅用于拦截亮度/音量按键事件）"
           }
         }
       }
@@ -8560,7 +9248,7 @@
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "独立显示器控制菜单栏图标"
+            "value": "显示器控制菜单栏图标"
           }
         }
       }
@@ -8570,13 +9258,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Open display controls directly from the menu bar. Independent of the main panel."
+            "value": "Show a separate menu bar icon for managing displays."
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "从菜单栏直接打开显示器控制，与主面板的显示开关独立。"
+            "value": "在菜单栏显示一个独立的图标用于便捷管理显示器"
           }
         }
       }
@@ -8629,22 +9317,6 @@
         }
       }
     },
-    "settings.expand-by-default.subtitle": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Show this item expanded when the panel opens"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "呼出面板时该项目默认处于展开状态"
-          }
-        }
-      }
-    },
     "settings.gpu.show-system-processes": {
       "localizations": {
         "en": {
@@ -8674,22 +9346,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "负载环"
-          }
-        }
-      }
-    },
-    "settings.include-built-in": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Include Built-in Display"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "包含内置显示器"
           }
         }
       }
@@ -9432,478 +10088,478 @@
         }
       }
     },
-    "stats.apps.average %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Observed average %@"
+    "stats.apps.average %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observed average %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "观测均值 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观测均值 %@"
           }
         }
       }
     },
-    "stats.apps.count %lld" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld apps with higher usage"
+    "stats.apps.count %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld apps with higher usage"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个应用占用较高"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 个应用占用较高"
           }
         }
       }
     },
-    "stats.apps.fixture.label" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Preview data · excluded from recorded statistics"
+    "stats.apps.fixture.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Preview data · excluded from recorded statistics"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "界面示例 · 不计入真实统计"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "界面示例 · 不计入真实统计"
           }
         }
       }
     },
-    "stats.apps.observed-between %@ %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "First %@ · Latest %@"
+    "stats.apps.observed-between %@ %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First %@ · Latest %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "首次 %@ · 最近 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首次 %@ · 最近 %@"
           }
         }
       }
     },
-    "stats.apps.open-detail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View app details"
+    "stats.apps.open-detail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View app details"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看应用详情"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看应用详情"
           }
         }
       }
     },
-    "stats.apps.open-list" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "View app rankings"
+    "stats.apps.open-list": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "View app rankings"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "查看应用排行"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看应用排行"
           }
         }
       }
     },
-    "stats.apps.other-metrics %lld" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "+%lld more"
+    "stats.apps.other-metrics %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "+%lld more"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "另 %lld 项"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另 %lld 项"
           }
         }
       }
     },
-    "stats.apps.recent.explanation" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Higher app usage does not necessarily mean system pressure."
+    "stats.apps.recent.explanation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Higher app usage does not necessarily mean system pressure."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用占用较高，并不代表系统出现压力。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用占用较高，并不代表系统出现压力。"
           }
         }
       }
     },
-    "stats.apps.recent.title" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recent observations"
+    "stats.apps.recent.title": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recent observations"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "最近观测"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近观测"
           }
         }
       }
     },
-    "stats.apps.sample-peak %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sampled peak %@"
+    "stats.apps.sample-peak %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sampled peak %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "采样峰值 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "采样峰值 %@"
           }
         }
       }
     },
-    "stats.apps.samples %lld" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld high-usage observations"
+    "stats.apps.samples %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld high-usage observations"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 次高占用观测"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 次高占用观测"
           }
         }
       }
     },
-    "stats.summary.period-caption" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "System status for the selected period"
+    "stats.summary.period-caption": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System status for the selected period"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "所选时段的系统状态"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选时段的系统状态"
           }
         }
       }
     },
-    "stats.apps.high-duration %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "High usage %@"
+    "stats.apps.high-duration %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High usage %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高占用 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高占用 %@"
           }
         }
       }
     },
-    "stats.apps.state.recovered" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recovered with confirming low readings"
+    "stats.apps.state.recovered": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovered with confirming low readings"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已由有效低值确认恢复"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已由有效低值确认恢复"
           }
         }
       }
     },
-    "stats.apps.state.interrupted %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interrupted (%@)"
+    "stats.apps.state.interrupted %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrupted (%@)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中断（%@）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中断（%@）"
           }
         }
       }
     },
-    "stats.apps.reason.recovered" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "verified low usage"
+    "stats.apps.reason.recovered": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "verified low usage"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有效低占用"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有效低占用"
           }
         }
       }
     },
-    "stats.apps.reason.gap" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "missing observations"
+    "stats.apps.reason.gap": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "missing observations"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "观测中断"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观测中断"
           }
         }
       }
     },
-    "stats.apps.reason.notObserved" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "not in leading samples"
+    "stats.apps.reason.notObserved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not in leading samples"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未进入前列"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未进入前列"
           }
         }
       }
     },
-    "stats.apps.reason.sourceFailure" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "source failed"
+    "stats.apps.reason.sourceFailure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "source failed"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "来源失败"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源失败"
           }
         }
       }
     },
-    "stats.apps.reason.exited" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "process exited"
+    "stats.apps.reason.exited": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "process exited"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进程退出"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程退出"
           }
         }
       }
     },
-    "stats.apps.reason.suspended" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sleep or recording paused"
+    "stats.apps.reason.suspended": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sleep or recording paused"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "睡眠或暂停记录"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "睡眠或暂停记录"
           }
         }
       }
     },
-    "stats.apps.reason.replaced" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "process replaced"
+    "stats.apps.reason.replaced": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "process replaced"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进程被替换"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程被替换"
           }
         }
       }
     },
-    "stats.apps.reason.unknown" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unknown reason"
+    "stats.apps.reason.unknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown reason"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原因未知"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原因未知"
           }
         }
       }
     },
-    "stats.apps.observation-limit-v2" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Duration counts valid high-usage coverage; observation count is separate and excludes unobserved time."
+    "stats.apps.observation-limit-v2": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duration counts valid high-usage coverage; observation count is separate and excludes unobserved time."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "时长按有效的高占用覆盖累计；观测次数单独列出，未观测时段不计入。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时长按有效的高占用覆盖累计；观测次数单独列出，未观测时段不计入。"
           }
         }
       }
     },
-    "stats.apps.a11y.average %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "observed average %@"
+    "stats.apps.a11y.average %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "observed average %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "观测均值 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观测均值 %@"
           }
         }
       }
     },
-    "stats.apps.a11y.peak %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sampled peak %@"
+    "stats.apps.a11y.peak %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sampled peak %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "采样峰值 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "采样峰值 %@"
           }
         }
       }
     },
-    "stats.apps.a11y.duration %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "effective high usage %@"
+    "stats.apps.a11y.duration %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "effective high usage %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有效高占用 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有效高占用 %@"
           }
         }
       }
     },
-    "stats.apps.state.ongoing" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ongoing"
+    "stats.apps.state.ongoing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ongoing"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进行中"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进行中"
           }
         }
       }
@@ -17786,13 +18442,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Export Hardware Telemetry Dossier"
+            "value": "Export Statistics Report"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "导出硬件规格档案"
+            "value": "导出统计报表"
           }
         }
       }
@@ -17847,954 +18503,954 @@
         }
       }
     },
-    "stats.report.record-missing" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "That record no longer exists. Showing the app list for the selected range."
+    "stats.report.record-missing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "That record no longer exists. Showing the app list for the selected range."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "该记录已不存在，已返回所选范围的应用页。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该记录已不存在，已返回所选范围的应用页。"
           }
         }
       }
     },
-    "stats.report.sort.value" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "By usage"
+    "stats.report.sort.value": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By usage"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按占用"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按占用"
           }
         }
       }
     },
-    "stats.report.sort.peak" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "By peak"
+    "stats.report.sort.peak": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By peak"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按峰值"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按峰值"
           }
         }
       }
     },
-    "stats.report.sort.name" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "By name"
+    "stats.report.sort.name": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "By name"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "按名称"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按名称"
           }
         }
       }
     },
-    "stats.report.search.placeholder" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Search apps"
+    "stats.report.search.placeholder": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Search apps"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "搜索应用"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索应用"
           }
         }
       }
     },
-    "stats.report.search.clear" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Clear search"
+    "stats.report.search.clear": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear search"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "清除搜索"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除搜索"
           }
         }
       }
     },
-    "stats.report.search.empty" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No matching apps"
+    "stats.report.search.empty": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching apps"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "没有匹配的应用"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的应用"
           }
         }
       }
     },
-    "stats.report.showAllApps %lld" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Show all %lld apps"
+    "stats.report.showAllApps %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show all %lld apps"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "显示全部 %lld 个应用"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示全部 %lld 个应用"
           }
         }
       }
     },
-    "stats.quality.noObservation" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No valid observations in the selected period."
+    "stats.quality.noObservation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No valid observations in the selected period."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "所选范围没有有效观测。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所选范围没有有效观测。"
           }
         }
       }
     },
-    "stats.quality.unsupported" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This build does not support that metric."
+    "stats.quality.unsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This build does not support that metric."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "当前渠道不支持该指标。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前渠道不支持该指标。"
           }
         }
       }
     },
-    "stats.quality.legacyDaily" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This period relies on legacy daily summaries and cannot be broken down per minute."
+    "stats.quality.legacyDaily": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This period relies on legacy daily summaries and cannot be broken down per minute."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本段来自旧版日汇总，无法还原到分钟明细。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本段来自旧版日汇总，无法还原到分钟明细。"
           }
         }
       }
     },
-    "stats.quality.leadingSample" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App values come from per-minute leading samples and are estimates, not a complete resource ledger."
+    "stats.quality.leadingSample": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App values come from per-minute leading samples and are estimates, not a complete resource ledger."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用数值来自每分钟前列采样，是样本估算而非完整资源统计。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用数值来自每分钟前列采样，是样本估算而非完整资源统计。"
           }
         }
       }
     },
-    "stats.quality.partial" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This period has coverage gaps; boundary intervals are excluded."
+    "stats.quality.partial": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This period has coverage gaps; boundary intervals are excluded."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本期存在覆盖缺口，边界时段未包含在内。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本期存在覆盖缺口，边界时段未包含在内。"
           }
         }
       }
     },
-    "stats.r.loadingHardware" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collecting the hardware inventory. Statistics are already available."
+    "stats.r.loadingHardware": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collecting the hardware inventory. Statistics are already available."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "正在采集硬件全景清单，统计内容已可用"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在采集硬件全景清单，统计内容已可用"
           }
         }
       }
     },
-    "stats.report.conclusion.calm" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "System pressure stayed low during this period"
+    "stats.report.conclusion.calm": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System pressure stayed low during this period"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这段时间系统压力较低"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段时间系统压力较低"
           }
         }
       }
     },
-    "stats.report.conclusion.pressure" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "System pressure occurred during this period"
+    "stats.report.conclusion.pressure": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System pressure occurred during this period"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这段时间出现过系统压力"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段时间出现过系统压力"
           }
         }
       }
     },
-    "stats.report.conclusion.noObservation" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No valid observations in this period"
+    "stats.report.conclusion.noObservation": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No valid observations in this period"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "这段时间没有有效观测"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这段时间没有有效观测"
           }
         }
       }
     },
-    "stats.report.conclusion.noObservationDetail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Cannot determine whether pressure occurred."
+    "stats.report.conclusion.noObservationDetail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot determine whether pressure occurred."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "无法判断是否存在系统压力。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法判断是否存在系统压力。"
           }
         }
       }
     },
-    "stats.report.conclusion.insufficient" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Not enough recorded time to conclude"
+    "stats.report.conclusion.insufficient": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough recorded time to conclude"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "观测时间不足，暂时无法判断"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观测时间不足，暂时无法判断"
           }
         }
       }
     },
-    "stats.report.conclusion.recorded" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recorded %@"
+    "stats.report.conclusion.recorded": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recorded %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已记录 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已记录 %@"
           }
         }
       }
     },
-    "stats.report.conclusion.pressureDetail" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ in %lld episodes"
+    "stats.report.conclusion.pressureDetail": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ in %lld episodes"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 共 %lld 段"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 共 %lld 段"
           }
         }
       }
     },
-    "stats.report.conclusion.and" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "and"
+    "stats.report.conclusion.and": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "and"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "与"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与"
           }
         }
       }
     },
-    "stats.report.conclusion.appsNote" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Also %lld apps with higher usage"
+    "stats.report.conclusion.appsNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also %lld apps with higher usage"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "另有 %lld 个应用占用较高"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "另有 %lld 个应用占用较高"
           }
         }
       }
     },
-    "stats.report.conclusion.scope" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "This summarizes system pressure for the selected period, not hardware health."
+    "stats.report.conclusion.scope": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This summarizes system pressure for the selected period, not hardware health."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "结论只描述所选时段的系统压力，不代表硬件健康。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结论只描述所选时段的系统压力，不代表硬件健康。"
           }
         }
       }
     },
-    "stats.report.trend.load" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Load"
+    "stats.report.trend.load": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "负载"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "负载"
           }
         }
       }
     },
-    "stats.report.trend.memory" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Memory"
+    "stats.report.trend.memory": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Memory"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "内存"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内存"
           }
         }
       }
     },
-    "stats.report.snapshotAt" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Snapshot %@"
+    "stats.report.snapshotAt": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "快照于 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照于 %@"
           }
         }
       }
     },
-    "stats.r.alertsContemporaneousNote" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "These are high-usage events in the same period; overlapping times do not imply causation."
+    "stats.r.alertsContemporaneousNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These are high-usage events in the same period; overlapping times do not imply causation."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "以下为同一时段出现的高占用与状态，时间重叠不代表存在因果。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下为同一时段出现的高占用与状态，时间重叠不代表存在因果。"
           }
         }
       }
     },
-    "stats.r.episodeAverage %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "avg %@"
+    "stats.r.episodeAverage %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "avg %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "均值 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "均值 %@"
           }
         }
       }
     },
-    "stats.r.episodePeak %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "peak %@"
+    "stats.r.episodePeak %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "peak %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "峰值 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "峰值 %@"
           }
         }
       }
     },
-    "stats.r.episodeDuration %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "High %@"
+    "stats.r.episodeDuration %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "高占用 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高占用 %@"
           }
         }
       }
     },
-    "stats.r.episodeOngoing" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Ongoing"
+    "stats.r.episodeOngoing": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ongoing"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进行中"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进行中"
           }
         }
       }
     },
-    "stats.r.episodeRecovered" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Recovered (verified low)"
+    "stats.r.episodeRecovered": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recovered (verified low)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "已恢复（有效低值）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已恢复（有效低值）"
           }
         }
       }
     },
-    "stats.r.episodeInterrupted %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Interrupted (%@)"
+    "stats.r.episodeInterrupted %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interrupted (%@)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "中断（%@）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "中断（%@）"
           }
         }
       }
     },
-    "stats.r.episodeReasonGap" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "missing observations"
+    "stats.r.episodeReasonGap": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "missing observations"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "观测中断"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "观测中断"
           }
         }
       }
     },
-    "stats.r.episodeReasonNotObserved" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "not in leading samples"
+    "stats.r.episodeReasonNotObserved": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "not in leading samples"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "未进入前列"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未进入前列"
           }
         }
       }
     },
-    "stats.r.episodeReasonSourceFailed" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "source failed"
+    "stats.r.episodeReasonSourceFailed": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "source failed"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "来源失败"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源失败"
           }
         }
       }
     },
-    "stats.r.episodeReasonExited" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "process exited"
+    "stats.r.episodeReasonExited": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "process exited"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进程退出"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程退出"
           }
         }
       }
     },
-    "stats.r.episodeReasonSuspended" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "sleep or paused"
+    "stats.r.episodeReasonSuspended": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "sleep or paused"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "睡眠或暂停"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "睡眠或暂停"
           }
         }
       }
     },
-    "stats.r.episodeReasonReplaced" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "process replaced"
+    "stats.r.episodeReasonReplaced": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "process replaced"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "进程被替换"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进程被替换"
           }
         }
       }
     },
-    "stats.r.episodeReasonUnknown" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "unknown reason"
+    "stats.r.episodeReasonUnknown": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "unknown reason"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "原因未知"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原因未知"
           }
         }
       }
     },
-    "stats.r.legacyIdentityNotice" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Some rows are from an older build that keyed records by display name: attribution and exact timing are estimates."
+    "stats.r.legacyIdentityNotice": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Some rows are from an older build that keyed records by display name: attribution and exact timing are estimates."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "部分记录来自按显示名存储的旧版本，归属与精确时间属于估算。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "部分记录来自按显示名存储的旧版本，归属与精确时间属于估算。"
           }
         }
       }
     },
-    "stats.export.scopeNote" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "App values come from per-minute leading samples and are estimates; periods backed by legacy daily summaries cannot be broken down per minute."
+    "stats.export.scopeNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App values come from per-minute leading samples and are estimates; periods backed by legacy daily summaries cannot be broken down per minute."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "应用数值来自每分钟前列采样，属估算；含旧日汇总的时段无法还原到分钟。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "应用数值来自每分钟前列采样，属估算；含旧日汇总的时段无法还原到分钟。"
           }
         }
       }
     },
-    "stats.report.appDetail.expand" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Expand app details"
+    "stats.report.appDetail.expand": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expand app details"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "展开应用详情"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "展开应用详情"
           }
         }
       }
     },
-    "stats.report.appDetail.collapse" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Collapse app details"
+    "stats.report.appDetail.collapse": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Collapse app details"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "收起应用详情"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收起应用详情"
           }
         }
       }
     },
-    "stats.report.appDetail.source" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Values come from per-minute leading samples: estimates, not a full average over the app's runtime."
+    "stats.report.appDetail.source": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Values come from per-minute leading samples: estimates, not a full average over the app's runtime."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "数值来自每分钟前列采样，属样本估算，不是该应用运行期间的完整平均。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数值来自每分钟前列采样，属样本估算，不是该应用运行期间的完整平均。"
           }
         }
       }
     },
-    "stats.report.appDetail.noEvents" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "No confirmed high-usage events in this period."
+    "stats.report.appDetail.noEvents": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No confirmed high-usage events in this period."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本期没有确认的高占用事件。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本期没有确认的高占用事件。"
           }
         }
       }
     },
-    "stats.r.episodeObserved %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Observed %@"
+    "stats.r.episodeObserved %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observed %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "有效观测 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有效观测 %@"
           }
         }
       }
     },
-    "stats.r.episodeSpan %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Span %@"
+    "stats.r.episodeSpan %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Span %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "跨度 %@"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "跨度 %@"
           }
         }
       }
     },
-    "stats.r.episodeObservations %lld" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld observations"
+    "stats.r.episodeObservations %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld observations"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 次观测"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 次观测"
           }
         }
       }
     },
-    "stats.r.episodeDistributionNote" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Bucket distribution shows effective observed time per level, not a timeline; gaps are not connected."
+    "stats.r.episodeDistributionNote": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bucket distribution shows effective observed time per level, not a timeline; gaps are not connected."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "档位分布表示各量级的有效观测时长，不是时间线；缺口不连线。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "档位分布表示各量级的有效观测时长，不是时间线；缺口不连线。"
           }
         }
       }
     },
-    "stats.report.loadMore %lld" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Load %lld more apps"
+    "stats.report.loadMore %lld": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load %lld more apps"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "再载入 %lld 个应用"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再载入 %lld 个应用"
           }
         }
       }
     },
-    "stats.report.sort.label" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Sort order"
+    "stats.report.sort.label": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sort order"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "排序方式"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "排序方式"
           }
         }
       }
     },
-    "stats.report.appDetail.trendTitle" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daily trend (daily aggregates)"
+    "stats.report.appDetail.trendTitle": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily trend (daily aggregates)"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "逐日趋势（按日汇总）"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "逐日趋势（按日汇总）"
           }
         }
       }
     },
-    "stats.report.appDetail.trendA11y %@" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Daily trend for %@"
+    "stats.report.appDetail.trendA11y %@": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Daily trend for %@"
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%@ 的逐日趋势"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 的逐日趋势"
           }
         }
       }
     },
-    "stats.report.appDetail.trendTooShort" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Only one day of data in this period; not enough for a trend."
+    "stats.report.appDetail.trendTooShort": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only one day of data in this period; not enough for a trend."
           }
         },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "本期只有一天数据，不足以绘制趋势。"
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本期只有一天数据，不足以绘制趋势。"
           }
         }
       }

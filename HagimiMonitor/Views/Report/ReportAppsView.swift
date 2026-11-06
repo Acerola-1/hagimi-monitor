@@ -425,7 +425,10 @@ struct ReportAppsView: View {
 
             // 有效起止与观测次数：次数不等于时长，缺口不连线也不补时长。
             HStack(spacing: 8) {
-                Text(String(localized: "stats.r.episodeObserved \(ReportUIHelper.formatDateTime(episode.startedAt)) – \(ReportUIHelper.formatDateTime(episode.endedAt ?? episode.lastSeenAt))"))
+                Text(Self.episodeObservedRangeText(
+                    start: ReportUIHelper.formatDateTime(episode.startedAt),
+                    end: ReportUIHelper.formatDateTime(episode.endedAt ?? episode.lastSeenAt)
+                ))
                     .font(.system(size: 10, design: .monospaced))
                     .foregroundStyle(.tertiary)
 
@@ -451,6 +454,11 @@ struct ReportAppsView: View {
                 .padding(.leading, 44)
         }
         .padding(.leading, 34)
+    }
+
+    /// 区间签名分别接收起点与终点，避免把两个时间拼成一个占位参数。
+    nonisolated static func episodeObservedRangeText(start: String, end: String, locale: Locale = .current) -> String {
+        String(localized: "stats.r.episodeObserved \(start) – \(end)", locale: locale)
     }
 
     /// 该应用在本期的逐日趋势。没有数据时明确显示「无趋势数据」，不画空图。

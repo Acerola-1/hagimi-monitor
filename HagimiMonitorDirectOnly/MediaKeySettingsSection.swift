@@ -21,11 +21,10 @@ struct MediaKeySettingsSection: View {
             }
 
         }
-        // 未授权时整组置灰不可操作,明确这些功能需要辅助功能权限。
-        // 的困惑;授权入口由下方常驻提示卡提供。
+        // 未授权时开关不可用，授权从下方提示卡进入。
         .disabled(!permission.isTrusted)
 
-        // 未授权时提示卡常驻——开关已灰掉,这是唯一授权入口。
+        // 未授权时提示卡常驻，开关组本身不提供授权入口。
         if !permission.isTrusted {
             permissionHint
         }
@@ -39,12 +38,8 @@ struct MediaKeySettingsSection: View {
                     .foregroundStyle(.orange)
                 Text(String(localized: "mediaKey.permission-title"))
                     .font(.callout.weight(.medium))
+                    .fixedSize(horizontal: false, vertical: true)
             }
-
-            Text(String(localized: "mediaKey.permission-explanation"))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
 
             HStack(spacing: 8) {
                 Button(String(localized: "mediaKey.open-system-settings")) {

@@ -19,6 +19,72 @@ struct StorageSettingsView: View {
         SettingsPage {
             backButton
 
+            if recorder.storageReadFailed {
+                SettingsGroup {
+                    Text(String(localized: "stats.report.unavailable"))
+                    Button(String(localized: "stats.report.retry")) { recorder.loadOverview() }
+                }
+            }
+            if info != nil {
+                loadedContent
+            } else if !recorder.storageReadFailed {
+                ProgressView(String(localized: "stats.r.loading"))
+            }
+        }
+        .task { recorder.loadOverview() }
+        .confirmationDialog(
+            Text(String(localized: "stats.settings.cleanup-before")),
+            isPresented: Binding(
+                get: { pendingDeleteDays != nil },
+                set: { if !$0 { pendingDeleteDays = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                performDeleteBefore()
+            } label: {
+                Text(String(localized: "stats.settings.cleanup-confirm-button"))
+            }
+            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "stats.settings.cleanup-before-confirm \(pendingDeleteDays ?? 0)"))
+        }
+        .confirmationDialog(
+            Text(String(localized: "stats.settings.cleanup-all")),
+            isPresented: $confirmClearAll,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                run { recorder.deleteAllData(completion: $0) }
+            } label: {
+                Text(String(localized: "stats.settings.cleanup-confirm-button"))
+            }
+            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "stats.settings.cleanup-all-confirm"))
+        }
+        .confirmationDialog(
+            Text(String(localized: "stats.storage.clear-apps")),
+            isPresented: $confirmClearApps,
+            titleVisibility: .visible
+        ) {
+            Button(role: .destructive) {
+                run { recorder.clearAppStats(completion: $0) }
+            } label: {
+                Text(String(localized: "stats.settings.cleanup-confirm-button"))
+            }
+            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
+        } message: {
+            Text(String(localized: "stats.storage.clear-apps-confirm"))
+        }
+    }
+
+    // MARK: - 返回
+
+    @State private var backHovered = false
+
+    private var loadedContent: some View {
+        Group {
             SettingsGroup {
                 ringCard
             }
@@ -86,62 +152,13 @@ struct StorageSettingsView: View {
                             .foregroundStyle(.red)
                     }
                     .fixedSize()
-                    .disabled(busy)
+                    .disabled(busy || recorder.storageReadFailed)
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
             }
         }
-        .confirmationDialog(
-            Text(String(localized: "stats.settings.cleanup-before")),
-            isPresented: Binding(
-                get: { pendingDeleteDays != nil },
-                set: { if !$0 { pendingDeleteDays = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button(role: .destructive) {
-                performDeleteBefore()
-            } label: {
-                Text(String(localized: "stats.settings.cleanup-confirm-button"))
-            }
-            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "stats.settings.cleanup-before-confirm \(pendingDeleteDays ?? 0)"))
-        }
-        .confirmationDialog(
-            Text(String(localized: "stats.settings.cleanup-all")),
-            isPresented: $confirmClearAll,
-            titleVisibility: .visible
-        ) {
-            Button(role: .destructive) {
-                run { recorder.deleteAllData(completion: $0) }
-            } label: {
-                Text(String(localized: "stats.settings.cleanup-confirm-button"))
-            }
-            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "stats.settings.cleanup-all-confirm"))
-        }
-        .confirmationDialog(
-            Text(String(localized: "stats.storage.clear-apps")),
-            isPresented: $confirmClearApps,
-            titleVisibility: .visible
-        ) {
-            Button(role: .destructive) {
-                run { recorder.clearAppStats(completion: $0) }
-            } label: {
-                Text(String(localized: "stats.settings.cleanup-confirm-button"))
-            }
-            Button(String(localized: "stats.settings.cancel"), role: .cancel) {}
-        } message: {
-            Text(String(localized: "stats.storage.clear-apps-confirm"))
-        }
     }
-
-    // MARK: - 返回
-
-    @State private var backHovered = false
 
     private var backButton: some View {
         Button(action: onBack) {
@@ -254,7 +271,7 @@ struct StorageSettingsView: View {
             Spacer(minLength: 16)
 
             action()
-                .disabled(disabled || busy)
+                .disabled(disabled || busy || recorder.storageReadFailed)
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
