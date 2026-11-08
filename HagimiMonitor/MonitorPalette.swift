@@ -104,22 +104,23 @@ struct MonitorPalette {
         quickToolTint.opacity(isDark ? 0.16 : 0.10)
     }
 
-    /// 核心类别色与模块色分工：活力模式用冷蓝表示性能核，橙色只承担 CPU 模块识别。
-    /// 明暗外观分别取色，保持小尺寸占用弧的辨识度；平衡模式沿用原有配色。
+    /// 活力模式里性能核用琥珀：比模块橙更黄，和青绿能效核拉开冷暖。
+    /// 深色用亮金。浅色保持同一色相的明亮金；黄压得过深会变成棕橄榄。
+    /// 平衡模式保持橙 / 蓝 / 绿的分工。
     var performanceCoreTint: Color {
         switch preference {
         case .balanced:
-            moduleTint(for: .cpu)
+            Color(hex: isDark ? 0xFF8F45 : 0xD25E28)
         case .vibrant:
-            Color(hex: isDark ? 0x7EA6F0 : 0x4776CC)
+            Color(hex: isDark ? 0xFFC44D : 0xE09600)
         }
     }
 
-    /// 三组核心的平衡配色保留冷蓝性能核；活力配色中的性能核不随超核是否存在换色。
+    /// 三组核心同时出现时，平衡配色的性能核改用冷蓝，避免和超核的橙色叠在一起。
     var secondaryPerformanceCoreTint: Color {
         switch preference {
         case .balanced:
-            Color(hex: 0x4E7FD9)
+            Color(hex: isDark ? 0x5C96FF : 0x2E64D4)
         case .vibrant:
             performanceCoreTint
         }
@@ -128,18 +129,18 @@ struct MonitorPalette {
     var superCoreTint: Color {
         switch preference {
         case .balanced:
-            moduleTint(for: .cpu)
+            Color(hex: isDark ? 0xFF8F45 : 0xD25E28)
         case .vibrant:
-            Color(hex: isDark ? 0xB6A0EC : 0x8B6FD6)
+            Color(hex: isDark ? 0xB07CFF : 0x6E3CC8)
         }
     }
 
     var efficiencyCoreTint: Color {
         switch preference {
         case .balanced:
-            severityTint(for: .calm)
+            Color(hex: isDark ? 0x3DCC70 : 0x1A8A48)
         case .vibrant:
-            Color(hex: isDark ? 0x66C7BD : 0x278C88)
+            Color(hex: isDark ? 0x22D6C4 : 0x0C948C)
         }
     }
 
