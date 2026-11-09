@@ -106,11 +106,13 @@ struct ModuleSettingsView: View {
                     ], spacing: 0) {
                         ForEach(selectionMetrics) { metric in
                             let isSelected = settings.isMetricEnabled(metric.id, for: kind)
+                            let isShelved = metric.id == "power-flow" && PowerFlowArchive.isShelved
                             MetricSelectionRow(
                                 title: metric.title,
                                 isSelected: isSelected,
-                                isEnabled: settings.canEnableMetric(metric.id, for: kind),
-                                tip: metric.tip
+                                isEnabled: settings.canEnableMetric(metric.id, for: kind) && !isShelved,
+                                tip: metric.tip,
+                                lockNote: isShelved ? String(localized: "metric.battery.power-flow.shelved") : nil
                             ) {
                                 settings.setMetric(metric.id, enabled: !isSelected, for: kind)
                             }
@@ -234,8 +236,8 @@ struct ModuleSettingsView: View {
             }
             #endif
 
-            // 功率流图没有独立开关:由分页选项里的「功率流」可勾项控制
-            // (直连版拓扑页、沙盒版健康页),与指标网格同一交互。
+            // 功率流没有独立开关，归在分页可勾项里（直连版拓扑页、沙盒版健康页）。
+            // 封存期间该行置灰并标明开发中，点击不改已保存的勾选。
             // 供电页为固定诊断视图、排名页为固定列表,均不含可勾指标,返回空。
             if PanelOrderCatalog.scopes.contains(where: { $0.moduleKind == kind }) {
                 Button(String(localized: "settings.restore-metric-order")) {
@@ -295,6 +297,8 @@ private struct MetricSelectionRow: View {
     /// 悬浮说明（如「部分 macOS 27 机型尚不可用」）。nil 时不渲染角标，
     /// 行为与普通行完全一致；角标只作提示，不阻断勾选。
     var tip: String? = nil
+    /// 封存说明（如「开发中」）。有值时整行锁定、变淡，勾选原样显示，点击不生效。
+    var lockNote: String? = nil
     let action: () -> Void
 
     var body: some View {
@@ -307,7 +311,14 @@ private struct MetricSelectionRow: View {
 
                 Text(title)
                     .font(.body)
-                    .foregroundStyle(isEnabled ? .primary : .secondary)
+                    .foregroundStyle(isEnabled || lockNote != nil ? .primary : .secondary)
+
+                if let lockNote {
+                    Text(lockNote)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
                 if let tip {
                     Image(systemName: "info.circle")
@@ -325,6 +336,7 @@ private struct MetricSelectionRow: View {
         }
         .buttonStyle(.plain)
         .disabled(!isEnabled)
+        .opacity(lockNote == nil ? 1 : 0.45)
         .help(tip ?? "")
     }
 }

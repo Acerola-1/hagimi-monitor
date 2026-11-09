@@ -617,7 +617,8 @@ struct MonitorPanelView: View {
                     ($0, storedMetricOrder(for: .battery($0)))
                 }),
                 isExpanded: isExpanded,
-                showPowerFlow: store.settings.isMetricEnabled("power-flow", for: module.kind),
+                showPowerFlow: !PowerFlowArchive.isShelved
+                    && store.settings.isMetricEnabled("power-flow", for: module.kind),
                 panelVisible: store.isPanelVisible,
                 powerFlowActive: !store.isExpansionAnimating
             ) {

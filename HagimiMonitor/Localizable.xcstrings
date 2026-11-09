@@ -6268,6 +6268,22 @@
         }
       }
     },
+    "metric.battery.power-flow.shelved": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In development"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开发中"
+          }
+        }
+      }
+    },
     "metric.battery.power-loss": {
       "localizations": {
         "en": {

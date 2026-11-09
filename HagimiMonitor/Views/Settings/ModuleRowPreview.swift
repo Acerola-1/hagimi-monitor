@@ -248,8 +248,9 @@ struct ModuleRowPreview: View {
     }
 
     /// 功率流图显隐:与面板 BatteryGlassRow 同源,由「功率流」选项勾选控制。
+    /// 封存期间预览同样不画流向图。
     private var showsPowerFlow: Bool {
-        metrics.contains { $0.id == "power-flow" }
+        !PowerFlowArchive.isShelved && metrics.contains { $0.id == "power-flow" }
     }
 
     /// 拓扑页已勾分项功耗(整机/屏幕/GPU),随分页联动。功率流归属本页但
