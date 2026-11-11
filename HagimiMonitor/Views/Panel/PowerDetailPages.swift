@@ -1,10 +1,9 @@
 import SwiftUI
 
-/// 电源展开区分区多页切换标签（拓扑 / 健康 / 排名 / 供电）。
+/// 电源展开区分区多页切换标签（健康 / 拓扑 / 供电），耗电 TOP 属于分页外的公共明细。
 enum BatteryPageTab: String, CaseIterable, Identifiable {
-    case flow = "flow"
     case health = "health"
-    case ranking = "ranking"
+    case flow = "flow"
     case supply = "supply"
 
     var id: String { rawValue }
@@ -15,8 +14,6 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
             return String(localized: "panel.battery.tab.flow")
         case .health:
             return String(localized: "panel.battery.tab.health")
-        case .ranking:
-            return String(localized: "panel.battery.tab.ranking")
         case .supply:
             return String(localized: "panel.battery.tab.supply")
         }
@@ -28,27 +25,24 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
             return "point.3.connected.trianglepath.dotted"
         case .health:
             return "heart.fill"
-        case .ranking:
-            return "list.number"
         case .supply:
             return "powerplug.fill"
         }
     }
 
-    /// 设置页预览可选的分页:排名页(逐进程能耗)与拓扑页(分项功耗)仅直连版
+    /// 设置页预览可选的分页:拓扑页(分项功耗)仅直连版
     /// 产得出,商店版既不产也不展示,避免预览出现面板永远不会出现的分页。
     static var previewCases: [BatteryPageTab] {
         #if DIRECT_DISTRIBUTION
         return allCases
         #else
-        return allCases.filter { $0 != .ranking && $0 != .flow }
+        return allCases.filter { $0 != .flow }
         #endif
     }
 
     /// 各分页归属的可勾指标名:面板展开区分栏渲染与设置页选项过滤同源。
     /// 「功率流」是网格外可视化选项(无采样指标),归入承载流向图的分页:
-    /// 直连版在拓扑页、沙盒版在健康页。供电页为固定诊断视图、排名页为
-    /// 固定列表,均不含可勾指标,返回空。
+    /// 直连版在拓扑页、沙盒版在健康页。供电页为固定诊断视图,不含可勾指标。
     var metricNames: [String] {
         switch self {
         case .flow:
@@ -67,9 +61,91 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
             names.append("power-flow")
             #endif
             return names
-        case .ranking, .supply:
+        case .supply:
             return []
         }
+    }
+}
+
+/// 二级导航沿用明细字体与内衬；原生按钮处理激活，分段语义供辅助技术操作。
+struct PowerPagePicker: View {
+    @Binding var selection: BatteryPageTab
+    let items: [BatteryPageTab]
+    let theme: MonitorPanelTheme
+    @FocusState private var isFocused: Bool
+    @State private var hoveredPage: BatteryPageTab?
+    @Environment(\.colorSchemeContrast) private var contrast
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(items) { page in
+                let selected = page == selection
+                Button {
+                    if !isFocused { isFocused = true }
+                    select(page)
+                } label: {
+                    Text(page.title)
+                        .monitorPanelCaptionFont(.caption2, weight: selected ? .semibold : .medium)
+                        .foregroundStyle(selected ? theme.valueText : theme.captionText)
+                        .fixedSize()
+                        .frame(maxWidth: .infinity, minHeight: 22)
+                        .background {
+                            RoundedRectangle(cornerRadius: 5)
+                                .fill(selected ? theme.badgeFill(for: .battery)
+                                      : hoveredPage == page ? theme.trackFill : .clear)
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 5)
+                                .strokeBorder(outline(for: page), lineWidth: isFocused && selected ? 1.5 : 1)
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .focusable(false)
+                .help(page.title)
+                .onHover { hovering in
+                    if hovering { hoveredPage = page }
+                    else if hoveredPage == page { hoveredPage = nil }
+                }
+            }
+        }
+        .padding(2)
+        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+        .focusable(interactions: .edit)
+        .focused($isFocused)
+        .focusEffectDisabled()
+        .onKeyPress(.leftArrow) { moveSelection(by: -1) ? .handled : .ignored }
+        .onKeyPress(.rightArrow) { moveSelection(by: 1) ? .handled : .ignored }
+        .accessibilityRepresentation {
+            Picker(String(localized: "panel.power-pages"), selection: Binding(
+                get: { selection }, set: { select($0) }
+            )) {
+                ForEach(items) { page in
+                    Text(page.title).tag(page)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+        }
+    }
+
+    private func outline(for page: BatteryPageTab) -> Color {
+        guard selection == page else { return .clear }
+        if isFocused { return theme.moduleTint(for: .battery) }
+        return contrast == .increased ? theme.valueText : theme.rowSeparator(for: .battery)
+    }
+
+    private func select(_ page: BatteryPageTab) {
+        guard selection != page else { return }
+        withPanelExpansionState { selection = page }
+    }
+
+    private func moveSelection(by offset: Int) -> Bool {
+        guard isFocused, let index = items.firstIndex(of: selection) else { return false }
+        let next = index + offset
+        guard items.indices.contains(next) else { return true }
+        select(items[next])
+        return true
     }
 }
 
