@@ -74,13 +74,18 @@ struct PowerPagePicker: View {
     let theme: MonitorPanelTheme
     @FocusState private var isFocused: Bool
     @State private var hoveredPage: BatteryPageTab?
+    @State private var suppressFocusRing = false
     @Environment(\.colorSchemeContrast) private var contrast
+
+    private static let inset: CGFloat = 2
+    private static let segmentRadius = CGFloat(MonitorConstants.rowCornerRadius / 2)
 
     var body: some View {
         HStack(spacing: 2) {
             ForEach(items) { page in
                 let selected = page == selection
                 Button {
+                    suppressFocusRing = true
                     if !isFocused { isFocused = true }
                     select(page)
                 } label: {
@@ -90,13 +95,13 @@ struct PowerPagePicker: View {
                         .fixedSize()
                         .frame(maxWidth: .infinity, minHeight: 22)
                         .background {
-                            RoundedRectangle(cornerRadius: 5)
+                            RoundedRectangle(cornerRadius: Self.segmentRadius)
                                 .fill(selected ? theme.badgeFill(for: .battery)
                                       : hoveredPage == page ? theme.trackFill : .clear)
                         }
                         .overlay {
-                            RoundedRectangle(cornerRadius: 5)
-                                .strokeBorder(outline(for: page), lineWidth: isFocused && selected ? 1.5 : 1)
+                            RoundedRectangle(cornerRadius: Self.segmentRadius)
+                                .strokeBorder(outline(for: page), lineWidth: 1.5)
                         }
                         .contentShape(Rectangle())
                 }
@@ -109,11 +114,17 @@ struct PowerPagePicker: View {
                 }
             }
         }
-        .padding(2)
-        .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+        .padding(Self.inset)
+        .background {
+            RoundedRectangle(cornerRadius: Self.segmentRadius + Self.inset)
+                .fill(theme.trackFill.opacity(contrast == .increased ? 1 : 0.45))
+        }
         .focusable(interactions: .edit)
         .focused($isFocused)
         .focusEffectDisabled()
+        .onChange(of: isFocused) { _, focused in
+            if !focused { suppressFocusRing = false }
+        }
         .onKeyPress(.leftArrow) { moveSelection(by: -1) ? .handled : .ignored }
         .onKeyPress(.rightArrow) { moveSelection(by: 1) ? .handled : .ignored }
         .accessibilityRepresentation {
@@ -131,8 +142,8 @@ struct PowerPagePicker: View {
 
     private func outline(for page: BatteryPageTab) -> Color {
         guard selection == page else { return .clear }
-        if isFocused { return theme.moduleTint(for: .battery) }
-        return contrast == .increased ? theme.valueText : theme.rowSeparator(for: .battery)
+        if isFocused && !suppressFocusRing { return theme.moduleTint(for: .battery) }
+        return contrast == .increased ? theme.valueText : .clear
     }
 
     private func select(_ page: BatteryPageTab) {
@@ -142,6 +153,7 @@ struct PowerPagePicker: View {
 
     private func moveSelection(by offset: Int) -> Bool {
         guard isFocused, let index = items.firstIndex(of: selection) else { return false }
+        suppressFocusRing = false
         let next = index + offset
         guard items.indices.contains(next) else { return true }
         select(items[next])
