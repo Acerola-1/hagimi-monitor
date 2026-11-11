@@ -3,23 +3,21 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.7.8</title>
-            <pubDate>Fri, 06 Nov 2026 16:52:31 +0000</pubDate>
-            <sparkle:version>103</sparkle:version>
-            <sparkle:shortVersionString>1.7.8</sparkle:shortVersionString>
+            <title>1.7.9</title>
+            <pubDate>Wed, 11 Nov 2026 11:01:45 +0000</pubDate>
+            <sparkle:version>104</sparkle:version>
+            <sparkle:shortVersionString>1.7.9</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-### 新功能
-
-- 新增显示器启停开关
-
 ### 优化与体验
 
-- 部分文本内容优化
-- 对部分 UI 进行优化调整
+- 优化了部分界面
+- 调整了电源分页，耗电排行在各分页下都会显示
+- 暂时隐藏功率流图，设置中标明开发中
+- 调整了 CPU 逐核环的颜色
 
 ### 目前已知的问题
 
@@ -35,13 +33,14 @@
 
 ### English
 
-- Added display on/off switches.
-- Revised some of the text.
 - Adjusted parts of the interface.
+- Adjusted the Power pages. The energy ranking stays visible on each page.
+- The power-flow diagram is hidden for now and marked as in development.
+- Adjusted the per-core ring colors.
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.7.8/HagimiMonitor-v1.7.8.zip" length="6469616" type="application/octet-stream" sparkle:edSignature="p5B2e2y7TuHLiuQuEZiecrQsdijO89RFSCsb7B9DEH1XmrJVEvsnQn+X8rqlJa29ulOBZTDuvjXM5XfA46FDDg=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.7.9/HagimiMonitor-v1.7.9.zip" length="6471539" type="application/octet-stream" sparkle:edSignature="4+WR/RvU88AzFvxMdPWwkWrrjfOy7sME3bjUXcZxWGJF5QbcY3ZcmA1AUTA52BiLQ8jNSK38J1pnfCI5f2v8AA=="/>
         </item>
     </channel>
 </rss>
