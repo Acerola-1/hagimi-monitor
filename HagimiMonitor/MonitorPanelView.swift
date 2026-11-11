@@ -253,17 +253,16 @@ struct MonitorPanelView: View {
                         if ids[index] == "display" { PanelBenchmarkCommand.send(.display(true)) }
                         else if let kind = MonitorKind(rawValue: ids[index]) { toggleExpansion(for: kind) }
                     } else {
-                        switch (index - ids.count) % 10 {
+                        switch (index - ids.count) % 9 {
                         case 0:
                             setExpansion(scrollToTop: true) { expandedKinds = Set(panelModules.map(\.kind)) }
                             PanelBenchmarkCommand.send(.display(true))
                         case 1: PanelBenchmarkCommand.send(.archives(true))
-                        case 2: PanelBenchmarkCommand.send(.batteryPage("ranking"))
-                        case 3: PanelBenchmarkCommand.send(.batteryPage("health"))
-                        case 4: PanelBenchmarkCommand.send(.batteryPage("supply"))
-                        case 5: PanelBenchmarkCommand.send(.batteryPage("flow"))
-                        case 6: PanelBenchmarkCommand.send(.archives(false))
-                        case 7, 8: toggleExpansion(for: .cpu)
+                        case 2: PanelBenchmarkCommand.send(.batteryPage("health"))
+                        case 3: PanelBenchmarkCommand.send(.batteryPage("supply"))
+                        case 4: PanelBenchmarkCommand.send(.batteryPage("flow"))
+                        case 5: PanelBenchmarkCommand.send(.archives(false))
+                        case 6, 7: toggleExpansion(for: .cpu)
                         default:
                             setExpansion(scrollToTop: true) { expandedKinds = [] }
                             PanelBenchmarkCommand.send(.display(false))
@@ -282,7 +281,7 @@ struct MonitorPanelView: View {
                 }
                 let fast = mode == "reverse" || mode == "full-reverse"
                     || (mode == "full-matrix" && index >= orderedTopLevelItems.count
-                        && (index - orderedTopLevelItems.count) % 10 == 7)
+                        && (index - orderedTopLevelItems.count) % 9 == 6)
                 try? await Task.sleep(for: .milliseconds(fast ? 100 : 700))
             }
             PanelLayoutCounters.shared.checkpoint()
@@ -617,7 +616,8 @@ struct MonitorPanelView: View {
                     ($0, storedMetricOrder(for: .battery($0)))
                 }),
                 isExpanded: isExpanded,
-                showPowerFlow: store.settings.isMetricEnabled("power-flow", for: module.kind),
+                showPowerFlow: !PowerFlowArchive.isShelved
+                    && store.settings.isMetricEnabled("power-flow", for: module.kind),
                 panelVisible: store.isPanelVisible,
                 powerFlowActive: !store.isExpansionAnimating
             ) {
@@ -2055,7 +2055,7 @@ struct BatteryGlassRow: View, Equatable {
     /// 功率流流光启用:false 时回落到纯静态绘制,用于展开动画窗口期停更 GPU 流光。
     var powerFlowActive = true
     var toggleExpansion: (() -> Void)?
-    @State private var selectedTab: BatteryPageTab = .flow
+    @State private var selectedTab: BatteryPageTab = .health
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
         guard lhs.isExpanded == rhs.isExpanded else { return false }
@@ -2151,24 +2151,18 @@ struct BatteryGlassRow: View, Equatable {
 
             CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand, measurementKey: detailMeasurementKey) {
                 VStack(spacing: 8) {
-                    // 顶部导航:动态小标题 + 贯穿分隔线 + 右侧多页切换胶囊
-                    // selection 锚定 activeTab:selectedTab 指向已被设置裁掉的
-                    // 分页时,胶囊仍高亮当前生效页而非陷入无高亮态。
-                    PowerSectionHeader(title: activeTab.title, theme: theme) {
-                        if availableTabs.count > 1 {
-                            PanelCapsulePicker(
-                                selection: Binding(
-                                    get: { activeTab },
-                                    set: { selectedTab = $0 }
-                                ),
-                                items: availableTabs,
-                                icon: { $0.icon },
-                                tooltip: { $0.title },
-                                accessibilityGroupName: String(localized: "panel.power-pages"),
-                                tint: tint,
-                                theme: theme
-                            )
-                        }
+                    // 可见页变化时仍选择有效页，避免读数暂缺导致导航无选中项。
+                    if availableTabs.count > 1 {
+                        PowerPagePicker(
+                            selection: Binding(
+                                get: { activeTab },
+                                set: { selectedTab = $0 }
+                            ),
+                            items: availableTabs,
+                            theme: theme
+                        )
+                    } else {
+                        PowerSectionHeader(title: activeTab.title, theme: theme)
                     }
 
                     switch activeTab {
@@ -2209,19 +2203,16 @@ struct BatteryGlassRow: View, Equatable {
                             )
                         }
                         #endif
-                    case .ranking:
-                        // 逐进程能耗实测的前 5 名应用。视觉沿用 CPU/内存/GPU 共用的
-                        // TopProcessList，不自造样式；无数据时该页本身不会出现在分页里。
-                        PowerAppRankingList(
-                            shares: module.processEnergy?.shares ?? [],
-                            theme: theme
-                        )
                     case .supply:
                         PowerSupplyDiagnosticsView(
                             module: module,
                             theme: theme,
                             metricOrder: metricOrders[.supply] ?? []
                         )
+                    }
+
+                    if let energy = module.processEnergy {
+                        PowerAppRankingList(shares: energy.shares, theme: theme)
                     }
                 }
                 .padding(.horizontal, 10)
@@ -2300,28 +2291,24 @@ struct BatteryGlassRow: View, Equatable {
     /// - 拓扑（.flow）：仅直连版存在;沙盒版分项功耗产不出、拓扑页近乎空页,
     ///   整页裁撤,流向图迁入健康页尾部(见 case .health);
     /// - 健康（.health）：仅带电池设备可用；
-    /// - 排名（.ranking）：需要逐进程能耗实测（仅直连版产得出），无数据时整页不出现；
     /// - 供电（.supply）：始终可用（未插电时优雅提示未连接）。
     private var availableTabs: [BatteryPageTab] {
         var tabs: [BatteryPageTab] = []
+        if hasBattery {
+            tabs.append(.health)
+        }
         #if DIRECT_DISTRIBUTION
         let hasFlowData = (showPowerFlow && numericValue("power") != nil) || !tabMetrics(for: .flow).isEmpty
         if hasFlowData {
             tabs.append(.flow)
         }
         #endif
-        if hasBattery {
-            tabs.append(.health)
-        }
-        if module.processEnergy != nil {
-            tabs.append(.ranking)
-        }
         tabs.append(.supply)
         return tabs
     }
 
     private var activeTab: BatteryPageTab {
-        availableTabs.contains(selectedTab) ? selectedTab : (availableTabs.first ?? .flow)
+        availableTabs.contains(selectedTab) ? selectedTab : (availableTabs.first ?? .health)
     }
 
     private func tabMetrics(for tab: BatteryPageTab) -> [MonitorMetric] {
@@ -2848,9 +2835,9 @@ private struct MemoryProcessList: View {
 
 // MARK: - 电源排名列表
 
-/// 电源排名页（拓扑 / 健康 / 排名 / 供电 的第三页）：逐进程能耗实测的前 5 名应用。
+/// 电源分页下方的公共 TOP：逐进程能耗实测的前 5 名应用，不随当前页切换。
 /// 视觉沿用 CPU/内存/GPU 共用的 `TopProcessList`——5 行、图标 + 名称 + 右对齐数值。
-/// 顶部不画分隔线：本页整块内容直接挂在分区头下方，分区头已自带贯穿分隔线。
+/// 与其余模块共用顶部细分隔线，区分分页指标与进程列表。
 /// 数值为该应用的实测平均功率（瓦），保留两位小数以免轻载应用被四舍五入成 0.0 W。
 /// 口径仍是同用户可读进程（系统进程读不到，不在榜单内）。
 /// 设置页预览也复用本视图，故不加 private。
@@ -2871,8 +2858,7 @@ struct PowerAppRankingList: View {
                 )
             },
             theme: theme,
-            showRosettaBanner: false,
-            showsSeparator: false
+            showRosettaBanner: false
         )
     }
 }

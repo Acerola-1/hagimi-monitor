@@ -12,7 +12,7 @@ struct ModuleRowPreview: View {
     let palette: MonitorPalette
     let metricOrders: [String: [String]]
     var chartStyle: PanelHistoryChartStyle = .bars
-    /// 电池模块分页选择(拓扑/健康/排名/供电):由设置页持有,驱动预览分页与下方指标选项联动。
+    /// 电池模块分页选择(健康/拓扑/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
 
     private var theme: MonitorPanelTheme {
@@ -53,8 +53,7 @@ struct ModuleRowPreview: View {
 
             if hasDetail {
                 if kind == .battery {
-                    // 电池展开区与面板 BatteryGlassRow 同构:贯穿分隔线由
-                    // PowerSectionHeader 自带,不再外挂。
+                    // 电池展开区与面板 BatteryGlassRow 共用文字分页导航。
                     batteryTabbedDetail
                         .padding(.horizontal, 10)
                         .padding(.bottom, 9)
@@ -185,24 +184,14 @@ struct ModuleRowPreview: View {
 
     // MARK: 电池分页预览
 
-    /// 与面板 BatteryGlassRow 同构的分页展开区:动态小标题 + 胶囊切换器,
+    /// 与面板 BatteryGlassRow 同构的分页展开区:紧凑文字分段切换器,
     /// 各页渲染示例内容(拓扑=分项功耗网格+功率流图,健康=指标网格,沙盒版
     /// 流向图随面板迁入健康页,供电=固定诊断视图)。静态示例数据渲染,
     /// 不向设置页引入常驻动画驱动。
     @ViewBuilder
     private var batteryTabbedDetail: some View {
         VStack(spacing: 8) {
-            PowerSectionHeader(title: batteryTab.title, theme: theme) {
-                PanelCapsulePicker(
-                    selection: $batteryTab,
-                    items: BatteryPageTab.previewCases,
-                    icon: { $0.icon },
-                    tooltip: { $0.title },
-                    accessibilityGroupName: String(localized: "panel.power-pages"),
-                    tint: tint,
-                    theme: theme
-                )
-            }
+            PowerPagePicker(selection: $batteryTab, items: BatteryPageTab.previewCases, theme: theme)
 
             switch batteryTab {
             case .flow:
@@ -232,11 +221,6 @@ struct ModuleRowPreview: View {
                     )
                 }
                 #endif
-            case .ranking:
-                PowerAppRankingList(
-                    shares: MetricSampleCatalog.appEnergyRankingShares,
-                    theme: theme
-                )
             case .supply:
                 PowerSupplyDiagnosticsView(
                     module: MetricSampleCatalog.powerFlowModule,
@@ -244,12 +228,16 @@ struct ModuleRowPreview: View {
                     metricOrder: metricOrders[PanelOrderScope.battery(.supply).storageKey] ?? []
                 )
             }
+            #if DIRECT_DISTRIBUTION
+            PowerAppRankingList(shares: MetricSampleCatalog.appEnergyRankingShares, theme: theme)
+            #endif
         }
     }
 
     /// 功率流图显隐:与面板 BatteryGlassRow 同源,由「功率流」选项勾选控制。
+    /// 封存期间预览同样不画流向图。
     private var showsPowerFlow: Bool {
-        metrics.contains { $0.id == "power-flow" }
+        !PowerFlowArchive.isShelved && metrics.contains { $0.id == "power-flow" }
     }
 
     /// 拓扑页已勾分项功耗(整机/屏幕/GPU),随分页联动。功率流归属本页但

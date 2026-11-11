@@ -656,6 +656,8 @@ final class MonitorSettings: ObservableObject {
     }
 
     func setMetric(_ id: String, enabled: Bool, for kind: MonitorKind) {
+        // 封存中的功率流只展示、不改写，避免置灰行上的点击把原勾选清掉。
+        if kind == .battery, id == "power-flow", PowerFlowArchive.isShelved { return }
         var current = enabledMetrics[kind] ?? defaultMetricIds(for: kind)
         if enabled {
             current.insert(id)

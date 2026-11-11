@@ -1,13 +1,11 @@
 ## 更新内容
 
-### 新功能
-
-- 新增显示器启停开关
-
 ### 优化与体验
 
-- 部分文本内容优化
-- 对部分 UI 进行优化调整
+- 优化了部分界面
+- 调整了电源分页，耗电排行在各分页下都会显示
+- 暂时隐藏功率流图，设置中标明开发中
+- 调整了 CPU 逐核环的颜色
 
 ### 目前已知的问题
 
@@ -23,7 +21,8 @@
 
 ### English
 
-- Added display on/off switches.
-- Revised some of the text.
 - Adjusted parts of the interface.
+- Adjusted the Power pages. The energy ranking stays visible on each page.
+- The power-flow diagram is hidden for now and marked as in development.
+- Adjusted the per-core ring colors.
 
