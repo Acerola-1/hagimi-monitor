@@ -1277,7 +1277,7 @@ enum DisplayAttributesProbe {
 }
 
 #if DISPLAY_CONTROL
-/// 行头成对读数。标题位区分设备,数值旁的太阳与展开区亮度滑杆同一符号。
+/// 单屏横排摘要与双屏分列共用完整读数槽，保持与其他主行相同的右侧轮廓。
 private struct DisplayRowHeaderPills: View {
     let readings: [(title: String, value: String)]
     let theme: MonitorPanelTheme
@@ -1285,7 +1285,8 @@ private struct DisplayRowHeaderPills: View {
     var body: some View {
         PairedHeaderReadings(theme: theme) {
             ForEach(Array(readings.enumerated()), id: \.offset) { _, reading in
-                DisplayBrightnessPill(title: reading.title, value: reading.value, theme: theme)
+                DisplayBrightnessPill(title: reading.title, value: reading.value,
+                                      isSingleReading: readings.count == 1, theme: theme)
             }
         }
     }
@@ -1294,14 +1295,22 @@ private struct DisplayRowHeaderPills: View {
 private struct DisplayBrightnessPill: View {
     let title: String
     let value: String
+    let isSingleReading: Bool
     let theme: MonitorPanelTheme
 
+    private var layout: AnyLayout {
+        isSingleReading
+            ? AnyLayout(HStackLayout(spacing: RowHeaderPillMetrics.spacing))
+            : AnyLayout(VStackLayout(spacing: 0))
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        layout {
             Text(title)
                 .font(.system(size: RowHeaderPillMetrics.labelSize))
                 .foregroundStyle(theme.secondaryText.opacity(0.72))
                 .lineLimit(1)
+                .frame(maxWidth: isSingleReading ? .infinity : nil)
             HStack(spacing: 2) {
                 Image(systemName: "sun.max")
                     .font(.system(size: 8, weight: .semibold))
@@ -1310,9 +1319,13 @@ private struct DisplayBrightnessPill: View {
                     .monospacedDigit()
             }
             .foregroundStyle(theme.secondaryText)
+            .frame(maxWidth: isSingleReading ? .infinity : nil)
         }
         .padding(.horizontal, RowHeaderPillMetrics.horizontalPadding)
-        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
+        .frame(width: isSingleReading
+               ? RowHeaderPillMetrics.width * 2 + RowHeaderPillMetrics.spacing
+               : RowHeaderPillMetrics.width,
+               height: RowHeaderPillMetrics.height)
         .help(String(localized: "display.control.brightness"))
     }
 }
