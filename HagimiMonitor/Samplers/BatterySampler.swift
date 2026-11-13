@@ -15,10 +15,11 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
     // 改读 pmset,结果缓存 60s。
     private let chargeLimitProbe = ChargeLimitProbe()
 
-    // 健康度平滑状态:健康度真实变化以天/周为尺度,充放电时的抖动纯属测量噪声。
-    // 系统设置显示的是 powerd 低通滤波后的值,这里用 EMA + 整数迟滞复刻其稳定性。
-    private var smoothedHealthRatio: Double?   // 平滑后的 maxCapacity/designCapacity
-    private var displayedHealthPercent: Double? // 当前对外显示的整数百分比
+    private let healthProbe: BatteryHealthProbe
+
+    init(healthProbe: BatteryHealthProbe = BatteryHealthProbe()) {
+        self.healthProbe = healthProbe
+    }
     // SMC 功率链读取器: App Store 沙盒版因 IOServiceOpen(AppleSMC) 受限无法使用,
     // 仅在 DISPLAY_CONTROL(Direct 版)下启用,为无电池机型或遥测缺报提供第二数据链。
     #if DISPLAY_CONTROL
@@ -71,7 +72,7 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         let connected = sourceState == kIOPSACPowerValue
 
         let smart = smartBatteryInfo(isCharging: isCharging)
-        let stableHealth = stabilizedHealth(smart.healthPercent)
+        let health = healthProbe.percent()
         let adapterWatts = smart.adapterWatts ?? externalAdapterWatts()
         let chargingPower = connected
             ? (smart.telemetryChargingWatts ?? smart.chargingPowerWatts)
@@ -158,15 +159,13 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         metrics.append(contentsOf: componentPowerMetrics())
         #endif
         metrics.append(contentsOf: [
-            MonitorMetric(name: "health", value: stableHealth.map(percent) ?? "--", numericValue: stableHealth, unit: "%"),
+            MonitorMetric(name: "health", value: health.map(percent) ?? "--", numericValue: health, unit: "%"),
             MonitorMetric(name: "cycle-count", value: cycleCountString(smart.cycleCount, design: smart.designCycleCount), numericValue: smart.cycleCount.map(Double.init)),
             MonitorMetric(name: "temperature", value: smart.temperatureCelsius.map { "\(String(format: "%.0f", $0))°C" } ?? "--", numericValue: smart.temperatureCelsius, unit: "°C"),
             MonitorMetric(name: "voltage", value: voltageString(smart.voltageVolts), numericValue: smart.voltageVolts, unit: " V"),
             MonitorMetric(name: "current", value: currentString(smart.amperageMilliamps), numericValue: smart.amperageMilliamps.map(abs), unit: " mA"),
             MonitorMetric(name: "cell-balance", value: cellBalance?.text ?? "--", numericValue: cellBalance.map { Double($0.delta) }),
-            // 剩余/满充容量合并为一格斜杠式展示;满充口径取电池芯片实测的
-            // FullChargeCapacity(与「健康度」用的 NominalChargeCapacity 分工不同,
-            // 后者负责相对设计容量的衰减叙事)。
+            // 容量明细保留电池芯片的 mAh 读数；健康度独立采用系统报告的最大容量。
             MonitorMetric(name: "capacity", value: capacityString(smart.remainingCapacitymAh, full: smart.fullChargeCapacitymAh), numericValue: smart.remainingCapacitymAh.map(Double.init), unit: " mAh"),
             // 功率流数据链(不进指标网格,由展开区功率流图消费)
             MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn, unit: " W"),
@@ -288,39 +287,6 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         )
     }
 
-    /// 健康度稳定化:EMA 平滑消除瞬时噪声 + 整数迟滞防止边界横跳。
-    ///
-    /// 系统设置的「最大容量」是 powerd 校准平滑后的结果,IOKit 只能读到电池芯片的
-    /// 瞬时原始容量(NominalChargeCapacity/AppleRawMaxCapacity),随温度、内阻、近期
-    /// 充放电波动 ±1~2%。真实健康度以天/周为尺度衰减,所以充放电时的抖动全是噪声。
-    ///
-    /// 两道处理:
-    ///   1. EMA(α=0.05):对底层比值做低通,新样本仅占 5%,需连续多次同向偏移才移动。
-    ///   2. 整数迟滞(0.6%):平滑值距当前显示整数超过 0.6 个百分点才翻页,避免 88/89 横跳。
-    private func stabilizedHealth(_ raw: Double?) -> Double? {
-        guard let raw else { return displayedHealthPercent }
-
-        let ratio = raw / 100
-        let alpha = 0.05
-        if let previous = smoothedHealthRatio {
-            smoothedHealthRatio = previous + alpha * (ratio - previous)
-        } else {
-            smoothedHealthRatio = ratio // 首次采样直接采纳,避免冷启动缓慢爬升
-        }
-        let smoothedPercent = (smoothedHealthRatio ?? ratio) * 100
-
-        guard let displayed = displayedHealthPercent else {
-            let rounded = smoothedPercent.rounded()
-            displayedHealthPercent = rounded
-            return rounded
-        }
-        // 迟滞:仅当平滑值越过 显示值±0.6 才更新整数,否则维持不变
-        if abs(smoothedPercent - displayed) >= 0.6 {
-            displayedHealthPercent = smoothedPercent.rounded()
-        }
-        return displayedHealthPercent
-    }
-
     private func smartBatteryInfo(isCharging: Bool) -> SmartBatteryInfo {
         let service = IOServiceGetMatchingService(kIOMainPortDefault, IOServiceMatching("AppleSmartBattery"))
         guard service != IO_OBJECT_NULL else {
@@ -347,13 +313,6 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         }
 
         let cycleCount = lookupInt("CycleCount")
-        let designCapacity = lookupDouble("DesignCapacity")
-        // 健康度口径必须与系统设置「最大容量」一致：系统用的是经 powerd 校准平滑的
-        // NominalChargeCapacity；AppleRawMaxCapacity 是电池芯片的瞬时原始满充容量，
-        // 随温度/近期充放波动，普遍偏低 1~3 个百分点，会导致与系统显示不一致。
-        let maxCapacity = lookupDouble("NominalChargeCapacity")
-            ?? lookupDouble("AppleRawMaxCapacity")
-            ?? lookupDouble("MaxCapacity")
         // 固件会把负电流以 UInt64 二补码发布。InstantAmperage 比平滑后的
         // Amperage 更新及时，且两者都必须按有符号 64 位解释。
         let voltage = lookupDouble("AppleRawBatteryVoltage") ?? lookupDouble("Voltage")
@@ -379,11 +338,6 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         let fullChargeCapacity = (lookupDouble("FullChargeCapacity")
             ?? lookupDouble("NominalChargeCapacity")
             ?? lookupDouble("AppleRawMaxCapacity")).map { Int($0) }
-        let health = if let maxCapacity, let designCapacity, designCapacity > 0 {
-            min(100, max(0, maxCapacity / designCapacity * 100))
-        } else {
-            nil as Double?
-        }
         let batteryWatts = if let voltage, let amperage {
             nonZeroWatts(abs(voltage * amperage / 1_000_000))
         } else {
@@ -402,7 +356,6 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         return SmartBatteryInfo(
             cycleCount: cycleCount,
             designCycleCount: designCycles,
-            healthPercent: health,
             batteryPowerWatts: batteryWatts,
             adapterWatts: adapterWatts,
             systemPowerWatts: systemPowerWatts,
@@ -838,7 +791,6 @@ nonisolated private func collectBatteryDataAndCellVoltages(_ root: io_registry_e
 nonisolated private struct SmartBatteryInfo {
     var cycleCount: Int?
     var designCycleCount: Int?
-    var healthPercent: Double?
     var batteryPowerWatts: Double?
     var adapterWatts: Double?
     var systemPowerWatts: Double?
