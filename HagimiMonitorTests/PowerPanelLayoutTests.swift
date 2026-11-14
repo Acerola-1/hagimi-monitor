@@ -175,4 +175,25 @@ struct PowerPanelLayoutTests {
             }
         }
     }
+
+    @Test func unavailableBatteryStillRendersIndependentTopology() async throws {
+        let reading = PowerReading(watts: 3.2, state: .valid, source: .clpc,
+                                   intervalStart: 10, intervalEnd: 11)
+        let sample = IOReportPowerSample(cpuWatts: 3.2, readings: ["cpu-power": reading])
+        let failed = BatterySampler(powerSourceReader: { .unavailable })
+            .sample(previous: module("charging"), power: sample)
+        let details = failed.metrics.filter { BatteryPowerPresentation.independentNames.contains($0.name) }
+        #expect(BatteryPowerPresentation(module: failed, enabledNames: Set(details.map(\.name)))
+            .tabs(showPowerFlow: true) == [.flow])
+        for scheme: ColorScheme in [.light, .dark] {
+            let theme = MonitorPanelTheme(palette: MonitorPalette(preference: .balanced, colorScheme: scheme))
+            let row = BatteryGlassRow(module: failed, theme: theme, details: details, isExpanded: true)
+                .frame(width: MonitorConstants.panelMinWidth)
+                .environment(\.colorScheme, scheme)
+            let size = try await capture(row, name: "unavailable-topology-\(scheme)",
+                                         width: MonitorConstants.panelMinWidth, height: 220)
+            #expect(size.height > MonitorConstants.panelRowHeaderHeight)
+            #expect(size.width <= MonitorConstants.panelMinWidth + 1)
+        }
+    }
 }

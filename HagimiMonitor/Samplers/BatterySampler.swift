@@ -10,6 +10,7 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
 
     private var powerTelemetryService: io_service_t = IO_OBJECT_NULL
     private var didSearchPowerTelemetryService = false
+    private let powerSourceReader: () -> BatteryPowerSourceReading
 
     // 充电上限兜底探针:IORegistry 无 ChargeLimit 键的系统版本(macOS 27 实测)
     // 改读 pmset,结果缓存 60s。
@@ -17,9 +18,62 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
 
     private let healthProbe: BatteryHealthProbe
 
-    init(healthProbe: BatteryHealthProbe = BatteryHealthProbe()) {
+    #if DIRECT_DISTRIBUTION
+    private let componentPowerReader: () -> IOReportPowerSample
+
+    init(
+        healthProbe: BatteryHealthProbe = BatteryHealthProbe(),
+        powerSourceReader: @escaping () -> BatteryPowerSourceReading = BatterySampler.systemPowerSourceReading
+    ) {
         self.healthProbe = healthProbe
+        self.powerSourceReader = powerSourceReader
+        self.componentPowerReader = { IOReportPowerSampler.shared.sample() }
     }
+
+    init(
+        healthProbe: BatteryHealthProbe,
+        powerSourceReader: @escaping () -> BatteryPowerSourceReading,
+        componentPowerReader: @escaping () -> IOReportPowerSample
+    ) {
+        self.healthProbe = healthProbe
+        self.powerSourceReader = powerSourceReader
+        self.componentPowerReader = componentPowerReader
+    }
+    #else
+    init(
+        healthProbe: BatteryHealthProbe = BatteryHealthProbe(),
+        powerSourceReader: @escaping () -> BatteryPowerSourceReading = BatterySampler.systemPowerSourceReading
+    ) {
+        self.healthProbe = healthProbe
+        self.powerSourceReader = powerSourceReader
+    }
+    #endif
+
+    static func systemPowerSourceReading() -> BatteryPowerSourceReading {
+        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
+              let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else {
+            return .unavailable
+        }
+        guard let source = sources.first else { return .noBattery }
+        guard let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
+            return .unavailable
+        }
+
+        guard let sourceState = description[kIOPSPowerSourceStateKey] as? String,
+              sourceState == kIOPSACPowerValue || sourceState == kIOPSBatteryPowerValue,
+              let isCharging = description[kIOPSIsChargingKey] as? Bool else {
+            return .unavailable
+        }
+        return .battery(BatteryPowerSourceSnapshot(
+            currentCapacity: doubleValue(description[kIOPSCurrentCapacityKey]),
+            maxCapacity: doubleValue(description[kIOPSMaxCapacityKey]),
+            isCharging: isCharging,
+            isConnectedToPower: sourceState == kIOPSACPowerValue,
+            timeToFullChargeMinutes: description[kIOPSTimeToFullChargeKey] as? Int,
+            timeToEmptyMinutes: description[kIOPSTimeToEmptyKey] as? Int
+        ))
+    }
+
     // SMC 功率链读取器: App Store 沙盒版因 IOServiceOpen(AppleSMC) 受限无法使用,
     // 仅在 DISPLAY_CONTROL(Direct 版)下启用,为无电池机型或遥测缺报提供第二数据链。
     #if DISPLAY_CONTROL
@@ -40,36 +94,40 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
 
     func sample(previous: MonitorModule?) -> MonitorModule {
         #if DIRECT_DISTRIBUTION
-        // IOReport 是累计能量计数，必须在每个既有采样帧持续推进基线；即使本帧
-        // IOPS 读取失败或机器无电池，也照常更新 CPU/GPU/内建屏功耗。
-        componentPower = IOReportPowerSampler.shared.sample()
-        processEnergy = ProcessEnergySampler.shared.sample()
+        return sample(previous: previous, power: componentPowerReader())
+        #else
+        return sampleBattery()
         #endif
+    }
 
-        // IOPS 接口本身失败(info/列表读不出):电源状态不可信,返回缺失态模块,
-        // 面板/菜单栏/统计均不把它当真实读数消费(尤其不得伪装成交流供电)。
-        guard let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-              let sources = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef] else {
+    #if DIRECT_DISTRIBUTION
+    /// 同一系统帧由调用方共享的分项读数；此入口不自行访问 IOReport。
+    func sample(previous: MonitorModule?, power: IOReportPowerSample) -> MonitorModule {
+        componentPower = power
+        processEnergy = ProcessEnergySampler.shared.sample()
+        return sampleBattery()
+    }
+    #endif
+
+    private func sampleBattery() -> MonitorModule {
+
+        let source: BatteryPowerSourceSnapshot
+        switch powerSourceReader() {
+        case .unavailable:
             AppLogger.sampler.error("BatterySampler failed to read power source info")
-            return unavailableModule(previous: previous)
-        }
-        // 空列表 = 无电池电源(桌面机型):AC 直供是真实稳态,按真实读数展示。
-        if sources.isEmpty {
+            return unavailableModule()
+        case .noBattery:
+            // 空电源列表 = 无电池机型，AC 直供是真实稳态。
             return externalPowerModule()
-        }
-        // 有电源硬件但描述读不出:与 info/列表失败同属接口不可信,返回缺失态。
-        guard let source = sources.first,
-              let description = IOPSGetPowerSourceDescription(info, source)?.takeUnretainedValue() as? [String: Any] else {
-            AppLogger.sampler.error("BatterySampler failed to read power source description")
-            return unavailableModule(previous: previous)
+        case let .battery(snapshot):
+            source = snapshot
         }
 
-        let current = doubleValue(description[kIOPSCurrentCapacityKey]) ?? 0
-        let maxCapacity = doubleValue(description[kIOPSMaxCapacityKey]) ?? 100
+        let current = source.currentCapacity ?? 0
+        let maxCapacity = source.maxCapacity ?? 100
         let percentage = maxCapacity > 0 ? min(100, max(0, current / maxCapacity * 100)) : 0
-        let isCharging = (description[kIOPSIsChargingKey] as? Bool) ?? false
-        let sourceState = description[kIOPSPowerSourceStateKey] as? String
-        let connected = sourceState == kIOPSACPowerValue
+        let isCharging = source.isCharging
+        let connected = source.isConnectedToPower
 
         let smart = smartBatteryInfo(isCharging: isCharging)
         let health = healthProbe.percent()
@@ -78,48 +136,49 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
             ? (smart.telemetryChargingWatts ?? smart.chargingPowerWatts)
             : nil
         let registryPower = smart.systemPowerWatts ?? powerTelemetryWatts()
+        let powerState: BatteryPowerSourceState = if isCharging {
+            .charging
+        } else if connected {
+            .externalPower
+        } else {
+            .onBattery
+        }
         #if DISPLAY_CONTROL
-        // SystemLoad 由固件约每 60 秒公布一次，是上一分钟的平均值。
-        // 只要它大于 0，旧顺序就不会落到 SMC PSTR，菜单栏功耗会滞后 30–60 秒。
-        let systemPower = preferredSystemPowerWatts(
-            registryFallback: registryPower ?? smcReader?.dcInputPower()
-        )
-        // 功率流:适配器实际输入。Direct 版优先读 SMC PDTR (与 PSTR 处于同一秒级时域),
-        // 缺失时退回注册表 SystemPowerIn。避免秒级系统负载与 60s 滞后的适配器输入做差导致虚假放电判定。
+        // 整机负载取自 PSTR/SystemLoad；PDTR 仅表示输入轨。
+        let measuredPowerReading = preferredSystemPowerReading(registryFallback: registryPower)
+        let measuredSystemPower = measuredPowerReading.watts
+        // 适配器输入是独立口径；Direct 版优先用同一秒级的 SMC PDTR。
         let powerIn = connected ? preferredDcInputWatts(registryFallback: smart.powerInWatts) : nil
         #else
-        let systemPower = registryPower
+        let measuredSystemPower = registryPower
+        let measuredPowerReading = powerMetadata(registryPower, source: .registry)
         let powerIn = connected ? smart.powerInWatts : nil
         #endif
 
-        // 功率流:适配器实际输入、电池流向(正=充电/负=放电)。
-        // 电池流向的方向只由 IOPS 状态决定,幅度取 |BatteryPower|(该字段的符号
-        // 约定随机型/系统版本不同,本机实测充电为正值)。插电未充电时固件常停报
-        // 遥测(充电上限维持期 BatteryPower 恒 0),此时按功率守恒用
-        // 「系统负载 − 适配器输入」估算放电量。
-        let batteryFlow: Double? = {
-            if isCharging {
-                return smart.batteryMagnitudeWatts
-            }
-            if !connected {
-                #if DISPLAY_CONTROL
-                // 直连版系统负载为秒级 SMC PSTR, 纯电池供电下电池放电功率与整机负载同源对齐,
-                // 避免使用 60s 滞后的 BatteryPower 导致与当前功耗数值割裂。
-                if let systemPower {
-                    return -systemPower
-                }
-                #endif
-                if let magnitude = smart.batteryMagnitudeWatts {
-                    return -magnitude
-                }
-                return systemPower.map { -$0 }
-            }
-            if let magnitude = smart.batteryMagnitudeWatts {
-                return -magnitude
-            }
-            guard let powerIn, let systemPower, powerIn < systemPower - 1 else { return nil }
-            return -(systemPower - powerIn)
-        }()
+        let systemLoad = BatteryPowerResolver.systemLoad(
+            state: powerState,
+            measuredSystemLoadWatts: measuredSystemPower,
+            adapterInputWatts: powerIn,
+            batteryMagnitudeWatts: smart.batteryMagnitudeWatts
+        )
+        #if DISPLAY_CONTROL
+        let preferMeasuredSystemLoadOnBattery = true
+        #else
+        let preferMeasuredSystemLoadOnBattery = false
+        #endif
+        let batteryFlowReading = BatteryPowerResolver.batteryFlow(
+            state: powerState,
+            measuredSystemLoadWatts: measuredSystemPower,
+            adapterInputWatts: powerIn,
+            batteryMagnitudeWatts: smart.batteryMagnitudeWatts,
+            batteryMagnitudeIsEstimated: smart.batteryMagnitudeIsEstimated,
+            preferMeasuredSystemLoadOnBattery: preferMeasuredSystemLoadOnBattery
+        )
+        let systemPower = systemLoad.watts
+        let batteryFlow = batteryFlowReading.watts
+        let batteryFlowSource: PowerReading.Source = batteryFlowReading.isEstimated ? .derived
+            : powerState == .onBattery && preferMeasuredSystemLoadOnBattery && measuredSystemPower != nil
+                ? measuredPowerReading.source : .registry
 
         let statusValue: String = if isCharging {
             "charging"
@@ -132,10 +191,10 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         // 剩余时间(分钟):充电中取充满耗时,电池供电取可用时长;-1 表示系统仍在估算。
         let timeRemaining: Int? = {
             if isCharging {
-                return (description[kIOPSTimeToFullChargeKey] as? Int).flatMap { $0 > 0 ? $0 : nil }
+                return source.timeToFullChargeMinutes.flatMap { $0 > 0 ? $0 : nil }
             }
             if !connected {
-                return (description[kIOPSTimeToEmptyKey] as? Int).flatMap { $0 > 0 ? $0 : nil }
+                return source.timeToEmptyMinutes.flatMap { $0 > 0 ? $0 : nil }
             }
             return nil
         }()
@@ -152,8 +211,10 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
             MonitorMetric(name: MonitorMetricKey.type, value: "battery"),
             MonitorMetric(name: "status", value: statusValue),
             MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
-            MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", numericValue: chargingPower, unit: connected ? " W" : nil),
-            MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower, unit: " W")
+            MonitorMetric(name: "charging-power", value: connected ? wattStringAllowZero(chargingPower) : "--", numericValue: chargingPower, unit: connected ? " W" : nil,
+                          powerReading: powerMetadata(chargingPower, source: smart.batteryMagnitudeIsEstimated ? .derived : .registry)),
+            MonitorMetric(name: "power", value: wattString(systemPower), numericValue: systemPower, unit: " W",
+                          powerReading: systemLoad.isEstimated ? powerMetadata(systemPower, source: .derived) : measuredPowerReading)
         ]
         #if DIRECT_DISTRIBUTION
         metrics.append(contentsOf: componentPowerMetrics())
@@ -169,7 +230,8 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
             MonitorMetric(name: "capacity", value: capacityString(smart.remainingCapacitymAh, full: smart.fullChargeCapacitymAh), numericValue: smart.remainingCapacitymAh.map(Double.init), unit: " mAh"),
             // 功率流数据链(不进指标网格,由展开区功率流图消费)
             MonitorMetric(name: "power-in", value: wattString(powerIn), numericValue: powerIn, unit: " W"),
-            MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow, unit: " W"),
+            MonitorMetric(name: "battery-flow", value: wattString(batteryFlow.map(abs)), numericValue: batteryFlow, unit: " W",
+                          powerReading: powerMetadata(batteryFlow.map(abs), source: batteryFlowSource)),
             MonitorMetric(name: "time-remaining", value: timeRemaining.map { "\($0)" } ?? "--", numericValue: timeRemaining.map(Double.init)),
             MonitorMetric(name: "pd-contract", value: smart.pdContract ?? "--"),
             // 端口级供电诊断(供电页单行消费):可协商档位列表、物理端口、同口并行通道。
@@ -212,16 +274,18 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
     /// IOPS 接口失败不共用本模块,走 `unavailableModule`,避免伪装成交流供电。
     private func externalPowerModule() -> MonitorModule {
         let adapterWatts = externalAdapterWatts()
-        // 桌面机型无 AppleSmartBattery。Direct 版同样先读 SMC PSTR，
-        // 遥测缺失时才用 PDTR(DC 输入)近似整机负载。
+        // 桌面机型无 AppleSmartBattery。Direct 版优先读 SMC PSTR，
+        // 其次使用 PowerTelemetryData.SystemLoad；PDTR 只表示输入功率。
         // 输入轨 powerInWatts 仅由 PDTR 实测填充,无真实读数时保持 nil,绝不用负载反向伪造输入。
         #if DISPLAY_CONTROL
-        let powerWatts = preferredSystemPowerWatts(
-            registryFallback: powerTelemetryWatts() ?? smcReader?.dcInputPower()
+        let powerReading = preferredSystemPowerReading(
+            registryFallback: powerTelemetryWatts()
         )
-        let powerInWatts = smcReader?.dcInputPower()
+        let powerWatts = powerReading.watts
+        let powerInWatts = BatteryPowerResolver.validWatts(smcReader?.dcInputPower())
         #else
         let powerWatts = powerTelemetryWatts()
+        let powerReading = powerMetadata(powerWatts, source: .registry)
         let powerInWatts: Double? = nil
         #endif
         let pdContract = externalPDContract()
@@ -229,7 +293,7 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
             MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.acPower),
             MonitorMetric(name: "status", value: "ac-power"),
             MonitorMetric(name: "adapter", value: wattString(adapterWatts, rounded: true), numericValue: adapterWatts, unit: " W"),
-            MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W")
+            MonitorMetric(name: "power", value: wattString(powerWatts), numericValue: powerWatts, unit: " W", powerReading: powerReading)
         ]
         #if DIRECT_DISTRIBUTION
         metrics.append(contentsOf: componentPowerMetrics())
@@ -252,37 +316,47 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
     }
 
     /// 直连版先读 SMC `PSTR`（约每秒更新）。读不到时再退回注册表里的 SystemLoad。
-    private func preferredSystemPowerWatts(registryFallback: Double?) -> Double? {
+    private func preferredSystemPowerReading(registryFallback: Double?) -> PowerReading {
         #if DISPLAY_CONTROL
         if let pstr = smcReader?.systemPower(), pstr.isFinite, pstr > 0 {
-            return pstr
+            return powerMetadata(pstr, source: .smc)
         }
         #endif
-        return registryFallback
+        return powerMetadata(registryFallback, source: .registry)
+    }
+
+    private func powerMetadata(_ watts: Double?, source: PowerReading.Source) -> PowerReading {
+        let value = BatteryPowerResolver.validWatts(watts)
+        let now = ProcessInfo.processInfo.systemUptime
+        return PowerReading(watts: value, state: value == nil ? .unavailable : .valid,
+                            source: source, intervalStart: now, intervalEnd: now)
     }
 
     /// 直连版优先读取 SMC `PDTR`（DC 输入轨功率，秒级更新）。读不到时退回注册表里的 SystemPowerIn。
     private func preferredDcInputWatts(registryFallback: Double?) -> Double? {
         #if DISPLAY_CONTROL
-        if let pdtr = smcReader?.dcInputPower(), pdtr.isFinite, pdtr > 0 {
+        if let pdtr = BatteryPowerResolver.validWatts(smcReader?.dcInputPower()) {
             return pdtr
         }
         #endif
-        return registryFallback
+        return BatteryPowerResolver.validWatts(registryFallback)
     }
 
-    /// IOPS 接口不可信时的缺失态模块:不声称任何电源状态、不产出数值,
-    /// 只携带不可用标记。UI 按 `isPlaceholder` 显示缺失态,统计据此过滤。
-    /// 数值沿用上一帧仅为让曲线不出假跳变(UI 不消费该值)。
-    private func unavailableModule(previous: MonitorModule?) -> MonitorModule {
-        MonitorModule(
+    /// IOPS 接口不可信时输出未知占位；Direct 仅附独立分项。
+    private func unavailableModule() -> MonitorModule {
+        var metrics = [
+            MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.batteryUnavailable),
+            MonitorMetric(name: "status", value: "unknown")
+        ]
+        #if DIRECT_DISTRIBUTION
+        metrics.append(contentsOf: componentPowerMetrics())
+        #endif
+        return MonitorModule(
             kind: .battery,
-            value: previous?.value ?? 0,
+            value: 0,
             summary: "--",
-            metrics: [
-                MonitorMetric(name: MonitorMetricKey.type, value: MonitorMetricKey.batteryUnavailable)
-            ],
-            samples: previous?.samples ?? seedSamples(0),
+            metrics: metrics,
+            samples: [],
             isPlaceholder: true
         )
     }
@@ -315,17 +389,26 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         let cycleCount = lookupInt("CycleCount")
         // 固件会把负电流以 UInt64 二补码发布。InstantAmperage 比平滑后的
         // Amperage 更新及时，且两者都必须按有符号 64 位解释。
-        let voltage = lookupDouble("AppleRawBatteryVoltage") ?? lookupDouble("Voltage")
-        let amperage = signedDoubleRegistryValue(service, "InstantAmperage")
+        let packVoltage = lookupDouble("AppleRawBatteryVoltage")
+        let voltage = packVoltage ?? lookupDouble("Voltage")
+        let instantAmperage = signedDoubleRegistryValue(service, "InstantAmperage")
             ?? signedDoubleValue(batteryData["InstantAmperage"])
+        let amperage = instantAmperage
             ?? signedDoubleRegistryValue(service, "Amperage")
             ?? signedDoubleValue(batteryData["Amperage"])
         let adapterWatts = adapterWatts(service)
         let systemPowerWatts = systemPowerWatts(service)
-        let chargingPowerWatts = chargingPowerWatts(service, isCharging: isCharging)
-        let telemetryChargingWatts = telemetryChargingWatts(service, isCharging: isCharging)
         let powerInWatts = powerInWatts(service)
-        let batteryMagnitudeWatts = batteryMagnitudeWatts(service)
+        let telemetryBatteryMagnitude = batteryMagnitudeWatts(service)
+        let packChargingPower = BatteryPowerResolver.packChargingPower(
+            packVoltageMillivolts: packVoltage,
+            signedInstantCurrentMilliamps: instantAmperage,
+            isCharging: isCharging
+        )
+        let batteryMagnitudeWatts = telemetryBatteryMagnitude ?? packChargingPower.watts
+        let batteryMagnitudeIsEstimated = telemetryBatteryMagnitude == nil && packChargingPower.watts != nil
+        let chargingPowerWatts = isCharging ? batteryMagnitudeWatts : nil
+        let telemetryChargingWatts = isCharging ? telemetryBatteryMagnitude : nil
         // 充电限制(%):macOS 26.4+ 支持 80/85/90/95/100 五档自选,优化电池充电
         // 也可能随时暂停充电。优先读 IORegistry 的 ChargeLimit 键;键缺失的
         // 系统版本(macOS 27 实测)回退 pmset 探针。
@@ -338,12 +421,6 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         let fullChargeCapacity = (lookupDouble("FullChargeCapacity")
             ?? lookupDouble("NominalChargeCapacity")
             ?? lookupDouble("AppleRawMaxCapacity")).map { Int($0) }
-        let batteryWatts = if let voltage, let amperage {
-            nonZeroWatts(abs(voltage * amperage / 1_000_000))
-        } else {
-            nil as Double?
-        }
-
         let designCycles = lookupInt("DesignCycleCount9C")
         let pdContract = adapterPDContract(service)
         let tiers = pdTiers(service)
@@ -356,7 +433,6 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         return SmartBatteryInfo(
             cycleCount: cycleCount,
             designCycleCount: designCycles,
-            batteryPowerWatts: batteryWatts,
             adapterWatts: adapterWatts,
             systemPowerWatts: systemPowerWatts,
             chargingPowerWatts: chargingPowerWatts,
@@ -364,6 +440,7 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
             telemetryChargingWatts: telemetryChargingWatts,
             powerInWatts: powerInWatts,
             batteryMagnitudeWatts: batteryMagnitudeWatts,
+            batteryMagnitudeIsEstimated: batteryMagnitudeIsEstimated,
             chargeLimit: chargeLimit,
             voltageVolts: voltage.map { $0 / 1_000 },
             amperageMilliamps: amperage,
@@ -568,52 +645,14 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
         return doubleValue(details[kIOPSPowerAdapterWattsKey])
     }
 
-    private func chargingPowerWatts(_ service: io_service_t, isCharging: Bool) -> Double? {
-        // 优先用 PowerTelemetryData.BatteryPower（电池包级别，准确）。
-        // 注意符号约定因机型/系统而异：实测本机充电时 BatteryPower 为正值
-        // （= SystemPowerIn − SystemLoad，流入电池的功率），不能单凭符号判方向。
-        // BatteryPower 的符号在不同硬件 / macOS 版本上并不一致，
-        // 因此用 IOPS 的充电状态判断方向，只把绝对值当作充电功率。
-        if let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
-            .takeRetainedValue() as? [String: Any],
-           let watts = interpretedChargingPowerWatts(
-               batteryPowerMilliwatts: signedDoubleValue(value["BatteryPower"]),
-               isCharging: isCharging
-           ) {
-            return watts
-        }
-        // Fallback: ChargerData 的 ChargingCurrent * ChargingVoltage
-        // 注意 ChargingVoltage 是单节电芯电压，结果会偏低
-        guard isCharging,
-              let value = IORegistryEntryCreateCFProperty(service, "ChargerData" as CFString, kCFAllocatorDefault, 0)?
-            .takeRetainedValue() as? [String: Any],
-              let current = doubleValue(value["ChargingCurrent"]),
-              let voltage = doubleValue(value["ChargingVoltage"]) else {
-            return nil
-        }
-        return nonZeroWatts(current * voltage / 1_000_000)
-    }
-
-    private func telemetryChargingWatts(_ service: io_service_t, isCharging: Bool) -> Double? {
-        // 同 chargingPowerWatts：取 BatteryPower 绝对值作充电功率，兼容正/负符号约定。
-        guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
-            .takeRetainedValue() as? [String: Any] else {
-            return nil
-        }
-        return interpretedChargingPowerWatts(
-            batteryPowerMilliwatts: signedDoubleValue(value["BatteryPower"]),
-            isCharging: isCharging
-        )
-    }
-
     /// 适配器实际输入功率(W):PowerTelemetryData.SystemPowerIn,仅插电时有意义。
     private func powerInWatts(_ service: io_service_t) -> Double? {
         guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
-              let powerIn = doubleValue(value["SystemPowerIn"]), powerIn > 0 else {
+              let powerIn = doubleValue(value["SystemPowerIn"]) else {
             return nil
         }
-        return powerIn / 1_000
+        return BatteryPowerResolver.validWatts(powerIn / 1_000)
     }
 
     /// 电池流向功率幅度(W,恒非负):|PowerTelemetryData.BatteryPower|。
@@ -621,10 +660,10 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
     private func batteryMagnitudeWatts(_ service: io_service_t) -> Double? {
         guard let value = IORegistryEntryCreateCFProperty(service, "PowerTelemetryData" as CFString, kCFAllocatorDefault, 0)?
             .takeRetainedValue() as? [String: Any],
-              let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 else {
+              let bp = signedDoubleValue(value["BatteryPower"]) else {
             return nil
         }
-        return abs(bp) / 1_000
+        return BatteryPowerResolver.batteryMagnitudeFromTelemetry(milliwatts: bp).watts
     }
 
     private func powerTelemetryWatts() -> Double? {
@@ -644,33 +683,10 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
             return nil
         }
 
-        // 优先用固件直接给出的整机负载(mW):实测与 SystemPowerIn − |BatteryPower|
-        // 逐位相等(固件同口径),但免去差值法两字段采样瞬间错位导致差值为负、
-        // 只能返 nil 的失真;且充电/直供/电池三态下都直接有效。
-        if let systemLoad = doubleValue(value["SystemLoad"]), systemLoad > 0 {
-            return systemLoad / 1_000
-        }
-
-        guard let powerIn = doubleValue(value["SystemPowerIn"]), powerIn > 0 else {
-            if let bp = signedDoubleValue(value["BatteryPower"]), bp != 0 {
-                return abs(bp) / 1_000
-            }
-            return nil
-        }
-
-        let batteryPower = signedDoubleValue(value["BatteryPower"]) ?? 0
-
-        if batteryPower == 0 {
-            return powerIn / 1_000
-        }
-
-        let systemPower = powerIn - abs(batteryPower)
-        if systemPower > 0 {
-            return systemPower / 1_000
-        }
-
-        // 遥测瞬时不同步导致差值为负，返回 nil 而非跳到完整 powerIn
-        return nil
+        // 此处只返回明确公布的整机负载。输入轨与电池幅度由 BatteryPowerResolver
+        // 在获知 IOPS 状态后解算，两种口径分别传递。
+        guard let systemLoad = doubleValue(value["SystemLoad"]) else { return nil }
+        return BatteryPowerResolver.validWatts(systemLoad / 1_000)
     }
 
     private func serviceWithProperty(_ key: String) -> io_service_t {
@@ -718,12 +734,13 @@ nonisolated final class BatterySampler: MonitorSampler, @unchecked Sendable {
 
     #if DIRECT_DISTRIBUTION
     private func componentPowerMetrics() -> [MonitorMetric] {
-        [
-            MonitorMetric(name: "display-power", value: wattString(componentPower.displayWatts), numericValue: componentPower.displayWatts, unit: " W"),
-            MonitorMetric(name: "cpu-power", value: wattString(componentPower.cpuWatts), numericValue: componentPower.cpuWatts, unit: " W"),
-            MonitorMetric(name: "gpu-power", value: wattString(componentPower.gpuWatts), numericValue: componentPower.gpuWatts, unit: " W"),
-            MonitorMetric(name: "ane-power", value: wattString(componentPower.aneWatts), numericValue: componentPower.aneWatts, unit: " W")
-        ]
+        let components: [(String, Double?)] = [("display-power", componentPower.displayWatts),
+            ("cpu-power", componentPower.cpuWatts), ("gpu-power", componentPower.gpuWatts), ("ane-power", componentPower.aneWatts)]
+        return components.map { name, value in
+            let reading = componentPower.readings[name] ?? powerMetadata(value, source: .unknown)
+            return MonitorMetric(name: name, value: wattString(reading.watts), numericValue: reading.watts,
+                                 unit: " W", powerReading: reading)
+        }
     }
     #endif
 }
@@ -791,7 +808,6 @@ nonisolated private func collectBatteryDataAndCellVoltages(_ root: io_registry_e
 nonisolated private struct SmartBatteryInfo {
     var cycleCount: Int?
     var designCycleCount: Int?
-    var batteryPowerWatts: Double?
     var adapterWatts: Double?
     var systemPowerWatts: Double?
     var chargingPowerWatts: Double?
@@ -799,6 +815,7 @@ nonisolated private struct SmartBatteryInfo {
     var telemetryChargingWatts: Double?
     var powerInWatts: Double?
     var batteryMagnitudeWatts: Double?
+    var batteryMagnitudeIsEstimated: Bool = false
     var chargeLimit: Int?
     var voltageVolts: Double?
     var amperageMilliamps: Double?

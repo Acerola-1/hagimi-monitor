@@ -1,6 +1,176 @@
 {
   "sourceLanguage": "zh-Hans",
   "strings": {
+    "power-reading.warming-up": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Building a power sampling interval"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在建立功率采样区间"
+          }
+        }
+      }
+    },
+    "power-reading.unavailable": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No valid power reading is available for this sample"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次未取得有效功率读数"
+          }
+        }
+      }
+    },
+    "power-reading.frozen": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power data has stopped updating; waiting for recovery"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功率数据暂未更新，等待数据源恢复"
+          }
+        }
+      }
+    },
+    "power-reading.unsupported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This power reading is unavailable on this device or system"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备或系统暂不支持该功率读数"
+          }
+        }
+      }
+    },
+    "power-reading.unverified": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for a valid energy change to verify this power source"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功率来源尚待有效能量变化验证"
+          }
+        }
+      }
+    },
+    "power-reading.estimated": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estimated from the current power state and available telemetry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "依据当前供电状态和可用遥测估算"
+          }
+        }
+      }
+    },
+    "power-reading.interval": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Average power over the latest %.1f-second interval"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 %.1f 秒区间的平均功率"
+          }
+        }
+      }
+    },
+    "power-reading.reported": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power reading reported by the system"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统报告的功率读数"
+          }
+        }
+      }
+    },
+    "power-reading.unknown-state": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Power source state is temporarily unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "电源状态暂不可用"
+          }
+        }
+      }
+    },
+    "about.open-source.macmon.note": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Channel mapping reference for power telemetry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "功率数据源的通道映射参考"
+          }
+        }
+      }
+    },
     "stats.r.fanNoTrend": {
       "localizations": {
         "zh-Hans": {

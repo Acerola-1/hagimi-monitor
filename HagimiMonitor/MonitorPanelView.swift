@@ -1608,7 +1608,8 @@ struct MetricDetailGrid: View {
                 splitValue(metric, text: valueText)
                     .help(valueText)
                     .contentShape(Rectangle())
-                    .modifier(MetricCopyFeedback(value: metric.value, label: labelText, displayValue: valueText))
+                    .modifier(MetricCopyFeedback(value: metric.value, label: labelText, displayValue: valueText,
+                                                 explanation: PowerReadingPresentation.help(metric.powerReading)))
             }
         ))
     }
@@ -2293,18 +2294,7 @@ struct BatteryGlassRow: View, Equatable {
     /// - 健康（.health）：仅带电池设备可用；
     /// - 供电（.supply）：始终可用（未插电时优雅提示未连接）。
     private var availableTabs: [BatteryPageTab] {
-        var tabs: [BatteryPageTab] = []
-        if hasBattery {
-            tabs.append(.health)
-        }
-        #if DIRECT_DISTRIBUTION
-        let hasFlowData = (showPowerFlow && numericValue("power") != nil) || !tabMetrics(for: .flow).isEmpty
-        if hasFlowData {
-            tabs.append(.flow)
-        }
-        #endif
-        tabs.append(.supply)
-        return tabs
+        BatteryPowerPresentation(module: module, enabledNames: Set(details.map(\.name))).tabs(showPowerFlow: showPowerFlow)
     }
 
     private var activeTab: BatteryPageTab {
@@ -2312,11 +2302,7 @@ struct BatteryGlassRow: View, Equatable {
     }
 
     private func tabMetrics(for tab: BatteryPageTab) -> [MonitorMetric] {
-        let enabledNames = Set(details.map(\.name))
-        return tab.metricNames.compactMap { name in
-            guard enabledNames.contains(name) else { return nil }
-            return module.metrics.first(where: { $0.name == name })
-        }
+        BatteryPowerPresentation(module: module, enabledNames: Set(details.map(\.name))).metrics(for: tab)
     }
 
     private var detailMetrics: [MonitorMetric] {
@@ -2328,7 +2314,8 @@ struct BatteryGlassRow: View, Equatable {
     }
 
     private func numericValue(_ name: String) -> Double? {
-        module.metrics.first { $0.name == name }?.numericValue
+        guard !module.isPlaceholder else { return nil }
+        return module.metrics.first { $0.name == name }?.numericValue
     }
 
     private func value(_ name: String) -> String {
@@ -2670,14 +2657,15 @@ private struct MetricCopyFeedback: ViewModifier {
     let value: String
     let label: String
     let displayValue: String
+    var explanation: String? = nil
     @State private var copyID: UUID?
 
     func body(content: Content) -> some View {
         content
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
-            .accessibilityValue(displayValue)
-            .help(String(localized: "panel.copy-value"))
+            .accessibilityValue([displayValue, explanation].compactMap { $0 }.joined(separator: ", "))
+            .help([explanation, String(localized: "panel.copy-value")].compactMap { $0 }.joined(separator: "\n"))
             .onTapGesture(perform: copy)
             .focusable(isEnabled)
             .onKeyPress(keys: ["c"], phases: .down) { press in

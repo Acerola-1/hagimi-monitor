@@ -18,6 +18,20 @@ nonisolated final class MemorySampler: MonitorSampler, @unchecked Sendable {
     }
 
     func sample(previous: MonitorModule?) -> MonitorModule {
+        #if DIRECT_DISTRIBUTION
+        sample(previous: previous, power: IOReportPowerSampler.shared.sample())
+        #else
+        sampleMemory(previous: previous)
+        #endif
+    }
+
+    #if DIRECT_DISTRIBUTION
+    func sample(previous: MonitorModule?, power: IOReportPowerSample) -> MonitorModule {
+        sampleMemory(previous: previous, bandwidth: power.memoryBandwidthBytesPerSec)
+    }
+    #endif
+
+    private func sampleMemory(previous: MonitorModule?, bandwidth: Double? = nil) -> MonitorModule {
         var stats = vm_statistics64()
         var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64_data_t>.size / MemoryLayout<integer_t>.size)
         let result = withUnsafeMutablePointer(to: &stats) {
@@ -69,7 +83,7 @@ nonisolated final class MemorySampler: MonitorSampler, @unchecked Sendable {
         ]
 
         #if DIRECT_DISTRIBUTION
-        let bwBytes = IOReportPowerSampler.shared.sample().memoryBandwidthBytesPerSec
+        let bwBytes = bandwidth
         let gbPerSec = bwBytes.map { $0 / 1e9 }
         let bwText = gbPerSec.map { String(format: "%.1f GB/s", $0) } ?? "--"
         metrics.append(MonitorMetric(name: "memory-bandwidth", value: bwText, numericValue: gbPerSec, unit: " GB/s"))

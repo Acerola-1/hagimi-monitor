@@ -33,6 +33,11 @@ struct OpenSourceLicensesView: View {
         ]
         #if DIRECT_DISTRIBUTION
         list.append(
+            Entry(name: "macmon", note: String(localized: "about.open-source.macmon.note"),
+                  license: "MIT License · Copyright © 2024 vladkens",
+                  url: URL(string: "https://github.com/vladkens/macmon")!)
+        )
+        list.append(
             Entry(
                 name: "Sparkle",
                 note: String(localized: "about.open-source.sparkle.note"),
