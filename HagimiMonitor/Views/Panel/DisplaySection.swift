@@ -180,14 +180,7 @@ struct DisplaySection: View {
             .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !displays.isEmpty else { return }
-                if !isExpanded {
-                    requestDisplayCollection()
-                }
-                withPanelExpansionState {
-                    isExpanded.toggle()
-                }
-                animate(Self.sectionKey, isExpanded, true)
+                toggleReadonlyExpansion()
             }
             // 无障碍语义与其余模块行同款。
             .accessibilityElement(children: .ignore)
@@ -197,6 +190,9 @@ struct DisplaySection: View {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(!displays.isEmpty ? .isButton : [])
+            .panelRowKeyboardFocus(canActivate: !displays.isEmpty, ring: theme.primaryText) {
+                toggleReadonlyExpansion()
+            }
             .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
                               title: String(localized: "kind.display"))
 
@@ -229,6 +225,17 @@ struct DisplaySection: View {
 
     private var summaryText: String {
         String(format: String(localized: "panel.displays.count"), displays.count)
+    }
+
+    private func toggleReadonlyExpansion() {
+        guard !displays.isEmpty else { return }
+        if !isExpanded {
+            requestDisplayCollection()
+        }
+        withPanelExpansionState {
+            isExpanded.toggle()
+        }
+        animate(Self.sectionKey, isExpanded, true)
     }
 
     private func displaySection(_ display: DisplayInfo) -> some View {
@@ -313,6 +320,12 @@ struct DisplaySection: View {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits((!entries.isEmpty || !visibleDisplays.isEmpty) ? .isButton : [])
+            .panelRowKeyboardFocus(
+                canActivate: !entries.isEmpty || !visibleDisplays.isEmpty,
+                ring: theme.primaryText
+            ) {
+                toggleExpansion()
+            }
             .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
                               title: String(localized: "kind.display"))
 
@@ -1277,7 +1290,7 @@ enum DisplayAttributesProbe {
 }
 
 #if DISPLAY_CONTROL
-/// 行头成对读数。标题位区分设备,数值旁的太阳与展开区亮度滑杆同一符号。
+/// 单屏横排摘要与双屏分列共用完整读数槽，保持与其他主行相同的右侧轮廓。
 private struct DisplayRowHeaderPills: View {
     let readings: [(title: String, value: String)]
     let theme: MonitorPanelTheme
@@ -1285,7 +1298,8 @@ private struct DisplayRowHeaderPills: View {
     var body: some View {
         PairedHeaderReadings(theme: theme) {
             ForEach(Array(readings.enumerated()), id: \.offset) { _, reading in
-                DisplayBrightnessPill(title: reading.title, value: reading.value, theme: theme)
+                DisplayBrightnessPill(title: reading.title, value: reading.value,
+                                      isSingleReading: readings.count == 1, theme: theme)
             }
         }
     }
@@ -1294,14 +1308,22 @@ private struct DisplayRowHeaderPills: View {
 private struct DisplayBrightnessPill: View {
     let title: String
     let value: String
+    let isSingleReading: Bool
     let theme: MonitorPanelTheme
 
+    private var layout: AnyLayout {
+        isSingleReading
+            ? AnyLayout(HStackLayout(spacing: RowHeaderPillMetrics.spacing))
+            : AnyLayout(VStackLayout(spacing: 0))
+    }
+
     var body: some View {
-        VStack(spacing: 0) {
+        layout {
             Text(title)
                 .font(.system(size: RowHeaderPillMetrics.labelSize))
                 .foregroundStyle(theme.secondaryText.opacity(0.72))
                 .lineLimit(1)
+                .frame(maxWidth: isSingleReading ? .infinity : nil)
             HStack(spacing: 2) {
                 Image(systemName: "sun.max")
                     .font(.system(size: 8, weight: .semibold))
@@ -1310,9 +1332,13 @@ private struct DisplayBrightnessPill: View {
                     .monospacedDigit()
             }
             .foregroundStyle(theme.secondaryText)
+            .frame(maxWidth: isSingleReading ? .infinity : nil)
         }
         .padding(.horizontal, RowHeaderPillMetrics.horizontalPadding)
-        .frame(width: RowHeaderPillMetrics.width, height: RowHeaderPillMetrics.height)
+        .frame(width: isSingleReading
+               ? RowHeaderPillMetrics.width * 2 + RowHeaderPillMetrics.spacing
+               : RowHeaderPillMetrics.width,
+               height: RowHeaderPillMetrics.height)
         .help(String(localized: "display.control.brightness"))
     }
 }

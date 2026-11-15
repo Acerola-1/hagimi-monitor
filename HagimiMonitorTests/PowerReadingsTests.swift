@@ -39,12 +39,20 @@ struct PowerReadingsTests {
         #expect(PowerReadings(module: module(status: "ac-power")).batteryText == nil)
     }
 
+    @Test func validZeroAndSmallPositiveReadingsRemainVisible() {
+        for value in [0.0, 0.04] {
+            #expect(PowerReadings(module: module(status: "charging", input: value)).inputText == wattString(value))
+            #expect(PowerReadings(module: module(status: "charging", flow: value)).batteryText == wattString(value))
+            #expect(PowerReadings(module: module(status: "maintain", flow: -value)).batteryText == wattString(value))
+        }
+    }
+
     @Test func placeholderAndInvalidReadingsStayUnavailable() {
         let missing = PowerReadings(module: module(status: "charging", placeholder: true))
         #expect(missing.inputText == "—")
         #expect(missing.loadText == "—")
         #expect(missing.batteryText == nil)
-        let invalid = PowerReadings(module: module(status: "charging", input: -.infinity, load: -7, flow: .nan, charging: 0))
+        let invalid = PowerReadings(module: module(status: "charging", input: -.infinity, load: -7, flow: .nan, charging: nil))
         #expect(invalid.inputText == "—")
         #expect(invalid.loadText == "—")
         #expect(invalid.batteryText == "—")

@@ -9,6 +9,18 @@ nonisolated final class SystemMonitorSampler: Sendable {
     private let cpuSampler: CPUSampler
     private let networkSampler: NetworkSampler
     private let samplers: [MonitorKind: MonitorSampler]
+    #if DIRECT_DISTRIBUTION
+    private let powerSampler: any IOReportPowerSampling
+    init(powerSampler: any IOReportPowerSampling = IOReportPowerSampler.shared) {
+        self.powerSampler = powerSampler
+        let cpu = CPUSampler()
+        let network = NetworkSampler()
+        cpuSampler = cpu
+        networkSampler = network
+        samplers = [.cpu: cpu, .gpu: GPUSampler(), .memory: MemorySampler(),
+                    .storage: StorageSampler(), .network: network, .battery: BatterySampler()]
+    }
+    #else
 
     init() {
         let cpu = CPUSampler()
@@ -24,6 +36,7 @@ nonisolated final class SystemMonitorSampler: Sendable {
             .battery: BatterySampler()
         ]
     }
+    #endif
 
     /// 菜单栏含 CPU 温度,或任一面板可见时为 true。false 时 CPU 占用照常采样,只是不读温度键。
     func setTemperatureReadsEnabled(_ enabled: Bool) {
@@ -41,10 +54,14 @@ nonisolated final class SystemMonitorSampler: Sendable {
 
     func sample(kinds: some Sequence<MonitorKind>, previousModules: [MonitorModule]) -> Result<SystemMonitorSnapshot, SamplingError> {
         autoreleasepool {
+            let requestedKinds = Array(kinds)
+            #if DIRECT_DISTRIBUTION
+            let power = requestedKinds.contains { [.gpu, .memory, .battery].contains($0) } ? powerSampler.sample() : nil
+            #endif
             var modulesByKind = Dictionary(uniqueKeysWithValues: previousModules.map { ($0.kind, $0) })
             var errors: [SamplingError] = []
 
-            for kind in kinds {
+            for kind in requestedKinds {
                 guard let sampler = samplers[kind] else {
                     let message = "No sampler registered for kind: \(kind.rawValue)"
                     AppLogger.sampler.error("\(message, privacy: .public)")
@@ -53,11 +70,20 @@ nonisolated final class SystemMonitorSampler: Sendable {
                     continue
                 }
                 let previous = modulesByKind[kind]
-                let module = sampler.sample(previous: previous)
+                let module: MonitorModule
+                #if DIRECT_DISTRIBUTION
+                if let consumer = sampler as? any IOReportPowerConsuming, let power {
+                    module = consumer.sample(previous: previous, power: power)
+                } else {
+                    module = sampler.sample(previous: previous)
+                }
+                #else
+                module = sampler.sample(previous: previous)
+                #endif
 
                 if let previous {
                     var updated = module
-                    updated.samples = Array((previous.samples + [module.value]).suffix(MonitorConstants.sparklineMaxPoints))
+                    updated.samples = Self.historySamples(current: module, previous: previous)
                     if let pressureValue = module.pressureValue {
                         updated.pressureSamples = Array((previous.pressureSamples + [pressureValue]).suffix(MonitorConstants.sparklineMaxPoints))
                     }
@@ -82,6 +108,15 @@ nonisolated final class SystemMonitorSampler: Sendable {
                 return .success(SystemMonitorSnapshot(modules: modules))
             }
         }
+    }
+
+    /// 电池未知区间不追加缓存电量，恢复时重新起线，避免伪造连续观测。
+    static func historySamples(current: MonitorModule, previous: MonitorModule) -> [Double] {
+        if current.kind == .battery {
+            if current.isPlaceholder { return previous.samples }
+            if previous.isPlaceholder { return [current.value] }
+        }
+        return Array((previous.samples + [current.value]).suffix(MonitorConstants.sparklineMaxPoints))
     }
 
     func sampleAsync(
@@ -117,3 +152,12 @@ nonisolated final class SystemMonitorSampler: Sendable {
         }
     }
 }
+
+#if DIRECT_DISTRIBUTION
+nonisolated protocol IOReportPowerConsuming {
+    func sample(previous: MonitorModule?, power: IOReportPowerSample) -> MonitorModule
+}
+extension BatterySampler: IOReportPowerConsuming {}
+extension GPUSampler: IOReportPowerConsuming {}
+extension MemorySampler: IOReportPowerConsuming {}
+#endif

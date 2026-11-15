@@ -1,3 +1,6 @@
+> 贡献者原始验证记录：由 [xyy386](https://github.com/xyy386) 在 [PR #141](https://github.com/Acerola-1/hagimi-monitor/pull/141) 提供，固定提交 `6405160fb2bf5f65b91c870c2836eb28f1cd24a6`。
+> 下列“本机”“本次修改”和测试结果均指贡献者的 M3 与 PR 代码，按原文保留；不是当前整合代码的 M3 验收结果。当前实现差异与后续复测要求见文末。
+
 # M3 / macOS 27 电源拓扑读数验证
 
 验证日期：2026-11-15。设备：MacBook Air M3（Mac15,12），macOS 27.2.1（26B131），Xcode 27.2。
@@ -62,3 +65,37 @@ SMC 电压/电流键、CLPC 报告表、HID 传感器与显示服务排查均未
 
 本地构建使用临时 Ad Hoc 签名：`CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= CODE_SIGN_STYLE=Manual`。
 最终 Debug 复测另使用 `ENABLE_DEBUG_DYLIB=NO`；没有修改仓库的签名配置或用户的全局 Xcode 配置。
+
+
+## 当前实现的吸收范围与差异
+
+- 当前基线为 `a6c27e9600181980821bd50aae15bd8241bd7efb` 的电源遥测框架，保留 `PowerReading`、完整身份/单位/成员校验、动态准入、独立来源选择、限频订阅恢复和补报保护；不另接入原 PR 的 `CLPCEnergyChannels` / `IOReportCounterRate`。
+- CPU/ANE 的 M3 完整报告 ID 与上文相同。生产订阅改为通过 `CLPCPowerChannels.descriptors` 构造，使测试可验证真实使用的描述符和平台门控；已知其他驱动仍沿现有映射处理，不收窄为仅 M3。
+- 已吸收描述符、nJ/实际间隔换算、缺失屏幕与空闲 ANE 同屏的布局回归。持续零屏幕的测试使用合成计数，不将上文中位数还原或冒充 39 份原始样本。
+- 活动内屏沿当前有界区间策略：无有效能量增量时显示缺失；不新增机型特判，也不根据亮度或整机差值估算屏幕瓦数。缺失原因沿现有中英 `PowerReading` 状态说明，避免重复提示入口。
+- ANE 零值不直接照搬原 PR。带有效源时间戳的 CLPC 在当前代次内通过正增量准入后，允许时间戳前进、计数不变的健康零。无源时间戳的 CLPC 继续要求连续正增量，空闲保持暂缺/未验证；计数重新增长的首份补报只重建基线。
+- 原 PR 未记录 M3 CLPC 的原始源时间戳，故本记录只能支持映射与负载响应，不能单凭空闲零值决定当前无时间戳策略是否可以放宽。保留“启动即零/后负载回零”的显示差异，等待同机原始报告证据。
+- 电池健康度、整机/输入/电池流向、IOPS 失败隔离继续采用本地实现，不从该 PR 回退。
+
+## 整合版的同机复测
+
+复用 `scripts/validation/power-topology-probe.swift` 文件顶部的编译命令，输出到 `tmp/power-topology-audit/probe`。例如：
+
+```bash
+mkdir -p tmp/power-topology-audit
+tmp/power-topology-audit/probe 120 1 > tmp/power-topology-audit/m3-integrated-raw.jsonl
+PRODUCTION_ONLY=1 tmp/power-topology-audit/probe 120 1 > tmp/power-topology-audit/m3-integrated-production.jsonl
+```
+
+第一轮除生产结果外，记录实际 CLPC 请求/返回的完整 driver/channel/format/unit、累计 counter 和 `sourceTimestampTicks`；第二轮关闭额外诊断订阅，排除其影响。源码编译命令已在探针中给出，两个运行命令均需先完成编译。
+
+由具备同机硬件的验证者分别记录以下场景及开始/结束时刻：
+
+1. 日常背景 → 4 个短时 CPU worker → 负载结束；确认 CPU 来源、响应和恢复，不要求重现上文具体瓦数。
+2. 明确使用 Neural Engine 的负载 → 结束后空闲；同时保留 ANE 原始 counter/源时间戳与生产状态，区分计数健康零、无时间戳和冻结。既有 PR 仅记录了负载方法；未提交可复跑的 ANE 负载脚本。
+3. 低 → 高 → 低亮度；记录实际亮度。活动屏持续零计数时，生产值应保持缺失。
+4. 真睡眠/唤醒、合盖/外屏变化；长间隔和恢复后的首份读数应预热，不产生累计补报尖峰。
+
+提交运行版本/芯片/系统与两轮完整 JSONL，并检查实际面板及中英缺失提示。当前整合尚未完成上述 M3 同机、ANE 负载、真实睡眠及绝对精度验收；原 PR 的构建和测试结果不替代整合版结果。
+
+本地吸收后的构建、定向测试与 M4 探针结果见 [2026-11-15 整合验证记录](reviews/2026-11-15-pr141-integration.md)。

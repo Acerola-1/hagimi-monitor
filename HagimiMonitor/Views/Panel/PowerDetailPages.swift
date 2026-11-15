@@ -43,7 +43,7 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
     /// 各分页归属的可勾指标名:面板展开区分栏渲染与设置页选项过滤同源。
     /// 「功率流」是网格外可视化选项(无采样指标),归入承载流向图的分页:
     /// 直连版在拓扑页、沙盒版在健康页。供电页为固定诊断视图,不含可勾指标。
-    var metricNames: [String] {
+    nonisolated var metricNames: [String] {
         switch self {
         case .flow:
             #if DIRECT_DISTRIBUTION
@@ -176,7 +176,9 @@ struct PowerSupplyDiagnosticsView: View {
     var metricOrder: [String] = []
 
     var body: some View {
-        if isUnavailable || !connected {
+        if isUnavailable {
+            standaloneStatus(String(localized: "power-reading.unknown-state"))
+        } else if !connected {
             standaloneStatus(String(localized: "panel.battery.diag.disconnected"))
         } else if supplyMetrics.isEmpty {
             standaloneStatus("--")

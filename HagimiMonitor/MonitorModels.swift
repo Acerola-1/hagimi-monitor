@@ -285,6 +285,8 @@ nonisolated struct MonitorMetric: Identifiable, Equatable, Sendable {
     /// 单位拆开渲染(数值主角化、单位弱化)。value 本身保持完整字符串,
     /// 复制/其他展示面语义不变;不设置时回退整串渲染。
     var unit: String? = nil
+    /// 功率解释随数值同帧发布，并通过状态区分缺失、冻结与缓存区间。
+    var powerReading: PowerReading? = nil
 
     var id: String { name }
 }
@@ -1357,7 +1359,13 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     }
 
     private func metricValue(_ name: String, in kind: MonitorKind) -> Double? {
-        allModules.first { $0.kind == kind }?.metrics.first { $0.name == name }?.numericValue
+        guard let module = allModules.first(where: { $0.kind == kind }) else { return nil }
+        return Self.numericMetricValue(name, in: module)
+    }
+
+    static func numericMetricValue(_ name: String, in module: MonitorModule) -> Double? {
+        guard !module.isPlaceholder else { return nil }
+        return module.metrics.first { $0.name == name }?.numericValue
     }
 
     private func advance() {

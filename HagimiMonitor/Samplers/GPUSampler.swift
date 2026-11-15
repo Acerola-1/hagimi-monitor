@@ -7,6 +7,20 @@ nonisolated final class GPUSampler: MonitorSampler, Sendable {
     var kind: MonitorKind { .gpu }
 
     func sample(previous: MonitorModule?) -> MonitorModule {
+        #if DIRECT_DISTRIBUTION
+        sample(previous: previous, power: IOReportPowerSampler.shared.sample())
+        #else
+        sampleGPU(previous: previous)
+        #endif
+    }
+
+    #if DIRECT_DISTRIBUTION
+    func sample(previous: MonitorModule?, power: IOReportPowerSample) -> MonitorModule {
+        sampleGPU(previous: previous, clock: power.gpuClock)
+    }
+    #endif
+
+    private func sampleGPU(previous: MonitorModule?, clock: GPUClockStateReadout? = nil) -> MonitorModule {
         guard let reading = gpuReading() else {
             AppLogger.sampler.error("gpuReading() returned nil, GPU data unavailable")
             return placeholderModule(.gpu, summary: String(localized: "sampler.unavailable"))
@@ -19,7 +33,6 @@ nonisolated final class GPUSampler: MonitorSampler, Sendable {
 
         #if DIRECT_DISTRIBUTION
         // 频率档来自 IOReport 私有 API，仅 Direct 版可读，紧跟 GPU 占用之后。
-        let clock = IOReportPowerSampler.shared.sample().gpuClock
         if let clock {
             let clockValue = clock.dominantState.flatMap { state in
                 clock.dominantResidencyPercent.map { "\(state) \(percent($0))" }

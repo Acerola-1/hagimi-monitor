@@ -36,6 +36,8 @@ extern CFDictionaryRef _Nullable IOReportCreateSamples(
 );
 extern CFStringRef _Nullable IOReportChannelGetChannelName(CFDictionaryRef _Nonnull channel);
 extern uint64_t IOReportChannelGetUnit(CFDictionaryRef _Nonnull channel);
+extern uint64_t IOReportChannelGetChannelID(CFDictionaryRef _Nonnull channel);
+extern uint64_t IOReportChannelGetDriverID(CFDictionaryRef _Nonnull channel);
 extern int64_t IOReportSimpleGetIntegerValue(CFDictionaryRef _Nonnull channel, int32_t index);
 
 // GPU 时钟态驻留走「状态通道」：给出的是区间内各状态各占多少 tick，而非计数器。

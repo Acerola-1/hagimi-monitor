@@ -889,12 +889,35 @@ final class BluetoothBatterySampler: NSObject {
             let key = pmsetDev.accessoryIdentifier == nil ? normalizeMAC(pmsetDev.address) : pmsetDev.address
             var match = merged.firstIndex { !key.isEmpty && $0.address == key }
             if match == nil, let uuid = pmsetDev.accessoryIdentifier {
-                let candidates = merged.indices.filter { bindings[merged[$0].address] == uuid.uuidString }
+                let candidates = merged.indices.filter {
+                    (bindings[merged[$0].address] ?? learned[merged[$0].address]) == uuid.uuidString
+                        || merged[$0].accessoryIdentifier == uuid
+                }
+                if candidates.count == 1 { match = candidates[0] }
+            }
+            if match == nil, let uuid = pmsetDev.accessoryIdentifier {
+                // 同轮 GATT 快照可把电源树的旧名关联到当前系统名；两侧身份均须唯一。
+                let names = Set(bleSnapshots.filter { $0.identifier == uuid }.compactMap(\.name)).filter { name in
+                    Set(bleSnapshots.filter { $0.name == name }.map(\.identifier)).count == 1
+                }
+                let candidates = merged.indices.filter {
+                    let bound = bindings[merged[$0].address] ?? learned[merged[$0].address]
+                    return (bound == nil || bound == uuid.uuidString)
+                        && !aliases(for: merged[$0]).isDisjoint(with: names)
+                }
                 if candidates.count == 1 { match = candidates[0] }
             }
             if match == nil, !pmsetDev.name.isEmpty {
+                // 相同电源身份可能同时带新旧名称，统一考虑，避免结果依赖报告顺序。
+                let names = Set(pmsetDevices.filter {
+                    $0.address == pmsetDev.address
+                        || (pmsetDev.accessoryIdentifier != nil && $0.accessoryIdentifier == pmsetDev.accessoryIdentifier)
+                }.map(\.name))
                 let candidates = merged.indices.filter {
-                    aliases(for: merged[$0]).contains(pmsetDev.name)
+                    let bound = bindings[merged[$0].address] ?? learned[merged[$0].address]
+                    let uuid = pmsetDev.accessoryIdentifier?.uuidString
+                    return (uuid == nil || bound == nil || bound == uuid)
+                        && !aliases(for: merged[$0]).isDisjoint(with: names)
                 }
                 if candidates.count == 1, !pmsetMatchedIndices.contains(candidates[0]) {
                     match = candidates[0]
@@ -902,7 +925,8 @@ final class BluetoothBatterySampler: NSObject {
             }
             if let index = match {
                 pmsetMatchedIndices.insert(index)
-                if let uuid = pmsetDev.accessoryIdentifier, bindings[merged[index].address] == nil {
+                if let uuid = pmsetDev.accessoryIdentifier,
+                   !merged[index].address.hasPrefix("ble-"), bindings[merged[index].address] == nil {
                     learned[merged[index].address] = uuid.uuidString
                 }
                 let target = merged[index]
@@ -941,6 +965,20 @@ final class BluetoothBatterySampler: NSObject {
             mergeEntry(at: mergedIndex, with: remainingSnapshots.remove(at: snapshotIndex))
         }
 
+        // 电源树已携带 UUID 的条目先按身份关联，避免新旧名称再次产生 BLE 行。
+        for snapshotIndex in remainingSnapshots.indices.reversed() {
+            let snapshot = remainingSnapshots[snapshotIndex]
+            let candidates = merged.indices.filter {
+                !consumedIndices.contains($0)
+                    && (merged[$0].accessoryIdentifier == snapshot.identifier
+                        || merged[$0].address == "ble-\(snapshot.identifier.uuidString)")
+            }
+            if candidates.count == 1, let index = candidates.first {
+                mergeEntry(at: index, with: snapshot)
+                remainingSnapshots.remove(at: snapshotIndex)
+            }
+        }
+
         // 3b) 同名匹配 + 学习绑定:仅当两侧名称均唯一时才允许,避免同名设备错误绑定。
         // 统计两侧名称出现次数
         var mergedNameCount: [String: Int] = [:]
@@ -957,14 +995,18 @@ final class BluetoothBatterySampler: NSObject {
         for index in merged.indices where !consumedIndices.contains(index) {
             let name = merged[index].name
             // 两侧均唯一才允许学习绑定:两台同名设备不得任选一台永久绑定
-            guard learned[merged[index].address] == nil,
+            guard bindings[merged[index].address] == nil, learned[merged[index].address] == nil,
                   mergedNameCount[name] == 1, snapshotNameCount[name] == 1,
-                  let snapshotIndex = remainingSnapshots.firstIndex(where: { $0.name == name }) else {
+                  let snapshotIndex = remainingSnapshots.firstIndex(where: { $0.name == name }),
+                  merged[index].accessoryIdentifier == nil
+                    || merged[index].accessoryIdentifier == remainingSnapshots[snapshotIndex].identifier else {
                 continue
             }
             let snapshot = remainingSnapshots.remove(at: snapshotIndex)
             mergeEntry(at: index, with: snapshot)
-            learned[merged[index].address] = snapshot.identifier.uuidString
+            if !merged[index].address.hasPrefix("ble-") {
+                learned[merged[index].address] = snapshot.identifier.uuidString
+            }
             // 更新计数,避免后续重复处理
             mergedNameCount[name] = 0
             snapshotNameCount[name] = 0
@@ -989,7 +1031,8 @@ final class BluetoothBatterySampler: NSObject {
                 guard snapshotNameCount3c[cbName] == 1 else { continue }
                 var scored: [(index: Int, distance: Double)] = []
                 for index in merged.indices where !consumedIndices.contains(index) {
-                    guard bindings[merged[index].address] == nil, learned[merged[index].address] == nil else { continue }
+                    guard bindings[merged[index].address] == nil, learned[merged[index].address] == nil,
+                          merged[index].accessoryIdentifier == nil else { continue }
                     scored.append((index, nameDistance(merged[index].name, cbName)))
                 }
                 scored.sort { $0.distance < $1.distance }
@@ -997,7 +1040,9 @@ final class BluetoothBatterySampler: NSObject {
                    best.distance <= 1.0 / 3.0,
                    scored.count == 1 || scored[1].distance - best.distance > 0.2 {
                     mergeEntry(at: best.index, with: snapshot)
-                    learned[merged[best.index].address] = snapshot.identifier.uuidString
+                    if !merged[best.index].address.hasPrefix("ble-") {
+                        learned[merged[best.index].address] = snapshot.identifier.uuidString
+                    }
                     consumedSnapshotIndices.insert(snapshotIndex)
                 }
             }

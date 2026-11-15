@@ -1,4 +1,5 @@
 import Testing
+import Foundation
 @testable import HagimiMonitorDirect
 
 struct BatterySamplerTests {
@@ -41,8 +42,212 @@ struct BatterySamplerTests {
         #expect(interpretedChargingPowerWatts(batteryPowerMilliwatts: -24_898, isCharging: false) == nil)
     }
 
-    @Test func chargingPowerTreatsZeroAsUnavailable() {
-        #expect(interpretedChargingPowerWatts(batteryPowerMilliwatts: 0, isCharging: true) == nil)
+    @Test func systemLoadAndBatteryFlowResolveIndependently() {
+        let pureBatteryLoad = BatteryPowerResolver.systemLoad(
+            state: .onBattery,
+            measuredSystemLoadWatts: 10,
+            adapterInputWatts: nil,
+            batteryMagnitudeWatts: 6
+        )
+        let pureBatteryFlow = BatteryPowerResolver.batteryFlow(
+            state: .onBattery,
+            measuredSystemLoadWatts: 10,
+            adapterInputWatts: nil,
+            batteryMagnitudeWatts: 6,
+            preferMeasuredSystemLoadOnBattery: true
+        )
+        #expect(pureBatteryLoad.watts == 10)
+        #expect(!pureBatteryLoad.isEstimated)
+        #expect(pureBatteryFlow.watts == -10)
+        #expect(BatteryPowerResolver.systemLoad(
+            state: .onBattery,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: nil,
+            batteryMagnitudeWatts: 6
+        ).watts == 6)
+
+        // 电池方向由 IOPS 状态决定，BatteryPower 原始符号只提供幅度。
+        for encodedBatteryPower in [6_000.0, -6_000.0] {
+            let magnitude = BatteryPowerResolver.batteryMagnitudeFromTelemetry(milliwatts: encodedBatteryPower)
+            let flow = BatteryPowerResolver.batteryFlow(
+                state: .onBattery,
+                measuredSystemLoadWatts: nil,
+                adapterInputWatts: nil,
+                batteryMagnitudeWatts: magnitude.watts
+            )
+            #expect(magnitude.watts == 6)
+            #expect(!magnitude.isEstimated)
+            #expect(flow.watts == -6)
+            #expect(BatteryPowerResolver.batteryFlow(
+                state: .charging,
+                measuredSystemLoadWatts: nil,
+                adapterInputWatts: nil,
+                batteryMagnitudeWatts: magnitude.watts
+            ).watts == 6)
+        }
+
+        let dischargingLoad = BatteryPowerResolver.systemLoad(
+            state: .externalPower,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: 10
+        )
+        let dischargingFlow = BatteryPowerResolver.batteryFlow(
+            state: .externalPower,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: 10
+        )
+        #expect(dischargingLoad.watts == 55)
+        #expect(dischargingLoad.isEstimated)
+        #expect(dischargingFlow.watts == -10)
+
+        let chargingLoad = BatteryPowerResolver.systemLoad(
+            state: .charging,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: 10
+        )
+        let chargingFlow = BatteryPowerResolver.batteryFlow(
+            state: .charging,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: 10
+        )
+        #expect(chargingLoad.watts == 35)
+        #expect(chargingFlow.watts == 10)
+    }
+
+    @Test func resolverPreservesKnownZeroAndRejectsMissingOrInvalidInputs() {
+        #expect(BatteryPowerResolver.batteryMagnitudeFromTelemetry(milliwatts: 0).watts == 0)
+        #expect(BatteryPowerResolver.batteryMagnitudeFromTelemetry(milliwatts: nil).watts == nil)
+        let knownZeroLoad = BatteryPowerResolver.systemLoad(
+            state: .charging,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: 0
+        )
+        let knownZeroFlow = BatteryPowerResolver.batteryFlow(
+            state: .charging,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: nil,
+            batteryMagnitudeWatts: 0
+        )
+        #expect(knownZeroLoad.watts == 45)
+        #expect(knownZeroFlow.watts == 0)
+        #expect(BatteryPowerResolver.systemLoad(
+            state: .charging,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: nil
+        ).watts == nil)
+        #expect(BatteryPowerResolver.batteryFlow(
+            state: .charging,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: nil,
+            batteryMagnitudeWatts: nil
+        ).watts == nil)
+        #expect(BatteryPowerResolver.systemLoad(
+            state: .charging,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: .infinity
+        ).watts == nil)
+        #expect(BatteryPowerResolver.systemLoad(
+            state: .charging,
+            measuredSystemLoadWatts: -1,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: 10
+        ).watts == 35)
+        #expect(BatteryPowerResolver.systemLoad(
+            state: .unknown,
+            measuredSystemLoadWatts: nil,
+            adapterInputWatts: 45,
+            batteryMagnitudeWatts: 10
+        ).watts == nil)
+    }
+
+    @Test func chargingPowerFallbackRequiresValidPackVoltageAndInstantCurrent() {
+        let charge = BatteryPowerResolver.packChargingPower(
+            packVoltageMillivolts: 12_000,
+            signedInstantCurrentMilliamps: -1_000,
+            isCharging: true
+        )
+        #expect(charge.watts == 12)
+        #expect(charge.isEstimated)
+        #expect(BatteryPowerResolver.packChargingPower(
+            packVoltageMillivolts: 12_000,
+            signedInstantCurrentMilliamps: 0,
+            isCharging: true
+        ).watts == 0)
+        #expect(BatteryPowerResolver.packChargingPower(
+            packVoltageMillivolts: 4_200,
+            signedInstantCurrentMilliamps: 1_000,
+            isCharging: true
+        ).watts == nil)
+        #expect(BatteryPowerResolver.packChargingPower(
+            packVoltageMillivolts: 12_000,
+            signedInstantCurrentMilliamps: nil,
+            isCharging: true
+        ).watts == nil)
+        #expect(BatteryPowerResolver.packChargingPower(
+            packVoltageMillivolts: 12_000,
+            signedInstantCurrentMilliamps: 1_000,
+            isCharging: false
+        ).watts == nil)
+    }
+
+    @Test func iopsFailureDropsCachedBatteryReadingsAndRecovers() {
+        let snapshot = BatteryPowerSourceSnapshot(
+            currentCapacity: 45,
+            maxCapacity: 100,
+            isCharging: false,
+            isConnectedToPower: false,
+            timeToEmptyMinutes: 120
+        )
+        let reads = BatteryPowerSourceSequence([.battery(snapshot), .unavailable, .battery(
+            BatteryPowerSourceSnapshot(
+                currentCapacity: 75,
+                maxCapacity: 100,
+                isCharging: false,
+                isConnectedToPower: false,
+                timeToEmptyMinutes: 90
+            )
+        )])
+        let componentPower = IOReportPowerSample(
+            displayWatts: 4,
+            cpuWatts: 5,
+            gpuWatts: 6,
+            aneWatts: 7
+        )
+        let sampler = BatterySampler(
+            healthProbe: BatteryHealthProbe(),
+            powerSourceReader: { reads.next() },
+            componentPowerReader: { componentPower }
+        )
+
+        let valid = sampler.sample(previous: nil, power: componentPower)
+        let unavailable = sampler.sample(previous: valid, power: componentPower)
+        let recovered = sampler.sample(previous: unavailable, power: componentPower)
+
+        #expect(valid.isPlaceholder == false)
+        #expect(unavailable.isPlaceholder)
+        #expect(unavailable.value == 0)
+        #expect(unavailable.summary == "--")
+        #expect(unavailable.samples.isEmpty)
+        #expect(unavailable.metrics.map(\.name).sorted() == [
+            "ane-power", "cpu-power", "display-power", "gpu-power", "status", "type"
+        ])
+        #expect(unavailable.metrics.first(where: { $0.name == "type" })?.value == "battery-unavailable")
+        #expect(unavailable.metrics.first(where: { $0.name == "status" })?.value == "unknown")
+        #expect(unavailable.metrics.first(where: { $0.name == "display-power" })?.numericValue == 4)
+        #expect(unavailable.metrics.first(where: { $0.name == "cpu-power" })?.numericValue == 5)
+        #expect(unavailable.metrics.first(where: { $0.name == "gpu-power" })?.numericValue == 6)
+        #expect(unavailable.metrics.first(where: { $0.name == "ane-power" })?.numericValue == 7)
+        #expect(unavailable.processEnergy == nil)
+        #expect(recovered.isPlaceholder == false)
+        #expect(recovered.summary == "75%")
+        #expect(recovered.samples == seedSamples(75))
     }
 
     @Test func smcReaderRespondsToSystemPowerOnDirect() {
@@ -176,5 +381,21 @@ struct BatterySamplerTests {
 
         let contract = sampler.parsePDContract(details)
         #expect(contract == "5V/1A/5W")
+    }
+}
+
+private final class BatteryPowerSourceSequence: @unchecked Sendable {
+    private let lock = NSLock()
+    private var readings: [BatteryPowerSourceReading]
+
+    init(_ readings: [BatteryPowerSourceReading]) {
+        self.readings = readings
+    }
+
+    func next() -> BatteryPowerSourceReading {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !readings.isEmpty else { return .unavailable }
+        return readings.removeFirst()
     }
 }

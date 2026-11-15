@@ -160,4 +160,105 @@ struct AirPodsRegressionTests {
         #expect(result.devices.first?.components.map(\.level) == [99, 100, 68])
     }
 
+    // 人工身份样本覆盖跨来源重复，不代表用户截图中已经确认的原始记录。
+    @Test func renamedPowerSourceAndBLEUseOneSystemIdentity() throws {
+        let power = try pmset()
+        let snapshot = BLEDeviceSnapshot(identifier: uuid, name: "AirPods 4 (ANC)", batteryLevel: nil)
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: [io("AirPods 4 (ANC)")], pmsetDevices: power,
+            profilerDevices: [], bleSnapshots: [snapshot], bindings: [:]
+        )
+        #expect(result.devices.count == 1)
+        #expect(result.devices.first?.address == address)
+        #expect(result.devices.first?.name == "AirPods 4 (ANC)")
+        #expect(result.devices.first?.components.map(\.level) == [99, 100, 68])
+        #expect(result.learnedBindings[address] == uuid.uuidString)
+    }
+
+    @Test func powerSourceAndBLEWithoutClassicConnectionDoNotDuplicateUUID() throws {
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: [], pmsetDevices: try pmset(), profilerDevices: [],
+            bleSnapshots: [BLEDeviceSnapshot(identifier: uuid, name: "Renamed Headphones", batteryLevel: 80)], bindings: [:]
+        )
+        #expect(result.devices.count == 1)
+        #expect(result.devices.first?.batteryLevel == 80)
+        #expect(result.devices.first?.components.map(\.level) == [99, 100, 68])
+        #expect(result.learnedBindings.isEmpty)
+    }
+
+    @Test func repeatedPowerRecordsUseIdentityLearnedInSameMerge() throws {
+        let power = try #require(try pmset().first)
+        let renamed = BluetoothDeviceInfo(address: power.address, name: "Renamed Headphones", type: power.type,
+                                      batteryLevel: power.batteryLevel, components: power.components,
+                                      accessoryIdentifier: power.accessoryIdentifier)
+        for records in [[power, renamed], [renamed, power]] {
+            let result = BluetoothBatterySampler.merge(
+                ioDevices: [io("Test AirPods #2")], pmsetDevices: records,
+                profilerDevices: [], bleSnapshots: [], bindings: [:]
+            )
+            #expect(result.devices.count == 1)
+            #expect(result.devices.first?.address == address)
+        }
+    }
+
+    @Test func groupedPowerSourceKeepsClassicMACDespiteDifferentNames() throws {
+        let entries: [[String: Any]] = [
+            ["Accessory Identifier": "AA:BB:CC:DD:EE:FF", "Group Identifier": uuid.uuidString,
+             "Name": "Test AirPods #2", "Part Identifier": "Combined", "Current Capacity": 77],
+            ["Accessory Identifier": "11:22:33:44:55:66", "Group Identifier": uuid.uuidString,
+             "Name": "Case", "Part Identifier": "Case", "Current Capacity": 96]
+        ]
+        let raw = try entries.reduce(into: Data()) { result, entry in
+            result.append(try PropertyListSerialization.data(fromPropertyList: entry, format: .xml, options: 0))
+        }
+        let power = PMSetAccessoryParser.parse(xmlData: raw)
+        #expect(power.first?.address == address)
+        #expect(power.first?.accessoryIdentifier == uuid)
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: [io("AirPods 4 (ANC)")], pmsetDevices: power,
+            profilerDevices: [io("AirPods 4 (ANC)")],
+            bleSnapshots: [BLEDeviceSnapshot(identifier: uuid, name: "Renamed Headphones", batteryLevel: nil)], bindings: [:]
+        )
+        #expect(result.devices.count == 1)
+        #expect(result.devices.first?.name == "AirPods 4 (ANC)")
+        #expect(result.devices.first?.components.first { $0.kind == .case }?.level == 96)
+    }
+
+    @Test func powerUUIDCannotOverrideAnotherHeadphonesBindingByName() throws {
+        let otherUUID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: [io("Test AirPods #2")], pmsetDevices: try pmset(), profilerDevices: [],
+            bleSnapshots: [BLEDeviceSnapshot(identifier: uuid, name: "Test AirPods #2", batteryLevel: nil)],
+            bindings: [address: otherUUID.uuidString]
+        )
+        #expect(result.devices.count == 2)
+        #expect(result.devices.first { $0.address == address }?.batteryLevel == nil)
+        #expect(result.devices.first { $0.accessoryIdentifier == uuid }?.components.count == 3)
+        #expect(result.learnedBindings[address] == nil)
+    }
+
+    @Test func sameNameHeadphonesRemainSeparateWhenPowerUUIDIsAmbiguous() throws {
+        let secondAddress = "112233445566"
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: [io("Test AirPods #2"), io("Test AirPods #2", address: secondAddress)],
+            pmsetDevices: try pmset(), profilerDevices: [],
+            bleSnapshots: [BLEDeviceSnapshot(identifier: uuid, name: "Test AirPods #2", batteryLevel: nil)], bindings: [:]
+        )
+        #expect(result.devices.count == 3)
+        #expect(result.devices.filter { $0.address == address || $0.address == secondAddress }.allSatisfy { $0.batteryLevel == nil })
+        #expect(result.learnedBindings.isEmpty)
+    }
+
+    @Test func differentKnownUUIDsRemainSeparateDespiteSameName() throws {
+        let otherUUID = UUID(uuidString: "00000000-0000-0000-0000-000000000002")!
+        let result = BluetoothBatterySampler.merge(
+            ioDevices: [], pmsetDevices: try pmset(), profilerDevices: [],
+            bleSnapshots: [BLEDeviceSnapshot(identifier: otherUUID, name: "Test AirPods #2", batteryLevel: 12)], bindings: [:]
+        )
+        #expect(result.devices.count == 2)
+        #expect(result.devices.first { $0.accessoryIdentifier == uuid }?.batteryLevel == 99)
+        #expect(result.devices.first { $0.address == "ble-" + otherUUID.uuidString }?.batteryLevel == 12)
+        #expect(result.learnedBindings.isEmpty)
+    }
+
 }
