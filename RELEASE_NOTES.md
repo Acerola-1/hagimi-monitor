@@ -1,11 +1,19 @@
 ## 更新内容
 
+感谢 @xyy386 提供 M3 实测数据与电源拓扑改进（#141）。
+
+### 修复
+
+- 电池健康度改用系统报告的「最大容量」，修正与系统设置不一致的问题。
+- 修复同一副 AirPods 在蓝牙模块中重复显示为多台设备的问题，保留左右耳与充电盒电量。
+- 修正部分供电、充放电功率的取值与回退逻辑，避免数据停更或采样恢复时出现异常读数。
+- 屏幕功耗没有有效数据时显示缺失状态，不再误显示为 0 W。
+
 ### 优化与体验
 
-- 优化了部分界面
-- 调整了电源分页，耗电排行在各分页下都会显示
-- 暂时隐藏功率流图，设置中标明开发中
-- 调整了 CPU 逐核环的颜色
+- 改进 macOS 27 下部分机型的 CPU、ANE 功耗读取，并补充预热、暂缺及数据停更的悬停说明。
+- 调整单显示器的亮度摘要布局，让主行读数更清楚。
+- 完善面板键盘导航，支持用空格或回车展开、收起模块，并减少鼠标操作时多余的焦点轮廓。
 
 ### 目前已知的问题
 
@@ -21,8 +29,20 @@
 
 ### English
 
-- Adjusted parts of the interface.
-- Adjusted the Power pages. The energy ranking stays visible on each page.
-- The power-flow diagram is hidden for now and marked as in development.
-- Adjusted the per-core ring colors.
+Thanks to @xyy386 for the M3 test data and power-topology improvements (#141).
+
+- Battery health now uses the system-reported maximum capacity to match System Settings.
+- Fixed duplicate AirPods entries while preserving left earbud, right earbud, and case battery readings.
+- Corrected power-source, charging, and discharging calculations and fallback behavior to avoid invalid readings when data stalls or sampling resumes.
+- Missing display-power data is no longer shown as 0 W.
+- Improved CPU and ANE power readings on supported Macs running macOS 27, with tooltips explaining warm-up, unavailable, and stalled data.
+- Improved the single-display brightness summary layout.
+- Improved keyboard navigation: expand or collapse modules with Space or Return, with fewer unwanted focus outlines during mouse interaction.
+
+#### Known Issues
+
+- Mac mini power consumption remains unverified without a matching device (#106).
+- Network may appear disconnected when a proxy app enables TUN mode; not reproduced locally (#98).
+- Missing charging-power readings on MacBook Air M4 remain unverified on the affected hardware (#86).
+- Apple Watch connections can be detected, but accurate battery readings remain unavailable (#131, in progress).
 
