@@ -15,9 +15,9 @@ nonisolated struct IOReportPowerSample: Sendable {
 /// 复用统一刷新节奏读取 IOReport 累计能量与总线吞吐，不创建独立轮询定时器，也不在采样线程 sleep。
 ///
 /// 数据口径：
-/// - 内建屏：DCP / display stats / power，实测为累计微焦耳；
+/// - 内建屏：DCP / display stats / power，按累计微焦耳处理；M3/macOS 27 的无效零增量按缺失返回；
 /// - CPU / GPU / ANE：Energy Model 下的 CPU Energy / GPU Energy / ANE* 通道，按 channel 自带 unit 解码；
-///   部分 macOS 27 机型（如 M4 实测）上 CPU/ANE 计数不再累加，此时按缺失返回，不伪装 0 W；
+///   M3/macOS 27 优先订阅 CLPC 的独立 nJ 计数，避免旧 Energy Model 冻结；其他机型保留原路径；
 /// - 内存总线：PMP / DSID Stats 下的各组 Misses 计数，计数单位即字节（多线程流式读负载实测：
 ///   本计数净增速率与负载实际字节速率之比 ≈1.05，每次 Miss 对应 64B 的假设已被否定）。
 ///
@@ -39,11 +39,12 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
         let scale: Double
     }
 
-    private struct Baseline {
-        let value: Int64
-        let uptime: TimeInterval
-    }
-
+    // 启动时固定来源，单帧缺报不切回可能按分钟批量更新的旧计数。
+    private let clpcSubscription = Subscription(descriptors: CLPCEnergyChannels.currentDescriptors())
+    private let displayZeroIsUnavailable = CLPCEnergyChannels.displayZeroIsUnavailable(
+        osMajor: ProcessInfo.processInfo.operatingSystemVersion.majorVersion,
+        cpuBrand: HardwareSysctl.string("machdep.cpu.brand_string")
+    )
     private let displaySubscription = Subscription(
         group: "DCP",
         subgroup: "display stats",
@@ -82,10 +83,10 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
     /// 相邻两次样本的报告，用于生成状态驻留的 delta。
     private var previousClockStateReport: CFDictionary?
 
-    private var baselines: [ChannelID: Baseline] = [:]
+    private var rates: [ChannelID: IOReportCounterRate] = [:]
     private var lastSample = IOReportPowerSample()
     private var lastSampleUptime: TimeInterval = 0
-    /// 互斥保护 baselines/lastSample，使 sample() 可安全跨线程调用。
+    /// 互斥保护 rates/lastSample，使 sample() 可安全跨线程调用。
     private let sampleLock = NSLock()
 
     func sample() -> IOReportPowerSample {
@@ -104,7 +105,7 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
         }
 
         if let energyChannels = energySubscription?.sampleChannels() {
-            if let channel = energyChannels["CPU Energy"],
+            if clpcSubscription == nil, let channel = energyChannels["CPU Energy"],
                let scale = Self.energyJoulesPerCount(unit: channel.unit) {
                 counters[.cpu] = Counter(value: channel.value, scale: scale)
             }
@@ -114,7 +115,14 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
             }
         }
 
-        if let aneChannels = aneSubscription?.sampleChannels(), !aneChannels.isEmpty {
+        if let clpcSubscription {
+            let channels = clpcSubscription.sampleChannels()
+            for (id, name) in [(ChannelID.cpu, "CPU Energy"), (.ane, "ANE")] {
+                if let channel = channels[name], let scale = Self.energyJoulesPerCount(unit: channel.unit) {
+                    counters[id] = Counter(value: channel.value, scale: scale)
+                }
+            }
+        } else if let aneChannels = aneSubscription?.sampleChannels(), !aneChannels.isEmpty {
             counters[.ane] = Self.aggregatedCounter(aneChannels.values)
         }
 
@@ -124,10 +132,13 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
         }
 
         let sample = IOReportPowerSample(
-            displayWatts: rate(for: .display, counter: counters[.display], uptime: uptime, maxRate: 1_000),
-            cpuWatts: rate(for: .cpu, counter: counters[.cpu], uptime: uptime, maxRate: 1_000, zeroDeltaIsUnavailable: true),
+            displayWatts: rate(for: .display, counter: counters[.display], uptime: uptime, maxRate: 1_000,
+                               zeroDeltaIsUnavailable: displayZeroIsUnavailable),
+            cpuWatts: rate(for: .cpu, counter: counters[.cpu], uptime: uptime, maxRate: 1_000,
+                           zeroDeltaIsUnavailable: clpcSubscription == nil),
             gpuWatts: rate(for: .gpu, counter: counters[.gpu], uptime: uptime, maxRate: 1_000),
-            aneWatts: rate(for: .ane, counter: counters[.ane], uptime: uptime, maxRate: 1_000, zeroDeltaIsUnavailable: true),
+            aneWatts: rate(for: .ane, counter: counters[.ane], uptime: uptime, maxRate: 1_000,
+                           zeroDeltaIsUnavailable: clpcSubscription == nil),
             memoryBandwidthBytesPerSec: rate(for: .memory, counter: counters[.memory], uptime: uptime, maxRate: 2_000_000_000_000),
             gpuClock: clockState()
         )
@@ -173,10 +184,7 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
         )
     }
 
-    /// - Parameter zeroDeltaIsUnavailable: 计数在区间内零增量时按缺失返回。
-    ///   CPU 能量计数在部分 macOS 27 机型上只保留一个冻结值（通道在、可订阅，
-    ///   但不再累加），持续的零增量说明数据源没有真值，显示 "--" 比显示 0 W 诚实；
-    ///   CPU 侧计数只要活着就必然远高于 1 次/采样（本机实测 GPU 同组计数每秒数千万次）。
+    /// 缺报会清除该通道基线；CLPC 允许真实零值，旧 CPU/ANE 冻结计数按缺失处理。
     private func rate(
         for id: ChannelID,
         counter: Counter?,
@@ -184,19 +192,10 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
         maxRate: Double,
         zeroDeltaIsUnavailable: Bool = false
     ) -> Double? {
-        guard let counter else { return nil }
-        defer { baselines[id] = Baseline(value: counter.value, uptime: uptime) }
-
-        guard let baseline = baselines[id] else { return nil }
-        let elapsed = uptime - baseline.uptime
-        let (delta, overflow) = counter.value.subtractingReportingOverflow(baseline.value)
-
-        // 首帧无基线；睡眠/长暂停后的跨窗口均值没有实时展示意义。
-        guard !overflow, elapsed > 0, elapsed <= 30, delta >= 0 else { return nil }
-        guard !(zeroDeltaIsUnavailable && delta == 0) else { return nil }
-        let result = Double(delta) * counter.scale / elapsed
-        guard result.isFinite, result >= 0, result <= maxRate else { return nil }
-        return result
+        rates[id, default: IOReportCounterRate()].sample(
+            value: counter?.value, scale: counter?.scale ?? 1, uptime: uptime,
+            maxRate: maxRate, zeroDeltaIsUnavailable: zeroDeltaIsUnavailable
+        )
     }
 
     /// IOReport unit:高 8 位为 quantity(3 = Energy)，bits 32...39 的 SI exponent
@@ -225,6 +224,27 @@ nonisolated final class IOReportPowerSampler: @unchecked Sendable {
     }
 }
 
+/// 单通道累计计数的差分状态；时间和计数由调用方注入，可独立验证恢复行为。
+nonisolated struct IOReportCounterRate {
+    private var baseline: (value: Int64, scale: Double, uptime: TimeInterval)?
+
+    mutating func sample(value: Int64?, scale: Double, uptime: TimeInterval, maxRate: Double,
+                         zeroDeltaIsUnavailable: Bool = false) -> Double? {
+        guard let value, value >= 0, scale.isFinite, scale > 0, uptime.isFinite, uptime >= 0 else {
+            baseline = nil
+            return nil
+        }
+        defer { baseline = (value, scale, uptime) }
+        guard let baseline, baseline.scale == scale else { return nil }
+        let elapsed = uptime - baseline.uptime
+        let (delta, overflow) = value.subtractingReportingOverflow(baseline.value)
+        guard !overflow, elapsed > 0, elapsed <= 30, delta >= 0 else { return nil }
+        guard !(zeroDeltaIsUnavailable && delta == 0) else { return nil }
+        let result = Double(delta) * scale / elapsed
+        return result.isFinite && result >= 0 && result <= maxRate ? result : nil
+    }
+}
+
 /// 线程安全不变量：Subscription 仅由 IOReportPowerSampler 私有持有，并通过 sampleLock 互斥调用底层 IOReport C API。
 private nonisolated final class Subscription: @unchecked Sendable {
     struct ChannelValue {
@@ -241,7 +261,7 @@ private nonisolated final class Subscription: @unchecked Sendable {
     private let subscription: CFTypeRef
     private let subscribedChannels: CFMutableDictionary
 
-    init?(
+    convenience init?(
         group: String,
         subgroup: String?,
         channelNames: Set<String>? = nil,
@@ -292,10 +312,21 @@ private nonisolated final class Subscription: @unchecked Sendable {
             Unmanaged.passUnretained(values).toOpaque()
         )
 
+        self.init(channels: mutableChannels)
+    }
+
+    convenience init?(descriptors: [NSMutableDictionary]) {
+        guard !descriptors.isEmpty,
+              let channels = CFDictionaryCreateMutableCopy(kCFAllocatorDefault, 0,
+                  ["IOReportChannels": descriptors] as CFDictionary) else { return nil }
+        self.init(channels: channels)
+    }
+
+    private init?(channels: CFMutableDictionary) {
         var subscribed: Unmanaged<CFMutableDictionary>?
         guard let createdSubscription = IOReportCreateSubscription(
             nil,
-            mutableChannels,
+            channels,
             &subscribed,
             0,
             nil

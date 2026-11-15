@@ -1606,7 +1606,8 @@ struct MetricDetailGrid: View {
                 Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
                 splitValue(metric, text: valueText)
-                    .help(valueText)
+                    .help(kind == .battery && metric.name == "display-power" && metric.numericValue == nil
+                          ? String(localized: "panel.power.display-unavailable-help") : valueText)
                     .contentShape(Rectangle())
                     .modifier(MetricCopyFeedback(value: metric.value, label: labelText, displayValue: valueText))
             }
