@@ -96,6 +96,27 @@ struct PowerPanelLayoutTests {
         }
     }
 
+    @Test func topologyKeepsMissingDisplayAndIdleANEAtMinimumWidth() async throws {
+        let metrics = [
+            MonitorMetric(name: "power", value: "7.5 W", numericValue: 7.5, unit: " W"),
+            MonitorMetric(name: "display-power", value: "--", numericValue: nil, unit: " W"),
+            MonitorMetric(name: "cpu-power", value: "1.3 W", numericValue: 1.3, unit: " W"),
+            MonitorMetric(name: "gpu-power", value: "0.2 W", numericValue: 0.2, unit: " W"),
+            MonitorMetric(name: "ane-power", value: "0.0 W", numericValue: 0, unit: " W")
+        ]
+        for scheme: ColorScheme in [.light, .dark] {
+            let theme = MonitorPanelTheme(palette: MonitorPalette(preference: .balanced, colorScheme: scheme))
+            let grid = MetricDetailGrid(metrics: metrics, kind: .battery, theme: theme,
+                                        orderScope: .battery(.flow), showsSeparator: false)
+                .frame(width: 260)
+                .background(scheme == .dark ? Color.black : Color.white)
+                .environment(\.colorScheme, scheme)
+            let size = try await capture(grid, name: "topology-\(scheme)", width: 260, height: 100)
+            #expect(abs(size.width - 260) < 0.5)
+            #expect(size.height > 0 && size.height <= 100)
+        }
+    }
+
     @Test func networkAndPowerHeadersShareTheSameGeometry() async throws {
         for scheme: ColorScheme in [.light, .dark] {
             let theme = MonitorPanelTheme(palette: MonitorPalette(preference: .balanced, colorScheme: scheme))

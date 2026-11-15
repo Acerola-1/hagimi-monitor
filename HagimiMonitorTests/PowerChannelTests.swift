@@ -3,6 +3,34 @@ import Testing
 @testable import HagimiMonitorDirect
 
 struct PowerChannelTests {
+    @Test func m3SubscriptionDescriptorsMatchVerifiedDriverAndNanojouleReports() throws {
+        let driverID: UInt64 = 0x1_0000_0428
+        let channels = CLPCPowerChannels.descriptors(bundle: "com.apple.driver.AppleT8122CLPC",
+                                                     majorVersion: 27, driverID: driverID)
+        #expect(channels.count == 2)
+        for (channel, (id, name)) in zip(channels, [
+            (UInt64(0x0000_0010_54b5_1c99), "CPU Energy"),
+            (UInt64(0x0000_0018_960a_fe2f), "ANE")
+        ]) {
+            let legend = try #require(channel["LegendChannel"] as? [Any])
+            #expect((legend[1] as? NSNumber)?.uint64Value == 0x0000_0001_0002_0001)
+            let descriptor = try #require(PowerChannelDescriptor.read(channel as CFDictionary))
+            #expect(descriptor == PowerChannelDescriptor(driver: driverID, channel: id, name: name,
+                                                        format: 1, unit: CLPCPowerChannels.nanojoules))
+            #expect(PowerEnergyUnit.joulesPerCount(descriptor.unit) == 1e-9)
+        }
+    }
+
+    @Test(arguments: [26, 28]) func m3DescriptorsRejectOtherOSVersions(_ majorVersion: Int) {
+        #expect(CLPCPowerChannels.descriptors(bundle: "com.apple.driver.AppleT8122CLPC",
+                                             majorVersion: majorVersion, driverID: 1).isEmpty)
+    }
+
+    @Test func unknownDriverCannotConstructM3Descriptors() {
+        #expect(CLPCPowerChannels.descriptors(bundle: "com.apple.driver.Unknown",
+                                             majorVersion: 27, driverID: 1).isEmpty)
+    }
+
     @Test func mapsFullM3M4IDsAndRejectsUnknownPlatforms() {
         let m3 = CLPCPowerChannels.reports(bundle: "com.apple.driver.AppleT8122CLPC", majorVersion: 27)
         #expect(m3?.map(\.id) == [0x0000001054b51c99, 0x00000018960afe2f])

@@ -37,6 +37,22 @@ nonisolated enum CLPCPowerChannels {
         return [Report(name: "CPU Energy", id: (16 << 32) | UInt64(keys.cpu)),
                 Report(name: "ANE", id: (24 << 32) | UInt64(keys.ane))]
     }
+
+    /// 描述符构造与平台门控共用同一入口；M3 实机依据见 docs/power-topology-m3-macos27.md。
+    static func descriptors(bundle: String, majorVersion: Int, driverID: UInt64) -> [NSDictionary] {
+        guard let reports = reports(bundle: bundle, majorVersion: majorVersion) else { return [] }
+        return reports.compactMap { report in
+            let dictionary: NSDictionary = [
+                "DriverID": NSNumber(value: driverID), "DriverName": "AppleCLPC",
+                "IOReportGroupName": "CLPC", "IOReportSubGroupName": "Energy Counters",
+                "IOReportChannelInfo": ["IOReportChannelUnit": NSNumber(value: nanojoules)],
+                "LegendChannel": [NSNumber(value: report.id), NSNumber(value: UInt64(1 | (2 << 16) | (1 << 32))), report.name]
+            ]
+            // IOReport getters 会缓存派生字段，传入可变 CF 字典。
+            return CFDictionaryCreateMutableCopy(nil, 0, dictionary as CFDictionary).map { $0 as NSDictionary }
+        }
+    }
+
     private static let keys: [String: (cpu: UInt32, ane: UInt32)] = [
         "com.apple.driver.AppleT6000CLPCv3": (cpu: 0x4747_9059, ane: 0x9aaa_17f8),
         "com.apple.driver.AppleT6002CLPC": (cpu: 0xb501_816b, ane: 0x14d5_a574),

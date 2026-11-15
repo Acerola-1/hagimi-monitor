@@ -98,11 +98,37 @@ struct PowerTopologyProbe {
         let energy = rawEnabled ? RawSubscription("Energy Model", subgroup: nil) {
             $0 == "CPU Energy" || $0 == "GPU Energy" || $0.hasPrefix("ANE")
         } : nil
-        emit(["event": "subscriptions", "rawEnabled": rawEnabled, "display": display != nil, "energy": energy != nil])
+        let clpc = rawEnabled ? IOReportSubscription.clpc() : nil
+        emit(["event": "subscriptions", "rawEnabled": rawEnabled, "display": display != nil,
+              "energy": energy != nil, "clpc": clpc != nil])
+        if let clpc {
+            for descriptor in clpc.expected.sorted(by: { $0.identity < $1.identity }) {
+                emit(["event": "requested", "group": "CLPC", "name": descriptor.name,
+                      "driverID": String(descriptor.driver), "channelID": String(format: "%016llx", descriptor.channel),
+                      "format": descriptor.format, "unit": String(format: "%016llx", descriptor.unit)])
+            }
+        }
         for frame in 0..<samples {
             autoreleasepool {
                 display?.sample(frame: frame)
                 energy?.sample(frame: frame)
+                // 与生产代码共用报告解析，原始源时间戳不以探针取样时间替代。
+                if let clpc {
+                    if let report = clpc.report(), let snapshot = clpc.snapshot(in: report, generation: 0) {
+                        for record in snapshot.records {
+                            emit(["event": "raw", "group": "CLPC", "frame": frame,
+                                  "name": record.descriptor.name, "driverID": String(record.descriptor.driver),
+                                  "channelID": String(format: "%016llx", record.descriptor.channel),
+                                  "format": record.descriptor.format, "unit": String(format: "%016llx", record.descriptor.unit),
+                                  "counter": record.value, "sourceTimestampTicks": record.timestamp,
+                                  "continuousTime": IOReportPowerSampler.continuousTime])
+                        }
+                        emit(["event": "clpc-report", "frame": frame, "expectedCount": snapshot.expected.count,
+                              "decodedCount": snapshot.records.count])
+                    } else {
+                        emit(["event": "sample-failed", "group": "CLPC", "frame": frame])
+                    }
+                }
                 let sample = IOReportPowerSampler.shared.sample()
                 func number(_ value: Double?) -> Any { value.map { $0 as Any } ?? NSNull() }
                 emit(["event": "production", "frame": frame,

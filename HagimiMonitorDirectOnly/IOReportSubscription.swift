@@ -136,20 +136,8 @@ nonisolated final class IOReportSubscription {
             defer { IOObjectRelease(service) }
             var driver: UInt64 = 0
             guard IORegistryEntryGetRegistryEntryID(service, &driver) == KERN_SUCCESS,
-                  let bundle = IORegistryEntryCreateCFProperty(service, "CFBundleIdentifier" as CFString, nil, 0)?.takeRetainedValue() as? String,
-                  let reports = CLPCPowerChannels.reports(bundle: bundle, majorVersion: 27) else { continue }
-            for report in reports {
-                let dictionary: NSDictionary = [
-                    "DriverID": NSNumber(value: driver), "DriverName": "AppleCLPC",
-                    "IOReportGroupName": "CLPC", "IOReportSubGroupName": "Energy Counters",
-                    "IOReportChannelInfo": ["IOReportChannelUnit": NSNumber(value: CLPCPowerChannels.nanojoules)],
-                    "LegendChannel": [NSNumber(value: report.id), NSNumber(value: UInt64(1 | (2 << 16) | (1 << 32))), report.name]
-                ]
-                // IOReport getters 会缓存派生字段，传入可变 CF 字典。
-                if let mutable = CFDictionaryCreateMutableCopy(nil, 0, dictionary as CFDictionary) {
-                    requested.append(mutable as NSDictionary)
-                }
-            }
+                  let bundle = IORegistryEntryCreateCFProperty(service, "CFBundleIdentifier" as CFString, nil, 0)?.takeRetainedValue() as? String else { continue }
+            requested.append(contentsOf: CLPCPowerChannels.descriptors(bundle: bundle, majorVersion: 27, driverID: driver))
         }
         return IOReportSubscription(requested: requested)
     }

@@ -2,6 +2,29 @@ import Testing
 @testable import HagimiMonitorDirect
 
 struct PowerTelemetryTests {
+    @Test func nanojoulesUseActualElapsedTime() {
+        var tracker = PowerCounterTracker()
+        let first = [PowerEnergyCounter(identity: "m3-cpu", value: 1_000_000_000,
+                                        joulesPerCount: 1e-9, timestamp: 1000)]
+        let next = [PowerEnergyCounter(identity: "m3-cpu", value: 4_000_000_000,
+                                       joulesPerCount: 1e-9, timestamp: 1100)]
+        #expect(tracker.update(first, at: 100, source: .clpc, requiresPositiveEvidence: true).watts == nil)
+        let reading = tracker.update(next, at: 100.5, source: .clpc, requiresPositiveEvidence: true)
+        #expect(reading.watts == 6)
+        #expect(reading.intervalStart == 100 && reading.intervalEnd == 100.5)
+    }
+
+    @Test func activeDisplayWithContinuouslyZeroEnergyNeverReportsZeroWatts() {
+        var tracker = PowerCounterTracker()
+        for frame in 0..<39 {
+            let input = [PowerEnergyCounter(identity: "m3-display", value: 0,
+                                            joulesPerCount: 1e-6, timestamp: UInt64(1000 + frame))]
+            let reading = tracker.update(input, at: Double(frame), source: .display, screen: .active)
+            #expect(reading.watts == nil)
+            #expect(reading.state == (frame < 5 ? .warmingUp : .unavailable))
+        }
+    }
+
     private func counter(_ value: Int64, _ timestamp: UInt64, id: String = "rail", scale: Double = 0.001) -> [PowerEnergyCounter] {
         [PowerEnergyCounter(identity: id, value: value, joulesPerCount: scale, timestamp: timestamp)]
     }
