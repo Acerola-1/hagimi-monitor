@@ -369,7 +369,11 @@ nonisolated enum PMSetAccessoryParser: Sendable {
         let level = components.filter { $0.kind != .case }.map(\.level).min()
             ?? (isCase(primary) ? nil : primary.capacity)
         let accessoryUUID = UUID(uuidString: primary.group ?? primary.identifier)
-        let normalizedAddress = accessoryUUID.map { "ble-" + $0.uuidString }
+        // 分组 UUID 关联电源部件，不能覆盖耳机本身可与 IOBluetooth 对齐的 MAC。
+        let mac = primary.identifier.replacingOccurrences(of: ":", with: "")
+            .replacingOccurrences(of: "-", with: "").lowercased()
+        let primaryMAC = mac.count == 12 && mac.allSatisfy(\.isHexDigit) ? mac : nil
+        let normalizedAddress = primaryMAC ?? accessoryUUID.map { "ble-" + $0.uuidString }
             ?? primary.identifier.lowercased().filter(\.isHexDigit)
         return BluetoothDeviceInfo(
             address: normalizedAddress.isEmpty ? primary.identifier : normalizedAddress,
