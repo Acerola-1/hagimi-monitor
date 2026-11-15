@@ -7956,6 +7956,23 @@
         }
       }
     },
+    "panel.power.display-unavailable-help": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system is not currently providing a valid built-in display power reading."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前系统未提供有效的内建屏幕功耗读数。"
+          }
+        }
+      }
+    },
     "panel.power.load-help": {
       "extractionState": "manual",
       "localizations": {
