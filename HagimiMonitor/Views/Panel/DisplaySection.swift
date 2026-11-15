@@ -180,14 +180,7 @@ struct DisplaySection: View {
             .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onTapGesture {
-                guard !displays.isEmpty else { return }
-                if !isExpanded {
-                    requestDisplayCollection()
-                }
-                withPanelExpansionState {
-                    isExpanded.toggle()
-                }
-                animate(Self.sectionKey, isExpanded, true)
+                toggleReadonlyExpansion()
             }
             // 无障碍语义与其余模块行同款。
             .accessibilityElement(children: .ignore)
@@ -197,6 +190,9 @@ struct DisplaySection: View {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(!displays.isEmpty ? .isButton : [])
+            .panelRowKeyboardFocus(canActivate: !displays.isEmpty, ring: theme.primaryText) {
+                toggleReadonlyExpansion()
+            }
             .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
                               title: String(localized: "kind.display"))
 
@@ -229,6 +225,17 @@ struct DisplaySection: View {
 
     private var summaryText: String {
         String(format: String(localized: "panel.displays.count"), displays.count)
+    }
+
+    private func toggleReadonlyExpansion() {
+        guard !displays.isEmpty else { return }
+        if !isExpanded {
+            requestDisplayCollection()
+        }
+        withPanelExpansionState {
+            isExpanded.toggle()
+        }
+        animate(Self.sectionKey, isExpanded, true)
     }
 
     private func displaySection(_ display: DisplayInfo) -> some View {
@@ -313,6 +320,12 @@ struct DisplaySection: View {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits((!entries.isEmpty || !visibleDisplays.isEmpty) ? .isButton : [])
+            .panelRowKeyboardFocus(
+                canActivate: !entries.isEmpty || !visibleDisplays.isEmpty,
+                ring: theme.primaryText
+            ) {
+                toggleExpansion()
+            }
             .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
                               title: String(localized: "kind.display"))
 

@@ -587,7 +587,10 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
 
         // 呼出直接显示已准备好的画面，展开区继续使用原有共享运动。
+        // 成为 key window 会把焦点落在第一个可聚焦行。指针呼出先记成指针输入，
+        // 再在下一轮清掉这处自动焦点，避免首行无故套上键盘轮廓。
         panel.alphaValue = 1
+        schedulePointerFocusReset()
         panel.makeKeyAndOrderFront(nil)
         panelMotion?.nativeLayer.panelDidShow()
         if contentScope == .systemMonitor { store.panelDidAppear() }
@@ -621,6 +624,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             awaitingGeometry = false
             panelMotion?.suspend()
             panel.orderOut(nil)
+            resetKeyboardFocus()
             panelRefreshGate.close()
             if decision.shouldCancelExpandedInterfaceSession {
                 cancelExpandedInterfaceSessionIfNeeded()
@@ -667,6 +671,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private func completePanelDismissal(generation: Int) {
         guard generation == dismissGeneration else { return }
         panel.orderOut(nil)
+        resetKeyboardFocus()
         panelMotion?.resetForHiddenPanel?()
         #if DEBUG
         PanelUXAcceptanceProbe.record("menu.hide", visible: panel.isVisible)
@@ -686,6 +691,45 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     /// dismissPanel 代际令牌,showPanel 时递增使在途淡出回调失效。
     private var dismissGeneration = 0
+    /// 指针呼出后的清焦点代际。按键或更新的呼出/隐藏会使过期清理失效。
+    private var pointerFocusResetID = 0
+
+    /// 面板视图常驻，隐藏后键盘焦点也会留下来。隐藏时直接清掉。
+    private func resetKeyboardFocus() {
+        pointerFocusResetID &+= 1
+        (panel as? NativePanelWindow)?.cancelPointerFocusReset = nil
+        panel.makeFirstResponder(nil)
+        NotificationCenter.default.post(name: .hagimiPanelKeyboardFocusReset, object: nil)
+    }
+
+    /// 在窗口接受自动焦点之前记成指针输入，并在系统落焦之后再清一次。
+    private func schedulePointerFocusReset() {
+        PanelKeyboardFocusRing.notePointer()
+        pointerFocusResetID &+= 1
+        let id = pointerFocusResetID
+        (panel as? NativePanelWindow)?.cancelPointerFocusReset = { [weak self] in
+            self?.pointerFocusResetID &+= 1
+        }
+        NotificationCenter.default.post(name: .hagimiPanelKeyboardFocusReset, object: nil)
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                self?.applyPointerFocusReset(id: id)
+            }
+        }
+    }
+
+    private func applyPointerFocusReset(id: Int) {
+        guard id == pointerFocusResetID else { return }
+        panel.makeFirstResponder(nil)
+        NotificationCenter.default.post(name: .hagimiPanelKeyboardFocusReset, object: nil)
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, id == self.pointerFocusResetID else { return }
+                self.panel.makeFirstResponder(nil)
+                NotificationCenter.default.post(name: .hagimiPanelKeyboardFocusReset, object: nil)
+            }
+        }
+    }
 
     /// 把「菜单栏下沿 → 屏幕可视区底部」的可用高度下发给内容侧:面板主体据此
     /// 自行封顶(header 固定,主体在内部 ScrollView 滚动),上报的自然尺寸随之

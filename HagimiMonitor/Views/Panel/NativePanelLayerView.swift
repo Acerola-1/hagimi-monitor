@@ -5,8 +5,23 @@ import QuartzCore
 
 final class NativePanelWindow: NSPanel {
     var escapeAction: (() -> Void)?
+    /// 指针呼出后会延迟清掉自动落到首行的焦点。真正的按键先取消这次清理。
+    var cancelPointerFocusReset: (() -> Void)?
     override var canBecomeKey: Bool { true }
     override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .keyDown:
+            PanelKeyboardFocusRing.noteKeyDown()
+            cancelPointerFocusReset?()
+            cancelPointerFocusReset = nil
+        case .leftMouseDown, .rightMouseDown, .otherMouseDown:
+            PanelKeyboardFocusRing.notePointer()
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .hagimiPanelPointerInteraction, object: nil)
+            }
+        default:
+            break
+        }
         // 明细各自拥有 NSHostingView，SwiftUI 命令不会跨这些宿主自动冒泡。
         // 只接管本窗口收到的无修饰 Esc，所有退出层级仍交给面板根视图决定。
         if event.type == .keyDown, event.keyCode == 53,

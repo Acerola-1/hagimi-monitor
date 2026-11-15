@@ -853,38 +853,38 @@ private struct PanelHeaderToolBadges: View {
     }
 
     var body: some View {
-        HStack(spacing: 5) {
-            if store.keyboardLocked {
-                HStack(spacing: 3) {
-                    Image(systemName: "keyboard")
-                        .font(.system(size: 11, weight: .semibold))
-                    if let deadline = store.keyboardLockAutoUnlockDate {
-                        autoUnlockCountdown(deadline: deadline)
-                    }
-                }
-                .help(String(localized: "quicktools.keyboard-lock"))
-            }
-            if store.systemSleepPrevented {
-                Image(systemName: "laptopcomputer")
-                    .font(.system(size: 11, weight: .semibold))
-                    .help(String(localized: "quicktools.system-awake"))
-            }
-            if store.displayAwake {
-                Image(systemName: "sun.max")
-                    .font(.system(size: 11, weight: .semibold))
-                    .help(String(localized: "quicktools.display-awake"))
-            }
-        }
-        .foregroundStyle(tint)
-        .frame(minHeight: 18)
-        .contentShape(Rectangle())
-        .onTapGesture {
+        Button {
             store.popoverPresenter.toggle(theme: theme, settings: settings, anchor: anchor)
+        } label: {
+            HStack(spacing: 5) {
+                if store.keyboardLocked {
+                    HStack(spacing: 3) {
+                        Image(systemName: "keyboard")
+                            .font(.system(size: 11, weight: .semibold))
+                        if let deadline = store.keyboardLockAutoUnlockDate {
+                            autoUnlockCountdown(deadline: deadline)
+                        }
+                    }
+                    .help(String(localized: "quicktools.keyboard-lock"))
+                }
+                if store.systemSleepPrevented {
+                    Image(systemName: "laptopcomputer")
+                        .font(.system(size: 11, weight: .semibold))
+                        .help(String(localized: "quicktools.system-awake"))
+                }
+                if store.displayAwake {
+                    Image(systemName: "sun.max")
+                        .font(.system(size: 11, weight: .semibold))
+                        .help(String(localized: "quicktools.display-awake"))
+                }
+            }
+            .foregroundStyle(tint)
+            .frame(minHeight: 18)
+            .contentShape(Rectangle())
         }
-        // 无障碍:徽章簇合并为单一按钮(打开快捷工具浮层)。
-        .accessibilityElement(children: .ignore)
+        .buttonStyle(.plain)
+        // 多个符号与倒计时合成一个按钮；标签覆盖内部图标，激活仍走按钮本身。
         .accessibilityLabel(String(localized: "panel.tools"))
-        .accessibilityAddTraits(.isButton)
         .background(QuickToolsAnchorView(box: anchor))
         // 菜单栏上已无任何激活工具时,收起本簇锚定的浮层,避免它随塌缩的
         // 徽章簇漂移到统计入口下方(脱离触发来源变得突兀)。仅作用于 header
@@ -916,10 +916,6 @@ private struct PanelHeaderToolBadges: View {
 // MARK: - Metric Row
 
 private struct MetricGlassRow: View, Equatable {
-    @Environment(\.isEnabled) private var isEnabled
-    @FocusState private var isHeaderFocused: Bool
-    @State private var showsKeyboardFocus = false
-
     let module: MonitorModule
     let theme: MonitorPanelTheme
     let detail: String
@@ -1038,7 +1034,6 @@ private struct MetricGlassRow: View, Equatable {
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
             .onTapGesture {
-                showsKeyboardFocus = false
                 // 单风扇时主行已展示 RPM,无展开内容,点击不切换展开状态。
                 guard detailAvailable else { return }
                 toggleExpansion?()
@@ -1054,36 +1049,9 @@ private struct MetricGlassRow: View, Equatable {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(detailAvailable ? .isButton : [])
-            .accessibilityAction {
+            .panelRowKeyboardFocus(canActivate: detailAvailable, ring: theme.primaryText) {
                 guard detailAvailable else { return }
                 toggleExpansion?()
-            }
-            .focusable(detailAvailable && isEnabled)
-            .focusEffectDisabled()
-            .focused($isHeaderFocused)
-            .onChange(of: isHeaderFocused) { _, focused in
-                // 鼠标保留激活能力；仅键盘或辅助导航显示行内焦点轮廓。
-                switch NSApp.currentEvent?.type {
-                case .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp:
-                    showsKeyboardFocus = false
-                default:
-                    showsKeyboardFocus = focused
-                }
-            }
-            .onKeyPress(.space) {
-                guard detailAvailable else { return .ignored }
-                showsKeyboardFocus = true
-                toggleExpansion?()
-                return .handled
-            }
-            .overlay {
-                if isHeaderFocused && showsKeyboardFocus {
-                    RoundedRectangle(cornerRadius: CGFloat(MonitorConstants.rowCornerRadius), style: .continuous)
-                        .inset(by: 1)
-                        .strokeBorder(theme.primaryText, lineWidth: 1.5)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
             }
             .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
@@ -1998,6 +1966,9 @@ struct NetworkGlassRow: View, Equatable {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(hasExpandableContent ? .isButton : [])
+            .panelRowKeyboardFocus(canActivate: hasExpandableContent, ring: theme.primaryText) {
+                if hasExpandableContent { toggleExpansion?() }
+            }
             .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
@@ -2146,6 +2117,9 @@ struct BatteryGlassRow: View, Equatable {
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
             .accessibilityAddTraits(canExpand ? .isButton : [])
+            .panelRowKeyboardFocus(canActivate: canExpand, ring: theme.primaryText) {
+                if canExpand { toggleExpansion?() }
+            }
             .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
@@ -3216,6 +3190,10 @@ private struct BluetoothGlassRow: View, Equatable {
             .accessibilityValue(accessibilityValueForRow)
             .accessibilityHint(devices.isEmpty ? "" : accessibilityHintForRow)
             .accessibilityAddTraits(devices.isEmpty ? [] : .isButton)
+            .panelRowKeyboardFocus(canActivate: !devices.isEmpty, ring: theme.primaryText) {
+                guard !devices.isEmpty else { return }
+                toggleExpansion?()
+            }
             .panelReorderItem(scope: .modules, id: module.kind.id, title: module.kind.title)
 
             .panelMeasure("row:" + module.kind.id)
