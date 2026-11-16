@@ -7821,13 +7821,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Topology"
+            "value": "Power"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "拓扑"
+            "value": "功耗"
           }
         }
       }

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 占位电池的独立功率仅由拓扑页展示；主读数与统计沿用占位模块过滤。
+/// 占位电池的独立功率仅由功耗页展示；主读数与统计沿用占位模块过滤。
 nonisolated struct BatteryPowerPresentation {
     static let independentNames: Set<String> = ["display-power", "cpu-power", "gpu-power", "ane-power"]
     let module: MonitorModule
