@@ -1631,7 +1631,7 @@ private struct DisplayControlSlider: View {
                 .foregroundStyle(isEnabled ? tint : palette.captionText)
                 .frame(width: 14)
 
-            Slider(value: binding(), in: 0...100, step: 1)
+            Slider(value: binding(), in: 0...100)
                 .tint(tint)
                 .controlSize(.small)
                 .disabled(!isEnabled)
@@ -1667,7 +1667,12 @@ private struct DisplayControlSlider: View {
     private func binding() -> Binding<Double> {
         Binding(
             get: { value ?? 50 },
-            set: { newValue in self.value = newValue }
+            set: { newValue in
+                // 连续滑轨不绘制密集刻线，设备目标仍按整数百分比提交。
+                let percentage = newValue.rounded()
+                guard value != percentage else { return }
+                value = percentage
+            }
         )
     }
 }
