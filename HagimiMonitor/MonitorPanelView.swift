@@ -2126,6 +2126,10 @@ struct BatteryGlassRow: View, Equatable {
 
             CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: canExpand, measurementKey: detailMeasurementKey) {
                 VStack(spacing: 8) {
+                    Rectangle()
+                        .fill(theme.rowSeparator(for: module.kind))
+                        .frame(height: 1)
+
                     // 可见页变化时仍选择有效页，避免读数暂缺导致导航无选中项。
                     if availableTabs.count > 1 {
                         PowerPagePicker(

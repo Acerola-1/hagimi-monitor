@@ -191,6 +191,10 @@ struct ModuleRowPreview: View {
     @ViewBuilder
     private var batteryTabbedDetail: some View {
         VStack(spacing: 8) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: kind))
+                .frame(height: 1)
+
             PowerPagePicker(selection: $batteryTab, items: BatteryPageTab.previewCases, theme: theme)
 
             switch batteryTab {
