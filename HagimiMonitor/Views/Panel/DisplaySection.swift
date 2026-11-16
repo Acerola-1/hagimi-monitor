@@ -66,6 +66,54 @@ nonisolated struct DisplayInfo: Identifiable, Equatable, Codable, Sendable {
     let manufactureDate: String?
 }
 
+private enum DisplayDeviceLayout {
+    static let iconWidth: CGFloat = 18
+    static let contentGap: CGFloat = 10
+    static let titleHeight: CGFloat = 22
+    static let deviceSpacing: CGFloat = 4
+    static let bottomInset: CGFloat = 6
+    static var textIndent: CGFloat { iconWidth + contentGap }
+}
+
+/// 分隔线属于设备自身的实测行头，随嵌套揭示一起裁剪，不绘制到子宿主边界之外。
+private struct DisplayDeviceHeader<Title: View, Action: View>: View {
+    let systemImage: String
+    let palette: MonitorPalette
+    var showsSeparator = false
+    var subtitle: String? = nil
+    @ViewBuilder var title: () -> Title
+    @ViewBuilder var action: () -> Action
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DisplayDeviceLayout.contentGap) {
+            if showsSeparator {
+                Rectangle()
+                    .fill(palette.displaySeparator.opacity(0.72))
+                    .frame(height: 1)
+            }
+            HStack(alignment: .top, spacing: DisplayDeviceLayout.contentGap) {
+                Image(systemName: systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(palette.displayTint)
+                    .frame(width: DisplayDeviceLayout.iconWidth, height: DisplayDeviceLayout.titleHeight)
+                VStack(alignment: .leading, spacing: 3) {
+                    title()
+                        .frame(minHeight: DisplayDeviceLayout.titleHeight, alignment: .leading)
+                    if let subtitle {
+                        Text(subtitle)
+                            .monitorPanelCaptionFont(.caption2, weight: .regular)
+                            .foregroundStyle(palette.captionText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                action()
+            }
+        }
+    }
+}
+
 #if DISPLAY_CONTROL
 extension Notification.Name {
     /// 调试自动测试:触发第一台显示器档案区的展开/收起。
@@ -152,6 +200,14 @@ struct DisplaySection: View {
 
     // MARK: 沙盒渠道:只读信息行
 
+    private var detailSeparator: some View {
+        Rectangle()
+            .fill(theme.palette.displaySeparator)
+            .frame(height: 1)
+            .padding(.horizontal, 10)
+            .allowsHitTesting(false)
+    }
+
     #if !DISPLAY_CONTROL
     private var infoContent: some View {
         PanelCardStack(measurementKey: "display") {
@@ -199,10 +255,11 @@ struct DisplaySection: View {
 
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
                     group: PanelChildGroup(ids: displays.map { "display-arc-\($0.id)" },
-                        leading: 10, trailing: 10, bottom: 9, spacing: 9),
-                    motion: expansion.motion, nativeItems: displays.map { display in
-                            NativePanelContentItem(id: "display-arc-\(display.id)", content: AnyView(displaySection(display)))
+                        leading: 10, trailing: 10, top: 9, bottom: 9, spacing: DisplayDeviceLayout.deviceSpacing),
+                    motion: expansion.motion, nativeItems: displays.enumerated().map { index, display in
+                            NativePanelContentItem(id: "display-arc-\(display.id)", content: AnyView(displaySection(display, showsSeparator: index > 0)))
                         })
+                    .overlay(alignment: .top) { detailSeparator }
 
         }
         .panelBenchmarkCommands { command in
@@ -238,12 +295,13 @@ struct DisplaySection: View {
         animate(Self.sectionKey, isExpanded, true)
     }
 
-    private func displaySection(_ display: DisplayInfo) -> some View {
+    private func displaySection(_ display: DisplayInfo, showsSeparator: Bool) -> some View {
         DisplayInfoCard(
             display: display,
             palette: theme.palette,
             isSectionExpanded: isExpanded,
             archiveKey: "display-arc-\(display.id)",
+            showsSeparator: showsSeparator,
             animate: animate
         )
     }
@@ -332,26 +390,25 @@ struct DisplaySection: View {
             if !entries.isEmpty {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
                     group: PanelChildGroup(ids: entries.map { "display-arc-\($0.id)" },
-                        leading: 10, trailing: 10, top: 9, bottom: 9, spacing: 17),
+                        leading: 10, trailing: 10, top: 9, bottom: 9, spacing: DisplayDeviceLayout.deviceSpacing),
                     motion: expansion.motion,
-                    nativeItems: entries.map { entry in
+                    nativeItems: entries.enumerated().map { index, entry in
                         NativePanelContentItem(id: "display-arc-\(entry.id)", content: AnyView(
-                            connectionCard(entry, palette: palette, tint: tint)))
+                            connectionCard(entry, palette: palette, tint: tint, showsSeparator: index > 0)))
                     })
+                .overlay(alignment: .top) { detailSeparator }
             } else if hasControls && !visibleDisplays.isEmpty {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
                     group: PanelChildGroup(ids: visibleDisplays.map { "display-arc-\($0.id)" },
-                        leading: 10, trailing: 10, top: 9, bottom: 9, spacing: 17),
+                        leading: 10, trailing: 10, top: 9, bottom: 9, spacing: DisplayDeviceLayout.deviceSpacing),
                     motion: expansion.motion, nativeItems: visibleDisplays.enumerated().map { index, display in
                             NativePanelContentItem(id: "display-arc-\(display.id)", content: AnyView(
                                 DisplayControlGroup(display: display, displayInfo: displayInfoByID[display.id],
                                     settings: settings, controller: controller, palette: palette, tint: tint,
-                                    isSectionExpanded: isExpanded, archiveKey: "display-arc-\(display.id)", animate: animate)
-                                    .overlay(alignment: .top) {
-                                        Rectangle().fill(palette.displaySeparator.opacity(index == 0 ? 1 : 0.72))
-                                            .frame(height: 1).offset(y: -9)
-                                    }))
+                                    isSectionExpanded: isExpanded, archiveKey: "display-arc-\(display.id)",
+                                    showsSeparator: index > 0, animate: animate)))
                         })
+                .overlay(alignment: .top) { detailSeparator }
             } else {
             CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded,
                 measurementKey: "\(hasControls)") {
@@ -450,7 +507,8 @@ struct DisplaySection: View {
     }
 
     @ViewBuilder
-    private func connectionCard(_ entry: DisplayConnectionEntry, palette: MonitorPalette, tint: Color) -> some View {
+    private func connectionCard(_ entry: DisplayConnectionEntry, palette: MonitorPalette, tint: Color,
+                                showsSeparator: Bool) -> some View {
         if entry.observation == .connected,
            let live = controller.displays.first(where: {
                $0.id == entry.screen?.id && $0.connectionIdentity?.matches(entry.record.identity) == true
@@ -458,9 +516,11 @@ struct DisplaySection: View {
             DisplayControlGroup(display: live,
                 displayInfo: displayInfoByID[live.id] ?? entry.record.archive?.info,
                 settings: settings, controller: controller, palette: palette, tint: tint,
-                isSectionExpanded: isExpanded, archiveKey: "display-arc-\(entry.id)", animate: animate)
+                isSectionExpanded: isExpanded, archiveKey: "display-arc-\(entry.id)",
+                showsSeparator: showsSeparator, animate: animate)
         } else {
-            DisplayDisconnectedGroup(entry: entry, controller: controller, palette: palette, tint: tint)
+            DisplayDisconnectedGroup(entry: entry, controller: controller, palette: palette,
+                                     showsSeparator: showsSeparator)
         }
     }
 
@@ -780,6 +840,7 @@ private struct DisplayInfoCard: View {
     let isSectionExpanded: Bool
     /// 本卡档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
     let archiveKey: String
+    var showsSeparator = false
     /// 发起动画的闭包,与 DisplaySection 同一驱动源。
     var animate: (String, Bool, Bool) -> Void
 
@@ -790,11 +851,13 @@ private struct DisplayInfoCard: View {
     var body: some View {
         Group {
 
-                PanelCardStack(measurementKey: String(describing: display)) {
+                PanelCardStack(measurementKey: "\(String(describing: display))|separator:\(showsSeparator)") {
                     VStack(alignment: .leading, spacing: 7) {
-                        HStack(alignment: .top, spacing: 10) {
-                            displayIcon
+                        DisplayDeviceHeader(systemImage: display.isBuiltIn ? "laptopcomputer" : "display",
+                                            palette: palette, showsSeparator: showsSeparator) {
                             title
+                        } action: {
+                            EmptyView()
                         }
                         DisplayInfoBaseGrid(display: display, palette: palette)
                     }
@@ -825,21 +888,13 @@ private struct DisplayInfoCard: View {
     }
 
     private var title: some View {
-        DisplayArchiveNameButton(name: display.name, expanded: archiveExpanded, action: toggleArchive) {
+        DisplayArchiveNameButton(name: display.name, palette: palette, expanded: archiveExpanded, action: toggleArchive) {
             Text(display.name)
-                .monitorPanelLabelFont(tracking: 0.8)
+                .monitorPanelCaptionFont(.footnote, weight: .semibold)
                 .foregroundStyle(palette.primaryText)
-                .fixedSize()
+                .lineLimit(1)
+                .truncationMode(.middle)
         }
-    }
-
-    private var displayIcon: some View {
-        Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
-            .font(.subheadline.weight(.semibold))
-            .symbolRenderingMode(.monochrome)
-            .foregroundStyle(palette.displayTint)
-            .frame(width: 18)
-            .padding(.top, 2)
     }
 
 
@@ -865,12 +920,22 @@ private struct DisplayInfoCard: View {
 /// 在线卡片的设备名承担档案开合。悬浮提示给出完整名称，并说明点击会展开或收起。
 private struct DisplayArchiveNameButton<Label: View>: View {
     let name: String
+    let palette: MonitorPalette
     let expanded: Bool
     var action: () -> Void
     @ViewBuilder var label: () -> Label
 
     var body: some View {
-        Button(action: action, label: label)
+        Button(action: action) {
+            HStack(spacing: 4) {
+                label()
+                    .layoutPriority(1)
+                Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                    .font(.system(size: 7, weight: .semibold))
+                    .foregroundStyle(palette.captionText)
+            }
+            .contentShape(Rectangle())
+        }
             .buttonStyle(.plain)
             .help(helpText)
             .accessibilityLabel(name)
@@ -1344,9 +1409,8 @@ private struct DisplayBrightnessPill: View {
 }
 
 /// 直连渠道单台显示器的控制组卡,两种形态经点击设备名切换:
-/// 收起态 = 图标 + 名称 + 行尾启停 + 一行摘要(分辨率 · 刷新率 ·
-/// HDR 开启时 · 位深)+ 控制滑杆;展开态 = 完整信息(基础四项 + 档案 +
-/// 复制),摘要与滑杆让位。不支持项在滑杆下方展示诚实静态提示。
+/// 名称与摘要常驻设备行头；展开档案时，滑杆让位给完整信息与复制入口。
+/// 不支持项在滑杆下方展示诚实静态提示。
 private struct DisplayControlGroup: View {
     let display: ControlledDisplay
     /// 该显示器的只读信息(分辨率/刷新率/HDR 与档案),并入控制区展示;采集失败为 nil 不占位。
@@ -1359,6 +1423,7 @@ private struct DisplayControlGroup: View {
 
     /// 本显示器档案展开区 key(按显示器区分,同一面板展开多台不互相牵动)。
     let archiveKey: String
+    var showsSeparator = false
     /// 发起动画的闭包,与 DisplaySection 同一驱动源。
     var animate: (String, Bool, Bool) -> Void
 
@@ -1370,15 +1435,20 @@ private struct DisplayControlGroup: View {
 
                 PanelCardStack(measurementKey: measurementKey) {
                     VStack(alignment: .leading, spacing: 7) {
-                    HStack(alignment: .top, spacing: 10) {
-                        displayIcon
-                        title
-                    }
-                    if let connectionIssue {
-                        Text(connectionIssue.message)
-                            .monitorPanelCaptionFont(.caption2).foregroundStyle(palette.secondaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
+                        DisplayDeviceHeader(systemImage: display.isBuiltIn ? "laptopcomputer" : "display",
+                                            palette: palette, showsSeparator: showsSeparator, subtitle: infoSummaryLine) {
+                            title
+                        } action: {
+                            DisplayConnectionAction(
+                                entry: controller.connections.entries.first { $0.screen?.id == display.id },
+                                name: display.name, palette: palette, controller: controller)
+                        }
+                        if let connectionIssue {
+                            Text(connectionIssue.message)
+                                .monitorPanelCaptionFont(.caption2).foregroundStyle(palette.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .padding(.leading, DisplayDeviceLayout.textIndent)
+                        }
                     }
                     .panelMeasure("row:" + archiveKey)
                     SingleHostReplacement(id: archiveKey, isExpanded: archiveExpanded,
@@ -1415,7 +1485,7 @@ private struct DisplayControlGroup: View {
     }
 
     private var measurementKey: String {
-        "\(display.name)|\(String(describing: displayInfo))|\(display.isBuiltIn)|\(settings.displayBrightnessControlEnabled)|\(settings.displayVolumeControlEnabled)|\(settings.displayContrastControlEnabled)|\(showsUnsupportedNotice)|\(connectionIssue?.rawValue ?? "")"
+        "\(display.name)|\(String(describing: displayInfo))|\(display.isBuiltIn)|\(settings.displayBrightnessControlEnabled)|\(settings.displayVolumeControlEnabled)|\(settings.displayContrastControlEnabled)|\(showsUnsupportedNotice)|\(connectionIssue?.rawValue ?? "")|separator:\(showsSeparator)"
     }
 
     private var connectionIssue: DisplayConnectionIssue? {
@@ -1428,24 +1498,15 @@ private struct DisplayControlGroup: View {
     }
 
     private var title: some View {
-                HStack(spacing: 8) {
-                    Group {
-                        if displayInfo != nil {
-                            DisplayArchiveNameButton(name: display.name, expanded: archiveExpanded, action: toggleArchive) {
-                                deviceName
-                            }
-                        } else {
-                            deviceName.help(display.name)
-                        }
-                    }
-                    .layoutPriority(1)
-
-                    Spacer(minLength: 8)
-
-                    DisplayConnectionAction(
-                        entry: controller.connections.entries.first { $0.screen?.id == display.id },
-                        name: display.name, palette: palette, controller: controller)
+        Group {
+            if displayInfo != nil {
+                DisplayArchiveNameButton(name: display.name, palette: palette, expanded: archiveExpanded, action: toggleArchive) {
+                    deviceName
                 }
+            } else {
+                deviceName.help(display.name)
+            }
+        }
     }
 
     private var deviceName: some View {
@@ -1456,28 +1517,8 @@ private struct DisplayControlGroup: View {
             .truncationMode(.middle)
     }
 
-    private var displayIcon: some View {
-            Image(systemName: display.isBuiltIn ? "laptopcomputer" : "display")
-                .font(.subheadline.weight(.semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
-                .frame(width: 18)
-                .padding(.top, 2)
-    }
-
-
-
     private var controlsContent: some View {
         VStack(spacing: 7) {
-            if let summary = infoSummaryLine {
-                Text(summary)
-                    .monitorPanelCaptionFont(.caption2)
-                    .foregroundStyle(palette.captionText)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-
             if settings.displayBrightnessControlEnabled {
                 DisplayControlSlider(
                     systemImage: "sun.max",
@@ -1532,7 +1573,7 @@ private struct DisplayControlGroup: View {
         }
         // 原生 Slider 的旋钮绘制会超出其布局盒下缘;控制区在 toggledContent 里按
         // 测量高度裁剪,留此底部余量避免最末一条滑轨的旋钮下半被削。
-        .padding(.bottom, 6)
+        .padding(.bottom, DisplayDeviceLayout.bottomInset)
     }
 
     private func archiveContent(for info: DisplayInfo) -> some View {
@@ -1624,12 +1665,12 @@ private struct DisplayControlSlider: View {
     let tint: Color
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: DisplayDeviceLayout.contentGap) {
             Image(systemName: systemImage)
                 .font(.caption2.weight(.semibold))
                 .symbolRenderingMode(.monochrome)
                 .foregroundStyle(isEnabled ? tint : palette.captionText)
-                .frame(width: 14)
+                .frame(width: DisplayDeviceLayout.iconWidth)
 
             Slider(value: binding(), in: 0...100)
                 .tint(tint)
@@ -1661,6 +1702,7 @@ private struct DisplayControlSlider: View {
                     .frame(width: 52, alignment: .trailing)
             }
         }
+        .frame(minHeight: DisplayDeviceLayout.titleHeight)
         .opacity(isEnabled ? 1 : 0.48)
     }
 
@@ -1740,24 +1782,24 @@ private struct DisplayConnectionAction: View {
     }
 }
 
-/// 停用条目只保留设备标题和明确的启用动作，不占用参数与档案空间。
+/// 非在线设备只保留名称和现有恢复操作，不占用参数与档案空间。
 private struct DisplayDisconnectedGroup: View {
     let entry: DisplayConnectionEntry
     @ObservedObject var controller: DisplayControlController
     let palette: MonitorPalette
-    let tint: Color
+    var showsSeparator = false
     private var key: String { "display-arc-\(entry.id)" }
 
     var body: some View {
-        HStack(alignment: .center, spacing: 10) {
-            Image(systemName: entry.record.identity.isBuiltIn ? "laptopcomputer" : "display")
-                .font(.subheadline.weight(.semibold)).foregroundStyle(tint).frame(width: 18)
+        DisplayDeviceHeader(systemImage: entry.record.identity.isBuiltIn ? "laptopcomputer" : "display",
+                            palette: palette, showsSeparator: showsSeparator) {
             Text(entry.record.name).monitorPanelCaptionFont(.footnote, weight: .semibold)
                 .foregroundStyle(palette.primaryText).lineLimit(1).truncationMode(.middle)
                 .help(entry.record.name)
-            Spacer(minLength: 8)
+        } action: {
             DisplayConnectionAction(entry: entry, name: entry.record.name, palette: palette, controller: controller)
         }
+        .padding(.bottom, DisplayDeviceLayout.bottomInset)
         .panelMeasure("row:" + key)
         .background {
             Color.clear.preference(key: PanelNaturalMeasurements.self, value: [
