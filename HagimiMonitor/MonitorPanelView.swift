@@ -1248,6 +1248,8 @@ struct CPUCoresDetail: View {
                         tint: tint(for: core.kind),
                         track: theme.palette.cpuCoreTrack
                     )
+                    .contentShape(Rectangle())
+                    .help("\(Int(core.usage.rounded()))%")
                 }
             }
             .padding(.vertical, 6)
