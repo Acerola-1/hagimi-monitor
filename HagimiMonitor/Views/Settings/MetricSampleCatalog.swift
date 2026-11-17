@@ -40,7 +40,7 @@ enum MetricSampleCatalog {
         case (.cpu, "uptime"):
             return MetricSample(parts: [MetricSamplePart(text: uptimeText)])
         case (.cpu, "thermal-pressure"):
-            // 面板中温度与热压力合并整行,双值并排且档位按 severity 着色;
+            // 面板中温度与热压力合并为一个卡片,双值并排且档位按 severity 着色;
             // 温度为直连版专属采样(与面板同门控),沙盒版只显示档位。
             var parts: [MetricSamplePart] = []
             #if DISPLAY_CONTROL
@@ -255,6 +255,7 @@ struct MetricPreviewTile: View {
         HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
             Text(title)
                 .monitorPanelCaptionFont(.footnote)
+                .help(title)
                 .foregroundStyle(palette.captionText)
                 .lineLimit(1)
                 .layoutPriority(1)
@@ -285,13 +286,18 @@ struct MetricPreviewTile: View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
             Text(part.text)
                 .monitorPanelMonoFont(.footnote, weight: .bold)
+                .help(part.text + (part.unit ?? ""))
                 .foregroundStyle(color(for: part.tone))
                 .lineLimit(1)
+                .truncationMode(.middle)
+                .minimumScaleFactor(0.75)
+                .layoutPriority(2)
             if let unit = part.unit {
                 Text(unit)
                     .monitorPanelCaptionFont(.footnote)
                     .foregroundStyle(palette.captionText)
                     .fixedSize()
+                    .layoutPriority(2)
             }
         }
     }

@@ -12,17 +12,13 @@ nonisolated enum MetricGridMetrics: Sendable {
     static let cellSpacerMinLength: CGFloat = 4
 }
 
-/// 指标格静态宽度基准:整行/半行登记、最坏值契约与测量字体。
-/// 布局决策是「语言 × 登记表」的纯函数,不随采样值与面板宽度重排;
-/// 半格预算按语言独立判定——zh 标签普遍两字,半行能容纳的指标比
-/// en 多,同一指标在两语下的布局归属可以不同(语言在一次运行内
-/// 不变,不构成跳动源)。登记依据是各语言 × 最坏值 × 最窄面板宽的
-/// 构建期审计(HagimiMonitorTests/MetricWidthAuditTests)。
+/// 旧版默认排序分组与宽度审计基准。实际列宽由 PanelMetricColumns 自动
+/// 测量和 PanelMetricWidth 偏好决定；保留登记表以兼容存量排序与审计样本。
 enum StaticMetricSizing {
     /// 半格内容宽,按最窄支持面板宽 300 推导:
     /// 300 − 两侧内边距 10×2 = 280,两列减 8 间距得 272,
     /// 每列 136,再减格子左右内衬 8×2 = 120。按最窄档登记,
-    /// 300~460 全区间判定一致成立,面板调整不触发重排。
+    /// 旧版 300~460 全区间共用该审计预算，实际布局按当前宽度测量。
     static let halfCellContentWidth: CGFloat = 120
 
     /// 格内横向占用:标签与数值之间的 HStack 间距 + Spacer 最小长度。
@@ -102,7 +98,7 @@ enum StaticMetricSizing {
         ]
     ]
 
-    /// 整行判定:结构性登记与当前语言登记表的纯查表,与采样值无关。
+    /// 旧版整行分组：仅用于默认排序与原宽度审计，不限制实际布局。
     static func isFullRow(kind: MonitorKind, name: String, language: String = panelLanguage) -> Bool {
         let key = "\(kind.rawValue).\(name)"
         return structuralFullRowMetricIDs.contains(key)

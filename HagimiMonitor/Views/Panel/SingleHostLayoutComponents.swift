@@ -204,9 +204,18 @@ nonisolated struct PanelMetricSpanKey: LayoutValueKey {
     static let defaultValue = 1
 }
 
+nonisolated struct PanelMetricIdentityKey: LayoutValueKey {
+    static let defaultValue = ""
+}
+
 extension View {
     func panelMetricSpan(_ columns: Int) -> some View {
         layoutValue(key: PanelMetricSpanKey.self, value: columns)
+    }
+
+    func panelMetricWidth(_ width: PanelMetricWidth, id: String) -> some View {
+        panelMetricSpan(width.span)
+            .layoutValue(key: PanelMetricIdentityKey.self, value: id)
     }
 }
 
@@ -229,7 +238,7 @@ nonisolated enum MetricGridPacking {
     }
 }
 
-/// 指标数量有限；普通与几何实验路径共用同一个固定跨度布局。
+/// 统一测量真实内容；自动格按当前宽度选择半行或整行。
 struct PanelMetricColumns<Content: View>: View {
     let measurementKey: String
     @ViewBuilder let content: () -> Content
@@ -238,7 +247,8 @@ struct PanelMetricColumns<Content: View>: View {
     @Environment(\.displayScale) private var scale
 
     var body: some View {
-        PanelMetricColumnsLayout(measurementKey: "\(measurementKey)|\(locale.identifier)|\(typeSize)|\(scale)") {
+        PanelMetricColumnsLayout(measurementKey: measurementKey,
+                                 environmentKey: "\(locale.identifier)|\(typeSize)|\(scale)") {
             content()
         }
     }
@@ -246,20 +256,32 @@ struct PanelMetricColumns<Content: View>: View {
 
 nonisolated struct PanelMetricColumnsLayout: Layout {
     let measurementKey: String
+    var environmentKey: String = ""
     struct Cache {
         var width: CGFloat?
         var key: String?
         var sizes: [CGSize] = []
         var frames: [CGRect] = []
         var height: CGFloat = 0
+        var resolution = MetricWidthResolution()
+        var environment: String?
     }
     func makeCache(subviews: Subviews) -> Cache { Cache() }
-    func updateCache(_ cache: inout Cache, subviews: Subviews) {}
+    func updateCache(_ cache: inout Cache, subviews: Subviews) { cache.key = nil }
 
     private func measure(width: CGFloat, subviews: Subviews, cache: inout Cache) {
-        guard cache.width != width || cache.key != measurementKey || cache.sizes.count != subviews.count else { return }
+        guard cache.width != width || cache.key != measurementKey || cache.environment != environmentKey
+                || cache.sizes.count != subviews.count else { return }
         let cellWidth = max(0, (width - MetricGridMetrics.columnSpacing) / 2)
-        let spans = subviews.map { $0[PanelMetricSpanKey.self] == 2 ? 2 : 1 }
+        let items = subviews.enumerated().map { index, subview in
+            let id = subview[PanelMetricIdentityKey.self]
+            let span = subview[PanelMetricSpanKey.self]
+            return MetricWidthResolution.Item(
+                id: id.isEmpty ? "index-\(index)" : id, span: span,
+                idealWidth: span == 0 ? subview.sizeThatFits(.unspecified).width : 0
+            )
+        }
+        let spans = cache.resolution.spans(for: items, width: width, environment: environmentKey)
         cache.sizes = subviews.enumerated().map { index, subview in
             subview.sizeThatFits(ProposedViewSize(width: spans[index] == 2 ? width : cellWidth, height: nil))
         }
@@ -281,6 +303,7 @@ nonisolated struct PanelMetricColumnsLayout: Layout {
         cache.height = rows.isEmpty ? 0 : y - MetricGridMetrics.gridRowGap
         cache.width = width
         cache.key = measurementKey
+        cache.environment = environmentKey
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Cache) -> CGSize {

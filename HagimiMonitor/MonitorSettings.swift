@@ -183,6 +183,7 @@ final class MonitorSettings: ObservableObject {
     @Published private(set) var enabledMetrics: [MonitorKind: Set<String>] = [:]
     /// 排列偏好保存完整 ID，显隐或暂时缺失不修改顺序。
     @Published private(set) var panelOrders: [String: [String]] = [:]
+    @Published private(set) var panelMetricWidths: [String: PanelMetricWidth] = [:]
 
     #if DIRECT_DISTRIBUTION
     // MARK: - Game HUD
@@ -521,6 +522,9 @@ final class MonitorSettings: ObservableObject {
         }
         enabledMetrics = loadedMetrics
         panelOrders = (defaults.dictionary(forKey: Keys.panelOrders) ?? [:]).compactMapValues { $0 as? [String] }
+        panelMetricWidths = (defaults.dictionary(forKey: Keys.panelMetricWidths) ?? [:]).compactMapValues {
+            ($0 as? String).flatMap(PanelMetricWidth.init(rawValue:))
+        }
 
         #if DIRECT_DISTRIBUTION
         // 一次性迁移:GPU 频率档调整为紧随 GPU 占用之后,调整已有顺序并将两项排在开头
@@ -828,6 +832,22 @@ final class MonitorSettings: ObservableObject {
     }
     #endif
     #endif
+
+    func panelMetricWidth(for kind: MonitorKind, id: String) -> PanelMetricWidth {
+        panelMetricWidths[PanelMetricWidth.key(kind: kind, id: id)] ?? .automatic
+    }
+
+    func setPanelMetricWidth(_ width: PanelMetricWidth, for kind: MonitorKind, id: String) {
+        guard PanelMetricWidth.supports(kind: kind, id: id) else { return }
+        let key = PanelMetricWidth.key(kind: kind, id: id)
+        guard panelMetricWidth(for: kind, id: id) != width else { return }
+        if width == .automatic { panelMetricWidths.removeValue(forKey: key) }
+        else { panelMetricWidths[key] = width }
+    }
+
+    func resetPanelMetricWidths(for kind: MonitorKind) {
+        panelMetricWidths = panelMetricWidths.filter { !$0.key.hasPrefix(kind.rawValue + ".") }
+    }
 
     func panelOrder(for scope: PanelOrderScope) -> [String] {
         PanelOrderList.reconciled(
@@ -1293,6 +1313,13 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $panelMetricWidths
+            .dropFirst()
+            .sink { [weak self] widths in
+                self?.persist(widths.mapValues(\.rawValue), forKey: Keys.panelMetricWidths)
+            }
+            .store(in: &cancellables)
+
         $pinnedPanelOriginX
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1486,6 +1513,7 @@ private enum Keys {
     static let legacyBatteryShowPowerFlow = "settings.battery.showPowerFlow"
     static let enabledMetricsPrefix = "settings.enabledMetrics."
     static let panelOrders = "settings.panel.orders"
+    static let panelMetricWidths = "settings.panel.metricWidths"
     static let pinnedPanelOriginX = "settings.pinnedPanel.originX"
     static let pinnedPanelOriginY = "settings.pinnedPanel.originY"
     #if DIRECT_DISTRIBUTION

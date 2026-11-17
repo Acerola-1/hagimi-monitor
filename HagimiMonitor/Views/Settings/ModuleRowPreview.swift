@@ -11,6 +11,7 @@ struct ModuleRowPreview: View {
     let memoryPressureMode: Bool
     let palette: MonitorPalette
     let metricOrders: [String: [String]]
+    var metricWidths: [String: PanelMetricWidth] = [:]
     var chartStyle: PanelHistoryChartStyle = .bars
     /// 电池模块分页选择(健康/拓扑/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
@@ -71,6 +72,7 @@ struct ModuleRowPreview: View {
                 }
             }
         }
+        .environment(\.panelMetricWidths, metricWidths)
         .background(
             palette.rowGlassFill(for: kind)
                 .clipShape(RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
@@ -151,7 +153,6 @@ struct ModuleRowPreview: View {
 
     private struct PreviewCell: Identifiable {
         let metric: MetricSwitch
-        let span: Int
         var id: String { metric.id }
     }
 
@@ -254,7 +255,11 @@ struct ModuleRowPreview: View {
         return renderMetrics.filter { names.contains($0.id) && $0.id != "power-flow" }
     }
 
-    /// 面板和预览共享静态跨度；拖动只改变位置，不改变指标宽度。
+    private func widthPreference(_ cell: PreviewCell) -> PanelMetricWidth {
+        metricWidths[PanelMetricWidth.key(kind: kind, id: cell.id)] ?? .automatic
+    }
+
+    /// 面板和预览共享自动测量与手动宽度偏好；默认顺序沿用原登记。
     @ViewBuilder
     private func previewGrid(_ gridMetrics: [MetricSwitch], order: [String]) -> some View {
         let visible = gridMetrics
@@ -263,15 +268,16 @@ struct ModuleRowPreview: View {
         let full = visible.filter {
             isFullRow($0) && !(mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure")
         }
-        let core = showsCoreDetail && kind == .cpu ? full.filter { $0.id == "core-split" } : []
-        let defaults = core + short + thermal + full.filter { $0.id != "core-split" || core.isEmpty }
+        let core = showsCoreDetail && kind == .cpu ? visible.filter { $0.id == "core-split" } : []
+        let defaults = core + short.filter { $0.id != "core-split" || core.isEmpty }
+            + thermal + full.filter { $0.id != "core-split" || core.isEmpty }
         let saved = PanelOrderList.reconciled(order.isEmpty ? nil : order, defaults: defaults.map(\.id))
         let byID = Dictionary(uniqueKeysWithValues: defaults.map { ($0.id, $0) })
         let cells = saved.compactMap { id -> PreviewCell? in
             guard let metric = byID[id] else { return nil }
-            return PreviewCell(metric: metric, span: isFullRow(metric) || (showsCoreDetail && kind == .cpu && id == "core-split") || (mergesThermalRow && kind == .cpu && id == "thermal-pressure") ? 2 : 1)
+            return PreviewCell(metric: metric)
         }
-        PanelMetricColumns(measurementKey: cells.map(\.id).joined(separator: ",")) {
+        PanelMetricColumns(measurementKey: cells.map { "\($0.id):\(widthPreference($0).rawValue)" }.joined(separator: ",")) {
             ForEach(cells) { cell in
                 if showsCoreDetail && kind == .cpu && cell.id == "core-split" {
                     CPUCoresDetail(detail: MetricSampleCatalog.cpuCoreDetail, theme: theme)
@@ -284,7 +290,7 @@ struct ModuleRowPreview: View {
                         memoryPressureMode: memoryPressureMode,
                         palette: palette
                     )
-                    .panelMetricSpan(cell.span)
+                    .panelMetricWidth(widthPreference(cell), id: cell.id)
                 }
             }
         }
