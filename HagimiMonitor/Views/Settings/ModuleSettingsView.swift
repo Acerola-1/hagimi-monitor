@@ -79,6 +79,7 @@ struct ModuleSettingsView: View {
                         memoryPressureMode: memoryPressureMode,
                         palette: palette,
                         metricOrders: settings.panelOrders,
+                        metricWidths: settings.panelMetricWidths,
                         chartStyle: settings.panelChartStyle(for: kind),
                         batteryTab: $batteryTab
                     )
@@ -88,6 +89,13 @@ struct ModuleSettingsView: View {
 
                 if kind == .battery && selectionMetrics.isEmpty {
                     // 供电页无归属可勾指标,给出说明而非空白。
+                    ForEach(PanelOrderCatalog.supplyIDs, id: \.self) { id in
+                        SettingsRow(title: String(localized: String.LocalizationValue("metric.battery." + id))) {
+                            PanelMetricWidthPicker(settings: settings, kind: .battery, id: id)
+                                .labelsHidden()
+                                .frame(width: 130)
+                        }
+                    }
                     Text(String(localized: "settings.battery.tab-no-metrics"))
                         .font(.callout)
                         .foregroundStyle(.secondary)
@@ -102,14 +110,30 @@ struct ModuleSettingsView: View {
                         ForEach(selectionMetrics) { metric in
                             let isSelected = settings.isMetricEnabled(metric.id, for: kind)
                             let isShelved = metric.id == "power-flow" && PowerFlowArchive.isShelved
-                            MetricSelectionRow(
-                                title: metric.title,
-                                isSelected: isSelected,
-                                isEnabled: settings.canEnableMetric(metric.id, for: kind) && !isShelved,
-                                tip: metric.tip,
-                                lockNote: isShelved ? String(localized: "metric.battery.power-flow.shelved") : nil
-                            ) {
-                                settings.setMetric(metric.id, enabled: !isSelected, for: kind)
+                            HStack(spacing: 0) {
+                                MetricSelectionRow(
+                                    title: metric.title,
+                                    isSelected: isSelected,
+                                    isEnabled: settings.canEnableMetric(metric.id, for: kind) && !isShelved,
+                                    tip: metric.tip,
+                                    lockNote: isShelved ? String(localized: "metric.battery.power-flow.shelved") : nil
+                                ) {
+                                    settings.setMetric(metric.id, enabled: !isSelected, for: kind)
+                                }
+                                if PanelMetricWidth.supports(kind: kind, id: metric.id) {
+                                    Menu {
+                                        PanelMetricWidthPicker(settings: settings, kind: kind, id: metric.id)
+                                            .pickerStyle(.inline)
+                                    } label: {
+                                        Text(settings.panelMetricWidth(for: kind, id: metric.id).title)
+                                            .font(.caption)
+                                    }
+                                    .menuStyle(.borderlessButton)
+                                    .fixedSize()
+                                    .padding(.trailing, 12)
+                                    .help(String(localized: "panel.metric-width.help"))
+                                    .accessibilityLabel(Text(metric.title + " " + String(localized: "panel.metric-width.title")))
+                                }
                             }
                         }
                     }
@@ -240,6 +264,13 @@ struct ModuleSettingsView: View {
                 }
                 .compatibleButtonStyle()
                 .disabled(!settings.hasCustomMetricOrder(for: kind))
+            }
+
+            if !availableMetrics.isEmpty {
+                Button(String(localized: "panel.metric-width.reset")) {
+                    settings.resetPanelMetricWidths(for: kind)
+                }
+                .disabled(!settings.panelMetricWidths.keys.contains { $0.hasPrefix(kind.rawValue + ".") })
             }
 
             if #available(macOS 26, *) {

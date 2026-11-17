@@ -120,14 +120,24 @@ struct PanelNaturalContent<Content: View>: View {
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.displayScale) private var scale
     @Environment(\.panelReorderController) private var reorder
+    @State private var metricGridSizes: [String: CGSize] = [:]
+
+    private var metricGridKey: String {
+        metricGridSizes.sorted { $0.key < $1.key }
+            .map { "\($0.key):\($0.value)" }.joined(separator: "|")
+    }
 
     var body: some View {
         let content = self.content
         PanelNaturalContentLayout(
             label: label,
             measurementKey: measurementKey.isEmpty || reorder?.session != nil ? ""
-                : "\(measurementKey)|\(locale.identifier)|\(dynamicTypeSize)|\(scale)"
+                : "\(measurementKey)|\(locale.identifier)|\(dynamicTypeSize)|\(scale)|\(metricGridKey)"
         ) { content }
+        .onPreferenceChange(PanelNaturalMeasurements.self) { sizes in
+            // 只在网格几何改变时失效外层高度缓存，普通读数刷新继续复用。
+            metricGridSizes = sizes.filter { $0.key.hasPrefix("metric-grid:") }
+        }
     }
 }
 

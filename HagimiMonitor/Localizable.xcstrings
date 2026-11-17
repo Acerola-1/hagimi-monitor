@@ -1074,6 +1074,102 @@
         }
       }
     },
+    "panel.metric-width.title": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card width"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片宽度"
+          }
+        }
+      }
+    },
+    "panel.metric-width.automatic": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动"
+          }
+        }
+      }
+    },
+    "panel.metric-width.half": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Half row"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "半行"
+          }
+        }
+      }
+    },
+    "panel.metric-width.full": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full row"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "整行"
+          }
+        }
+      }
+    },
+    "panel.metric-width.help": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic fits up to two cards per row. Half row and full row keep your chosen width; hover over shortened text to see the full value."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动模式每行最多两格；半行和整行固定使用你的选择，内容显示不全时可悬停查看。"
+          }
+        }
+      }
+    },
+    "panel.metric-width.reset": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reset card widths to automatic"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "卡片宽度恢复自动"
+          }
+        }
+      }
+    },
     "panel.reorder.no-moves": {
       "extractionState": "manual",
       "localizations": {

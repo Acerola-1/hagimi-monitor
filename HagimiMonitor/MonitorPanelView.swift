@@ -210,6 +210,7 @@ struct MonitorPanelView: View {
         .environmentObject(panelExpansion)
         .environment(\.panelReorderController, contentScope == .systemMonitor ? panelReorder : nil)
         .environment(\.panelReorderSettings, store.settings)
+        .environment(\.panelMetricWidths, store.settings.panelMetricWidths)
         .background(NativePanelEscapeHandler(action: handleExitCommand))
         .onExitCommand(perform: handleExitCommand)
         .onDisappear { panelReorder.cancel() }
@@ -1413,13 +1414,12 @@ struct MetricDetailGrid: View {
     var cpuCoreDetail: CPUCoreDetail? = nil
     /// 是否在顶部绘制贯穿分隔线。电源等已有专属分区头组件的场景可关闭。
     var showsSeparator: Bool = true
+    @Environment(\.panelMetricWidths) private var metricWidths
 
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
 
-    /// 整行判定查静态登记表(见 StaticMetricSizing):按当前语言查表,
-    /// 登记依据是各语言 × 最坏值 × 最窄面板宽的构建期审计,布局不随
-    /// 采样值与面板宽度重排。
+    /// 静态登记仅保留原默认顺序；实际宽度由自动测量或用户偏好决定。
     private func isFullRow(_ metric: MonitorMetric) -> Bool {
         StaticMetricSizing.isFullRow(kind: kind, name: metric.name)
     }
@@ -1471,12 +1471,12 @@ struct MetricDetailGrid: View {
 
     // 逐格内衬网格(stat tile 形态):每个指标独立 trackFill 圆角内衬色块,
     // 边界属于格子自己,不依赖行数;单元保持「标签左·数值右」,数值字重
-    // 提到 bold 强化存在感。逐项按静态跨度排布,整行前的半格空位保留。
+    // 提到 bold 强化存在感。按实际宽度排布，手动偏好优先。
     private var content: some View {
         VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
             if !cells.isEmpty {
-                PanelMetricColumns(measurementKey: cells.map { "\($0.id):\($0.span)" }.joined(separator: "|")
-                    + "|cores:\(cpuCoreDetail?.cores.count ?? 0)") {
+                PanelMetricColumns(measurementKey: cells.map { "\($0.id):\(widthPreference($0).rawValue):\($0.metric.value)" }.joined(separator: "|")
+                    + "|temperature:\(metrics.first { $0.name == "temperature" }?.value ?? "")|cores:\(cpuCoreDetail?.cores.count ?? 0)") {
                     ForEach(cells) { cell in
                         if isCoreDetail(cell.metric), let cpuCoreDetail {
                             CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
@@ -1487,13 +1487,13 @@ struct MetricDetailGrid: View {
                            let temperature = metrics.first(where: { $0.name == "temperature" }) {
                             thermalPressureCell(thermal: cell.metric, temperature: temperature)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2)
-                                .panelMetricSpan(2)
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: widthPreference(cell).span, allowsMetricWidth: true)
+                                .panelMetricWidth(widthPreference(cell), id: cell.id)
                         } else {
                             metricCell(cell.metric)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: cell.span)
-                                .panelMetricSpan(cell.span)
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: widthPreference(cell).span, allowsMetricWidth: true)
+                                .panelMetricWidth(widthPreference(cell), id: cell.id)
                         }
                     }
                 }
@@ -1502,10 +1502,15 @@ struct MetricDetailGrid: View {
                            value: cells.map(\.id))
             }
         }
+        .panelMeasure("metric-grid:" + effectiveOrderScope.storageKey)
     }
 
     private var effectiveOrderScope: PanelOrderScope {
         orderScope ?? .metrics(kind)
+    }
+
+    private func widthPreference(_ cell: Cell) -> PanelMetricWidth {
+        metricWidths[PanelMetricWidth.key(kind: kind, id: cell.id)] ?? .automatic
     }
 
     /// 指标格内衬容器:trackFill 圆角色块包裹,格与格靠 8pt 间隙 + 各自
@@ -1518,7 +1523,7 @@ struct MetricDetailGrid: View {
             .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
     }
 
-    /// 热压力合并整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
+    /// 热压力合并格:标签「热压力」,右侧数值为「温度 / 热压力档位」。
     /// 仅在温度可用(直连版)时渲染此行;档位按 severity 着色,
     /// 温度保持 valueText 与其余数值同层级。
     private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric) -> some View {
@@ -1569,6 +1574,7 @@ struct MetricDetailGrid: View {
             HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
                 Text(labelText)
                     .monitorPanelCaptionFont(labelStyle)
+                    .help(labelText)
                     .foregroundStyle(theme.captionText)
                     .lineLimit(1)
                     .layoutPriority(1)
@@ -2645,7 +2651,7 @@ private struct MetricCopyFeedback: ViewModifier {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
             .accessibilityValue([displayValue, explanation].compactMap { $0 }.joined(separator: ", "))
-            .help([explanation, String(localized: "panel.copy-value")].compactMap { $0 }.joined(separator: "\n"))
+            .help([displayValue, explanation, String(localized: "panel.copy-value")].compactMap { $0 }.joined(separator: "\n"))
             .onTapGesture(perform: copy)
             .focusable(isEnabled)
             .onKeyPress(keys: ["c"], phases: .down) { press in

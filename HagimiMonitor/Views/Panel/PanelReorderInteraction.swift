@@ -191,6 +191,7 @@ final class PanelReorderController: ObservableObject {
             let latest = frames[PanelReorderItemKey(scope: scope, id: slot.id)]
             return (slot.id, registeredFrame(scope: scope, id: slot.id) ?? slot.frame, latest?.span ?? slot.span)
         }
+        current.slots = resolvingAutomaticSpans(current.slots)
         // 只接收同一作用域的实际卡片；展开区和固定组件即使位于两项之间也无效。
         current.valid = current.slots.contains {
             $0.frame.insetBy(dx: -12, dy: -12).contains(location)
@@ -303,13 +304,21 @@ final class PanelReorderController: ObservableObject {
         slots.indices.contains(index + 1) ? slots[index + 1].id : nil
     }
 
+    /// 自动格的实际跨度取自已布局的几何，保持拖动与方向菜单和画面一致。
+    private func resolvingAutomaticSpans(_ slots: [(id: String, frame: CGRect, span: Int)]) -> [(id: String, frame: CGRect, span: Int)] {
+        let width = slots.reduce(CGRect.null) { $0.union($1.frame) }.width
+        return slots.map { slot in
+            (slot.id, slot.frame, slot.span == 0 ? (slot.frame.width * 1.5 < width ? 1 : 2) : slot.span)
+        }
+    }
+
     private func visibleSlots(scope: PanelOrderScope, settings: MonitorSettings) -> [(id: String, frame: CGRect, span: Int)] {
         let available = frames.keys.filter { $0.scope == scope }.map(\.id)
-        return settings.orderedPanelIDs(for: scope, available: available).compactMap { id in
+        return resolvingAutomaticSpans(settings.orderedPanelIDs(for: scope, available: available).compactMap { id in
             guard let frame = frames[PanelReorderItemKey(scope: scope, id: id)],
                   frame.rect.width > 0, frame.rect.height > 0 else { return nil }
             return (id, registeredFrame(scope: scope, id: id) ?? frame.rect, frame.span)
-        }
+        })
     }
 }
 
@@ -442,6 +451,7 @@ private struct PanelReorderItemModifier: ViewModifier {
     let id: String
     let title: String
     let span: Int
+    let allowsMetricWidth: Bool
     @Environment(\.panelReorderController) private var controller
     @Environment(\.panelReorderSettings) private var settings
     @Environment(\.displayScale) private var displayScale
@@ -501,6 +511,10 @@ private struct PanelReorderItemModifier: ViewModifier {
                     }
             )
             .contextMenu {
+                if allowsMetricWidth, let kind = scope.moduleKind {
+                    PanelMetricWidthPicker(settings: settings, kind: kind, id: id)
+                    Divider()
+                }
                 moveCommands(controller: controller, settings: settings)
                 if controller.availableDirections(id, scope: scope, settings: settings).isEmpty {
                     Button(String(localized: "panel.reorder.no-moves")) {}
@@ -514,6 +528,9 @@ private struct PanelReorderItemModifier: ViewModifier {
                 menuLayoutRevision &+= 1
             }
             .onReceive(settings.$panelOrders) { _ in
+                menuLayoutRevision &+= 1
+            }
+            .onReceive(settings.$panelMetricWidths) { _ in
                 menuLayoutRevision &+= 1
             }
             .help(String(localized: "panel.reorder.long-press-hint"))
@@ -564,7 +581,8 @@ private struct PanelReorderItemModifier: ViewModifier {
 }
 
 extension View {
-    func panelReorderItem(scope: PanelOrderScope, id: String, title: String, span: Int = 2) -> some View {
-        modifier(PanelReorderItemModifier(scope: scope, id: id, title: title, span: span))
+    func panelReorderItem(scope: PanelOrderScope, id: String, title: String, span: Int = 2,
+                          allowsMetricWidth: Bool = false) -> some View {
+        modifier(PanelReorderItemModifier(scope: scope, id: id, title: title, span: span, allowsMetricWidth: allowsMetricWidth))
     }
 }
