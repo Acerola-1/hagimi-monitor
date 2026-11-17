@@ -1410,7 +1410,7 @@ private struct DisplayBrightnessPill: View {
 
 /// 直连渠道单台显示器的控制组卡,两种形态经点击设备名切换:
 /// 名称与摘要常驻设备行头；展开档案时，滑杆让位给完整信息与复制入口。
-/// 不支持项在滑杆下方展示诚实静态提示。
+/// 不支持项保留滑杆，并以禁用和降低透明度表达不可用状态。
 private struct DisplayControlGroup: View {
     let display: ControlledDisplay
     /// 该显示器的只读信息(分辨率/刷新率/HDR 与档案),并入控制区展示;采集失败为 nil 不占位。
@@ -1485,7 +1485,7 @@ private struct DisplayControlGroup: View {
     }
 
     private var measurementKey: String {
-        "\(display.name)|\(String(describing: displayInfo))|\(display.isBuiltIn)|\(settings.displayBrightnessControlEnabled)|\(settings.displayVolumeControlEnabled)|\(settings.displayContrastControlEnabled)|\(showsUnsupportedNotice)|\(connectionIssue?.rawValue ?? "")|separator:\(showsSeparator)"
+        "\(display.name)|\(String(describing: displayInfo))|\(display.isBuiltIn)|\(settings.displayBrightnessControlEnabled)|\(settings.displayVolumeControlEnabled)|\(settings.displayContrastControlEnabled)|\(connectionIssue?.rawValue ?? "")|separator:\(showsSeparator)"
     }
 
     private var connectionIssue: DisplayConnectionIssue? {
@@ -1557,19 +1557,6 @@ private struct DisplayControlGroup: View {
                     tint: tint
                 )
             }
-
-            if showsUnsupportedNotice {
-                HStack(alignment: .top, spacing: 5) {
-                    Image(systemName: "info.circle")
-                        .font(.caption2)
-                        .foregroundStyle(palette.captionText)
-                    Text(String(localized: "display.control-unavailable"))
-                        .monitorPanelCaptionFont(.caption2)
-                        .foregroundStyle(palette.captionText)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
         }
         // 原生 Slider 的旋钮绘制会超出其布局盒下缘;控制区在 toggledContent 里按
         // 测量高度裁剪,留此底部余量避免最末一条滑轨的旋钮下半被削。
@@ -1626,15 +1613,6 @@ private struct DisplayControlGroup: View {
     }
 
     private var controlDisplayName: String { display.name }
-
-    /// 是否展示"此显示器不支持该项控制"的诚实静态提示。仅当某条**已启用且正在显示**的
-    /// 控制被显示器明确判定为不支持(supports == false,由 capability .unsupported 驱动)
-    /// 时才出现;瞬时写入失败不会改变能力状态。
-    private var showsUnsupportedNotice: Bool {
-        (settings.displayBrightnessControlEnabled && !display.supports(.brightness))
-            || (settings.displayVolumeControlEnabled && !display.isBuiltIn && !display.supports(.volume))
-            || (settings.displayContrastControlEnabled && !display.isBuiltIn && !display.supports(.contrast))
-    }
 
     /// 摘要行文本:分辨率 · 刷新率 · HDR(当前开启时) · 位深;读不到的
     /// 段(--)整段跳过,全部缺失时摘要行不占位。
