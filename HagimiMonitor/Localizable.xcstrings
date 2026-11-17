@@ -3230,22 +3230,6 @@
         }
       }
     },
-    "display.control-unavailable": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "This display doesn't support this control."
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "此显示器不支持该项控制。"
-          }
-        }
-      }
-    },
     "display.connection.disable": {
       "localizations": {
         "en": {
@@ -7821,13 +7805,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Topology"
+            "value": "Power"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "拓扑"
+            "value": "功耗"
           }
         }
       }

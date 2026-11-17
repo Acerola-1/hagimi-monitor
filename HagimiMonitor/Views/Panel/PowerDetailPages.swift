@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 电源展开区分区多页切换标签（健康 / 拓扑 / 供电），耗电 TOP 属于分页外的公共明细。
+/// 电源展开区分区多页切换标签（健康 / 功耗 / 供电），耗电 TOP 属于分页外的公共明细。
 enum BatteryPageTab: String, CaseIterable, Identifiable {
     case health = "health"
     case flow = "flow"
@@ -30,7 +30,7 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
         }
     }
 
-    /// 设置页预览可选的分页:拓扑页(分项功耗)仅直连版
+    /// 设置页预览可选的分页:功耗页(分项功耗)仅直连版
     /// 产得出,商店版既不产也不展示,避免预览出现面板永远不会出现的分页。
     static var previewCases: [BatteryPageTab] {
         #if DIRECT_DISTRIBUTION
@@ -42,7 +42,7 @@ enum BatteryPageTab: String, CaseIterable, Identifiable {
 
     /// 各分页归属的可勾指标名:面板展开区分栏渲染与设置页选项过滤同源。
     /// 「功率流」是网格外可视化选项(无采样指标),归入承载流向图的分页:
-    /// 直连版在拓扑页、沙盒版在健康页。供电页为固定诊断视图,不含可勾指标。
+    /// 直连版在功耗页、沙盒版在健康页。供电页为固定诊断视图,不含可勾指标。
     nonisolated var metricNames: [String] {
         switch self {
         case .flow:
