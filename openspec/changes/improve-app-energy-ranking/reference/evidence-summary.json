@@ -1,0 +1,38 @@
+{
+  "initial": {
+    "sha256": "52fc832d132c8ec9e25462cd9e7ed24b7b18dbe34be330b11d2b517ed828192b",
+    "raw_bytes": 35946974,
+    "samples": 70,
+    "first_timestamp_utc": "2026-11-16 15:57:38",
+    "last_timestamp_utc": "2026-11-16 16:00:00",
+    "sample_window_seconds": 143.672572474,
+    "sampler_cpu_seconds": 3.91899819,
+    "sampler_one_core_percent": 2.72772883683781,
+    "authorization_exit": 0,
+    "malformed_records": 0
+  },
+  "isolated": {
+    "sha256": "2e0c4782fd20aed20f85a54f948cd00067729c187753036de82e5c13b22effa4",
+    "raw_bytes": 28091205,
+    "samples": 45,
+    "first_timestamp_utc": "2026-11-16 16:02:22",
+    "last_timestamp_utc": "2026-11-16 16:03:52",
+    "sample_window_seconds": 92.330919147,
+    "sampler_cpu_seconds": 2.547196361,
+    "sampler_one_core_percent": 2.758768551783407,
+    "authorization_exit": 0,
+    "malformed_records": 0,
+    "rss_KiB": {
+      "min": 4752,
+      "max": 9936,
+      "mean": 9753.244444444445,
+      "observations": 45
+    },
+    "gpu_workload_cpu_only_W": {
+      "samples": 18,
+      "mean": 0.016370752926218257,
+      "min": 0.015444723223083129,
+      "max": 0.01744991063907233
+    }
+  }
+}
