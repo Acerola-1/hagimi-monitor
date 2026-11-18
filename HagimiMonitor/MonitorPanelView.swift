@@ -1199,6 +1199,8 @@ private struct MetricGlassRow: View, Equatable {
 struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hoveredCore: Int?
 
     private var displayedDetail: CPUCoreDetail {
         #if DEBUG
@@ -1238,22 +1240,25 @@ struct CPUCoresDetail: View {
     }
 
     var body: some View {
+        let cores = orderedCores
         VStack(spacing: 0) {
             // 圆环逐行铺满:优先放满一行,放不下自动折行;每一行(含末行)
             // 按自身环数把间隙撑满整行,不留右侧空档。
             CoreRingFlowLayout() {
-                ForEach(orderedCores) { core in
-                    CoreLoadRing(
-                        usage: core.usage,
-                        tint: tint(for: core.kind),
-                        track: theme.palette.cpuCoreTrack
-                    )
-                    .contentShape(Rectangle())
-                    .help("\(Int(core.usage.rounded()))%")
+                ForEach(cores) { core in
+                    coreRing(for: core)
                 }
             }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
+            .padding(.vertical, CoreRingHoverRegion.verticalInset)
+            .padding(.horizontal, CoreRingHoverRegion.horizontalInset)
+            .background {
+                // 收起的明细仍挂载供宿主测量，只在可交互时跟踪指针。
+                if isEnabled {
+                    CoreRingHoverRegion(coreIDs: cores.map(\.index)) { core in
+                        if hoveredCore != core { hoveredCore = core }
+                    }
+                }
+            }
 
             Rectangle()
                 .fill(theme.captionText.opacity(0.16))
@@ -1273,6 +1278,29 @@ struct CPUCoresDetail: View {
             .padding(.vertical, 6)
         }
         .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+        .onDisappear { hoveredCore = nil }
+    }
+
+    private func coreRing(for core: CPUCoreLoad) -> some View {
+        let value = "\(Int(core.usage.rounded()))%"
+        return CoreLoadRing(usage: core.usage, tint: tint(for: core.kind), track: theme.palette.cpuCoreTrack)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(value))
+            .overlay(alignment: .bottom) {
+                if hoveredCore == core.index {
+                    Text(value)
+                        .monitorPanelMonoFont(.caption2, weight: .semibold)
+                        .foregroundStyle(theme.primaryText)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .fixedSize()
+                        .offset(y: CPUCoreRingMetrics.diameter / 2 + 4)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
     }
 
     /// 单一底色内等分两段或三段;组内信息聚拢,细线标示相邻组的边界。
@@ -1312,6 +1340,136 @@ struct CPUCoresDetail: View {
         case .superCore: String(localized: "cpu.detail.s-cores")
         case .performance: String(localized: "cpu.detail.p-cores")
         case .efficiency: String(localized: "cpu.detail.e-cores")
+        }
+    }
+}
+
+struct CoreRingHoverRegion: NSViewRepresentable {
+    let coreIDs: [Int]
+    let onHover: (Int?) -> Void
+
+    fileprivate static let horizontalInset: CGFloat = 8
+    fileprivate static let verticalInset: CGFloat = 6
+
+    func makeNSView(context: Context) -> TrackingView {
+        TrackingView()
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.coreIDs = coreIDs
+        view.onHover = onHover
+    }
+
+    static func dismantleNSView(_ view: TrackingView, coordinator: ()) {
+        view.stopTracking()
+        view.onHover = nil
+    }
+
+    final class TrackingView: NSView {
+        var coreIDs: [Int] = [] {
+            didSet {
+                if coreIDs != oldValue { needsLayout = true }
+            }
+        }
+        var onHover: ((Int?) -> Void)?
+        private var panelPointer: AnyCancellable?
+        private var buttonMonitor: Any?
+        private var rings: [(id: Int, frame: CGRect)] = []
+        private var ringAreas: [NSTrackingArea] = []
+
+        override var isFlipped: Bool { true }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            refreshRings()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            refreshRings()
+        }
+
+        private func refreshRings() {
+            var visible: [(id: Int, frame: CGRect)] = []
+            let clip = visibleRect
+            let ringBounds = bounds.insetBy(dx: horizontalInset, dy: verticalInset)
+            CoreRingFlowLayout().forEachRing(count: coreIDs.count, in: ringBounds) { index, frame in
+                let rect = frame.intersection(clip)
+                if !rect.isEmpty { visible.append((coreIDs[index], rect)) }
+            }
+            guard !rings.elementsEqual(visible, by: { $0.id == $1.id && $0.frame == $1.frame }) else { return }
+            rings = visible
+            ringAreas.forEach(removeTrackingArea)
+            // 非激活窗口可能漏掉连续的 mouseMoved，因此逐环监听指针进出。
+            ringAreas = rings.map { ring in
+                let area = NSTrackingArea(rect: ring.frame, options: [.activeAlways, .mouseEnteredAndExited],
+                                          owner: self)
+                addTrackingArea(area)
+                return area
+            }
+            // 布局变化后复核停在原位的指针。
+            if let window, window.isVisible {
+                DispatchQueue.main.async { [weak self, weak window] in
+                    guard let self, let window, self.window === window else { return }
+                    self.checkPointer()
+                }
+            }
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if newWindow !== window { stopTracking() }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            if let panel = window as? NativePanelWindow {
+                panelPointer = panel.pointerDidChange.sink { [weak self] in self?.checkPointer() }
+                return
+            }
+            let buttons: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown,
+                                                   .leftMouseUp, .rightMouseUp, .otherMouseUp]
+            buttonMonitor = NSEvent.addLocalMonitorForEvents(matching: buttons) { [weak self] event in
+                guard let self else { return event }
+                if NSEvent.pressedMouseButtons == 0, event.window === self.window {
+                    self.checkPointer()
+                } else {
+                    self.onHover?(nil)
+                }
+                return event
+            }
+        }
+
+        func stopTracking() {
+            panelPointer = nil
+            if let buttonMonitor { NSEvent.removeMonitor(buttonMonitor) }
+            buttonMonitor = nil
+            onHover?(nil)
+        }
+
+        override func mouseEntered(with event: NSEvent) { checkPointer() }
+        override func mouseExited(with event: NSEvent) { checkPointer() }
+
+        private func checkPointer() {
+            let screenPoint = NSEvent.mouseLocation
+            guard let window, window.isVisible, !window.ignoresMouseEvents,
+                  !isHiddenOrHasHiddenAncestor, NSEvent.pressedMouseButtons == 0 else {
+                onHover?(nil)
+                return
+            }
+            let point = convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+            guard visibleRect.contains(point),
+                  NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0) == window.windowNumber else {
+                onHover?(nil)
+                return
+            }
+            updateHover(at: point)
+        }
+
+        func updateHover(at point: CGPoint) {
+            onHover?(rings.first(where: { $0.frame.contains(point) })?.id)
         }
     }
 }
@@ -1356,7 +1514,13 @@ private struct CoreRingFlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let (rows, spacings) = arrange(count: subviews.count, width: bounds.width)
+        forEachRing(count: subviews.count, in: bounds) { index, frame in
+            subviews[index].place(at: frame.origin, proposal: ProposedViewSize(frame.size))
+        }
+    }
+
+    func forEachRing(count: Int, in bounds: CGRect, place: (Int, CGRect) -> Void) {
+        let (rows, spacings) = arrange(count: count, width: bounds.width)
         var y = bounds.minY
         for (rowIndex, indices) in rows.enumerated() {
             // 单环行居中;多环行从行首起按该行间隙铺满。
@@ -1365,10 +1529,7 @@ private struct CoreRingFlowLayout: Layout {
                 : bounds.minX + (bounds.width - ringSize) / 2
             let spacing = spacings[rowIndex]
             for (position, subviewIndex) in indices.enumerated() {
-                subviews[subviewIndex].place(
-                    at: CGPoint(x: x, y: y),
-                    proposal: ProposedViewSize(width: ringSize, height: ringSize)
-                )
+                place(subviewIndex, CGRect(x: x, y: y, width: ringSize, height: ringSize))
                 if position < indices.count - 1 {
                     x += ringSize + spacing
                 }
@@ -1481,7 +1642,8 @@ struct MetricDetailGrid: View {
                         if isCoreDetail(cell.metric), let cpuCoreDetail {
                             CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2)
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2,
+                                                  showsDragHint: false)
                                 .panelMetricSpan(2)
                         } else if cell.mergedThermal,
                            let temperature = metrics.first(where: { $0.name == "temperature" }) {
