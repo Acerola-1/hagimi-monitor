@@ -3260,7 +3260,7 @@ struct FanList: View {
     }
 }
 
-/// 蓝牙设备电量行:行头显示设备数与最低电量,展开区逐设备列出电量。
+/// 蓝牙行头按明细顺序显示设备类型，展开区逐设备列出电量。
 /// 与 BatteryGlassRow 同款结构:手势只挂行头,展开区不拦截。
 private struct BluetoothGlassRow: View, Equatable {
     let module: MonitorModule
@@ -3283,11 +3283,6 @@ private struct BluetoothGlassRow: View, Equatable {
         module.bluetoothDevices ?? []
     }
 
-    private func hasBluetoothComponents(_ device: BluetoothDeviceInfo) -> String {
-        let single = !device.components.isEmpty && device.components.allSatisfy { $0.kind == .single }
-        return single ? "single" : (!device.components.isEmpty || device.batterySource == .advertisement ? "parts" : "none")
-    }
-
     /// 行头的无障碍值:设备数 + 摘要(如「3 个设备, 最低 45%」)。
     private var accessibilityValueForRow: String {
         if devices.isEmpty {
@@ -3306,6 +3301,43 @@ private struct BluetoothGlassRow: View, Equatable {
         isExpanded
             ? String(localized: "bluetooth.row.collapse-hint")
             : String(localized: "bluetooth.row.expand-hint")
+    }
+
+    /// 图标槽与双列读数等宽。标题和设备数优先，空间不足时缩窄槽并折叠末尾图标。
+    private var deviceIcons: some View {
+        let iconWidth: CGFloat = 16
+        let spacing: CGFloat = 4
+        return GeometryReader { geometry in
+            let width = min(geometry.size.width, RowHeaderPillMetrics.width * 2 + RowHeaderPillMetrics.spacing)
+            let innerWidth = max(0, width - 2 * RowHeaderPillMetrics.horizontalPadding)
+            let slots = Int((innerWidth + spacing) / (iconWidth + spacing))
+            PairedHeaderReadings(theme: theme) {
+                ViewThatFits(in: .horizontal) {
+                    ForEach((0...min(slots, devices.count)).reversed(), id: \.self) { visible in
+                        HStack(spacing: spacing) {
+                            ForEach(devices.prefix(visible)) { device in
+                                Image(systemName: device.type.symbol)
+                                    .font(.callout.weight(.medium))
+                                    .frame(width: iconWidth)
+                            }
+                            if visible < devices.count {
+                                Text(verbatim: "+\(devices.count - visible)")
+                                    .font(.caption.monospacedDigit())
+                            }
+                        }
+                        .fixedSize()
+                    }
+                    Color.clear
+                }
+                .frame(width: innerWidth)
+                .frame(width: width, height: RowHeaderPillMetrics.height)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(height: RowHeaderPillMetrics.height)
+        .foregroundStyle(tint.opacity(0.8))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     var body: some View {
@@ -3329,22 +3361,15 @@ private struct BluetoothGlassRow: View, Equatable {
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
 
-                Spacer(minLength: 8)
-
-                // 行尾不放电量数值:多设备时「最低电量」归属不明,易误读;
-                // 设备明细在展开区,行尾用箭头标出可展开。
-                // 无设备时无内容可展开,箭头隐藏(显占位保持行高稳定)。
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(theme.captionText)
-                    .frame(width: 18, height: 18)
-                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                       dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
-                    .opacity(devices.isEmpty ? 0 : 1)
+                if !devices.isEmpty {
+                    deviceIcons
+                        .layoutPriority(-1)
+                }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 10)
+            .padding(.trailing, RowHeaderPillMetrics.trailingPadding)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
             .onTapGesture {
@@ -3355,7 +3380,8 @@ private struct BluetoothGlassRow: View, Equatable {
             // 无障碍:行头提供模块名 + 设备数 + 展开/收起状态 + 操作提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(module.kind.title)
-            .accessibilityValue(accessibilityValueForRow)
+            .accessibilityValue(devices.isEmpty ? accessibilityValueForRow
+                : "\(accessibilityValueForRow), \(String(localized: isExpanded ? "panel.row.expanded" : "panel.row.collapsed"))")
             .accessibilityHint(devices.isEmpty ? "" : accessibilityHintForRow)
             .accessibilityAddTraits(devices.isEmpty ? [] : .isButton)
             .panelRowKeyboardFocus(canActivate: !devices.isEmpty, ring: theme.primaryText) {
@@ -3366,7 +3392,7 @@ private struct BluetoothGlassRow: View, Equatable {
 
             .panelMeasure("row:" + module.kind.id)
 
-            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty, measurementKey: devices.map { "\($0.id):\($0.name):\($0.type):\(hasBluetoothComponents($0))" }.joined(separator: "|")) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty, measurementKey: devices.map { "\($0.id):\($0.name):\($0.type):\($0.hasSeparateBatteryParts):\($0.compactBatteryLevel != nil)" }.joined(separator: "|")) {
                 BluetoothDeviceList(devices: devices, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
@@ -3394,9 +3420,7 @@ struct BluetoothDeviceList: View {
         }
     }
 
-    private func hasComponentGrid(_ device: BluetoothDeviceInfo) -> Bool {
-        !device.components.isEmpty || device.batterySource == .advertisement
-    }
+    private let partOrder: [BluetoothBatteryComponent.Kind] = [.left, .right, .case]
 
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
         PanelAccessoryGroup(theme: theme) {
@@ -3420,22 +3444,21 @@ struct BluetoothDeviceList: View {
                             .foregroundStyle(theme.captionText)
                     }
                     Spacer(minLength: 4)
-                    if !hasComponentGrid(device) {
-                        if let level = device.batteryLevel {
+                    if !device.hasSeparateBatteryParts {
+                        if let level = device.compactBatteryLevel {
                             BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
                                 .frame(width: BluetoothComponentSizing.barWidth, height: BluetoothComponentSizing.trackHeight)
                         }
-                        batteryValue(device.batteryLevel, charging: device.isCharging)
+                        batteryValue(device.compactBatteryLevel, charging: device.compactChargingState)
                             .frame(minWidth: BluetoothComponentSizing.valueWidth, alignment: .trailing)
                     }
                 }
                 .padding(AccessoryDetailSizing.inset)
-                if hasComponentGrid(device) {
+                if device.hasSeparateBatteryParts {
                     Rectangle().fill(theme.rowSeparator(for: .bluetooth)).frame(height: 1)
                         .padding(.horizontal, AccessoryDetailSizing.inset)
-                    let kinds = componentKinds(for: device)
-                    PanelAccessoryGrid(count: kinds.count, columns: kinds.count, kind: .bluetooth, theme: theme) { index in
-                        componentCell(kinds[index], device: device)
+                    PanelAccessoryGrid(count: partOrder.count, columns: partOrder.count, kind: .bluetooth, theme: theme) { index in
+                        componentCell(partOrder[index], device: device)
                     }
                 }
             }
@@ -3491,16 +3514,6 @@ struct BluetoothDeviceList: View {
         }
     }
 
-    private func componentKinds(for device: BluetoothDeviceInfo) -> [BluetoothBatteryComponent.Kind] {
-        if device.components.allSatisfy({ $0.kind == .single }), !device.components.isEmpty {
-            return [.single]
-        }
-        if device.batterySource == .advertisement || device.components.contains(where: { $0.kind == .left || $0.kind == .right || $0.kind == .case }) {
-            return [.left, .right, .case]
-        }
-        return [.single]
-    }
-
     private func componentLocalizationKey(_ kind: BluetoothBatteryComponent.Kind) -> String {
         switch kind {
         case .left: "bluetooth.component.left"
@@ -3513,8 +3526,8 @@ struct BluetoothDeviceList: View {
     /// 朗读所有部件，包括未上报的项，避免把缺失电量读成真实零值。
     private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
         var details = [typeLabel(for: device.type)]
-        if hasComponentGrid(device) {
-            for kind in componentKinds(for: device) {
+        if device.hasSeparateBatteryParts {
+            for kind in partOrder {
                 let component = device.components.first { $0.kind == kind }
                 let label = String(localized: String.LocalizationValue(componentLocalizationKey(kind)))
                 let value = component.map { "\($0.level)%" } ?? String(localized: "bluetooth.battery-unavailable")
@@ -3522,8 +3535,8 @@ struct BluetoothDeviceList: View {
                 details.append("\(label) \(value)\(charging)")
             }
         } else {
-            details.append(device.batteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.battery-unavailable"))
-            if device.isCharging == true { details.append(String(localized: "bluetooth.charging")) }
+            details.append(device.compactBatteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.battery-unavailable"))
+            if device.compactChargingState == true { details.append(String(localized: "bluetooth.charging")) }
         }
         return details.joined(separator: ", ")
     }
