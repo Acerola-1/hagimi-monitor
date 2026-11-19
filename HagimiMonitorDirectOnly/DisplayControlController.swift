@@ -73,7 +73,7 @@ final class DisplayControlController: ObservableObject {
     /// 收尾上。具体的鼠标事件丢失因果仍需运行时复测,这里不把它当作已证实事实。
     private struct MediaKeyPlanInputs: Equatable {
         let hasExternalBrightnessDisplay: Bool
-        let hasExternalAudioDisplay: Bool
+        let externalAudioDisplayNames: [CGDirectDisplayID: String]
     }
     private var mediaKeyPlanInputs: MediaKeyPlanInputs?
 
@@ -124,10 +124,13 @@ final class DisplayControlController: ObservableObject {
     }
 
     private func invalidateParameterSession() {
+        mediaKeyController.dismissFeedback()
         connectionTransition = true; refreshGeneration += 1
         pendingValues.removeAll(); recentlySetValues.removeAll(); suppressedWrites.removeAll()
         activeEngineTokens.removeAll(); service.invalidateConnectionTokens()
     }
+
+    func dismissMediaControlOSD() { mediaKeyController.dismissFeedback() }
 
     func attach(settings: MonitorSettings) {
         mediaKeyController.attach(controller: self, settings: settings)
@@ -177,7 +180,9 @@ final class DisplayControlController: ObservableObject {
     private func refreshMediaKeyPlanIfInputsChanged(_ detectedDisplays: [ControlledDisplay]) {
         let inputs = MediaKeyPlanInputs(
             hasExternalBrightnessDisplay: detectedDisplays.contains { !$0.isBuiltIn && $0.supportsBrightness },
-            hasExternalAudioDisplay: detectedDisplays.contains { !$0.isBuiltIn && $0.supportsVolume }
+            externalAudioDisplayNames: Dictionary(uniqueKeysWithValues: detectedDisplays.lazy
+                .filter { !$0.isBuiltIn && $0.supportsVolume }
+                .map { ($0.id, $0.name) })
         )
         guard inputs != mediaKeyPlanInputs else { return }
         mediaKeyPlanInputs = inputs
@@ -270,23 +275,27 @@ final class DisplayControlController: ObservableObject {
         return displays.first(where: { $0.id == displayID })?.knownValue(for: control)
     }
 
-    func setValueAsync(_ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID) {
-        guard !connectionTransition, !connections.isBusy else { return }
+    @discardableResult
+    func setValueAsync(
+        _ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID,
+        final: Bool = true, afterNativeWrite: (@MainActor @Sendable () -> Void)? = nil
+    ) -> Bool {
+        guard value.isFinite, !connectionTransition, !connections.isBusy else { return false }
         if connections.hasStarted {
             guard let entry = connections.entries.first(where: { $0.screen?.id == displayID }),
                   entry.canWriteParameters,
                   let live = displays.first(where: { $0.id == displayID }),
-                  live.connectionIdentity?.matches(entry.record.identity) == true else { return }
+                  live.connectionIdentity?.matches(entry.record.identity) == true else { return false }
         }
-        if let entry = connections.entries.first(where: { $0.screen?.id == displayID }), !entry.canWriteParameters { return }
+        if let entry = connections.entries.first(where: { $0.screen?.id == displayID }), !entry.canWriteParameters { return false }
         let clampedValue = min(100, max(0, value))
         guard let display = displays.first(where: { $0.id == displayID }) else {
             AppLogger.ui.error("Display not found for setValue: \(displayID)")
-            return
+            return false
         }
         guard display.supports(control) else {
             AppLogger.ui.error("Display \(displayID) does not support control: \(control.storageKey, privacy: .public)")
-            return
+            return false
         }
 
         let key = ControlKey(displayID: displayID, control: control)
@@ -296,8 +305,8 @@ final class DisplayControlController: ObservableObject {
         if display.kind == .externalDDC,
            display.dimmingMode == .hardware,
            let connection = service.engineConnections(for: [display]).first {
-            engine.enqueueWrite(token: connection.token, control: control, value: clampedValue, final: true)
-            return
+            engine.enqueueWrite(token: connection.token, control: control, value: clampedValue, final: final)
+            return true
         }
 
         let requestGeneration = refreshGeneration
@@ -305,8 +314,10 @@ final class DisplayControlController: ObservableObject {
             Task { @MainActor in
                 guard let self, !self.connectionTransition, self.refreshGeneration == requestGeneration else { return }
                 self.handleWriteResult(result)
+                if result.outcome.didWrite { afterNativeWrite?() }
             }
         }
+        return true
     }
 
     private func seedFallbackValues(for display: ControlledDisplay) {
@@ -831,7 +842,7 @@ private nonisolated final class DisplayControlService: DisplayControlBackend, @u
     }
 }
 
-private nonisolated final class DisplayServicesBridge: Sendable {
+nonisolated final class DisplayServicesBridge: Sendable {
     func getBrightness(displayID: CGDirectDisplayID) -> Float? {
         var value: Float = -1
         let result = DisplayServicesGetBrightness(displayID, &value)

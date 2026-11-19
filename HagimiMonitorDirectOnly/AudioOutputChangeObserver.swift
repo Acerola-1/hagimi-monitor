@@ -3,9 +3,8 @@ import Foundation
 
 /// 监听系统默认音频输出设备的变化。
 ///
-/// `MediaKeyController` 是否接管音量键取决于 `AudioOutputDetector
-/// .defaultOutputDeviceIsControllable()` 的判定结果,但该判定只在启动、
-/// 设置变化、显示器刷新时执行。当用户把输出从外接显示器喇叭切回内建
+/// `MediaKeyController` 根据默认音频输出决定是否安装音量键 tap。
+/// 当用户把输出从外接显示器喇叭切回内建
 /// 扬声器(或反之)时,若不重新评估,会出现"音量键仍调外接屏而非系统当前
 /// 输出"的问题。本观察者补上这一事件源:监听 CoreAudio 的
 /// `kAudioHardwarePropertyDefaultOutputDevice` 属性,变化时触发回调,

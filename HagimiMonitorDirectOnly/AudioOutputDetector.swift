@@ -18,20 +18,30 @@ private let audioDetectorLog = Logger(subsystem: "com.acerola.hagimi-monitor.dir
 /// 设备切换(插拔 AirPods 等)的自动重评估不在本类型内处理;调用方在设置变化、
 /// 显示器刷新、权限变化等事件里重新调用即可覆盖多数场景。
 enum AudioOutputDetector {
-    /// 返回当前默认输出设备是否可以被系统直接调节音量。
-    /// - true  → 设备可控(如 AirPods、内建扬声器),音量键应交给系统
-    /// - false → 设备不可控(如外接显示器音频),音量键可被 App 接管
-    ///
-    /// 检测顺序对齐 SimplyCoreAudio `canSetVirtualMainVolume`:
-    /// 1. `kAudioDevicePropertyVolumeScalar`(main element)settable
-    /// 2. `kAudioHardwareServiceDeviceProperty_VirtualMainVolume` settable
-    ///    ← MacBook 内建扬声器只满足这一项;漏掉它会导致音量键被错误接管。
-    static func defaultOutputDeviceIsControllable() -> Bool {
-        guard let deviceID = defaultOutputDeviceID() else {
-            audioDetectorLog.notice("No default output device; treating as not controllable")
-            return false
-        }
+    static func defaultOutputDescription() -> AudioOutputDescription? {
+        guard let deviceID = defaultOutputDeviceID() else { return nil }
+        return AudioOutputDescription(
+            deviceUID: stringProperty(kAudioDevicePropertyDeviceUID, deviceID: deviceID) ?? "",
+            name: stringProperty(kAudioObjectPropertyName, deviceID: deviceID) ?? "",
+            transportType: nil,
+            isControllable: isControllable(deviceID: deviceID)
+        )
+    }
 
+    private static func stringProperty(_ selector: AudioObjectPropertySelector, deviceID: AudioDeviceID) -> String? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var value: Unmanaged<CFString>?
+        var size = UInt32(MemoryLayout.size(ofValue: value))
+        guard AudioObjectGetPropertyData(deviceID, &address, 0, nil, &size, &value) == noErr else { return nil }
+        return value?.takeRetainedValue() as String?
+    }
+
+    /// 同时检查主元素和虚拟主音量，内建扬声器可能只支持后者。
+    private static func isControllable(deviceID: AudioDeviceID) -> Bool {
         if isPropertySettable(
             deviceID: deviceID,
             selector: kAudioDevicePropertyVolumeScalar,

@@ -15,7 +15,7 @@ nonisolated struct AudioOutputDescription: Equatable, Sendable {
 // MARK: - 媒体键目标选择(D8/9.1/9.3)
 
 /// 亮度键与音量键的独立目标策略。
-/// - 音量:默认跟随系统音频输出对应的显示器(经 UID→身份映射);
+/// - 音量:跟随系统音频输出对应的显示器，优先使用明确绑定或唯一同名匹配；
 ///   无法确定或系统可控输出时交还系统,不吞键。
 /// - 亮度:鼠标所在外接屏;鼠标在内建屏时交还系统;
 ///   无法取得鼠标所在屏幕且仅一台可控外接屏时用该屏,多台无法确定时交还系统。
@@ -26,7 +26,8 @@ nonisolated enum MediaKeyTargetSelector {
         audioOutput: AudioOutputDescription?,
         boundIdentity: DisplayIdentity?,
         boundDisplayID: CGDirectDisplayID?,
-        displays: [(identity: DisplayIdentity, displayID: CGDirectDisplayID, supportsVolume: Bool)]
+        displays: [(identity: DisplayIdentity, displayID: CGDirectDisplayID, supportsVolume: Bool)],
+        displayNames: [CGDirectDisplayID: String]? = nil
     ) -> CGDirectDisplayID? {
         // 系统自身可调节输出优先交还系统。
         guard let audioOutput, !audioOutput.isControllable else {
@@ -37,8 +38,17 @@ nonisolated enum MediaKeyTargetSelector {
            displays.contains(where: { $0.identity == boundIdentity && $0.displayID == boundDisplayID && $0.supportsVolume }) {
             return boundDisplayID
         }
-        // 唯一映射:音频输出对应唯一支持音量的外接屏。
         let volumeCapable = displays.filter { $0.supportsVolume }
+        if let displayNames {
+            let outputName = audioOutput.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !outputName.isEmpty else { return nil }
+            let sameName = volumeCapable.filter {
+                displayNames[$0.displayID]?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .caseInsensitiveCompare(outputName) == .orderedSame
+            }
+            return sameName.count == 1 ? sameName.first?.displayID : nil
+        }
+        // 调用方仅提供能力列表时，沿用唯一可控屏的选择规则。
         if volumeCapable.count == 1 {
             return volumeCapable.first?.displayID
         }

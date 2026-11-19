@@ -44,6 +44,26 @@ struct MediaKeyTargetSelectorTests {
         #expect(target == 1, "显式绑定应选绑定屏 A")
     }
 
+    @Test func volumeMatchesNamedOutputAndRejectsAmbiguousOrUnmatchedNames() {
+        let audio = AudioOutputDescription(deviceUID: "uid-A", name: "Display A", transportType: nil, isControllable: false)
+        let displays: [(DisplayIdentity, CGDirectDisplayID, Bool)] = [(identityA, 1, true), (identityB, 2, true)]
+        let target = MediaKeyTargetSelector.volumeTarget(
+            audioOutput: audio, boundIdentity: nil, boundDisplayID: nil,
+            displays: displays, displayNames: [1: " Display a ", 2: "Display B"]
+        )
+        #expect(target == 1)
+        let duplicate = MediaKeyTargetSelector.volumeTarget(
+            audioOutput: audio, boundIdentity: nil, boundDisplayID: nil,
+            displays: displays, displayNames: [1: "Display A", 2: "Display A"]
+        )
+        #expect(duplicate == nil)
+        let unmatched = MediaKeyTargetSelector.volumeTarget(
+            audioOutput: audio, boundIdentity: nil, boundDisplayID: nil,
+            displays: [displays[1]], displayNames: [2: "Display B"]
+        )
+        #expect(unmatched == nil)
+    }
+
     /// 唯一支持音量的外接屏:兜底选中。
     @Test func volumeTargetFallsBackToSingleVolumeDisplay() {
         let audio = AudioOutputDescription(deviceUID: "uid-X", name: "未知", transportType: "USB", isControllable: false)
