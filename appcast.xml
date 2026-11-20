@@ -3,29 +3,29 @@
     <channel>
         <title>HagimiMonitorDirect</title>
         <item>
-            <title>1.8.1</title>
-            <pubDate>Tue, 17 Nov 2026 18:24:49 +0000</pubDate>
-            <sparkle:version>106</sparkle:version>
-            <sparkle:shortVersionString>1.8.1</sparkle:shortVersionString>
+            <title>1.8.2</title>
+            <pubDate>Fri, 20 Nov 2026 15:38:34 +0000</pubDate>
+            <sparkle:version>107</sparkle:version>
+            <sparkle:shortVersionString>1.8.2</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>15.0</sparkle:minimumSystemVersion>
             <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
             <description><![CDATA[<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;font-size:13px;line-height:1.5;padding:8px;}pre{white-space:pre-wrap;}</style></head><body><pre>
 ## 更新内容
 
-感谢 @xyy386 为 CPU 逐核圆环补充占用率悬停提示（#145）。
-
 ### 新功能
 
-- 鼠标悬停 CPU 逐核圆环时，可查看该核心当前的整数占用率；面板与设置页预览均支持。
+- 开启「媒体键接管」后，调节亮度、音量会新增浮层反馈：在菜单栏附近实时显示当前档位与刻度，亮度在可用时一并显示面板物理亮度（尼特）；指针移入后可直接拖动滑条微调，停止操作约 1.5 秒后自动淡出，主面板展开期间不弹出。
+- 媒体键跟随实际设备：亮度键作用于鼠标所在的可控屏幕，内建屏也支持平滑调光；音量键跟随系统当前音频输出。目标无法唯一确定时，仍交还系统处理。
+
+### 修复
+
+- 稳定 CPU 逐核圆环的悬停读数：改为逐环跟踪指针，占用率不再随刷新闪烁或落到相邻核心，并避免与长按拖动排序的提示互相干扰。
 
 ### 优化与体验
 
-- 显示器展开区按设备分节，增加设备之间的分隔线，统一名称与参数摘要的对齐和层级，让多屏信息更清楚。
-- 统一未连接显示器的条目样式，只保留设备名称与原有操作入口。
-- 移除显示器亮度、音量和对比度滑轨的密集刻线，仍按整数百分比调节。
-- 移除显示器不支持控制时的重复提示，保留禁用样式表示不可用状态。
-- 补齐电源、显示器主行与展开内容之间的分隔线，电源设置预览同步保持一致。
-- 电源模块的「拓扑」分页更名为「功耗」，让分项功耗信息更容易理解。
+- 蓝牙主行按明细顺序显示设备类型图标；展开区按设备实际上报的电量部件（整机 / 左耳、右耳、充电盒）排布，不再依据名称或广播来源猜测，同一连接内偶尔缺少分部读数时布局也保持稳定。
+- 蓝牙已开启但没有连接设备时，明确显示「未连接设备」，不再显示为「0 台设备」。
+- 媒体键浮层的读数气泡随刻度平滑移动、箭头始终指向填充边界；玻璃材质改用更清透的系统材质，并收敛上下沿高光。
 
 ### 目前已知的问题
 
@@ -41,26 +41,25 @@
 
 ### English
 
-Thanks to @xyy386 for adding per-core CPU usage tooltips (#145).
+This release adds an on-screen readout for media-key adjustments, along with refinements to Bluetooth and per-core CPU details.
 
-- Hover over a CPU core ring to see its current usage as a whole-number percentage, in both the panel and Settings preview.
-- Grouped display details into clearer device sections, with separators and consistent alignment for names and specifications.
-- Unified disconnected-display rows, keeping only the device name and existing actions.
-- Removed dense tick marks from display brightness, volume, and contrast sliders while preserving whole-percentage adjustments.
-- Removed repetitive unsupported-control messages while retaining disabled styling for unavailable controls.
-- Added separators between the main rows and expanded content for Power and Displays, with matching Power previews in Settings.
-- Renamed the Power module's “Topology” tab to “Power” to make component power readings easier to find.
+- With Media Key Takeover enabled, brightness and volume adjustments now show a floating readout near the menu bar with the current level and step bar. Brightness also shows physical panel luminance (nits) when available. Move the pointer in to drag the slider directly; it fades out after about 1.5 seconds of inactivity and stays hidden while the main panel is open.
+- Media keys now follow the active device: brightness keys target the controllable screen under the pointer (including smooth dimming on the built-in display), and volume keys follow the current audio output. When no unique target can be determined, the keys are handed back to macOS.
+- Stabilized per-core CPU usage tooltips: pointer tracking is now per ring, so the reading no longer flickers with refreshes or lands on a neighboring core, and it no longer competes with the long-press reorder hint.
+- The Bluetooth row now shows device-type icons in detail order, and the expanded list follows the battery parts each device actually reports (single / left, right, case) instead of inferring them from the name or broadcast source. The layout also stays stable when a sample briefly omits part readings.
+- When Bluetooth is on but no device is connected, the row now reads “No devices connected” instead of “0 devices”.
+- The media-key readout bubble now moves smoothly with the level and its arrow stays aligned to the fill edge; the glass uses a clearer system material with softer top and bottom highlights.
 
 #### Known Issues
 
 - Missing power-consumption readings on Mac mini still require verification on the affected hardware (#106).
 - Network may appear disconnected when a proxy app enables TUN mode; not reproduced locally (#98).
-- Missing charging-power readings on MacBook Air M4 still require verification on the affected hardware (#86).
+- Missing charging-power readings on MacBook Air M4 remain unverified on the affected hardware (#86).
 - Apple Watch connections can be detected, but accurate battery readings remain unavailable (#131, in progress).
 
 </pre></body></html>
 ]]></description>
-            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.8.1/HagimiMonitor-v1.8.1.zip" length="6526342" type="application/octet-stream" sparkle:edSignature="WtK3Oo5ayFYo+9VWji5iiC8w7DJ3dfsJIZaulPTjIBkLygL9E/TsAxbYjXfq1UKJC5cPoiuM1C3nv4KHCKzJAA=="/>
+            <enclosure url="https://github.com/Acerola-1/hagimi-monitor/releases/download/v1.8.2/HagimiMonitor-v1.8.2.zip" length="6585015" type="application/octet-stream" sparkle:edSignature="bzdeQOomIWbA5Xsd31/5kqhLhMoRUfDu1VIzIjgB5XpzfTROZf3uZupcxOueJvOWCE1Tny2DIN/GdleNV4g3Bw=="/>
         </item>
     </channel>
 </rss>
