@@ -523,6 +523,18 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { panel.isVisible && !awaitingGeometry }
 
+    #if DISPLAY_CONTROL
+    func mediaOSDAnchor(on screen: NSScreen) -> CGRect? {
+        guard statusItem.isVisible, let button = statusItem.button,
+              let window = button.window, window.isVisible else { return nil }
+        let frame = window.convertToScreen(button.convert(button.bounds, to: nil))
+        guard !frame.isEmpty, frame.maxY <= screen.frame.maxY + 1,
+              frame.minY >= screen.visibleFrame.maxY - 1,
+              frame.midX >= screen.frame.minX, frame.midX <= screen.frame.maxX else { return nil }
+        return frame
+    }
+    #endif
+
     /// 开关关闭时同步停止本窗口的显示和回读，保留位置与预热内容供再次打开。
     func setMenuBarEntryEnabled(_ enabled: Bool) {
         if !enabled { dismissPanel(animated: false) }
@@ -540,6 +552,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     }
 
     private func showPanel() {
+        #if DISPLAY_CONTROL
+        store.displayControlController.dismissMediaControlOSD()
+        #endif
         // 用户点开面板即视为看过菜单栏那处告警:只清这一处红点,
         // 面板统计入口与统计页的红点各有各的清除时机。
         if contentScope == .systemMonitor { PressureAlertCenter.shared.markRead(.menuBar) }
