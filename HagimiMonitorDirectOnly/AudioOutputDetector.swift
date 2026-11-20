@@ -5,18 +5,7 @@ import OSLog
 
 private let audioDetectorLog = Logger(subsystem: "com.acerola.hagimi-monitor.direct", category: "AudioOutput")
 
-/// 探测默认音频输出设备是否自身可控。
-///
-/// macOS 上 F11/F12 音量键默认调节"系统当前选中的输出设备"。当该设备是
-/// AirPods、蓝牙音箱、USB 声卡等自带音量控制的设备时,系统会自行处理音量键;
-/// 此时 App 若也接管音量键,会让 AirPods 等设备的音量键失效。
-///
-/// 因此对齐 MonitorControl 的策略(`MediaKeyTapManager.updateMediaKeyTap` 中
-/// `canSetVirtualMainVolume(scope: .output)` 判断):仅在默认输出设备自身
-/// **不可控**时才接管音量键。典型场景是音频走外接显示器喇叭,系统认为不可控。
-///
-/// 设备切换(插拔 AirPods 等)的自动重评估不在本类型内处理;调用方在设置变化、
-/// 显示器刷新、权限变化等事件里重新调用即可覆盖多数场景。
+/// 默认输出可直接调音量时走 Core Audio，其他设备由显示器路由匹配。
 enum AudioOutputDetector {
     static func defaultOutputDescription() -> AudioOutputDescription? {
         guard let deviceID = defaultOutputDeviceID() else { return nil }
@@ -24,7 +13,7 @@ enum AudioOutputDetector {
             deviceUID: stringProperty(kAudioDevicePropertyDeviceUID, deviceID: deviceID) ?? "",
             name: stringProperty(kAudioObjectPropertyName, deviceID: deviceID) ?? "",
             transportType: nil,
-            isControllable: isControllable(deviceID: deviceID)
+            isControllable: volumeSelector(deviceID) != nil
         )
     }
 
@@ -40,26 +29,56 @@ enum AudioOutputDetector {
         return value?.takeRetainedValue() as String?
     }
 
-    /// 同时检查主元素和虚拟主音量，内建扬声器可能只支持后者。
-    private static func isControllable(deviceID: AudioDeviceID) -> Bool {
-        if isPropertySettable(
-            deviceID: deviceID,
-            selector: kAudioDevicePropertyVolumeScalar,
-            scope: kAudioDevicePropertyScopeOutput
-        ) {
-            return true
+    struct VolumeOutput: Equatable {
+        let id: AudioDeviceID
+        let selector: AudioObjectPropertySelector
+
+        private func address(_ selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
+            AudioObjectPropertyAddress(mSelector: selector, mScope: kAudioDevicePropertyScopeOutput,
+                                       mElement: kAudioObjectPropertyElementMain)
         }
 
-        // Fallback: virtual main volume(MacBook 内建扬声器的实际可写属性)。
-        if isPropertySettable(
-            deviceID: deviceID,
-            selector: kAudioHardwareServiceDeviceProperty_VirtualMainVolume,
-            scope: kAudioDevicePropertyScopeOutput
-        ) {
-            return true
+        var level: Double? {
+            var property = address(selector)
+            var scalar: Float32 = 0
+            var size = UInt32(MemoryLayout.size(ofValue: scalar))
+            guard AudioObjectGetPropertyData(id, &property, 0, nil, &size, &scalar) == noErr,
+                  (0...1).contains(scalar) else { return nil }
+            return Double(scalar) * 100
         }
 
-        return false
+        var muted: Bool? {
+            var property = address(kAudioDevicePropertyMute)
+            var flag: UInt32 = 0
+            var size = UInt32(MemoryLayout.size(ofValue: flag))
+            guard AudioObjectHasProperty(id, &property),
+                  AudioObjectGetPropertyData(id, &property, 0, nil, &size, &flag) == noErr else { return nil }
+            return flag != 0
+        }
+
+        func setMuted(_ muted: Bool) -> Bool {
+            var property = address(kAudioDevicePropertyMute)
+            var flag: UInt32 = muted ? 1 : 0
+            return AudioObjectSetPropertyData(id, &property, 0, nil, 4, &flag) == noErr
+        }
+
+        func setLevel(_ level: Double) -> Bool {
+            var property = address(selector)
+            var scalar = Float32(min(100, max(0, level)) / 100)
+            guard AudioObjectSetPropertyData(id, &property, 0, nil, 4, &scalar) == noErr else { return false }
+            return scalar == 0 || muted != true || setMuted(false)
+        }
+    }
+
+    static func volumeOutput() -> VolumeOutput? {
+        guard let id = defaultOutputDeviceID(), let selector = volumeSelector(id) else { return nil }
+        return VolumeOutput(id: id, selector: selector)
+    }
+
+    private static func volumeSelector(_ deviceID: AudioDeviceID) -> AudioObjectPropertySelector? {
+        [kAudioHardwareServiceDeviceProperty_VirtualMainVolume, kAudioDevicePropertyVolumeScalar].first {
+            isPropertySettable(deviceID: deviceID, selector: $0, scope: kAudioDevicePropertyScopeOutput)
+        }
     }
 
     private static func isPropertySettable(

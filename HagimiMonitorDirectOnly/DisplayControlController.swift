@@ -10,7 +10,7 @@ import SwiftUI
 
 nonisolated protocol DisplayControlBackend: Sendable {
     func displays() -> [ControlledDisplay]
-    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome
+    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay, smoothBrightness: Bool) -> DisplayWriteOutcome
     func makeEngineTransport() -> any DDCTransport
     func engineConnections(for displays: [ControlledDisplay]) -> [DisplayConnection]
     func invalidateConnectionTokens()
@@ -67,12 +67,9 @@ final class DisplayControlController: ObservableObject {
     private var pollTimerCancellable: AnyCancellable?
     private static let pollInterval: TimeInterval = 5
 
-    /// 媒体键 tap 决策所依赖的显示侧输入:是否存在支持 DDC 亮度的外接屏、
-    /// 是否存在可控音量的外接屏。只有这两个量变化才需要重算接管策略——tap 装在
-    /// `.headInsertEventTap` 上,重建会扰动系统事件/焦点状态,不能挂在显示刷新的
-    /// 收尾上。具体的鼠标事件丢失因果仍需运行时复测,这里不把它当作已证实事实。
+    /// 按键接管取决于亮度控制能力，以及可与音频输出匹配的外接屏。
     private struct MediaKeyPlanInputs: Equatable {
-        let hasExternalBrightnessDisplay: Bool
+        let hasBrightnessDisplay: Bool
         let externalAudioDisplayNames: [CGDirectDisplayID: String]
     }
     private var mediaKeyPlanInputs: MediaKeyPlanInputs?
@@ -175,11 +172,10 @@ final class DisplayControlController: ObservableObject {
             }
     }
 
-    /// 仅在显示侧输入变化时重算媒体键接管,避免每 5s 一次的刷新都去重建
-    /// headInsert tap。显示数值的周期回读与媒体键 tap 的生命周期没有直接因果。
+    /// 周期回读亮度和音量时，沿用已安装的媒体键监听。
     private func refreshMediaKeyPlanIfInputsChanged(_ detectedDisplays: [ControlledDisplay]) {
         let inputs = MediaKeyPlanInputs(
-            hasExternalBrightnessDisplay: detectedDisplays.contains { !$0.isBuiltIn && $0.supportsBrightness },
+            hasBrightnessDisplay: detectedDisplays.contains { $0.supportsBrightness },
             externalAudioDisplayNames: Dictionary(uniqueKeysWithValues: detectedDisplays.lazy
                 .filter { !$0.isBuiltIn && $0.supportsVolume }
                 .map { ($0.id, $0.name) })
@@ -264,6 +260,16 @@ final class DisplayControlController: ObservableObject {
         return fallbackValues[displayID]?[control] ?? fallbackDefault
     }
 
+    private let nativeBrightness = DisplayServicesBridge()
+
+    func mediaKeyBaseline(for control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
+        if control == .brightness, displays.contains(where: { $0.id == displayID && ($0.isBuiltIn || $0.kind == .appleNative) }) {
+            if let pending = pendingValues[displayID]?[control] { return pending }
+            return nativeBrightness.getBrightness(displayID: displayID).map { Double($0) * 100 }
+        }
+        return value(for: control, displayID: displayID)
+    }
+
     func optionalValue(for control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
         if let pendingValue = pendingValues[displayID]?[control] {
             return pendingValue
@@ -278,7 +284,7 @@ final class DisplayControlController: ObservableObject {
     @discardableResult
     func setValueAsync(
         _ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID,
-        final: Bool = true, afterNativeWrite: (@MainActor @Sendable () -> Void)? = nil
+        final: Bool = true, smoothBrightness: Bool = false, afterNativeWrite: (@MainActor @Sendable () -> Void)? = nil
     ) -> Bool {
         guard value.isFinite, !connectionTransition, !connections.isBusy else { return false }
         if connections.hasStarted {
@@ -310,7 +316,7 @@ final class DisplayControlController: ObservableObject {
         }
 
         let requestGeneration = refreshGeneration
-        worker.setValue(clampedValue, for: key, display: display, service: service) { [weak self] result in
+        worker.setValue(clampedValue, for: key, display: display, service: service, smoothBrightness: smoothBrightness) { [weak self] result in
             Task { @MainActor in
                 guard let self, !self.connectionTransition, self.refreshGeneration == requestGeneration else { return }
                 self.handleWriteResult(result)
@@ -459,6 +465,7 @@ private nonisolated final class DisplayControlWorker: @unchecked Sendable {
         for key: ControlKey,
         display: ControlledDisplay,
         service: any DisplayControlBackend,
+        smoothBrightness: Bool,
         completion: @escaping @Sendable (DisplayWriteResult) -> Void
     ) {
         let requestGeneration = generationLock.withLock { generation }
@@ -474,8 +481,12 @@ private nonisolated final class DisplayControlWorker: @unchecked Sendable {
                 }
                 self.debounceTimers.removeValue(forKey: key)
 
-                let outcome = service.setValue(latestValue, for: key.control, display: display)
+                let outcome = service.setValue(latestValue, for: key.control, display: display, smoothBrightness: smoothBrightness)
                 completion(DisplayWriteResult(key: key, value: latestValue, outcome: outcome))
+            }
+            if smoothBrightness {
+                timer.perform()
+                return
             }
             self.debounceTimers[key] = timer
             self.queue.asyncAfter(deadline: .now() + self.debounceInterval, execute: timer)
@@ -754,7 +765,7 @@ private nonisolated final class DisplayControlService: DisplayControlBackend, @u
         return result
     }
 
-    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome {
+    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay, smoothBrightness: Bool) -> DisplayWriteOutcome {
         guard display.supports(control) else { return .busError }
 
         // Gamma 软件调光降级路径:DDC 不可用的显示器仍可调亮度(但仅亮度)。
@@ -772,6 +783,9 @@ private nonisolated final class DisplayControlService: DisplayControlBackend, @u
         if useDisplayServices {
             switch control {
             case .brightness:
+                if smoothBrightness {
+                    return HagimiSetSmoothBrightness(display.id, Float(value / 100)) == 0 ? .written : .busError
+                }
                 return displayServices.setBrightness(displayID: display.id, value: Float(value / 100)) ? .written : .busError
             case .volume, .contrast:
                 return .busError

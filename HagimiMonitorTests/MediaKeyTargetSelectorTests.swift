@@ -3,17 +3,13 @@ import Testing
 import CoreGraphics
 import Foundation
 
-/// 媒体键目标选择测试(9.1/9.3/9.4)。
-/// 验收:双屏音频 A/鼠标 B 时选 A;未知映射不猜测;系统可控输出交还系统;
-/// 亮度保留鼠标/单屏策略;静音恢复优先级(进程内→持久化→兜底)。
 struct MediaKeyTargetSelectorTests {
     private let identityA = DisplayIdentity(vendorID: 0x1111, productID: 0x2222, serialNumber: "A", edidUUID: nil, isBuiltIn: false)
     private let identityB = DisplayIdentity(vendorID: 0x3333, productID: 0x4444, serialNumber: "B", edidUUID: nil, isBuiltIn: false)
 
-    // MARK: - 9.1 音量目标
+    // MARK: - 音量目标
 
-    /// 音频输出在屏 A(不可控),鼠标在屏 B:音量键调屏 A。
-    @Test func volumeTargetsAudioDisplayNotMouse() {
+    @Test func volumeRejectsMultipleDisplaysWithoutBindingOrNames() {
         let audio = AudioOutputDescription(deviceUID: "uid-A", name: "显示器喇叭", transportType: "HDMI", isControllable: false)
         let displays: [(DisplayIdentity, CGDirectDisplayID, Bool)] = [
             (identityA, 1, true),
@@ -80,8 +76,8 @@ struct MediaKeyTargetSelectorTests {
         #expect(target == 1, "唯一音量屏应被选中")
     }
 
-    /// 系统可控输出(AirPods/内建扬声器)交还系统。
-    @Test func controllableOutputHandedBackToSystem() {
+    /// 系统可控输出由当前音频设备处理，不能再选择外接屏音量。
+    @Test func controllableOutputSkipsDDC() {
         let audio = AudioOutputDescription(deviceUID: "airpods", name: "AirPods", transportType: "Bluetooth", isControllable: true)
         let displays: [(DisplayIdentity, CGDirectDisplayID, Bool)] = [(identityA, 1, true)]
         let target = MediaKeyTargetSelector.volumeTarget(
@@ -90,16 +86,23 @@ struct MediaKeyTargetSelectorTests {
             boundDisplayID: nil,
             displays: displays.map { ($0.0, $0.1, $0.2) }
         )
-        #expect(target == nil, "系统可控输出交还系统")
+        #expect(target == nil, "系统可控输出跳过显示器音量控制")
     }
 
-    // MARK: - 9.3 亮度策略保留
+    // MARK: - 亮度目标
+
+    @Test func brightnessTargetsCapableInternalPanel() {
+        let displays: [(CGDirectDisplayID, Bool)] = [(7, true), (9, true)]
+        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: 7, displays: displays) == 7)
+        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: nil, displays: displays) == nil)
+        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: nil, displays: [displays[0]]) == 7)
+    }
 
     @Test func brightnessUsesMouseExternalDisplay() {
-        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
-            (0, true, false), // 内建屏
-            (1, false, true), // 外接可控 A
-            (2, false, true), // 外接可控 B
+        let displays: [(CGDirectDisplayID, Bool)] = [
+            (0, false), // 内建屏
+            (1, true), // 外接可控 A
+            (2, true), // 外接可控 B
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
             mouseDisplayID: 2,
@@ -108,10 +111,10 @@ struct MediaKeyTargetSelectorTests {
         #expect(target == 2, "鼠标所在外接屏优先")
     }
 
-    @Test func brightnessOnBuiltInDisplayHandsBackToSystem() {
-        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
-            (0, true, false),
-            (1, false, true), // 唯一外接可控
+    @Test func brightnessOnUnsupportedBuiltInDisplayHandsBackToSystem() {
+        let displays: [(CGDirectDisplayID, Bool)] = [
+            (0, false),
+            (1, true), // 唯一外接可控
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
             mouseDisplayID: 0, // 鼠标在内建屏
@@ -121,9 +124,9 @@ struct MediaKeyTargetSelectorTests {
     }
 
     @Test func brightnessUnknownWithSingleExternalFallsBackToExternal() {
-        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
-            (0, true, false),
-            (1, false, true), // 唯一外接可控
+        let displays: [(CGDirectDisplayID, Bool)] = [
+            (0, false),
+            (1, true), // 唯一外接可控
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
             mouseDisplayID: nil,
@@ -133,19 +136,19 @@ struct MediaKeyTargetSelectorTests {
     }
 
     @Test func brightnessUnknownWithMultipleExternalsHandsBack() {
-        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
-            (0, true, false),
-            (1, false, true),
-            (2, false, true),
+        let displays: [(CGDirectDisplayID, Bool)] = [
+            (0, false),
+            (1, true),
+            (2, true),
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
-            mouseDisplayID: 0, // 鼠标在内建屏
+            mouseDisplayID: nil,
             displays: displays
         )
         #expect(target == nil, "多台无法确定交还系统")
     }
 
-    // MARK: - 9.3 shouldAccept
+    // MARK: - shouldAccept
 
     @Test func shouldAcceptRequiresTargetAndBaseline() {
         #expect(MediaKeyTargetSelector.shouldAccept(key: .volume, target: nil, hasBaseline: true) == false)
@@ -155,7 +158,7 @@ struct MediaKeyTargetSelectorTests {
         #expect(MediaKeyTargetSelector.shouldAccept(key: .mute, target: 1, hasBaseline: false) == true)
     }
 
-    // MARK: - 9.4 静音恢复优先级
+    // MARK: - 静音恢复优先级
 
     /// 历史 70、实读 25:静音时捕获 25,解除恢复 25(不恢复陈旧 70)。
     @Test func unmuteRestoresCapturedCurrentOverStalePersisted() {

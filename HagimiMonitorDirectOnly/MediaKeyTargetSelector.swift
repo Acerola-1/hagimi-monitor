@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-// MARK: - 音频输出描述(D8/9.1)
+// MARK: - 音频输出描述
 
 /// 默认音频输出设备的只读描述。
 nonisolated struct AudioOutputDescription: Equatable, Sendable {
@@ -12,16 +12,11 @@ nonisolated struct AudioOutputDescription: Equatable, Sendable {
     let isControllable: Bool
 }
 
-// MARK: - 媒体键目标选择(D8/9.1/9.3)
+// MARK: - 媒体键目标选择
 
-/// 亮度键与音量键的独立目标策略。
-/// - 音量:跟随系统音频输出对应的显示器，优先使用明确绑定或唯一同名匹配；
-///   无法确定或系统可控输出时交还系统,不吞键。
-/// - 亮度:鼠标所在外接屏;鼠标在内建屏时交还系统;
-///   无法取得鼠标所在屏幕且仅一台可控外接屏时用该屏,多台无法确定时交还系统。
+/// 音量跟随默认音频输出，亮度跟随鼠标所在的可控显示器。
 nonisolated enum MediaKeyTargetSelector {
-    /// 音量键目标。
-    /// - Returns: nil = 交还系统(不消费事件)。
+    /// 返回应通过 DDC 调整音量的显示器。系统可调音量的设备由 Core Audio 处理。
     static func volumeTarget(
         audioOutput: AudioOutputDescription?,
         boundIdentity: DisplayIdentity?,
@@ -29,7 +24,6 @@ nonisolated enum MediaKeyTargetSelector {
         displays: [(identity: DisplayIdentity, displayID: CGDirectDisplayID, supportsVolume: Bool)],
         displayNames: [CGDirectDisplayID: String]? = nil
     ) -> CGDirectDisplayID? {
-        // 系统自身可调节输出优先交还系统。
         guard let audioOutput, !audioOutput.isControllable else {
             return nil
         }
@@ -56,28 +50,16 @@ nonisolated enum MediaKeyTargetSelector {
         return nil
     }
 
-    /// 亮度键目标(保留既有鼠标/单屏策略)。
+    /// 无法定位鼠标时，仅在目标唯一时接管亮度键。
     static func brightnessTarget(
         mouseDisplayID: CGDirectDisplayID?,
-        displays: [(displayID: CGDirectDisplayID, isBuiltIn: Bool, supportsBrightness: Bool)]
+        displays: [(displayID: CGDirectDisplayID, supportsBrightness: Bool)]
     ) -> CGDirectDisplayID? {
+        let available = displays.filter { $0.supportsBrightness }
         if let mouseDisplayID {
-            // 鼠标在内建屏时交还系统,让 macOS 调节内建屏亮度。
-            if displays.contains(where: { $0.displayID == mouseDisplayID && $0.isBuiltIn }) {
-                return nil
-            }
-            // 鼠标所在外接屏。
-            if let display = displays.first(where: { $0.displayID == mouseDisplayID && !$0.isBuiltIn && $0.supportsBrightness }) {
-                return display.displayID
-            }
-            return nil
+            return available.first { $0.displayID == mouseDisplayID }?.displayID
         }
-        // 无法取得鼠标所在屏幕且仅一台可控外接屏时兜底。
-        let controllableExternals = displays.filter { !$0.isBuiltIn && $0.supportsBrightness }
-        if controllableExternals.count == 1 {
-            return controllableExternals.first?.displayID
-        }
-        return nil
+        return available.count == 1 ? available[0].displayID : nil
     }
 
     /// 调节方法是否接受操作:目标不存在/不支持/无基准 → 不接受(交还系统)。
@@ -106,7 +88,7 @@ nonisolated enum MediaKeyKind: Hashable, Sendable {
     case mute
 }
 
-// MARK: - 静音恢复优先级(D8/9.4)
+// MARK: - 静音恢复优先级
 
 /// 静音恢复值解析:进程内最近非零 → 持久化非零 → 兜底。
 /// 静音前可靠读到的当前音量纳入"进程内最近"。
