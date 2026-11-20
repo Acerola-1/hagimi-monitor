@@ -561,7 +561,7 @@ final class BluetoothBatterySampler: NSObject {
         }
         // 维护绑定:更新已召回的 lastSeenAt,清理长期未召回的过期绑定。
         maintainBindings(recalledUUIDs: Set(bleSnapshots.map { $0.identifier.uuidString } + airPodsAdvertisements.map { $0.identifier.uuidString }))
-        devices = Self.displayOrder(result.devices)
+        devices = Self.displayOrder(Self.continuingBatteryReports(result.devices, after: devices))
         // 日常日志只记录设备数量;详细设备名/电量用 .private 隐私级别,
         // 调试构建可见但不暴露在系统日志中。
         AppLogger.sampler.info("Bluetooth merged: \(self.devices.count) devices")
@@ -1139,6 +1139,22 @@ final class BluetoothBatterySampler: NSObject {
             swap(&previous, &current)
         }
         return Double(previous[n]) / Double(Swift.max(m, n))
+    }
+
+    /// 从仍在清单中的同一设备继承分部能力。设备离场后，下一次连接重新判定。
+    nonisolated static func continuingBatteryReports(
+        _ current: [BluetoothDeviceInfo], after previous: [BluetoothDeviceInfo]
+    ) -> [BluetoothDeviceInfo] {
+        let splitDevices = previous.filter(\.hasSeparateBatteryParts)
+        guard !splitDevices.isEmpty else { return current }
+        let addresses = Set(splitDevices.map(\.address))
+        let identifiers = Set(splitDevices.compactMap(\.accessoryIdentifier))
+        return current.map { device in
+            var next = device
+            next.previouslyReportedBatteryParts = addresses.contains(device.address)
+                || device.accessoryIdentifier.map(identifiers.contains) == true
+            return next
+        }
     }
 
     /// 展示排序:有电量上报的设备排前(信息量大),同组内按名称排,列表顺序稳定不跳动。

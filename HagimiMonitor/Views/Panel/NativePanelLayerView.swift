@@ -4,6 +4,7 @@ import SwiftUI
 import QuartzCore
 
 final class NativePanelWindow: NSPanel {
+    let pointerDidChange = PassthroughSubject<Void, Never>()
     var escapeAction: (() -> Void)?
     /// 指针呼出后会延迟清掉自动落到首行的焦点。真正的按键先取消这次清理。
     var cancelPointerFocusReset: (() -> Void)?
@@ -919,8 +920,9 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         if let globalMonitor { NSEvent.removeMonitor(globalMonitor); self.globalMonitor = nil }
         window?.acceptsMouseMovedEvents = false
         window?.ignoresMouseEvents = true
+        (window as? NativePanelWindow)?.pointerDidChange.send()
     }
-    func nativePanelDidShow() { installMonitors(); updateBoundary(); scheduleBoundaryCrossing() }
+    func nativePanelDidShow() { installMonitors(); pointerDidChange() }
     private func scheduleEdgeScroll(delay: TimeInterval = 0.05) {
         edgeScrollWork?.cancel(); edgeScrollWork = nil
         guard let controller = reorderController, let session = controller.session,
@@ -972,14 +974,18 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
             else if event.window === self.window && (event.type == .leftMouseDown || event.type == .rightMouseDown) {
                 self.isDragging = self.containsPointer(at: CACurrentMediaTime())
             }
-            self.updateBoundary()
-            self.scheduleBoundaryCrossing()
+            self.pointerDidChange()
             return event
         }
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .leftMouseUp, .rightMouseUp]) { [weak self] event in
             if event.type == .leftMouseUp || event.type == .rightMouseUp { self?.isDragging = false }
-            self?.updateBoundary(); self?.scheduleBoundaryCrossing()
+            self?.pointerDidChange()
         }
+    }
+    private func pointerDidChange() {
+        updateBoundary()
+        (window as? NativePanelWindow)?.pointerDidChange.send()
+        scheduleBoundaryCrossing()
     }
     private var pointerInSurface: CGPoint? {
         guard let window else { return nil }
@@ -995,7 +1001,15 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
     private func updateBoundary() {
         guard let window, window.isVisible else { return }
         let ignores = !isDragging && !containsPointer(at: CACurrentMediaTime())
-        if window.ignoresMouseEvents != ignores { window.ignoresMouseEvents = ignores }
+        guard window.ignoresMouseEvents != ignores else { return }
+        window.ignoresMouseEvents = ignores
+        // 结束穿透后复核一次，等待 WindowServer 更新指针命中窗口。
+        if !ignores, let panel = window as? NativePanelWindow {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak panel] in
+                guard let panel, panel.isVisible, !panel.ignoresMouseEvents else { return }
+                panel.pointerDidChange.send()
+            }
+        }
     }
     /// 静止指针只在轮廓交叉时重新判定，不建立逐帧事件/绘制驱动。
     private func scheduleBoundaryCrossing() {

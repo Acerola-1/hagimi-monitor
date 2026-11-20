@@ -1199,6 +1199,8 @@ private struct MetricGlassRow: View, Equatable {
 struct CPUCoresDetail: View {
     let detail: CPUCoreDetail
     let theme: MonitorPanelTheme
+    @Environment(\.isEnabled) private var isEnabled
+    @State private var hoveredCore: Int?
 
     private var displayedDetail: CPUCoreDetail {
         #if DEBUG
@@ -1238,22 +1240,25 @@ struct CPUCoresDetail: View {
     }
 
     var body: some View {
+        let cores = orderedCores
         VStack(spacing: 0) {
             // 圆环逐行铺满:优先放满一行,放不下自动折行;每一行(含末行)
             // 按自身环数把间隙撑满整行,不留右侧空档。
             CoreRingFlowLayout() {
-                ForEach(orderedCores) { core in
-                    CoreLoadRing(
-                        usage: core.usage,
-                        tint: tint(for: core.kind),
-                        track: theme.palette.cpuCoreTrack
-                    )
-                    .contentShape(Rectangle())
-                    .help("\(Int(core.usage.rounded()))%")
+                ForEach(cores) { core in
+                    coreRing(for: core)
                 }
             }
-            .padding(.vertical, 6)
-            .padding(.horizontal, 8)
+            .padding(.vertical, CoreRingHoverRegion.verticalInset)
+            .padding(.horizontal, CoreRingHoverRegion.horizontalInset)
+            .background {
+                // 收起的明细仍挂载供宿主测量，只在可交互时跟踪指针。
+                if isEnabled {
+                    CoreRingHoverRegion(coreIDs: cores.map(\.index)) { core in
+                        if hoveredCore != core { hoveredCore = core }
+                    }
+                }
+            }
 
             Rectangle()
                 .fill(theme.captionText.opacity(0.16))
@@ -1273,6 +1278,29 @@ struct CPUCoresDetail: View {
             .padding(.vertical, 6)
         }
         .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
+        .onDisappear { hoveredCore = nil }
+    }
+
+    private func coreRing(for core: CPUCoreLoad) -> some View {
+        let value = "\(Int(core.usage.rounded()))%"
+        return CoreLoadRing(usage: core.usage, tint: tint(for: core.kind), track: theme.palette.cpuCoreTrack)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Text(value))
+            .overlay(alignment: .bottom) {
+                if hoveredCore == core.index {
+                    Text(value)
+                        .monitorPanelMonoFont(.caption2, weight: .semibold)
+                        .foregroundStyle(theme.primaryText)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
+                        .fixedSize()
+                        .offset(y: CPUCoreRingMetrics.diameter / 2 + 4)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            }
     }
 
     /// 单一底色内等分两段或三段;组内信息聚拢,细线标示相邻组的边界。
@@ -1312,6 +1340,136 @@ struct CPUCoresDetail: View {
         case .superCore: String(localized: "cpu.detail.s-cores")
         case .performance: String(localized: "cpu.detail.p-cores")
         case .efficiency: String(localized: "cpu.detail.e-cores")
+        }
+    }
+}
+
+struct CoreRingHoverRegion: NSViewRepresentable {
+    let coreIDs: [Int]
+    let onHover: (Int?) -> Void
+
+    fileprivate static let horizontalInset: CGFloat = 8
+    fileprivate static let verticalInset: CGFloat = 6
+
+    func makeNSView(context: Context) -> TrackingView {
+        TrackingView()
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.coreIDs = coreIDs
+        view.onHover = onHover
+    }
+
+    static func dismantleNSView(_ view: TrackingView, coordinator: ()) {
+        view.stopTracking()
+        view.onHover = nil
+    }
+
+    final class TrackingView: NSView {
+        var coreIDs: [Int] = [] {
+            didSet {
+                if coreIDs != oldValue { needsLayout = true }
+            }
+        }
+        var onHover: ((Int?) -> Void)?
+        private var panelPointer: AnyCancellable?
+        private var buttonMonitor: Any?
+        private var rings: [(id: Int, frame: CGRect)] = []
+        private var ringAreas: [NSTrackingArea] = []
+
+        override var isFlipped: Bool { true }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            refreshRings()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            refreshRings()
+        }
+
+        private func refreshRings() {
+            var visible: [(id: Int, frame: CGRect)] = []
+            let clip = visibleRect
+            let ringBounds = bounds.insetBy(dx: horizontalInset, dy: verticalInset)
+            CoreRingFlowLayout().forEachRing(count: coreIDs.count, in: ringBounds) { index, frame in
+                let rect = frame.intersection(clip)
+                if !rect.isEmpty { visible.append((coreIDs[index], rect)) }
+            }
+            guard !rings.elementsEqual(visible, by: { $0.id == $1.id && $0.frame == $1.frame }) else { return }
+            rings = visible
+            ringAreas.forEach(removeTrackingArea)
+            // 非激活窗口可能漏掉连续的 mouseMoved，因此逐环监听指针进出。
+            ringAreas = rings.map { ring in
+                let area = NSTrackingArea(rect: ring.frame, options: [.activeAlways, .mouseEnteredAndExited],
+                                          owner: self)
+                addTrackingArea(area)
+                return area
+            }
+            // 布局变化后复核停在原位的指针。
+            if let window, window.isVisible {
+                DispatchQueue.main.async { [weak self, weak window] in
+                    guard let self, let window, self.window === window else { return }
+                    self.checkPointer()
+                }
+            }
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if newWindow !== window { stopTracking() }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            if let panel = window as? NativePanelWindow {
+                panelPointer = panel.pointerDidChange.sink { [weak self] in self?.checkPointer() }
+                return
+            }
+            let buttons: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown,
+                                                   .leftMouseUp, .rightMouseUp, .otherMouseUp]
+            buttonMonitor = NSEvent.addLocalMonitorForEvents(matching: buttons) { [weak self] event in
+                guard let self else { return event }
+                if NSEvent.pressedMouseButtons == 0, event.window === self.window {
+                    self.checkPointer()
+                } else {
+                    self.onHover?(nil)
+                }
+                return event
+            }
+        }
+
+        func stopTracking() {
+            panelPointer = nil
+            if let buttonMonitor { NSEvent.removeMonitor(buttonMonitor) }
+            buttonMonitor = nil
+            onHover?(nil)
+        }
+
+        override func mouseEntered(with event: NSEvent) { checkPointer() }
+        override func mouseExited(with event: NSEvent) { checkPointer() }
+
+        private func checkPointer() {
+            let screenPoint = NSEvent.mouseLocation
+            guard let window, window.isVisible, !window.ignoresMouseEvents,
+                  !isHiddenOrHasHiddenAncestor, NSEvent.pressedMouseButtons == 0 else {
+                onHover?(nil)
+                return
+            }
+            let point = convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+            guard visibleRect.contains(point),
+                  NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0) == window.windowNumber else {
+                onHover?(nil)
+                return
+            }
+            updateHover(at: point)
+        }
+
+        func updateHover(at point: CGPoint) {
+            onHover?(rings.first(where: { $0.frame.contains(point) })?.id)
         }
     }
 }
@@ -1356,7 +1514,13 @@ private struct CoreRingFlowLayout: Layout {
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        let (rows, spacings) = arrange(count: subviews.count, width: bounds.width)
+        forEachRing(count: subviews.count, in: bounds) { index, frame in
+            subviews[index].place(at: frame.origin, proposal: ProposedViewSize(frame.size))
+        }
+    }
+
+    func forEachRing(count: Int, in bounds: CGRect, place: (Int, CGRect) -> Void) {
+        let (rows, spacings) = arrange(count: count, width: bounds.width)
         var y = bounds.minY
         for (rowIndex, indices) in rows.enumerated() {
             // 单环行居中;多环行从行首起按该行间隙铺满。
@@ -1365,10 +1529,7 @@ private struct CoreRingFlowLayout: Layout {
                 : bounds.minX + (bounds.width - ringSize) / 2
             let spacing = spacings[rowIndex]
             for (position, subviewIndex) in indices.enumerated() {
-                subviews[subviewIndex].place(
-                    at: CGPoint(x: x, y: y),
-                    proposal: ProposedViewSize(width: ringSize, height: ringSize)
-                )
+                place(subviewIndex, CGRect(x: x, y: y, width: ringSize, height: ringSize))
                 if position < indices.count - 1 {
                     x += ringSize + spacing
                 }
@@ -1481,7 +1642,8 @@ struct MetricDetailGrid: View {
                         if isCoreDetail(cell.metric), let cpuCoreDetail {
                             CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2)
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2,
+                                                  showsDragHint: false)
                                 .panelMetricSpan(2)
                         } else if cell.mergedThermal,
                            let temperature = metrics.first(where: { $0.name == "temperature" }) {
@@ -3098,7 +3260,7 @@ struct FanList: View {
     }
 }
 
-/// 蓝牙设备电量行:行头显示设备数与最低电量,展开区逐设备列出电量。
+/// 蓝牙行头按明细顺序显示设备类型，展开区逐设备列出电量。
 /// 与 BatteryGlassRow 同款结构:手势只挂行头,展开区不拦截。
 private struct BluetoothGlassRow: View, Equatable {
     let module: MonitorModule
@@ -3121,11 +3283,6 @@ private struct BluetoothGlassRow: View, Equatable {
         module.bluetoothDevices ?? []
     }
 
-    private func hasBluetoothComponents(_ device: BluetoothDeviceInfo) -> String {
-        let single = !device.components.isEmpty && device.components.allSatisfy { $0.kind == .single }
-        return single ? "single" : (!device.components.isEmpty || device.batterySource == .advertisement ? "parts" : "none")
-    }
-
     /// 行头的无障碍值:设备数 + 摘要(如「3 个设备, 最低 45%」)。
     private var accessibilityValueForRow: String {
         if devices.isEmpty {
@@ -3144,6 +3301,43 @@ private struct BluetoothGlassRow: View, Equatable {
         isExpanded
             ? String(localized: "bluetooth.row.collapse-hint")
             : String(localized: "bluetooth.row.expand-hint")
+    }
+
+    /// 图标槽与双列读数等宽。标题和设备数优先，空间不足时缩窄槽并折叠末尾图标。
+    private var deviceIcons: some View {
+        let iconWidth: CGFloat = 16
+        let spacing: CGFloat = 4
+        return GeometryReader { geometry in
+            let width = min(geometry.size.width, RowHeaderPillMetrics.width * 2 + RowHeaderPillMetrics.spacing)
+            let innerWidth = max(0, width - 2 * RowHeaderPillMetrics.horizontalPadding)
+            let slots = Int((innerWidth + spacing) / (iconWidth + spacing))
+            PairedHeaderReadings(theme: theme) {
+                ViewThatFits(in: .horizontal) {
+                    ForEach((0...min(slots, devices.count)).reversed(), id: \.self) { visible in
+                        HStack(spacing: spacing) {
+                            ForEach(devices.prefix(visible)) { device in
+                                Image(systemName: device.type.symbol)
+                                    .font(.callout.weight(.medium))
+                                    .frame(width: iconWidth)
+                            }
+                            if visible < devices.count {
+                                Text(verbatim: "+\(devices.count - visible)")
+                                    .font(.caption.monospacedDigit())
+                            }
+                        }
+                        .fixedSize()
+                    }
+                    Color.clear
+                }
+                .frame(width: innerWidth)
+                .frame(width: width, height: RowHeaderPillMetrics.height)
+            }
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+        .frame(height: RowHeaderPillMetrics.height)
+        .foregroundStyle(tint.opacity(0.8))
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     var body: some View {
@@ -3167,22 +3361,15 @@ private struct BluetoothGlassRow: View, Equatable {
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
 
-                Spacer(minLength: 8)
-
-                // 行尾不放电量数值:多设备时「最低电量」归属不明,易误读;
-                // 设备明细在展开区,行尾用箭头标出可展开。
-                // 无设备时无内容可展开,箭头隐藏(显占位保持行高稳定)。
-                Image(systemName: "chevron.down")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(theme.captionText)
-                    .frame(width: 18, height: 18)
-                    .rotationEffect(.degrees(isExpanded ? 0 : -90))
-                    .animation(.spring(response: MonitorConstants.panelExpansionSpringResponse,
-                                       dampingFraction: MonitorConstants.panelExpansionSpringDamping), value: isExpanded)
-                    .opacity(devices.isEmpty ? 0 : 1)
+                if !devices.isEmpty {
+                    deviceIcons
+                        .layoutPriority(-1)
+                }
             }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 10)
+            .padding(.trailing, RowHeaderPillMetrics.trailingPadding)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
             .onTapGesture {
@@ -3193,7 +3380,8 @@ private struct BluetoothGlassRow: View, Equatable {
             // 无障碍:行头提供模块名 + 设备数 + 展开/收起状态 + 操作提示。
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(module.kind.title)
-            .accessibilityValue(accessibilityValueForRow)
+            .accessibilityValue(devices.isEmpty ? accessibilityValueForRow
+                : "\(accessibilityValueForRow), \(String(localized: isExpanded ? "panel.row.expanded" : "panel.row.collapsed"))")
             .accessibilityHint(devices.isEmpty ? "" : accessibilityHintForRow)
             .accessibilityAddTraits(devices.isEmpty ? [] : .isButton)
             .panelRowKeyboardFocus(canActivate: !devices.isEmpty, ring: theme.primaryText) {
@@ -3204,7 +3392,7 @@ private struct BluetoothGlassRow: View, Equatable {
 
             .panelMeasure("row:" + module.kind.id)
 
-            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty, measurementKey: devices.map { "\($0.id):\($0.name):\($0.type):\(hasBluetoothComponents($0))" }.joined(separator: "|")) {
+            CollapsibleDetail(expansionKey: module.kind.id, isExpanded: isExpanded, contentAvailable: !devices.isEmpty, measurementKey: devices.map { "\($0.id):\($0.name):\($0.type):\($0.hasSeparateBatteryParts):\($0.compactBatteryLevel != nil)" }.joined(separator: "|")) {
                 BluetoothDeviceList(devices: devices, theme: theme)
                     .padding(.horizontal, 10)
                     .padding(.bottom, 9)
@@ -3232,9 +3420,7 @@ struct BluetoothDeviceList: View {
         }
     }
 
-    private func hasComponentGrid(_ device: BluetoothDeviceInfo) -> Bool {
-        !device.components.isEmpty || device.batterySource == .advertisement
-    }
+    private let partOrder: [BluetoothBatteryComponent.Kind] = [.left, .right, .case]
 
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
         PanelAccessoryGroup(theme: theme) {
@@ -3258,22 +3444,21 @@ struct BluetoothDeviceList: View {
                             .foregroundStyle(theme.captionText)
                     }
                     Spacer(minLength: 4)
-                    if !hasComponentGrid(device) {
-                        if let level = device.batteryLevel {
+                    if !device.hasSeparateBatteryParts {
+                        if let level = device.compactBatteryLevel {
                             BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
                                 .frame(width: BluetoothComponentSizing.barWidth, height: BluetoothComponentSizing.trackHeight)
                         }
-                        batteryValue(device.batteryLevel, charging: device.isCharging)
+                        batteryValue(device.compactBatteryLevel, charging: device.compactChargingState)
                             .frame(minWidth: BluetoothComponentSizing.valueWidth, alignment: .trailing)
                     }
                 }
                 .padding(AccessoryDetailSizing.inset)
-                if hasComponentGrid(device) {
+                if device.hasSeparateBatteryParts {
                     Rectangle().fill(theme.rowSeparator(for: .bluetooth)).frame(height: 1)
                         .padding(.horizontal, AccessoryDetailSizing.inset)
-                    let kinds = componentKinds(for: device)
-                    PanelAccessoryGrid(count: kinds.count, columns: kinds.count, kind: .bluetooth, theme: theme) { index in
-                        componentCell(kinds[index], device: device)
+                    PanelAccessoryGrid(count: partOrder.count, columns: partOrder.count, kind: .bluetooth, theme: theme) { index in
+                        componentCell(partOrder[index], device: device)
                     }
                 }
             }
@@ -3329,16 +3514,6 @@ struct BluetoothDeviceList: View {
         }
     }
 
-    private func componentKinds(for device: BluetoothDeviceInfo) -> [BluetoothBatteryComponent.Kind] {
-        if device.components.allSatisfy({ $0.kind == .single }), !device.components.isEmpty {
-            return [.single]
-        }
-        if device.batterySource == .advertisement || device.components.contains(where: { $0.kind == .left || $0.kind == .right || $0.kind == .case }) {
-            return [.left, .right, .case]
-        }
-        return [.single]
-    }
-
     private func componentLocalizationKey(_ kind: BluetoothBatteryComponent.Kind) -> String {
         switch kind {
         case .left: "bluetooth.component.left"
@@ -3351,8 +3526,8 @@ struct BluetoothDeviceList: View {
     /// 朗读所有部件，包括未上报的项，避免把缺失电量读成真实零值。
     private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
         var details = [typeLabel(for: device.type)]
-        if hasComponentGrid(device) {
-            for kind in componentKinds(for: device) {
+        if device.hasSeparateBatteryParts {
+            for kind in partOrder {
                 let component = device.components.first { $0.kind == kind }
                 let label = String(localized: String.LocalizationValue(componentLocalizationKey(kind)))
                 let value = component.map { "\($0.level)%" } ?? String(localized: "bluetooth.battery-unavailable")
@@ -3360,8 +3535,8 @@ struct BluetoothDeviceList: View {
                 details.append("\(label) \(value)\(charging)")
             }
         } else {
-            details.append(device.batteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.battery-unavailable"))
-            if device.isCharging == true { details.append(String(localized: "bluetooth.charging")) }
+            details.append(device.compactBatteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.battery-unavailable"))
+            if device.compactChargingState == true { details.append(String(localized: "bluetooth.charging")) }
         }
         return details.joined(separator: ", ")
     }

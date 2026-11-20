@@ -72,7 +72,7 @@ nonisolated enum MonitorKind: String, CaseIterable, Identifiable, Sendable {
     case network
     case battery
     /// 蓝牙设备电量:独立于 SystemMonitorSampler,数据由 BluetoothBatterySampler 注入,
-    /// 蓝牙开启时常驻(无连接设备时显示 0 台)。声明在 battery 之后,面板中落在电源行与
+    /// 蓝牙开启时常驻(无连接设备时显示未连接状态)。声明在 battery 之后,面板中落在电源行与
     /// 显示器区之间;可见性与其余模块一致走用户开关。
     case bluetooth
 
@@ -1498,11 +1498,11 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
     /// 把 BluetoothBatterySampler 的输出合成成 .bluetooth MonitorModule,插入到
     /// allModules 的电池之后(面板中落在电源行与显示器区之间):
     /// - 蓝牙确认关闭:不插入模块,面板行消失
-    /// - 蓝牙开启即常驻(无连接设备时显示 0 台,与风扇「无硬件才隐藏」的
+    /// - 蓝牙开启即常驻(无连接设备时显示未连接状态,与风扇「无硬件才隐藏」的
     ///   门控不同:蓝牙开关是瞬态,隐藏会让用户误以为功能消失)
     /// - 数据源尚未确认(unknown):保留占位行,与其他模块启动期占位一致;
     ///   「尚未确认」不是「已关闭」,按关闭处理会让行在启动竞态下消失又出现
-    /// - summary = 设备数,value = 上报电量设备中的最低值(均未上报时为 0,
+    /// - summary = 未连接状态或设备数,value = 上报电量设备中的最低值(均未上报时为 0,
     ///   severity 已对无电量情形判 calm 不误报)
     private func applyBluetoothModule() {
         allModules.removeAll { $0.kind == .bluetooth }
@@ -1510,13 +1510,19 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
 
         let isConfirmed = bluetoothControllerState == .on
         let lowestLevel = bluetoothDevices.compactMap(\.batteryLevel).min()
+        let summary: String
+        if !isConfirmed {
+            summary = "--"
+        } else if bluetoothDevices.isEmpty {
+            summary = String(localized: "bluetooth.summary.none")
+        } else {
+            summary = String(localized: "bluetooth.summary.count \(bluetoothDevices.count)")
+        }
 
         var bluetoothModule = MonitorModule(
             kind: .bluetooth,
             value: isConfirmed ? Double(lowestLevel ?? 0) : 0,
-            summary: isConfirmed
-                ? String(localized: "bluetooth.summary.count \(bluetoothDevices.count)")
-                : "--",
+            summary: summary,
             metrics: [],
             samples: []
         )

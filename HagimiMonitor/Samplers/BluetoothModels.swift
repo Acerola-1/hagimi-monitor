@@ -199,6 +199,16 @@ nonisolated struct BluetoothDeviceInfo: Identifiable, Equatable, Sendable {
     /// 电源树的 UUID 身份；与 MAC 分开，防止 UUID 被误当作地址。
     var accessoryIdentifier: UUID? = nil
 
+    /// 同次连接内只保留分部上报能力；每个部位的电量和充电状态始终取当前快照。
+    var previouslyReportedBatteryParts = false
+    var hasSeparateBatteryParts: Bool {
+        previouslyReportedBatteryParts || components.contains { $0.kind != .single }
+    }
+
+    var compactBatteryLevel: Int? { batteryLevel ?? singleBattery?.level }
+    var compactChargingState: Bool? { singleBattery?.isCharging ?? isCharging }
+    private var singleBattery: BluetoothBatteryComponent? { components.first { $0.kind == .single } }
+
     var id: String { address }
 }
 

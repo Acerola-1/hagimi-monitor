@@ -2526,6 +2526,22 @@
         }
       }
     },
+    "bluetooth.summary.none": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No devices connected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未连接设备"
+          }
+        }
+      }
+    },
     "bluetooth.type.gamepad": {
       "localizations": {
         "en": {
@@ -3514,6 +3530,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "对比度"
+          }
+        }
+      }
+    },
+    "display.control.muted": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已静音"
+          }
+        }
+      }
+    },
+    "display.control.nits": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld nits"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 尼特"
           }
         }
       }

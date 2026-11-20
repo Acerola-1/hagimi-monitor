@@ -22,6 +22,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var displayMenuBarController: FluidPanelController?
     private let displayTermination = DisplayConnectionTermination()
 
+    func mediaOSDPlacement(on screen: NSScreen) -> (suppressed: Bool, anchor: CGRect?) {
+        let anchor = displayMenuBarController?.mediaOSDAnchor(on: screen)
+            ?? fluidPanelController.mediaOSDAnchor(on: screen)
+        return (fluidPanelController.isVisible || displayMenuBarController?.isVisible == true, anchor)
+    }
+
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         let connections = store.displayControlController.connections
         guard connections.hasStarted else { return .terminateNow }

@@ -46,6 +46,33 @@ struct AirPodsRegressionTests {
         return PMSetAccessoryParser.parse(xmlData: raw)
     }
 
+    @Test func compactBatteryUsesSingleComponentWithoutGuessingPartsFromNameOrSource() {
+        var device = io("AirPods")
+        device.batterySource = .advertisement
+        #expect(!device.hasSeparateBatteryParts)
+        #expect(device.compactBatteryLevel == nil)
+        device.components = [.init(kind: .single, level: 0, isCharging: true)]
+        #expect(!device.hasSeparateBatteryParts)
+        #expect(device.compactBatteryLevel == 0)
+        #expect(device.compactChargingState == true)
+    }
+
+    @Test func separateBatteryLayoutSurvivesMissingReadingsOnlyForThePresentDevice() {
+        var leftOnly = io()
+        leftOnly.components = [.init(kind: .left, level: 30)]
+        #expect(leftOnly.hasSeparateBatteryParts)
+        let fresh = [io(), io(address: "another-device")]
+        let next = BluetoothBatterySampler.continuingBatteryReports(fresh, after: [leftOnly])
+        #expect(next.map(\.hasSeparateBatteryParts) == [true, false])
+        #expect(next[0].components.isEmpty)
+        #expect(next[0].compactBatteryLevel == nil)
+        let later = BluetoothBatterySampler.continuingBatteryReports(fresh, after: next)
+        #expect(later[0].hasSeparateBatteryParts)
+        let disconnected = BluetoothBatterySampler.continuingBatteryReports([], after: later)
+        let reconnected = BluetoothBatterySampler.continuingBatteryReports(fresh, after: disconnected)
+        #expect(!reconnected[0].hasSeparateBatteryParts)
+    }
+
     @Test func directSourcesMergeRenamedAirPodsIntoOneIdentity() throws {
         let power = try pmset()
         #expect(power.first?.accessoryIdentifier == uuid)

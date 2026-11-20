@@ -442,6 +442,7 @@ private struct PanelReorderItemModifier: ViewModifier {
     let id: String
     let title: String
     let span: Int
+    let showsDragHint: Bool
     @Environment(\.panelReorderController) private var controller
     @Environment(\.panelReorderSettings) private var settings
     @Environment(\.displayScale) private var displayScale
@@ -450,7 +451,12 @@ private struct PanelReorderItemModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if let controller, let settings {
-            interactive(content: content, controller: controller, settings: settings)
+            let item = interactive(content: content, controller: controller, settings: settings)
+            if showsDragHint {
+                item.help(String(localized: "panel.reorder.long-press-hint"))
+            } else {
+                item
+            }
         } else {
             content
         }
@@ -516,7 +522,6 @@ private struct PanelReorderItemModifier: ViewModifier {
             .onReceive(settings.$panelOrders) { _ in
                 menuLayoutRevision &+= 1
             }
-            .help(String(localized: "panel.reorder.long-press-hint"))
     }
 
     @ViewBuilder
@@ -564,7 +569,9 @@ private struct PanelReorderItemModifier: ViewModifier {
 }
 
 extension View {
-    func panelReorderItem(scope: PanelOrderScope, id: String, title: String, span: Int = 2) -> some View {
-        modifier(PanelReorderItemModifier(scope: scope, id: id, title: title, span: span))
+    func panelReorderItem(scope: PanelOrderScope, id: String, title: String, span: Int = 2,
+                          showsDragHint: Bool = true) -> some View {
+        modifier(PanelReorderItemModifier(scope: scope, id: id, title: title, span: span,
+                                          showsDragHint: showsDragHint))
     }
 }
