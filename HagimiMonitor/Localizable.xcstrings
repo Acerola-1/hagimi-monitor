@@ -2526,6 +2526,22 @@
         }
       }
     },
+    "bluetooth.summary.none": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No devices connected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未连接设备"
+          }
+        }
+      }
+    },
     "bluetooth.type.gamepad": {
       "localizations": {
         "en": {
