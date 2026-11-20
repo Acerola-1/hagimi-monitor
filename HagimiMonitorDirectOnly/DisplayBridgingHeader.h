@@ -4,17 +4,6 @@
 #import <CoreGraphics/CoreGraphics.h>
 #import "../HagimiMonitor/CrashSignalHandler.h"
 
-#import <dlfcn.h>
-
-// 仅设置应用自己 OSD 窗口的背景柔化半径；缺少可选合成接口时仍由 AppKit 绘制玻璃。
-static inline void HagimiSetOSDBackdropBlur(uint32_t windowID, int32_t radius) {
-    typedef int32_t (*ConnectionID)(void);
-    typedef int32_t (*SetBlur)(int32_t, uint32_t, int32_t);
-    ConnectionID connection = (ConnectionID)dlsym(RTLD_DEFAULT, "SLSMainConnectionID");
-    SetBlur setBlur = (SetBlur)dlsym(RTLD_DEFAULT, "SLSSetWindowBackgroundBlurRadius");
-    if (connection && setBlur) setBlur(connection(), windowID, radius);
-}
-
 typedef CFTypeRef IOAVService;
 extern IOAVService IOAVServiceCreate(CFAllocatorRef allocator);
 extern IOAVService IOAVServiceCreateWithService(CFAllocatorRef allocator, io_service_t service);

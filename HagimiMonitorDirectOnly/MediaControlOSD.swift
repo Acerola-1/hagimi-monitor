@@ -42,7 +42,8 @@ final class MediaControlOSD {
         guard let screen else { return }
         let placement = AppDelegate.shared?.mediaOSDPlacement(on: screen)
 
-        if self.displayID != displayID || state.control != control {
+        let sameScale = self.displayID == displayID && (state.control == .brightness) == (control == .brightness)
+        if !sameScale {
             luminanceRead?.cancel()
             state.luminance = nil
             isEditing = false
@@ -50,7 +51,7 @@ final class MediaControlOSD {
         self.displayID = displayID
         self.updateValue = updateValue
         state.control = control
-        updateDisplayedValue(value)
+        updateDisplayedValue(value, animated: sameScale && panel?.isVisible == true && !isEditing)
 
         let panel = self.panel ?? makePanel()
         let frame = screen.visibleFrame
@@ -58,7 +59,10 @@ final class MediaControlOSD {
         let origin: CGPoint
         if CGDisplayIsBuiltin(displayID) != 0 {
             // 内屏反馈沿用系统浮层在菜单栏下方的右侧位置。
-            origin = CGPoint(x: screen.frame.maxX - size.width - 31, y: frame.maxY - size.height - 11)
+            let panelInset: CGPoint
+            if #available(macOS 27.2, *) { panelInset = CGPoint(x: 30, y: 10) }
+            else { panelInset = CGPoint(x: 31, y: 11) }
+            origin = CGPoint(x: screen.frame.maxX - size.width - panelInset.x, y: frame.maxY - size.height - panelInset.y)
         } else {
             let centerX = placement?.suppressed == true ? frame.midX : placement?.anchor?.midX ?? frame.midX
             let top = min(placement?.anchor?.minY ?? frame.maxY, frame.maxY) - 6
@@ -69,9 +73,6 @@ final class MediaControlOSD {
         if !panel.isVisible {
             panel.alphaValue = 0
             panel.orderFrontRegardless()
-        }
-        if #available(macOS 26, *), let glass = panel.contentView as? MediaControlGlassView {
-            glass.updateMaterial()
         }
         scheduleDismissal()
     }
@@ -97,18 +98,25 @@ final class MediaControlOSD {
         luminanceRead?.cancel()
         luminanceRead = Task { [weak self] in
             // 背光控制器先发布目标百分比，再逐渐达到对应亮度；最后一次回读取稳定值。
+            var receivedReading = false
             for delay in [0, 90, 120, 160] {
                 if delay > 0 { try? await Task.sleep(for: .milliseconds(delay)) }
                 guard !Task.isCancelled else { return }
                 let nits = await NativeDisplayLuminanceReader.read(displayID: displayID, expectedPercent: percent)
                 guard !Task.isCancelled else { return }
-                if let nits { self?.state.luminance = nits }
+                if let nits {
+                    receivedReading = true
+                    self?.state.luminance = nits
+                }
             }
+            if !receivedReading { self?.state.luminance = nil }
         }
     }
 
     private func makePanel() -> NSPanel {
-        let size = CGSize(width: 304, height: 64)
+        let size: CGSize
+        if #available(macOS 27.2, *) { size = CGSize(width: 307, height: 66) }
+        else { size = CGSize(width: 304, height: 64) }
         let panel = NSPanel(
             contentRect: CGRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
@@ -133,6 +141,7 @@ final class MediaControlOSD {
         host.autoresizingMask = [.width, .height]
         if #available(macOS 26, *) {
             let glass = MediaControlGlassView(frame: host.frame)
+            glass.updateMaterial()
             glass.cornerRadius = size.height / 2
             glass.contentView = host
             panel.contentView = glass
@@ -160,11 +169,19 @@ final class MediaControlOSD {
         scheduleDismissal()
     }
 
-    private func updateDisplayedValue(_ value: Double) {
+    private func updateDisplayedValue(_ value: Double, animated: Bool = false) {
         guard state.value != value else { return }
         luminanceRead?.cancel()
-        state.luminance = nil
-        state.value = value
+        // 连续调光时保留最近的实测读数，直到背光报告新值。短暂等待读数期间保持气泡宽度。
+        if state.luminance != nil {
+            luminanceRead = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(500))
+                guard !Task.isCancelled else { return }
+                self?.state.luminance = nil
+            }
+        }
+        let animate = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        withAnimation(animate ? .smooth(duration: 0.20) : nil) { state.value = value }
     }
 
     private func edit(_ editing: Bool) {
@@ -207,31 +224,23 @@ final class MediaControlOSD {
 
 @available(macOS 26, *)
 private final class MediaControlGlassView: NSGlassEffectView {
-    private var reducedTransparency: Bool?
-
-    func updateMaterial() {
-        let reduced = NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency
-        guard reduced != reducedTransparency else { return }
-        reducedTransparency = reduced
-        style = reduced ? .regular : .clear
-        let version = ProcessInfo.processInfo.operatingSystemVersion
-        guard version.majorVersion == 27, version.minorVersion >= 2,
-              let number = window?.windowNumber, let windowID = UInt32(exactly: number), windowID != 0 else { return }
-        if reduced {
-            HagimiSetOSDBackdropBlur(windowID, 0)
-            return
+    // TODO: 自绘浮层还没有完全还原系统原生浮层的液态玻璃效果。
+    // 彩色背景下的边缘折射更弱，整体更像毛玻璃。后续用同一背景实机对照，继续改善折射表现。
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        let center = NSWorkspace.shared.notificationCenter
+        center.removeObserver(self, name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
+        if window != nil {
+            center.addObserver(self, selector: #selector(updateMaterial),
+                               name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
+            updateMaterial()
         }
+    }
 
-        // AppKit 27 的 Bubbles 材质会折射窗后内容。该变体未公开，签名不匹配时沿用标准玻璃。
-        let selector = NSSelectorFromString("set_variant:")
-        guard let method = class_getInstanceMethod(NSGlassEffectView.self, selector),
-              let encoding = method_getTypeEncoding(method),
-              String(cString: encoding) == "v24@0:8q16" else { return }
-        typealias SetVariant = @convention(c) (AnyObject, Selector, Int) -> Void
-        let setVariant = unsafeBitCast(method_getImplementation(method), to: SetVariant.self)
-        let bubblesVariant = 11
-        setVariant(self, selector, bubblesVariant)
-        HagimiSetOSDBackdropBlur(windowID, 4)
+    @objc func updateMaterial() {
+        let workspace = NSWorkspace.shared
+        style = workspace.accessibilityDisplayShouldReduceTransparency || workspace.accessibilityDisplayShouldIncreaseContrast
+            ? .regular : .clear
     }
 }
 
@@ -283,58 +292,54 @@ private struct MediaControlOSDView: View {
                 .accessibilityHidden(true)
             GeometryReader { geometry in
                 let travel = max(1, geometry.size.width)
-                let segments = HStack(spacing: 1) {
-                    ForEach(0..<16) { _ in Rectangle() }
-                }
-                Capsule()
-                    .fill(.white.opacity(0.23))
-                    .overlay(alignment: .leading) {
-                        Rectangle().fill(.white)
-                            .frame(width: travel * CGFloat(state.value / 100))
+                OSDLevelTrack(fraction: state.value / 100, luminanceText: luminanceText)
+                    .contentShape(Rectangle())
+                    .gesture(DragGesture(minimumDistance: 0)
+                        .onChanged { point in
+                            if !dragging { dragging = true; edit(true) }
+                            changeValue(Double(min(travel, max(0, point.location.x)) / travel) * 100)
+                        }
+                        .onEnded { _ in dragging = false; edit(false) })
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel(Text(label))
+                    .accessibilityValue(Text(verbatim: [percentageText, luminanceText].compactMap { $0 }.joined(separator: ", ")))
+                    .accessibilityAdjustableAction { direction in
+                        switch direction {
+                        case .increment: changeValue(min(100, state.value + 6.25))
+                        case .decrement: changeValue(max(0, state.value - 6.25))
+                        @unknown default: break
+                        }
                     }
-                    .clipShape(Capsule())
-                    .mask(segments)
-                    .frame(height: 4)
-                .frame(maxHeight: .infinity)
-                .animation(reduceMotion || dragging ? nil : .smooth(duration: 0.14), value: state.value)
-                .contentShape(Rectangle())
-                .gesture(DragGesture(minimumDistance: 0)
-                    .onChanged { point in
-                        if !dragging { dragging = true; edit(true) }
-                        changeValue(Double(min(travel, max(0, point.location.x)) / travel) * 100)
-                    }
-                    .onEnded { _ in dragging = false; edit(false) })
             }
             .frame(height: 30)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(Text(label))
-            .accessibilityValue(Text(verbatim: [percentageText, luminanceText].compactMap { $0 }.joined(separator: ", ")))
-            .accessibilityAdjustableAction { direction in
-                switch direction {
-                case .increment: changeValue(min(100, state.value + 6.25))
-                case .decrement: changeValue(max(0, state.value - 6.25))
-                @unknown default: break
-                }
-            }
-            .overlay(alignment: .bottomTrailing) {
-                HStack(spacing: 7) {
-                    Text(percentageText)
-                        .contentTransition(.numericText(value: state.value.rounded()))
-                    if let luminanceText { Text(luminanceText) }
-                }
-                .font(.system(size: 10, weight: .semibold).monospacedDigit())
-                .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.4), radius: 1)
-                .offset(y: 3)
-                .allowsHitTesting(false)
-                .accessibilityHidden(true)
-            }
         }
         .padding(.leading, 22)
         .padding(.trailing, 30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // 在读数背后轻微压低白底亮度；折射和高光均由下方完整的系统材质生成。
-        .background(Color(white: 0.36).opacity(0.23), in: Capsule())
+        .background {
+            if #available(macOS 27.2, *) {
+                // 独立浮窗的玻璃表面由 AppKit 合成。轮廓只在上下弧面保留窄反光。
+                Capsule().fill(.white.opacity(0.025))
+                    .overlay {
+                        Capsule().strokeBorder(
+                            LinearGradient(stops: [
+                                .init(color: .white.opacity(0.44), location: 0),
+                                .init(color: .clear, location: 0.26),
+                                .init(color: .clear, location: 0.74),
+                                .init(color: .white.opacity(0.42), location: 1),
+                            ], startPoint: .top, endPoint: .bottom),
+                            lineWidth: 0.75
+                        )
+                    }
+                    .overlay {
+                        Capsule().strokeBorder(.white.opacity(0.085), lineWidth: 1.6)
+                            .blur(radius: 1.8)
+                            .clipShape(Capsule())
+                    }
+            } else {
+                Capsule().fill(Color(white: 0.36).opacity(0.23))
+            }
+        }
     }
 
     private var percentageText: String { (state.value / 100).formatted(.percent.precision(.fractionLength(0))) }
@@ -357,5 +362,86 @@ private struct MediaControlOSDView: View {
         case .volume: state.value < 34 ? "speaker.wave.1.fill" : state.value < 67 ? "speaker.wave.2.fill" : "speaker.wave.3.fill"
         case .mute: "speaker.slash.fill"
         }
+    }
+}
+
+/// 填充、尖角和读数共享同一个插值。按键反向或长按时，三者始终处于同一档位。
+private struct OSDLevelTrack: View, Animatable {
+    var fraction: Double
+    let luminanceText: String?
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    nonisolated var animatableData: Double {
+        get { fraction }
+        set { fraction = newValue }
+    }
+
+    var body: some View {
+        GeometryReader { geometry in
+            let progress = min(1, max(0, fraction))
+            let endpoint = geometry.size.width * progress
+            let bubbleColor = Color.white.opacity(reduceTransparency ? 1 : 0.84)
+            let capsule = Capsule()
+            ZStack {
+                capsule.fill(.white.opacity(0.23))
+                    .overlay(alignment: .leading) {
+                        Rectangle().fill(.white).frame(width: endpoint)
+                    }
+                    .clipShape(capsule)
+                    .mask {
+                        HStack(spacing: 1) {
+                            ForEach(0..<16) { _ in Rectangle() }
+                        }
+                    }
+                    .frame(height: 4)
+
+                OSDCalloutLayout(endpoint: endpoint) {
+                    HStack(spacing: 2.5) {
+                        Text(verbatim: progress.formatted(.percent.precision(.fractionLength(0))))
+                        if let luminanceText {
+                            Text(verbatim: "·")
+                            Text(verbatim: luminanceText)
+                        }
+                    }
+                    .font(.system(size: 8.5, weight: .semibold).monospacedDigit())
+                    .foregroundStyle(.black.opacity(0.70))
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1.5)
+                    .background(bubbleColor, in: Capsule())
+                    Path { path in
+                        path.move(to: .zero)
+                        path.addLine(to: CGPoint(x: 6, y: 0))
+                        path.addLine(to: CGPoint(x: 3, y: 3.5))
+                        path.closeSubpath()
+                    }
+                    .fill(bubbleColor)
+                    .frame(width: 6, height: 3.5)
+                }
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+            }
+            // 每一帧直接使用插值的位置，子视图无需再次启动位置动画。
+            .transaction { $0.animation = nil }
+        }
+    }
+}
+
+private struct OSDCalloutLayout: Layout {
+    let endpoint: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        proposal.replacingUnspecifiedDimensions()
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let label = subviews[0], tip = subviews[1]
+        let labelSize = label.sizeThatFits(.unspecified)
+        let tipSize = tip.sizeThatFits(.unspecified)
+        let x = bounds.minX + endpoint
+        let tipBottom = bounds.midY - 6
+        // 允许气泡伸入轨道两侧留白。靠近胶囊端部时只移动文字，尖角仍跟随填充末端。
+        let left = min(max(x - labelSize.width / 2, bounds.minX - 19), bounds.maxX + 15 - labelSize.width)
+        label.place(at: CGPoint(x: left, y: tipBottom - tipSize.height), anchor: .bottomLeading, proposal: .unspecified)
+        tip.place(at: CGPoint(x: x, y: tipBottom), anchor: .bottom, proposal: .unspecified)
     }
 }
