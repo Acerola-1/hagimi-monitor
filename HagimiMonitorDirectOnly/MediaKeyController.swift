@@ -276,7 +276,8 @@ final class MediaKeyController {
         guard let storageID = controller?.displays.first(where: { $0.id == displayID })?.storageID,
               submit(value, for: control, on: displayID, final: true) else { return false }
         feedbackOutput = nil
-        feedback.show(control: kind, value: value, displayID: displayID) { [weak self] value, final in
+        feedback.show(control: kind, value: value, displayID: displayID,
+                      expectsLuminance: usesNativeBrightness(control, on: displayID)) { [weak self] value, final in
             guard let self, self.controller?.displays.contains(where: {
                 $0.id == displayID && $0.storageID == storageID
             }) == true else { return false }
@@ -286,12 +287,16 @@ final class MediaKeyController {
         return true
     }
 
+    private func usesNativeBrightness(_ control: DisplayControlKind, on displayID: CGDirectDisplayID) -> Bool {
+        control == .brightness && controller?.displays.contains {
+            $0.id == displayID && ($0.kind == .appleNative || $0.kind == .builtIn) && $0.dimmingMode == .hardware
+        } == true
+    }
+
     private func submit(_ value: Double, for control: DisplayControlKind, on displayID: CGDirectDisplayID, final: Bool) -> Bool {
         guard let controller else { return false }
         let afterNativeWrite: (@MainActor @Sendable () -> Void)?
-        let nativeBrightness = control == .brightness && controller.displays.contains(where: {
-            $0.id == displayID && ($0.kind == .appleNative || $0.kind == .builtIn) && $0.dimmingMode == .hardware
-        })
+        let nativeBrightness = usesNativeBrightness(control, on: displayID)
         if nativeBrightness {
             afterNativeWrite = { [weak self] in self?.feedback.refreshLuminance(on: displayID, percent: value) }
         } else {
