@@ -2,6 +2,34 @@ import Foundation
 import Testing
 @testable import HagimiMonitorDirect
 
+@Suite("SMC CPU temperature profiles")
+struct SMCCPUTemperatureTests {
+    @Test(arguments: ["Apple M2", "Apple M2 Pro", "Apple M2 Max", "Apple M2 Ultra"])
+    func m2UsesChipSpecificKeysAndSkipsInvalidReadings(chipName: String) {
+        let profile = SMCReader.CPUTemperatureProfile(chipName: chipName)
+        let readings: [String: Double] = [
+            "Tp1h": 43, "Tp0j": 47, "Tp01": 6, "Tp05": 10, "Tp09": .nan,
+            "Tp0D": .infinity, "Tp0X": 121, "Tp0T": 80
+        ]
+        #expect(profile.sample(read: { readings[$0] }) == 45)
+    }
+
+    @Test func m2SamplesRecoverAfterMissingFrame() {
+        let profile = SMCReader.CPUTemperatureProfile(chipName: "Apple M2 Pro")
+        #expect(profile.sample(read: { _ in 6 }) == nil)
+        #expect(profile.sample(read: { _ in nil }) == nil)
+        let readings: [String: Double] = ["Tp1t": 15, "Tp0b": 120]
+        #expect(profile.sample(read: { readings[$0] }) == 67.5)
+    }
+
+    @Test(arguments: [nil, "Apple M1 Pro", "Apple M4"] as [String?])
+    func otherChipsKeepLegacySampling(chipName: String?) {
+        let profile = SMCReader.CPUTemperatureProfile(chipName: chipName)
+        let readings: [String: Double] = ["Tp0T": 10, "Tp01": 42, "Tp1h": 80]
+        #expect(profile.sample(read: { readings[$0] }) == 26)
+    }
+}
+
 @Suite("CPU temperature freshness")
 struct CPUSamplerTemperatureTests {
     private final class StubTemperatureReader: CPUTemperatureReading, @unchecked Sendable {
@@ -48,6 +76,21 @@ struct CPUSamplerTemperatureTests {
         let resumed = sampler.sample(previous: cached)
         #expect(reader.callCount == 2)
         #expect(temperature(in: resumed)?.numericValue == 43)
+    }
+
+    @Test func missingTemperatureKeepsThermalPressureAndDoesNotReuseAnOldSample() {
+        let reader = StubTemperatureReader([42, nil, 44])
+        let sampler = CPUSampler(smcReader: reader)
+        sampler.setTemperatureReadsEnabled(true)
+
+        let fresh = sampler.sample(previous: nil)
+        #expect(temperature(in: fresh)?.numericValue == 42)
+        let missing = sampler.sample(previous: fresh)
+        #expect(temperature(in: missing)?.value == "--")
+        #expect(temperature(in: missing)?.numericValue == nil)
+        #expect(missing.metrics.contains { $0.name == "thermal-pressure" })
+        let recovered = sampler.sample(previous: missing)
+        #expect(temperature(in: recovered)?.numericValue == 44)
     }
 
     @Test("Temperature gating leaves CPU usage sampling unchanged")
