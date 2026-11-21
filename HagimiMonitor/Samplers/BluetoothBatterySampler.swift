@@ -136,6 +136,7 @@ final class BluetoothBatterySampler: NSObject {
     private var profilerDevices: [BluetoothDeviceInfo] = []
     /// pmset -g accps 最新结果的主线程镜像(仅 Direct 版可用,沙盒为空)。
     private var pmsetDevices: [BluetoothDeviceInfo] = []
+    private var cachedAddresses: [UUID: String] = [:]
     private var pmsetObservedAt: TimeInterval?
     /// BLE 侧已连接外设快照,由读取器在主线程发布。
     private var bleSnapshots: [BLEDeviceSnapshot] = []
@@ -237,6 +238,7 @@ final class BluetoothBatterySampler: NSObject {
                 self.ioDevices = []
                 self.profilerDevices = []
                 self.pmsetDevices = []
+                self.cachedAddresses = [:]
                 self.pmsetObservedAt = nil
                 self.profilerControllerOn = nil
                 self.profilerControllerUpdatedAt = nil
@@ -345,6 +347,7 @@ final class BluetoothBatterySampler: NSObject {
         profilerControllerUpdatedAt = nil
         profilerDevices = []
         pmsetDevices = []
+        cachedAddresses = [:]
         pmsetObservedAt = nil
         bleSnapshots = []
         airPodsAdvertisements = []
@@ -362,9 +365,11 @@ final class BluetoothBatterySampler: NSObject {
     private func refreshIO() {
         ioDevices = ioConnectedDevices()
         let names = Set(pairedAudioDevices.flatMap { Array(nameAliases[$0.address] ?? [$0.name]) })
-        let identifiers = Set(pairedAudioDevices.compactMap { device in
+        let pairedAddresses = Set(pairedAudioDevices.map(\.address))
+        var identifiers = Set(pairedAudioDevices.compactMap { device in
             identityBindings[device.address].flatMap { UUID(uuidString: $0.uuid) }
         })
+        identifiers.formUnion(cachedAddresses.compactMap { pairedAddresses.contains($0.value) ? $0.key : nil })
         bleReader.updateAirPodsMonitoring(names: names, identifiers: identifiers)
         publishMerged()
     }
@@ -378,9 +383,10 @@ final class BluetoothBatterySampler: NSObject {
         let capturedEpoch = probeEpoch
         queue.async { [weak self] in
             guard let self else { return }
-            let outcome = Self.probe()
+            let (outcome, aliases) = Self.probe()
             #if DIRECT_DISTRIBUTION
             let pmsetList = Self.probePmset()
+            let cachedAddresses = Self.bluetoothCacheAddresses()
             let powerSourceObservedAt: TimeInterval? = Date().timeIntervalSince1970
             #else
             let pmsetList: [BluetoothDeviceInfo] = []
@@ -398,6 +404,9 @@ final class BluetoothBatterySampler: NSObject {
                     return
                 }
                 let shouldContinue = self.profilerProbeState.finish()
+                #if DIRECT_DISTRIBUTION
+                self.cachedAddresses = cachedAddresses
+                #endif
                 self.pmsetDevices = pmsetList
                 self.pmsetObservedAt = powerSourceObservedAt
                 switch outcome {
@@ -409,6 +418,11 @@ final class BluetoothBatterySampler: NSObject {
                         self.profilerControllerUpdatedAt = Date()
                     }
                     self.profilerDevices = devices
+                    // 离线记录仅按已配对 MAC 提供名称线索，不将离线设备加入在线清单。
+                    let pairedAddresses = Set(self.pairedAudioDevices.map(\.address))
+                    for (address, names) in aliases where pairedAddresses.contains(address) {
+                        self.nameAliases[address, default: []].formUnion(names)
+                    }
                     AppLogger.sampler.info("Bluetooth probe success: profiler=\(devices.count), pmset=\(pmsetList.count), io=\(self.ioDevices.count)")
                 case .failure:
                     // 启动失败 / 超时 / 异常 JSON / 沙盒空骨架:保留上次成功快照。
@@ -545,6 +559,7 @@ final class BluetoothBatterySampler: NSObject {
             profilerDevices: profilerDevices,
             bleSnapshots: bleSnapshots,
             bindings: bindingsForMerge,
+            cachedAddresses: cachedAddresses,
             airPodsAdvertisements: airPodsAdvertisements,
             nameAliases: nameAliases,
             pairedDevices: pairedAudioDevices,
@@ -575,7 +590,8 @@ final class BluetoothBatterySampler: NSObject {
 
     /// 绑定表当前已知的外设标识(identifier 兜底召回名单)。
     private func boundIdentifiers() -> [UUID] {
-        identityBindings.values.compactMap { UUID(uuidString: $0.uuid) }
+        Set(identityBindings.values.compactMap { UUID(uuidString: $0.uuid) })
+            .sorted { $0.uuidString < $1.uuidString }
     }
 
     /// 持久化绑定表:JSON 编码后写入 UserDefaults。
@@ -628,6 +644,27 @@ final class BluetoothBatterySampler: NSObject {
     nonisolated static func normalizeMAC(_ raw: String) -> String {
         raw.lowercased().filter(\.isHexDigit)
     }
+
+    #if DIRECT_DISTRIBUTION
+    /// 缓存只用于核对已观测外设的身份，缺少该域或映射时继续使用实时来源。
+    nonisolated static func bluetoothCacheAddresses() -> [UUID: String] {
+        let defaults = UserDefaults(suiteName: "/Library/Preferences/com.apple.Bluetooth")
+        let entries = defaults?.dictionary(forKey: "CoreBluetoothCache") ?? [:]
+        return parseCacheAddresses(entries)
+    }
+
+    nonisolated static func parseCacheAddresses(_ entries: [String: Any]) -> [UUID: String] {
+        var addresses: [UUID: Set<String>] = [:]
+        for (key, value) in entries {
+            guard let uuid = UUID(uuidString: key), let fields = value as? [String: Any],
+                  let raw = fields["DeviceAddress"] as? String else { continue }
+            let address = raw.replacingOccurrences(of: ":", with: "").replacingOccurrences(of: "-", with: "").lowercased()
+            guard address.count == 12, address.allSatisfy(\.isHexDigit) else { continue }
+            addresses[uuid, default: []].insert(address)
+        }
+        return addresses.compactMapValues { $0.count == 1 ? $0.first : nil }
+    }
+    #endif
 
     /// IOBluetooth 侧已连接设备快照:系统名(实时反映设备端改名)、
     /// 归一化 MAC、CoD 类型、经 AVRCP/HFP 上报给系统的电量。
@@ -763,16 +800,30 @@ final class BluetoothBatterySampler: NSObject {
         profilerDevices: [BluetoothDeviceInfo],
         bleSnapshots: [BLEDeviceSnapshot],
         bindings: [String: String],
+        cachedAddresses: [UUID: String] = [:],
         airPodsAdvertisements: [AirPodsAdvertisement] = [],
         nameAliases: [String: Set<String>] = [:],
         pairedDevices: [BluetoothDeviceInfo] = [],
         powerSourceObservedAt: TimeInterval? = nil,
         now: TimeInterval = Date().timeIntervalSince1970
     ) -> (devices: [BluetoothDeviceInfo], learnedBindings: [String: String]) {
+        let freshAdvertisements = airPodsAdvertisements.filter {
+            (0...AirPodsAdvertisement.freshnessInterval).contains(now - $0.observedAt)
+        }
+        let observedBLEIdentifiers = Set(bleSnapshots.map(\.identifier)).union(freshAdvertisements.map(\.identifier))
+        let identity = BluetoothDeviceIdentity(
+            ioDevices: ioDevices, profilerDevices: profilerDevices, pmsetDevices: pmsetDevices,
+            bleSnapshots: bleSnapshots, bindings: bindings, cachedAddresses: cachedAddresses,
+            nameAliases: nameAliases, pairedDevices: pairedDevices, advertisements: freshAdvertisements
+        )
+        let profilerDevices = identity.profilerDevices
+        let pmsetDevices = identity.pmsetDevices
+        let bleSnapshots = identity.bleSnapshots
+        let bindings = identity.bindings
+        let nameAliases = identity.nameAliases
         var merged = ioDevices
-        var learned: [String: String] = [:]
+        var learned = identity.learnedBindings
         var consumedIndices = Set<Int>()
-        var remainingSnapshots = bleSnapshots
         // profiler 的 MAC 把旧系统名与当前 IO 名连起来；UUID 始终单独保留。
         func aliases(for device: BluetoothDeviceInfo) -> Set<String> {
             var names = nameAliases[device.address] ?? []
@@ -786,7 +837,8 @@ final class BluetoothBatterySampler: NSObject {
             // 纯 profiler 条目(services 非 nil)的名可能滞后于设备端改名,
             // 用 GAP 实时名覆盖;IOBluetooth 条目(services nil)的系统名
             // 已实时,保留。
-            let name = device.services == nil ? device.name : (snapshot.name ?? device.name)
+            let pairedName = pairedDevices.first { $0.address == device.address }?.name
+            let name = pairedName ?? (device.services == nil ? device.name : (snapshot.name ?? device.name))
             // 类型已定位(CoD/profiler 元数据)则保留;仍未知时用设备自报的
             // GAP Appearance 补位——这是设备端的形态声明,不是名称猜测。
             let type = device.type != .other
@@ -805,7 +857,8 @@ final class BluetoothBatterySampler: NSObject {
                 vendorName: device.vendorName,
                 modelName: device.modelName,
                 batterySource: snapshot.batteryLevel == nil ? device.batterySource : .gatt,
-                accessoryIdentifier: device.accessoryIdentifier
+                accessoryIdentifier: device.accessoryIdentifier,
+                memberIdentifiers: device.memberIdentifiers
             )
             consumedIndices.insert(index)
         }
@@ -888,14 +941,20 @@ final class BluetoothBatterySampler: NSObject {
         for pmsetDev in pmsetDevices {
             let key = pmsetDev.accessoryIdentifier == nil ? normalizeMAC(pmsetDev.address) : pmsetDev.address
             var match = merged.firstIndex { !key.isEmpty && $0.address == key }
-            if match == nil, let uuid = pmsetDev.accessoryIdentifier {
+            let identifiers = pmsetDev.reportedIdentifiers
+            let owners = Set(identifiers.compactMap { cachedAddresses[$0] })
+            if match == nil, owners.count == 1 {
+                match = merged.firstIndex { owners.contains($0.address) }
+            }
+            if match == nil, owners.isEmpty, !identifiers.isEmpty {
                 let candidates = merged.indices.filter {
-                    (bindings[merged[$0].address] ?? learned[merged[$0].address]) == uuid.uuidString
-                        || merged[$0].accessoryIdentifier == uuid
+                    let device = merged[$0]
+                    let bound = (bindings[device.address] ?? learned[device.address]).flatMap(UUID.init(uuidString:))
+                    return bound.map(identifiers.contains) == true || !device.reportedIdentifiers.isDisjoint(with: identifiers)
                 }
                 if candidates.count == 1 { match = candidates[0] }
             }
-            if match == nil, let uuid = pmsetDev.accessoryIdentifier {
+            if match == nil, owners.isEmpty, let uuid = pmsetDev.accessoryIdentifier {
                 // 同轮 GATT 快照可把电源树的旧名关联到当前系统名；两侧身份均须唯一。
                 let names = Set(bleSnapshots.filter { $0.identifier == uuid }.compactMap(\.name)).filter { name in
                     Set(bleSnapshots.filter { $0.name == name }.map(\.identifier)).count == 1
@@ -907,7 +966,7 @@ final class BluetoothBatterySampler: NSObject {
                 }
                 if candidates.count == 1 { match = candidates[0] }
             }
-            if match == nil, !pmsetDev.name.isEmpty {
+            if match == nil, owners.isEmpty, !pmsetDev.name.isEmpty {
                 // 相同电源身份可能同时带新旧名称，统一考虑，避免结果依赖报告顺序。
                 let names = Set(pmsetDevices.filter {
                     $0.address == pmsetDev.address
@@ -919,20 +978,29 @@ final class BluetoothBatterySampler: NSObject {
                     return (uuid == nil || bound == nil || bound == uuid)
                         && !aliases(for: merged[$0]).isDisjoint(with: names)
                 }
-                if candidates.count == 1, !pmsetMatchedIndices.contains(candidates[0]) {
+                let namedUUIDs = Set(pmsetDevices.filter { names.contains($0.name) }.compactMap(\.accessoryIdentifier))
+                if candidates.count == 1, namedUUIDs.count <= 1, !pmsetMatchedIndices.contains(candidates[0]) {
                     match = candidates[0]
                 }
             }
             if let index = match {
                 pmsetMatchedIndices.insert(index)
-                if let uuid = pmsetDev.accessoryIdentifier,
-                   !merged[index].address.hasPrefix("ble-"), bindings[merged[index].address] == nil {
-                    learned[merged[index].address] = uuid.uuidString
-                }
                 let target = merged[index]
+                // 电源分组可用于本轮归并；可召回的 UUID 还须由当前 BLE 数据证实。
+                if let uuid = pmsetDev.accessoryIdentifier,
+                   observedBLEIdentifiers.contains(uuid),
+                   cachedAddresses[uuid] == nil || cachedAddresses[uuid] == target.address,
+                   !target.address.hasPrefix("ble-"),
+                   bindings[target.address] == nil, learned[target.address] == nil {
+                    learned[target.address] = uuid.uuidString
+                }
                 let updatedType = target.type != .other ? target.type : pmsetDev.type
                 let updatedBattery = pmsetDev.batteryLevel ?? target.batteryLevel
-                let updatedComponents = !pmsetDev.components.isEmpty ? pmsetDev.components : target.components
+                // 同轮画像可能给出两耳读数，而电源树仅更新充电盒。
+                var updatedComponents = pmsetDev.components.isEmpty ? target.components : pmsetDev.components
+                if pmsetDev.components.map(\.kind) == [.case] {
+                    updatedComponents = target.components.filter { $0.kind == .left || $0.kind == .right } + pmsetDev.components
+                }
                 let updatedCharging = pmsetDev.isCharging ?? target.isCharging
                 merged[index] = BluetoothDeviceInfo(
                     address: target.address,
@@ -945,7 +1013,8 @@ final class BluetoothBatterySampler: NSObject {
                     vendorName: pmsetDev.vendorName ?? target.vendorName,
                     modelName: pmsetDev.modelName ?? target.modelName,
                     batterySource: pmsetDev.batteryLevel == nil ? target.batterySource : .powerSource,
-                    accessoryIdentifier: pmsetDev.accessoryIdentifier ?? target.accessoryIdentifier
+                    accessoryIdentifier: pmsetDev.accessoryIdentifier ?? target.accessoryIdentifier,
+                    memberIdentifiers: target.memberIdentifiers.union(identifiers)
                 )
             } else {
                 var standalone = pmsetDev
@@ -955,27 +1024,47 @@ final class BluetoothBatterySampler: NSObject {
             }
         }
 
-        // 3a) 已学绑定:UUID 命中即关联,不受当前名字与其它设备干扰。
-        for (address, boundUUID) in bindings.merging(learned, uniquingKeysWith: { old, _ in old }) {
-            guard let snapshotIndex = remainingSnapshots.firstIndex(where: { $0.identifier.uuidString == boundUUID }),
-                  let mergedIndex = merged.firstIndex(where: { $0.address == address }),
-                  !consumedIndices.contains(mergedIndex) else {
-                continue
-            }
-            mergeEntry(at: mergedIndex, with: remainingSnapshots.remove(at: snapshotIndex))
-        }
-
-        // 电源树已携带 UUID 的条目先按身份关联，避免新旧名称再次产生 BLE 行。
-        for snapshotIndex in remainingSnapshots.indices.reversed() {
-            let snapshot = remainingSnapshots[snapshotIndex]
-            let candidates = merged.indices.filter {
-                !consumedIndices.contains($0)
-                    && (merged[$0].accessoryIdentifier == snapshot.identifier
-                        || merged[$0].address == "ble-\(snapshot.identifier.uuidString)")
+        // 一个物理设备可以对应多个 BLE 端点。先按明确身份分组，名称匹配只处理剩余记录。
+        let knownBindings = bindings.merging(learned, uniquingKeysWith: { old, _ in old })
+        var identified: [Int: [BLEDeviceSnapshot]] = [:]
+        var independentSnapshots: [BLEDeviceSnapshot] = []
+        var remainingSnapshots = bleSnapshots.filter { snapshot in
+            let id = snapshot.identifier
+            let owner = cachedAddresses[id]
+            let candidates = merged.indices.filter { index in
+                let device = merged[index]
+                if let owner {
+                    return device.address == owner || (device.address.hasPrefix("ble-") && device.reportedIdentifiers.contains(id))
+                }
+                return knownBindings[device.address] == id.uuidString || device.reportedIdentifiers.contains(id)
+                    || device.address == "ble-\(id.uuidString)"
             }
             if candidates.count == 1, let index = candidates.first {
+                identified[index, default: []].append(snapshot)
+                return false
+            }
+            if owner != nil || !candidates.isEmpty {
+                independentSnapshots.append(snapshot)
+                return false
+            }
+            return true
+        }
+        for (index, snapshots) in identified {
+            let device = merged[index]
+            // 分部端点的 GATT 百分比没有左右耳/盒的标签，不能当作整副耳机的主电量。
+            let aggregate = snapshots.filter { snapshot in
+                !device.memberIdentifiers.contains(snapshot.identifier) || snapshot.identifier == device.accessoryIdentifier
+            }
+            if aggregate.count == 1, let snapshot = aggregate.first,
+               !(device.hasSeparateBatteryParts && device.components.allSatisfy { $0.kind == .case }) {
                 mergeEntry(at: index, with: snapshot)
-                remainingSnapshots.remove(at: snapshotIndex)
+            }
+            consumedIndices.insert(index)
+            let names = Set(snapshots.compactMap(\.name).filter { !$0.isEmpty })
+            if names.count == 1, let name = names.first, name != device.name,
+               BluetoothDeviceInfo.isGenericAirPodsName(device.name), !BluetoothDeviceInfo.isGenericAirPodsName(name),
+               snapshots.count > 1 || snapshots.contains(where: { cachedAddresses[$0.identifier] == device.address }) {
+                merged[index].name = name
             }
         }
 
@@ -1053,7 +1142,7 @@ final class BluetoothBatterySampler: NSObject {
 
         // 4) 未消化的 BLE 条目为 CB 独有设备:identifier 作稳定 id 补入,
         //    类型按 GAP Appearance(设备自报)优先、名称关键词兜底。
-        for snapshot in remainingSnapshots {
+        for snapshot in remainingSnapshots + independentSnapshots {
             let name = snapshot.name ?? String(snapshot.identifier.uuidString.prefix(8))
             merged.append(BluetoothDeviceInfo(
                 address: "ble-\(snapshot.identifier.uuidString)",
@@ -1066,17 +1155,16 @@ final class BluetoothBatterySampler: NSObject {
         }
 
         // 广播仅补充系统连接或明确已配对的身份，不能把附近的陌生设备加入清单。
-        let freshAdvertisements = airPodsAdvertisements.filter {
-            (0...AirPodsAdvertisement.freshnessInterval).contains(now - $0.observedAt)
-        }
         var applied = Set<Int>()
         for advertisement in freshAdvertisements.sorted(by: { $0.observedAt > $1.observedAt }) {
             let uuid = advertisement.identifier.uuidString
             let effectiveBindings = bindings.merging(learned, uniquingKeysWith: { old, _ in old })
             var candidates = merged.indices.filter {
-                effectiveBindings[merged[$0].address] == uuid || merged[$0].accessoryIdentifier == advertisement.identifier
+                let device = merged[$0]
+                if let owner = cachedAddresses[advertisement.identifier] { return owner == device.address }
+                return effectiveBindings[device.address] == uuid || device.reportedIdentifiers.contains(advertisement.identifier)
             }
-            if candidates.isEmpty, let name = advertisement.name,
+            if candidates.isEmpty, cachedAddresses[advertisement.identifier] == nil, let name = advertisement.name,
                Set(freshAdvertisements.filter { $0.name == name }.map(\.identifier)).count == 1 {
                 candidates = merged.indices.filter { index in
                     ioDevices.contains { $0.address == merged[index].address }
@@ -1087,6 +1175,7 @@ final class BluetoothBatterySampler: NSObject {
             // 打开充电仓可能尚未建立音频链路：只允许明确已配对的唯一身份补入。
             if candidates.isEmpty, !advertisement.components.isEmpty {
                 let pairedMatches = pairedDevices.filter { device in
+                    if let owner = cachedAddresses[advertisement.identifier] { return owner == device.address }
                     if let bound = effectiveBindings[device.address] { return bound == uuid }
                     guard let name = advertisement.name,
                           Set(freshAdvertisements.filter { $0.name == name }.map(\.identifier)).count == 1 else { return false }
@@ -1112,7 +1201,8 @@ final class BluetoothBatterySampler: NSObject {
                 components: advertisement.components,
                 isCharging: ears.isEmpty ? nil : ears.allSatisfy { $0.isCharging == true },
                 vendorName: device.vendorName, modelName: device.modelName,
-                batterySource: .advertisement, accessoryIdentifier: advertisement.identifier
+                batterySource: .advertisement, accessoryIdentifier: device.accessoryIdentifier ?? advertisement.identifier,
+                memberIdentifiers: device.memberIdentifiers
             )
             if !device.address.hasPrefix("ble-"), effectiveBindings[device.address] == nil {
                 learned[device.address] = uuid
@@ -1167,12 +1257,32 @@ final class BluetoothBatterySampler: NSObject {
         }
     }
 
-    private nonisolated static func probe() -> ProbeOutcome {
+    private nonisolated static func probe() -> (ProbeOutcome, [String: Set<String>]) {
         guard let output = probeProcessData(
             executableURL: URL(fileURLWithPath: "/usr/sbin/system_profiler"),
             arguments: ["SPBluetoothDataType", "-json"]
-        ) else { return .failure }
-        return parse(profilerJSON: output)
+        ) else { return (.failure, [:]) }
+        return (parse(profilerJSON: output), identityAliases(profilerJSON: output))
+    }
+
+    /// 同 MAC 的画像名称只用于身份关联；未连接条目不会因此获得在线状态或电量。
+    nonisolated static func identityAliases(profilerJSON data: Data) -> [String: Set<String>] {
+        guard let root = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let entries = root["SPBluetoothDataType"] as? [[String: Any]] else { return [:] }
+        var aliases: [String: Set<String>] = [:]
+        for entry in entries {
+            for key in ["device_connected", "device_not_connected"] {
+                for item in entry[key] as? [[String: Any]] ?? [] {
+                    for (name, info) in item {
+                        guard let properties = info as? [String: Any],
+                              let raw = properties["device_address"] as? String,
+                              let address = BluetoothDeviceIdentity.mac(raw), !name.isEmpty else { continue }
+                        aliases[address, default: []].insert(name)
+                    }
+                }
+            }
+        }
+        return aliases
     }
 
     /// 两类系统探针共用截止时间，覆盖进程退出与输出读取，避免独占采样队列。
@@ -1285,7 +1395,7 @@ final class BluetoothBatterySampler: NSObject {
                     let level = components.isEmpty
                         ? BluetoothBatteryParser.batteryLevel(from: rawOpt)
                         : components.filter { $0.kind != .case }.map(\.level).min()
-                    devices.append(BluetoothDeviceInfo(
+                    var device = BluetoothDeviceInfo(
                         address: normalizeMAC(props["device_address"] as? String ?? name),
                         name: name,
                         type: type,
@@ -1293,7 +1403,12 @@ final class BluetoothBatterySampler: NSObject {
                         services: props["device_services"] as? String,
                         components: components,
                         batterySource: level == nil ? nil : .profiler
-                    ))
+                    )
+                    let services = (device.services ?? "").uppercased()
+                    device.isBLETransportOnly = BluetoothDeviceType(minorType: props["device_minorType"] as? String) == .other
+                        && services.contains("BLE")
+                        && !["A2DP", "AVRCP", "HFP", "HSP", "ACL"].contains(where: services.contains)
+                    devices.append(device)
                 }
             }
         }
