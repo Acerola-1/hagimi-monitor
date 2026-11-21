@@ -288,4 +288,94 @@ struct AirPodsRegressionTests {
         #expect(result.learnedBindings.isEmpty)
     }
 
+    @Test func issue147CaseAndTwoBLEEndpointsBelongToOneHeadset() throws {
+        let earbud = UUID()
+        let chargingCase = UUID()
+        let nickname = "林舍的 AirPods"
+        let xml = try PropertyListSerialization.data(fromPropertyList: [
+            "Accessory Identifier": chargingCase.uuidString, "Group Identifier": uuid.uuidString,
+            "Part Identifier": "Case", "Accessory Category": "Audio Battery Case",
+            "Name": nickname, "Current Capacity": 57
+        ], format: .xml, options: 0)
+        let power = PMSetAccessoryParser.parse(xmlData: xml)
+        var system = io("AirPods 4 (ANC)")
+        system.components = [.init(kind: .left, level: 94), .init(kind: .right, level: 91), .init(kind: .case, level: 56)]
+        let snapshots = [earbud, chargingCase].map { BLEDeviceSnapshot(identifier: $0, name: nickname, batteryLevel: nil) }
+        for order in [snapshots, Array(snapshots.reversed())] {
+            let result = BluetoothBatterySampler.merge(ioDevices: [io("AirPods 4 (ANC)")], pmsetDevices: power,
+                profilerDevices: [system], bleSnapshots: order, bindings: [:],
+                cachedAddresses: [earbud: address, chargingCase: address])
+            #expect(result.devices.count == 1)
+            let device = try #require(result.devices.first)
+            #expect(device.address == address)
+            #expect(device.name == nickname)
+            #expect(device.components == [.init(kind: .left, level: 94), .init(kind: .right, level: 91), .init(kind: .case, level: 57)])
+            #expect(result.learnedBindings.isEmpty)
+        }
+    }
+
+    @Test func powerGroupIdentifiesMemberPeripheralsWithoutSystemCache() throws {
+        let bud = UUID()
+        let chargingCase = UUID()
+        let entries: [[String: Any]] = [
+            ["Accessory Identifier": "AA:BB:CC:DD:EE:FF", "Part Identifier": "Combined", "Current Capacity": 62],
+            ["Accessory Identifier": bud.uuidString, "Part Identifier": "Left", "Current Capacity": 62],
+            ["Accessory Identifier": chargingCase.uuidString, "Part Identifier": "Case", "Current Capacity": 19]
+        ]
+        let xml = try entries.reduce(into: Data()) { data, entry in
+            var fields = entry
+            fields["Group Identifier"] = uuid.uuidString
+            fields["Name"] = "Studio headphones"
+            data.append(try PropertyListSerialization.data(fromPropertyList: fields, format: .xml, options: 0))
+        }
+        let power = PMSetAccessoryParser.parse(xmlData: xml)
+        #expect(power.first?.memberIdentifiers == Set([bud, chargingCase]))
+        let result = BluetoothBatterySampler.merge(ioDevices: [io()], pmsetDevices: power, profilerDevices: [],
+            bleSnapshots: [
+                .init(identifier: bud, name: "Studio headphones", batteryLevel: nil),
+                .init(identifier: chargingCase, name: "Studio headphones", batteryLevel: 19)
+            ], bindings: [:])
+        #expect(result.devices.count == 1)
+        #expect(result.devices.first?.name == "Studio headphones")
+        #expect(result.devices.first?.batteryLevel == 62)
+        #expect(result.learnedBindings.isEmpty)
+    }
+
+    @Test func sameNamePairsAndUnrelatedBLEDeviceRetainSeparateIdentities() {
+        let second = "112233445566"
+        let other = UUID()
+        let unrelated = UUID()
+        let name = "AirPods"
+        let snapshots = [
+            BLEDeviceSnapshot(identifier: uuid, name: name, batteryLevel: 88),
+            BLEDeviceSnapshot(identifier: other, name: name, batteryLevel: 23),
+            BLEDeviceSnapshot(identifier: unrelated, name: name, batteryLevel: nil)
+        ]
+        // 过期的历史绑定指向另一副耳机，以当前系统映射为准。
+        let result = BluetoothBatterySampler.merge(ioDevices: [io(name), io(name, address: second)],
+            profilerDevices: [], bleSnapshots: snapshots, bindings: [address: other.uuidString],
+            cachedAddresses: [uuid: address, other: second])
+        #expect(result.devices.count == 3)
+        #expect(result.devices.first { $0.address == address }?.batteryLevel == 88)
+        #expect(result.devices.first { $0.address == second }?.batteryLevel == 23)
+        #expect(result.devices.contains { $0.address == "ble-\(unrelated.uuidString)" })
+        #expect(result.learnedBindings.isEmpty)
+    }
+
+    @Test func cacheOnlyAcceptsUnambiguousUUIDAndAddressPairs() {
+        let alias = UUID()
+        let broken = UUID()
+        let conflicted = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
+        let entries: [String: Any] = [
+            uuid.uuidString: ["DeviceAddress": "AA:BB:CC:DD:EE:FF"],
+            alias.uuidString: ["DeviceAddress": "aa-bb-cc-dd-ee-ff"],
+            broken.uuidString: ["DeviceAddress": "bad address"],
+            "invalid": ["DeviceAddress": "aa-bb-cc-dd-ee-ff"],
+            conflicted.uuidString: ["DeviceAddress": "aa-bb-cc-dd-ee-ff"],
+            conflicted.uuidString.lowercased(): ["DeviceAddress": "11:22:33:44:55:66"]
+        ]
+        #expect(BluetoothBatterySampler.parseCacheAddresses(entries) == [uuid: address, alias: address])
+        #expect(BluetoothBatterySampler.merge(ioDevices: [], profilerDevices: [], bleSnapshots: [],
+            bindings: [:], cachedAddresses: [uuid: address]).devices.isEmpty)
+    }
 }

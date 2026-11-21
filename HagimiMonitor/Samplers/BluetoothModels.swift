@@ -181,7 +181,7 @@ nonisolated enum BluetoothBatterySource: Equatable, Sendable {
 nonisolated struct BluetoothDeviceInfo: Identifiable, Equatable, Sendable {
     /// 归一化 MAC(去分隔符小写)或 "ble-UUID"。跨数据源身份关联的锚点。
     let address: String
-    let name: String
+    var name: String
     let type: BluetoothDeviceType
     /// 0-100;nil = 未上报。
     let batteryLevel: Int?
@@ -199,10 +199,24 @@ nonisolated struct BluetoothDeviceInfo: Identifiable, Equatable, Sendable {
     /// 电源树的 UUID 身份；与 MAC 分开，防止 UUID 被误当作地址。
     var accessoryIdentifier: UUID? = nil
 
+    /// 同一个电源分组内各配件的 UUID，耳机和充电盒可分别使用不同标识。
+    var memberIdentifiers: Set<UUID> = []
+    /// 系统画像仅报告 BLE 传输、未声明独立设备类型的条目。
+    var isBLETransportOnly = false
+
+    var reportedIdentifiers: Set<UUID> {
+        guard let accessoryIdentifier else { return memberIdentifiers }
+        return memberIdentifiers.union([accessoryIdentifier])
+    }
+
     /// 同次连接内只保留分部上报能力；每个部位的电量和充电状态始终取当前快照。
     var previouslyReportedBatteryParts = false
     var hasSeparateBatteryParts: Bool {
         previouslyReportedBatteryParts || components.contains { $0.kind != .single }
+    }
+
+    static func isGenericAirPodsName(_ name: String) -> Bool {
+        name.range(of: #"^AirPods(?: (?:Pro|Max))?(?: [0-9]+)?(?: \(ANC\))?$"#, options: .regularExpression) != nil
     }
 
     var compactBatteryLevel: Int? { batteryLevel ?? singleBattery?.level }
@@ -378,7 +392,7 @@ nonisolated enum PMSetAccessoryParser: Sendable {
         let components = [BluetoothBatteryComponent.Kind.left, .right, .case, .single].compactMap { parts[$0] }
         let level = components.filter { $0.kind != .case }.map(\.level).min()
             ?? (isCase(primary) ? nil : primary.capacity)
-        let accessoryUUID = UUID(uuidString: primary.group ?? primary.identifier)
+        let accessoryUUID = primary.group.flatMap(UUID.init(uuidString:)) ?? UUID(uuidString: primary.identifier)
         // 分组 UUID 关联电源部件，不能覆盖耳机本身可与 IOBluetooth 对齐的 MAC。
         let mac = primary.identifier.replacingOccurrences(of: ":", with: "")
             .replacingOccurrences(of: "-", with: "").lowercased()
@@ -394,7 +408,8 @@ nonisolated enum PMSetAccessoryParser: Sendable {
             components: components,
             isCharging: primary.charging,
             batterySource: level == nil ? nil : .powerSource,
-            accessoryIdentifier: accessoryUUID
+            accessoryIdentifier: accessoryUUID,
+            memberIdentifiers: Set(entries.compactMap { UUID(uuidString: $0.identifier) })
         )
     }
 

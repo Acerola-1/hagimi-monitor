@@ -15,9 +15,44 @@ nonisolated final class SMCReader: FanSMCReading, CPUTemperatureReading, @unchec
     /// FNum 是这台机器的风扇个数，运行期不变。首次读到大于 0 的值后复用，
     /// 后续转速采样不再为了个数反复读同一个键。
     private var cachedFanCount: Int?
-    private static let temperatureKeys = [
-        "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"
-    ]
+    private static let temperatureProfile = CPUTemperatureProfile(
+        chipName: HardwareSysctl.string("machdep.cpu.brand_string")
+    )
+
+    enum CPUTemperatureProfile {
+        case legacy
+        case m2
+
+        private static let legacyKeys = [
+            "Tp09", "Tp0T", "Tp01", "Tp05", "Tp0D", "Tp0H", "Tp0L", "Tp0P", "Tp0X", "Tp0b"
+        ]
+        // M2 系列的 CPU 温度键来自 Stats 的芯片映射。各机型只会提供其中一部分。
+        private static let m2Keys = [
+            "Tp1h", "Tp1t", "Tp1p", "Tp1l", "Tp01", "Tp05", "Tp09", "Tp0D", "Tp0X", "Tp0b", "Tp0f", "Tp0j"
+        ]
+
+        init(chipName: String?) {
+            switch chipName {
+            case "Apple M2", "Apple M2 Pro", "Apple M2 Max", "Apple M2 Ultra": self = .m2
+            default: self = .legacy
+            }
+        }
+
+        func sample(read: (String) -> Double?) -> Double? {
+            let keys = self == .m2 ? Self.m2Keys : Self.legacyKeys
+            var total = 0.0
+            var count = 0
+            for key in keys {
+                guard let value = read(key) else { continue }
+                // M2 空闲时有些键会返回 0 或个位数等异常读数。只聚合当前有效样本。
+                if self == .m2 && !(15.0...120.0).contains(value) { continue }
+                total += value
+                count += 1
+            }
+            guard count > 0 else { return nil }
+            return total / Double(count)
+        }
+    }
 
     init?() {
         var iterator: io_iterator_t = 0
@@ -41,14 +76,7 @@ nonisolated final class SMCReader: FanSMCReading, CPUTemperatureReading, @unchec
     }
 
     func cpuTemperature() -> Double? {
-        var temperatures: [Double] = []
-        for key in Self.temperatureKeys {
-            if let value = readValue(key) {
-                temperatures.append(value)
-            }
-        }
-        guard !temperatures.isEmpty else { return nil }
-        return temperatures.reduce(0, +) / Double(temperatures.count)
+        Self.temperatureProfile.sample(read: readValue)
     }
 
     /// 读取 SMC key `PSTR`（整机系统总负载，flt 类型，单位 W）。读取失败返回 nil。

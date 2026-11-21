@@ -18,9 +18,8 @@ final class UpdateService: NSObject, ObservableObject {
         static let availableUpdateVersion = "availableUpdateVersion"
     }
 
-    /// 当前 App 版本号，用于判断已发现的更新是否已安装。
-    private static var appVersion: String {
-        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? ""
+    private static var appVersion: String? {
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String
     }
 
     /// 是否可发起检查(下载/安装进行中时 Sparkle 会置为 false),用于禁用按钮避免重复触发。
@@ -34,13 +33,12 @@ final class UpdateService: NSObject, ObservableObject {
     )
 
     override init() {
-        let stored = UserDefaults.standard.string(forKey: Keys.availableUpdateVersion)
-        // 启动时清除过时的可用版本：若已更新到该版本，说明更新已完成，不应再提示。
-        if let stored, stored == Self.appVersion {
-            UserDefaults.standard.removeObject(forKey: Keys.availableUpdateVersion)
-        }
-        availableUpdateVersion = (stored == Self.appVersion) ? nil : stored
         super.init()
+
+        // 手动安装后，缓存里的目标版本可能已低于当前版本。
+        if let stored = UserDefaults.standard.string(forKey: Keys.availableUpdateVersion) {
+            setAvailableUpdateVersion(stored)
+        }
 
         // startingUpdater: true → 随 App 启动即开始后台定时检查(遵循 Sparkle 默认周期)。
         // 将自身作为 delegate 以保留已发现版本，供设置页展示非侵入式提醒。
@@ -55,6 +53,13 @@ final class UpdateService: NSObject, ObservableObject {
     func checkForUpdates() {
         updaterController.checkForUpdates(nil)
     }
+
+    /// 提示使用用户看到的版本号。Sparkle 根据构建号决定实际可安装的更新。
+    static func newerDisplayVersion(_ candidate: String?, than installed: String?) -> String? {
+        guard let candidate, !candidate.isEmpty, let installed, !installed.isEmpty else { return nil }
+        let comparison = SUStandardVersionComparator.default.compareVersion(candidate, toVersion: installed)
+        return comparison == .orderedDescending ? candidate : nil
+    }
 }
 
 extension UpdateService: SPUUpdaterDelegate {
@@ -66,7 +71,8 @@ extension UpdateService: SPUUpdaterDelegate {
         setAvailableUpdateVersion(nil)
     }
 
-    private func setAvailableUpdateVersion(_ version: String?) {
+    private func setAvailableUpdateVersion(_ candidate: String?) {
+        let version = Self.newerDisplayVersion(candidate, than: Self.appVersion)
         availableUpdateVersion = version
         if let version {
             UserDefaults.standard.set(version, forKey: Keys.availableUpdateVersion)

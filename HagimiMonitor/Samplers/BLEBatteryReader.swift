@@ -19,6 +19,26 @@ nonisolated struct BLEDeviceSnapshot: Equatable, Sendable {
         self.batteryLevel = batteryLevel
         self.appearance = appearance
     }
+
+    /// 同 UUID 只保留一个快照，空读数不能挤掉本轮有效的 0% 或其他电量。
+    static func coalesced(_ snapshots: [Self]) -> [Self] {
+        var order: [UUID] = []
+        var byIdentifier: [UUID: Self] = [:]
+        for snapshot in snapshots {
+            if let existing = byIdentifier[snapshot.identifier] {
+                let prefersNew = existing.batteryLevel == nil && snapshot.batteryLevel != nil
+                let preferred = prefersNew ? snapshot : existing
+                let fallback = prefersNew ? existing : snapshot
+                byIdentifier[snapshot.identifier] = Self(identifier: snapshot.identifier,
+                    name: preferred.name ?? fallback.name, batteryLevel: preferred.batteryLevel,
+                    appearance: preferred.appearance ?? fallback.appearance)
+            } else {
+                order.append(snapshot.identifier)
+                byIdentifier[snapshot.identifier] = snapshot
+            }
+        }
+        return order.compactMap { byIdentifier[$0] }
+    }
 }
 
 /// BLE 设备电量常驻读取器。
@@ -82,8 +102,12 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     private var airPodsScanEnd: DispatchWorkItem?
     private var lastAirPodsScan: TimeInterval?
     /// 常驻连接的外设(强引用保证 delegate 回调可达),值为最新已知名。
-    private var tracked: [CBPeripheral: String] = [:]
-    private var connectTimeouts: [CBPeripheral: DispatchWorkItem] = [:]
+    private struct TrackedPeripheral {
+        let peripheral: CBPeripheral
+        var name: String
+    }
+    private var tracked: [UUID: TrackedPeripheral] = [:]
+    private var connectTimeouts: [UUID: DispatchWorkItem] = [:]
     private var refreshTimer: DispatchSourceTimer?
     /// 电量读数按外设标识存取:设备改名后仍指向同一条目。
     /// 多 Battery Service 实例(如左耳/右耳/充电仓)按 characteristic 对象标识
@@ -154,7 +178,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     /// 更新 identifier 兜底召回名单(线程安全,串行队列写入)。
     func updateKnownIdentifiers(_ identifiers: [UUID]) {
         queue.async { [weak self] in
-            self?.knownIdentifiers = identifiers
+            self?.knownIdentifiers = Array(Set(identifiers)).sorted { $0.uuidString < $1.uuidString }
         }
     }
 
@@ -203,8 +227,8 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
                 works.forEach { $0.cancel() }
             }
             self.batteryReadRetries.removeAll()
-            for peripheral in self.tracked.keys {
-                self.central?.cancelPeripheralConnection(peripheral)
+            for entry in self.tracked.values {
+                self.central?.cancelPeripheralConnection(entry.peripheral)
             }
             // central 一并释放:ensureWatching 重建时会重新触发 didUpdateState,
             // 周期召回定时器与控制器状态发布随之恢复。
@@ -230,74 +254,75 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     /// 同步系统连接清单 + 为新出现的外设挂常驻连接。
     private func refreshNow() {
         guard let central, central.state == .poweredOn else { return }
-        // 双路召回:常见标准服务过滤为主 + 绑定表 identifier 直接召回兜底
-        // (覆盖系统未缓存其标准服务的设备,召回后仅保留已连接态)。
         publishAirPods()
         startAirPodsScanIfNeeded(central)
-        let serviceFilter = Self.discoveryServiceUUIDs
-        var peripherals = central.retrieveConnectedPeripherals(withServices: serviceFilter)
+        var peripherals = central.retrieveConnectedPeripherals(withServices: Self.discoveryServiceUUIDs)
         if !knownIdentifiers.isEmpty {
-            let seen = Set(peripherals.map(\.identifier))
-            let rawRecalled = central.retrievePeripherals(withIdentifiers: knownIdentifiers)
-            let recalled = rawRecalled.filter { $0.state == .connected && !seen.contains($0.identifier) }
-            peripherals.append(contentsOf: recalled)
+            peripherals += central.retrievePeripherals(withIdentifiers: knownIdentifiers).filter { $0.state == .connected }
         }
-        // 无名外设没有可展示的身份,不进清单也不跟踪。
-        peripherals = peripherals.filter { $0.name != nil }
-        let identifiers = Set(peripherals.map(\.identifier))
-
-        // 系统已不再报告的常驻外设:断开并清理其读数。
-        for (peripheral, _) in tracked where !identifiers.contains(peripheral.identifier) {
-            central.cancelPeripheralConnection(peripheral)
-            tracked.removeValue(forKey: peripheral)
-            connectTimeouts.removeValue(forKey: peripheral)?.cancel()
-            batteryByIdentifier.removeValue(forKey: peripheral.identifier)
-            batteryReadingsByIdentifier.removeValue(forKey: peripheral.identifier)
-            appearanceByIdentifier.removeValue(forKey: peripheral.identifier)
-            pollOnlyIdentifiers.remove(peripheral.identifier)
-            batteryCharacteristicsByIdentifier.removeValue(forKey: peripheral.identifier)
-            batteryReadRetries.removeValue(forKey: peripheral.identifier)?.forEach { $0.cancel() }
-        }
-
-        // 已跟踪的外设同步最新空中名(设备端改名在此反映);新出现的挂常驻连接。
-        var newPeripherals: [CBPeripheral] = []
-        for peripheral in peripherals {
-            if let knownName = tracked[peripheral] {
-                tracked[peripheral] = peripheral.name ?? knownName
-            } else {
-                newPeripherals.append(peripheral)
+        // 多条 MAC 绑定可能召回同一个 UUID；保留当前仍在使用的对象，避免重复连接与迟到回调。
+        var byIdentifier: [UUID: CBPeripheral] = [:]
+        for peripheral in peripherals where peripheral.name != nil {
+            let id = peripheral.identifier
+            if let current = tracked[id], current.peripheral.state != .disconnected {
+                byIdentifier[id] = current.peripheral
+            } else if byIdentifier[id] == nil || peripheral.state == .connected {
+                byIdentifier[id] = peripheral
             }
         }
-        for peripheral in newPeripherals {
-            attach(peripheral, central: central)
+        for id in Array(tracked.keys) where byIdentifier[id] == nil {
+            removeTracked(id, cancelConnection: true)
+        }
+        for id in byIdentifier.keys.sorted(by: { $0.uuidString < $1.uuidString }) {
+            guard let peripheral = byIdentifier[id] else { continue }
+            if isCurrent(peripheral) {
+                tracked[id]?.name = peripheral.name ?? tracked[id]?.name ?? ""
+            } else {
+                removeTracked(id, cancelConnection: true)
+                attach(peripheral, central: central)
+            }
         }
         publishSnapshots()
     }
 
-    /// 为外设挂常驻连接:已连接(系统持有链路)直接建交,否则发起连接并设安全网超时。
+    private func isCurrent(_ peripheral: CBPeripheral) -> Bool {
+        tracked[peripheral.identifier]?.peripheral === peripheral
+    }
+
+    private func removeTracked(_ id: UUID, cancelConnection: Bool) {
+        let previous = tracked.removeValue(forKey: id)
+        if cancelConnection, let previous { central?.cancelPeripheralConnection(previous.peripheral) }
+        connectTimeouts.removeValue(forKey: id)?.cancel()
+        batteryReadRetries.removeValue(forKey: id)?.forEach { $0.cancel() }
+        batteryByIdentifier.removeValue(forKey: id)
+        batteryReadingsByIdentifier.removeValue(forKey: id)
+        appearanceByIdentifier.removeValue(forKey: id)
+        pollOnlyIdentifiers.remove(id)
+        batteryCharacteristicsByIdentifier.removeValue(forKey: id)
+    }
+
+    /// 每个 UUID 只持有一个连接，超时和断连只能清理其当前对象。
     private func attach(_ peripheral: CBPeripheral, central: CBCentralManager) {
         guard let name = peripheral.name else { return }
-        tracked[peripheral] = name
+        tracked[peripheral.identifier] = TrackedPeripheral(peripheral: peripheral, name: name)
         if peripheral.state == .connected {
             setUp(peripheral)
             return
         }
         central.connect(peripheral, options: nil)
         let work = DispatchWorkItem { [weak self, weak peripheral] in
-            guard let self, let peripheral,
-                  self.tracked[peripheral] != nil,
+            guard let self, let peripheral, self.isCurrent(peripheral),
                   peripheral.state != .connected else { return }
-            self.connectTimeouts.removeValue(forKey: peripheral)
-            self.tracked.removeValue(forKey: peripheral)
-            self.central?.cancelPeripheralConnection(peripheral)
+            self.removeTracked(peripheral.identifier, cancelConnection: true)
+            self.publishSnapshots()
         }
-        connectTimeouts[peripheral] = work
+        connectTimeouts[peripheral.identifier] = work
         queue.asyncAfter(deadline: .now() + Self.connectTimeout, execute: work)
     }
 
-    /// 连接就绪:发现电池服务(电量)与 GAP 服务(Appearance)。
     private func setUp(_ peripheral: CBPeripheral) {
-        connectTimeouts.removeValue(forKey: peripheral)?.cancel()
+        guard isCurrent(peripheral) else { return }
+        connectTimeouts.removeValue(forKey: peripheral.identifier)?.cancel()
         peripheral.delegate = self
         peripheral.discoverServices([Self.batteryServiceUUID, Self.gapServiceUUID])
     }
@@ -321,10 +346,10 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
     private func publishSnapshots() {
         let snapshots = tracked
             .map { BLEDeviceSnapshot(
-                identifier: $0.key.identifier,
-                name: $0.value,
-                batteryLevel: batteryByIdentifier[$0.key.identifier],
-                appearance: appearanceByIdentifier[$0.key.identifier]
+                identifier: $0.key,
+                name: $0.value.name,
+                batteryLevel: batteryByIdentifier[$0.key],
+                appearance: appearanceByIdentifier[$0.key]
             ) }
             .sorted { $0.identifier.uuidString < $1.identifier.uuidString }
         guard snapshots != lastPublishedSnapshots else { return }
@@ -351,7 +376,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
 
     nonisolated func centralManagerDidUpdateState(_ central: CBCentralManager) {
         queue.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.central === central else { return }
             switch central.state {
             case .poweredOn:
                 self.publishControllerState(true)
@@ -395,29 +420,23 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
 
     nonisolated func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         queue.async { [weak self] in
-            guard let self, self.tracked[peripheral] != nil else { return }
+            guard let self, self.central === central, self.isCurrent(peripheral) else { return }
             self.setUp(peripheral)
         }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
         queue.async { [weak self] in
-            guard let self else { return }
-            self.connectTimeouts.removeValue(forKey: peripheral)?.cancel()
-            self.tracked.removeValue(forKey: peripheral)
+            guard let self, self.central === central, self.isCurrent(peripheral) else { return }
+            self.removeTracked(peripheral.identifier, cancelConnection: false)
+            self.publishSnapshots()
         }
     }
 
     nonisolated func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
         queue.async { [weak self] in
-            guard let self else { return }
-            // 自持连接断开即设备离场信号:立即重新同步清单,秒级反映断连。
-            self.connectTimeouts.removeValue(forKey: peripheral)?.cancel()
-            self.batteryReadRetries.removeValue(forKey: peripheral.identifier)?.forEach { $0.cancel() }
-            self.pollOnlyIdentifiers.remove(peripheral.identifier)
-            self.batteryCharacteristicsByIdentifier.removeValue(forKey: peripheral.identifier)
-            self.batteryReadingsByIdentifier.removeValue(forKey: peripheral.identifier)
-            self.tracked.removeValue(forKey: peripheral)
+            guard let self, self.central === central, self.isCurrent(peripheral) else { return }
+            self.removeTracked(peripheral.identifier, cancelConnection: false)
             self.refreshNow()
         }
     }
@@ -426,7 +445,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
         queue.async { [weak self] in
-            guard let self, self.tracked[peripheral] != nil else { return }
+            guard let self, self.isCurrent(peripheral) else { return }
             let services = peripheral.services ?? []
             if services.isEmpty {
                 // 无标准服务缓存(厂商私有协议):保留清单条目,电量留空不伪造。
@@ -444,7 +463,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         queue.async { [weak self] in
-            guard let self else { return }
+            guard let self, self.isCurrent(peripheral) else { return }
             let characteristics = service.characteristics ?? []
             let batteryChars = characteristics.filter { service.uuid == Self.batteryServiceUUID && $0.uuid == BLEBatteryReader.batteryLevelCharacteristicUUID }
             for characteristic in batteryChars {
@@ -472,7 +491,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
 
     nonisolated func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         queue.async { [weak self] in
-            guard let self, self.tracked[peripheral] != nil else { return }
+            guard let self, self.isCurrent(peripheral) else { return }
             switch characteristic.uuid {
             case Self.batteryLevelCharacteristicUUID:
                 // GATT 2A19 规范:0-100 合法,101-255 保留值拒绝,不污染缓存。
@@ -546,7 +565,7 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
         let retries = Self.readRetryDelays.map { delay in
             DispatchWorkItem { [weak self, weak peripheral] in
                 guard let self, let peripheral,
-                      self.tracked[peripheral] != nil,
+                      self.isCurrent(peripheral),
                       // 该特征已成功读到则不再重试,避免重复读取。
                       self.batteryReadingsByIdentifier[identifier]?[charID] == nil else { return }
                 peripheral.readValue(for: characteristic)
@@ -580,10 +599,10 @@ nonisolated final class BLEBatteryReader: NSObject, CBCentralManagerDelegate, CB
             pollTimer = nil
             return
         }
-        for (peripheral, _) in tracked where pollOnlyIdentifiers.contains(peripheral.identifier) {
-            if let characteristics = batteryCharacteristicsByIdentifier[peripheral.identifier] {
+        for (id, entry) in tracked where pollOnlyIdentifiers.contains(id) {
+            if let characteristics = batteryCharacteristicsByIdentifier[id] {
                 for characteristic in characteristics {
-                    peripheral.readValue(for: characteristic)
+                    entry.peripheral.readValue(for: characteristic)
                 }
             }
         }
