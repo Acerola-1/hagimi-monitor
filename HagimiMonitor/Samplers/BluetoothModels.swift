@@ -198,6 +198,8 @@ nonisolated struct BluetoothDeviceInfo: Identifiable, Equatable, Sendable {
     var batterySource: BluetoothBatterySource? = nil
     /// 电源树的 UUID 身份；与 MAC 分开，防止 UUID 被误当作地址。
     var accessoryIdentifier: UUID? = nil
+    /// 系统只报告 BLE 链路且没有明确设备类别的辅助传输身份。
+    var isBLETransportOnly = false
 
     /// 同次连接内只保留分部上报能力；每个部位的电量和充电状态始终取当前快照。
     var previouslyReportedBatteryParts = false

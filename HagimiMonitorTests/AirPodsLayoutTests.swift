@@ -6,8 +6,16 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct AirPodsLayoutTests {
+    private var output: URL {
+        let environment = ProcessInfo.processInfo.environment
+        if let path = environment["HAGIMI_TEST_OUTPUT_DIR"] ?? environment["TEST_RUNNER_HAGIMI_TEST_OUTPUT_DIR"] {
+            return URL(fileURLWithPath: path)
+        }
+        return URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .appendingPathComponent("tmp/airpods-ui-review")
+    }
+
     @Test func productionDeviceListRendersCompleteComponentsAtMinimumWidth() async throws {
-        let output = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("tmp/airpods-ui-review")
         try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
         for language in ["zh-Hans", "en"] {
             for scheme: ColorScheme in [.light, .dark] {
@@ -39,6 +47,35 @@ struct AirPodsLayoutTests {
                 host.cacheDisplay(in: host.bounds, to: bitmap)
                 try #require(bitmap.representation(using: .png, properties: [:])).write(to: output.appendingPathComponent("airpods-\(language)-\(scheme).png"))
             }
+        }
+    }
+
+    @Test func deduplicatedFixtureRendersOneCompleteHeadphonesCard() async throws {
+        let devices = try AirPodsIdentityTests.scene().merge().devices
+        #expect(devices.count == 3)
+        #expect(devices.filter { $0.type == .headphones }.count == 1)
+        try FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        for scheme: ColorScheme in [.light, .dark] {
+            let theme = MonitorPanelTheme(palette: MonitorPalette(preference: .balanced, colorScheme: scheme))
+            let view = BluetoothDeviceList(devices: devices, theme: theme)
+                .padding(10).frame(width: MonitorConstants.panelMinWidth)
+                .environment(\.colorScheme, scheme)
+                .background(scheme == .dark ? Color.black : Color.white)
+            let host = NSHostingView(rootView: view)
+            let panel = NSPanel(contentRect: CGRect(x: -10000, y: -10000, width: MonitorConstants.panelMinWidth, height: 360),
+                                styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+            panel.contentView = host
+            panel.orderFrontRegardless()
+            defer { panel.orderOut(nil); panel.contentView = nil }
+            host.frame.size = CGSize(width: MonitorConstants.panelMinWidth, height: 360)
+            try await Task.sleep(for: .milliseconds(200))
+            host.layoutSubtreeIfNeeded()
+            #expect(host.fittingSize.height <= 360)
+            let bitmap = try #require(host.bitmapImageRepForCachingDisplay(in: host.bounds))
+            bitmap.bitmapData?.initialize(repeating: 0, count: bitmap.bytesPerRow * bitmap.pixelsHigh)
+            host.cacheDisplay(in: host.bounds, to: bitmap)
+            try #require(bitmap.representation(using: .png, properties: [:]))
+                .write(to: output.appendingPathComponent("deduplicated-\(scheme).png"))
         }
     }
 }

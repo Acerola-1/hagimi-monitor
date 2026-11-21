@@ -1,0 +1,63 @@
+{
+  "ioDevices": [
+    {
+      "address": "aabbcc000001",
+      "name": "Personal AirPods",
+      "type": "headphones"
+    },
+    {
+      "address": "aabbcc000003",
+      "name": "Test Mouse",
+      "type": "mouse",
+      "battery": 60
+    },
+    {
+      "address": "aabbcc000004",
+      "name": "Test Keyboard",
+      "type": "keyboard"
+    }
+  ],
+  "profiler": {
+    "SPBluetoothDataType": [
+      {
+        "device_connected": [
+          {
+            "AirPods 4 (ANC)": {
+              "device_address": "AA:BB:CC:00:00:01",
+              "device_minorType": "Headphones",
+              "device_services": "HFP AVRCP A2DP GATT ACL",
+              "device_batteryLevelLeft": "100%",
+              "device_batteryLevelRight": "64%",
+              "device_batteryLevelCase": "78%"
+            }
+          },
+          {
+            "AirPods 4 (ANC)": {
+              "device_address": "AA:BB:CC:00:00:02",
+              "device_services": "0x400000 < BLE >",
+              "device_batteryLevelLeft": "100%",
+              "device_batteryLevelCase": "78%"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  "bleSnapshots": [
+    {
+      "identifier": "00000000-0000-0000-0000-000000000001",
+      "name": "AirPods 4 (ANC)"
+    },
+    {
+      "identifier": "00000000-0000-0000-0000-000000000002",
+      "name": "AirPods 4 (ANC)"
+    }
+  ],
+  "bindings": {
+    "aabbcc000001": "00000000-0000-0000-0000-000000000003",
+    "aabbcc000002": "00000000-0000-0000-0000-000000000004"
+  },
+  "pairedAddresses": [
+    "aabbcc000001"
+  ]
+}
