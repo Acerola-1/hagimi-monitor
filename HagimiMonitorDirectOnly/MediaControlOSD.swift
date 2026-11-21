@@ -140,14 +140,10 @@ final class MediaControlOSD {
         host.frame = CGRect(origin: .zero, size: size)
         host.autoresizingMask = [.width, .height]
         if #available(macOS 26, *) {
-            let glass = MediaControlGlassView(frame: host.frame)
-            glass.updateMaterial()
-            glass.cornerRadius = size.height / 2
-            glass.contentView = host
-            panel.contentView = glass
+            panel.contentView = host
         } else {
             let backdrop = NSVisualEffectView(frame: host.frame)
-            // 白色读数在浅色桌面上也需要足够的对比度。
+            // 旧系统使用深色 HUD，内容继承同一外观。
             backdrop.appearance = NSAppearance(named: .darkAqua)
             backdrop.material = .hudWindow
             backdrop.blendingMode = .behindWindow
@@ -211,6 +207,10 @@ final class MediaControlOSD {
         dismissal = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(1450))
             guard let self, let panel = self.panel, !Task.isCancelled else { return }
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                self.hide()
+                return
+            }
             NSAnimationContext.runAnimationGroup({ context in
                 context.duration = 0.15
                 panel.animator().alphaValue = 0
@@ -219,28 +219,6 @@ final class MediaControlOSD {
             guard !Task.isCancelled else { return }
             self.hide()
         }
-    }
-}
-
-@available(macOS 26, *)
-private final class MediaControlGlassView: NSGlassEffectView {
-    // TODO: 自绘浮层还没有完全还原系统原生浮层的液态玻璃效果。
-    // 彩色背景下的边缘折射更弱，整体更像毛玻璃。后续用同一背景实机对照，继续改善折射表现。
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        let center = NSWorkspace.shared.notificationCenter
-        center.removeObserver(self, name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
-        if window != nil {
-            center.addObserver(self, selector: #selector(updateMaterial),
-                               name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
-            updateMaterial()
-        }
-    }
-
-    @objc func updateMaterial() {
-        let workspace = NSWorkspace.shared
-        style = workspace.accessibilityDisplayShouldReduceTransparency || workspace.accessibilityDisplayShouldIncreaseContrast
-            ? .regular : .clear
     }
 }
 
@@ -279,20 +257,23 @@ private struct MediaControlOSDView: View {
     let edit: @MainActor @Sendable (Bool) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+    @Environment(\.displayScale) private var displayScale
     @State private var dragging = false
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
                 .font(.system(size: 24, weight: .regular))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .contentTransition(.symbolEffect(.replace))
                 .animation(reduceMotion ? nil : .smooth(duration: 0.18), value: symbol)
                 .frame(width: 28)
                 .accessibilityHidden(true)
             GeometryReader { geometry in
                 let travel = max(1, geometry.size.width)
-                OSDLevelTrack(fraction: state.value / 100, luminanceText: luminanceText)
+                OSDLevelTrack(fraction: state.value / 100, percentageText: percentageText, luminanceText: luminanceText)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0)
                         .onChanged { point in
@@ -317,27 +298,17 @@ private struct MediaControlOSDView: View {
         .padding(.trailing, 30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            if #available(macOS 27.2, *) {
-                // 独立浮窗的玻璃表面由 AppKit 合成。轮廓只在上下弧面保留窄反光。
-                Capsule().fill(.white.opacity(0.025))
+            if #available(macOS 26, *) {
+                let capsule = Capsule(style: .circular)
+                let enhancedLegibility = reduceTransparency || contrast == .increased
+                // 仅减轻玻璃底面，让背景细节保留下来。读数与滑条保持完整对比度。
+                capsule.fill(Color(nsColor: .windowBackgroundColor).opacity(enhancedLegibility ? 0 : 0.4))
+                    .glassEffect(.regular.interactive(), in: capsule)
+                    .opacity(enhancedLegibility ? 1 : 0.5)
+                    .clipShape(capsule)
                     .overlay {
-                        Capsule().strokeBorder(
-                            LinearGradient(stops: [
-                                .init(color: .white.opacity(0.44), location: 0),
-                                .init(color: .clear, location: 0.26),
-                                .init(color: .clear, location: 0.74),
-                                .init(color: .white.opacity(0.42), location: 1),
-                            ], startPoint: .top, endPoint: .bottom),
-                            lineWidth: 0.75
-                        )
+                        capsule.strokeBorder(.separator, lineWidth: 1 / displayScale)
                     }
-                    .overlay {
-                        Capsule().strokeBorder(.white.opacity(0.085), lineWidth: 1.6)
-                            .blur(radius: 1.8)
-                            .clipShape(Capsule())
-                    }
-            } else {
-                Capsule().fill(Color(white: 0.36).opacity(0.23))
             }
         }
     }
@@ -365,11 +336,12 @@ private struct MediaControlOSDView: View {
     }
 }
 
-/// 填充、尖角和读数共享同一个插值。按键反向或长按时，三者始终处于同一档位。
+/// 轨道和气泡位置随进度插值，文字直接显示本次调节的目标百分比。
 private struct OSDLevelTrack: View, Animatable {
     var fraction: Double
+    let percentageText: String
     let luminanceText: String?
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
 
     nonisolated var animatableData: Double {
         get { fraction }
@@ -380,12 +352,12 @@ private struct OSDLevelTrack: View, Animatable {
         GeometryReader { geometry in
             let progress = min(1, max(0, fraction))
             let endpoint = geometry.size.width * progress
-            let bubbleColor = Color.white.opacity(reduceTransparency ? 1 : 0.84)
+            let ink = Color(nsColor: .labelColor)
             let capsule = Capsule()
             ZStack {
-                capsule.fill(.white.opacity(0.23))
+                capsule.fill(ink.opacity(contrast == .increased ? 0.42 : 0.24))
                     .overlay(alignment: .leading) {
-                        Rectangle().fill(.white).frame(width: endpoint)
+                        Rectangle().fill(ink).frame(width: endpoint)
                     }
                     .clipShape(capsule)
                     .mask {
@@ -397,24 +369,24 @@ private struct OSDLevelTrack: View, Animatable {
 
                 OSDCalloutLayout(endpoint: endpoint) {
                     HStack(spacing: 2.5) {
-                        Text(verbatim: progress.formatted(.percent.precision(.fractionLength(0))))
+                        Text(verbatim: percentageText)
                         if let luminanceText {
                             Text(verbatim: "·")
                             Text(verbatim: luminanceText)
                         }
                     }
                     .font(.system(size: 8.5, weight: .semibold).monospacedDigit())
-                    .foregroundStyle(.black.opacity(0.70))
+                    .foregroundStyle(Color(nsColor: .textBackgroundColor))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1.5)
-                    .background(bubbleColor, in: Capsule())
+                    .background(ink, in: Capsule())
                     Path { path in
                         path.move(to: .zero)
                         path.addLine(to: CGPoint(x: 6, y: 0))
                         path.addLine(to: CGPoint(x: 3, y: 3.5))
                         path.closeSubpath()
                     }
-                    .fill(bubbleColor)
+                    .fill(ink)
                     .frame(width: 6, height: 3.5)
                 }
                 .allowsHitTesting(false)
