@@ -144,7 +144,7 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .gpuUsage:
             "display"
         case .gpuPower:
-            "bolt.fill"
+            "bolt.square.fill"
         case .memoryUsage:
             "memorychip"
         case .memoryPressure:
@@ -152,7 +152,7 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .memorySwapUsed:
             "arrow.left.arrow.right"
         case .memoryBandwidth:
-            "memorychip"
+            "waveform"
         case .networkDownload:
             "arrow.down"
         case .networkUpload:
@@ -160,7 +160,7 @@ enum MenuBarMetricKind: String, CaseIterable, Identifiable, Hashable, Sendable {
         case .storageFree:
             "externaldrive"
         case .displayRefreshRate:
-            "arrow.clockwise"
+            "play.display"
         case .displayPower:
             "sun.max.fill"
         case .batteryLevel:

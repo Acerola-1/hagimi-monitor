@@ -170,6 +170,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 几乎每秒都变),但格式化后的菜单栏指标文本往往不变;文字/外观/布局/scale/徽章
     /// 全等时据此跳过 ImageRenderer 快照,消除「指标模式每秒重绘」这一常驻 CPU 热点。
     private var lastMetricsRenderKey: MenuBarMetricsRenderKey?
+    private var statusToolTipTag: NSView.ToolTipTag?
+    private var lastAccessibilityValue: String?
 
     /// 面板与菜单栏按钮左边缘对齐时,补偿窗口阴影/边框带来的 2pt 偏移。
     private static let windowBorderSize: CGFloat = 2
@@ -358,11 +360,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 只有标准状态项图会被菜单栏系统跨屏复制并在「非活跃屏幕」自动变淡,与原生 app
         // 一致;自建子视图拿不到这个逐屏 dimming(表现为非活跃屏幕全亮)。动态内容(负载
         // 环/可变宽指标文本)通过 ImageRenderer 每次快照渲染成 NSImage 再赋给 button.image。
+        statusItem.autosaveName = "SystemMonitor"
         button.imagePosition = .imageOnly
         button.image = nil
         button.setAccessibilityTitle("HagimiMonitor")
 
         refreshStatusItemImage()
+        refreshStatusItemToolTipRect()
         store.loadAnimator.setAnimationEnabled(store.settings.menuBarDisplayMode == .ring)
 
         // 只消费这一帧的新值；Published 在属性写回前发送，回读 store 会落后一帧。
@@ -409,6 +413,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 菜单栏黑白模式翻转时,这个值会「即刻」更新——比等下一个采样 tick(~1s)
         // 快得多,图标墨色随焦点迅速跟随。option(.initial) 顺带完成首刷。
         button.publisher(for: \.effectiveAppearance, options: [.new])
+            .sink { [weak self] _ in self?.refreshStatusItemImage() }
+            .store(in: &cancellables)
+
+        // 系统「增强对比度」等辅助显示设置变更时立即重刷，保证菜单栏图标同步响应。
+        NSWorkspace.shared.notificationCenter
+            .publisher(for: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification)
+            .receive(on: RunLoop.main)
             .sink { [weak self] _ in self?.refreshStatusItemImage() }
             .store(in: &cancellables)
     }
@@ -483,6 +494,32 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private func showStatusItemContextMenu(for button: NSStatusBarButton, event: NSEvent) {
         let menu = NSMenu(title: "HagimiMonitor")
 
+        if contentScope == .systemMonitor {
+            let toggleModeTitle = store.settings.menuBarDisplayMode == .ring
+                ? String(localized: "contextMenu.switch-to-metrics")
+                : String(localized: "contextMenu.switch-to-ring")
+            let toggleModeItem = NSMenuItem(
+                title: toggleModeTitle,
+                action: #selector(toggleMenuBarDisplayModeFromMenu(_:)),
+                keyEquivalent: ""
+            )
+            toggleModeItem.target = self
+            menu.addItem(toggleModeItem)
+
+            #if DIRECT_DISTRIBUTION
+            let gameHUDItem = NSMenuItem(
+                title: String(localized: "contextMenu.game-hud"),
+                action: #selector(toggleGameHUDFromMenu(_:)),
+                keyEquivalent: ""
+            )
+            gameHUDItem.target = self
+            gameHUDItem.state = store.settings.gameHUDMasterEnabled ? .on : .off
+            menu.addItem(gameHUDItem)
+            #endif
+
+            menu.addItem(.separator())
+        }
+
         let settingsItem = NSMenuItem(
             title: String(localized: "contextMenu.settings"),
             action: #selector(openSettingsFromMenu(_:)),
@@ -504,6 +541,16 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         menu.addItem(quitItem)
         NSMenu.popUpContextMenu(menu, with: event, for: button)
     }
+
+    @objc private func toggleMenuBarDisplayModeFromMenu(_ sender: Any?) {
+        store.settings.menuBarDisplayMode = store.settings.menuBarDisplayMode == .ring ? .metrics : .ring
+    }
+
+    #if DIRECT_DISTRIBUTION
+    @objc private func toggleGameHUDFromMenu(_ sender: Any?) {
+        store.settings.gameHUDMasterEnabled.toggle()
+    }
+    #endif
 
     @objc private func openSettingsFromMenu(_ sender: Any?) {
         openSettingsAction()
@@ -836,8 +883,9 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 浅色系统 + 彩色壁纸时会画成黑环,和白色的系统图标格格不入。
         let appearance = statusItem.button?.effectiveAppearance ?? NSApp.effectiveAppearance
         let isDark = appearance.isDark
+        let increaseContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast || appearance.isHighContrast
         let showsAlert = PressureAlertCenter.shared.menuBarUnread
-        // Game HUD 徽章:硬件浮窗显示中时点亮(与告警红点同位互斥,告警优先)。
+        // Game HUD 徽章:硬件浮窗显示中时点亮(与告警红点各自独立角位，可同时显示)。
         // Game HUD 仅官网版提供,沙盒恒无徽章。
         #if DIRECT_DISTRIBUTION
         let showsHUDBadge = AppDelegate.shared?.gameHUDCoordinator.isShowing ?? false
@@ -852,15 +900,24 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         // 该 NSImage 由绘制闭包惰性渲染,系统绘制时会按各屏 scale 原生重画,多屏依旧清晰;
         // 内部读 NSAppearance.currentDrawing() 判定墨色,与 button 外观同步。
         if store.settings.menuBarDisplayMode == .ring {
+            let load = displayedLoad ?? store.loadAnimator.displayedComputeLoad
+            let coreLevel = store.loadAnimator.displayedCoreLevel
+            updateStatusItemAccessibilityValue(
+                displayedLoad: load,
+                coreLevel: coreLevel,
+                showsAlert: showsAlert,
+                showsHUDBadge: showsHUDBadge
+            )
             // 切到环形模式时失效指标缓存:之后切回指标模式时,即使文本碰巧与上次
             // 相同,也得重新栅格化(当前 button.image 已是环形图)。
             lastMetricsRenderKey = nil
             let image = MenuBarComputeRingIcon.image(
-                load: displayedLoad ?? store.loadAnimator.displayedComputeLoad,
+                load: load,
                 darkMode: isDark,
-                coreLevel: store.loadAnimator.displayedCoreLevel,
+                coreLevel: coreLevel,
                 showsAlert: showsAlert,
-                showsHUDBadge: showsHUDBadge
+                showsHUDBadge: showsHUDBadge,
+                increaseContrast: increaseContrast
             )
             // 负载未跨整数桶 / 外观未变时,image(...) 返回同一缓存 NSImage 对象。此时跳过
             // button.image 重新赋值:$modules 每秒 tick 都会触发本方法,重复赋同一张图会让
@@ -875,6 +932,14 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             updateStatusItemLength(image.size.width + Self.statusItemHorizontalPadding * 2)
             return
         }
+
+        let liveLoad = displayedLoad ?? store.combinedComputeLoad
+        updateStatusItemAccessibilityValue(
+            displayedLoad: liveLoad,
+            coreLevel: MenuBarCoreLevel.normal.updated(for: liveLoad),
+            showsAlert: showsAlert,
+            showsHUDBadge: showsHUDBadge
+        )
 
         // 指标(文本)模式:无现成位图,仍用 ImageRenderer 快照。
         // 先按最大屏 scale 与当前指标文本构造去重键,命中即跳过整套快照渲染。
@@ -921,12 +986,13 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             let image: NSImage
             if badge.needsOverlay {
                 // 徽章是后处理盖上去的:标签本身不含告警/HUD 状态,
-                // 快照宽度不变,状态项长度也不受影响。告警优先于 HUD。
+                // 快照宽度不变,状态项长度也不受影响。告警右上、HUD 右下，可共存。
                 image = NSImage(size: pointSize, flipped: false) { rect in
                     base.draw(in: rect)
                     if badge.drawsAlert {
                         MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
-                    } else if badge.drawsHUD {
+                    }
+                    if badge.drawsHUD {
                         MenuBarHUDBadge.draw(in: rect, darkMode: isDark)
                     }
                     return true
@@ -947,6 +1013,67 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let target = max(width.rounded(.up), 24)
         guard statusItem.length != target else { return }
         statusItem.length = target
+        refreshStatusItemToolTipRect()
+    }
+
+    /// 注册惰性悬停 Tooltip 区域：仅在鼠标真实停留时才经 `NSViewToolTipOwner` 拼接文本，
+    /// 避免每秒采样期间写 `button.toolTip` 产生无效分配或打断系统悬停计时。
+    private func refreshStatusItemToolTipRect() {
+        guard contentScope == .systemMonitor, let button = statusItem.button else { return }
+        if let tag = statusToolTipTag {
+            button.removeToolTip(tag)
+            statusToolTipTag = nil
+        }
+        let width = max(button.bounds.width, statusItem.length > 0 ? statusItem.length : 25)
+        let height = max(button.bounds.height, NSStatusBar.system.thickness)
+        let rect = NSRect(x: 0, y: 0, width: width, height: height)
+        statusToolTipTag = button.addToolTip(rect, owner: self, userData: nil)
+    }
+
+    private func updateStatusItemAccessibilityValue(
+        displayedLoad: Double,
+        coreLevel: MenuBarCoreLevel,
+        showsAlert: Bool,
+        showsHUDBadge: Bool
+    ) {
+        let summary = makeStatusSummary(
+            displayedLoad: displayedLoad,
+            coreLevel: coreLevel,
+            showsAlert: showsAlert,
+            showsHUDBadge: showsHUDBadge
+        )
+        let value = summary.accessibilityValue
+        guard value != lastAccessibilityValue else { return }
+        lastAccessibilityValue = value
+        statusItem.button?.setAccessibilityValue(value)
+    }
+
+    private func makeStatusSummary(
+        displayedLoad: Double,
+        coreLevel: MenuBarCoreLevel? = nil,
+        showsAlert: Bool? = nil,
+        showsHUDBadge: Bool? = nil
+    ) -> MenuBarStatusSummary {
+        let breakdown = store.computeLoadBreakdown
+        let alertVisible = showsAlert ?? (contentScope == .systemMonitor && PressureAlertCenter.shared.menuBarUnread)
+        let hudVisible: Bool = {
+            if let showsHUDBadge { return showsHUDBadge }
+            #if DIRECT_DISTRIBUTION
+            return contentScope == .systemMonitor && (AppDelegate.shared?.gameHUDCoordinator.isShowing ?? false)
+            #else
+            return false
+            #endif
+        }()
+        let resolvedCoreLevel = coreLevel ?? MenuBarCoreLevel.normal.updated(for: displayedLoad)
+        return MenuBarStatusSummary(
+            combinedLoad: displayedLoad,
+            coreLevel: resolvedCoreLevel,
+            cpuUsage: breakdown.cpu,
+            gpuUsage: breakdown.gpu,
+            memoryPressure: breakdown.memoryPressure,
+            showsAlert: alertVisible,
+            showsHUDBadge: hudVisible
+        )
     }
 
     /// 打开设置窗口前关闭面板(供 AppDelegate 的 openSettings 闭包调用)。
@@ -1084,4 +1211,21 @@ extension FluidPanelController: PanelWindowSubmissionAdapter {
     }
     func currentScreen() -> NSScreen? { NativePanelMotionMode.testScreen ?? statusItem.button?.window?.screen ?? panel.screen }
     func completePresentationLayout() { hostingView?.layoutSubtreeIfNeeded() }
+}
+
+extension FluidPanelController: NSViewToolTipOwner {
+    func view(
+        _ view: NSView,
+        stringForToolTip tag: NSView.ToolTipTag,
+        point: NSPoint,
+        userData data: UnsafeMutableRawPointer?
+    ) -> String {
+        let coreLevel: MenuBarCoreLevel = store.settings.menuBarDisplayMode == .ring
+            ? store.loadAnimator.displayedCoreLevel
+            : MenuBarCoreLevel.normal.updated(for: store.combinedComputeLoad)
+        return makeStatusSummary(
+            displayedLoad: store.combinedComputeLoad,
+            coreLevel: coreLevel
+        ).tooltipText
+    }
 }

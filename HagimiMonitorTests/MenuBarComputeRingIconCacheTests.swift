@@ -60,14 +60,99 @@ struct MenuBarComputeRingIconCacheTests {
         #expect(over === hundred)
     }
 
-    @Test("Alert priority removes the redundant HUD cache dimension")
-    func alertDominatesHUDCacheState() {
+    @Test("Alert and HUD badges coexist as distinct cache entries")
+    func alertAndHUDBadgesCoexistInCache() {
+        let none = MenuBarComputeRingIcon.image(load: 50, darkMode: true)
         let alert = MenuBarComputeRingIcon.image(load: 50, darkMode: true, showsAlert: true)
-        let both = MenuBarComputeRingIcon.image(load: 50, darkMode: true, showsAlert: true, showsHUDBadge: true)
-        #expect(alert === both)
         let hud = MenuBarComputeRingIcon.image(load: 50, darkMode: true, showsHUDBadge: true)
+        let both = MenuBarComputeRingIcon.image(load: 50, darkMode: true, showsAlert: true, showsHUDBadge: true)
+        #expect(alert !== none)
+        #expect(hud !== none)
         #expect(hud !== alert)
+        #expect(both !== none)
+        #expect(both !== alert)
+        #expect(both !== hud)
+        #expect(both === MenuBarComputeRingIcon.image(load: 50, darkMode: true, showsAlert: true, showsHUDBadge: true))
     }
+
+    @Test("increaseContrast dimension is part of cache key")
+    func increaseContrastIsKeyed() {
+        for dark in [false, true] {
+            let normal = MenuBarComputeRingIcon.image(load: 45, darkMode: dark, increaseContrast: false)
+            let highContrast = MenuBarComputeRingIcon.image(load: 45, darkMode: dark, increaseContrast: true)
+            #expect(normal !== highContrast)
+            #expect(highContrast === MenuBarComputeRingIcon.image(load: 45, darkMode: dark, increaseContrast: true))
+        }
+    }
+
+    @Test("Full load retains open top gap and dual badges render independently")
+    func fullLoadGapAndDualBadgePixels() throws {
+        MenuBarComputeRingIcon.clearCacheForTesting()
+        let fullRing = MenuBarComputeRingIcon.image(load: 100, darkMode: true)
+        let fullBitmap = try renderBitmap(fullRing, darkMode: true)
+
+        // 12 点钟起笔处实心高不透明，左侧（约 11 点半）保留仅绘剩余底轨的低不透明缺口。
+        let topStartAlpha = fullBitmap.colorAt(x: 21, y: 8)?.alphaComponent ?? 0
+        let gapAlpha = fullBitmap.colorAt(x: 17, y: 8)?.alphaComponent ?? 0
+        #expect(topStartAlpha > 0.85)
+        #expect(gapAlpha > 0.15 && gapAlpha < 0.55)
+
+        let noneBitmap = try renderBitmap(
+            MenuBarComputeRingIcon.image(load: 50, darkMode: true),
+            darkMode: true
+        )
+        let bothBitmap = try renderBitmap(
+            MenuBarComputeRingIcon.image(load: 50, darkMode: true, showsAlert: true, showsHUDBadge: true),
+            darkMode: true
+        )
+
+        #expect(maxAlpha(in: noneBitmap, xRange: 35...40, yRange: 2...7) < 0.05)
+        #expect(maxAlpha(in: noneBitmap, xRange: 34...40, yRange: 34...40) < 0.05)
+
+        // 右上角为偏红的告警圆点，右下角为偏紫的 HUD 菱形。
+        let topRightAlert = try #require(bothBitmap.colorAt(x: 37, y: 5))
+        #expect(topRightAlert.alphaComponent > 0.85)
+        #expect(topRightAlert.redComponent > topRightAlert.blueComponent + 0.3)
+
+        let bottomRightHUD = try #require(bothBitmap.colorAt(x: 37, y: 37))
+        #expect(bottomRightHUD.alphaComponent > 0.85)
+        #expect(bottomRightHUD.blueComponent > 0.65 && bottomRightHUD.redComponent > 0.45)
+    }
+
+    private func renderBitmap(_ image: NSImage, darkMode: Bool) throws -> NSBitmapImageRep {
+        let rep = try #require(NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: 42,
+            pixelsHigh: 42,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ))
+        let context = try #require(NSGraphicsContext(bitmapImageRep: rep))
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        let appearance = NSAppearance(named: darkMode ? .darkAqua : .aqua)
+        appearance?.performAsCurrentDrawingAppearance {
+            image.draw(in: NSRect(x: 0, y: 0, width: 42, height: 42))
+        }
+        NSGraphicsContext.restoreGraphicsState()
+        return rep
+    }
+
+    private func maxAlpha(in bitmap: NSBitmapImageRep, xRange: ClosedRange<Int>, yRange: ClosedRange<Int>) -> CGFloat {
+        var result: CGFloat = 0
+        for y in yRange {
+            for x in xRange {
+                result = max(result, bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0)
+            }
+        }
+        return result
+    }
+
     @Test("Recovery colors at the same load use separate cache entries")
     func coreLevelIsKeyed() {
         for dark in [false, true] {

@@ -2926,6 +2926,22 @@
         }
       }
     },
+    "contextMenu.game-hud": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game HUD"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "游戏 HUD"
+          }
+        }
+      }
+    },
     "contextMenu.settings": {
       "localizations": {
         "en": {
@@ -2938,6 +2954,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "设置"
+          }
+        }
+      }
+    },
+    "contextMenu.switch-to-metrics": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to Menu Bar Metrics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换为菜单栏指标"
+          }
+        }
+      }
+    },
+    "contextMenu.switch-to-ring": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Switch to Load Ring"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换为负载环"
           }
         }
       }
@@ -5161,7 +5209,6 @@
       }
     },
     "memory-pressure.critical": {
-      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5178,7 +5225,6 @@
       }
     },
     "memory-pressure.normal": {
-      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5194,8 +5240,23 @@
         }
       }
     },
+    "memory-pressure.unknown": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知"
+          }
+        }
+      }
+    },
     "memory-pressure.warning": {
-      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5372,7 +5433,6 @@
       }
     },
     "menu-bar-display.ring-description": {
-      "extractionState": "stale",
       "localizations": {
         "en": {
           "stringUnit": {
@@ -5401,6 +5461,214 @@
           "stringUnit": {
             "state": "translated",
             "value": "综合负载环"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.accessibility.value %lld %@ %lld %lld %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combined load %lld%%, %@; CPU %lld%%, GPU %lld%%, Memory %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "综合负载 %lld%%，%@；CPU %lld%%，GPU %lld%%，内存%@"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.legend.alert-badge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top-right red dot · Unread pressure event"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右上红点 · 未读压力事件"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.legend.hud-badge": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bottom-right purple diamond · Game HUD showing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "右下紫菱 · 游戏 HUD 显示中"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.legend.range.busy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "50%–77%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "50%–77%"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.legend.range.normal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "< 50%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "< 50%"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.legend.range.stressed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≥ 78%"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "≥ 78%"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.level.busy": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Busy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "繁忙"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.level.normal": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Normal"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正常"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.level.stressed": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "High"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "高压"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.tooltip.alert": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unread pressure event"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有未读压力事件"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.tooltip.breakdown %lld %lld %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU %lld%% · GPU %lld%% · Memory %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CPU %lld%% · GPU %lld%% · 内存 %@"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.tooltip.headline %lld %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Combined Load %lld%% · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "综合负载 %lld%% · %@"
+          }
+        }
+      }
+    },
+    "menu-bar-ring.tooltip.hud": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Game HUD showing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "游戏 HUD 显示中"
           }
         }
       }
@@ -5573,7 +5841,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": ""
+            "value": "REF"
           }
         },
         "zh-Hans": {

@@ -1232,14 +1232,19 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             ?? MonitorModule.placeholder(kind: selectedKind)
     }
 
-    var combinedComputeLoad: Double {
+    var computeLoadBreakdown: (cpu: Double, gpu: Double, memoryPressure: MemoryPressureLevel) {
         let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
         let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
         let memoryPressure = allModules.first { $0.kind == .memory }?.pressure ?? .unknown
+        return (cpuValue, gpuValue, memoryPressure)
+    }
+
+    var combinedComputeLoad: Double {
+        let breakdown = computeLoadBreakdown
         return ComputeLoadModel.combined(
-            cpuValue: cpuValue,
-            gpuValue: gpuValue,
-            memoryPressure: memoryPressure
+            cpuValue: breakdown.cpu,
+            gpuValue: breakdown.gpu,
+            memoryPressure: breakdown.memoryPressure
         )
     }
 

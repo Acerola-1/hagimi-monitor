@@ -267,17 +267,24 @@ struct GameHUDTemperatureFreshnessTests {
 
 @Suite("Menu bar badge presentation")
 struct MenuBarBadgePresentationTests {
-    @Test("HUD badge is drawn only when alert is absent")
-    func alertTakesPriority() {
+    @Test("Alert and HUD badges are drawn independently and can coexist")
+    func alertAndHUDCoexist() {
         let hud = MenuBarBadgePresentation(showsAlert: false, showsHUDBadge: true)
         #expect(hud.needsOverlay)
         #expect(hud.drawsHUD)
         #expect(!hud.drawsAlert)
 
+        let alert = MenuBarBadgePresentation(showsAlert: true, showsHUDBadge: false)
+        #expect(alert.needsOverlay)
+        #expect(alert.drawsAlert)
+        #expect(!alert.drawsHUD)
+
         let both = MenuBarBadgePresentation(showsAlert: true, showsHUDBadge: true)
         #expect(both.needsOverlay)
         #expect(both.drawsAlert)
-        #expect(!both.drawsHUD)
+        #expect(both.drawsHUD)
+        #expect(both != alert)
+        #expect(both != hud)
 
         let none = MenuBarBadgePresentation(showsAlert: false, showsHUDBadge: false)
         #expect(!none.needsOverlay)
