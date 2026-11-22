@@ -277,8 +277,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             forName: NSApplication.willTerminateNotification,
             object: nil,
             queue: .main
-        ) { _ in
+        ) { [weak self] _ in
             MainActor.assumeIsolated {
+                self?.store.statisticsRecorder.flushForTermination()
                 AppLaunchStateTracker.shared.markCleanExit()
                 AppLogStore.shared.flush()
                 // 退出前释放快捷功能的电源断言与键盘拦截。

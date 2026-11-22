@@ -265,6 +265,203 @@ enum StatisticsOverviewModel {
         }
     }
 
+    /// 所选统计范围内的记录覆盖度摘要（用于顶栏时钟悬浮卡片）。
+    struct CoverageSummary: Equatable {
+        let recordedSeconds: Double
+        let windowElapsedSeconds: Double
+        /// 数据完整度（0...1），无有效统计窗口时为 0。
+        let completeness: Double
+    }
+
+    static func coverageSummary(
+        for range: StatisticsOverviewRange,
+        row: StatisticsRow?,
+        now: Date,
+        calendar: Calendar = .current
+    ) -> CoverageSummary {
+        let windowStart = range.startOfDayWindow(from: now, calendar: calendar)
+        let elapsed = max(0, now.timeIntervalSince(windowStart))
+        let recorded = max(0, row?.coverS ?? 0)
+        let completeness = elapsed > 0 ? min(1, recorded / elapsed) : 0
+        return CoverageSummary(
+            recordedSeconds: recorded,
+            windowElapsedSeconds: elapsed,
+            completeness: completeness
+        )
+    }
+
+    /// 面向设置页并排环图的单维度事实分布：按原生系统档位统计各档时长与占比。
+    struct DimensionStatus: Equatable {
+        enum State: Equatable {
+            case noData
+            case insufficient
+            case normal
+            case hasPressure
+        }
+
+        struct Slice: Equatable, Identifiable {
+            /// 原生档位：内存 0=正常/1=警告/2=严重；热压力 0=正常(含轻微)/2=严重/3=临界。
+            let level: Int
+            let seconds: Double
+            let share: Double
+            var id: Int { level }
+        }
+
+        let kind: Event.Kind
+        let state: State
+        let validSeconds: Double
+        let pressureSeconds: Double
+        /// 完整三档分布（总和约等于 1，当存在有效观测时）。
+        let slices: [Slice]
+        /// 非零异常档位，按时长降序（等长按更严重优先）。
+        let abnormalSlices: [Slice]
+        let eventState: Event.State?
+
+        var isOngoing: Bool { eventState == .ongoing }
+        var isInterrupted: Bool { eventState == .interrupted }
+    }
+
+    static func dimensionStatus(
+        for kind: Event.Kind,
+        row: StatisticsRow,
+        events: [Event]
+    ) -> DimensionStatus {
+        let matchingEvents = events.filter { $0.kind == kind }
+        let eventFallbackSeconds = matchingEvents.reduce(0) { $0 + $1.pressureSeconds }
+
+        let validSeconds: Double
+        let pressureSeconds: Double
+        let rawSlices: [(level: Int, seconds: Double)]
+
+        switch kind {
+        case .memory:
+            let warnS = max(0, row.memWarnS ?? 0)
+            let critS = max(0, row.memCritS ?? 0)
+            let rawNormalS = max(0, row.memNormalS ?? 0)
+            validSeconds = max(row.validMemS ?? 0, rawNormalS + warnS + critS)
+            let normalS = validSeconds > 0 ? max(rawNormalS, validSeconds - warnS - critS) : 0
+            pressureSeconds = (warnS + critS) > 0 ? (warnS + critS) : eventFallbackSeconds
+            rawSlices = [(0, normalS), (1, warnS), (2, critS)]
+        case .thermal:
+            let seriousS = max(0, row.thSeriousS ?? 0)
+            let critS = max(0, row.thCritS ?? 0)
+            let rawNormalS = max(0, (row.thNominalS ?? 0) + (row.thFairS ?? 0))
+            validSeconds = max(row.validThermalS ?? 0, rawNormalS + seriousS + critS)
+            let normalS = validSeconds > 0 ? max(rawNormalS, validSeconds - seriousS - critS) : 0
+            pressureSeconds = (seriousS + critS) > 0 ? (seriousS + critS) : eventFallbackSeconds
+            rawSlices = [(0, normalS), (2, seriousS), (3, critS)]
+        }
+
+        let slices = rawSlices.map { item in
+            DimensionStatus.Slice(
+                level: item.level,
+                seconds: item.seconds,
+                share: validSeconds > 0 ? min(1, max(0, item.seconds / validSeconds)) : 0
+            )
+        }
+
+        let state: DimensionStatus.State
+        if pressureSeconds > 0 {
+            state = .hasPressure
+        } else if validSeconds <= 0 {
+            state = .noData
+        } else if !hasSufficientObservation(row) {
+            state = .insufficient
+        } else {
+            state = .normal
+        }
+
+        let eventState: Event.State? = pressureSeconds > 0
+            ? (matchingEvents.min { statePriority($0.state) < statePriority($1.state) }?.state ?? .recovered)
+            : nil
+
+        let abnormalSlices = slices
+            .filter { $0.level > 0 && $0.seconds > 0 }
+            .sorted { lhs, rhs in
+                if lhs.seconds != rhs.seconds { return lhs.seconds > rhs.seconds }
+                return lhs.level > rhs.level
+            }
+
+        return DimensionStatus(
+            kind: kind,
+            state: state,
+            validSeconds: validSeconds,
+            pressureSeconds: pressureSeconds,
+            slices: slices,
+            abnormalSlices: abnormalSlices,
+            eventState: eventState
+        )
+    }
+
+    /// CPU / GPU 算力工作负载汇总：基于现有 `valid_*_s` 与 `*_high_s` 计算常规与高负载占比，供 2×3 宫格及悬浮明细复用。
+    struct WorkloadSummary: Equatable {
+        enum Kind: Equatable {
+            case cpu
+            case gpu
+
+            /// 与 StatisticsHealthScore 共用同一高负载阈值口径（CPU 85%、GPU 90%）。
+            var highThresholdPercent: Int {
+                switch self {
+                case .cpu: Int(StatisticsHealthScore.cpuHighThreshold)
+                case .gpu: Int(StatisticsHealthScore.gpuHighThreshold)
+                }
+            }
+        }
+
+        let kind: Kind
+        let averagePercent: Double?
+        let peakPercent: Double?
+        let validSeconds: Double
+        let highSeconds: Double
+        let normalSeconds: Double
+        /// 高负载占比（0...1），无有效观测时为 nil。
+        let highShare: Double?
+        /// 常规负载占比（0...1），无有效观测时为 nil。
+        let normalShare: Double?
+
+        var hasHighLoad: Bool { highSeconds > 0 }
+        var hasBreakdown: Bool { validSeconds > 0 || peakPercent != nil }
+    }
+
+    static func workloadSummary(
+        for kind: WorkloadSummary.Kind,
+        row: StatisticsRow
+    ) -> WorkloadSummary {
+        let average: Double?
+        let peak: Double?
+        let rawValid: Double
+        let rawHigh: Double
+
+        switch kind {
+        case .cpu:
+            average = row.cpuAvg
+            peak = row.cpuMax
+            rawValid = max(0, row.validCpuS ?? 0)
+            rawHigh = max(0, row.cpuHighS ?? 0)
+        case .gpu:
+            average = row.gpuAvg
+            peak = row.gpuMax
+            rawValid = max(0, row.validGpuS ?? 0)
+            rawHigh = max(0, row.gpuHighS ?? 0)
+        }
+
+        let valid = max(rawValid, rawHigh)
+        let normal = max(0, valid - rawHigh)
+        let highShare: Double? = valid > 0 ? min(1, max(0, rawHigh / valid)) : nil
+        let normalShare: Double? = valid > 0 ? min(1, max(0, normal / valid)) : nil
+
+        return WorkloadSummary(
+            kind: kind,
+            averagePercent: average,
+            peakPercent: peak,
+            validSeconds: valid,
+            highSeconds: rawHigh,
+            normalSeconds: normal,
+            highShare: highShare,
+            normalShare: normalShare
+        )
+    }
+
     /// 记录是否足以判断范围结论:与评分门控同一口径(交集 ≥30 分钟且 ≥90% 覆盖)。
     static func hasSufficientObservation(_ row: StatisticsRow) -> Bool {
         let intersection = row.validMemThermalS ?? 0

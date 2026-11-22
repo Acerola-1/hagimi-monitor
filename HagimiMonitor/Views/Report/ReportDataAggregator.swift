@@ -898,7 +898,8 @@ nonisolated enum ReportDataAggregator: Sendable {
             mergedByID[restored.id] = restored
         }
         for alert in mergedByID.values {
-            alertGroups[alert.appKey, default: []].append(alert)
+            let canonicalKey = aliasMap[alert.appKey] ?? alert.appKey
+            alertGroups[canonicalKey, default: []].append(alert)
         }
 
         // 仅保留与本期有交集的事件并按区间裁剪

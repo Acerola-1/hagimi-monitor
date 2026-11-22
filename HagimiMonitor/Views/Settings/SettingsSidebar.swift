@@ -14,6 +14,8 @@ enum SettingsRoute: Hashable {
     #endif
     /// 数据统计:今日概览与网页报表入口。
     case statistics
+    /// 异常警报:通知总开关、分项警报开关与忽略的应用白名单。
+    case alerts
     /// 存储管理:本地数据占用可视化与选择性清理。
     case storage
     case about
@@ -30,7 +32,7 @@ struct SettingsSidebar: View {
 
     private var listSelection: Binding<SettingsRoute> {
         Binding(
-            get: { selection == .storage ? .statistics : selection },
+            get: { (selection == .storage || selection == .alerts) ? .statistics : selection },
             set: { selection = $0 }
         )
     }

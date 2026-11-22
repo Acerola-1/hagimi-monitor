@@ -20,13 +20,20 @@ struct ProcessAlertCenterDurationTests {
         [(name: name, pid: 100, bytes: bytes)]
     }
 
+    private var highCPU: Double {
+        (StatisticsMetricDefinition.attentionThreshold(
+            for: .cpu,
+            logicalCoreCount: StatisticsMetricDefinition.logicalCoreCount()
+        )?.value ?? StatisticsMetricDefinition.cpuAttentionFloor) + 10
+    }
+
     private let t0 = Date(timeIntervalSince1970: 1_700_000_000)
     private func at(_ seconds: TimeInterval) -> Date { t0.addingTimeInterval(seconds) }
 
     @Test func twoSamplesOneMinuteApartDoNotBecomeTwoMinutes() {
         let center = center()
-        center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(0))
-        center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(60))
+        center.ingest(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], at: at(0))
+        center.ingest(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], at: at(60))
 
         // 未达到 120 秒持续资格：不进入展示列表，也不虚报两分钟。
         #expect(center.activeAlerts.isEmpty)
@@ -36,7 +43,7 @@ struct ProcessAlertCenterDurationTests {
     @Test func confirmedEventExposesRealSecondsNotSampleCount() {
         let center = center()
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
         let episode = try? #require(center.activeAlerts.first)
         #expect(episode?.continuousHighSeconds == 120)
@@ -47,7 +54,7 @@ struct ProcessAlertCenterDurationTests {
     @Test func reliableLowUsageConfirmsRecoveryWithEvidence() {
         let center = center()
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
         #expect(center.activeAlerts.count == 1)
 
@@ -63,7 +70,7 @@ struct ProcessAlertCenterDurationTests {
     @Test func missingAppInProvidedBatchDoesNotCountAsRecovery() {
         let center = center()
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
         // 本拍采集了 CPU，但 Heavy 不在前列：这是未观测，不是已恢复。
         center.ingest(cpu: cpu("Other", 10), memory: [], gpu: [], network: [], at: at(180))
@@ -80,7 +87,7 @@ struct ProcessAlertCenterDurationTests {
     @Test func suspendInterruptsOngoingEvent() {
         let center = center()
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
         center.interruptAll(reason: .suspended, at: at(130))
         #expect(center.activeAlerts.isEmpty)
@@ -91,7 +98,7 @@ struct ProcessAlertCenterDurationTests {
     @Test func networkBatchDoesNotImplyCpuRecovery() {
         let center = center()
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
         // 本拍只有网络结果，CPU 批次未提供 → 不能宣告 CPU 事件恢复。
         center.ingest(
@@ -108,7 +115,7 @@ struct ProcessAlertCenterDurationTests {
         let physical = StatisticsMetricDefinition.physicalMemoryBytes() ?? 0
         let heavyMemory = max(StatisticsMetricDefinition.memoryAttentionFloor, physical * 0.2) + StatisticsMetricDefinition.gibibyte
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu("Heavy", 70), memory: memory("Heavy", heavyMemory), gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu("Heavy", highCPU), memory: memory("Heavy", heavyMemory), gpu: [], network: [], at: at(offset))
         }
         let metrics = Set(center.activeAlerts.map(\.metric))
         #expect(metrics.contains(.cpu))

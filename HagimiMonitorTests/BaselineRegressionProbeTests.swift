@@ -17,10 +17,17 @@ struct BaselineRegressionProbeTests {
         [(name: "AuditCPU", pid: 0, usage: usage)]
     }
 
+    private var highCPU: Double {
+        (StatisticsMetricDefinition.attentionThreshold(
+            for: .cpu,
+            logicalCoreCount: StatisticsMetricDefinition.logicalCoreCount()
+        )?.value ?? StatisticsMetricDefinition.cpuAttentionFloor) + 10
+    }
+
     @Test func twoSamplesSixtySecondsApartAreNotReportedAsTwoMinutes() {
         let center = ProcessAlertCenter()
-        center.ingest(cpu: cpu(70), memory: [], gpu: [], network: [], at: at(0))
-        center.ingest(cpu: cpu(70), memory: [], gpu: [], network: [], at: at(60))
+        center.ingest(cpu: cpu(highCPU), memory: [], gpu: [], network: [], at: at(0))
+        center.ingest(cpu: cpu(highCPU), memory: [], gpu: [], network: [], at: at(60))
         // 旧实现报 2 分钟；现在两次瞬时观测只证明 60 秒，未达 120 秒资格，
         // 因此不进入展示列表，也不虚报时长。
         #expect(center.activeAlerts.isEmpty)
@@ -29,10 +36,10 @@ struct BaselineRegressionProbeTests {
     @Test func fiftyNineMinuteGapDoesNotExtendTheOldEvent() {
         let center = ProcessAlertCenter()
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu(70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu(highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
         // 59 分钟后回来：旧事件以中断结束，新样本建立新基线，缺口不被补入。
-        center.ingest(cpu: cpu(70), memory: [], gpu: [], network: [], at: at(3600))
+        center.ingest(cpu: cpu(highCPU), memory: [], gpu: [], network: [], at: at(3600))
         let finished = center.recentAlerts.first
         #expect(finished?.endReason == .observationGap)
         #expect((finished?.continuousHighSeconds ?? 0) < 200)

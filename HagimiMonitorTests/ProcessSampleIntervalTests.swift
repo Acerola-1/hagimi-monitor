@@ -85,12 +85,19 @@ struct ProcessBatchGateTests {
         [TopCPUProcess(pid: 300, name: name, cpuUsage: usage, icon: nil, translated: false)]
     }
 
+    private var highCPU: Double {
+        (StatisticsMetricDefinition.attentionThreshold(
+            for: .cpu,
+            logicalCoreCount: StatisticsMetricDefinition.logicalCoreCount()
+        )?.value ?? StatisticsMetricDefinition.cpuAttentionFloor) + 10
+    }
+
     @Test func duplicateBatchAtSameTimestampCountsOnce() {
         let (recorder, alerts) = makeRecorder()
         // 同一次采样被投递两次：第二次必须被丢弃，否则时长会翻倍。
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            recorder.recordProcesses(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], disk: [], at: at(offset))
-            recorder.recordProcesses(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], disk: [], at: at(offset))
+            recorder.recordProcesses(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], disk: [], at: at(offset))
+            recorder.recordProcesses(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], disk: [], at: at(offset))
         }
         let episode = try? #require(alerts.activeAlerts.first)
         #expect(episode?.continuousHighSeconds == 120)
@@ -101,23 +108,81 @@ struct ProcessBatchGateTests {
     @Test func callbacksAfterSuspendAreDropped() {
         let (recorder, alerts) = makeRecorder()
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            recorder.recordProcesses(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], disk: [], at: at(offset))
+            recorder.recordProcesses(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], disk: [], at: at(offset))
         }
         recorder.suspend()
         // 关闭记录后在途回调到达：不得继续累计。
-        recorder.recordProcesses(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], disk: [], at: at(180))
+        recorder.recordProcesses(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], disk: [], at: at(180))
         let episode = try? #require(alerts.activeAlerts.first)
         #expect(episode?.continuousHighSeconds == 120)
     }
 
     @Test func outOfOrderBatchIsIgnored() {
         let (recorder, alerts) = makeRecorder()
-        recorder.recordProcesses(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], disk: [], at: at(120))
-        recorder.recordProcesses(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], disk: [], at: at(60))
-        recorder.recordProcesses(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], disk: [], at: at(180))
+        recorder.recordProcesses(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], disk: [], at: at(120))
+        recorder.recordProcesses(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], disk: [], at: at(60))
+        recorder.recordProcesses(cpu: cpu("Heavy", highCPU), memory: [], gpu: [], network: [], disk: [], at: at(180))
         let episode = try? #require(alerts.activeAlerts.first)
         // 60 秒那拍被丢弃，只有 120 与 180 两拍计入 60 秒，未达资格。
         #expect(episode == nil)
         recorder.suspend()
+    }
+
+    @Test func interleavedFastAndNetworkPipelinesKeepIndependentCursorsAndMetrics() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let alerts = ProcessAlertCenter()
+        let recorder = StatisticsRecorder(
+            databaseURL: root.appendingPathComponent("statistics.sqlite3"),
+            processStoreDirectory: root.appendingPathComponent("processes"),
+            processAlertCenter: alerts
+        )
+        defer { recorder.suspend() }
+
+        let networkSample = [TopNetworkProcess(pid: 301, name: "Downloader", download: 1_000_000, upload: 0, icon: nil)]
+        for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
+            recorder.recordProcesses(
+                cpu: cpu("Heavy", highCPU),
+                memory: [],
+                gpu: [],
+                network: [],
+                disk: [],
+                at: at(offset),
+                providedMetrics: [.cpu, .memory, .gpu]
+            )
+            // 仅隔 200ms 到达的网络采样不得消费掉 CPU/快样本的时间间隔，也不得打断/推进 CPU 事件。
+            recorder.recordProcesses(
+                cpu: [],
+                memory: [],
+                gpu: [],
+                network: networkSample,
+                disk: [],
+                at: at(offset + 0.2),
+                providedMetrics: [.network]
+            )
+        }
+
+        // 再来一拍纯网络批次：CPU 的 lastSeenAt 不得被虚推，也不会误判恢复或中断。
+        recorder.recordProcesses(
+            cpu: [],
+            memory: [],
+            gpu: [],
+            network: networkSample,
+            disk: [],
+            at: at(150),
+            providedMetrics: [.network]
+        )
+
+        let episode = try #require(alerts.activeAlerts.first)
+        #expect(episode.metric == .cpu)
+        #expect(episode.continuousHighSeconds == 120)
+        #expect(episode.lastSeenAt == at(120))
+
+        recorder.processStore?.flushSynchronously()
+        let day = StatisticsProcessStore.dayKey(at(0), calendar: .current)
+        let topNet = recorder.processStore?.topApps(fromDay: day, toDay: day, category: .network) ?? []
+        let downloaderBytes = topNet.first(where: { $0.name == "Downloader" })?.value ?? 0
+        // 共 4 次纯网络采样包含 3 个间隔（60s + 60s + 29.8s ≈ 149.8 MB），而不是每次都被 200ms 前的快样本打断（~0.2 MB）。
+        #expect(downloaderBytes > 100_000_000)
     }
 }

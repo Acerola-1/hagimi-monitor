@@ -83,10 +83,38 @@ struct AppAlertNotificationPolicyTests {
         #expect(decision == .update(tier: 2))
     }
 
+    @Test func cooldownBlocksNewNotificationButAllowsSameEpisodeEscalation() {
+        let pressure = SystemPressureSnapshot(memoryLevel: 2, thermalLevel: 0, hasValidObservation: true)
+        let newDecision = AppAlertNotificationPolicy.decide(
+            notificationsEnabled: true,
+            isConfirmed: true,
+            systemPressure: pressure,
+            tier: 1,
+            alreadyNotifiedTier: nil,
+            inCooldown: true
+        )
+        #expect(newDecision == .skip(reason: .inCooldown))
+
+        let escalationDecision = AppAlertNotificationPolicy.decide(
+            notificationsEnabled: true,
+            isConfirmed: true,
+            systemPressure: pressure,
+            tier: 2,
+            alreadyNotifiedTier: 1,
+            inCooldown: true
+        )
+        #expect(escalationDecision == .update(tier: 2))
+    }
+
     @Test func tierUsesRelativeExceedanceAboveThreshold() {
-        // CPU 门槛 60%：刚好达标为 1 档，超过两倍为 2 档。
-        #expect(AppAlertNotificationPolicy.tier(metric: .cpu, rawValue: 60) == 1)
-        #expect(AppAlertNotificationPolicy.tier(metric: .cpu, rawValue: 130) == 2)
+        // CPU 门槛随逻辑核数自适应：刚好达标为 1 档，超过两倍为 2 档。
+        let cpuThreshold = StatisticsMetricDefinition.attentionThreshold(
+            for: .cpu,
+            logicalCoreCount: StatisticsMetricDefinition.logicalCoreCount()
+        )?.value ?? StatisticsMetricDefinition.cpuAttentionFloor
+        #expect(AppAlertNotificationPolicy.tier(metric: .cpu, rawValue: cpuThreshold) == 1)
+        #expect(AppAlertNotificationPolicy.tier(metric: .cpu, rawValue: cpuThreshold * 2 - 1) == 1)
+        #expect(AppAlertNotificationPolicy.tier(metric: .cpu, rawValue: cpuThreshold * 2) == 2)
         // 网络门槛约 20 MiB/s。
         #expect(AppAlertNotificationPolicy.tier(metric: .network, rawValue: 20 * StatisticsMetricDefinition.mebibyte) == 1)
         #expect(AppAlertNotificationPolicy.tier(metric: .network, rawValue: 50 * StatisticsMetricDefinition.mebibyte) == 2)
@@ -103,8 +131,22 @@ struct AppAlertNotificationPolicyTests {
 /// 集成面：告警中心在无同期压力时不发送通知，但界面记录仍然更新。
 @MainActor
 struct ProcessAlertNotificationGateTests {
+    actor RecordingSender: AppAlertNotificationSending {
+        private(set) var sentIdentifiers: [String] = []
+        func send(identifier: String, title: String, body: String) async throws {
+            sentIdentifiers.append(identifier)
+        }
+    }
+
     private let t0 = Date(timeIntervalSince1970: 1_700_000_000)
     private func at(_ seconds: TimeInterval) -> Date { t0.addingTimeInterval(seconds) }
+
+    private var cpuThreshold: Double {
+        StatisticsMetricDefinition.attentionThreshold(
+            for: .cpu,
+            logicalCoreCount: StatisticsMetricDefinition.logicalCoreCount()
+        )?.value ?? StatisticsMetricDefinition.cpuAttentionFloor
+    }
 
     private func cpu(_ name: String, _ usage: Double) -> [(name: String, pid: pid_t, usage: Double)] {
         [(name: name, pid: 200, usage: usage)]
@@ -114,7 +156,7 @@ struct ProcessAlertNotificationGateTests {
         let center = ProcessAlertCenter()
         center.updateSystemPressure(SystemPressureSnapshot(memoryLevel: 0, thermalLevel: 0, hasValidObservation: true))
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu("Heavy", 70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu("Heavy", cpuThreshold + 10), memory: [], gpu: [], network: [], at: at(offset))
         }
         // 通知被跳过，但事件照常进入展示列表。
         let episode = try? #require(center.activeAlerts.first)
@@ -122,10 +164,96 @@ struct ProcessAlertNotificationGateTests {
         #expect(episode?.continuousHighSeconds == 120)
     }
 
+    @Test func cpuBelowAdaptiveThresholdDoesNotTriggerEpisode() {
+        let center = ProcessAlertCenter()
+        for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
+            center.ingest(cpu: cpu("Heavy", max(0, cpuThreshold - 1)), memory: [], gpu: [], network: [], at: at(offset))
+        }
+        #expect(center.activeAlerts.isEmpty)
+        #expect(center.recentAlerts.isEmpty)
+    }
+
+    @Test func fairThermalDoesNotCountAsElevatedSystemPressure() {
+        let fairOnly = SystemPressureSnapshot(memoryLevel: 0, thermalLevel: 1, hasValidObservation: true)
+        #expect(fairOnly.hasElevatedPressure == false)
+
+        let seriousThermal = SystemPressureSnapshot(memoryLevel: 0, thermalLevel: 2, hasValidObservation: true)
+        #expect(seriousThermal.hasElevatedPressure == true)
+    }
+
     @Test func pressureSnapshotSeverityReflectsWorstChannel() {
         let snapshot = SystemPressureSnapshot(memoryLevel: 1, thermalLevel: 3, hasValidObservation: true)
         #expect(snapshot.severity == 3)
         #expect(snapshot.hasElevatedPressure)
         #expect(SystemPressureSnapshot.unknown.hasElevatedPressure == false)
+    }
+
+    @Test func ignoredAppsFilterActiveListAndSuppressNotifications() async throws {
+        let sender = RecordingSender()
+        let dispatcher = AppAlertNotificationDispatcher(sender: sender, maxAttempts: 1)
+        let center = ProcessAlertCenter(notificationDispatcher: dispatcher)
+        center.updateNotificationPreferences(enabled: true, highLoadAppEnabled: true)
+        center.updateSystemPressure(SystemPressureSnapshot(memoryLevel: 2, thermalLevel: 0, hasValidObservation: true))
+        center.updateIgnoredApps([
+            AlertIgnoredApp(id: "Heavy", displayName: "Heavy", bundleIdentifier: nil)
+        ])
+
+        for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
+            center.ingest(cpu: cpu("Heavy", cpuThreshold + 20), memory: [], gpu: [], network: [], at: at(offset))
+        }
+        try await Task.sleep(for: .milliseconds(30))
+
+        // 白名单应用不出现在活跃列表、不发通知，但移除忽略后可见 underlying 观测仍在。
+        #expect(center.activeAlerts.isEmpty)
+        #expect(center.activeAppGroups.isEmpty)
+        #expect(await sender.sentIdentifiers.isEmpty)
+
+        center.updateIgnoredApps([])
+        #expect(center.activeAppGroups.count == 1)
+        #expect(center.activeAppGroups.first?.episodes.first?.notified == false)
+    }
+
+    @Test func disabledHighLoadCategorySuppressesNotificationWhileKeepingObservation() async throws {
+        let sender = RecordingSender()
+        let dispatcher = AppAlertNotificationDispatcher(sender: sender, maxAttempts: 1)
+        let center = ProcessAlertCenter(notificationDispatcher: dispatcher)
+        center.updateNotificationPreferences(enabled: true, highLoadAppEnabled: false)
+        center.updateSystemPressure(SystemPressureSnapshot(memoryLevel: 2, thermalLevel: 0, hasValidObservation: true))
+
+        for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
+            center.ingest(cpu: cpu("Heavy", cpuThreshold + 20), memory: [], gpu: [], network: [], at: at(offset))
+        }
+        try await Task.sleep(for: .milliseconds(30))
+
+        #expect(center.activeAlerts.count == 1)
+        #expect(center.activeAlerts.first?.notified == false)
+        #expect(await sender.sentIdentifiers.isEmpty)
+    }
+
+    @Test func crossEpisodeNotificationCooldownSuppressesImmediateRepeatAlert() async throws {
+        let sender = RecordingSender()
+        let dispatcher = AppAlertNotificationDispatcher(sender: sender, maxAttempts: 1)
+        let center = ProcessAlertCenter(notificationDispatcher: dispatcher)
+        center.updateNotificationPreferences(enabled: true, highLoadAppEnabled: true)
+        center.updateSystemPressure(SystemPressureSnapshot(memoryLevel: 2, thermalLevel: 0, hasValidObservation: true))
+
+        for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
+            center.ingest(cpu: cpu("Heavy", cpuThreshold + 20), memory: [], gpu: [], network: [], at: at(offset))
+        }
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while await sender.sentIdentifiers.isEmpty && ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(await sender.sentIdentifiers.count == 1)
+        #expect(center.activeAlerts.first?.notified == true)
+
+        // 恢复后 5 分钟内再次持续高负载：处于 15 分钟冷却期内，不重复发送通知。
+        center.ingest(cpu: cpu("Heavy", 5), memory: [], gpu: [], network: [], at: at(180))
+        for offset in [300.0, 360.0, 420.0] {
+            center.ingest(cpu: cpu("Heavy", cpuThreshold + 20), memory: [], gpu: [], network: [], at: at(offset))
+        }
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(center.activeAlerts.first?.notified == false)
+        #expect(await sender.sentIdentifiers.count == 1)
     }
 }

@@ -125,6 +125,60 @@ enum AppLanguagePreference: String, CaseIterable, Identifiable {
     }
 }
 
+/// 高负载警报白名单中的忽略应用条目。
+nonisolated struct AlertIgnoredApp: Codable, Identifiable, Equatable, Hashable, Sendable {
+    let id: String
+    let displayName: String
+    let bundleIdentifier: String?
+
+    func matches(appKey: String, name: String) -> Bool {
+        if appKey == id { return true }
+        if let bundleIdentifier, !bundleIdentifier.isEmpty {
+            if appKey == "bundle:\(bundleIdentifier)" || appKey == bundleIdentifier {
+                return true
+            }
+        }
+        return !displayName.isEmpty && displayName.caseInsensitiveCompare(name) == .orderedSame
+    }
+
+    static func from(bundleURL: URL) -> AlertIgnoredApp? {
+        guard let bundle = Bundle(url: bundleURL) else { return nil }
+        let bundleID = bundle.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawName = (bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String)
+            ?? (bundle.object(forInfoDictionaryKey: "CFBundleName") as? String)
+            ?? bundleURL.deletingPathExtension().lastPathComponent
+        let displayName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !displayName.isEmpty else { return nil }
+        let normalizedBundleID = (bundleID?.isEmpty == false) ? bundleID : nil
+        let id = normalizedBundleID.map { "bundle:\($0)" } ?? "name:\(displayName)"
+        return AlertIgnoredApp(id: id, displayName: displayName, bundleIdentifier: normalizedBundleID)
+    }
+
+    static func from(runningApp: NSRunningApplication) -> AlertIgnoredApp? {
+        let bundleID = runningApp.bundleIdentifier?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let rawName = runningApp.localizedName
+            ?? runningApp.bundleURL?.deletingPathExtension().lastPathComponent
+            ?? ""
+        let displayName = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !displayName.isEmpty else { return nil }
+        let normalizedBundleID = (bundleID?.isEmpty == false) ? bundleID : nil
+        let id = normalizedBundleID.map { "bundle:\($0)" } ?? "name:\(displayName)"
+        return AlertIgnoredApp(id: id, displayName: displayName, bundleIdentifier: normalizedBundleID)
+    }
+
+    static func from(appKey: String, displayName: String) -> AlertIgnoredApp {
+        let trimmedName = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = trimmedName.isEmpty ? appKey : trimmedName
+        if appKey.hasPrefix("bundle:") {
+            let bundleID = String(appKey.dropFirst("bundle:".count))
+            if !bundleID.isEmpty {
+                return AlertIgnoredApp(id: appKey, displayName: name, bundleIdentifier: bundleID)
+            }
+        }
+        return AlertIgnoredApp(id: appKey.isEmpty ? "name:\(name)" : appKey, displayName: name, bundleIdentifier: nil)
+    }
+}
+
 final class MonitorSettings: ObservableObject {
     @Published var launchAtLogin: Bool = false {
         didSet { persistLaunchAtLogin(launchAtLogin) }
@@ -167,6 +221,12 @@ final class MonitorSettings: ObservableObject {
     /// 一律不出现。它与 `statisticsEnabled` 是两个维度——那个管「记录与统计」,
     /// 这个只管「要不要打扰我」,所以不做成同一个开关。
     @Published var alertNotificationsEnabled: Bool = false
+    /// 分项警报开关（在通知总开关开启后生效）。
+    @Published var alertMemoryPressureEnabled: Bool = true
+    @Published var alertThermalPressureEnabled: Bool = true
+    @Published var alertHighLoadAppEnabled: Bool = true
+    /// 高负载警报忽略名单：不发通知且不弹出设置页高负载横幅，但正常计入统计历史。
+    @Published private(set) var alertIgnoredApps: [AlertIgnoredApp] = []
     /// 小工具(快捷功能)入口是否在面板中显示。
     @Published var quickToolsVisible: Bool = true
     /// 键盘锁定自动解锁时长(分钟),写入前约束在
@@ -306,6 +366,13 @@ final class MonitorSettings: ObservableObject {
         networkShowSystemProcesses = defaults.object(forKey: Keys.networkShowSystemProcesses) as? Bool ?? true
         statisticsEnabled = defaults.object(forKey: Keys.statisticsEnabled) as? Bool ?? true
         alertNotificationsEnabled = defaults.object(forKey: Keys.alertNotificationsEnabled) as? Bool ?? false
+        alertMemoryPressureEnabled = defaults.object(forKey: Keys.alertMemoryPressureEnabled) as? Bool ?? true
+        alertThermalPressureEnabled = defaults.object(forKey: Keys.alertThermalPressureEnabled) as? Bool ?? true
+        alertHighLoadAppEnabled = defaults.object(forKey: Keys.alertHighLoadAppEnabled) as? Bool ?? true
+        if let rawIgnoredApps = defaults.data(forKey: Keys.alertIgnoredApps),
+           let decodedIgnoredApps = try? JSONDecoder().decode([AlertIgnoredApp].self, from: rawIgnoredApps) {
+            alertIgnoredApps = decodedIgnoredApps
+        }
         quickToolsVisible = defaults.object(forKey: Keys.quickToolsVisible) as? Bool ?? true
         let storedAutoUnlock = defaults.object(forKey: Keys.keyboardLockAutoUnlockMinutes) as? Int
         keyboardLockAutoUnlockMinutes = KeyboardLockController.autoUnlockMinuteOptions.contains(storedAutoUnlock ?? -1)
@@ -605,6 +672,30 @@ final class MonitorSettings: ObservableObject {
 
     func isVisible(_ kind: MonitorKind) -> Bool {
         visibleKinds.contains(kind)
+    }
+
+    var enabledAlertCategoryCount: Int {
+        [alertMemoryPressureEnabled, alertThermalPressureEnabled, alertHighLoadAppEnabled].filter { $0 }.count
+    }
+
+    func addIgnoredAlertApp(_ app: AlertIgnoredApp) {
+        let duplicate = alertIgnoredApps.contains { existing in
+            if existing.id == app.id { return true }
+            if let bundleID = app.bundleIdentifier, !bundleID.isEmpty, existing.bundleIdentifier == bundleID {
+                return true
+            }
+            return existing.matches(appKey: app.id, name: app.displayName)
+        }
+        guard !duplicate else { return }
+        alertIgnoredApps.append(app)
+    }
+
+    func removeIgnoredAlertApp(id: String) {
+        alertIgnoredApps.removeAll { $0.id == id }
+    }
+
+    func isAlertAppIgnored(appKey: String, name: String) -> Bool {
+        alertIgnoredApps.contains { $0.matches(appKey: appKey, name: name) }
     }
 
     func setVisible(_ isVisible: Bool, for kind: MonitorKind) {
@@ -1225,6 +1316,35 @@ final class MonitorSettings: ObservableObject {
             }
             .store(in: &cancellables)
 
+        $alertMemoryPressureEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.alertMemoryPressureEnabled)
+            }
+            .store(in: &cancellables)
+
+        $alertThermalPressureEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.alertThermalPressureEnabled)
+            }
+            .store(in: &cancellables)
+
+        $alertHighLoadAppEnabled
+            .dropFirst()
+            .sink { [weak self] newValue in
+                self?.persist(newValue, forKey: Keys.alertHighLoadAppEnabled)
+            }
+            .store(in: &cancellables)
+
+        $alertIgnoredApps
+            .dropFirst()
+            .sink { [weak self] newValue in
+                guard let self, let data = try? JSONEncoder().encode(newValue) else { return }
+                self.persist(data, forKey: Keys.alertIgnoredApps)
+            }
+            .store(in: &cancellables)
+
         $quickToolsVisible
             .dropFirst()
             .sink { [weak self] newValue in
@@ -1436,6 +1556,10 @@ private enum Keys {
     static let networkShowSystemProcesses = "settings.network.showSystemProcesses"
     static let statisticsEnabled = "settings.statistics.enabled"
     static let alertNotificationsEnabled = "settings.alerts.notificationsEnabled"
+    static let alertMemoryPressureEnabled = "settings.alerts.memoryPressureEnabled"
+    static let alertThermalPressureEnabled = "settings.alerts.thermalPressureEnabled"
+    static let alertHighLoadAppEnabled = "settings.alerts.highLoadAppEnabled"
+    static let alertIgnoredApps = "settings.alerts.ignoredApps"
     static let quickToolsVisible = "settings.quickTools.visible"
     /// 键盘锁定自动解锁时长的持久化键:与 QuickToolsStore 的启动恢复路径共用
     /// 同一常量,避免两处字面量漂移。

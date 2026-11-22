@@ -283,4 +283,73 @@ struct SettingsTests {
         SettingsWindowPresenter.close()
         #expect(SettingsWindowPresenter.settingsWindow == nil)
     }
+
+    @Test func alertCategoriesDefaultToEnabledAndPersist() {
+        let suiteName = "alertCategoriesDefaultToEnabledAndPersist"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let settings = MonitorSettings(defaults: defaults)
+        #expect(settings.alertMemoryPressureEnabled)
+        #expect(settings.alertThermalPressureEnabled)
+        #expect(settings.alertHighLoadAppEnabled)
+        #expect(settings.enabledAlertCategoryCount == 3)
+        #expect(settings.alertIgnoredApps.isEmpty)
+
+        settings.alertMemoryPressureEnabled = false
+        settings.alertThermalPressureEnabled = false
+        #expect(settings.enabledAlertCategoryCount == 1)
+
+        settings.alertHighLoadAppEnabled = false
+        #expect(settings.enabledAlertCategoryCount == 0)
+
+        let restored = MonitorSettings(defaults: defaults)
+        #expect(!restored.alertMemoryPressureEnabled)
+        #expect(!restored.alertThermalPressureEnabled)
+        #expect(!restored.alertHighLoadAppEnabled)
+        #expect(restored.enabledAlertCategoryCount == 0)
+    }
+
+    @Test func alertIgnoredAppsDeduplicatePersistRemoveAndMatch() {
+        let suiteName = "alertIgnoredAppsDeduplicatePersistRemoveAndMatch"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let settings = MonitorSettings(defaults: defaults)
+        let safari = AlertIgnoredApp(
+            id: "bundle:com.apple.Safari",
+            displayName: "Safari",
+            bundleIdentifier: "com.apple.Safari"
+        )
+        let duplicateSameBundle = AlertIgnoredApp(
+            id: "com.apple.Safari",
+            displayName: "Safari Browser",
+            bundleIdentifier: "com.apple.Safari"
+        )
+        let duplicateSameName = AlertIgnoredApp(
+            id: "name:safari",
+            displayName: "safari",
+            bundleIdentifier: nil
+        )
+        let windowServer = AlertIgnoredApp.from(appKey: "WindowServer", displayName: "WindowServer")
+
+        settings.addIgnoredAlertApp(safari)
+        settings.addIgnoredAlertApp(duplicateSameBundle)
+        settings.addIgnoredAlertApp(duplicateSameName)
+        settings.addIgnoredAlertApp(windowServer)
+
+        #expect(settings.alertIgnoredApps.count == 2)
+        #expect(settings.isAlertAppIgnored(appKey: "bundle:com.apple.Safari", name: "WebContent"))
+        #expect(settings.isAlertAppIgnored(appKey: "com.apple.Safari", name: "Safari"))
+        #expect(settings.isAlertAppIgnored(appKey: "otherKey", name: "safari"))
+        #expect(settings.isAlertAppIgnored(appKey: "WindowServer", name: "WindowServer"))
+        #expect(!settings.isAlertAppIgnored(appKey: "bundle:com.apple.Xcode", name: "Xcode"))
+
+        let restored = MonitorSettings(defaults: defaults)
+        #expect(restored.alertIgnoredApps == settings.alertIgnoredApps)
+
+        restored.removeIgnoredAlertApp(id: safari.id)
+        #expect(restored.alertIgnoredApps == [windowServer])
+        #expect(!restored.isAlertAppIgnored(appKey: "bundle:com.apple.Safari", name: "Safari"))
+    }
 }

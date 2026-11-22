@@ -32,7 +32,6 @@ struct SettingsRootView: View {
                 .ignoresSafeArea(edges: .top)
         }
         .background(SettingsWindowTracker(selection: $selection))
-        .onAppear { store.statisticsRecorder.loadOverview() }
     }
 
     @ViewBuilder
@@ -59,8 +58,16 @@ struct SettingsRootView: View {
 
 
         case .statistics:
-            StatisticsSettingsView(recorder: store.statisticsRecorder, settings: settings) {
-                selection = .storage
+            StatisticsSettingsView(
+                recorder: store.statisticsRecorder,
+                settings: settings,
+                openAlerts: { selection = .alerts },
+                openStorage: { selection = .storage }
+            )
+
+        case .alerts:
+            AlertSettingsView(settings: settings) {
+                selection = .statistics
             }
 
         case .storage:

@@ -42,6 +42,8 @@ struct PressureAlertStateMachine {
         var readEntries: Set<Entry> = []
         var severeSince: Date?
         var notifiedLevel: Int?
+        /// 最近一次成功发出通知的时刻（跨 episode 保留，用于 15 分钟防打扰冷却）。
+        var lastNotifiedAt: Date?
     }
 
     private var memory = KindState()
@@ -72,21 +74,27 @@ struct PressureAlertStateMachine {
         lastFrameAt = nil
     }
 
+    /// 清空单个维度的状态(分项开关关闭时静音该维度，含冷却时间)。
+    mutating func reset(_ kind: Kind) {
+        self[kind] = KindState()
+    }
+
     mutating func ingest(
         memoryLevel: Int?,
         thermalLevel: Int?,
         at date: Date,
         sustain: TimeInterval,
-        breakThreshold: TimeInterval
+        breakThreshold: TimeInterval,
+        cooldown: TimeInterval = 0
     ) -> [Alert] {
         let resumesAfterBreak = lastFrameAt.map { date.timeIntervalSince($0) > breakThreshold } ?? false
         lastFrameAt = date
 
         var alerts: [Alert] = []
         advance(.memory, level: memoryLevel, at: date, sustain: sustain,
-                resumesAfterBreak: resumesAfterBreak, alerts: &alerts)
+                resumesAfterBreak: resumesAfterBreak, cooldown: cooldown, alerts: &alerts)
         advance(.thermal, level: thermalLevel, at: date, sustain: sustain,
-                resumesAfterBreak: resumesAfterBreak, alerts: &alerts)
+                resumesAfterBreak: resumesAfterBreak, cooldown: cooldown, alerts: &alerts)
         return alerts
     }
 
@@ -112,15 +120,19 @@ struct PressureAlertStateMachine {
         at date: Date,
         sustain: TimeInterval,
         resumesAfterBreak: Bool,
+        cooldown: TimeInterval,
         alerts: inout [Alert]
     ) {
         guard let level else { return }
         var state = self[kind]
         defer { self[kind] = state }
 
-        // 跌回红点门槛以下即 episode 结束:未读一并清除(告警过去后红点自动消失)。
+        // 跌回红点门槛以下即 episode 结束:未读一并清除(告警过去后红点自动消失)，
+        // 但保留上次通知时间供跨事件冷却判断。
         guard Self.isAlertLevel(kind, level: level) else {
+            let previousNotifiedAt = state.lastNotifiedAt
             state = KindState()
+            state.lastNotifiedAt = previousNotifiedAt
             return
         }
 
@@ -147,7 +159,14 @@ struct PressureAlertStateMachine {
         }
         guard let since = state.severeSince, date.timeIntervalSince(since) >= sustain else { return }
         guard state.notifiedLevel != level else { return }
+        // 跨事件冷却：同一 episode 内的严重度升级不受冷却限制，新 episode 在冷却期内不发通知。
+        if state.notifiedLevel == nil, cooldown > 0,
+           let lastNotified = state.lastNotifiedAt,
+           date.timeIntervalSince(lastNotified) < cooldown {
+            return
+        }
         state.notifiedLevel = level
+        state.lastNotifiedAt = date
         alerts.append(Alert(kind: kind, level: level))
     }
 

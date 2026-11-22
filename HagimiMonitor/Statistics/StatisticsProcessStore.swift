@@ -162,6 +162,8 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         var memPeak = 0.0
     }
     private var currentDay: Int64 = 0
+    /// 当日已成功打卡的日键缓存，避免每分钟重复查写 SwiftData。
+    private var lastRecordedUsageDay: Int64 = 0
     private var accumulators: [String: AppAccumulator] = [:]
     /// 名称 → 图标 PNG 内存缓存,避免重复转码。设置上限防止无界常驻。
     private let iconCache: NSCache<NSString, NSData> = {
@@ -323,8 +325,17 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
             // 每帧清空身份缓存，避免进程退出后 PID 复用导致身份串联。
             self.identityCache.removeAll(keepingCapacity: true)
             if day != self.currentDay {
+                let hadPreviousDay = self.currentDay != 0
                 self.flushLocked()
                 self.currentDay = day
+                if hadPreviousDay,
+                   let cutoff = calendar.date(
+                       byAdding: .day,
+                       value: -Self.eventRetentionDays,
+                       to: calendar.startOfDay(for: date)
+                   ) {
+                    self.pruneExpiredEventsLocked(before: cutoff)
+                }
             }
             // 档位边界与采样下限统一使用 StatisticsMetricDefinition 定义的标准阈值。
             let cpuBands = StatisticsMetricDefinition.cpuBandBoundaries
@@ -423,7 +434,7 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
     func recordUsageDay(at date: Date, calendar: Calendar) {
         let day = Self.dayKey(date, calendar: calendar)
         queue.async { [weak self] in
-            guard let self else { return }
+            guard let self, day != self.lastRecordedUsageDay else { return }
             self.ensureContextLocked()
             guard let context = self.context else { return }
             let descriptor = FetchDescriptor<StatsUsageMeta>()
@@ -443,9 +454,14 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
             if (try? context.fetch(activeDescriptor))?.first == nil {
                 context.insert(StatsActiveDay(day: day))
             }
-            try? context.save()
-            if !context.hasChanges {
-                self.resetContextLocked()
+            do {
+                try context.save()
+                self.lastRecordedUsageDay = day
+                if !context.hasChanges {
+                    self.resetContextLocked()
+                }
+            } catch {
+                AppLogger.settings.error("Statistics usage day save failed: \(String(describing: error), privacy: .public)")
             }
         }
     }
@@ -972,10 +988,34 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
         }
     }
 
+    /// 清理超过保留期的确认事件。
+    func pruneExpiredEvents(before cutoff: Date) {
+        queue.async { [weak self] in
+            self?.pruneExpiredEventsLocked(before: cutoff)
+        }
+    }
+
+    private func pruneExpiredEventsLocked(before cutoff: Date) {
+        ensureContextLocked()
+        guard let context else { return }
+        let expired = (try? context.fetch(FetchDescriptor<StatsAppEvent>(
+            predicate: #Predicate { $0.endedAt < cutoff }
+        ))) ?? []
+        guard !expired.isEmpty else { return }
+        expired.forEach { context.delete($0) }
+        do {
+            try context.save()
+            resetContextLocked()
+        } catch {
+            AppLogger.settings.error("Statistics prune expired events failed: \(String(describing: error), privacy: .public)")
+        }
+    }
+
     /// 删除早于指定日键的应用聚合/打卡/电池快照行。
     /// 应用身份(名称+图标)保留:占用极小,且是历史行名称与图标的来源。
     func deleteBefore(day: Int64) {
         queue.sync {
+            lastRecordedUsageDay = 0
             guard let context else { return }
             let appRows = (try? context.fetch(FetchDescriptor<StatsAppDaily>(predicate: #Predicate { $0.day < day }))) ?? []
             appRows.forEach { context.delete($0) }
@@ -1005,6 +1045,7 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
     /// 应用身份(名称+图标)保留,与 deleteBefore 同口径。
     func deleteRange(fromDay: Int64, toDay: Int64) {
         queue.sync {
+            lastRecordedUsageDay = 0
             flushLocked()
             // flushLocked 会重置 context，此处重新获取以保证在同一上下文中执行后续删除与保存。
             guard let context else { return }
@@ -1072,6 +1113,7 @@ nonisolated final class StatisticsProcessStore: @unchecked Sendable {
             iconCache.removeAllObjects()
             iconSkipSet.removeAll()
             currentDay = 0
+            lastRecordedUsageDay = 0
             // 先断开容器再删文件;即便旧连接延迟关闭,POSIX unlink 下它写的
             // 是已摘除的 inode,不影响同路径上的新库。
             context = nil

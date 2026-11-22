@@ -13,9 +13,16 @@ struct TargetedRecheckTests {
         [(name: name, pid: 500, usage: usage)]
     }
 
+    private var highCPU: Double {
+        (StatisticsMetricDefinition.attentionThreshold(
+            for: .cpu,
+            logicalCoreCount: StatisticsMetricDefinition.logicalCoreCount()
+        )?.value ?? StatisticsMetricDefinition.cpuAttentionFloor) + 10
+    }
+
     private func confirm(_ center: ProcessAlertCenter, _ name: String) {
         for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
-            center.ingest(cpu: cpu(name, 70), memory: [], gpu: [], network: [], at: at(offset))
+            center.ingest(cpu: cpu(name, highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
     }
 
@@ -25,7 +32,7 @@ struct TargetedRecheckTests {
         for index in 0..<(ProcessAlertCenter.targetedRecheckLimit + 4) {
             for offset in stride(from: 0.0, through: 120.0, by: 60.0) {
                 center.ingest(
-                    cpu: cpu("App\(index)", 70), memory: [], gpu: [], network: [],
+                    cpu: cpu("App\(index)", highCPU), memory: [], gpu: [], network: [],
                     at: at(offset + Double(index) * 0.1)
                 )
             }

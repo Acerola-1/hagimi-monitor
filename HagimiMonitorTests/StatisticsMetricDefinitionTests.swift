@@ -91,6 +91,40 @@ struct StatisticsMetricDefinitionTests {
         #expect((capacity ?? 0) > 0)
     }
 
+    // MARK: - 核数自适应 CPU 门槛
+
+    @Test func cpuThresholdScalesWithLogicalCoreCountAndHasOneCoreFloor() {
+        let fourCores = StatisticsMetricDefinition.attentionThreshold(for: .cpu, logicalCoreCount: 4)
+        #expect(fourCores?.value == 100) // 4 × 15% = 60%，低于单核 100% 下限
+        #expect(fourCores?.considersPhysicalCapacity == true)
+
+        let eightCores = StatisticsMetricDefinition.attentionThreshold(for: .cpu, logicalCoreCount: 8)
+        #expect(eightCores?.value == 120)
+        #expect(eightCores?.considersPhysicalCapacity == true)
+
+        let twelveCores = StatisticsMetricDefinition.attentionThreshold(for: .cpu, logicalCoreCount: 12)
+        #expect(twelveCores?.value == 180)
+        #expect(twelveCores?.considersPhysicalCapacity == true)
+
+        let sixteenCores = StatisticsMetricDefinition.attentionThreshold(for: .cpu, logicalCoreCount: 16)
+        #expect(sixteenCores?.value == 240)
+        #expect(sixteenCores?.considersPhysicalCapacity == true)
+
+        let unknown = StatisticsMetricDefinition.attentionThreshold(for: .cpu, logicalCoreCount: nil)
+        #expect(unknown?.value == 100)
+        #expect(unknown?.considersPhysicalCapacity == false)
+
+        let zero = StatisticsMetricDefinition.attentionThreshold(for: .cpu, logicalCoreCount: 0)
+        #expect(zero?.value == 100)
+        #expect(zero?.considersPhysicalCapacity == false)
+    }
+
+    @Test func logicalCoreCountIsReadableOnThisMachine() {
+        let cores = StatisticsMetricDefinition.logicalCoreCount()
+        #expect(cores != nil)
+        #expect((cores ?? 0) > 0)
+    }
+
     // MARK: - 百分比基准
 
     @Test func cpuPercentBasisIsSingleCoreAndNotClamped() {

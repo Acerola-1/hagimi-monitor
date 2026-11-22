@@ -365,6 +365,54 @@ struct StatisticsRecorderTests {
         #expect(minutes[0].cpuAvg == 40)
         #expect((minutes[0].netDown ?? 0) == 1_000_000)
     }
+
+    @Test func weekRangeIncludesCurrentHourMinutesWithoutFalseInterrupted() async {
+        let dbURL = tempDatabaseURL("week-current-hour")
+        let calendar = Calendar.current
+        let now = Date()
+        let currentHourStart = calendar.dateInterval(of: .hour, for: now)?.start ?? now
+        let previousHourStart = currentHourStart.addingTimeInterval(-3600)
+
+        // 先在上一已完成小时写入一条正常观测，确保小时表存在前序桶。
+        do {
+            let db = StatisticsDatabase(url: dbURL, calendar: calendar)
+            let validMemIndex = StatisticsRow.columns.firstIndex { $0.name == "valid_mem_s" }!
+            let memNormalIndex = StatisticsRow.columns.firstIndex { $0.name == "mem_normal_s" }!
+            let coverIndex = StatisticsRow.columns.firstIndex { $0.name == "cover_s" }!
+            var values = [Double?](repeating: nil, count: StatisticsRow.columns.count)
+            values[validMemIndex] = 60
+            values[memNormalIndex] = 60
+            values[coverIndex] = 60
+            db.insertMinuteRow(StatisticsRow(t: Int64(previousHourStart.timeIntervalSince1970), n: 60, values: values))
+            db.maintain(now: now)
+        }
+
+        let recorder = StatisticsRecorder(databaseURL: dbURL, calendar: calendar)
+        defer { recorder.suspend() }
+
+        let memory = makeModule(.memory, value: 80, metrics: [
+            MonitorMetric(name: "pressure-level", value: "1", numericValue: 1),
+        ])
+        // 内存期望采样周期 3s、maxGap = 9s；间隔取 <= 4s 确保落入有效观测口径。
+        let delta = max(0.05, min(4.0, now.timeIntervalSince(currentHourStart) * 0.5))
+        recordFrame(recorder, [memory], at: currentHourStart)
+        recordFrame(recorder, [memory], at: currentHourStart.addingTimeInterval(delta))
+        recorder.sealCompletedMinuteForTesting()
+
+        let series: [StatisticsRow] = await withCheckedContinuation { continuation in
+            recorder.rangeSeries(.week) { rows in
+                continuation.resume(returning: rows)
+            }
+        }
+
+        let currentHourTimestamp = Int64(currentHourStart.timeIntervalSince1970)
+        #expect(series.contains { $0.t == currentHourTimestamp })
+        let bucketSeconds = StatisticsOverviewModel.bucketSeconds(for: .week, series: series)
+        #expect(bucketSeconds == 3600)
+        let events = StatisticsOverviewModel.events(from: series, bucketSeconds: bucketSeconds, now: Date())
+        let memoryEvent = events.first { $0.kind == .memory }
+        #expect(memoryEvent?.state == .ongoing)
+    }
 }
 
 // MARK: - 秒数口径(运行状态评估模型 v0.1)
@@ -816,6 +864,189 @@ struct StatisticsOverviewModelTests {
         let fallback = StatisticsOverviewModel.pressureKinds(row: nil, events: [memoryEvent])
         #expect(fallback.first?.seconds == 240)
         #expect(fallback.first?.state == .ongoing)
+    }
+
+    @Test func dimensionStatusComputesExactSlicesAndShares() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+
+        // 无有效观测 -> .noData
+        let noValidRow = row(["cover_s": 600], t: 0)
+        #expect(StatisticsOverviewModel.dimensionStatus(for: .memory, row: noValidRow, events: []).state == .noData)
+        #expect(StatisticsOverviewModel.dimensionStatus(for: .thermal, row: noValidRow, events: []).state == .noData)
+
+        // 有效观测不足 30 分钟且无异常 -> .insufficient
+        let shortRow = row([
+            "cover_s": 600,
+            "valid_mem_s": 600,
+            "valid_thermal_s": 600,
+            "valid_mem_thermal_s": 600,
+        ], t: 0)
+        #expect(StatisticsOverviewModel.dimensionStatus(for: .memory, row: shortRow, events: []).state == .insufficient)
+        #expect(StatisticsOverviewModel.dimensionStatus(for: .thermal, row: shortRow, events: []).state == .insufficient)
+
+        // 充分观测且热状态仅含 fair(1) -> 两项均为 .normal，且 fair(1) 并入热压力 level 0 占比 1.0
+        let normalRow = row([
+            "cover_s": 7200,
+            "valid_mem_s": 7200,
+            "valid_thermal_s": 7200,
+            "valid_mem_thermal_s": 7200,
+            "mem_normal_s": 7200,
+            "th_nominal_s": 3600,
+            "th_fair_s": 3600,
+        ], t: 0)
+        let normalMem = StatisticsOverviewModel.dimensionStatus(for: .memory, row: normalRow, events: [])
+        let normalThermal = StatisticsOverviewModel.dimensionStatus(for: .thermal, row: normalRow, events: [])
+        #expect(normalMem.state == .normal)
+        #expect(normalThermal.state == .normal)
+        #expect(normalThermal.abnormalSlices.isEmpty)
+        #expect(normalThermal.slices.first { $0.level == 0 }?.share == 1.0)
+
+        // 6 小时内出现 1 分钟内存警告（已恢复） -> .hasPressure，异常片段为 [(1, 60, ~0.00278)]，总和为 1.0
+        let briefRow = row([
+            "cover_s": 21600,
+            "valid_mem_s": 21600,
+            "valid_mem_thermal_s": 21600,
+            "mem_warn_s": 60,
+        ], t: 0)
+        let briefEvent = StatisticsOverviewModel.Event(
+            kind: .memory,
+            start: now.addingTimeInterval(-3600),
+            end: now.addingTimeInterval(-3540),
+            pressureSeconds: 60,
+            state: .recovered
+        )
+        let briefStatus = StatisticsOverviewModel.dimensionStatus(for: .memory, row: briefRow, events: [briefEvent])
+        #expect(briefStatus.state == .hasPressure)
+        #expect(briefStatus.isOngoing == false)
+        #expect(briefStatus.abnormalSlices.count == 1)
+        #expect(briefStatus.abnormalSlices[0].level == 1)
+        #expect(briefStatus.abnormalSlices[0].seconds == 60)
+        #expect(abs(briefStatus.abnormalSlices[0].share - (60.0 / 21600.0)) < 0.0001)
+        #expect(abs(briefStatus.slices.reduce(0) { $0 + $1.share } - 1.0) < 0.0001)
+
+        // 245 小时内 182 小时 17 分钟警告 + 3 分钟严重 -> 按时长降序排异常片段，占比总和为 1.0
+        let validMemS: Double = 245 * 3600
+        let warnS: Double = 182 * 3600 + 17 * 60
+        let critS: Double = 3 * 60
+        let longWarnRow = row([
+            "cover_s": validMemS,
+            "valid_mem_s": validMemS,
+            "valid_mem_thermal_s": validMemS,
+            "mem_warn_s": warnS,
+            "mem_crit_s": critS,
+        ], t: 0)
+        let recoveredLongEvent = StatisticsOverviewModel.Event(
+            kind: .memory,
+            start: now.addingTimeInterval(-7200),
+            end: now.addingTimeInterval(-3600),
+            pressureSeconds: warnS + critS,
+            state: .recovered
+        )
+        let elevatedMem = StatisticsOverviewModel.dimensionStatus(for: .memory, row: longWarnRow, events: [recoveredLongEvent])
+        #expect(elevatedMem.state == .hasPressure)
+        #expect(elevatedMem.abnormalSlices.map(\.level) == [1, 2])
+        #expect(abs(elevatedMem.abnormalSlices[0].share - (warnS / validMemS)) < 0.0001)
+        #expect(abs(elevatedMem.abnormalSlices[1].share - (critS / validMemS)) < 0.0001)
+        #expect(abs(elevatedMem.slices.reduce(0) { $0 + $1.share } - 1.0) < 0.0001)
+
+        // 进行中 / 中断标记正确透传
+        let ongoingEvent = StatisticsOverviewModel.Event(
+            kind: .thermal,
+            start: now.addingTimeInterval(-180),
+            end: now,
+            pressureSeconds: 180,
+            state: .ongoing
+        )
+        let ongoingThermalRow = row([
+            "cover_s": 3600,
+            "valid_thermal_s": 3600,
+            "th_serious_s": 180,
+        ], t: 0)
+        let ongoingStatus = StatisticsOverviewModel.dimensionStatus(for: .thermal, row: ongoingThermalRow, events: [ongoingEvent])
+        #expect(ongoingStatus.isOngoing)
+        #expect(!ongoingStatus.isInterrupted)
+
+        let interruptedEvent = StatisticsOverviewModel.Event(
+            kind: .memory,
+            start: now.addingTimeInterval(-1200),
+            end: now.addingTimeInterval(-900),
+            pressureSeconds: 120,
+            state: .interrupted
+        )
+        let interruptedRow = row([
+            "cover_s": 3600,
+            "valid_mem_s": 3600,
+            "mem_crit_s": 120,
+        ], t: 0)
+        let interruptedStatus = StatisticsOverviewModel.dimensionStatus(for: .memory, row: interruptedRow, events: [interruptedEvent])
+        #expect(interruptedStatus.isInterrupted)
+        #expect(!interruptedStatus.isOngoing)
+    }
+
+    @Test func coverageSummaryComputesCompletenessAcrossRanges() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 8 * 3600)!
+        let now = calendar.date(from: DateComponents(year: 2026, month: 11, day: 22, hour: 8, minute: 0))!
+
+        // 今日 00:00 → 08:00 窗口已过 8 小时，记录 6 小时 -> 75%
+        let todayRow = row(["cover_s": 6 * 3600], t: 0)
+        let todaySummary = StatisticsOverviewModel.coverageSummary(for: .today, row: todayRow, now: now, calendar: calendar)
+        #expect(todaySummary.windowElapsedSeconds == 8 * 3600)
+        #expect(todaySummary.recordedSeconds == 6 * 3600)
+        #expect(abs(todaySummary.completeness - 0.75) < 0.0001)
+
+        // 近 7 日：6 天 + 8 小时 = 152 小时，若记录超出窗口仍上限截断至 1.0
+        let hugeRow = row(["cover_s": 200 * 3600], t: 0)
+        let weekSummary = StatisticsOverviewModel.coverageSummary(for: .week, row: hugeRow, now: now, calendar: calendar)
+        #expect(weekSummary.windowElapsedSeconds == 152 * 3600)
+        #expect(weekSummary.completeness == 1.0)
+
+        // 近 30 日无行 -> 0% 完整度
+        let monthSummary = StatisticsOverviewModel.coverageSummary(for: .month, row: nil, now: now, calendar: calendar)
+        #expect(monthSummary.windowElapsedSeconds == (29 * 24 + 8) * 3600)
+        #expect(monthSummary.recordedSeconds == 0)
+        #expect(monthSummary.completeness == 0)
+    }
+
+    @Test func workloadSummaryComputesSharesAndHandlesLegacyAndEmptyRows() {
+        let cpuRow = row(["valid_cpu_s": 3600, "cpu_high_s": 360, "cpu_avg": 28, "cpu_max": 94], t: 0)
+        let cpuSummary = StatisticsOverviewModel.workloadSummary(for: .cpu, row: cpuRow)
+        #expect(cpuSummary.validSeconds == 3600)
+        #expect(cpuSummary.highSeconds == 360)
+        #expect(cpuSummary.normalSeconds == 3240)
+        #expect(abs((cpuSummary.highShare ?? -1) - 0.1) < 0.0001)
+        #expect(abs((cpuSummary.normalShare ?? -1) - 0.9) < 0.0001)
+        #expect(cpuSummary.hasHighLoad)
+        #expect(cpuSummary.hasBreakdown)
+        #expect(cpuSummary.kind.highThresholdPercent == 85)
+
+        let gpuRow = row(["valid_gpu_s": 3600, "gpu_high_s": 0, "gpu_avg": 12, "gpu_max": 55], t: 0)
+        let gpuSummary = StatisticsOverviewModel.workloadSummary(for: .gpu, row: gpuRow)
+        #expect(gpuSummary.highShare == 0)
+        #expect(gpuSummary.normalShare == 1)
+        #expect(!gpuSummary.hasHighLoad)
+        #expect(gpuSummary.hasBreakdown)
+        #expect(gpuSummary.kind.highThresholdPercent == 90)
+
+        let legacyRow = row(["cpu_avg": 22, "cpu_max": 78], t: 0)
+        let legacySummary = StatisticsOverviewModel.workloadSummary(for: .cpu, row: legacyRow)
+        #expect(legacySummary.validSeconds == 0)
+        #expect(legacySummary.highShare == nil)
+        #expect(legacySummary.normalShare == nil)
+        #expect(!legacySummary.hasHighLoad)
+        #expect(legacySummary.hasBreakdown)
+
+        let emptyGpuSummary = StatisticsOverviewModel.workloadSummary(for: .gpu, row: row([:], t: 0))
+        #expect(!emptyGpuSummary.hasBreakdown)
+        #expect(emptyGpuSummary.highShare == nil)
+        #expect(emptyGpuSummary.averagePercent == nil)
+
+        let overClampedRow = row(["valid_cpu_s": 100, "cpu_high_s": 120], t: 0)
+        let overClamped = StatisticsOverviewModel.workloadSummary(for: .cpu, row: overClampedRow)
+        #expect(overClamped.validSeconds == 120)
+        #expect(overClamped.normalSeconds == 0)
+        #expect(overClamped.highShare == 1.0)
+        #expect(overClamped.normalShare == 0.0)
     }
 }
 
