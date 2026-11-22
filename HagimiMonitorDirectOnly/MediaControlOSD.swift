@@ -128,7 +128,7 @@ final class MediaControlOSD {
         let size: CGSize
         if #available(macOS 27.2, *) { size = CGSize(width: 307, height: 66) }
         else { size = CGSize(width: 304, height: 64) }
-        let panel = NSPanel(
+        let panel = MediaControlOSDPanel(
             contentRect: CGRect(origin: .zero, size: size),
             styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: true
         )
@@ -151,7 +151,11 @@ final class MediaControlOSD {
         host.frame = CGRect(origin: .zero, size: size)
         host.autoresizingMask = [.width, .height]
         if #available(macOS 26, *) {
-            panel.contentView = host
+            let glass = MediaControlGlassView(frame: host.frame)
+            glass.updateMaterial()
+            glass.cornerRadius = size.height / 2
+            glass.contentView = host
+            panel.contentView = glass
         } else {
             let backdrop = NSVisualEffectView(frame: host.frame)
             // 旧系统使用深色 HUD，内容继承同一外观。
@@ -240,6 +244,52 @@ final class MediaControlOSD {
     }
 }
 
+/// 浮层不抢占前台焦点，但维持激活外观，避免液态玻璃退化为非激活态的重模糊。
+private final class MediaControlOSDPanel: NSPanel {
+    @objc var hasKeyAppearance: Bool { true }
+    @objc var _hasActiveAppearance: Bool { true }
+    @objc var _hasActiveControls: Bool { true }
+}
+
+@available(macOS 26, *)
+private final class MediaControlGlassView: NSGlassEffectView {
+    private static let systemBannerVariant = 9
+    private static let variantSetter = NSSelectorFromString("set_variant:")
+
+    // 使用系统横幅液态玻璃预设，浅色背景保持足够压暗以保证白色图标与滑条可读，同时保留边缘折射；
+    // 若系统移除私有预设接口则回退为深色 tint 的 .clear，辅助功能高对比度或降低透明度时切为深色 .regular。
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        let center = NSWorkspace.shared.notificationCenter
+        center.removeObserver(self, name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
+        if window != nil {
+            center.addObserver(self, selector: #selector(updateMaterial),
+                               name: NSWorkspace.accessibilityDisplayOptionsDidChangeNotification, object: nil)
+            updateMaterial()
+        }
+    }
+
+    @objc func updateMaterial() {
+        let workspace = NSWorkspace.shared
+        let highLegibility = workspace.accessibilityDisplayShouldReduceTransparency
+            || workspace.accessibilityDisplayShouldIncreaseContrast
+        if highLegibility {
+            style = .regular
+            tintColor = nil
+            appearance = NSAppearance(named: .darkAqua)
+        } else {
+            appearance = nil
+            style = .clear
+            if responds(to: Self.variantSetter) {
+                tintColor = nil
+                setValue(Self.systemBannerVariant, forKey: "_variant")
+            } else {
+                tintColor = NSColor.black.withAlphaComponent(0.18)
+            }
+        }
+    }
+}
+
 private final class MediaControlOSDHost: NSHostingView<MediaControlOSDView> {
     var hover: ((Bool) -> Void)?
     private var pointerTrackingArea: NSTrackingArea?
@@ -288,16 +338,13 @@ private struct MediaControlOSDView: View {
     let edit: @MainActor @Sendable (Bool) -> Void
 
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-    @Environment(\.colorSchemeContrast) private var contrast
-    @Environment(\.displayScale) private var displayScale
     @State private var dragging = false
 
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: symbol)
                 .font(.system(size: 24, weight: .regular))
-                .foregroundStyle(.primary)
+                .foregroundStyle(.white)
                 .contentTransition(.symbolEffect(.replace))
                 .animation(reduceMotion ? nil : .smooth(duration: 0.18), value: symbol)
                 .frame(width: 28)
@@ -329,17 +376,8 @@ private struct MediaControlOSDView: View {
         .padding(.trailing, 30)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background {
-            if #available(macOS 26, *) {
-                let capsule = Capsule(style: .circular)
-                let enhancedLegibility = reduceTransparency || contrast == .increased
-                // 仅减轻玻璃底面，让背景细节保留下来。读数与滑条保持完整对比度。
-                capsule.fill(Color(nsColor: .windowBackgroundColor).opacity(enhancedLegibility ? 0 : 0.4))
-                    .glassEffect(.regular.interactive(), in: capsule)
-                    .opacity(enhancedLegibility ? 1 : 0.58)
-                    .clipShape(capsule)
-                    .overlay {
-                        capsule.strokeBorder(.separator, lineWidth: 1 / displayScale)
-                    }
+            if #unavailable(macOS 26) {
+                Capsule().fill(Color(white: 0.36).opacity(0.23))
             }
         }
     }
@@ -366,6 +404,7 @@ private struct OSDLevelTrack: View, Animatable {
     var fraction: Double
     let readout: OSDReadout?
     let expectsLuminance: Bool
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
     nonisolated var animatableData: Double {
@@ -377,12 +416,12 @@ private struct OSDLevelTrack: View, Animatable {
         GeometryReader { geometry in
             let progress = min(1, max(0, fraction))
             let endpoint = geometry.size.width * progress
-            let ink = Color(nsColor: .labelColor)
+            let bubbleColor = Color.white.opacity(reduceTransparency ? 1 : 0.84)
             let capsule = Capsule()
             ZStack {
-                capsule.fill(ink.opacity(contrast == .increased ? 0.42 : 0.24))
+                capsule.fill(Color.white.opacity(contrast == .increased ? 0.42 : 0.23))
                     .overlay(alignment: .leading) {
-                        Rectangle().fill(ink).frame(width: endpoint)
+                        Rectangle().fill(.white).frame(width: endpoint)
                     }
                     .clipShape(capsule)
                     .mask {
@@ -402,17 +441,17 @@ private struct OSDLevelTrack: View, Animatable {
                     }
                     .font(.system(size: 8.5, weight: .semibold).monospacedDigit())
                     .contentTransition(.identity)
-                    .foregroundStyle(Color(nsColor: .textBackgroundColor))
+                    .foregroundStyle(.black.opacity(contrast == .increased ? 0.9 : 0.70))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1.5)
-                    .background(ink, in: Capsule())
+                    .background(bubbleColor, in: Capsule())
                     Path { path in
                         path.move(to: .zero)
                         path.addLine(to: CGPoint(x: 6, y: 0))
                         path.addLine(to: CGPoint(x: 3, y: 3.5))
                         path.closeSubpath()
                     }
-                    .fill(ink)
+                    .fill(bubbleColor)
                     .frame(width: 6, height: 3.5)
                 }
                 .opacity(readout == nil ? 0 : 1)
