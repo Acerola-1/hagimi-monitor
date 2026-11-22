@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import HagimiMonitorDirect
@@ -90,5 +91,64 @@ struct TopProcessRowTests {
         if let own = arguments, let expected = CommandLine.arguments.last {
             #expect(own.contains(expected))
         }
+    }
+
+    @MainActor
+    @Test func processActionSafetyBlocksSelfSystemAndMismatchedPIDReuse() {
+        let selfPID = ProcessInfo.processInfo.processIdentifier
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 0, name: "kernel_task"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 1, name: "launchd"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 1234, name: "WindowServer"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: selfPID, name: "HagimiMonitorDirect"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 99999, name: "Safari") == false)
+
+        #if DIRECT_DISTRIBUTION
+        #expect(ProcessActionHelper.canTerminate(pid: selfPID, name: "HagimiMonitorDirect") == false)
+        #expect(ProcessActionHelper.canTerminate(pid: 1, name: "launchd") == false)
+        if let finder = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "com.apple.finder" }) {
+            #expect(ProcessActionHelper.matchesIdentity(app: finder, expectedName: "DefinitelyNotFinderApp") == false)
+            #expect(ProcessActionHelper.terminate(pid: finder.processIdentifier, expectedName: "DefinitelyNotFinderApp") == false)
+        }
+        #endif
+    }
+
+    @Test func processRankingFreezePreservesOrderRefreshesValuesAndUnfreezes() {
+        struct Item: Equatable {
+            let pid: pid_t
+            let name: String
+            var value: String
+        }
+        let initial = [
+            Item(pid: 101, name: "Safari", value: "42.0%"),
+            Item(pid: 202, name: "Xcode", value: "30.0%")
+        ]
+        let updatedLive = [
+            Item(pid: 303, name: "Finder", value: "60.0%"),
+            Item(pid: 202, name: "Xcode", value: "50.0%")
+        ]
+        let frozenResolved = ProcessRankingFreeze.resolve(
+            live: updatedLive,
+            frozen: initial,
+            id: \.pid
+        ) { existing, updated in
+            Item(pid: existing.pid, name: existing.name, value: updated.value)
+        }
+        #expect(frozenResolved == [
+            Item(pid: 101, name: "Safari", value: "42.0%"),
+            Item(pid: 202, name: "Xcode", value: "50.0%")
+        ])
+        let unfrozenResolved = ProcessRankingFreeze.resolve(
+            live: updatedLive,
+            frozen: nil,
+            id: \.pid
+        ) { existing, updated in
+            Item(pid: existing.pid, name: existing.name, value: updated.value)
+        }
+        #expect(unfrozenResolved == updatedLive)
+    }
+
+    @Test func metricCopyPayloadIncludesAttributeAndValue() {
+        #expect(MetricCopyFeedback.formattedPayload(label: "空闲", value: "72 %") == "空闲: 72 %")
+        #expect(MetricCopyFeedback.formattedPayload(label: "热压力", value: "75 °C · 正常") == "热压力: 75 °C · 正常")
     }
 }

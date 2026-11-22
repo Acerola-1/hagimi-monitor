@@ -13,17 +13,21 @@ nonisolated enum MetricGridMetrics: Sendable {
 }
 
 /// 指标格静态宽度基准:整行/半行登记、最坏值契约与测量字体。
-/// 布局决策是「语言 × 登记表」的纯函数,不随采样值与面板宽度重排;
-/// 半格预算按语言独立判定——zh 标签普遍两字,半行能容纳的指标比
-/// en 多,同一指标在两语下的布局归属可以不同(语言在一次运行内
-/// 不变,不构成跳动源)。登记依据是各语言 × 最坏值 × 最窄面板宽的
-/// 构建期审计(HagimiMonitorTests/MetricWidthAuditTests)。
+/// 布局决策是「语言 × 面板宽度断点 × 登记表」的纯函数,与实时采样值无关;
+/// 半格预算按语言与宽度档位独立判定——zh 标签普遍较短,半行能容纳的指标比
+/// en 多,同一指标在两语下的布局归属可以不同。登记依据是各语言 × 面板宽度档位
+/// × 常规最坏值的构建期审计(HagimiMonitorTests/MetricWidthAuditTests)。
 enum StaticMetricSizing {
-    /// 半格内容宽,按最窄支持面板宽 300 推导:
-    /// 300 − 两侧内边距 10×2 = 280,两列减 8 间距得 272,
-    /// 每列 136,再减格子左右内衬 8×2 = 120。按最窄档登记,
-    /// 300~460 全区间判定一致成立,面板调整不触发重排。
+    /// 保守半格内容宽（对应最窄支持面板宽 300pt，作兜底常量与最窄档预算）。
     static let halfCellContentWidth: CGFloat = 120
+
+    /// 随面板当前有效宽度断点计算半格内容预算（300pt 为 120pt，340pt 为 134pt，460pt 为 194pt）。
+    static func halfCellContentWidth(for panelWidth: CGFloat = CGFloat(MonitorConstants.panelIdealWidth)) -> CGFloat {
+        guard panelWidth > CGFloat(MonitorConstants.panelMinWidth) else { return halfCellContentWidth }
+        let horizontalInset = 12 + 20 + MetricGridMetrics.columnSpacing
+        let tileHorizontalPadding: CGFloat = 16
+        return max(halfCellContentWidth, floor((panelWidth - horizontalInset) / 2 - tileHorizontalPadding))
+    }
 
     /// 格内横向占用:标签与数值之间的 HStack 间距 + Spacer 最小长度。
     static let cellHorizontalSpacing: CGFloat =
@@ -49,14 +53,11 @@ enum StaticMetricSizing {
         "network.wifi-rssi", "network.gateway-latency"
     ]
 
-    /// 各语言整行登记:键 "kind.name"。时长/地址/容量类长值两语一致
-    /// 升整行;compressed 是 en 专属——en 标签加最坏值超半格预算,
-    /// zh 短标签半行放得下;pressure 在顶格 120pt 预算下两语均可收纳
-    /// 进半行,凑齐 2x2 对称方阵。
+    /// 最窄档（300pt）各语言整行登记:键 "kind.name"。
     static let fullRowMetricIDsByLanguage: [String: Set<String>] = [
         "zh-Hans": [
-            // 「888天88小时」级时长值约 86pt,标签再无压缩空间
             "cpu.uptime",
+            "cpu.thermal-pressure",
             // SSID 名称无界,整行 + 中部截断
             "network.wifi-ssid",
             // 15 字符 IPv4 地址即 117pt,半格放不下
@@ -81,6 +82,7 @@ enum StaticMetricSizing {
         ],
         "en": [
             "cpu.uptime",
+            "cpu.thermal-pressure",
             "network.wifi-ssid",
             "network.ipv4",
             "network.ipv6",
@@ -102,11 +104,38 @@ enum StaticMetricSizing {
         ]
     ]
 
-    /// 整行判定:结构性登记与当前语言登记表的纯查表,与采样值无关。
-    static func isFullRow(kind: MonitorKind, name: String, language: String = panelLanguage) -> Bool {
+    /// 标准宽度档（≥340pt）下按半格展示的指标（较 300pt 最窄档放宽）。
+    private static let relaxedAtIdealWidthByLanguage: [String: Set<String>] = [
+        "zh-Hans": ["cpu.uptime", "cpu.thermal-pressure"],
+        "en": ["cpu.uptime"]
+    ]
+
+    /// 宽面板档（≥460pt）下按半格展示的指标。
+    private static let relaxedAtMaxWidthByLanguage: [String: Set<String>] = [
+        "zh-Hans": ["cpu.uptime", "cpu.thermal-pressure"],
+        "en": ["cpu.uptime", "cpu.thermal-pressure", "memory.compressed"]
+    ]
+
+    /// 整行判定：按面板静态宽度断点与当前语言纯查表，与实时采样值解耦。
+    static func isFullRow(
+        kind: MonitorKind,
+        name: String,
+        language: String = panelLanguage,
+        panelWidth: CGFloat = CGFloat(MonitorConstants.panelIdealWidth)
+    ) -> Bool {
         let key = "\(kind.rawValue).\(name)"
-        return structuralFullRowMetricIDs.contains(key)
-            || fullRowMetricIDsByLanguage[language]?.contains(key) == true
+        if structuralFullRowMetricIDs.contains(key) {
+            return true
+        }
+        if panelWidth >= CGFloat(MonitorConstants.panelMaxWidth),
+           relaxedAtMaxWidthByLanguage[language]?.contains(key) == true {
+            return false
+        }
+        if panelWidth >= CGFloat(MonitorConstants.panelIdealWidth),
+           relaxedAtIdealWidthByLanguage[language]?.contains(key) == true {
+            return false
+        }
+        return fullRowMetricIDsByLanguage[language]?.contains(key) == true
     }
 }
 
@@ -130,8 +159,7 @@ extension StaticMetricSizing {
         case measured(WorstValue)
         /// 枚举值格(如内存压力/SMART 状态):最坏值取各语言最长枚举文案
         case enumMeasured(valueKeys: [String])
-        /// 网格外特殊形态:热压力合并行、core-split 的 P/E 瓦片取代、
-        /// 行头/pill/功率流,不做预算断言
+        /// 网格外特殊形态:core-split 的 P/E 视图取代、行头/pill/功率流,不做预算断言
         case specialForm
     }
 
@@ -151,9 +179,9 @@ extension StaticMetricSizing {
         AuditEntry(kind: .cpu, name: "system", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .cpu, name: "user", layout: .measured(WorstValue(number: "100%", unit: nil))),
         AuditEntry(kind: .cpu, name: "idle", layout: .measured(WorstValue(number: "100%", unit: nil))),
-        AuditEntry(kind: .cpu, name: "uptime", layout: .measured(WorstValue(number: "888天88小时", unit: nil))),
-        // 整数计数,按五位封顶
-        AuditEntry(kind: .cpu, name: "process-count", layout: .measured(WorstValue(number: "99999", unit: nil))),
+        AuditEntry(kind: .cpu, name: "uptime", layout: .measured(WorstValue(number: "9天23小时", unit: nil))),
+        // 整数计数,按四位日常上限登记
+        AuditEntry(kind: .cpu, name: "process-count", layout: .measured(WorstValue(number: "9999", unit: nil))),
         AuditEntry(kind: .cpu, name: "thermal-pressure", layout: .enumMeasured(valueKeys: [
             "thermal-pressure.normal", "thermal-pressure.fair", "thermal-pressure.serious", "thermal-pressure.critical"
         ])),

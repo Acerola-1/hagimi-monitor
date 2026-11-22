@@ -449,6 +449,8 @@ private struct PanelReorderItemModifier: ViewModifier {
     let title: String
     let span: Int
     let showsDragHint: Bool
+    let copyActionTitle: String?
+    let onCopyAction: (() -> Void)?
     @Environment(\.panelReorderController) private var controller
     @Environment(\.panelReorderSettings) private var settings
     @Environment(\.displayScale) private var displayScale
@@ -458,7 +460,7 @@ private struct PanelReorderItemModifier: ViewModifier {
     func body(content: Content) -> some View {
         if let controller, let settings {
             let item = interactive(content: content, controller: controller, settings: settings)
-            if showsDragHint && scope != .modules {
+            if showsDragHint && scope != .modules && copyActionTitle == nil {
                 item.help(String(localized: "panel.reorder.long-press-hint"))
             } else {
                 item
@@ -513,6 +515,10 @@ private struct PanelReorderItemModifier: ViewModifier {
                     }
             )
             .contextMenu {
+                if let copyActionTitle, let onCopyAction {
+                    Button(copyActionTitle, action: onCopyAction)
+                    Divider()
+                }
                 moveCommands(controller: controller, settings: settings)
                 if controller.availableDirections(id, scope: scope, settings: settings).isEmpty {
                     Button(String(localized: "panel.reorder.no-moves")) {}
@@ -576,8 +582,12 @@ private struct PanelReorderItemModifier: ViewModifier {
 
 extension View {
     func panelReorderItem(scope: PanelOrderScope, id: String, title: String, span: Int = 2,
-                          showsDragHint: Bool = true) -> some View {
+                          showsDragHint: Bool = true,
+                          copyActionTitle: String? = nil,
+                          onCopyAction: (() -> Void)? = nil) -> some View {
         modifier(PanelReorderItemModifier(scope: scope, id: id, title: title, span: span,
-                                          showsDragHint: showsDragHint))
+                                          showsDragHint: showsDragHint,
+                                          copyActionTitle: copyActionTitle,
+                                          onCopyAction: onCopyAction))
     }
 }

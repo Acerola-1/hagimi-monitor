@@ -155,6 +155,7 @@ struct DisplaySection: View {
 
     @EnvironmentObject private var expansion: PanelExpansionDriver
     @State private var isExpanded = false
+    @State private var isHeaderHovering = false
     #if DISPLAY_CONTROL
     @ObservedObject var controller: DisplayControlController
     var expandsControlsOnOpen = false
@@ -212,29 +213,34 @@ struct DisplaySection: View {
     private var infoContent: some View {
         PanelCardStack(measurementKey: "display") {
             HStack(spacing: 10) {
-                Image(systemName: "slider.horizontal.below.rectangle")
-                    .font(.callout.weight(.semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(theme.palette.displayTint)
-                    .frame(width: 18)
+                ModuleHeaderIcon(systemName: "slider.horizontal.below.rectangle",
+                                 tint: theme.palette.displayTint, theme: theme)
 
-                Text(String(localized: "kind.display") + ":")
+                Text(String(localized: "kind.display"))
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
+                    .monitorPanelModuleTitleSlot()
 
                 Text(summaryText)
                     .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
+                    .overlay(alignment: .trailing) {
+                        RowExpandChevronHint(isVisible: !displays.isEmpty && isHeaderHovering,
+                                             isExpanded: isExpanded, theme: theme)
+                            .offset(x: 14)
+                    }
 
                 Spacer(minLength: 8)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .panelMeasure("row:display")
             .contentShape(Rectangle())
+            .onHover { isHeaderHovering = $0 }
+            .help(displays.isEmpty ? String(localized: "panel.row.not-expandable-hint") : "")
             .onTapGesture {
                 toggleReadonlyExpansion()
             }
@@ -269,7 +275,8 @@ struct DisplaySection: View {
             NSLog("[panel-bench] display=%d", expanded ? 1 : 0)
         }
         .panelCardBrighten()
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius,
+                               borderColor: theme.cardBorderColor) {
             theme.palette.displayGlassFill
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didChangeScreenParametersNotification)) { _ in
@@ -331,19 +338,22 @@ struct DisplaySection: View {
 
         return PanelCardStack(measurementKey: "display") {
             HStack(spacing: 10) {
-                Image(systemName: "slider.horizontal.below.rectangle")
-                    .font(.callout.weight(.semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(tint)
-                    .frame(width: 18)
+                ModuleHeaderIcon(systemName: "slider.horizontal.below.rectangle",
+                                 tint: tint, theme: theme)
 
-                Text(String(localized: "kind.display") + ":")
+                Text(String(localized: "kind.display"))
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(palette.primaryText)
                     .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
+                    .monitorPanelModuleTitleSlot()
 
                 if showsDeviceReadings {
+                    Color.clear
+                        .frame(width: 1, height: 14)
+                        .overlay(alignment: .leading) {
+                            RowExpandChevronHint(isVisible: (!entries.isEmpty || !visibleDisplays.isEmpty) && isHeaderHovering,
+                                                 isExpanded: isExpanded, theme: theme)
+                        }
                     Spacer(minLength: 4)
                     DisplayRowHeaderPills(
                         readings: headerReadings,
@@ -355,16 +365,23 @@ struct DisplaySection: View {
                         .monitorPanelRoundedFont(weight: .semibold)
                         .foregroundStyle(palette.valueText)
                         .lineLimit(1)
+                        .overlay(alignment: .trailing) {
+                            RowExpandChevronHint(isVisible: (!entries.isEmpty || !visibleDisplays.isEmpty) && isHeaderHovering,
+                                                 isExpanded: isExpanded, theme: theme)
+                                .offset(x: 14)
+                        }
 
                     Spacer(minLength: 8)
                 }
             }
             .padding(.leading, 10)
             .padding(.trailing, showsDeviceReadings ? RowHeaderPillMetrics.trailingPadding : 10)
-            .padding(.vertical, showsDeviceReadings ? RowHeaderPillMetrics.verticalPadding : 8)
+            .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .panelMeasure("row:display")
             .contentShape(Rectangle())
+            .onHover { isHeaderHovering = $0 }
+            .help((!entries.isEmpty || !visibleDisplays.isEmpty) ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 toggleExpansion()
             }
@@ -501,7 +518,8 @@ struct DisplaySection: View {
             NSLog("[panel-bench] display=%d", expanded ? 1 : 0)
         }
         .panelCardBrighten()
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius,
+                               borderColor: theme.cardBorderColor) {
             palette.displayGlassFill
         }
     }

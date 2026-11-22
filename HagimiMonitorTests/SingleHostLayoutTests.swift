@@ -234,20 +234,45 @@ struct SingleHostLayoutTests {
     }
 
     @Test @MainActor func fixedColumnsMatchOriginalGridAtSupportedWidths() throws {
-        let cells = ForEach(0..<5) { index in
+        let evenCells = ForEach(0..<4) { index in
+            Color.red.opacity(Double(index + 1) / 4).frame(height: index.isMultiple(of: 2) ? 24 : 30)
+        }
+        let oddCells = ForEach(0..<5) { index in
             Color.red.opacity(Double(index + 1) / 5).frame(height: index.isMultiple(of: 2) ? 24 : 30)
         }
+        let expandedTailCells = ForEach(0..<5) { index in
+            Color.red.opacity(Double(index + 1) / 5)
+                .frame(height: index.isMultiple(of: 2) ? 24 : 30)
+                .panelMetricSpan(index == 4 ? 2 : 1)
+        }
+        let expectedOddHeight = 30 + MetricGridMetrics.gridRowGap + 30 + MetricGridMetrics.gridRowGap + 24
+
         for width: CGFloat in [240, 280, 400] {
-            let original = ImageRenderer(content:
+            let originalEven = ImageRenderer(content:
                 LazyVGrid(columns: [GridItem(.flexible(), spacing: MetricGridMetrics.columnSpacing), GridItem(.flexible())],
-                          spacing: MetricGridMetrics.gridRowGap) { cells }.frame(width: width))
-            let candidate = ImageRenderer(content:
-                PanelMetricColumnsLayout(measurementKey: "five") { cells }.frame(width: width))
-            let expected = try #require(original.cgImage)
-            let actual = try #require(candidate.cgImage)
-            #expect(actual.width == expected.width)
-            #expect(actual.height == expected.height)
-            #expect(actual.dataProvider?.data as Data? == expected.dataProvider?.data as Data?)
+                          spacing: MetricGridMetrics.gridRowGap) { evenCells }.frame(width: width))
+            let candidateEven = ImageRenderer(content:
+                PanelMetricColumnsLayout(measurementKey: "four") { evenCells }.frame(width: width))
+            let expectedEvenImage = try #require(originalEven.cgImage)
+            let actualEvenImage = try #require(candidateEven.cgImage)
+            #expect(actualEvenImage.width == expectedEvenImage.width)
+            #expect(actualEvenImage.height == expectedEvenImage.height)
+            #expect(actualEvenImage.dataProvider?.data as Data? == expectedEvenImage.dataProvider?.data as Data?)
+
+            let candidateOdd = ImageRenderer(content:
+                PanelMetricColumnsLayout(measurementKey: "five") { oddCells }.frame(width: width))
+            let referenceOdd = ImageRenderer(content:
+                PanelMetricColumnsLayout(measurementKey: "five-expanded") { expandedTailCells }.frame(width: width))
+            var renderedSize = CGSize.zero
+            candidateOdd.proposedSize = ProposedViewSize(width: width, height: nil)
+            candidateOdd.render { size, _ in renderedSize = size }
+            #expect(renderedSize == CGSize(width: width, height: expectedOddHeight))
+
+            let actualOddImage = try #require(candidateOdd.cgImage)
+            let expectedOddImage = try #require(referenceOdd.cgImage)
+            #expect(actualOddImage.width == expectedOddImage.width)
+            #expect(actualOddImage.height == expectedOddImage.height)
+            #expect(actualOddImage.dataProvider?.data as Data? == expectedOddImage.dataProvider?.data as Data?)
         }
     }
 

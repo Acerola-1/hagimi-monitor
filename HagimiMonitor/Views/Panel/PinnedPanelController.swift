@@ -260,6 +260,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         ensureOnScreen()
 
         // 非激活方式呈现,保持当前 App 前台。
+        panel.ignoresMouseEvents = false
         panel.alphaValue = 1
         panel.orderFrontRegardless()
 panelMotion?.nativeLayer.panelDidShow()

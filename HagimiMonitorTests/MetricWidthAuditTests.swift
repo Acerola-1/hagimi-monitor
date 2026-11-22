@@ -45,48 +45,66 @@ struct MetricWidthAuditTests {
         return result
     }
 
-    private func isHalfRow(_ entry: StaticMetricSizing.AuditEntry, language: String) -> Bool {
-        !StaticMetricSizing.isFullRow(kind: entry.kind, name: entry.name, language: language)
+    private let panelWidths: [CGFloat] = [
+        CGFloat(MonitorConstants.panelMinWidth),
+        CGFloat(MonitorConstants.panelIdealWidth),
+        CGFloat(MonitorConstants.panelMaxWidth)
+    ]
+
+    private func isHalfRow(
+        _ entry: StaticMetricSizing.AuditEntry,
+        language: String,
+        panelWidth: CGFloat
+    ) -> Bool {
+        !StaticMetricSizing.isFullRow(kind: entry.kind, name: entry.name, language: language, panelWidth: panelWidth)
     }
 
     @Test func measuredMetricsFitBudgetInHalfRowLanguages() throws {
-        let budget = StaticMetricSizing.halfCellContentWidth
         let spacing = StaticMetricSizing.cellHorizontalSpacing
 
-        for entry in StaticMetricSizing.auditInventory {
-            guard case let .measured(worst) = entry.layout else { continue }
-            for lang in languages where isHalfRow(entry, language: lang) {
-                let label = try localized(entry.labelKey, lang)
-                let total = width(label, font: StaticMetricSizing.labelFont)
-                    + spacing + valueWidth(worst)
-                #expect(total <= budget, """
-                [\(lang)] \(entry.kind.rawValue).\(entry.name) 超预算:\
-                「\(label)」+「\(worst.number)\(worst.unit.map { " \($0)" } ?? "")」\
-                = \(Int(total))pt > \(Int(budget))pt
-                """)
+        for panelWidth in panelWidths {
+            let budget = StaticMetricSizing.halfCellContentWidth(for: panelWidth)
+            for entry in StaticMetricSizing.auditInventory {
+                guard case let .measured(worst) = entry.layout else { continue }
+                for lang in languages where isHalfRow(entry, language: lang, panelWidth: panelWidth) {
+                    let label = try localized(entry.labelKey, lang)
+                    let total = width(label, font: StaticMetricSizing.labelFont)
+                        + spacing + valueWidth(worst)
+                    #expect(total <= budget, """
+                    [\(lang) @ \(Int(panelWidth))pt] \(entry.kind.rawValue).\(entry.name) 超预算:\
+                    「\(label)」+「\(worst.number)\(worst.unit.map { " \($0)" } ?? "")」\
+                    = \(Int(total))pt > \(Int(budget))pt
+                    """)
+                }
             }
         }
     }
 
     @Test func enumMetricsFitBudgetInHalfRowLanguages() throws {
-        let budget = StaticMetricSizing.halfCellContentWidth
         let spacing = StaticMetricSizing.cellHorizontalSpacing
 
-        for entry in StaticMetricSizing.auditInventory {
-            guard case let .enumMeasured(valueKeys) = entry.layout else { continue }
-            for lang in languages where isHalfRow(entry, language: lang) {
-                // 最坏值 = 该语言下最长的枚举文案
-                let candidates = try valueKeys.map { try localized($0, lang) }
-                let worst = candidates.max {
-                    width($0, font: StaticMetricSizing.valueFont) < width($1, font: StaticMetricSizing.valueFont)
-                } ?? ""
-                let label = try localized(entry.labelKey, lang)
-                let total = width(label, font: StaticMetricSizing.labelFont)
-                    + spacing + width(worst, font: StaticMetricSizing.valueFont)
-                #expect(total <= budget, """
-                [\(lang)] \(entry.kind.rawValue).\(entry.name) 超预算:\
-                「\(label)」+「\(worst)」= \(Int(total))pt > \(Int(budget))pt
-                """)
+        for panelWidth in panelWidths {
+            let budget = StaticMetricSizing.halfCellContentWidth(for: panelWidth)
+            for entry in StaticMetricSizing.auditInventory {
+                guard case let .enumMeasured(valueKeys) = entry.layout else { continue }
+                for lang in languages where isHalfRow(entry, language: lang, panelWidth: panelWidth) {
+                    // 最坏值 = 该语言下最长的枚举文案
+                    let candidates = try valueKeys.map { try localized($0, lang) }
+                    let worst = candidates.max {
+                        width($0, font: StaticMetricSizing.valueFont) < width($1, font: StaticMetricSizing.valueFont)
+                    } ?? ""
+                    let label = try localized(entry.labelKey, lang)
+                    var extraWidth: CGFloat = 0
+                    if entry.kind == .cpu, entry.name == "thermal-pressure" {
+                        extraWidth = valueWidth(StaticMetricSizing.WorstValue(number: "100", unit: "°C")) + 4
+                    }
+                    let total = width(label, font: StaticMetricSizing.labelFont)
+                        + spacing + extraWidth + width(worst, font: StaticMetricSizing.valueFont)
+                    #expect(total <= budget, """
+                    [\(lang) @ \(Int(panelWidth))pt] \(entry.kind.rawValue).\(entry.name) 超预算:\
+                    「\(label)」+「\(worst)」(+merge=\(Int(extraWidth))) = \(Int(total))pt > \(Int(budget))pt
+                    """)
+                }
             }
         }
     }

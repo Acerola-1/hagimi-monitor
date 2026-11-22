@@ -430,6 +430,7 @@ struct MonitorPanelView: View {
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
+            .help(String(localized: "panel.header.toggle-all"))
             .onTapGesture(count: 2) {
                 toggleAllExpansion()
             }
@@ -511,7 +512,7 @@ struct MonitorPanelView: View {
     private func statsEntryButton(theme: MonitorPanelTheme) -> some View {
         if store.settings.statisticsEnabled {
             QuickPanelControlButton(
-                imageName: "chart.bar.doc.horizontal",
+                imageName: "chart.xyaxis.line",
                 help: String(localized: "panel.statistics"),
                 tint: theme.secondaryText
             ) {
@@ -938,6 +939,7 @@ private struct MetricGlassRow: View, Equatable {
     var topDiskProcesses: [TopDiskProcess] = []
     var showDiskProcesses = true
     var toggleExpansion: (() -> Void)?
+    @State private var isHeaderHovering = false
 
     // theme 完全由 (preference, colorScheme) 决定(见 ThemeCache),故只比这两个键字段;
     // 闭包不参与相等判定。未变化的行 == 成立时 SwiftUI 跳过整行重绘。
@@ -998,16 +1000,13 @@ private struct MetricGlassRow: View, Equatable {
     var body: some View {
         PanelCardStack(measurementKey: "\(module.kind.id)|\(samples.isEmpty)") {
             HStack(spacing: 10) {
-                Image(systemName: module.kind.symbol)
-                    .font(.callout.weight(.semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(tint)
-                    .frame(width: 18)
+                ModuleHeaderIcon(systemName: module.kind.symbol, tint: tint, theme: theme)
 
-                Text("\(module.kind.title):")
+                Text(module.kind.title)
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
+                    .monitorPanelModuleTitleSlot()
 
                 HStack(spacing: 5) {
                     Text(detail)
@@ -1019,6 +1018,11 @@ private struct MetricGlassRow: View, Equatable {
                             .fill(statusTint)
                             .frame(width: 6, height: 6)
                     }
+                }
+                .overlay(alignment: .trailing) {
+                    RowExpandChevronHint(isVisible: detailAvailable && isHeaderHovering,
+                                         isExpanded: isExpanded, theme: theme)
+                        .offset(x: 14)
                 }
 
                 Spacer(minLength: 8)
@@ -1033,6 +1037,8 @@ private struct MetricGlassRow: View, Equatable {
             // 手势只挂行头(与 DisplaySection 同款):macOS 上覆盖整个
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
+            .onHover { isHeaderHovering = $0 }
+            .help(detailAvailable ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 // 单风扇时主行已展示 RPM,无展开内容,点击不切换展开状态。
                 guard detailAvailable else { return }
@@ -1100,7 +1106,8 @@ private struct MetricGlassRow: View, Equatable {
             }
         }
         .panelCardBrighten()
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius,
+                               borderColor: theme.cardBorderColor) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -1201,6 +1208,8 @@ struct CPUCoresDetail: View {
     let theme: MonitorPanelTheme
     @Environment(\.isEnabled) private var isEnabled
     @State private var hoveredCore: Int?
+    @State private var displayedHoveredCore: Int?
+    @State private var hoverClearTask: Task<Void, Never>?
 
     private var displayedDetail: CPUCoreDetail {
         #if DEBUG
@@ -1256,6 +1265,19 @@ struct CPUCoresDetail: View {
                 if isEnabled {
                     CoreRingHoverRegion(coreIDs: cores.map(\.index)) { core in
                         if hoveredCore != core { hoveredCore = core }
+                        hoverClearTask?.cancel()
+                        hoverClearTask = nil
+                        if let core {
+                            if displayedHoveredCore != core {
+                                displayedHoveredCore = core
+                            }
+                        } else if displayedHoveredCore != nil {
+                            hoverClearTask = Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(180))
+                                guard !Task.isCancelled else { return }
+                                displayedHoveredCore = nil
+                            }
+                        }
                     }
                 }
             }
@@ -1265,42 +1287,70 @@ struct CPUCoresDetail: View {
                 .frame(height: 1)
                 .padding(.horizontal, 8)
 
-            HStack(spacing: 0) {
-                ForEach(Array(displayedDetail.groups.enumerated()), id: \.element.id) { index, group in
-                    if index > 0 {
-                        Rectangle()
-                            .fill(theme.captionText.opacity(0.22))
-                            .frame(width: 1, height: 13)
+            let activeCore = displayedHoveredCore.flatMap { id in cores.first(where: { $0.index == id }) }
+            let showingSingleCore = activeCore != nil
+            ZStack {
+                HStack(spacing: 0) {
+                    ForEach(Array(displayedDetail.groups.enumerated()), id: \.element.id) { index, group in
+                        if index > 0 {
+                            Rectangle()
+                                .fill(theme.captionText.opacity(0.22))
+                                .frame(width: 1, height: 13)
+                        }
+                        usageSegment(group)
                     }
-                    usageSegment(group)
+                }
+                .opacity(showingSingleCore ? 0 : 1)
+                .allowsHitTesting(!showingSingleCore)
+
+                if let core = activeCore {
+                    hoveredCoreSegment(core: core, in: cores)
+                        .transition(.opacity)
                 }
             }
             .padding(.vertical, 6)
+            .animation(.easeOut(duration: 0.16), value: showingSingleCore)
         }
         .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
-        .onDisappear { hoveredCore = nil }
+        .onDisappear {
+            hoverClearTask?.cancel()
+            hoverClearTask = nil
+            hoveredCore = nil
+            displayedHoveredCore = nil
+        }
     }
 
     private func coreRing(for core: CPUCoreLoad) -> some View {
         let value = "\(Int(core.usage.rounded()))%"
+        let isHovered = hoveredCore == core.index
         return CoreLoadRing(usage: core.usage, tint: tint(for: core.kind), track: theme.palette.cpuCoreTrack)
+            .scaleEffect(isHovered ? 1.12 : 1.0)
+            .animation(.easeOut(duration: 0.12), value: isHovered)
             .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(value))
-            .overlay(alignment: .bottom) {
-                if hoveredCore == core.index {
-                    Text(value)
-                        .monitorPanelMonoFont(.caption2, weight: .semibold)
-                        .foregroundStyle(theme.primaryText)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 2)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 6))
-                        .fixedSize()
-                        .offset(y: CPUCoreRingMetrics.diameter / 2 + 4)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-            }
+    }
+
+    private func hoveredCoreSegment(core: CPUCoreLoad, in cores: [CPUCoreLoad]) -> some View {
+        let sameKindCores = cores.filter { $0.kind == core.kind }
+        let ordinal = (sameKindCores.firstIndex(where: { $0.index == core.index }) ?? 0) + 1
+        let value = "\(Int(core.usage.rounded()))%"
+        return HStack(spacing: 5) {
+            Circle()
+                .fill(tint(for: core.kind))
+                .frame(width: 6, height: 6)
+            Text("\(shortLabel(for: core.kind))\(ordinal) · \(fullLabel(for: core.kind))")
+                .monitorPanelCaptionFont(.footnote)
+                .foregroundStyle(theme.captionText)
+                .lineLimit(1)
+            Text(value)
+                .monitorPanelMonoFont(.footnote, weight: .bold)
+                .foregroundStyle(theme.valueText)
+                .lineLimit(1)
+                .frame(minWidth: 34, alignment: .trailing)
+        }
+        .padding(.horizontal, 6)
+        .frame(maxWidth: .infinity)
     }
 
     /// 单一底色内等分两段或三段;组内信息聚拢,细线标示相邻组的边界。
@@ -1568,6 +1618,7 @@ struct MetricDetailGrid: View {
     let metrics: [MonitorMetric]
     let kind: MonitorKind
     let theme: MonitorPanelTheme
+    @Environment(\.nativePanelContentWidth) private var nativePanelContentWidth
     var metricOrder: [String] = []
     var orderScope: PanelOrderScope? = nil
     /// CPU 逐核数据:非 nil 时以 core-split 的稳定身份替代普通指标格。
@@ -1578,11 +1629,14 @@ struct MetricDetailGrid: View {
     private var labelStyle: Font.TextStyle { .footnote }
     private var valueStyle: Font.TextStyle { .footnote }
 
-    /// 整行判定查静态登记表(见 StaticMetricSizing):按当前语言查表,
-    /// 登记依据是各语言 × 最坏值 × 最窄面板宽的构建期审计,布局不随
-    /// 采样值与面板宽度重排。
+    private var panelWidth: CGFloat {
+        nativePanelContentWidth + 12
+    }
+
+    /// 整行判定查静态登记表(见 StaticMetricSizing):按当前语言与面板宽度断点查表,
+    /// 布局不随实时采样值波动而重排。
     private func isFullRow(_ metric: MonitorMetric) -> Bool {
-        StaticMetricSizing.isFullRow(kind: kind, name: metric.name)
+        StaticMetricSizing.isFullRow(kind: kind, name: metric.name, panelWidth: panelWidth)
     }
 
     private struct Cell: Identifiable {
@@ -1597,12 +1651,12 @@ struct MetricDetailGrid: View {
         let available = metrics.filter { !(hasTemperature && $0.name == "temperature") }.map { metric in
             let merged = hasTemperature && metric.name == "thermal-pressure"
             return Cell(id: PanelOrderCatalog.stableMetricID(kind: kind, displayedName: metric.name),
-                        metric: metric, span: merged || isCoreDetail(metric) || isFullRow(metric) ? 2 : 1,
+                        metric: metric, span: isCoreDetail(metric) || isFullRow(metric) ? 2 : 1,
                         mergedThermal: merged)
         }
         let defaultCells = available.filter { kind == .cpu && $0.id == "core-split" }
             + available.filter { $0.span == 1 && !(kind == .cpu && $0.id == "core-split") }
-            + available.filter(\.mergedThermal)
+            + available.filter { $0.mergedThermal && $0.span == 2 }
             + available.filter { $0.span == 2 && !$0.mergedThermal
                 && !(kind == .cpu && $0.id == "core-split") }
         guard !metricOrder.isEmpty else { return defaultCells }
@@ -1631,8 +1685,8 @@ struct MetricDetailGrid: View {
     }
 
     // 逐格内衬网格(stat tile 形态):每个指标独立 trackFill 圆角内衬色块,
-    // 边界属于格子自己,不依赖行数;单元保持「标签左·数值右」,数值字重
-    // 提到 bold 强化存在感。逐项按静态跨度排布,整行前的半格空位保留。
+    // 边界属于格子自己,不依赖行数;单元保持「标签左·数值右」,数值采用 bold
+    // 强化主次层级。各格按静态跨度排布,单行内仅余单个半格时自动拉满整行。
     private var content: some View {
         VStack(alignment: .leading, spacing: MetricGridMetrics.gridRowGap) {
             if !cells.isEmpty {
@@ -1647,14 +1701,30 @@ struct MetricDetailGrid: View {
                                 .panelMetricSpan(2)
                         } else if cell.mergedThermal,
                            let temperature = metrics.first(where: { $0.name == "temperature" }) {
+                            let thermalLabel = localizedMetricName(kind: kind, id: cell.metric.name)
+                            let thermalCombined = "\(localizedMetricValue(kind: kind, metric: temperature)) · \(localizedMetricValue(kind: kind, metric: cell.metric))"
                             thermalPressureCell(thermal: cell.metric, temperature: temperature)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2)
-                                .panelMetricSpan(2)
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: cell.span,
+                                                  copyActionTitle: String(localized: "panel.copy-value-short"),
+                                                  onCopyAction: {
+                                    MetricCopyFeedback.writeToPasteboard(
+                                        MetricCopyFeedback.formattedPayload(label: thermalLabel, value: thermalCombined)
+                                    )
+                                })
+                                .panelMetricSpan(cell.span)
                         } else {
+                            let cellLabel = localizedMetricName(kind: kind, id: cell.metric.name)
+                            let cellValue = localizedMetricValue(kind: kind, metric: cell.metric)
                             metricCell(cell.metric)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: cell.span)
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: cell.span,
+                                                  copyActionTitle: String(localized: "panel.copy-value-short"),
+                                                  onCopyAction: {
+                                    MetricCopyFeedback.writeToPasteboard(
+                                        MetricCopyFeedback.formattedPayload(label: cellLabel, value: cellValue)
+                                    )
+                                })
                                 .panelMetricSpan(cell.span)
                         }
                     }
@@ -1680,30 +1750,36 @@ struct MetricDetailGrid: View {
             .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
     }
 
-    /// 热压力合并整行:标签「热压力」,右侧数值为「温度 / 热压力档位」。
-    /// 仅在温度可用(直连版)时渲染此行;档位按 severity 着色,
-    /// 温度保持 valueText 与其余数值同层级。
+    /// 热压力合并格:标签「热压力」,右侧依次展示温度与热压力档位。
+    /// 仅在温度可用时渲染此合并格,整格统一作为单个复制热区以容纳完整反馈文案。
     private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric) -> some View {
-        insetCell(
-            HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-                Text(localizedMetricName(kind: kind, id: thermal.name))
+        let labelText = localizedMetricName(kind: kind, id: thermal.name)
+        let tempText = localizedMetricValue(kind: kind, metric: temperature)
+        let thermalText = localizedMetricValue(kind: kind, metric: thermal)
+        let combinedValue = "\(tempText) · \(thermalText)"
+
+        return insetCell(
+            HStack(spacing: 4) {
+                Text(labelText)
                     .monitorPanelCaptionFont(labelStyle)
                     .foregroundStyle(theme.captionText)
                     .lineLimit(1)
                     .layoutPriority(1)
 
-                Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+                Spacer(minLength: 2)
 
-                splitValue(temperature, text: localizedMetricValue(kind: kind, metric: temperature))
-                    .help(localizedMetricValue(kind: kind, metric: temperature))
-                    .contentShape(Rectangle())
-                    .modifier(MetricCopyFeedback(value: temperature.value, label: String(localized: "menu-bar-metric.cpu-temperature"), displayValue: localizedMetricValue(kind: kind, metric: temperature)))
-                splitValue(thermal, text: localizedMetricValue(kind: kind, metric: thermal))
-                    .help(localizedMetricValue(kind: kind, metric: thermal))
-                    .contentShape(Rectangle())
-                    .modifier(MetricCopyFeedback(value: thermal.value, label: localizedMetricName(kind: kind, id: thermal.name), displayValue: localizedMetricValue(kind: kind, metric: thermal)))
+                HStack(spacing: 4) {
+                    splitValue(temperature, text: tempText)
+                    splitValue(thermal, text: thermalText)
+                }
             }
         )
+        .modifier(MetricCopyFeedback(
+            label: labelText,
+            displayValue: combinedValue,
+            tint: theme.palette.severityTint(for: .calm),
+            includesDragHint: true
+        ))
     }
 
     /// 热压力四档 severity 着色:正常→calm 绿,轻微→warning,严重/临界→critical。
@@ -1721,32 +1797,48 @@ struct MetricDetailGrid: View {
     private func metricCell(_ metric: MonitorMetric) -> some View {
         let labelText = localizedMetricName(kind: kind, id: metric.name)
         let valueText = localizedMetricValue(kind: kind, metric: metric)
+        let explanation = PowerReadingPresentation.help(metric.powerReading)
 
         // Wi-Fi 信号用「信号格 + dBm」组合(冻结原型),非纯文本值。
         if kind == .network, metric.name == "wifi-rssi" {
-            return AnyView(insetCell(wifiSignalCell(labelText: labelText, metric: metric)))
+            return AnyView(
+                insetCell(wifiSignalCell(labelText: labelText, metric: metric))
+                    .modifier(MetricCopyFeedback(
+                        label: labelText,
+                        displayValue: valueText,
+                        explanation: explanation,
+                        tint: theme.palette.severityTint(for: .calm),
+                        includesDragHint: true
+                    ))
+            )
         }
 
-        return AnyView(insetCell(
-            HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-                Text(labelText)
-                    .monitorPanelCaptionFont(labelStyle)
-                    .foregroundStyle(theme.captionText)
-                    .lineLimit(1)
-                    .layoutPriority(1)
+        return AnyView(
+            insetCell(
+                HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
+                    Text(labelText)
+                        .monitorPanelCaptionFont(labelStyle)
+                        .foregroundStyle(theme.captionText)
+                        .lineLimit(1)
+                        .layoutPriority(1)
 
-                Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+                    Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
 
-                splitValue(metric, text: valueText)
-                    .help(valueText)
-                    .contentShape(Rectangle())
-                    .modifier(MetricCopyFeedback(value: metric.value, label: labelText, displayValue: valueText,
-                                                 explanation: PowerReadingPresentation.help(metric.powerReading)))
-            }
-        ))
+                    splitValue(metric, text: valueText)
+                }
+            )
+            .modifier(MetricCopyFeedback(
+                label: labelText,
+                displayValue: valueText,
+                explanation: explanation,
+                tint: theme.palette.severityTint(for: .calm),
+                includesDragHint: true
+            ))
+        )
     }
 
     /// 数值/单位两段组合:数字 mono bold 主角化,单位 caption 弱化;
+    /// `%` 紧贴数字且保持同字重同色彩,其余字母单位走后缀弱化;
     /// 无 unit 标记或后缀不匹配("--"、文本态、长值)时回退整串渲染,
     /// 整串回退走中部截断——SSID/IP/IPv6 等无界值保留中段可辨识部分。
     /// 两段同 layoutPriority(2) 一起预留宽度,单位另加 fixedSize:
@@ -1774,8 +1866,11 @@ struct MetricDetailGrid: View {
         }
     }
 
-    /// 按采样侧标注的单位后缀拆分文案;不命中时返回整串。
+    /// 按采样侧标注的单位后缀拆分文案;`%` 保持紧贴整体渲染,其余不命中时返回整串。
     private func splitValueUnit(_ text: String, unit: String?) -> (number: String, unit: String?) {
+        if unit == "%" || text.hasSuffix("%") {
+            return (text, nil)
+        }
         guard let unit, !unit.isEmpty, text.hasSuffix(unit), text.count > unit.count else {
             return (text, nil)
         }
@@ -2055,6 +2150,7 @@ struct NetworkGlassRow: View, Equatable {
     var topNetworkProcesses: [TopNetworkProcess] = []
     var showNetworkProcesses = true
     var toggleExpansion: (() -> Void)?
+    @State private var isHeaderHovering = false
 
     static func == (lhs: NetworkGlassRow, rhs: NetworkGlassRow) -> Bool {
         guard lhs.isExpanded == rhs.isExpanded else { return false }
@@ -2086,25 +2182,26 @@ struct NetworkGlassRow: View, Equatable {
     var body: some View {
         PanelCardStack {
             HStack(spacing: 10) {
-                Image(systemName: "wifi")
-                    .font(.callout.weight(.semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(tint)
-                    .frame(width: 18)
+                ModuleHeaderIcon(systemName: "wifi", tint: tint, theme: theme)
 
                 HStack(spacing: 6) {
                     HStack(spacing: 10) {
-                        Text(String(localized: "kind.network") + ":")
+                        Text(String(localized: "kind.network"))
                             .monitorPanelMetricLabelFont()
                             .foregroundStyle(theme.primaryText)
                             .lineLimit(1)
-                            .fixedSize(horizontal: true, vertical: false)
+                            .monitorPanelModuleTitleSlot()
 
                         Text(localizedNetworkInterface(module.summary))
                             .monitorPanelMonoFont(weight: .semibold)
                             .foregroundStyle(theme.valueText)
                             .lineLimit(1)
                             .truncationMode(.tail)
+                            .overlay(alignment: .trailing) {
+                                RowExpandChevronHint(isVisible: hasExpandableContent && isHeaderHovering,
+                                                     isExpanded: isExpanded, theme: theme)
+                                    .offset(x: 14)
+                            }
                     }
                     .layoutPriority(1)
 
@@ -2119,6 +2216,8 @@ struct NetworkGlassRow: View, Equatable {
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
+            .onHover { isHeaderHovering = $0 }
+            .help(hasExpandableContent ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 if hasExpandableContent { toggleExpansion?() }
             }
@@ -2155,7 +2254,8 @@ struct NetworkGlassRow: View, Equatable {
             }
         }
         .panelCardBrighten()
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius,
+                               borderColor: theme.cardBorderColor) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -2192,6 +2292,7 @@ struct BatteryGlassRow: View, Equatable {
     var powerFlowActive = true
     var toggleExpansion: (() -> Void)?
     @State private var selectedTab: BatteryPageTab = .health
+    @State private var isHeaderHovering = false
 
     static func == (lhs: BatteryGlassRow, rhs: BatteryGlassRow) -> Bool {
         guard lhs.isExpanded == rhs.isExpanded else { return false }
@@ -2234,18 +2335,19 @@ struct BatteryGlassRow: View, Equatable {
                 // 重渲染整棵面板树,是面板展开时 CPU 高占用的根因之一。图标本身已足够表达充电语义。
                 // 低电量模式开启时整个电池图标染成琥珀色(与 macOS 菜单栏省电态同思路,
                 // SF Symbols 为模板图,颜色由前景样式决定,无需单独的黄色电池符号)。
-                Image(systemName: powerSymbol)
-                    .font(.callout.weight(.semibold))
-                    .symbolRenderingMode(.monochrome)
-                    .foregroundStyle(isLowPowerMode ? theme.palette.severityTint(for: .warning) : tint)
-                    .frame(width: 18)
-                    .help(isLowPowerMode ? String(localized: "panel.battery.low-power-on") : "")
+                ModuleHeaderIcon(
+                    systemName: powerSymbol,
+                    tint: isLowPowerMode ? theme.palette.severityTint(for: .warning) : tint,
+                    theme: theme
+                )
+                .help(isLowPowerMode ? String(localized: "panel.battery.low-power-on") : "")
 
-                Text(String(localized: "kind.battery") + ":")
+                Text(String(localized: "kind.battery"))
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.82)
+                    .monitorPanelModuleTitleSlot()
                     .layoutPriority(1)
 
                 Text(summaryText)
@@ -2255,6 +2357,11 @@ struct BatteryGlassRow: View, Equatable {
                     .minimumScaleFactor(0.75)
                     .truncationMode(.tail)
                     .layoutPriority(1)
+                    .overlay(alignment: .trailing) {
+                        RowExpandChevronHint(isVisible: canExpand && isHeaderHovering,
+                                             isExpanded: isExpanded, theme: theme)
+                            .offset(x: 14)
+                    }
 
                 Spacer(minLength: 4)
 
@@ -2268,6 +2375,8 @@ struct BatteryGlassRow: View, Equatable {
             // 手势只挂行头,不覆盖展开区(与 MetricGlassRow/DisplaySection
             // 同款纪律:整行 onTapGesture 会抢占深层控件的点击)。
             .contentShape(Rectangle())
+            .onHover { isHeaderHovering = $0 }
+            .help(canExpand ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 if canExpand {
                     toggleExpansion?()
@@ -2363,7 +2472,8 @@ struct BatteryGlassRow: View, Equatable {
             }
         }
         .panelCardBrighten()
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius,
+                               borderColor: theme.cardBorderColor) {
             theme.rowGlassFill(for: module.kind)
         }
         .panelBenchmarkCommands { command in
@@ -2746,6 +2856,10 @@ struct MonitorPanelTheme {
         palette.rowGrooveFill
     }
 
+    var cardBorderColor: Color {
+        palette.cardBorderColor
+    }
+
     func liveDot(for loadLevel: MenuBarComputeLoadLevel) -> Color {
         palette.liveDot(for: loadLevel)
     }
@@ -2794,37 +2908,82 @@ enum ThemeCache {
     }
 }
 
-private struct MetricCopyFeedback: ViewModifier {
+struct MetricCopyFeedback: ViewModifier {
     @Environment(\.isEnabled) private var isEnabled
-    let value: String
+    @Environment(\.panelReorderController) private var reorderController
     let label: String
     let displayValue: String
     var explanation: String? = nil
+    var tint: Color = .green
+    var includesDragHint: Bool = false
     @State private var copyID: UUID?
+    @State private var isHovering = false
+    @FocusState private var isFocused: Bool
+
+    static func formattedPayload(label: String, value: String) -> String {
+        "\(label): \(value)"
+    }
+
+    private var helpText: String {
+        var parts = [explanation, String(localized: "panel.copy-value")].compactMap { $0 }
+        if includesDragHint, reorderController != nil {
+            parts.append(String(localized: "panel.reorder.long-press-hint"))
+        }
+        return parts.joined(separator: "\n")
+    }
 
     func body(content: Content) -> some View {
+        let isCopied = copyID != nil
+        let tileShape = RoundedRectangle(cornerRadius: 7, style: .continuous)
         content
+            .opacity(isCopied ? 0 : 1)
+            .background {
+                tileShape
+                    .fill(isCopied ? tint.opacity(0.12) : Color.primary.opacity(isHovering ? 0.045 : 0))
+                    .allowsHitTesting(false)
+            }
+            .overlay {
+                if isCopied {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(String(localized: "panel.copied"))
+                            .monitorPanelCaptionFont(.footnote, weight: .semibold)
+                            .lineLimit(1)
+                    }
+                    .foregroundStyle(tint)
+                    .fixedSize()
+                    .allowsHitTesting(false)
+                }
+            }
+            .overlay {
+                if isCopied || isFocused {
+                    tileShape
+                        .strokeBorder(tint.opacity(isCopied ? 0.32 : 0.45), lineWidth: isCopied ? 0.75 : 1)
+                        .allowsHitTesting(false)
+                }
+            }
+            .contentShape(tileShape)
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
             .accessibilityValue([displayValue, explanation].compactMap { $0 }.joined(separator: ", "))
-            .help([explanation, String(localized: "panel.copy-value")].compactMap { $0 }.joined(separator: "\n"))
-            .onTapGesture(perform: copy)
+            .help(helpText)
+            .onHover { isHovering = isEnabled && $0 }
+            .onTapGesture {
+                isFocused = false
+                copy()
+            }
             .focusable(isEnabled)
+            .focused($isFocused)
+            .focusEffectDisabled()
             .onKeyPress(keys: ["c"], phases: .down) { press in
                 guard isEnabled, press.modifiers == .command else { return .ignored }
                 copy()
                 return .handled
             }
             .accessibilityAction(named: Text(String(localized: "panel.copy-value")), copy)
-            .overlay(alignment: .topTrailing) {
-                if copyID != nil {
-                    Text(String(localized: "panel.copied"))
-                        .font(.caption)
-                        .padding(4)
-                        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 4))
-                        .allowsHitTesting(false)
-                }
-            }
+            .animation(.easeOut(duration: 0.14), value: isCopied)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
             .task(id: copyID) {
                 guard copyID != nil else { return }
                 do {
@@ -2834,10 +2993,21 @@ private struct MetricCopyFeedback: ViewModifier {
             }
     }
 
-    private func copy() {
-        guard isEnabled else { return }
+    static func writeToPasteboard(_ payload: String) {
         NSPasteboard.general.clearContents()
-        guard NSPasteboard.general.setString(value, forType: .string) else { return }
+        guard NSPasteboard.general.setString(payload, forType: .string) else { return }
+        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
+            userInfo: [
+                .announcement: String(localized: "panel.copied"),
+                .priority: NSAccessibilityPriorityLevel.medium.rawValue
+            ])
+    }
+
+    private func copy() {
+        guard isEnabled, reorderController?.session == nil else { return }
+        let payload = Self.formattedPayload(label: label, value: displayValue)
+        NSPasteboard.general.clearContents()
+        guard NSPasteboard.general.setString(payload, forType: .string) else { return }
         copyID = UUID()
         NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
             userInfo: [
@@ -2849,8 +3019,36 @@ private struct MetricCopyFeedback: ViewModifier {
 
 // MARK: - Top Processes (通用列表)
 
-/// 通用 TOP 进程行数据。内存/CPU/GPU 三列表共用,行内可选 Rosetta 角标与 API 类型。
+nonisolated enum ProcessRankingFreeze {
+    /// 交互期间（悬停、右键菜单展开或退出确认）按 pid 冻结 5 行位置与成员，
+    /// 同步刷新仍在榜内的同 pid 行数值，交互结束立即解冻回实时排行。
+    static func resolve<Item>(
+        live: [Item],
+        frozen: [Item]?,
+        id: (Item) -> pid_t,
+        mergeLive: (_ existing: Item, _ updated: Item) -> Item
+    ) -> [Item] {
+        guard let frozen else { return live }
+        var byPID: [pid_t: Item] = [:]
+        for item in live {
+            let pid = id(item)
+            if pid > 0, byPID[pid] == nil {
+                byPID[pid] = item
+            }
+        }
+        return frozen.map { existing in
+            let pid = id(existing)
+            if pid > 0, let updated = byPID[pid] {
+                return mergeLive(existing, updated)
+            }
+            return existing
+        }
+    }
+}
+
+/// 通用 TOP 进程行数据。内存/CPU/GPU/电源列表共用,行内可选 Rosetta 角标与 API 类型。
 private struct TopProcessRowData {
+    let pid: pid_t
     let name: String
     let icon: NSImage?
     let valueText: String
@@ -2874,11 +3072,44 @@ private struct TopProcessList: View {
     /// 下方的场景传 false——分区头自带贯穿分隔线,再画一条只是叠在同一处。
     var showsSeparator: Bool = true
 
+    @State private var isListHovering = false
+    @State private var openMenuCount = 0
+    @State private var confirmingQuitPID: pid_t?
+    @State private var frozenRows: [TopProcessRowData]?
+
     /// 固定展示 top 5 个位置:真实数据从上往下填,空位显“—”占位。
     private static let rowCount = 5
 
+    private var isInteractionFrozen: Bool {
+        isListHovering || openMenuCount > 0 || confirmingQuitPID != nil
+    }
+
+    private var displayedRows: [TopProcessRowData] {
+        ProcessRankingFreeze.resolve(live: rows, frozen: frozenRows, id: \.pid) { existing, updated in
+            TopProcessRowData(
+                pid: existing.pid,
+                name: existing.name,
+                icon: updated.icon ?? existing.icon,
+                valueText: updated.valueText,
+                apiText: updated.apiText,
+                translated: existing.translated
+            )
+        }
+    }
+
+    private func syncFreezeState() {
+        if isInteractionFrozen {
+            if frozenRows == nil {
+                frozenRows = rows
+            }
+        } else {
+            frozenRows = nil
+        }
+    }
+
     var body: some View {
-        let translatedCount = rows.filter(\.translated).count
+        let visibleRows = displayedRows
+        let translatedCount = visibleRows.filter(\.translated).count
 
         VStack(spacing: 5) {
             if showsSeparator {
@@ -2889,41 +3120,55 @@ private struct TopProcessList: View {
 
             VStack(spacing: 4) {
                 ForEach(0 ..< Self.rowCount, id: \.self) { index in
-                    if index < rows.count {
-                        let proc = rows[index]
-                        HStack(spacing: 6) {
-                            ProcessIcon(icon: proc.icon, theme: theme)
-                                .frame(width: 16, height: 16)
-
-                            Text(proc.name)
-                                .monitorPanelCaptionFont(.footnote)
-                                .foregroundStyle(theme.primaryText)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-
-                            // Rosetta 转译角标:macOS 28 起 Intel 应用将无法运行,
-                            // 在 TOP 进程行内尽早暴露(仅 arm64 宿主可能为 true)。
-                            if proc.translated {
-                                RosettaBadge()
+                    if index < visibleRows.count {
+                        let proc = visibleRows[index]
+                        InteractiveProcessRow(
+                            pid: proc.pid,
+                            name: proc.name,
+                            theme: theme,
+                            onMenuOpenChange: { isOpen in
+                                openMenuCount = max(0, openMenuCount + (isOpen ? 1 : -1))
+                                syncFreezeState()
+                            },
+                            onConfirmingQuitChange: { targetPID in
+                                confirmingQuitPID = targetPID
+                                syncFreezeState()
                             }
+                        ) {
+                            HStack(spacing: 6) {
+                                ProcessIcon(icon: proc.icon, theme: theme)
+                                    .frame(width: 16, height: 16)
 
-                            Spacer(minLength: 4)
+                                Text(proc.name)
+                                    .monitorPanelCaptionFont(.footnote)
+                                    .foregroundStyle(theme.primaryText)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
 
-                            Text(proc.valueText)
-                                .monitorPanelMonoFont(.caption2, weight: .medium)
-                                .foregroundStyle(theme.secondaryText)
-                                .lineLimit(1)
-                                .fixedSize(horizontal: true, vertical: false)
-                                .layoutPriority(1)
-
-                            // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
-                            // GPU 时间,空值(旧驱动/未上报)时不渲染。
-                            if let apiText = proc.apiText {
-                                Text(apiText)
-                                    .monitorPanelCaptionFont(.caption2)
-                                    .foregroundStyle(theme.captionText)
+                                // Rosetta 转译角标:macOS 28 起 Intel 应用将无法运行,
+                                // 在 TOP 进程行内尽早暴露(仅 arm64 宿主可能为 true)。
+                                if proc.translated {
+                                    RosettaBadge()
+                                }
+                            }
+                        } trailing: {
+                            HStack(spacing: 4) {
+                                Text(proc.valueText)
+                                    .monitorPanelMonoFont(.caption2, weight: .medium)
+                                    .foregroundStyle(theme.secondaryText)
                                     .lineLimit(1)
                                     .fixedSize(horizontal: true, vertical: false)
+                                    .layoutPriority(1)
+
+                                // 图形 API 类型(Metal 等):驱动在 AppUsage 里按 API 记录
+                                // GPU 时间,空值(旧驱动/未上报)时不渲染。
+                                if let apiText = proc.apiText {
+                                    Text(apiText)
+                                        .monitorPanelCaptionFont(.caption2)
+                                        .foregroundStyle(theme.captionText)
+                                        .lineLimit(1)
+                                        .fixedSize(horizontal: true, vertical: false)
+                                }
                             }
                         }
                     } else {
@@ -2931,12 +3176,23 @@ private struct TopProcessList: View {
                     }
                 }
             }
-            .animation(.easeInOut(duration: 0.2), value: rows.count)
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isListHovering = hovering
+                syncFreezeState()
+            }
+            .animation(.easeInOut(duration: 0.2), value: visibleRows.count)
 
             // 转译进程汇总横幅:CPU 列表存在转译进程时才出现。
             if showRosettaBanner, translatedCount > 0 {
                 RosettaBanner(count: translatedCount, theme: theme)
             }
+        }
+        .onDisappear {
+            isListHovering = false
+            openMenuCount = 0
+            confirmingQuitPID = nil
+            frozenRows = nil
         }
     }
 }
@@ -2950,6 +3206,7 @@ private struct MemoryProcessList: View {
             kind: .memory,
             rows: processes.map {
                 TopProcessRowData(
+                    pid: $0.pid,
                     name: $0.name,
                     icon: $0.icon,
                     valueText: byteCountString(Int64($0.memoryUsage), countStyle: .memory),
@@ -2980,6 +3237,7 @@ struct PowerAppRankingList: View {
             kind: .battery,
             rows: shares.map {
                 TopProcessRowData(
+                    pid: $0.pid,
                     name: $0.name,
                     icon: $0.icon,
                     valueText: String(format: "%.2f W", $0.watts),
@@ -3004,6 +3262,7 @@ private struct CPUProcessList: View {
             kind: .cpu,
             rows: processes.map {
                 TopProcessRowData(
+                    pid: $0.pid,
                     name: $0.name,
                     icon: $0.icon,
                     valueText: String(format: "%.1f%%", $0.cpuUsage),
@@ -3028,6 +3287,7 @@ private struct GPUProcessList: View {
             kind: .gpu,
             rows: processes.map {
                 TopProcessRowData(
+                    pid: $0.pid,
                     name: $0.name,
                     icon: $0.icon,
                     valueText: String(format: "%.1f%%", $0.gpuUsage),
@@ -3095,6 +3355,8 @@ private struct ProcessPlaceholderRow: View {
                 .monitorPanelMonoFont(.caption2, weight: .medium)
                 .foregroundStyle(theme.secondaryText.opacity(0.5))
         }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
     }
 }
 
@@ -3117,15 +3379,96 @@ private struct ProcessRowData: Identifiable {
 /// 固定 5 行的“—”占位行数据:磁盘/网络无数据或不足 5 行时填充。
 private let processDashRow = ProcessRowData(id: -1, name: "—", icon: nil, upText: "—", downText: "—", isPlaceholder: true)
 
+/// 磁盘/网络共用 5 行流量进程列表（带交互期间排行冻结）。
+private struct FrozenTrafficProcessList: View {
+    let kind: MonitorKind
+    let rows: [ProcessRowData]
+    let theme: MonitorPanelTheme
+
+    private static let rowCount = 5
+
+    @State private var isListHovering = false
+    @State private var openMenuCount = 0
+    @State private var confirmingQuitPID: pid_t?
+    @State private var frozenRows: [ProcessRowData]?
+
+    private var isInteractionFrozen: Bool {
+        isListHovering || openMenuCount > 0 || confirmingQuitPID != nil
+    }
+
+    private var displayedRows: [ProcessRowData] {
+        ProcessRankingFreeze.resolve(
+            live: rows,
+            frozen: frozenRows,
+            id: { $0.isPlaceholder ? -1 : pid_t($0.id) }
+        ) { existing, updated in
+            ProcessRowData(
+                id: existing.id,
+                name: existing.name,
+                icon: updated.icon ?? existing.icon,
+                upText: updated.upText,
+                downText: updated.downText,
+                isPlaceholder: existing.isPlaceholder
+            )
+        }
+    }
+
+    private func syncFreezeState() {
+        if isInteractionFrozen {
+            if frozenRows == nil {
+                frozenRows = rows
+            }
+        } else {
+            frozenRows = nil
+        }
+    }
+
+    var body: some View {
+        let visibleRows = displayedRows
+        VStack(spacing: 5) {
+            Rectangle()
+                .fill(theme.rowSeparator(for: kind))
+                .frame(height: 1)
+
+            VStack(spacing: 4) {
+                ForEach(0 ..< Self.rowCount, id: \.self) { index in
+                    ProcessRowView(
+                        row: index < visibleRows.count ? visibleRows[index] : processDashRow,
+                        theme: theme,
+                        onMenuOpenChange: { isOpen in
+                            openMenuCount = max(0, openMenuCount + (isOpen ? 1 : -1))
+                            syncFreezeState()
+                        },
+                        onConfirmingQuitChange: { targetPID in
+                            confirmingQuitPID = targetPID
+                            syncFreezeState()
+                        }
+                    )
+                }
+            }
+            .contentShape(Rectangle())
+            .onHover { hovering in
+                isListHovering = hovering
+                syncFreezeState()
+            }
+            .animation(.easeInOut(duration: 0.2), value: visibleRows.count)
+        }
+        .onDisappear {
+            isListHovering = false
+            openMenuCount = 0
+            confirmingQuitPID = nil
+            frozenRows = nil
+        }
+    }
+}
+
 /// 磁盘 I/O 进程列表。固定 5 行位置:真实数据从上往下填,空位显“—”,高度恒定无加载跳变。
 private struct InlineDiskProcessList: View {
     let processes: [TopDiskProcess]
     let theme: MonitorPanelTheme
 
-    private static let rowCount = 5
-
     private var rows: [ProcessRowData] {
-        processes.enumerated().map { index, proc in
+        processes.map { proc in
             ProcessRowData(
                 id: Int(proc.pid),
                 name: proc.name,
@@ -3137,18 +3480,7 @@ private struct InlineDiskProcessList: View {
     }
 
     var body: some View {
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: .storage))
-                .frame(height: 1)
-
-            VStack(spacing: 4) {
-                ForEach(0 ..< Self.rowCount, id: \.self) { index in
-                    ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: rows.count)
-        }
+        FrozenTrafficProcessList(kind: .storage, rows: rows, theme: theme)
     }
 }
 
@@ -3157,10 +3489,8 @@ private struct InlineNetworkProcessList: View {
     let processes: [TopNetworkProcess]
     let theme: MonitorPanelTheme
 
-    private static let rowCount = 5
-
     private var rows: [ProcessRowData] {
-        processes.enumerated().map { index, proc in
+        processes.map { proc in
             ProcessRowData(
                 id: Int(proc.pid),
                 name: proc.name,
@@ -3172,18 +3502,7 @@ private struct InlineNetworkProcessList: View {
     }
 
     var body: some View {
-        VStack(spacing: 5) {
-            Rectangle()
-                .fill(theme.rowSeparator(for: .network))
-                .frame(height: 1)
-
-            VStack(spacing: 4) {
-                ForEach(0 ..< Self.rowCount, id: \.self) { index in
-                    ProcessRowView(row: index < rows.count ? rows[index] : processDashRow, theme: theme)
-                }
-            }
-            .animation(.easeInOut(duration: 0.2), value: rows.count)
-        }
+        FrozenTrafficProcessList(kind: .network, rows: rows, theme: theme)
     }
 }
 
@@ -3267,6 +3586,7 @@ private struct BluetoothGlassRow: View, Equatable {
     let theme: MonitorPanelTheme
     var isExpanded = false
     var toggleExpansion: (() -> Void)?
+    @State private var isHeaderHovering = false
 
     static func == (lhs: BluetoothGlassRow, rhs: BluetoothGlassRow) -> Bool {
         lhs.module == rhs.module
@@ -3303,14 +3623,18 @@ private struct BluetoothGlassRow: View, Equatable {
             : String(localized: "bluetooth.row.expand-hint")
     }
 
-    /// 图标槽与双列读数等宽。标题和设备数优先，空间不足时缩窄槽并折叠末尾图标。
+    /// 图标槽按可见设备数量紧凑自适应（最多不超过双列读数宽度）。
     private var deviceIcons: some View {
         let iconWidth: CGFloat = 16
         let spacing: CGFloat = 4
         return GeometryReader { geometry in
-            let width = min(geometry.size.width, RowHeaderPillMetrics.width * 2 + RowHeaderPillMetrics.spacing)
-            let innerWidth = max(0, width - 2 * RowHeaderPillMetrics.horizontalPadding)
-            let slots = Int((innerWidth + spacing) / (iconWidth + spacing))
+            let maxWidth = min(geometry.size.width, RowHeaderPillMetrics.width * 2 + RowHeaderPillMetrics.spacing)
+            let naturalWidth = min(
+                maxWidth,
+                max(44, CGFloat(devices.count) * iconWidth + CGFloat(max(0, devices.count - 1)) * spacing + 20)
+            )
+            let innerWidth = max(0, naturalWidth - 2 * RowHeaderPillMetrics.horizontalPadding)
+            let slots = max(0, Int((innerWidth + spacing) / (iconWidth + spacing)))
             PairedHeaderReadings(theme: theme) {
                 ViewThatFits(in: .horizontal) {
                     ForEach((0...min(slots, devices.count)).reversed(), id: \.self) { visible in
@@ -3330,7 +3654,7 @@ private struct BluetoothGlassRow: View, Equatable {
                     Color.clear
                 }
                 .frame(width: innerWidth)
-                .frame(width: width, height: RowHeaderPillMetrics.height)
+                .frame(width: naturalWidth, height: RowHeaderPillMetrics.height)
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
@@ -3343,23 +3667,23 @@ private struct BluetoothGlassRow: View, Equatable {
     var body: some View {
         PanelCardStack {
             HStack(spacing: 10) {
-                module.kind.symbolImage
-                    .resizable()
-                    .scaledToFit()
-                    .foregroundStyle(tint)
-                    // 占位宽度与其余行头图标(SF Symbols .frame(width: 18))一致,
-                    // 保证各行标题文字起始列对齐;高度 14 匹配符文的窄高形态。
-                    .frame(width: 18, height: 14)
+                ModuleHeaderIcon(image: module.kind.symbolImage, tint: tint, theme: theme)
 
-                Text("\(module.kind.title):")
+                Text(module.kind.title)
                     .monitorPanelMetricLabelFont()
                     .foregroundStyle(theme.primaryText)
                     .lineLimit(1)
+                    .monitorPanelModuleTitleSlot()
 
                 Text(module.summary)
                     .monitorPanelMonoFont(weight: .semibold)
                     .foregroundStyle(theme.valueText)
                     .lineLimit(1)
+                    .overlay(alignment: .trailing) {
+                        RowExpandChevronHint(isVisible: !devices.isEmpty && isHeaderHovering,
+                                             isExpanded: isExpanded, theme: theme)
+                            .offset(x: 14)
+                    }
 
                 if !devices.isEmpty {
                     deviceIcons
@@ -3372,6 +3696,8 @@ private struct BluetoothGlassRow: View, Equatable {
             .padding(.vertical, RowHeaderPillMetrics.verticalPadding)
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
+            .onHover { isHeaderHovering = $0 }
+            .help(devices.isEmpty ? String(localized: "panel.row.not-expandable-hint") : "")
             .onTapGesture {
                 // 无设备时展开区无内容,点击不切换状态。
                 guard !devices.isEmpty else { return }
@@ -3399,7 +3725,8 @@ private struct BluetoothGlassRow: View, Equatable {
             }
         }
         .panelCardBrighten()
-        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius) {
+        .compatibleGlassEffect(cornerRadius: MonitorConstants.rowCornerRadius,
+                               borderColor: theme.cardBorderColor) {
             theme.rowGlassFill(for: module.kind)
         }
     }
@@ -3613,34 +3940,58 @@ private struct BluetoothBatteryBar: View {
 private struct ProcessRowView: View {
     let row: ProcessRowData
     let theme: MonitorPanelTheme
+    let onMenuOpenChange: (Bool) -> Void
+    let onConfirmingQuitChange: (pid_t?) -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            if row.isPlaceholder {
+        if row.isPlaceholder {
+            HStack(spacing: 6) {
                 Color.clear
                     .frame(width: 16, height: 16)
-            } else {
-                ProcessIcon(icon: row.icon, theme: theme)
-                    .frame(width: 16, height: 16)
-            }
-
-            Text(row.name)
-                .monitorPanelCaptionFont(.footnote)
-                .foregroundStyle(row.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.primaryText)
+                Text(row.name)
+                    .monitorPanelCaptionFont(.footnote)
+                    .foregroundStyle(theme.secondaryText.opacity(0.5))
+                    .lineLimit(1)
+                Spacer(minLength: 8)
+                HStack(spacing: 10) {
+                    metricColumn(symbol: "↑", value: row.upText)
+                    metricColumn(symbol: "↓", value: row.downText)
+                }
+                .foregroundStyle(theme.secondaryText.opacity(0.5))
                 .lineLimit(1)
-                .truncationMode(.tail)
-
-            Spacer(minLength: 8)
-
-            // 两个数值各占固定宽度、右对齐:箭头留在左侧固定位置,数字尾部对齐,
-            // 数值宽度变化时列位置不再左右抖动,跨行也对齐成整齐两列。
-            HStack(spacing: 10) {
-                metricColumn(symbol: "↑", value: row.upText)
-                metricColumn(symbol: "↓", value: row.downText)
+                .layoutPriority(1)
             }
-            .foregroundStyle(row.isPlaceholder ? theme.secondaryText.opacity(0.5) : theme.secondaryText)
-            .lineLimit(1)
-            .layoutPriority(1)
+            .padding(.horizontal, 4)
+            .padding(.vertical, 1)
+        } else {
+            InteractiveProcessRow(
+                pid: pid_t(row.id),
+                name: row.name,
+                theme: theme,
+                onMenuOpenChange: onMenuOpenChange,
+                onConfirmingQuitChange: onConfirmingQuitChange
+            ) {
+                HStack(spacing: 6) {
+                    ProcessIcon(icon: row.icon, theme: theme)
+                        .frame(width: 16, height: 16)
+
+                    Text(row.name)
+                        .monitorPanelCaptionFont(.footnote)
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            } trailing: {
+                // 两个数值各占固定宽度、右对齐:箭头留在左侧固定位置,数字尾部对齐,
+                // 数值宽度变化时列位置不再左右抖动,跨行也对齐成整齐两列。
+                HStack(spacing: 10) {
+                    metricColumn(symbol: "↑", value: row.upText)
+                    metricColumn(symbol: "↓", value: row.downText)
+                }
+                .foregroundStyle(theme.secondaryText)
+                .lineLimit(1)
+                .layoutPriority(1)
+            }
         }
     }
 
@@ -3707,5 +4058,455 @@ struct CollapsibleDetail<Content: View>: View {
         let expanded = contentAvailable && isExpanded
         SingleHostDetail(id: expansionKey, isExpanded: expanded, available: contentAvailable,
             content: content, measurementKey: measurementKey)
+    }
+}
+
+// MARK: - 主行共享辅助组件与进程操作
+
+/// 主行模块图标：统一系统符号与自定义资源图在 18×18 槽位内的尺寸与着色对齐。
+struct ModuleHeaderIcon: View {
+    private enum Source {
+        case system(String)
+        case image(Image)
+    }
+
+    private let source: Source
+    let tint: Color
+    let theme: MonitorPanelTheme
+
+    init(systemName: String, tint: Color, theme: MonitorPanelTheme) {
+        self.source = .system(systemName)
+        self.tint = tint
+        self.theme = theme
+    }
+
+    init(image: Image, tint: Color, theme: MonitorPanelTheme) {
+        self.source = .image(image)
+        self.tint = tint
+        self.theme = theme
+    }
+
+    var body: some View {
+        Group {
+            switch source {
+            case .system(let name):
+                Image(systemName: name)
+                    .font(.callout.weight(.semibold))
+                    .symbolRenderingMode(.monochrome)
+                    .foregroundStyle(tint)
+            case .image(let img):
+                img
+                    .resizable()
+                    .scaledToFit()
+                    .foregroundStyle(tint)
+                    .frame(width: 18, height: 14)
+            }
+        }
+        .frame(width: 18, height: 18)
+    }
+}
+
+/// 可展开行头悬停时的微弱箭头提示（占位独立于布局流，零高度/宽度抖动）。
+struct RowExpandChevronHint: View {
+    let isVisible: Bool
+    let isExpanded: Bool
+    let theme: MonitorPanelTheme
+
+    var body: some View {
+        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+            .font(.system(size: 8.5, weight: .bold))
+            .foregroundStyle(theme.captionText.opacity(0.75))
+            .opacity(isVisible ? 1 : 0)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+            .animation(.easeOut(duration: 0.12), value: isVisible)
+    }
+}
+
+extension View {
+    /// 按当前语言设定主行模块标题的最小左对齐槽宽，使各行主数值纵向对齐。
+    func monitorPanelModuleTitleSlot() -> some View {
+        let slotWidth: CGFloat = StaticMetricSizing.panelLanguage.hasPrefix("zh") ? 38 : 48
+        return frame(minWidth: slotWidth, alignment: .leading)
+    }
+}
+
+/// TOP 进程快捷操作辅助器：封装激活、访达定位、剪贴板复制及直连版退出与 PID 复用核验。
+@MainActor
+enum ProcessActionHelper {
+    private static let protectedSystemNames: Set<String> = [
+        "kernel_task", "launchd", "WindowServer", "loginwindow"
+    ]
+
+    static func isProtectedSystemProcess(pid: pid_t, name: String) -> Bool {
+        pid <= 1 || pid == ProcessInfo.processInfo.processIdentifier || protectedSystemNames.contains(name)
+    }
+
+    static func canActivate(pid: pid_t) -> Bool {
+        guard pid > 0, let app = NSRunningApplication(processIdentifier: pid) else { return false }
+        return !app.isTerminated && app.activationPolicy == .regular
+    }
+
+    static func activate(pid: pid_t) {
+        guard pid > 0, let app = NSRunningApplication(processIdentifier: pid), !app.isTerminated else { return }
+        app.activate()
+    }
+
+    static func revealURL(pid: pid_t) -> URL? {
+        guard pid > 0 else { return nil }
+        if let app = NSRunningApplication(processIdentifier: pid),
+           let url = app.bundleURL ?? app.executableURL {
+            return url
+        }
+        let path = executablePath(for: pid)
+        return path.isEmpty ? nil : URL(fileURLWithPath: path)
+    }
+
+    static func revealInFinder(pid: pid_t) {
+        guard let url = revealURL(pid: pid) else { return }
+        NSWorkspace.shared.activateFileViewerSelecting([url])
+    }
+
+    static func copyText(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    static func matchesIdentity(app: NSRunningApplication, expectedName: String) -> Bool {
+        let target = expectedName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !target.isEmpty else { return false }
+        let candidates = [
+            app.localizedName,
+            app.executableURL?.lastPathComponent,
+            app.bundleURL?.deletingPathExtension().lastPathComponent
+        ].compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        return candidates.contains { $0.caseInsensitiveCompare(target) == .orderedSame }
+    }
+
+    #if DIRECT_DISTRIBUTION
+    static func canTerminate(pid: pid_t, name: String) -> Bool {
+        guard !isProtectedSystemProcess(pid: pid, name: name),
+              let app = NSRunningApplication(processIdentifier: pid),
+              !app.isTerminated else { return false }
+        return matchesIdentity(app: app, expectedName: name)
+    }
+
+    @discardableResult
+    static func terminate(pid: pid_t, expectedName: String) -> Bool {
+        guard !isProtectedSystemProcess(pid: pid, name: expectedName),
+              let app = NSRunningApplication(processIdentifier: pid),
+              !app.isTerminated,
+              matchesIdentity(app: app, expectedName: expectedName) else { return false }
+        return app.terminate()
+    }
+    #endif
+}
+
+/// AppKit 进程行右键菜单宿主：弹出瞬间按值快照 pid 与进程名并锁定列表排序，避免排名波动调包目标。
+private struct ProcessRowContextMenuOverlay: NSViewRepresentable {
+    let pid: pid_t
+    let name: String
+    let onMenuOpenChange: (Bool) -> Void
+    let onCopied: () -> Void
+    let onRequestQuit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> MenuHitTestView {
+        let view = MenuHitTestView()
+        view.coordinator = context.coordinator
+        syncCoordinator(context.coordinator)
+        return view
+    }
+
+    func updateNSView(_ nsView: MenuHitTestView, context: Context) {
+        nsView.coordinator = context.coordinator
+        syncCoordinator(context.coordinator)
+    }
+
+    static func dismantleNSView(_ nsView: MenuHitTestView, coordinator: Coordinator) {
+        coordinator.setMenuOpen(false)
+        nsView.coordinator = nil
+    }
+
+    private func syncCoordinator(_ coordinator: Coordinator) {
+        coordinator.pid = pid
+        coordinator.name = name
+        coordinator.onMenuOpenChange = onMenuOpenChange
+        coordinator.onCopied = onCopied
+        coordinator.onRequestQuit = onRequestQuit
+    }
+
+    final class MenuHitTestView: NSView {
+        weak var coordinator: Coordinator?
+
+        override func hitTest(_ point: NSPoint) -> NSView? {
+            guard let event = NSApp.currentEvent else { return nil }
+            let isContextClick = event.type == .rightMouseDown
+                || (event.type == .leftMouseDown && event.modifierFlags.contains(.control))
+            guard isContextClick else { return nil }
+            let local = convert(point, from: superview)
+            return bounds.contains(local) ? self : nil
+        }
+
+        override func menu(for event: NSEvent) -> NSMenu? {
+            coordinator?.buildMenu()
+        }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.modifierFlags.contains(.control), let menu = menu(for: event) {
+                NSMenu.popUpContextMenu(menu, with: event, for: self)
+                return
+            }
+            super.mouseDown(with: event)
+        }
+    }
+
+    final class Coordinator: NSObject, NSMenuDelegate {
+        var pid: pid_t = 0
+        var name: String = ""
+        var onMenuOpenChange: ((Bool) -> Void)?
+        var onCopied: (() -> Void)?
+        var onRequestQuit: (() -> Void)?
+        private var isMenuOpen = false
+
+        func setMenuOpen(_ open: Bool) {
+            guard isMenuOpen != open else { return }
+            isMenuOpen = open
+            onMenuOpenChange?(open)
+        }
+
+        func menuWillOpen(_ menu: NSMenu) {
+            setMenuOpen(true)
+        }
+
+        func menuDidClose(_ menu: NSMenu) {
+            setMenuOpen(false)
+        }
+
+        @MainActor
+        func buildMenu() -> NSMenu? {
+            let capturedPID = pid
+            let capturedName = name
+            let canActivate = ProcessActionHelper.canActivate(pid: capturedPID)
+            let hasRevealURL = ProcessActionHelper.revealURL(pid: capturedPID) != nil
+            #if DIRECT_DISTRIBUTION
+            let canTerminate = ProcessActionHelper.canTerminate(pid: capturedPID, name: capturedName)
+            #else
+            let canTerminate = false
+            #endif
+
+            let menu = NSMenu(title: capturedName)
+            menu.delegate = self
+
+            if canActivate {
+                menu.addItem(makeItem(title: String(localized: "panel.process.activate")) {
+                    ProcessActionHelper.activate(pid: capturedPID)
+                })
+            }
+            if hasRevealURL {
+                menu.addItem(makeItem(title: String(localized: "panel.process.reveal-in-finder")) {
+                    ProcessActionHelper.revealInFinder(pid: capturedPID)
+                })
+            }
+            let copyCallback = onCopied
+            menu.addItem(makeItem(title: String(localized: "panel.process.copy-name")) {
+                ProcessActionHelper.copyText(capturedName)
+                copyCallback?()
+            })
+            if capturedPID > 0 {
+                menu.addItem(makeItem(title: String(localized: "panel.process.copy-pid")) {
+                    ProcessActionHelper.copyText("\(capturedPID)")
+                    copyCallback?()
+                })
+            }
+            #if DIRECT_DISTRIBUTION
+            if canTerminate {
+                menu.addItem(.separator())
+                let quitCallback = onRequestQuit
+                menu.addItem(makeItem(title: String(localized: "panel.process.quit")) {
+                    quitCallback?()
+                })
+            }
+            #endif
+            return menu.items.isEmpty ? nil : menu
+        }
+
+        private func makeItem(title: String, action: @escaping @MainActor () -> Void) -> NSMenuItem {
+            let box = MenuActionBox(action: action)
+            let item = NSMenuItem(title: title, action: #selector(MenuActionBox.invoke), keyEquivalent: "")
+            item.target = box
+            item.representedObject = box
+            return item
+        }
+    }
+
+    private final class MenuActionBox: NSObject {
+        private let handler: @MainActor () -> Void
+
+        init(action: @escaping @MainActor () -> Void) {
+            self.handler = action
+        }
+
+        @objc func invoke() {
+            MainActor.assumeIsolated {
+                handler()
+            }
+        }
+    }
+}
+
+private struct InteractiveProcessRow<Leading: View, Trailing: View>: View {
+    let pid: pid_t
+    let name: String
+    let theme: MonitorPanelTheme
+    let onMenuOpenChange: (Bool) -> Void
+    let onConfirmingQuitChange: (pid_t?) -> Void
+    @ViewBuilder let leading: () -> Leading
+    @ViewBuilder let trailing: () -> Trailing
+
+    @State private var isHovering = false
+    @State private var pendingQuitTarget: (pid: pid_t, name: String)?
+    @State private var copyID: UUID?
+
+    private var canActivate: Bool { ProcessActionHelper.canActivate(pid: pid) }
+    #if DIRECT_DISTRIBUTION
+    private var canTerminate: Bool { ProcessActionHelper.canTerminate(pid: pid, name: name) }
+    #else
+    private var canTerminate: Bool { false }
+    #endif
+
+    private func setPendingQuit(_ target: (pid: pid_t, name: String)?) {
+        pendingQuitTarget = target
+        onConfirmingQuitChange(target?.pid)
+    }
+
+    var body: some View {
+        let confirmingQuit = pendingQuitTarget != nil
+        HStack(spacing: 6) {
+            leading()
+
+            Spacer(minLength: 4)
+
+            if let target = pendingQuitTarget {
+                #if DIRECT_DISTRIBUTION
+                HStack(spacing: 4) {
+                    Button(String(localized: "panel.process.cancel-quit")) {
+                        setPendingQuit(nil)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(theme.captionText)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(theme.trackFill))
+
+                    Button(String(localized: "panel.process.confirm-quit")) {
+                        _ = ProcessActionHelper.terminate(pid: target.pid, expectedName: target.name)
+                        setPendingQuit(nil)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(theme.palette.severityTint(for: .critical))
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 1)
+                    .background(Capsule().fill(theme.palette.severityTint(for: .critical).opacity(0.14)))
+                }
+                .fixedSize()
+                #endif
+            } else if copyID != nil {
+                HStack(spacing: 3) {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 9, weight: .bold))
+                    Text(String(localized: "panel.process.copied"))
+                        .monitorPanelCaptionFont(.caption2, weight: .semibold)
+                }
+                .foregroundStyle(theme.palette.severityTint(for: .calm))
+                .fixedSize()
+            } else {
+                if isHovering && pid > 0 {
+                    HStack(spacing: 3) {
+                        if canActivate {
+                            quickActionButton(systemName: "arrow.up.forward.app",
+                                              help: String(localized: "panel.process.activate"),
+                                              tint: theme.secondaryText) {
+                                ProcessActionHelper.activate(pid: pid)
+                            }
+                        }
+                        quickActionButton(systemName: "doc.on.doc",
+                                          help: String(localized: "panel.process.copy-pid"),
+                                          tint: theme.secondaryText) {
+                            ProcessActionHelper.copyText("\(pid)")
+                            copyID = UUID()
+                        }
+                        #if DIRECT_DISTRIBUTION
+                        if canTerminate {
+                            quickActionButton(systemName: "xmark.circle",
+                                              help: String(localized: "panel.process.quit"),
+                                              tint: theme.palette.severityTint(for: .critical)) {
+                                setPendingQuit((pid: pid, name: name))
+                            }
+                        }
+                        #endif
+                    }
+                    .fixedSize()
+                }
+                trailing()
+            }
+        }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 1)
+        .background(
+            RoundedRectangle(cornerRadius: 5, style: .continuous)
+                .fill(theme.trackFill.opacity(isHovering || confirmingQuit ? 1 : 0))
+        )
+        .contentShape(Rectangle())
+        .overlay {
+            ProcessRowContextMenuOverlay(
+                pid: pid,
+                name: name,
+                onMenuOpenChange: onMenuOpenChange,
+                onCopied: { copyID = UUID() },
+                onRequestQuit: { setPendingQuit((pid: pid, name: name)) }
+            )
+        }
+        .onHover { hovering in
+            isHovering = hovering
+            if !hovering && pendingQuitTarget != nil {
+                setPendingQuit(nil)
+            }
+        }
+        .onChange(of: pid) { _, newPID in
+            if let target = pendingQuitTarget, target.pid != newPID {
+                setPendingQuit(nil)
+            }
+        }
+        .onDisappear {
+            if pendingQuitTarget != nil {
+                setPendingQuit(nil)
+            }
+        }
+        .task(id: copyID) {
+            guard copyID != nil else { return }
+            do {
+                try await Task.sleep(for: .seconds(1))
+                copyID = nil
+            } catch {}
+        }
+    }
+
+    private func quickActionButton(systemName: String, help: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(tint)
+                .frame(width: 16, height: 15)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
     }
 }

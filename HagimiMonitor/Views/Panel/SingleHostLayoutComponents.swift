@@ -260,19 +260,28 @@ nonisolated struct PanelMetricColumnsLayout: Layout {
         guard cache.width != width || cache.key != measurementKey || cache.sizes.count != subviews.count else { return }
         let cellWidth = max(0, (width - MetricGridMetrics.columnSpacing) / 2)
         let spans = subviews.map { $0[PanelMetricSpanKey.self] == 2 ? 2 : 1 }
+        let rows = MetricGridPacking.rows(for: spans)
+        var itemWidths = Array(repeating: cellWidth, count: subviews.count)
+        for row in rows {
+            let effectiveFullRow = row.count == 1
+            for index in row {
+                itemWidths[index] = (spans[index] == 2 || effectiveFullRow) ? width : cellWidth
+            }
+        }
         cache.sizes = subviews.enumerated().map { index, subview in
-            subview.sizeThatFits(ProposedViewSize(width: spans[index] == 2 ? width : cellWidth, height: nil))
+            subview.sizeThatFits(ProposedViewSize(width: itemWidths[index], height: nil))
         }
         cache.frames = Array(repeating: .zero, count: subviews.count)
-        let rows = MetricGridPacking.rows(for: spans)
         var y: CGFloat = 0
         for row in rows {
             let rowHeight = row.map { cache.sizes[$0].height }.max() ?? 0
             for (column, index) in row.enumerated() {
-                let x = spans[index] == 2 ? 0 : CGFloat(column) * (cellWidth + MetricGridMetrics.columnSpacing)
+                let x = (spans[index] == 2 || row.count == 1)
+                    ? 0
+                    : CGFloat(column) * (cellWidth + MetricGridMetrics.columnSpacing)
                 cache.frames[index] = CGRect(
                     x: x, y: y + (rowHeight - cache.sizes[index].height) / 2,
-                    width: spans[index] == 2 ? width : cellWidth,
+                    width: itemWidths[index],
                     height: cache.sizes[index].height
                 )
             }
