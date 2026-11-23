@@ -104,6 +104,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
+        panel.allowsToolTipsWhenApplicationIsInactive = true
         panel.delegate = self
         panel.autorecalculatesKeyViewLoop = true
 

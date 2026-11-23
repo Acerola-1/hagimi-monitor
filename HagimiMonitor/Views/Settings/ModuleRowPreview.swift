@@ -89,13 +89,15 @@ struct ModuleRowPreview: View {
         HStack(spacing: 10) {
             ModuleHeaderIcon(systemName: kind.symbol, tint: tint, theme: theme)
 
-            Text(kind.title)
-                .monitorPanelMetricLabelFont()
-                .foregroundStyle(palette.primaryText)
-                .lineLimit(1)
-                .monitorPanelModuleTitleSlot()
+            HStack(spacing: 6) {
+                Text("\(kind.title):")
+                    .monitorPanelMetricLabelFont()
+                    .foregroundStyle(palette.primaryText)
+                    .lineLimit(1)
+                    .monitorPanelModuleTitleSlot()
 
-            headerSummary
+                headerSummary
+            }
 
             Spacer(minLength: 8)
 

@@ -1091,23 +1091,6 @@
         }
       }
     },
-    "panel.reorder.long-press-hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Press and hold to reorder"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "长按并拖动以调整顺序"
-          }
-        }
-      }
-    },
     "panel.reorder.invalid-drop": {
       "extractionState": "manual",
       "localizations": {
@@ -26980,23 +26963,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "复制"
-          }
-        }
-      }
-    },
-    "panel.row.not-expandable-hint": {
-      "extractionState": "manual",
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "No additional details to expand"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "当前无更多可展开明细"
           }
         }
       }

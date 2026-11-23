@@ -283,6 +283,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.stationary, .moveToActiveSpace, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
+        panel.allowsToolTipsWhenApplicationIsInactive = true
         panel.delegate = self
         panel.autorecalculatesKeyViewLoop = true
 

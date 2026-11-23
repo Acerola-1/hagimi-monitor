@@ -216,21 +216,23 @@ struct DisplaySection: View {
                 ModuleHeaderIcon(systemName: "slider.horizontal.below.rectangle",
                                  tint: theme.palette.displayTint, theme: theme)
 
-                Text(String(localized: "kind.display"))
-                    .monitorPanelMetricLabelFont()
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                    .monitorPanelModuleTitleSlot()
+                HStack(spacing: 6) {
+                    Text(String(localized: "kind.display") + ":")
+                        .monitorPanelMetricLabelFont()
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .monitorPanelModuleTitleSlot()
 
-                Text(summaryText)
-                    .monitorPanelMonoFont(weight: .semibold)
-                    .foregroundStyle(theme.valueText)
-                    .lineLimit(1)
-                    .overlay(alignment: .trailing) {
-                        RowExpandChevronHint(isVisible: !displays.isEmpty && isHeaderHovering,
-                                             isExpanded: isExpanded, theme: theme)
-                            .offset(x: 14)
-                    }
+                    Text(summaryText)
+                        .monitorPanelMonoFont(weight: .semibold)
+                        .foregroundStyle(theme.valueText)
+                        .lineLimit(1)
+                        .overlay(alignment: .trailing) {
+                            RowExpandChevronHint(isVisible: !displays.isEmpty && isHeaderHovering,
+                                                 isExpanded: isExpanded, theme: theme)
+                                .offset(x: 14)
+                        }
+                }
 
                 Spacer(minLength: 8)
             }
@@ -240,7 +242,6 @@ struct DisplaySection: View {
             .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onHover { isHeaderHovering = $0 }
-            .help(displays.isEmpty ? String(localized: "panel.row.not-expandable-hint") : "")
             .onTapGesture {
                 toggleReadonlyExpansion()
             }
@@ -341,13 +342,13 @@ struct DisplaySection: View {
                 ModuleHeaderIcon(systemName: "slider.horizontal.below.rectangle",
                                  tint: tint, theme: theme)
 
-                Text(String(localized: "kind.display"))
-                    .monitorPanelMetricLabelFont()
-                    .foregroundStyle(palette.primaryText)
-                    .lineLimit(1)
-                    .monitorPanelModuleTitleSlot()
-
                 if showsDeviceReadings {
+                    Text(String(localized: "kind.display") + ":")
+                        .monitorPanelMetricLabelFont()
+                        .foregroundStyle(palette.primaryText)
+                        .lineLimit(1)
+                        .monitorPanelModuleTitleSlot()
+
                     Color.clear
                         .frame(width: 1, height: 14)
                         .overlay(alignment: .leading) {
@@ -361,15 +362,23 @@ struct DisplaySection: View {
                     )
                     .layoutPriority(2)
                 } else {
-                    Text(connectionSummary)
-                        .monitorPanelRoundedFont(weight: .semibold)
-                        .foregroundStyle(palette.valueText)
-                        .lineLimit(1)
-                        .overlay(alignment: .trailing) {
-                            RowExpandChevronHint(isVisible: (!entries.isEmpty || !visibleDisplays.isEmpty) && isHeaderHovering,
-                                                 isExpanded: isExpanded, theme: theme)
-                                .offset(x: 14)
-                        }
+                    HStack(spacing: 6) {
+                        Text(String(localized: "kind.display") + ":")
+                            .monitorPanelMetricLabelFont()
+                            .foregroundStyle(palette.primaryText)
+                            .lineLimit(1)
+                            .monitorPanelModuleTitleSlot()
+
+                        Text(connectionSummary)
+                            .monitorPanelRoundedFont(weight: .semibold)
+                            .foregroundStyle(palette.valueText)
+                            .lineLimit(1)
+                            .overlay(alignment: .trailing) {
+                                RowExpandChevronHint(isVisible: (!entries.isEmpty || !visibleDisplays.isEmpty) && isHeaderHovering,
+                                                     isExpanded: isExpanded, theme: theme)
+                                    .offset(x: 14)
+                            }
+                    }
 
                     Spacer(minLength: 8)
                 }
@@ -381,7 +390,6 @@ struct DisplaySection: View {
             .panelMeasure("row:display")
             .contentShape(Rectangle())
             .onHover { isHeaderHovering = $0 }
-            .help((!entries.isEmpty || !visibleDisplays.isEmpty) ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 toggleExpansion()
             }

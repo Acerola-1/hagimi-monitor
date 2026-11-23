@@ -430,7 +430,14 @@ struct MonitorPanelView: View {
                 Spacer(minLength: 0)
             }
             .contentShape(Rectangle())
-            .help(String(localized: "panel.header.toggle-all"))
+            .background {
+                DelayedTooltipOverlay(
+                    text: String(localized: "panel.header.toggle-all"),
+                    delay: 2.0,
+                    isEnabled: store.isPanelVisible
+                )
+            }
+            .accessibilityHint(String(localized: "panel.header.toggle-all"))
             .onTapGesture(count: 2) {
                 toggleAllExpansion()
             }
@@ -1002,27 +1009,29 @@ private struct MetricGlassRow: View, Equatable {
             HStack(spacing: 10) {
                 ModuleHeaderIcon(systemName: module.kind.symbol, tint: tint, theme: theme)
 
-                Text(module.kind.title)
-                    .monitorPanelMetricLabelFont()
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                    .monitorPanelModuleTitleSlot()
-
-                HStack(spacing: 5) {
-                    Text(detail)
-                        .monitorPanelMonoFont(weight: .semibold)
-                        .foregroundStyle(theme.valueText)
+                HStack(spacing: 6) {
+                    Text("\(module.kind.title):")
+                        .monitorPanelMetricLabelFont()
+                        .foregroundStyle(theme.primaryText)
                         .lineLimit(1)
-                    if let statusTint {
-                        Circle()
-                            .fill(statusTint)
-                            .frame(width: 6, height: 6)
+                        .monitorPanelModuleTitleSlot()
+
+                    HStack(spacing: 5) {
+                        Text(detail)
+                            .monitorPanelMonoFont(weight: .semibold)
+                            .foregroundStyle(theme.valueText)
+                            .lineLimit(1)
+                        if let statusTint {
+                            Circle()
+                                .fill(statusTint)
+                                .frame(width: 6, height: 6)
+                        }
                     }
-                }
-                .overlay(alignment: .trailing) {
-                    RowExpandChevronHint(isVisible: detailAvailable && isHeaderHovering,
-                                         isExpanded: isExpanded, theme: theme)
-                        .offset(x: 14)
+                    .overlay(alignment: .trailing) {
+                        RowExpandChevronHint(isVisible: detailAvailable && isHeaderHovering,
+                                             isExpanded: isExpanded, theme: theme)
+                            .offset(x: 14)
+                    }
                 }
 
                 Spacer(minLength: 8)
@@ -1038,7 +1047,6 @@ private struct MetricGlassRow: View, Equatable {
             // 展开区的 onTapGesture 会抢占深层控件(按钮/滑杆)的点击。
             .contentShape(Rectangle())
             .onHover { isHeaderHovering = $0 }
-            .help(detailAvailable ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 // 单风扇时主行已展示 RPM,无展开内容,点击不切换展开状态。
                 guard detailAvailable else { return }
@@ -1208,8 +1216,6 @@ struct CPUCoresDetail: View {
     let theme: MonitorPanelTheme
     @Environment(\.isEnabled) private var isEnabled
     @State private var hoveredCore: Int?
-    @State private var displayedHoveredCore: Int?
-    @State private var hoverClearTask: Task<Void, Never>?
 
     private var displayedDetail: CPUCoreDetail {
         #if DEBUG
@@ -1258,6 +1264,12 @@ struct CPUCoresDetail: View {
                     coreRing(for: core)
                 }
             }
+            .overlay {
+                if let activeID = hoveredCore,
+                   let core = cores.first(where: { $0.index == activeID }) {
+                    coreHoverBubbleOverlay(for: core, in: cores)
+                }
+            }
             .padding(.vertical, CoreRingHoverRegion.verticalInset)
             .padding(.horizontal, CoreRingHoverRegion.horizontalInset)
             .background {
@@ -1265,19 +1277,6 @@ struct CPUCoresDetail: View {
                 if isEnabled {
                     CoreRingHoverRegion(coreIDs: cores.map(\.index)) { core in
                         if hoveredCore != core { hoveredCore = core }
-                        hoverClearTask?.cancel()
-                        hoverClearTask = nil
-                        if let core {
-                            if displayedHoveredCore != core {
-                                displayedHoveredCore = core
-                            }
-                        } else if displayedHoveredCore != nil {
-                            hoverClearTask = Task { @MainActor in
-                                try? await Task.sleep(for: .milliseconds(180))
-                                guard !Task.isCancelled else { return }
-                                displayedHoveredCore = nil
-                            }
-                        }
                     }
                 }
             }
@@ -1287,37 +1286,75 @@ struct CPUCoresDetail: View {
                 .frame(height: 1)
                 .padding(.horizontal, 8)
 
-            let activeCore = displayedHoveredCore.flatMap { id in cores.first(where: { $0.index == id }) }
-            let showingSingleCore = activeCore != nil
-            ZStack {
-                HStack(spacing: 0) {
-                    ForEach(Array(displayedDetail.groups.enumerated()), id: \.element.id) { index, group in
-                        if index > 0 {
-                            Rectangle()
-                                .fill(theme.captionText.opacity(0.22))
-                                .frame(width: 1, height: 13)
-                        }
-                        usageSegment(group)
+            HStack(spacing: 0) {
+                ForEach(Array(displayedDetail.groups.enumerated()), id: \.element.id) { index, group in
+                    if index > 0 {
+                        Rectangle()
+                            .fill(theme.captionText.opacity(0.22))
+                            .frame(width: 1, height: 13)
                     }
-                }
-                .opacity(showingSingleCore ? 0 : 1)
-                .allowsHitTesting(!showingSingleCore)
-
-                if let core = activeCore {
-                    hoveredCoreSegment(core: core, in: cores)
-                        .transition(.opacity)
+                    usageSegment(group)
                 }
             }
             .padding(.vertical, 6)
-            .animation(.easeOut(duration: 0.16), value: showingSingleCore)
         }
         .background(RoundedRectangle(cornerRadius: 7).fill(theme.trackFill))
-        .onDisappear {
-            hoverClearTask?.cancel()
-            hoverClearTask = nil
-            hoveredCore = nil
-            displayedHoveredCore = nil
+        .onDisappear { hoveredCore = nil }
+    }
+
+    static func hoverBadgeText(
+        for core: CPUCoreLoad,
+        in cores: [CPUCoreLoad],
+        shortLabel: (CPUCoreKind) -> String
+    ) -> String {
+        let sameKindCores = cores.filter { $0.kind == core.kind }
+        let ordinal = (sameKindCores.firstIndex(where: { $0.index == core.index }) ?? 0) + 1
+        let value = "\(Int(core.usage.rounded()))%"
+        return "\(shortLabel(core.kind))\(ordinal) · \(value)"
+    }
+
+    private static func hoveredRingFrame(
+        for coreID: Int,
+        in cores: [CPUCoreLoad],
+        size: CGSize
+    ) -> CGRect? {
+        var found: CGRect?
+        CoreRingFlowLayout().forEachRing(count: cores.count, in: CGRect(origin: .zero, size: size)) { index, frame in
+            if cores[index].index == coreID {
+                found = frame
+            }
         }
+        return found
+    }
+
+    private func coreHoverBubbleOverlay(for core: CPUCoreLoad, in cores: [CPUCoreLoad]) -> some View {
+        GeometryReader { proxy in
+            if let ringFrame = Self.hoveredRingFrame(for: core.index, in: cores, size: proxy.size) {
+                let text = Self.hoverBadgeText(for: core, in: cores, shortLabel: shortLabel)
+                let safeInset = min(18, proxy.size.width / 2)
+                let clampedX = max(safeInset, min(proxy.size.width - safeInset, ringFrame.midX))
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(tint(for: core.kind))
+                        .frame(width: 5, height: 5)
+                    Text(text)
+                        .monitorPanelMonoFont(.caption2, weight: .semibold)
+                        .foregroundStyle(theme.primaryText)
+                }
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2.5)
+                .background(.regularMaterial, in: Capsule(style: .continuous))
+                .overlay(
+                    Capsule(style: .continuous)
+                        .strokeBorder(theme.cardBorderColor, lineWidth: 0.5)
+                )
+                .shadow(color: Color.black.opacity(0.14), radius: 3, y: 1)
+                .fixedSize()
+                .position(x: clampedX, y: ringFrame.minY - 12)
+            }
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private func coreRing(for core: CPUCoreLoad) -> some View {
@@ -1329,28 +1366,6 @@ struct CPUCoresDetail: View {
             .contentShape(Rectangle())
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(Text(value))
-    }
-
-    private func hoveredCoreSegment(core: CPUCoreLoad, in cores: [CPUCoreLoad]) -> some View {
-        let sameKindCores = cores.filter { $0.kind == core.kind }
-        let ordinal = (sameKindCores.firstIndex(where: { $0.index == core.index }) ?? 0) + 1
-        let value = "\(Int(core.usage.rounded()))%"
-        return HStack(spacing: 5) {
-            Circle()
-                .fill(tint(for: core.kind))
-                .frame(width: 6, height: 6)
-            Text("\(shortLabel(for: core.kind))\(ordinal) · \(fullLabel(for: core.kind))")
-                .monitorPanelCaptionFont(.footnote)
-                .foregroundStyle(theme.captionText)
-                .lineLimit(1)
-            Text(value)
-                .monitorPanelMonoFont(.footnote, weight: .bold)
-                .foregroundStyle(theme.valueText)
-                .lineLimit(1)
-                .frame(minWidth: 34, alignment: .trailing)
-        }
-        .padding(.horizontal, 6)
-        .frame(maxWidth: .infinity)
     }
 
     /// 单一底色内等分两段或三段;组内信息聚拢,细线标示相邻组的边界。
@@ -1633,6 +1648,15 @@ struct MetricDetailGrid: View {
         nativePanelContentWidth + 12
     }
 
+    /// 仅网络 IP 地址类指标支持点击或右键复制纯地址值。
+    static let copyableNetworkMetricIDs: Set<String> = [
+        "ipv4", "ipv6", "public-ip", "ip-address"
+    ]
+
+    static func isCopyableMetric(kind: MonitorKind, name: String) -> Bool {
+        kind == .network && copyableNetworkMetricIDs.contains(name)
+    }
+
     /// 整行判定查静态登记表(见 StaticMetricSizing):按当前语言与面板宽度断点查表,
     /// 布局不随实时采样值波动而重排。
     private func isFullRow(_ metric: MonitorMetric) -> Bool {
@@ -1696,35 +1720,24 @@ struct MetricDetailGrid: View {
                         if isCoreDetail(cell.metric), let cpuCoreDetail {
                             CPUCoresDetail(detail: cpuCoreDetail, theme: theme)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2,
-                                                  showsDragHint: false)
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: 2)
                                 .panelMetricSpan(2)
                         } else if cell.mergedThermal,
                            let temperature = metrics.first(where: { $0.name == "temperature" }) {
-                            let thermalLabel = localizedMetricName(kind: kind, id: cell.metric.name)
-                            let thermalCombined = "\(localizedMetricValue(kind: kind, metric: temperature)) · \(localizedMetricValue(kind: kind, metric: cell.metric))"
                             thermalPressureCell(thermal: cell.metric, temperature: temperature)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
-                                                  title: localizedMetricName(kind: kind, id: cell.id), span: cell.span,
-                                                  copyActionTitle: String(localized: "panel.copy-value-short"),
-                                                  onCopyAction: {
-                                    MetricCopyFeedback.writeToPasteboard(
-                                        MetricCopyFeedback.formattedPayload(label: thermalLabel, value: thermalCombined)
-                                    )
-                                })
+                                                  title: localizedMetricName(kind: kind, id: cell.id), span: cell.span)
                                 .panelMetricSpan(cell.span)
                         } else {
-                            let cellLabel = localizedMetricName(kind: kind, id: cell.metric.name)
                             let cellValue = localizedMetricValue(kind: kind, metric: cell.metric)
+                            let copyable = Self.isCopyableMetric(kind: kind, name: cell.metric.name)
                             metricCell(cell.metric)
                                 .panelReorderItem(scope: effectiveOrderScope, id: cell.id,
                                                   title: localizedMetricName(kind: kind, id: cell.id), span: cell.span,
-                                                  copyActionTitle: String(localized: "panel.copy-value-short"),
-                                                  onCopyAction: {
-                                    MetricCopyFeedback.writeToPasteboard(
-                                        MetricCopyFeedback.formattedPayload(label: cellLabel, value: cellValue)
-                                    )
-                                })
+                                                  copyActionTitle: copyable ? String(localized: "panel.copy-value-short") : nil,
+                                                  onCopyAction: copyable ? {
+                                    MetricCopyFeedback.writeToPasteboard(cellValue)
+                                } : nil)
                                 .panelMetricSpan(cell.span)
                         }
                     }
@@ -1751,12 +1764,10 @@ struct MetricDetailGrid: View {
     }
 
     /// 热压力合并格:标签「热压力」,右侧依次展示温度与热压力档位。
-    /// 仅在温度可用时渲染此合并格,整格统一作为单个复制热区以容纳完整反馈文案。
     private func thermalPressureCell(thermal: MonitorMetric, temperature: MonitorMetric) -> some View {
         let labelText = localizedMetricName(kind: kind, id: thermal.name)
         let tempText = localizedMetricValue(kind: kind, metric: temperature)
         let thermalText = localizedMetricValue(kind: kind, metric: thermal)
-        let combinedValue = "\(tempText) · \(thermalText)"
 
         return insetCell(
             HStack(spacing: 4) {
@@ -1774,12 +1785,6 @@ struct MetricDetailGrid: View {
                 }
             }
         )
-        .modifier(MetricCopyFeedback(
-            label: labelText,
-            displayValue: combinedValue,
-            tint: theme.palette.severityTint(for: .calm),
-            includesDragHint: true
-        ))
     }
 
     /// 热压力四档 severity 着色:正常→calm 绿,轻微→warning,严重/临界→critical。
@@ -1801,40 +1806,38 @@ struct MetricDetailGrid: View {
 
         // Wi-Fi 信号用「信号格 + dBm」组合(冻结原型),非纯文本值。
         if kind == .network, metric.name == "wifi-rssi" {
+            return AnyView(insetCell(wifiSignalCell(labelText: labelText, metric: metric)))
+        }
+
+        let cell = insetCell(
+            HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
+                Text(labelText)
+                    .monitorPanelCaptionFont(labelStyle)
+                    .foregroundStyle(theme.captionText)
+                    .lineLimit(1)
+                    .layoutPriority(1)
+
+                Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
+
+                splitValue(metric, text: valueText)
+            }
+        )
+
+        if Self.isCopyableMetric(kind: kind, name: metric.name) {
             return AnyView(
-                insetCell(wifiSignalCell(labelText: labelText, metric: metric))
-                    .modifier(MetricCopyFeedback(
-                        label: labelText,
-                        displayValue: valueText,
-                        explanation: explanation,
-                        tint: theme.palette.severityTint(for: .calm),
-                        includesDragHint: true
-                    ))
+                cell.modifier(MetricCopyFeedback(
+                    label: labelText,
+                    displayValue: valueText,
+                    explanation: explanation,
+                    tint: theme.palette.severityTint(for: .calm)
+                ))
             )
         }
 
-        return AnyView(
-            insetCell(
-                HStack(spacing: MetricGridMetrics.cellHStackSpacing) {
-                    Text(labelText)
-                        .monitorPanelCaptionFont(labelStyle)
-                        .foregroundStyle(theme.captionText)
-                        .lineLimit(1)
-                        .layoutPriority(1)
-
-                    Spacer(minLength: MetricGridMetrics.cellSpacerMinLength)
-
-                    splitValue(metric, text: valueText)
-                }
-            )
-            .modifier(MetricCopyFeedback(
-                label: labelText,
-                displayValue: valueText,
-                explanation: explanation,
-                tint: theme.palette.severityTint(for: .calm),
-                includesDragHint: true
-            ))
-        )
+        if let explanation {
+            return AnyView(cell.help(explanation))
+        }
+        return AnyView(cell)
     }
 
     /// 数值/单位两段组合:数字 mono bold 主角化,单位 caption 弱化;
@@ -2185,8 +2188,8 @@ struct NetworkGlassRow: View, Equatable {
                 ModuleHeaderIcon(systemName: "wifi", tint: tint, theme: theme)
 
                 HStack(spacing: 6) {
-                    HStack(spacing: 10) {
-                        Text(String(localized: "kind.network"))
+                    HStack(spacing: 6) {
+                        Text(String(localized: "kind.network") + ":")
                             .monitorPanelMetricLabelFont()
                             .foregroundStyle(theme.primaryText)
                             .lineLimit(1)
@@ -2217,7 +2220,6 @@ struct NetworkGlassRow: View, Equatable {
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
             .onHover { isHeaderHovering = $0 }
-            .help(hasExpandableContent ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 if hasExpandableContent { toggleExpansion?() }
             }
@@ -2342,26 +2344,27 @@ struct BatteryGlassRow: View, Equatable {
                 )
                 .help(isLowPowerMode ? String(localized: "panel.battery.low-power-on") : "")
 
-                Text(String(localized: "kind.battery"))
-                    .monitorPanelMetricLabelFont()
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.82)
-                    .monitorPanelModuleTitleSlot()
-                    .layoutPriority(1)
+                HStack(spacing: 6) {
+                    Text(String(localized: "kind.battery") + ":")
+                        .monitorPanelMetricLabelFont()
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.82)
+                        .monitorPanelModuleTitleSlot()
 
-                Text(summaryText)
-                    .monitorPanelMonoFont(weight: .semibold)
-                    .foregroundStyle(theme.valueText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
-                    .truncationMode(.tail)
-                    .layoutPriority(1)
-                    .overlay(alignment: .trailing) {
-                        RowExpandChevronHint(isVisible: canExpand && isHeaderHovering,
-                                             isExpanded: isExpanded, theme: theme)
-                            .offset(x: 14)
-                    }
+                    Text(summaryText)
+                        .monitorPanelMonoFont(weight: .semibold)
+                        .foregroundStyle(theme.valueText)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .truncationMode(.tail)
+                        .overlay(alignment: .trailing) {
+                            RowExpandChevronHint(isVisible: canExpand && isHeaderHovering,
+                                                 isExpanded: isExpanded, theme: theme)
+                                .offset(x: 14)
+                        }
+                }
+                .layoutPriority(1)
 
                 Spacer(minLength: 4)
 
@@ -2376,7 +2379,6 @@ struct BatteryGlassRow: View, Equatable {
             // 同款纪律:整行 onTapGesture 会抢占深层控件的点击)。
             .contentShape(Rectangle())
             .onHover { isHeaderHovering = $0 }
-            .help(canExpand ? "" : String(localized: "panel.row.not-expandable-hint"))
             .onTapGesture {
                 if canExpand {
                     toggleExpansion?()
@@ -2915,21 +2917,11 @@ struct MetricCopyFeedback: ViewModifier {
     let displayValue: String
     var explanation: String? = nil
     var tint: Color = .green
-    var includesDragHint: Bool = false
     @State private var copyID: UUID?
-    @State private var isHovering = false
     @FocusState private var isFocused: Bool
 
-    static func formattedPayload(label: String, value: String) -> String {
-        "\(label): \(value)"
-    }
-
     private var helpText: String {
-        var parts = [explanation, String(localized: "panel.copy-value")].compactMap { $0 }
-        if includesDragHint, reorderController != nil {
-            parts.append(String(localized: "panel.reorder.long-press-hint"))
-        }
-        return parts.joined(separator: "\n")
+        [explanation, String(localized: "panel.copy-value")].compactMap { $0 }.joined(separator: "\n")
     }
 
     func body(content: Content) -> some View {
@@ -2939,7 +2931,7 @@ struct MetricCopyFeedback: ViewModifier {
             .opacity(isCopied ? 0 : 1)
             .background {
                 tileShape
-                    .fill(isCopied ? tint.opacity(0.12) : Color.primary.opacity(isHovering ? 0.045 : 0))
+                    .fill(isCopied ? tint.opacity(0.12) : Color.clear)
                     .allowsHitTesting(false)
             }
             .overlay {
@@ -2967,8 +2959,13 @@ struct MetricCopyFeedback: ViewModifier {
             .accessibilityElement(children: .ignore)
             .accessibilityLabel(label)
             .accessibilityValue([displayValue, explanation].compactMap { $0 }.joined(separator: ", "))
-            .help(helpText)
-            .onHover { isHovering = isEnabled && $0 }
+            .background {
+                DelayedTooltipOverlay(
+                    text: helpText,
+                    delay: 0.6,
+                    isEnabled: isEnabled && !isCopied
+                )
+            }
             .onTapGesture {
                 isFocused = false
                 copy()
@@ -2983,7 +2980,6 @@ struct MetricCopyFeedback: ViewModifier {
             }
             .accessibilityAction(named: Text(String(localized: "panel.copy-value")), copy)
             .animation(.easeOut(duration: 0.14), value: isCopied)
-            .animation(.easeOut(duration: 0.12), value: isHovering)
             .task(id: copyID) {
                 guard copyID != nil else { return }
                 do {
@@ -2993,27 +2989,22 @@ struct MetricCopyFeedback: ViewModifier {
             }
     }
 
-    static func writeToPasteboard(_ payload: String) {
+    @discardableResult
+    static func writeToPasteboard(_ payload: String) -> Bool {
         NSPasteboard.general.clearContents()
-        guard NSPasteboard.general.setString(payload, forType: .string) else { return }
+        guard NSPasteboard.general.setString(payload, forType: .string) else { return false }
         NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
             userInfo: [
                 .announcement: String(localized: "panel.copied"),
                 .priority: NSAccessibilityPriorityLevel.medium.rawValue
             ])
+        return true
     }
 
     private func copy() {
         guard isEnabled, reorderController?.session == nil else { return }
-        let payload = Self.formattedPayload(label: label, value: displayValue)
-        NSPasteboard.general.clearContents()
-        guard NSPasteboard.general.setString(payload, forType: .string) else { return }
+        guard Self.writeToPasteboard(displayValue) else { return }
         copyID = UUID()
-        NSAccessibility.post(element: NSApp as Any, notification: .announcementRequested,
-            userInfo: [
-                .announcement: String(localized: "panel.copied"),
-                .priority: NSAccessibilityPriorityLevel.medium.rawValue
-            ])
     }
 }
 
@@ -3669,21 +3660,23 @@ private struct BluetoothGlassRow: View, Equatable {
             HStack(spacing: 10) {
                 ModuleHeaderIcon(image: module.kind.symbolImage, tint: tint, theme: theme)
 
-                Text(module.kind.title)
-                    .monitorPanelMetricLabelFont()
-                    .foregroundStyle(theme.primaryText)
-                    .lineLimit(1)
-                    .monitorPanelModuleTitleSlot()
+                HStack(spacing: 6) {
+                    Text("\(module.kind.title):")
+                        .monitorPanelMetricLabelFont()
+                        .foregroundStyle(theme.primaryText)
+                        .lineLimit(1)
+                        .monitorPanelModuleTitleSlot()
 
-                Text(module.summary)
-                    .monitorPanelMonoFont(weight: .semibold)
-                    .foregroundStyle(theme.valueText)
-                    .lineLimit(1)
-                    .overlay(alignment: .trailing) {
-                        RowExpandChevronHint(isVisible: !devices.isEmpty && isHeaderHovering,
-                                             isExpanded: isExpanded, theme: theme)
-                            .offset(x: 14)
-                    }
+                    Text(module.summary)
+                        .monitorPanelMonoFont(weight: .semibold)
+                        .foregroundStyle(theme.valueText)
+                        .lineLimit(1)
+                        .overlay(alignment: .trailing) {
+                            RowExpandChevronHint(isVisible: !devices.isEmpty && isHeaderHovering,
+                                                 isExpanded: isExpanded, theme: theme)
+                                .offset(x: 14)
+                        }
+                }
 
                 if !devices.isEmpty {
                     deviceIcons
@@ -3697,7 +3690,6 @@ private struct BluetoothGlassRow: View, Equatable {
             .panelRowHeaderHeight()
             .contentShape(Rectangle())
             .onHover { isHeaderHovering = $0 }
-            .help(devices.isEmpty ? String(localized: "panel.row.not-expandable-hint") : "")
             .onTapGesture {
                 // 无设备时展开区无内容,点击不切换状态。
                 guard !devices.isEmpty else { return }
@@ -4126,7 +4118,7 @@ struct RowExpandChevronHint: View {
 extension View {
     /// 按当前语言设定主行模块标题的最小左对齐槽宽，使各行主数值纵向对齐。
     func monitorPanelModuleTitleSlot() -> some View {
-        let slotWidth: CGFloat = StaticMetricSizing.panelLanguage.hasPrefix("zh") ? 38 : 48
+        let slotWidth: CGFloat = StaticMetricSizing.panelLanguage.hasPrefix("zh") ? 31 : 48
         return frame(minWidth: slotWidth, alignment: .leading)
     }
 }
@@ -4508,5 +4500,310 @@ private struct InteractiveProcessRow<Leading: View, Trailing: View>: View {
         .buttonStyle(.plain)
         .help(help)
         .accessibilityLabel(help)
+    }
+}
+
+/// 延迟悬浮提示框：悬停满指定时长后在宿主区域下方弹出轻量非激活提示，点击或移出立即取消。
+struct DelayedTooltipOverlay: NSViewRepresentable {
+    let text: String
+    var delay: TimeInterval = 2.0
+    var isEnabled: Bool = true
+    @Environment(\.colorScheme) private var colorScheme
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.coordinator = context.coordinator
+        sync(view: view, coordinator: context.coordinator)
+        return view
+    }
+
+    func updateNSView(_ nsView: TrackingView, context: Context) {
+        nsView.coordinator = context.coordinator
+        sync(view: nsView, coordinator: context.coordinator)
+    }
+
+    static func dismantleNSView(_ nsView: TrackingView, coordinator: Coordinator) {
+        coordinator.cancelAndHide()
+        nsView.stopObserving()
+        nsView.coordinator = nil
+    }
+
+    private func sync(view: TrackingView, coordinator: Coordinator) {
+        let appearanceName: NSAppearance.Name = colorScheme == .dark ? .darkAqua : .aqua
+        let changed = coordinator.text != text || coordinator.delay != delay || coordinator.appearanceName != appearanceName
+        coordinator.text = text
+        coordinator.delay = delay
+        coordinator.appearanceName = appearanceName
+        if !isEnabled {
+            coordinator.isEnabled = false
+            coordinator.cancelAndHide()
+            return
+        }
+        coordinator.isEnabled = true
+        if changed && coordinator.isVisible {
+            coordinator.cancelAndHide()
+        }
+        view.checkPointer()
+    }
+
+    @MainActor
+    final class Coordinator {
+        var text: String = ""
+        var delay: TimeInterval = 2.0
+        var isEnabled: Bool = true
+        var appearanceName: NSAppearance.Name = .aqua
+        private var pendingWorkItem: DispatchWorkItem?
+        private var tipPanel: NSPanel?
+        private weak var parentWindow: NSWindow?
+        private var isHovering = false
+
+        var isVisible: Bool { tipPanel?.isVisible == true }
+
+        func handlePointerUpdate(hovering: Bool, anchorView: TrackingView, window: NSWindow) {
+            guard isEnabled, hovering else {
+                cancelAndHide()
+                return
+            }
+            if isHovering { return }
+            isHovering = true
+            scheduleShow(anchorView: anchorView, window: window)
+        }
+
+        func handleMouseDown() {
+            cancelAndHide()
+        }
+
+        func cancelAndHide() {
+            isHovering = false
+            pendingWorkItem?.cancel()
+            pendingWorkItem = nil
+            hidePanel()
+        }
+
+        private func scheduleShow(anchorView: TrackingView, window: NSWindow) {
+            pendingWorkItem?.cancel()
+            let item = DispatchWorkItem { [weak self, weak anchorView, weak window] in
+                MainActor.assumeIsolated {
+                    guard let self, let anchorView, let window else { return }
+                    self.pendingWorkItem = nil
+                    self.showIfEligible(anchorView: anchorView, window: window)
+                }
+            }
+            pendingWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: item)
+        }
+
+        private func showIfEligible(anchorView: TrackingView, window: NSWindow) {
+            guard isEnabled, isHovering,
+                  anchorView.window === window,
+                  window.isVisible, window.alphaValue > 0.5, !window.ignoresMouseEvents,
+                  !anchorView.isHiddenOrHasHiddenAncestor,
+                  NSEvent.pressedMouseButtons == 0 else {
+                cancelAndHide()
+                return
+            }
+            let screenPoint = NSEvent.mouseLocation
+            let localPoint = anchorView.convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+            guard anchorView.containsLocalPoint(localPoint),
+                  NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0) == window.windowNumber else {
+                cancelAndHide()
+                return
+            }
+            presentPanel(anchorView: anchorView, window: window, mouseX: screenPoint.x)
+        }
+
+        private func presentPanel(anchorView: NSView, window: NSWindow, mouseX: CGFloat) {
+            let panel = tipPanel ?? makePanel()
+            tipPanel = panel
+
+            guard let effect = panel.contentView as? NSVisualEffectView,
+                  let label = effect.subviews.first as? NSTextField else { return }
+            let appearance = NSAppearance(named: appearanceName) ?? window.effectiveAppearance
+            panel.appearance = appearance
+            effect.appearance = appearance
+            appearance.performAsCurrentDrawingAppearance {
+                effect.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.45).cgColor
+            }
+            label.stringValue = text
+            label.sizeToFit()
+
+            let tipSize = NSSize(width: ceil(label.frame.width) + 16, height: ceil(label.frame.height) + 8)
+            label.setFrameOrigin(NSPoint(x: 8, y: 4))
+            effect.frame = NSRect(origin: .zero, size: tipSize)
+
+            let rectInWindow = anchorView.convert(anchorView.bounds, to: nil)
+            let rectOnScreen = window.convertToScreen(rectInWindow)
+
+            let minX = rectOnScreen.minX
+            let maxX = max(minX, rectOnScreen.maxX - tipSize.width)
+            var originX = min(max(mouseX - tipSize.width / 2, minX), maxX)
+            var originY = rectOnScreen.minY - tipSize.height - 4
+            if let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame {
+                originX = min(max(originX, screenFrame.minX + 4), max(screenFrame.minX + 4, screenFrame.maxX - tipSize.width - 4))
+                if originY < screenFrame.minY + 4 {
+                    originY = rectOnScreen.maxY + 4
+                }
+            }
+
+            panel.level = window.level
+            panel.setFrame(NSRect(origin: NSPoint(x: originX, y: originY), size: tipSize), display: true)
+            if let oldParent = parentWindow, oldParent !== window {
+                oldParent.removeChildWindow(panel)
+            }
+            if panel.parent !== window {
+                window.addChildWindow(panel, ordered: .above)
+                parentWindow = window
+            }
+            panel.orderFrontRegardless()
+        }
+
+        private func hidePanel() {
+            guard let panel = tipPanel else { return }
+            if let parent = panel.parent ?? parentWindow {
+                parent.removeChildWindow(panel)
+            }
+            parentWindow = nil
+            panel.orderOut(nil)
+        }
+
+        private func makePanel() -> NSPanel {
+            let panel = NSPanel(
+                contentRect: .zero,
+                styleMask: [.borderless, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            panel.isFloatingPanel = true
+            panel.hidesOnDeactivate = false
+            panel.ignoresMouseEvents = true
+            panel.hasShadow = true
+            panel.isOpaque = false
+            panel.backgroundColor = .clear
+            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+
+            let effect = NSVisualEffectView(frame: .zero)
+            effect.material = .popover
+            effect.blendingMode = .behindWindow
+            effect.state = .active
+            effect.wantsLayer = true
+            effect.layer?.cornerRadius = 6
+            effect.layer?.masksToBounds = true
+            effect.layer?.borderWidth = 0.5
+
+            let label = NSTextField(labelWithString: "")
+            label.font = NSFont.toolTipsFont(ofSize: 11)
+            label.textColor = .labelColor
+            label.setAccessibilityElement(false)
+            effect.addSubview(label)
+
+            panel.contentView = effect
+            return panel
+        }
+    }
+
+    final class TrackingView: NSView {
+        weak var coordinator: Coordinator?
+        private var trackingArea: NSTrackingArea?
+        private var trackedRect: CGRect = .null
+        private var panelPointer: AnyCancellable?
+        private var buttonMonitor: Any?
+
+        /// macOS 14+ 默认 clipsToBounds 为 false 时，visibleRect 会扩张到裁剪祖先窗口范围；
+        /// 与自身 bounds 求交后才是真实的标题栏命中区域。
+        var hitRect: CGRect {
+            bounds.intersection(visibleRect)
+        }
+
+        func containsLocalPoint(_ point: CGPoint) -> Bool {
+            let rect = hitRect
+            return !rect.isEmpty && rect.contains(point)
+        }
+
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            refreshTrackingArea()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            refreshTrackingArea()
+        }
+
+        private func refreshTrackingArea() {
+            let rect = hitRect
+            guard rect != trackedRect else { return }
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+                self.trackingArea = nil
+            }
+            guard !rect.isEmpty else {
+                trackedRect = .null
+                return
+            }
+            let area = NSTrackingArea(
+                rect: rect,
+                options: [.activeAlways, .mouseEnteredAndExited],
+                owner: self
+            )
+            addTrackingArea(area)
+            trackingArea = area
+            trackedRect = rect
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if newWindow !== window { stopObserving() }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            guard let window else { return }
+            if let panel = window as? NativePanelWindow {
+                panelPointer = panel.pointerDidChange.sink { [weak self] in self?.checkPointer() }
+            }
+            let buttons: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+            buttonMonitor = NSEvent.addLocalMonitorForEvents(matching: buttons) { [weak self] event in
+                guard let self, event.window === self.window else { return event }
+                self.coordinator?.handleMouseDown()
+                return event
+            }
+        }
+
+        func stopObserving() {
+            panelPointer = nil
+            if let buttonMonitor { NSEvent.removeMonitor(buttonMonitor) }
+            buttonMonitor = nil
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+                self.trackingArea = nil
+            }
+            trackedRect = .null
+            coordinator?.cancelAndHide()
+        }
+
+        override func mouseEntered(with event: NSEvent) { checkPointer() }
+        override func mouseExited(with event: NSEvent) { checkPointer() }
+
+        func checkPointer() {
+            guard let coordinator, let window,
+                  coordinator.isEnabled,
+                  window.isVisible, window.alphaValue > 0.5, !window.ignoresMouseEvents,
+                  !isHiddenOrHasHiddenAncestor,
+                  NSEvent.pressedMouseButtons == 0 else {
+                coordinator?.cancelAndHide()
+                return
+            }
+            let screenPoint = NSEvent.mouseLocation
+            let point = convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+            let hovering = containsLocalPoint(point)
+                && NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0) == window.windowNumber
+            coordinator.handlePointerUpdate(hovering: hovering, anchorView: self, window: window)
+        }
     }
 }

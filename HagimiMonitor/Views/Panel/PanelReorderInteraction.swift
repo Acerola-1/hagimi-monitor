@@ -30,7 +30,6 @@ private struct PanelReorderItemKey: Hashable {
 private struct PanelReorderFrame {
     let rect: CGRect
     let span: Int
-    let showsDragHint: Bool
 }
 
 enum PanelNeighborDirection: CaseIterable, Hashable {
@@ -102,10 +101,6 @@ final class PanelReorderController: ObservableObject {
         captureViews[key] = PanelReorderWeakView(view)
     }
 
-    func showsDragHint(forModule id: String) -> Bool {
-        frames[PanelReorderItemKey(scope: .modules, id: id)]?.showsDragHint == true
-    }
-
     func snapshot(scope: PanelOrderScope, id: String) -> NSImage? {
         let key = PanelReorderItemKey(scope: scope, id: id)
         guard let view = captureViews[key]?.value,
@@ -120,11 +115,10 @@ final class PanelReorderController: ObservableObject {
         return image
     }
 
-    func register(scope: PanelOrderScope, id: String, title: String, span: Int = 2,
-                  showsDragHint: Bool = true, frame: CGRect) {
+    func register(scope: PanelOrderScope, id: String, title: String, span: Int = 2, frame: CGRect) {
         let key = PanelReorderItemKey(scope: scope, id: id)
         let isNew = frames[key] == nil
-        frames[key] = PanelReorderFrame(rect: frame, span: span, showsDragHint: showsDragHint)
+        frames[key] = PanelReorderFrame(rect: frame, span: span)
         titles[key] = title
         if isNew { scheduleLayoutRevision() }
     }
@@ -448,7 +442,6 @@ private struct PanelReorderItemModifier: ViewModifier {
     let id: String
     let title: String
     let span: Int
-    let showsDragHint: Bool
     let copyActionTitle: String?
     let onCopyAction: (() -> Void)?
     @Environment(\.panelReorderController) private var controller
@@ -459,12 +452,7 @@ private struct PanelReorderItemModifier: ViewModifier {
     @ViewBuilder
     func body(content: Content) -> some View {
         if let controller, let settings {
-            let item = interactive(content: content, controller: controller, settings: settings)
-            if showsDragHint && scope != .modules && copyActionTitle == nil {
-                item.help(String(localized: "panel.reorder.long-press-hint"))
-            } else {
-                item
-            }
+            interactive(content: content, controller: controller, settings: settings)
         } else {
             content
         }
@@ -483,7 +471,7 @@ private struct PanelReorderItemModifier: ViewModifier {
             }
             .contentShape(Rectangle())
             .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-                controller.register(scope: scope, id: id, title: title, span: span, showsDragHint: showsDragHint, frame: frame)
+                controller.register(scope: scope, id: id, title: title, span: span, frame: frame)
             }
             .onDisappear { controller.unregister(scope: scope, id: id) }
             .simultaneousGesture(
@@ -582,11 +570,9 @@ private struct PanelReorderItemModifier: ViewModifier {
 
 extension View {
     func panelReorderItem(scope: PanelOrderScope, id: String, title: String, span: Int = 2,
-                          showsDragHint: Bool = true,
                           copyActionTitle: String? = nil,
                           onCopyAction: (() -> Void)? = nil) -> some View {
         modifier(PanelReorderItemModifier(scope: scope, id: id, title: title, span: span,
-                                          showsDragHint: showsDragHint,
                                           copyActionTitle: copyActionTitle,
                                           onCopyAction: onCopyAction))
     }

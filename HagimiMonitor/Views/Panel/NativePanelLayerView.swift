@@ -722,8 +722,6 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
     var globalMonitor: Any?
     var boundaryWork: DispatchWorkItem?
     var edgeScrollWork: DispatchWorkItem?
-    private let reorderHoverHint = PanelReorderHoverHint()
-    private var hoverTrackingArea: NSTrackingArea?
     weak var reorderController: PanelReorderController?
     var reorderSubscriptions: [AnyCancellable] = []
     var isDragging = false
@@ -790,7 +788,6 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
                         if session == nil {
                             self?.stopEdgeScroll()
                         } else {
-                            self?.reorderHoverHint.cancel()
                             self?.scheduleEdgeScroll()
                         }
                     }]
@@ -921,7 +918,6 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         // 隐藏期间鼠标释放不再经过事件监视器，下次显示从新的输入会话开始。
         isDragging = false
         boundaryWork?.cancel(); boundaryWork = nil
-        reorderHoverHint.cancel()
         stopEdgeScroll()
         scroll.stopInteraction()
         if let localMonitor { NSEvent.removeMonitor(localMonitor); self.localMonitor = nil }
@@ -933,18 +929,7 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
     func nativePanelDidShow() {
         installMonitors()
         pointerDidChange()
-        updateReorderHoverHint()
     }
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        guard hoverTrackingArea == nil else { return }
-        let area = NSTrackingArea(rect: .zero, options: [.inVisibleRect, .activeAlways, .mouseEnteredAndExited, .mouseMoved], owner: self)
-        addTrackingArea(area)
-        hoverTrackingArea = area
-    }
-    override func mouseEntered(with event: NSEvent) { updateReorderHoverHint(eventWindow: event.window) }
-    override func mouseMoved(with event: NSEvent) { updateReorderHoverHint(eventWindow: event.window) }
-    override func mouseExited(with event: NSEvent) { reorderHoverHint.cancel() }
     private func scheduleEdgeScroll(delay: TimeInterval = 0.05) {
         edgeScrollWork?.cancel(); edgeScrollWork = nil
         guard let controller = reorderController, let session = controller.session,
@@ -999,62 +984,12 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
                 self.isDragging = self.containsPointer(at: CACurrentMediaTime())
             }
             self.pointerDidChange()
-            if event.type == .mouseMoved || event.type == .leftMouseUp {
-                self.updateReorderHoverHint(eventWindow: event.window)
-            } else {
-                self.reorderHoverHint.cancel()
-            }
             return event
         }
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged, .rightMouseDragged, .leftMouseUp, .rightMouseUp]) { [weak self] event in
             if event.type == .leftMouseUp || event.type == .rightMouseUp { self?.isDragging = false }
             self?.pointerDidChange()
-            if event.type == .mouseMoved {
-                self?.updateReorderHoverHint()
-            } else {
-                self?.reorderHoverHint.cancel()
-            }
         }
-    }
-    private func updateReorderHoverHint(eventWindow: NSWindow? = nil) {
-        let point = NSEvent.mouseLocation
-        guard let window, let rowID = reorderHintRow(at: point),
-              eventWindow === window || NSWindow.windowNumber(at: point, belowWindowWithWindowNumber: 0) == window.windowNumber else {
-            reorderHoverHint.cancel()
-            return
-        }
-        reorderHoverHint.track(rowID: rowID, at: point) { [weak self] rowID, point in
-            guard let self, let window = self.window, self.reorderHintRow(at: point) == rowID,
-                  let height = self.motion.nativeLayer.sample(at: CACurrentMediaTime())?.frame.windowContentSize.height
-            else { return nil }
-            let pointer = self.surface.convert(window.convertPoint(fromScreen: point), from: nil)
-            let bounds = CGRect(x: 0, y: 0, width: self.surface.bounds.width, height: height)
-            return self.makeReorderHoverHint(at: pointer, within: bounds)
-        }
-    }
-    private func reorderHintRow(at point: NSPoint) -> String? {
-        guard let reorderController, reorderController.session == nil,
-              let window, window.isVisible, !window.ignoresMouseEvents, NSEvent.pressedMouseButtons == 0,
-              !motion.nativeLayer.isSuspended, !motion.nativeLayer.isUserScrolling,
-              let snapshot = motion.nativeLayer.snapshot,
-              let frame = motion.nativeLayer.sample(at: CACurrentMediaTime())?.frame else { return nil }
-        let local = surface.convert(window.convertPoint(fromScreen: point), from: nil)
-        let viewport = bodyViewport(for: frame)
-        guard viewport.contains(local) else { return nil }
-        let documentPoint = CGPoint(x: local.x - viewport.minX, y: local.y - viewport.minY + frame.scrollOffset)
-        // 使用正在显示的卡片位置和行头高度，与 SwiftUI 后台排序抓图锚点无关。
-        return snapshot.orderedTopLevelIDs.first { id in
-            guard reorderController.showsDragHint(forModule: id),
-                  var rect = frame.cardFrames[id], let size = snapshot.sections[id] else { return false }
-            rect.size.height = size.headerHeight
-            return rect.contains(documentPoint)
-        }
-    }
-    private func makeReorderHoverHint(at pointer: NSPoint, within bounds: CGRect) -> NSView {
-        let hint = PanelReorderHoverHintView(pointer: pointer, within: bounds, appearance: effect.appearance)
-        // 浮在当前面板的滚动区和卡片上方，与主面板同步显示和关闭。
-        surface.addSubview(hint, positioned: .above, relativeTo: nil)
-        return hint
     }
     private func pointerDidChange() {
         updateBoundary()
@@ -1079,10 +1014,9 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         window.ignoresMouseEvents = ignores
         // 结束穿透后复核一次，等待 WindowServer 更新指针命中窗口。
         if !ignores, let panel = window as? NativePanelWindow {
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak self, weak panel] in
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) { [weak panel] in
                 guard let panel, panel.isVisible, !panel.ignoresMouseEvents else { return }
                 panel.pointerDidChange.send()
-                self?.updateReorderHoverHint()
             }
         }
     }

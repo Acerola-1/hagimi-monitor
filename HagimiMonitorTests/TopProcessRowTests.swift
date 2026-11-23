@@ -147,8 +147,64 @@ struct TopProcessRowTests {
         #expect(unfrozenResolved == updatedLive)
     }
 
-    @Test func metricCopyPayloadIncludesAttributeAndValue() {
-        #expect(MetricCopyFeedback.formattedPayload(label: "空闲", value: "72 %") == "空闲: 72 %")
-        #expect(MetricCopyFeedback.formattedPayload(label: "热压力", value: "75 °C · 正常") == "热压力: 75 °C · 正常")
+    @MainActor
+    @Test func onlyNetworkAddressMetricsAreCopyableAndBadgeFormatsSingleCore() {
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "ipv4"))
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "ipv6"))
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "public-ip"))
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "ip-address"))
+
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "wifi-ssid") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "wifi-rssi") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .cpu, name: "idle") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .cpu, name: "thermal-pressure") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .memory, name: "used") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .battery, name: "power") == false)
+
+        let cores = [
+            CPUCoreLoad(index: 0, usage: 12.2, kind: .performance),
+            CPUCoreLoad(index: 1, usage: 44.6, kind: .performance),
+            CPUCoreLoad(index: 2, usage: 18.1, kind: .efficiency),
+            CPUCoreLoad(index: 3, usage: 62.4, kind: .superCore)
+        ]
+        let shortLabel: (CPUCoreKind) -> String = {
+            switch $0 {
+            case .superCore: "S"
+            case .performance: "P"
+            case .efficiency: "E"
+            }
+        }
+        #expect(CPUCoresDetail.hoverBadgeText(for: cores[1], in: cores, shortLabel: shortLabel) == "P2 · 45%")
+        #expect(CPUCoresDetail.hoverBadgeText(for: cores[2], in: cores, shortLabel: shortLabel) == "E1 · 18%")
+        #expect(CPUCoresDetail.hoverBadgeText(for: cores[3], in: cores, shortLabel: shortLabel) == "S1 · 62%")
+    }
+
+    @MainActor
+    @Test func delayedTooltipHitAreaStaysWithinHeaderBoundsWhenUnclipped() {
+        final class FlippedContainer: NSView {
+            override var isFlipped: Bool { true }
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 364, height: 824),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+
+        let root = FlippedContainer(frame: NSRect(x: 0, y: 0, width: 364, height: 824))
+        let trackingView = DelayedTooltipOverlay.TrackingView(frame: NSRect(x: 22, y: 8, width: 298, height: 16))
+        root.addSubview(trackingView)
+        window.contentView = root
+        root.layoutSubtreeIfNeeded()
+
+        #expect(trackingView.clipsToBounds == false)
+        #expect(!trackingView.hitRect.isEmpty)
+        #expect(trackingView.bounds.contains(trackingView.hitRect))
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 150, y: 8)))
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 150, y: -60)) == false)
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 150, y: 60)) == false)
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 310, y: 8)) == false)
     }
 }
