@@ -13,6 +13,21 @@ private actor DisplayCollectionExecutor {
         guard !Task.isCancelled else { return [] }
         return DisplaySection.collectDisplays(screenSnapshots: screenSnapshots)
     }
+
+    #if DISPLAY_CONTROL
+    func collectWithReadOnlyCandidates(_ screenSnapshots: [DisplayScreenSnapshot]) -> (all: [DisplayInfo], readOnlyCandidates: [DisplayInfo]) {
+        guard !Task.isCancelled else { return ([], []) }
+        let all = DisplaySection.collectDisplays(screenSnapshots: screenSnapshots)
+        let classifier = DisplayClassifier(probeNativeBrightness: { _ in false })
+        let candidates = DisplaySection.readOnlyDisplays(
+            from: all,
+            coveredDisplayIDs: [],
+            classify: { classifier.classify(displayID: $0) },
+            isVendorModelZero: { CGDisplayVendorNumber($0) == 0 && CGDisplayModelNumber($0) == 0 }
+        )
+        return (all, candidates)
+    }
+    #endif
 }
 
 /// MainActor 读取的最小显示器系统快照。只保留 AppKit 提供的名称与 EDR 状态,
@@ -64,6 +79,18 @@ nonisolated struct DisplayInfo: Identifiable, Equatable, Codable, Sendable {
     let serial: String?
     /// 身份档案:制造日期(本地化格式,如 "2025 年第 20 周")。
     let manufactureDate: String?
+
+    /// 摘要行文本:分辨率 · 刷新率 · HDR(当前开启时) · 位深;读不到的
+    /// 段(--)整段跳过,全部缺失时摘要行不占位。
+    var summaryLine: String? {
+        var segments = [resolution, refreshRate]
+        if hdrActive == true {
+            segments.append("HDR")
+        }
+        segments.append(colorDepth)
+        let line = segments.filter { $0 != "--" }.joined(separator: " · ")
+        return line.isEmpty ? nil : line
+    }
 }
 
 private enum DisplayDeviceLayout {
@@ -164,6 +191,8 @@ struct DisplaySection: View {
     /// 只在显示器集合变化时重采;拖滑杆等高频 body 重算不再反复触发昂贵的
     /// IORegistry 枚举与 DDC 分类探测。
     @State private var displayInfoByID: [CGDirectDisplayID: DisplayInfo] = [:]
+    /// 无线/虚拟等无法控制或关闭的副屏只读信息候选,展示在展开区末尾。
+    @State private var readOnlyDisplayCandidates: [DisplayInfo] = []
     #else
     @State private var displays: [DisplayInfo] = []
     #endif
@@ -334,8 +363,62 @@ struct DisplaySection: View {
             return (title: title, value: value)
         }
         let showsDeviceReadings = hasControls && (1...2).contains(headerReadings.count)
-        let connectionSummary = entries.isEmpty ? summary(for: visibleDisplays, hasControls: hasControls)
-            : String(format: String(localized: "panel.displays.count"), entries.count)
+
+        let coveredIDs: Set<CGDirectDisplayID>
+        let primaryItems: [NativePanelContentItem]
+        if !entries.isEmpty {
+            coveredIDs = Set(entries.compactMap { $0.screen?.id })
+            primaryItems = entries.enumerated().map { index, entry in
+                NativePanelContentItem(
+                    id: "display-arc-\(entry.id)",
+                    content: AnyView(connectionCard(entry, palette: palette, tint: tint, showsSeparator: index > 0))
+                )
+            }
+        } else if hasControls && !visibleDisplays.isEmpty {
+            coveredIDs = Set(visibleDisplays.map(\.id))
+            primaryItems = visibleDisplays.enumerated().map { index, display in
+                NativePanelContentItem(
+                    id: "display-arc-\(display.id)",
+                    content: AnyView(
+                        DisplayControlGroup(display: display, displayInfo: displayInfoByID[display.id],
+                            settings: settings, controller: controller, palette: palette, tint: tint,
+                            isSectionExpanded: isExpanded, archiveKey: "display-arc-\(display.id)",
+                            showsSeparator: index > 0, animate: animate)
+                    )
+                )
+            }
+        } else {
+            coveredIDs = []
+            primaryItems = []
+        }
+
+        let readOnlyDisplays = readOnlyDisplayCandidates.filter { !coveredIDs.contains($0.id) }
+        let readOnlyItems = readOnlyDisplays.enumerated().map { offset, info in
+            let key = "display-arc-ro-\(info.id)"
+            return NativePanelContentItem(
+                id: key,
+                content: AnyView(
+                    DisplayReadOnlyGroup(
+                        display: info,
+                        palette: palette,
+                        isSectionExpanded: isExpanded,
+                        archiveKey: key,
+                        showsSeparator: (primaryItems.count + offset) > 0,
+                        animate: animate
+                    )
+                )
+            )
+        }
+        let childItems = primaryItems + readOnlyItems
+        let hasDisplayCards = !childItems.isEmpty
+        let connectionSummary: String
+        if !entries.isEmpty {
+            connectionSummary = String(format: String(localized: "panel.displays.count"), entries.count + readOnlyDisplays.count)
+        } else if !childItems.isEmpty {
+            connectionSummary = String(format: String(localized: "panel.displays.count"), childItems.count)
+        } else {
+            connectionSummary = summary(for: visibleDisplays, hasControls: hasControls)
+        }
 
         return PanelCardStack(measurementKey: "display") {
             HStack(spacing: 10) {
@@ -352,7 +435,7 @@ struct DisplaySection: View {
                     Color.clear
                         .frame(width: 1, height: 14)
                         .overlay(alignment: .leading) {
-                            RowExpandChevronHint(isVisible: (!entries.isEmpty || !visibleDisplays.isEmpty) && isHeaderHovering,
+                            RowExpandChevronHint(isVisible: hasDisplayCards && isHeaderHovering,
                                                  isExpanded: isExpanded, theme: theme)
                         }
                     Spacer(minLength: 4)
@@ -374,7 +457,7 @@ struct DisplaySection: View {
                             .foregroundStyle(palette.valueText)
                             .lineLimit(1)
                             .overlay(alignment: .trailing) {
-                                RowExpandChevronHint(isVisible: (!entries.isEmpty || !visibleDisplays.isEmpty) && isHeaderHovering,
+                                RowExpandChevronHint(isVisible: hasDisplayCards && isHeaderHovering,
                                                      isExpanded: isExpanded, theme: theme)
                                     .offset(x: 14)
                             }
@@ -399,12 +482,12 @@ struct DisplaySection: View {
             .accessibilityValue(showsDeviceReadings
                 ? headerReadings.map { "\($0.title) \(String(localized: "display.control.brightness")) \($0.value)" }.joined(separator: ", ")
                 : connectionSummary)
-            .accessibilityHint((!entries.isEmpty || !visibleDisplays.isEmpty) ? (isExpanded
+            .accessibilityHint(hasDisplayCards ? (isExpanded
                 ? String(localized: "panel.row.collapse-hint")
                 : String(localized: "panel.row.expand-hint")) : "")
-            .accessibilityAddTraits((!entries.isEmpty || !visibleDisplays.isEmpty) ? .isButton : [])
+            .accessibilityAddTraits(hasDisplayCards ? .isButton : [])
             .panelRowKeyboardFocus(
-                canActivate: !entries.isEmpty || !visibleDisplays.isEmpty,
+                canActivate: hasDisplayCards,
                 ring: theme.primaryText
             ) {
                 toggleExpansion()
@@ -412,27 +495,12 @@ struct DisplaySection: View {
             .panelReorderItem(scope: .modules, id: PanelOrderCatalog.displayID,
                               title: String(localized: "kind.display"))
 
-            if !entries.isEmpty {
+            if !childItems.isEmpty {
                 SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
-                    group: PanelChildGroup(ids: entries.map { "display-arc-\($0.id)" },
+                    group: PanelChildGroup(ids: childItems.map(\.id),
                         leading: 10, trailing: 10, top: 9, bottom: 9, spacing: DisplayDeviceLayout.deviceSpacing),
                     motion: expansion.motion,
-                    nativeItems: entries.enumerated().map { index, entry in
-                        NativePanelContentItem(id: "display-arc-\(entry.id)", content: AnyView(
-                            connectionCard(entry, palette: palette, tint: tint, showsSeparator: index > 0)))
-                    })
-                .overlay(alignment: .top) { detailSeparator }
-            } else if hasControls && !visibleDisplays.isEmpty {
-                SingleHostChildren(id: Self.sectionKey, isExpanded: isExpanded,
-                    group: PanelChildGroup(ids: visibleDisplays.map { "display-arc-\($0.id)" },
-                        leading: 10, trailing: 10, top: 9, bottom: 9, spacing: DisplayDeviceLayout.deviceSpacing),
-                    motion: expansion.motion, nativeItems: visibleDisplays.enumerated().map { index, display in
-                            NativePanelContentItem(id: "display-arc-\(display.id)", content: AnyView(
-                                DisplayControlGroup(display: display, displayInfo: displayInfoByID[display.id],
-                                    settings: settings, controller: controller, palette: palette, tint: tint,
-                                    isSectionExpanded: isExpanded, archiveKey: "display-arc-\(display.id)",
-                                    showsSeparator: index > 0, animate: animate)))
-                        })
+                    nativeItems: childItems)
                 .overlay(alignment: .top) { detailSeparator }
             } else {
             CollapsibleDetail(expansionKey: Self.sectionKey, isExpanded: isExpanded,
@@ -497,6 +565,12 @@ struct DisplaySection: View {
             // 显示器集合变化(插拔/首次探测完成)才重采只读信息。轮询回读或拖滑杆
             // 只改亮度值、id 集合不变,不会触发本重算。
             requestDisplayCollection()
+        }
+        // 连接拓扑事务结束时补采一次,避免热插拔瞬间因 isBusy 丢弃采集而漏掉虚拟副屏。
+        .onChange(of: controller.connections.isBusy) { _, busy in
+            if !busy {
+                requestDisplayCollection()
+            }
         }
         // 屏幕参数变化(HDR 开关/分辨率调整/插拔):摘要行的 HDR 是状态量,
         // 通知本身低频,不挂 5s 轮询,避免把 IORegistry 枚举开销加回常态。
@@ -636,6 +710,20 @@ struct DisplaySection: View {
         return String(token.prefix(limit - 1)) + "…"
     }
 
+    nonisolated static func readOnlyDisplays(
+        from collected: [DisplayInfo],
+        coveredDisplayIDs: Set<CGDirectDisplayID>,
+        classify: (CGDirectDisplayID) -> DisplayKind,
+        isVendorModelZero: (CGDirectDisplayID) -> Bool
+    ) -> [DisplayInfo] {
+        collected.filter { info in
+            guard !coveredDisplayIDs.contains(info.id) else { return false }
+            let kind = classify(info.id)
+            if kind == .virtual { return true }
+            return kind != .builtIn && kind != .dummy && isVendorModelZero(info.id)
+        }
+    }
+
     #endif
 
     /// 请求重采只读信息缓存(按显示器 id 归并)。触发源均为低频用户动作:
@@ -652,18 +740,26 @@ struct DisplaySection: View {
         #if DISPLAY_CONTROL
         let revision = controller.connections.revision
         let identities = Dictionary(uniqueKeysWithValues: screenSnapshots.map { ($0.id, DisplayConnectionBridge.identity(for: $0.id)) })
-        #endif
-        let values = await DisplayCollectionExecutor.shared.collect(screenSnapshots)
+        let (all, readOnlyCandidates) = await DisplayCollectionExecutor.shared.collectWithReadOnlyCandidates(screenSnapshots)
         guard !Task.isCancelled else { return }
-        #if DISPLAY_CONTROL
         guard revision == controller.connections.revision, !controller.connections.isBusy else { return }
-        let currentValues = values.filter { identities[$0.id]?.matches(DisplayConnectionBridge.identity(for: $0.id)) == true }
-        controller.connections.cache(currentValues, identities: identities)
+        let currentPhysicalValues = all.filter { identities[$0.id]?.matches(DisplayConnectionBridge.identity(for: $0.id)) == true }
+        controller.connections.cache(currentPhysicalValues, identities: identities)
+        func isStillCurrent(_ info: DisplayInfo) -> Bool {
+            if let before = identities[info.id] {
+                return before == DisplayConnectionBridge.identity(for: info.id)
+            }
+            return CGDisplayIsActive(info.id) != 0
+        }
+        let currentValues = all.filter(isStillCurrent)
         displayInfoByID = Dictionary(
             currentValues.map { ($0.id, $0) },
             uniquingKeysWith: { first, _ in first }
         )
+        readOnlyDisplayCandidates = readOnlyCandidates.filter(isStillCurrent)
         #else
+        let values = await DisplayCollectionExecutor.shared.collect(screenSnapshots)
+        guard !Task.isCancelled else { return }
         displays = values
         #endif
     }
@@ -1590,14 +1686,7 @@ private struct DisplayControlGroup: View {
     }
 
     private func archiveContent(for info: DisplayInfo) -> some View {
-        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
-            Text(String(localized: "display.archive.basic"))
-                .monitorPanelCaptionFont(.caption2)
-                .foregroundStyle(palette.captionText)
-            DisplayInfoBaseGrid(display: info, palette: palette)
-            DisplayArchiveGrid(display: info, palette: palette)
-            DisplayArchiveCopyButton(display: info, palette: palette)
-        }
+        DisplayArchiveDetailContent(display: info, palette: palette)
     }
 
 
@@ -1643,14 +1732,90 @@ private struct DisplayControlGroup: View {
     /// 摘要行文本:分辨率 · 刷新率 · HDR(当前开启时) · 位深;读不到的
     /// 段(--)整段跳过,全部缺失时摘要行不占位。
     private var infoSummaryLine: String? {
-        guard let info = displayInfo else { return nil }
-        var segments = [info.resolution, info.refreshRate]
-        if info.hdrActive == true {
-            segments.append("HDR")
+        displayInfo?.summaryLine
+    }
+}
+
+/// 直连渠道控制卡与只读副屏卡共用的展开档案内容(基本四项 + 完整档案 + 复制按钮)。
+private struct DisplayArchiveDetailContent: View {
+    let display: DisplayInfo
+    let palette: MonitorPalette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MetricGridMetrics.rowSpacing) {
+            Text(String(localized: "display.archive.basic"))
+                .monitorPanelCaptionFont(.caption2)
+                .foregroundStyle(palette.captionText)
+            DisplayInfoBaseGrid(display: display, palette: palette)
+            DisplayArchiveGrid(display: display, palette: palette)
+            DisplayArchiveCopyButton(display: display, palette: palette)
         }
-        segments.append(info.colorDepth)
-        let line = segments.filter { $0 != "--" }.joined(separator: " · ")
-        return line.isEmpty ? nil : line
+    }
+}
+
+/// 直连渠道无法控制/停用的只读副屏(如无线/虚拟屏):保持与控制卡一致的紧凑行头与小箭头,
+/// 默认仅展示名称与单行摘要(不显示滑条与连接按钮),点击名称展开完整档案。
+private struct DisplayReadOnlyGroup: View {
+    let display: DisplayInfo
+    let palette: MonitorPalette
+    let isSectionExpanded: Bool
+    let archiveKey: String
+    var showsSeparator = false
+    var animate: (String, Bool, Bool) -> Void
+
+    @EnvironmentObject private var expansion: PanelExpansionDriver
+    @State private var archiveExpanded = false
+
+    var body: some View {
+        PanelCardStack(measurementKey: "\(String(describing: display))|separator:\(showsSeparator)") {
+            DisplayDeviceHeader(systemImage: display.isBuiltIn ? "laptopcomputer" : "display",
+                                palette: palette, showsSeparator: showsSeparator, subtitle: display.summaryLine) {
+                DisplayArchiveNameButton(name: display.name, palette: palette, expanded: archiveExpanded, action: toggleArchive) {
+                    Text(display.name)
+                        .monitorPanelCaptionFont(.footnote, weight: .semibold)
+                        .foregroundStyle(palette.primaryText)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+            } action: {
+                EmptyView()
+            }
+            .padding(.bottom, DisplayDeviceLayout.bottomInset)
+            .panelMeasure("row:" + archiveKey)
+
+            SingleHostDetail(id: archiveKey, isExpanded: archiveExpanded, available: true,
+                content: archiveContent,
+                measurementKey: String(describing: display))
+        }
+        .panelBenchmarkCommands { command in
+            guard case .archives(let expanded) = command, archiveExpanded != expanded else { return }
+            withPanelExpansionState { archiveExpanded = expanded }
+            animate(archiveKey, expanded, true)
+            NSLog("[panel-bench] archive=%@ expanded=%d", archiveKey, expanded ? 1 : 0)
+        }
+        .onReceive(expansion.motion.hiddenPanelReset) {
+            archiveExpanded = false
+            animate(archiveKey, false, false)
+        }
+        .onChange(of: isSectionExpanded) { _, newValue in
+            if !newValue && archiveExpanded {
+                archiveExpanded = false
+                animate(archiveKey, false, true)
+            }
+        }
+    }
+
+    private var archiveContent: some View {
+        DisplayArchiveDetailContent(display: display, palette: palette)
+            .padding(.top, 1)
+            .padding(.bottom, DisplayDeviceLayout.bottomInset)
+    }
+
+    private func toggleArchive() {
+        withPanelExpansionState {
+            archiveExpanded.toggle()
+        }
+        animate(archiveKey, archiveExpanded, true)
     }
 }
 

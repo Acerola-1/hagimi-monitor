@@ -8,8 +8,6 @@ final class MediaControlOSD {
     private var panel: NSPanel?
     private var presentation: Task<Void, Never>?
     private var dismissal: Task<Void, Never>?
-    private var luminanceRead: Task<Void, Never>?
-    private var awaitingBrightnessWrite = false
     private var updateValue: ((Double, Bool) -> Bool)?
     private var isEditing = false
     private var pointerInside = false
@@ -20,7 +18,6 @@ final class MediaControlOSD {
         control: MediaKeyKind,
         value: Double,
         displayID: CGDirectDisplayID,
-        expectsLuminance: Bool = false,
         updateValue: @escaping (Double, Bool) -> Bool
     ) {
         // 首次建窗及后续刷新均移出事件 tap 回调，连续按键只保留最新反馈。
@@ -28,8 +25,7 @@ final class MediaControlOSD {
         presentation = Task { [weak self] in
             guard let self, !Task.isCancelled else { return }
             self.presentation = nil
-            self.present(control: control, value: value, displayID: displayID,
-                         expectsLuminance: expectsLuminance, updateValue: updateValue)
+            self.present(control: control, value: value, displayID: displayID, updateValue: updateValue)
         }
     }
 
@@ -37,7 +33,6 @@ final class MediaControlOSD {
         control: MediaKeyKind,
         value: Double,
         displayID: CGDirectDisplayID,
-        expectsLuminance: Bool,
         updateValue: @escaping (Double, Bool) -> Bool
     ) {
         let screen = NSScreen.screens.first { screen in
@@ -47,11 +42,8 @@ final class MediaControlOSD {
         let placement = AppDelegate.shared?.mediaOSDPlacement(on: screen)
 
         let sameScale = self.displayID == displayID && (state.control == .brightness) == (control == .brightness)
-        let resetReadout = !sameScale || state.expectsLuminance != expectsLuminance
+        let resetReadout = !sameScale
         if resetReadout {
-            luminanceRead?.cancel()
-            state.readout = nil
-            state.expectsLuminance = expectsLuminance
             isEditing = false
         }
         self.displayID = displayID
@@ -62,19 +54,10 @@ final class MediaControlOSD {
         let panel = self.panel ?? makePanel()
         let frame = screen.visibleFrame
         let size = panel.frame.size
-        let origin: CGPoint
-        if CGDisplayIsBuiltin(displayID) != 0 {
-            // 内屏反馈沿用系统浮层在菜单栏下方的右侧位置。
-            let panelInset: CGPoint
-            if #available(macOS 27.2, *) { panelInset = CGPoint(x: 30, y: 10) }
-            else { panelInset = CGPoint(x: 31, y: 11) }
-            origin = CGPoint(x: screen.frame.maxX - size.width - panelInset.x, y: frame.maxY - size.height - panelInset.y)
-        } else {
-            let centerX = placement?.suppressed == true ? frame.midX : placement?.anchor?.midX ?? frame.midX
-            let top = min(placement?.anchor?.minY ?? frame.maxY, frame.maxY) - 6
-            let x = max(frame.minX + 6, min(centerX - size.width / 2, frame.maxX - size.width - 6))
-            origin = CGPoint(x: x, y: top - size.height)
-        }
+        let centerX = placement?.suppressed == true ? frame.midX : placement?.anchor?.midX ?? frame.midX
+        let top = min(placement?.anchor?.minY ?? frame.maxY, frame.maxY) - 6
+        let x = max(frame.minX + 6, min(centerX - size.width / 2, frame.maxX - size.width - 6))
+        let origin = CGPoint(x: x, y: top - size.height)
         if panel.frame.origin != origin { panel.setFrameOrigin(origin) }
         if !panel.isVisible {
             panel.alphaValue = 0
@@ -88,9 +71,6 @@ final class MediaControlOSD {
         presentation = nil
         dismissal?.cancel()
         dismissal = nil
-        luminanceRead?.cancel()
-        luminanceRead = nil
-        awaitingBrightnessWrite = false
         panel?.orderOut(nil)
         displayID = nil
         updateValue = nil
@@ -98,30 +78,6 @@ final class MediaControlOSD {
         pointerInside = false
         state.isInteractive = false
         state.readout = nil
-    }
-
-    func refreshLuminance(on displayID: CGDirectDisplayID, percent: Double) {
-        guard awaitingBrightnessWrite, self.displayID == displayID, state.value == percent else { return }
-        awaitingBrightnessWrite = false
-        luminanceRead?.cancel()
-        luminanceRead = Task { [weak self] in
-            // 背光在一段时间内持续变化。实测值停止变化即可显示；有轻微波动时按最终显示精度确认。
-            let delays = [180, 45, 45, 45, 80, 100, 120]
-            var previous: Double?
-            for (index, delay) in delays.enumerated() {
-                try? await Task.sleep(for: .milliseconds(delay))
-                guard !Task.isCancelled else { return }
-                let nits = await NativeDisplayLuminanceReader.read(displayID: displayID, expectedPercent: percent)
-                guard !Task.isCancelled else { return }
-                if let nits, let previous,
-                   nits == previous || (index == delays.count - 1 && nits.rounded() == previous.rounded()) {
-                    self?.state.readout = OSDReadout(percent: percent, nits: Int(nits.rounded()))
-                    return
-                }
-                previous = nits
-            }
-            self?.state.readout = OSDReadout(percent: percent)
-        }
     }
 
     private func makePanel() -> NSPanel {
@@ -182,22 +138,7 @@ final class MediaControlOSD {
 
     private func updateDisplayedValue(_ value: Double, resetReadout: Bool = false, animated: Bool = false) {
         guard resetReadout || state.value != value else { return }
-        luminanceRead?.cancel()
-        awaitingBrightnessWrite = state.expectsLuminance
-        if awaitingBrightnessWrite, let displayID {
-            // 上一档还没读稳就再次按键时，收起过时的读数；滑条仍逐次响应。
-            if !isEditing, let readout = state.readout, readout.percent != state.value {
-                state.readout = nil
-            }
-            // 优先等写入确认。若回调先于浮层出现，仍通过目标百分比校验后读取实测亮度。
-            luminanceRead = Task { [weak self] in
-                try? await Task.sleep(for: .milliseconds(300))
-                guard !Task.isCancelled else { return }
-                self?.refreshLuminance(on: displayID, percent: value)
-            }
-        } else {
-            state.readout = OSDReadout(percent: value)
-        }
+        state.readout = OSDReadout(percent: value)
         let animate = animated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         withAnimation(animate ? .smooth(duration: 0.20) : nil) { state.value = value }
     }
@@ -313,13 +254,9 @@ private final class MediaControlOSDHost: NSHostingView<MediaControlOSDView> {
 
 private struct OSDReadout {
     let percent: Double
-    var nits: Int? = nil
 
     var text: String {
-        let percentage = (percent / 100).formatted(.percent.precision(.fractionLength(0)))
-        guard let nits else { return percentage }
-        let luminance = String.localizedStringWithFormat(String(localized: "display.control.nits"), nits)
-        return percentage + " · " + luminance
+        (percent / 100).formatted(.percent.precision(.fractionLength(0)))
     }
 }
 
@@ -327,7 +264,6 @@ private struct OSDReadout {
 private final class MediaControlOSDState {
     var control: MediaKeyKind = .brightness
     var value: Double = 0
-    var expectsLuminance = false
     var readout: OSDReadout?
     var isInteractive = false
 }
@@ -351,7 +287,7 @@ private struct MediaControlOSDView: View {
                 .accessibilityHidden(true)
             GeometryReader { geometry in
                 let travel = max(1, geometry.size.width)
-                OSDLevelTrack(fraction: state.value / 100, readout: state.readout, expectsLuminance: state.expectsLuminance)
+                OSDLevelTrack(fraction: state.value / 100, readout: state.readout)
                     .contentShape(Rectangle())
                     .gesture(DragGesture(minimumDistance: 0)
                         .onChanged { point in
@@ -403,7 +339,6 @@ private struct MediaControlOSDView: View {
 private struct OSDLevelTrack: View, Animatable {
     var fraction: Double
     let readout: OSDReadout?
-    let expectsLuminance: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     @Environment(\.colorSchemeContrast) private var contrast
 
@@ -432,19 +367,13 @@ private struct OSDLevelTrack: View, Animatable {
                     .frame(height: 4)
 
                 OSDCalloutLayout(endpoint: endpoint) {
-                    ZStack {
-                        if expectsLuminance {
-                            // 按本地化的最大读数预留宽度；跨越两位、三位尼特时外轮廓也保持连续。
-                            Text(verbatim: OSDReadout(percent: 100, nits: 10_000).text).hidden()
-                        }
-                        Text(verbatim: readout?.text ?? "")
-                    }
-                    .font(.system(size: 8.5, weight: .semibold).monospacedDigit())
-                    .contentTransition(.identity)
-                    .foregroundStyle(.black.opacity(contrast == .increased ? 0.9 : 0.70))
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 1.5)
-                    .background(bubbleColor, in: Capsule())
+                    Text(verbatim: readout?.text ?? "")
+                        .font(.system(size: 8.5, weight: .semibold).monospacedDigit())
+                        .contentTransition(.identity)
+                        .foregroundStyle(.black.opacity(contrast == .increased ? 0.9 : 0.70))
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 1.5)
+                        .background(bubbleColor, in: Capsule())
                     Path { path in
                         path.move(to: .zero)
                         path.addLine(to: CGPoint(x: 6, y: 0))

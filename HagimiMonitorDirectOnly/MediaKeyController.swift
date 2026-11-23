@@ -17,9 +17,6 @@ final class MediaKeyController {
 
     private var lastNonZeroVolume: [CGDirectDisplayID: Double] = [:]
 
-    private var feedbackOutput: AudioOutputDetector.VolumeOutput?
-    private var nativeRestoreLevels: [UInt32: Double] = [:]
-
     init() {}
 
     func attach(controller: DisplayControlController, settings: MonitorSettings) {
@@ -50,24 +47,35 @@ final class MediaKeyController {
         }
 
         var keys: Set<MediaKey> = []
-        if wantBrightness, controller?.displays.contains(where: { $0.supportsBrightness }) == true {
+        if wantBrightness, controller?.displays.contains(where: { $0.kind == .externalDDC && $0.supportsBrightness }) == true {
             keys.formUnion([.brightnessUp, .brightnessDown])
         }
-        let nativeOutput = wantVolume ? AudioOutputDetector.volumeOutput() : nil
-        let volumeTarget = wantVolume && nativeOutput == nil ? targetDisplayID(for: .volumeUp) : nil
-        if nativeOutput != nil || volumeTarget != nil {
+        let volumeTarget = wantVolume ? targetDisplayID(for: .volumeUp) : nil
+        if volumeTarget != nil {
             keys.formUnion([.volumeUp, .volumeDown, .mute])
         }
 
-        if feedback.control == .brightness, !keys.contains(.brightnessUp) {
-            feedback.hide()
-        } else if let control = feedback.control, control != .brightness, (feedbackOutput != nativeOutput || (nativeOutput == nil && feedback.displayID != volumeTarget)) {
+        if feedback.control == .brightness {
+            let keepsTarget = keys.contains(.brightnessUp)
+                && controller?.displays.contains(where: {
+                    $0.id == feedback.displayID && $0.kind == .externalDDC && $0.supportsBrightness
+                }) == true
+            if !keepsTarget {
+                feedback.hide()
+            }
+        } else if let control = feedback.control, control != .brightness, feedback.displayID != volumeTarget {
             feedback.hide()
         }
         apply(desired: keys)
     }
 
     func dismissFeedback() { feedback.hide() }
+
+    func dismissFeedbackIfDisconnected(onlineIDs: Set<CGDirectDisplayID>) {
+        if let displayID = feedback.displayID, !onlineIDs.contains(displayID) {
+            feedback.hide()
+        }
+    }
 
     /// 仅在监听的按键集合变化时重建事件 tap，避免干扰系统事件顺序。
     private func apply(desired: Set<MediaKey>) {
@@ -88,20 +96,7 @@ final class MediaKeyController {
     }
 
     private func handle(event: MediaKeyEvent) -> Bool {
-        switch event.key {
-        case .volumeUp, .volumeDown, .mute:
-            if let output = AudioOutputDetector.volumeOutput() {
-                if isOptionOnly(modifiers: event.modifiers) {
-                    if event.isPressed && !event.isRepeat { openPreferencePane(for: event.key) }
-                    return true
-                }
-                guard event.isPressed, !(event.key == .mute && event.isRepeat) else { return true }
-                return adjustAudio(event, on: output)
-            }
-        default: break
-        }
-
-        // 亮度跟随鼠标所在屏，音量跟随当前音频输出。没有匹配目标时交还系统。
+        // 亮度跟随鼠标所在的第三方外接屏，音量跟随匹配的外接屏输出；其余交还系统。
         guard let targetDisplayID = targetDisplayID(for: event.key) else {
             return false
         }
@@ -135,38 +130,13 @@ final class MediaKeyController {
         }
     }
 
-    private func adjustAudio(_ event: MediaKeyEvent, on output: AudioOutputDetector.VolumeOutput) -> Bool {
-        guard let level = output.level else { return false }
-        let muted = output.muted
-        let next: Double
-        if event.key == .mute {
-            if level > 0 { nativeRestoreLevels[output.id] = level }
-            if let muted, level > 0, output.setMuted(!muted) {
-                next = muted ? level : 0
-            } else {
-                next = level > 0 && muted != true ? 0 : nativeRestoreLevels[output.id] ?? unmuteFallback
-                guard output.setLevel(next) else { return false }
-            }
-        } else {
-            let step = stepSize(modifiers: event.modifiers)
-            next = min(100, max(0, (muted == true ? 0 : level) + (event.key == .volumeUp ? step : -step)))
-            guard output.setLevel(next) else { return false }
-        }
-        feedbackOutput = output
-        feedback.show(control: next == 0 ? .mute : .volume, value: next,
-                      displayID: currentDisplayIDUnderMouse() ?? CGMainDisplayID()) { value, _ in
-            guard AudioOutputDetector.volumeOutput() == output else { return false }
-            return output.setLevel(value)
-        }
-        return true
-    }
-
     private func targetDisplayIDForCurrentMouseLocation() -> CGDirectDisplayID? {
         let mouseDisplayID = currentDisplayIDUnderMouse()
         guard let controller else { return nil }
         let displays = controller.displays.map {
             (
                 displayID: $0.id,
+                isSystemManaged: $0.kind != .externalDDC,
                 supportsBrightness: $0.supportsBrightness
             )
         }
@@ -181,7 +151,7 @@ final class MediaKeyController {
         case .volumeUp, .volumeDown, .mute:
             guard let controller else { return nil }
             guard let output = AudioOutputDetector.defaultOutputDescription(), !output.isControllable else { return nil }
-            let externals = controller.displays.filter { !$0.isBuiltIn && $0.supportsVolume }
+            let externals = controller.displays.filter { $0.kind == .externalDDC && $0.supportsVolume }
             let displays = externals.map {
                 (
                     identity: displayIdentity(for: $0),
@@ -243,7 +213,7 @@ final class MediaKeyController {
 
     private func adjust(_ control: DisplayControlKind, by delta: Double, on displayID: CGDirectDisplayID) -> Bool {
         guard let controller else { return false }
-        guard let current = controller.mediaKeyBaseline(for: control, displayID: displayID) else { return false }
+        let current = controller.value(for: control, displayID: displayID)
         let next = min(100, max(0, current + delta))
         return submitWithFeedback(next, for: control, on: displayID)
     }
@@ -275,9 +245,7 @@ final class MediaKeyController {
         }
         guard let storageID = controller?.displays.first(where: { $0.id == displayID })?.storageID,
               submit(value, for: control, on: displayID, final: true) else { return false }
-        feedbackOutput = nil
-        feedback.show(control: kind, value: value, displayID: displayID,
-                      expectsLuminance: usesNativeBrightness(control, on: displayID)) { [weak self] value, final in
+        feedback.show(control: kind, value: value, displayID: displayID) { [weak self] value, final in
             guard let self, self.controller?.displays.contains(where: {
                 $0.id == displayID && $0.storageID == storageID
             }) == true else { return false }
@@ -287,30 +255,16 @@ final class MediaKeyController {
         return true
     }
 
-    private func usesNativeBrightness(_ control: DisplayControlKind, on displayID: CGDirectDisplayID) -> Bool {
-        control == .brightness && controller?.displays.contains {
-            $0.id == displayID && ($0.kind == .appleNative || $0.kind == .builtIn) && $0.dimmingMode == .hardware
-        } == true
-    }
-
     private func submit(_ value: Double, for control: DisplayControlKind, on displayID: CGDirectDisplayID, final: Bool) -> Bool {
         guard let controller else { return false }
-        let afterNativeWrite: (@MainActor @Sendable () -> Void)?
-        let nativeBrightness = usesNativeBrightness(control, on: displayID)
-        if nativeBrightness {
-            afterNativeWrite = { [weak self] in self?.feedback.refreshLuminance(on: displayID, percent: value) }
-        } else {
-            afterNativeWrite = nil
-        }
-        guard controller.setValueAsync(value, for: control, displayID: displayID,
-                                       final: final, smoothBrightness: nativeBrightness, afterNativeWrite: afterNativeWrite) else { return false }
+        guard controller.setValueAsync(value, for: control, displayID: displayID, final: final) else { return false }
         switch control {
         case .brightness:
             guard CGDisplayIsInMirrorSet(displayID) != 0 else { break }
             let primary = CGDisplayMirrorsDisplay(displayID)
             let mirrorSource = primary == kCGNullDirectDisplay ? displayID : primary
-            // 镜像已经共享源画面，额外写入仅用于独立的硬件背光。
-            for display in controller.displays where display.id != displayID && display.supportsBrightness && display.dimmingMode == .hardware {
+            // 镜像已经共享源画面，额外写入仅用于其他第三方外接屏的独立硬件背光。
+            for display in controller.displays where display.id != displayID && display.kind == .externalDDC && display.supportsBrightness && display.dimmingMode == .hardware {
                 guard display.id == mirrorSource || CGDisplayMirrorsDisplay(display.id) == mirrorSource else { continue }
                 controller.setValueAsync(value, for: control, displayID: display.id, final: final)
             }

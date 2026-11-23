@@ -3581,22 +3581,6 @@
         }
       }
     },
-    "display.control.nits": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld nits"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "%lld 尼特"
-          }
-        }
-      }
-    },
     "display.control.volume": {
       "localizations": {
         "en": {

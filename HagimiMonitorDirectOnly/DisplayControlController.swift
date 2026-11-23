@@ -10,7 +10,7 @@ import SwiftUI
 
 nonisolated protocol DisplayControlBackend: Sendable {
     func displays() -> [ControlledDisplay]
-    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay, smoothBrightness: Bool) -> DisplayWriteOutcome
+    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome
     func makeEngineTransport() -> any DDCTransport
     func engineConnections(for displays: [ControlledDisplay]) -> [DisplayConnection]
     func invalidateConnectionTokens()
@@ -67,9 +67,9 @@ final class DisplayControlController: ObservableObject {
     private var pollTimerCancellable: AnyCancellable?
     private static let pollInterval: TimeInterval = 5
 
-    /// 按键接管取决于亮度控制能力，以及可与音频输出匹配的外接屏。
+    /// 按键接管取决于是否存在可控亮度的第三方外接屏，以及可与音频输出匹配的外接屏。
     private struct MediaKeyPlanInputs: Equatable {
-        let hasBrightnessDisplay: Bool
+        let hasExternalBrightnessDisplay: Bool
         let externalAudioDisplayNames: [CGDirectDisplayID: String]
     }
     private var mediaKeyPlanInputs: MediaKeyPlanInputs?
@@ -175,9 +175,9 @@ final class DisplayControlController: ObservableObject {
     /// 周期回读亮度和音量时，沿用已安装的媒体键监听。
     private func refreshMediaKeyPlanIfInputsChanged(_ detectedDisplays: [ControlledDisplay]) {
         let inputs = MediaKeyPlanInputs(
-            hasBrightnessDisplay: detectedDisplays.contains { $0.supportsBrightness },
+            hasExternalBrightnessDisplay: detectedDisplays.contains { $0.kind == .externalDDC && $0.supportsBrightness },
             externalAudioDisplayNames: Dictionary(uniqueKeysWithValues: detectedDisplays.lazy
-                .filter { !$0.isBuiltIn && $0.supportsVolume }
+                .filter { $0.kind == .externalDDC && $0.supportsVolume }
                 .map { ($0.id, $0.name) })
         )
         guard inputs != mediaKeyPlanInputs else { return }
@@ -206,14 +206,18 @@ final class DisplayControlController: ObservableObject {
                 guard request == self.refreshGeneration, !self.connectionTransition else { return }
                 AppLogger.ui.info("Display refresh completed, found \(detectedDisplays.count) displays")
                 let detectedIDs = Set(detectedDisplays.map { $0.id })
+                let removedIDs = previousIDs.subtracting(detectedIDs)
                 // 已移除的显示器:清理 worker 去重状态,避免同 ID 重新接入时
                 // lastWrittenValues 残留导致首次写入被误跳过。
                 // 同时重置 gamma 调光,避免对已断开的显示器残留 gamma 压暗。
-                for removedID in previousIDs.subtracting(detectedIDs) {
+                for removedID in removedIDs {
                     self.worker.clearLastValues(displayID: removedID)
                     self.recentlySetValues[removedID] = nil
                     self.suppressedWrites = self.suppressedWrites.filter { $0.key.displayID != removedID }
                     GammaDimmingController.shared.reset(displayID: removedID)
+                }
+                if !removedIDs.isEmpty {
+                    self.mediaKeyController.dismissFeedbackIfDisconnected(onlineIDs: detectedIDs)
                 }
                 self.displays = detectedDisplays
                 for display in detectedDisplays {
@@ -260,16 +264,6 @@ final class DisplayControlController: ObservableObject {
         return fallbackValues[displayID]?[control] ?? fallbackDefault
     }
 
-    private let nativeBrightness = DisplayServicesBridge()
-
-    func mediaKeyBaseline(for control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
-        if control == .brightness, displays.contains(where: { $0.id == displayID && ($0.isBuiltIn || $0.kind == .appleNative) }) {
-            if let pending = pendingValues[displayID]?[control] { return pending }
-            return nativeBrightness.getBrightness(displayID: displayID).map { Double($0) * 100 }
-        }
-        return value(for: control, displayID: displayID)
-    }
-
     func optionalValue(for control: DisplayControlKind, displayID: CGDirectDisplayID) -> Double? {
         if let pendingValue = pendingValues[displayID]?[control] {
             return pendingValue
@@ -284,7 +278,7 @@ final class DisplayControlController: ObservableObject {
     @discardableResult
     func setValueAsync(
         _ value: Double, for control: DisplayControlKind, displayID: CGDirectDisplayID,
-        final: Bool = true, smoothBrightness: Bool = false, afterNativeWrite: (@MainActor @Sendable () -> Void)? = nil
+        final: Bool = true
     ) -> Bool {
         guard value.isFinite, !connectionTransition, !connections.isBusy else { return false }
         if connections.hasStarted {
@@ -316,11 +310,10 @@ final class DisplayControlController: ObservableObject {
         }
 
         let requestGeneration = refreshGeneration
-        worker.setValue(clampedValue, for: key, display: display, service: service, smoothBrightness: smoothBrightness) { [weak self] result in
+        worker.setValue(clampedValue, for: key, display: display, service: service) { [weak self] result in
             Task { @MainActor in
                 guard let self, !self.connectionTransition, self.refreshGeneration == requestGeneration else { return }
                 self.handleWriteResult(result)
-                if result.outcome.didWrite { afterNativeWrite?() }
             }
         }
         return true
@@ -465,7 +458,6 @@ private nonisolated final class DisplayControlWorker: @unchecked Sendable {
         for key: ControlKey,
         display: ControlledDisplay,
         service: any DisplayControlBackend,
-        smoothBrightness: Bool,
         completion: @escaping @Sendable (DisplayWriteResult) -> Void
     ) {
         let requestGeneration = generationLock.withLock { generation }
@@ -481,12 +473,8 @@ private nonisolated final class DisplayControlWorker: @unchecked Sendable {
                 }
                 self.debounceTimers.removeValue(forKey: key)
 
-                let outcome = service.setValue(latestValue, for: key.control, display: display, smoothBrightness: smoothBrightness)
+                let outcome = service.setValue(latestValue, for: key.control, display: display)
                 completion(DisplayWriteResult(key: key, value: latestValue, outcome: outcome))
-            }
-            if smoothBrightness {
-                timer.perform()
-                return
             }
             self.debounceTimers[key] = timer
             self.queue.asyncAfter(deadline: .now() + self.debounceInterval, execute: timer)
@@ -765,7 +753,7 @@ private nonisolated final class DisplayControlService: DisplayControlBackend, @u
         return result
     }
 
-    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay, smoothBrightness: Bool) -> DisplayWriteOutcome {
+    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome {
         guard display.supports(control) else { return .busError }
 
         // Gamma 软件调光降级路径:DDC 不可用的显示器仍可调亮度(但仅亮度)。
@@ -783,9 +771,6 @@ private nonisolated final class DisplayControlService: DisplayControlBackend, @u
         if useDisplayServices {
             switch control {
             case .brightness:
-                if smoothBrightness {
-                    return HagimiSetSmoothBrightness(display.id, Float(value / 100)) == 0 ? .written : .busError
-                }
                 return displayServices.setBrightness(displayID: display.id, value: Float(value / 100)) ? .written : .busError
             case .volume, .contrast:
                 return .busError

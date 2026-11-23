@@ -14,9 +14,12 @@ nonisolated struct AudioOutputDescription: Equatable, Sendable {
 
 // MARK: - 媒体键目标选择
 
-/// 音量跟随默认音频输出，亮度跟随鼠标所在的可控显示器。
+/// 媒体键只接管系统无法原生控制且没有原生 OSD 的第三方外接显示器（externalDDC）：
+/// - 音量：默认音频输出不可由系统直接调节，且能匹配到支持 DDC 音量的第三方外接屏时接管；其余交还系统。
+/// - 亮度：仅鼠标位于可控的第三方外接屏，或无法定位鼠标且仅有唯一可控第三方外接屏时接管；
+///   内建屏与 Apple 原生外接屏交还系统处理。
 nonisolated enum MediaKeyTargetSelector {
-    /// 返回应通过 DDC 调整音量的显示器。系统可调音量的设备由 Core Audio 处理。
+    /// 返回应通过 DDC 调整音量的显示器。系统可调音量的设备交还 macOS 处理。
     static func volumeTarget(
         audioOutput: AudioOutputDescription?,
         boundIdentity: DisplayIdentity?,
@@ -50,12 +53,13 @@ nonisolated enum MediaKeyTargetSelector {
         return nil
     }
 
-    /// 无法定位鼠标时，仅在目标唯一时接管亮度键。
+    /// 亮度键目标：仅选择非系统原生管理（externalDDC）且支持亮度的外接显示器。
+    /// 鼠标落在内建屏或 Apple 原生外接屏上时交还系统；无法定位鼠标时仅在唯一可控外接屏时接管。
     static func brightnessTarget(
         mouseDisplayID: CGDirectDisplayID?,
-        displays: [(displayID: CGDirectDisplayID, supportsBrightness: Bool)]
+        displays: [(displayID: CGDirectDisplayID, isSystemManaged: Bool, supportsBrightness: Bool)]
     ) -> CGDirectDisplayID? {
-        let available = displays.filter { $0.supportsBrightness }
+        let available = displays.filter { !$0.isSystemManaged && $0.supportsBrightness }
         if let mouseDisplayID {
             return available.first { $0.displayID == mouseDisplayID }?.displayID
         }
