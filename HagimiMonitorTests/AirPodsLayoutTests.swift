@@ -1,4 +1,5 @@
 import AppKit
+import CoreAudio
 import SwiftUI
 import Testing
 @testable import HagimiMonitorDirect
@@ -28,7 +29,24 @@ struct AirPodsLayoutTests {
                                         components: [.init(kind: .single, level: 100, isCharging: true)], batterySource: .advertisement),
                     BluetoothDeviceInfo(address: "test-5", name: "Mouse", type: .mouse, batteryLevel: 45)
                 ]
-                let view = BluetoothDeviceList(devices: devices, theme: theme)
+                let audioOutput = BluetoothAudioOutputController(
+                    endpoints: [
+                        BluetoothAudioOutputEndpoint(
+                            id: 101,
+                            uid: "AA-BB-CC-DD-EE-01:output",
+                            name: "Very Long AirPods Name for Complete Display",
+                            transportType: kAudioDeviceTransportTypeBluetooth
+                        ),
+                        BluetoothAudioOutputEndpoint(
+                            id: 102,
+                            uid: "AA-BB-CC-DD-EE-04:output",
+                            name: "AirPods Max",
+                            transportType: kAudioDeviceTransportTypeBluetooth
+                        )
+                    ],
+                    defaultOutputDeviceID: 101
+                )
+                let view = BluetoothDeviceList(devices: devices, theme: theme, audioOutput: audioOutput)
                     .padding(10).frame(width: MonitorConstants.panelMinWidth)
                     .background(scheme == .dark ? Color(nsColor: .darkGray) : Color(nsColor: .windowBackgroundColor))
                     .environment(\.colorScheme, scheme).environment(\.locale, Locale(identifier: language))
@@ -77,5 +95,49 @@ struct AirPodsLayoutTests {
             try #require(bitmap.representation(using: .png, properties: [:]))
                 .write(to: output.appendingPathComponent("deduplicated-\(scheme).png"))
         }
+    }
+
+    @Test func audioOutputMatchingPrefersMACAndFallsBackToNormalizedName() {
+        let endpoints = [
+            BluetoothAudioOutputEndpoint(
+                id: 10,
+                uid: "7C-C9-5E-67-E5-3F:output",
+                name: "Redmi Buds 4",
+                transportType: kAudioDeviceTransportTypeBluetooth
+            ),
+            BluetoothAudioOutputEndpoint(
+                id: 20,
+                uid: "BuiltInSpeakerDevice",
+                name: "MacBook Pro扬声器",
+                transportType: kAudioDeviceTransportTypeBuiltIn
+            )
+        ]
+
+        // 1. MAC 精确命中（即便设备端改名也能关联同一音频输出）
+        let renamedHeadset = BluetoothDeviceInfo(
+            address: "7cc95e67e53f",
+            name: "My Custom Buds",
+            type: .headset,
+            batteryLevel: 80
+        )
+        #expect(BluetoothAudioOutputController.matchEndpoint(for: renamedHeadset, in: endpoints)?.id == 10)
+
+        // 2. 沙盒 BLE UUID 身份按归一化名称命中蓝牙音频端点
+        let bleSpeaker = BluetoothDeviceInfo(
+            address: "ble-99620140-3A7D-D903-E863-ECA1E915B5C8",
+            name: "  redmi   buds 4 ",
+            type: .speaker,
+            batteryLevel: 65
+        )
+        #expect(BluetoothAudioOutputController.matchEndpoint(for: bleSpeaker, in: endpoints)?.id == 10)
+
+        // 3. 非音频外设（鼠标/键盘）不匹配音频输出
+        let mouse = BluetoothDeviceInfo(
+            address: "7cc95e67e53f",
+            name: "Redmi Buds 4",
+            type: .mouse,
+            batteryLevel: 95
+        )
+        #expect(BluetoothAudioOutputController.matchEndpoint(for: mouse, in: endpoints) == nil)
     }
 }

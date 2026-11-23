@@ -275,12 +275,28 @@ nonisolated enum AccessoryDetailSizing {
     static let fanContentWidth: CGFloat = (MonitorConstants.panelMinWidth - 12 - 2 * inset - 1) / 2 - 2 * inset
 }
 
-/// 蓝牙部件按整行排列，最窄面板也保留标签、条形与完整充电读数。
+/// 蓝牙明细尺寸：单行采用紧凑电池符号与百分比，分体三列保持标签、条形与完整充电读数。
 nonisolated enum BluetoothComponentSizing {
-    static let barWidth: CGFloat = 56
-    static let valueWidth: CGFloat = 56
+    static let rowIconWidth: CGFloat = 18
+    static let rowVerticalInset: CGFloat = 8
+    static let rowHStackSpacing: CGFloat = 8
+    static let rowBatterySymbolSize: CGFloat = 12
+    static let rowValueSize: CGFloat = 12.5
+    static let rowChargingSize: CGFloat = 8.5
+    static let rowBatterySpacing: CGFloat = 3
+    static let connectedDotSize: CGFloat = 5
+    static let connectedLabelSize: CGFloat = 10.5
+    static let audioPillIconSize: CGFloat = 9
+    static let audioPillFontSize: CGFloat = 10
+    static let audioPillHorizontalPadding: CGFloat = 6
+    static let audioPillVerticalPadding: CGFloat = 2
+    static let audioPillSpacing: CGFloat = 3
+    /// 最窄面板下蓝牙单行右侧文本主列（副标题 + 音频输出胶囊同排）的可用宽度预算。
+    static let rowTextColumnMinWidth: CGFloat =
+        MonitorConstants.panelMinWidth - 12 - 20 - 2 * AccessoryDetailSizing.inset - rowIconWidth - rowHStackSpacing
+
     static let horizontalInset: CGFloat = 8
-    static let valueSize: CGFloat = 14
+    static let valueSize: CGFloat = 13
     static let symbolSize: CGFloat = 11
     static let chargingSize: CGFloat = 9
     static let chargingGap: CGFloat = 2

@@ -3724,17 +3724,25 @@ private struct BluetoothGlassRow: View, Equatable {
     }
 }
 
-/// 蓝牙展开区按设备分组；分部电量使用等分网格，普通设备保留总电量。
-/// 系统连接与已配对耳机的有效广播合并成同一清单。
-/// 未上报电量的设备(厂商私有协议,系统本身收不到)右侧以短横占位,不伪造读数。
+/// 蓝牙展开区按设备分组；分部电量使用等分网格，普通设备采用紧凑电池符号与百分比。
+/// 系统连接与已配对耳机的有效广播合并成同一清单；未上报电量的单体设备显示「已连接」状态。
 struct BluetoothDeviceList: View {
     let devices: [BluetoothDeviceInfo]
     let theme: MonitorPanelTheme
+    @ObservedObject var audioOutput: BluetoothAudioOutputController = .shared
+    var showsSeparator: Bool = true
 
     var body: some View {
-        VStack(spacing: MetricGridMetrics.rowSpacing) {
-            ForEach(devices) { device in
-                deviceRow(device)
+        VStack(spacing: 7) {
+            if showsSeparator {
+                Rectangle()
+                    .fill(theme.rowSeparator(for: .bluetooth))
+                    .frame(height: 1)
+            }
+            VStack(spacing: MetricGridMetrics.rowSpacing) {
+                ForEach(devices) { device in
+                    deviceRow(device)
+                }
             }
         }
     }
@@ -3742,37 +3750,48 @@ struct BluetoothDeviceList: View {
     private let partOrder: [BluetoothBatteryComponent.Kind] = [.left, .right, .case]
 
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
-        PanelAccessoryGroup(theme: theme) {
+        let supportsAudio = device.type.supportsAudioOutput
+        let isDefaultAudio = audioOutput.isDefaultOutput(device)
+        return PanelAccessoryGroup(theme: theme) {
             VStack(spacing: 0) {
-                HStack(spacing: 8) {
+                HStack(alignment: .center, spacing: BluetoothComponentSizing.rowHStackSpacing) {
                     Image(systemName: device.type.symbol)
-                        .font(.caption.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
+                        .symbolRenderingMode(.monochrome)
                         .foregroundStyle(theme.moduleTint(for: .bluetooth))
-                        .frame(width: AccessoryDetailSizing.iconSize, height: AccessoryDetailSizing.iconSize)
-                        .background {
-                            RoundedRectangle(cornerRadius: AccessoryDetailSizing.cornerRadius, style: .continuous)
-                                .fill(theme.badgeFill(for: .bluetooth))
+                        .frame(width: BluetoothComponentSizing.rowIconWidth)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 6) {
+                            Text(device.name)
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(theme.primaryText)
+                                .fixedSize(horizontal: false, vertical: true)
+
+                            Spacer(minLength: 6)
+
+                            if !device.hasSeparateBatteryParts {
+                                compactBatteryReadout(device)
+                            }
                         }
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text(device.name)
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(theme.primaryText)
-                            .fixedSize(horizontal: false, vertical: true)
-                        Text(LocalizedStringKey(typeLocalizationKey(device.type)))
-                            .monitorPanelCaptionFont()
-                            .foregroundStyle(theme.captionText)
-                    }
-                    Spacer(minLength: 4)
-                    if !device.hasSeparateBatteryParts {
-                        if let level = device.compactBatteryLevel {
-                            BluetoothBatteryBar(level: level, tint: batteryColor(level), theme: theme)
-                                .frame(width: BluetoothComponentSizing.barWidth, height: BluetoothComponentSizing.trackHeight)
+
+                        HStack(spacing: 6) {
+                            Text(LocalizedStringKey(typeLocalizationKey(device.type)))
+                                .monitorPanelCaptionFont()
+                                .foregroundStyle(theme.captionText)
+
+                            if supportsAudio {
+                                Spacer(minLength: 4)
+                                BluetoothAudioOutputPill(isActive: isDefaultAudio, theme: theme) {
+                                    audioOutput.selectOutput(for: device)
+                                }
+                            }
                         }
-                        batteryValue(device.compactBatteryLevel, charging: device.compactChargingState)
-                            .frame(minWidth: BluetoothComponentSizing.valueWidth, alignment: .trailing)
                     }
                 }
-                .padding(AccessoryDetailSizing.inset)
+                .padding(.horizontal, AccessoryDetailSizing.inset)
+                .padding(.vertical, BluetoothComponentSizing.rowVerticalInset)
+
                 if device.hasSeparateBatteryParts {
                     Rectangle().fill(theme.rowSeparator(for: .bluetooth)).frame(height: 1)
                         .padding(.horizontal, AccessoryDetailSizing.inset)
@@ -3784,7 +3803,54 @@ struct BluetoothDeviceList: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(device.name)
-        .accessibilityValue(accessibilityValueForDevice(device))
+        .accessibilityValue(accessibilityValueForDevice(device, isDefaultAudioOutput: isDefaultAudio))
+        .modifier(BluetoothAudioOutputAccessibilityAction(
+            enabled: supportsAudio && !isDefaultAudio
+        ) {
+            audioOutput.selectOutput(for: device)
+        })
+    }
+
+    @ViewBuilder
+    private func compactBatteryReadout(_ device: BluetoothDeviceInfo) -> some View {
+        if let level = device.compactBatteryLevel {
+            HStack(spacing: BluetoothComponentSizing.rowBatterySpacing) {
+                if device.compactChargingState == true {
+                    Image(systemName: "bolt.fill")
+                        .font(.system(size: BluetoothComponentSizing.rowChargingSize, weight: .bold))
+                        .foregroundStyle(theme.palette.severityTint(for: .calm))
+                }
+                Image(systemName: batterySymbol(for: level))
+                    .font(.system(size: BluetoothComponentSizing.rowBatterySymbolSize))
+                    .foregroundStyle(batteryColor(level))
+                Text("\(level)%")
+                    .font(.system(size: BluetoothComponentSizing.rowValueSize, weight: .semibold, design: .monospaced))
+                    .monospacedDigit()
+                    .foregroundStyle(levelTextColor(level))
+            }
+            .fixedSize()
+        } else {
+            HStack(spacing: 4) {
+                Circle()
+                    .fill(theme.palette.severityTint(for: .calm))
+                    .frame(width: BluetoothComponentSizing.connectedDotSize,
+                           height: BluetoothComponentSizing.connectedDotSize)
+                Text("bluetooth.status.connected")
+                    .font(.system(size: BluetoothComponentSizing.connectedLabelSize, weight: .medium))
+                    .foregroundStyle(theme.captionText)
+            }
+            .fixedSize()
+        }
+    }
+
+    private func batterySymbol(for level: Int) -> String {
+        switch level {
+        case 88...100: "battery.100percent"
+        case 63..<88: "battery.75percent"
+        case 38..<63: "battery.50percent"
+        case 13..<38: "battery.25percent"
+        default: "battery.0percent"
+        }
     }
 
     private func componentCell(_ kind: BluetoothBatteryComponent.Kind, device: BluetoothDeviceInfo) -> some View {
@@ -3843,7 +3909,7 @@ struct BluetoothDeviceList: View {
     }
 
     /// 朗读所有部件，包括未上报的项，避免把缺失电量读成真实零值。
-    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
+    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo, isDefaultAudioOutput: Bool) -> String {
         var details = [typeLabel(for: device.type)]
         if device.hasSeparateBatteryParts {
             for kind in partOrder {
@@ -3854,8 +3920,11 @@ struct BluetoothDeviceList: View {
                 details.append("\(label) \(value)\(charging)")
             }
         } else {
-            details.append(device.compactBatteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.battery-unavailable"))
+            details.append(device.compactBatteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.status.connected"))
             if device.compactChargingState == true { details.append(String(localized: "bluetooth.charging")) }
+        }
+        if isDefaultAudioOutput {
+            details.append(String(localized: "bluetooth.audio.current-output"))
         }
         return details.joined(separator: ", ")
     }
@@ -3925,6 +3994,71 @@ private struct BluetoothBatteryBar: View {
             }
         }
         .accessibilityHidden(true)
+    }
+}
+
+/// 蓝牙音频设备（耳机/耳麦/音箱）的输出状态胶囊与一键切换按钮。
+private struct BluetoothAudioOutputPill: View {
+    let isActive: Bool
+    let theme: MonitorPanelTheme
+    let action: () -> Void
+    @State private var isHovered = false
+
+    private var isDark: Bool { theme.palette.colorScheme == .dark }
+    private var tint: Color { theme.moduleTint(for: .bluetooth) }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: BluetoothComponentSizing.audioPillSpacing) {
+                Image(systemName: isActive ? "speaker.wave.2.fill" : "speaker.wave.2")
+                    .font(.system(size: BluetoothComponentSizing.audioPillIconSize,
+                                  weight: isActive ? .bold : .medium))
+                    .foregroundStyle(isActive ? tint : theme.secondaryText)
+                Text(LocalizedStringKey(isActive ? "bluetooth.audio.current-output" : "bluetooth.audio.set-output"))
+                    .font(.system(size: BluetoothComponentSizing.audioPillFontSize,
+                                  weight: isActive ? .semibold : .medium))
+                    .foregroundStyle(isActive ? (isDark ? theme.primaryText : tint) : theme.secondaryText)
+            }
+            .padding(.horizontal, BluetoothComponentSizing.audioPillHorizontalPadding)
+            .padding(.vertical, BluetoothComponentSizing.audioPillVerticalPadding)
+            .background {
+                Capsule()
+                    .fill(isActive
+                          ? theme.badgeFill(for: .bluetooth)
+                          : (isHovered ? theme.badgeFill(for: .bluetooth).opacity(0.45) : theme.trackFill))
+            }
+            .overlay {
+                Capsule()
+                    .strokeBorder(
+                        isActive ? tint.opacity(isDark ? 0.45 : 0.32)
+                                 : theme.captionText.opacity(isHovered ? 0.30 : 0.14),
+                        lineWidth: 0.5
+                    )
+            }
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .fixedSize()
+        .onHover { isHovered = $0 }
+        .help(String(localized: isActive
+                     ? "bluetooth.audio.current-output.help"
+                     : "bluetooth.audio.set-output.help"))
+    }
+}
+
+/// 仅当音频设备未处于当前输出时挂接无障碍切换动作。
+private struct BluetoothAudioOutputAccessibilityAction: ViewModifier {
+    let enabled: Bool
+    let action: () -> Void
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content.accessibilityAction(named: Text("bluetooth.audio.set-output")) {
+                action()
+            }
+        } else {
+            content
+        }
     }
 }
 
