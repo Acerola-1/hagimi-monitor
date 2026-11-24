@@ -284,6 +284,19 @@ struct SettingsTests {
         #expect(SettingsWindowPresenter.settingsWindow == nil)
     }
 
+    @MainActor
+    @Test func openSettingsActionForwardsOptionalTab() {
+        var received: [SettingsTab?] = []
+        let action = OpenSettingsActionKey.Action { tab in
+            received.append(tab)
+        }
+
+        action()
+        action(.statistics)
+
+        #expect(received == [nil, .statistics])
+    }
+
     @Test func alertCategoriesDefaultToEnabledAndPersist() {
         let suiteName = "alertCategoriesDefaultToEnabledAndPersist"
         let defaults = UserDefaults(suiteName: suiteName)!

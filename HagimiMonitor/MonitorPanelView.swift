@@ -523,7 +523,7 @@ struct MonitorPanelView: View {
                 help: String(localized: "panel.statistics"),
                 tint: theme.secondaryText
             ) {
-                SettingsWindowPresenter.open(tab: .statistics)
+                fluidOpenSettings(.statistics)
             }
             .overlay(alignment: .topTrailing) {
                 if alerts.statisticsEntryUnread {

@@ -150,7 +150,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private let store: MonitorStore
     private let contentScope: MonitorPanelContentScope
     /// 打开设置窗口的闭包。由外部注入,因为 `OpenSettingsAction` 只能在 SwiftUI 视图层获取。
-    private let openSettingsAction: @MainActor @Sendable () -> Void
+    private let openSettingsAction: @MainActor @Sendable (SettingsTab?) -> Void
 
     private let statusItem: NSStatusItem
     private let panel: NSPanel
@@ -190,7 +190,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     init(
         store: MonitorStore,
         contentScope: MonitorPanelContentScope = .systemMonitor,
-        openSettings: @escaping @MainActor @Sendable () -> Void
+        openSettings: @escaping @MainActor @Sendable (SettingsTab?) -> Void
     ) {
         self.store = store
         self.contentScope = contentScope
@@ -554,7 +554,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     #endif
 
     @objc private func openSettingsFromMenu(_ sender: Any?) {
-        openSettingsAction()
+        openSettingsAction(nil)
     }
 
     @objc private func terminateApplication(_ sender: Any?) {
@@ -1154,18 +1154,18 @@ extension EnvironmentValues {
 /// 因此用自定义环境键传递闭包,在 MonitorPanelView 中读取并调用。
 enum OpenSettingsActionKey: EnvironmentKey {
     struct Action: Sendable {
-        let action: @MainActor () -> Void
+        let action: @MainActor (SettingsTab?) -> Void
 
-        init(_ action: @escaping @MainActor () -> Void) {
+        init(_ action: @escaping @MainActor (SettingsTab?) -> Void) {
             self.action = action
         }
 
-        @MainActor func callAsFunction() {
-            action()
+        @MainActor func callAsFunction(_ tab: SettingsTab? = nil) {
+            action(tab)
         }
     }
 
-    static let defaultValue: Action = Action({})
+    static let defaultValue: Action = Action({ _ in })
 }
 
 extension EnvironmentValues {

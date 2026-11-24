@@ -39,9 +39,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func updateDisplayMenuBarEntry(enabled: Bool) {
         if enabled, displayMenuBarController == nil {
-            displayMenuBarController = FluidPanelController(store: store, contentScope: .displayControls) { [weak self] in
+            displayMenuBarController = FluidPanelController(store: store, contentScope: .displayControls) { [weak self] tab in
                 self?.displayMenuBarController?.dismissPanelForSettings()
-                SettingsWindowPresenter.open()
+                SettingsWindowPresenter.open(tab: tab)
             }
         }
         displayMenuBarController?.setMenuBarEntryEnabled(enabled)
@@ -56,18 +56,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) lazy var fluidPanelController: FluidPanelController = {
         FluidPanelController(
             store: store,
-            openSettings: { [weak self] in
+            openSettings: { [weak self] tab in
                 self?.fluidPanelController.dismissPanelForSettings()
-                SettingsWindowPresenter.open()
+                SettingsWindowPresenter.open(tab: tab)
             }
         )
     }()
 
     private(set) lazy var pinnedPanelController: PinnedPanelController = {
-        PinnedPanelController(store: store, openSettings: { [weak self] in
+        PinnedPanelController(store: store, openSettings: { [weak self] tab in
             // 收起发起设置操作的钉选面板，避免它继续遮挡设置窗口。
             self?.pinnedPanelController.hide()
-            SettingsWindowPresenter.open()
+            SettingsWindowPresenter.open(tab: tab)
         })
     }()
 
