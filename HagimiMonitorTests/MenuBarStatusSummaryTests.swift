@@ -114,4 +114,38 @@ struct MenuBarStatusSummaryTests {
         #expect(!NSAppearance.isDark(appearanceName: nil))
         #expect(!NSAppearance.isHighContrast(appearanceName: nil))
     }
+
+    @Test("Status item tooltip is shown only when the menu bar panel is completely hidden")
+    func statusItemToolTipSuppressedWhilePanelActive() {
+        #expect(FluidPanelStatusItemToolTipPolicy.shouldShow(
+            panelIsVisible: false,
+            awaitingGeometry: false,
+            dismissalInProgress: false
+        ))
+        #expect(!FluidPanelStatusItemToolTipPolicy.shouldShow(
+            panelIsVisible: true,
+            awaitingGeometry: false,
+            dismissalInProgress: false
+        ))
+        #expect(!FluidPanelStatusItemToolTipPolicy.shouldShow(
+            panelIsVisible: false,
+            awaitingGeometry: true,
+            dismissalInProgress: false
+        ))
+        #expect(!FluidPanelStatusItemToolTipPolicy.shouldShow(
+            panelIsVisible: true,
+            awaitingGeometry: true,
+            dismissalInProgress: false
+        ))
+        #expect(!FluidPanelStatusItemToolTipPolicy.shouldShow(
+            panelIsVisible: true,
+            awaitingGeometry: false,
+            dismissalInProgress: true
+        ))
+        #expect(!FluidPanelStatusItemToolTipPolicy.shouldShow(
+            panelIsVisible: false,
+            awaitingGeometry: false,
+            dismissalInProgress: true
+        ))
+    }
 }

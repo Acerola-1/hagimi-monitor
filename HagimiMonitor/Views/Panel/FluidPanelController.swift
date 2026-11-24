@@ -129,6 +129,18 @@ struct FluidPanelDismissalDecision: Equatable, Sendable {
     }
 }
 
+/// 菜单栏状态项悬停提示的显示决策：仅在关联面板完全收起时允许显示悬停摘要，
+/// 面板打开、首帧几何准备或淡出收起期间一律抑制，避免打开面板后仍弹出冗余提示。
+nonisolated enum FluidPanelStatusItemToolTipPolicy {
+    static func shouldShow(
+        panelIsVisible: Bool,
+        awaitingGeometry: Bool,
+        dismissalInProgress: Bool
+    ) -> Bool {
+        !panelIsVisible && !awaitingGeometry && !dismissalInProgress
+    }
+}
+
 /// 自建的菜单栏面板控制器,替换系统 `MenuBarExtra(.window)`。
 ///
 /// 背景:SwiftUI 的 `MenuBarExtra(.window)` 在 macOS 15 及更早版本对宿主窗口的
@@ -171,7 +183,16 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     /// 全等时据此跳过 ImageRenderer 快照,消除「指标模式每秒重绘」这一常驻 CPU 热点。
     private var lastMetricsRenderKey: MenuBarMetricsRenderKey?
     private var statusToolTipTag: NSView.ToolTipTag?
+    private var statusToolTipRect: NSRect?
     private var lastAccessibilityValue: String?
+
+    private var shouldShowStatusItemToolTip: Bool {
+        FluidPanelStatusItemToolTipPolicy.shouldShow(
+            panelIsVisible: panel.isVisible,
+            awaitingGeometry: awaitingGeometry,
+            dismissalInProgress: dismissalInProgress
+        )
+    }
 
     /// 面板与菜单栏按钮左边缘对齐时,补偿窗口阴影/边框带来的 2pt 偏移。
     private static let windowBorderSize: CGFloat = 2
@@ -351,8 +372,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             statusItem.length = NSStatusItem.squareLength
             button.image = DisplayControlStatusIcon.makeImage()
             button.imagePosition = .imageOnly
-            button.toolTip = String(localized: "display.controls.title")
             button.setAccessibilityTitle(String(localized: "display.controls.title"))
+            refreshStatusItemToolTip()
             return
         }
         #endif
@@ -367,7 +388,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         button.setAccessibilityTitle("HagimiMonitor")
 
         refreshStatusItemImage()
-        refreshStatusItemToolTipRect()
+        refreshStatusItemToolTip()
         store.loadAnimator.setAnimationEnabled(store.settings.menuBarDisplayMode == .ring)
 
         // 只消费这一帧的新值；Published 在属性写回前发送，回读 store 会落后一帧。
@@ -632,6 +653,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
                 panel.orderFrontRegardless()
                 hostingView?.needsLayout = true
             }
+            refreshStatusItemToolTip()
             return
         }
         awaitingGeometry = false
@@ -655,6 +677,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         panel.alphaValue = 1
         schedulePointerFocusReset()
         panel.makeKeyAndOrderFront(nil)
+        refreshStatusItemToolTip()
         panelMotion?.nativeLayer.panelDidShow()
         if contentScope == .systemMonitor { store.panelDidAppear() }
         #if DEBUG
@@ -692,6 +715,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
             if decision.shouldCancelExpandedInterfaceSession {
                 cancelExpandedInterfaceSessionIfNeeded()
             }
+            refreshStatusItemToolTip()
             return
         }
 
@@ -745,6 +769,7 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         }
         if contentScope == .systemMonitor { store.panelDidDisappear() }
         dismissalInProgress = false
+        refreshStatusItemToolTip()
         // 关门晚于上面的隐藏回调发布,保证 isPanelVisible 变 false 的
         // 最后一次转发送达视图、驱动隐藏复位;此后冻结面板树。
         panelRefreshGate.close()
@@ -1014,21 +1039,46 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
         let target = max(width.rounded(.up), 24)
         guard statusItem.length != target else { return }
         statusItem.length = target
-        refreshStatusItemToolTipRect()
+        refreshStatusItemToolTip()
     }
 
-    /// 注册惰性悬停 Tooltip 区域：仅在鼠标真实停留时才经 `NSViewToolTipOwner` 拼接文本，
-    /// 避免每秒采样期间写 `button.toolTip` 产生无效分配或打断系统悬停计时。
-    private func refreshStatusItemToolTipRect() {
-        guard contentScope == .systemMonitor, let button = statusItem.button else { return }
-        if let tag = statusToolTipTag {
-            button.removeToolTip(tag)
-            statusToolTipTag = nil
+    /// 同步状态项悬停提示：面板打开或过渡期间移除系统 Tooltip 区域，避免在已展开面板上方
+    /// 继续弹出重复摘要；面板完全收起后按惰性 `NSViewToolTipOwner` 恢复注册，不增加采样期分配。
+    private func refreshStatusItemToolTip() {
+        guard let button = statusItem.button else { return }
+
+        #if DISPLAY_CONTROL
+        if contentScope == .displayControls {
+            let target = shouldShowStatusItemToolTip ? String(localized: "display.controls.title") : nil
+            if button.toolTip != target {
+                button.toolTip = target
+            }
+            return
         }
+        #endif
+
+        guard contentScope == .systemMonitor else { return }
+
+        guard shouldShowStatusItemToolTip else {
+            if let tag = statusToolTipTag {
+                button.removeToolTip(tag)
+                statusToolTipTag = nil
+            }
+            statusToolTipRect = nil
+            return
+        }
+
         let width = max(button.bounds.width, statusItem.length > 0 ? statusItem.length : 25)
         let height = max(button.bounds.height, NSStatusBar.system.thickness)
         let rect = NSRect(x: 0, y: 0, width: width, height: height)
+        if statusToolTipTag != nil, statusToolTipRect == rect {
+            return
+        }
+        if let tag = statusToolTipTag {
+            button.removeToolTip(tag)
+        }
         statusToolTipTag = button.addToolTip(rect, owner: self, userData: nil)
+        statusToolTipRect = rect
     }
 
     private func updateStatusItemAccessibilityValue(
@@ -1221,6 +1271,7 @@ extension FluidPanelController: NSViewToolTipOwner {
         point: NSPoint,
         userData data: UnsafeMutableRawPointer?
     ) -> String {
+        guard shouldShowStatusItemToolTip else { return "" }
         let coreLevel: MenuBarCoreLevel = store.settings.menuBarDisplayMode == .ring
             ? store.loadAnimator.displayedCoreLevel
             : MenuBarCoreLevel.normal.updated(for: store.combinedComputeLoad)
