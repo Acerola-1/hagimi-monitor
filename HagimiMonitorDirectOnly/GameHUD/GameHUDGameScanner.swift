@@ -110,9 +110,16 @@ final class GameHUDGameScanner: ObservableObject {
         guard !started else { return }
         started = true
         performRescan(force: true)
-        watchDirectory(FileManager.default
+        let steamApps = FileManager.default
             .homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Steam/steamapps"))
+            .appendingPathComponent("Library/Application Support/Steam/steamapps")
+        var watchedPaths: Set<String> = []
+        for library in Self.steamLibraryPaths(
+            vdfURL: steamApps.appendingPathComponent("libraryfolders.vdf"),
+            fallback: steamApps
+        ) where watchedPaths.insert(library.path).inserted {
+            watchDirectory(library)
+        }
         watchDirectory(FileManager.default
             .homeDirectoryForCurrentUser
             .appendingPathComponent("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"))
@@ -321,7 +328,7 @@ final class GameHUDGameScanner: ObservableObject {
                 let commonDir = library.appendingPathComponent("common").appendingPathComponent(installdir)
                 let gameName = fields["name"] ?? installdir
                 // 不在多应用包目录里随便取第一个 .app:唯一候选或名称唯一匹配才采用。
-                let candidates = GameHUDAppAssociation.candidates(inDirectory: commonDir, maxDepth: 1)
+                let candidates = GameHUDAppAssociation.candidates(inDirectory: commonDir, maxDepth: 2)
                 guard let app = GameHUDAppAssociation.select(gameName: gameName, candidates: candidates) else {
                     continue
                 }
@@ -345,38 +352,88 @@ final class GameHUDGameScanner: ObservableObject {
         return flags & 4 != 0
     }
 
+    /// 从单行 VDF/ACF 文本提取 `"key" "value"` 引号对，不依赖制表符分隔，并还原简单转义。
+    nonisolated static func parseQuotedKeyValue(_ line: Substring) -> (key: String, value: String)? {
+        var tokens: [String] = []
+        var index = line.startIndex
+        while index < line.endIndex, tokens.count < 2 {
+            let ch = line[index]
+            if ch == "\"" {
+                index = line.index(after: index)
+                var value = ""
+                var escaped = false
+                var closed = false
+                while index < line.endIndex {
+                    let current = line[index]
+                    if escaped {
+                        value.append(current)
+                        escaped = false
+                    } else if current == "\\" {
+                        escaped = true
+                    } else if current == "\"" {
+                        closed = true
+                        index = line.index(after: index)
+                        break
+                    } else {
+                        value.append(current)
+                    }
+                    index = line.index(after: index)
+                }
+                guard closed else { return nil }
+                tokens.append(value)
+                continue
+            }
+            if ch == "/" {
+                let next = line.index(after: index)
+                if next < line.endIndex, line[next] == "/" {
+                    break
+                }
+            }
+            index = line.index(after: index)
+        }
+        guard tokens.count == 2 else { return nil }
+        return (tokens[0], tokens[1])
+    }
+
     /// libraryfolders.vdf 里的 "path" 字段列表;解析失败回退默认库。
-    nonisolated private static func steamLibraryPaths(vdfURL: URL, fallback: URL) -> [URL] {
+    nonisolated static func steamLibraryPaths(vdfURL: URL, fallback: URL) -> [URL] {
         guard let text = try? String(contentsOf: vdfURL, encoding: .utf8) else {
             return [fallback]
         }
         var paths: [URL] = []
+        var seen: Set<String> = []
         for line in text.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // 形如 "path" "/Users/xxx/Library/Application Support/Steam"
-            guard trimmed.hasPrefix("\"path\"") else { continue }
-            let parts = trimmed.split(separator: "\t")
-            guard parts.count >= 2 else { continue }
-            let value = parts.last?.trimmingCharacters(in: CharacterSet(charactersIn: "\" \t")) ?? ""
-            guard !value.isEmpty else { continue }
-            paths.append(URL(fileURLWithPath: value).appendingPathComponent("steamapps"))
+            guard let pair = parseQuotedKeyValue(line),
+                  pair.key == "path", !pair.value.isEmpty else { continue }
+            let steamApps = URL(fileURLWithPath: pair.value).appendingPathComponent("steamapps")
+            if seen.insert(steamApps.path).inserted {
+                paths.append(steamApps)
+            }
         }
         return paths.isEmpty ? [fallback] : paths
     }
 
-    /// 抓 ACF 顶层字段(进 "AppState" 一层即取,不递归嵌套节)。
-    nonisolated private static func acfFields(at url: URL, keys: [String]) -> [String: String]? {
+    /// 抓 ACF 顶层字段(进 "AppState" depth == 1 即取, 跳过更深层嵌套节)。
+    nonisolated static func acfFields(at url: URL, keys: [String]) -> [String: String]? {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let keySet = Set(keys)
         var result: [String: String] = [:]
+        var depth = 0
         for line in text.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            for key in keys {
-                if result[key] == nil, trimmed.hasPrefix("\"\(key)\"") {
-                    let segments = trimmed.split(separator: "\t").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\" \t")) }
-                    if segments.count >= 2 {
-                        result[key] = segments[1]
-                    }
-                }
+            if trimmed == "{" {
+                depth += 1
+                continue
+            }
+            if trimmed == "}" {
+                depth = max(0, depth - 1)
+                continue
+            }
+            guard depth <= 1, let pair = parseQuotedKeyValue(line), keySet.contains(pair.key) else {
+                continue
+            }
+            if result[pair.key] == nil {
+                result[pair.key] = pair.value
             }
         }
         return result.isEmpty ? nil : result
@@ -457,6 +514,15 @@ final class GameHUDGameScanner: ObservableObject {
         )
     }
 
+    nonisolated private static let ignoredBundlePathComponents: [String] = [
+        "/.Trash/",
+        "/DerivedData/",
+        "/Backups.backupdb/",
+        "/CoreSimulator/",
+        "/node_modules/",
+        "/.build/",
+    ]
+
     nonisolated private static func applicationBundlePaths() -> (paths: [String], failed: Bool) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
@@ -469,8 +535,15 @@ final class GameHUDGameScanner: ObservableObject {
         } catch {
             return ([], true)
         }
+        let timeoutWorkItem = DispatchWorkItem {
+            if process.isRunning {
+                process.terminate()
+            }
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10, execute: timeoutWorkItem)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        timeoutWorkItem.cancel()
         guard process.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else {
             return ([], true)
         }
@@ -479,6 +552,7 @@ final class GameHUDGameScanner: ObservableObject {
         for line in text.split(separator: "\n") {
             let path = line.trimmingCharacters(in: .whitespaces)
             guard path.hasSuffix(".app"), !path.hasPrefix("/System/") else { continue }
+            guard !ignoredBundlePathComponents.contains(where: { path.contains($0) }) else { continue }
             // 只接受最外层应用包,跳过 .app 内部嵌套的 helper/插件。
             guard path.components(separatedBy: ".app").count <= 2 else { continue }
             guard seen.insert(path).inserted else { continue }

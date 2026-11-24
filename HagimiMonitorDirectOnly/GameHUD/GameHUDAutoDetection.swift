@@ -81,7 +81,7 @@ nonisolated enum GameHUDAutoDetection {
     /// 前台激活兜底:类别证据可即时登记;商店安装路径只用于安排一次重扫。
     static func storePathSource(for applicationURL: URL?) -> GameHUDRecognitionSource? {
         guard let path = applicationURL?.path else { return nil }
-        if path.contains("/Steam/steamapps/common/") {
+        if path.contains("/steamapps/common/") {
             return .steamManifest
         }
         if path.contains("/Epic Games/") {

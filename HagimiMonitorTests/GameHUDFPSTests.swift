@@ -25,6 +25,24 @@ struct GameHUDFPSTests {
         #expect(buffer.isEmpty)
     }
 
+    @Test func extractJSONObjectsFromDataHandlesSplitMultibyteUTF8() {
+        let json = #"{"Process":"黑神话：悟空","Layers":[{"Performance Stats":{"Presented Frame Stats":{"FPS":90.5,"Frame Count":90}}}]}"#
+        let bytes = Data(json.utf8)
+        // 故意在中文多字节 UTF-8 字符中间切分数据块
+        let splitPoint = 14
+        var buffer = Data()
+        buffer.append(bytes.prefix(splitPoint))
+        #expect(MetalPerfTraceMeter.extractJSONObjects(from: &buffer).isEmpty)
+
+        buffer.append(bytes.dropFirst(splitPoint))
+        let objects = MetalPerfTraceMeter.extractJSONObjects(from: &buffer)
+        #expect(objects.count == 1)
+        #expect(buffer.isEmpty)
+        let decoded = String(data: objects[0], encoding: .utf8)
+        #expect(decoded == json)
+        #expect(decoded.flatMap(MetalPerfTraceMeter.parseSample(from:))?.fps == 90.5)
+    }
+
     // MARK: - Sample 解析测试
 
     @Test func parseSampleExtractsPresentedAndIntervalStats() {
@@ -184,6 +202,24 @@ struct GameHUDFPSTests {
         #expect((stats?.onePercentLow ?? 0) > 105.0 && (stats?.onePercentLow ?? 0) <= 120.0)
     }
 
+    @Test func onePercentLowDoesNotOverPenalizeSmooth240FPS() {
+        let samples = (0..<10).map { i in
+            MetalPerfTraceMeter.SecondSample(
+                timestamp: Double(i),
+                fps: 240.0,
+                frameCount: 240,
+                avgMs: 4.17,
+                stdDevMs: 0.25,
+                maxMs: 5.2,
+                minMs: 3.7,
+                totalMs: 1000.0
+            )
+        }
+        let stats = MetalPerfTraceMeter.computeFPSStats(from: samples)
+        #expect(stats != nil)
+        #expect((stats?.onePercentLow ?? 0) > 196.0 && (stats?.onePercentLow ?? 0) <= 240.0)
+    }
+
     @MainActor
     @Test func frameMeterIsIdempotentForSameTarget() {
         let meter = GameHUDFrameMeter()
@@ -290,6 +326,7 @@ struct GameHUDFPSTests {
         #expect(entries.contains(where: { $0.id == .onePercentLow }))
         #expect(entries.contains(where: { $0.id == .frameTime }))
         #expect(entries.contains(where: { $0.id == .fanSpeed }))
+        #expect(entries.contains(where: { $0.id == .gpuRender }))
         #expect(entries.contains(where: { $0.id == .gpuPower }))
         #expect(entries.contains(where: { $0.id == .cpuPower }))
         let pressureIndex = entries.firstIndex(where: { $0.id == .memoryPressure })
@@ -356,10 +393,24 @@ struct GameHUDFPSTests {
             "gamehud.metric.one-percent-low",
             "gamehud.metric.frame-time",
             "gamehud.metric.fan-speed",
+            "gamehud.metric.gpu-render",
             "gamehud.metric.cpu-power",
             "gamehud.metric.gpu-power",
             "gamehud.metric.memory-pressure",
-            "gamehud.metric.network-rates"
+            "gamehud.metric.network-rates",
+            "gamehud.strip.cpu-usage",
+            "gamehud.strip.cpu-temperature",
+            "gamehud.strip.gpu-render",
+            "gamehud.strip.frame-time",
+            "gamehud.settings.master-subtitle.off",
+            "gamehud.settings.master-subtitle.idle",
+            "gamehud.settings.master-subtitle.active %@",
+            "gamehud.settings.metrics.count %lld %lld",
+            "gamehud.settings.metrics.empty-hint",
+            "gamehud.settings.metrics.section.fps",
+            "gamehud.settings.metrics.section.compute",
+            "gamehud.settings.metrics.section.system",
+            "gamehud.settings.fps-probe-unavailable"
         ]
 
         for key in requiredKeys {
@@ -554,5 +605,35 @@ struct GameHUDFPSTests {
         meter.stop()
         #expect(meter.currentPID == nil)
         #expect(meter.stats == nil)
+    }
+
+    @Test func snapshotProviderKeepsZeroRPMFanAndCompactTemperature() {
+        let fan = MonitorModule(
+            kind: .fan,
+            value: 0,
+            summary: "0 RPM",
+            metrics: [],
+            samples: [],
+            fans: [FanInfo(id: 0, name: "Left", currentRPM: 0, minRPM: 0, maxRPM: 5000)]
+        )
+        let cpu = MonitorModule(
+            kind: .cpu,
+            value: 18,
+            summary: "18%",
+            metrics: [
+                MonitorMetric(name: "temperature", value: "64°C", numericValue: 64),
+                MonitorMetric(name: "thermal-pressure", value: "normal"),
+            ],
+            samples: []
+        )
+        let readings = GameHUDSnapshotProvider.readings(
+            enabledIDs: [.fanSpeed, .cpuTemperature],
+            in: [fan, cpu]
+        )
+        let fanReading = readings.first { $0.metricID == GameHUDMetricID.fanSpeed.rawValue }
+        let tempReading = readings.first { $0.metricID == GameHUDMetricID.cpuTemperature.rawValue }
+        #expect(fanReading?.value == "0 RPM")
+        #expect(tempReading?.compactValue == "64°C")
+        #expect(tempReading?.value?.contains("64°C") == true)
     }
 }

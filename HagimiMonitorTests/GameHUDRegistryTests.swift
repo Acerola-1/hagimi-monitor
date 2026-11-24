@@ -419,6 +419,21 @@ struct GameHUDAutoDetectionTests {
         #expect(GameHUDAutoDetection.storePathSource(
             for: URL(fileURLWithPath: "/Applications/Some Game.app")
         ) == nil)
+        #expect(GameHUDAutoDetection.storePathSource(
+            for: URL(fileURLWithPath: "/Volumes/SSD/SteamLibrary/steamapps/common/Hades/Hades.app")
+        ) == .steamManifest)
+    }
+
+    @Test func quotedKeyValueParsesSpacesTabsAndEscapesInVDF() {
+        let spaced = #"        "path"     "/Volumes/External SSD/SteamLibrary""#
+        let parsedSpaced = GameHUDGameScanner.parseQuotedKeyValue(spaced[...])
+        #expect(parsedSpaced?.key == "path")
+        #expect(parsedSpaced?.value == "/Volumes/External SSD/SteamLibrary")
+
+        let escaped = "\t\"installdir\"\t\"Cyberpunk \\\"2077\\\"\""
+        let parsedEscaped = GameHUDGameScanner.parseQuotedKeyValue(escaped[...])
+        #expect(parsedEscaped?.key == "installdir")
+        #expect(parsedEscaped?.value == "Cyberpunk \"2077\"")
     }
 
     @Test func launcherCategoriesAreExcludedFromAutomaticAdoption() throws {

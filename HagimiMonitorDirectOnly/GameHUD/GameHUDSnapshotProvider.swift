@@ -15,6 +15,22 @@ nonisolated struct GameHUDReading: Equatable, Sendable {
     let value: String?
     /// 曲线输入(0~100 百分比口径);无百分比语义的条目为 nil,不画曲线。
     let percent: Double?
+    /// 顶部横条使用的紧凑显示文本(例如温度去掉压力前缀)；nil 时回退 `value`。
+    let compactValue: String?
+
+    init(
+        metricID: String,
+        kind: MonitorKind,
+        value: String?,
+        percent: Double?,
+        compactValue: String? = nil
+    ) {
+        self.metricID = metricID
+        self.kind = kind
+        self.value = value
+        self.percent = percent
+        self.compactValue = compactValue
+    }
 }
 
 /// 一次快照内全部已勾选条目的集合。
@@ -109,7 +125,13 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
     func publishIfChanged(enabledIDs: Set<GameHUDMetricID>) {
         guard activeSubscribers > 0 else { return }
         let ids = GameHUDMetricCatalog.readableIDs(from: enabledIDs)
-        guard !ids.isEmpty else { return }
+        guard !ids.isEmpty else {
+            if lastSnapshot != .empty {
+                lastSnapshot = .empty
+                subject.send(.empty)
+            }
+            return
+        }
         let snapshot = GameHUDSnapshot(readings: Self.readings(enabledIDs: ids, in: store.allModulesForHUD), date: Date())
         guard snapshot != lastSnapshot else { return }
         lastSnapshot = snapshot
@@ -127,7 +149,8 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
                 metricID: entry.id.rawValue,
                 kind: entry.kind,
                 value: displayValue(for: entry.id, module: module),
-                percent: percentValue(for: entry.id, module: module)
+                percent: percentValue(for: entry.id, module: module),
+                compactValue: compactDisplayValue(for: entry.id, module: module)
             )
         }
     }
@@ -153,7 +176,8 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
             let m = module.metrics.first(where: { $0.name == "gpu-power" })
             return (m?.value == nil || m?.value == "--") ? nil : m?.value
         case .fanSpeed:
-            if let maxRPM = module.fans?.map(\.currentRPM).max(), maxRPM > 0 {
+            if let fans = module.fans, !fans.isEmpty {
+                let maxRPM = fans.map(\.currentRPM).max() ?? 0
                 return "\(maxRPM) RPM"
             }
             if module.value > 0 {
@@ -208,6 +232,13 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
             }
             return "\(thermalLevel) · \(temp)"
         }
+    }
+
+    private nonisolated static func compactDisplayValue(for id: GameHUDMetricID, module: MonitorModule?) -> String? {
+        guard id == .cpuTemperature, let module, !module.isPlaceholder,
+              let metric = module.metrics.first(where: { $0.name == "temperature" }),
+              metric.numericValue != nil else { return nil }
+        return metric.value
     }
 
     private nonisolated static func percentValue(for id: GameHUDMetricID, module: MonitorModule?) -> Double? {

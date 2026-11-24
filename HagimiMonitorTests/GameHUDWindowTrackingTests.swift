@@ -82,16 +82,17 @@ struct GameHUDWindowTrackingTests {
 
     @Test func cadenceDoesNotAccumulateQueryAndPresentationTimeOrReplayExpiredTicks() throws {
         let screen = try #require(NSScreen.screens.first)
+        let windowedRect = CGRect(x: screen.frame.minX + 100, y: screen.frame.minY + 100, width: 900, height: 600)
         let clock = Clock()
         var workDuration: TimeInterval = 0.009
         var queryStarts: [TimeInterval] = []
         let tracker = GameHUDWindowTracker(readTarget: { identity in
             queryStarts.append(clock.time)
             clock.time += workDuration
-            return .target(windowID: identity.windowID, rect: screen.frame, screen: screen)
+            return .target(windowID: identity.windowID, rect: windowedRect, screen: screen)
         }, isPermitted: { _ in true }, mousePressed: { true }, now: { clock.time }, schedule: clock.schedule)
         tracker.start(identity: .init(processIdentifier: 42, windowID: 7),
-                      initialTarget: .target(windowID: 7, rect: screen.frame, screen: screen))
+                      initialTarget: .target(windowID: 7, rect: windowedRect, screen: screen))
         for _ in 0..<5 { clock.fire() }
         for (a, b) in zip(queryStarts, queryStarts.dropFirst()) {
             #expect(abs((b - a) - GameHUDWindowTracker.movingInterval) < 0.000001)
@@ -103,6 +104,29 @@ struct GameHUDWindowTrackingTests {
         #expect(next <= GameHUDWindowTracker.movingInterval)
         #expect(clock.scheduled.count == 1)
         tracker.stop()
+    }
+
+    @Test func fullscreenTargetStaysAtLowIdleCadenceWhileMousePressed() throws {
+        let screen = try #require(NSScreen.screens.first)
+        let clock = Clock()
+        let tracker = GameHUDWindowTracker(
+            readTarget: { identity in
+                .target(windowID: identity.windowID, rect: screen.frame, screen: screen)
+            },
+            isPermitted: { _ in true },
+            mousePressed: { clock.pressed },
+            now: { clock.time },
+            schedule: clock.schedule
+        )
+        tracker.start(
+            identity: .init(processIdentifier: 42, windowID: 7),
+            initialTarget: .target(windowID: 7, rect: screen.frame, screen: screen)
+        )
+        defer { tracker.stop() }
+        clock.pressed = true
+        clock.fire()
+        let next = try #require(clock.scheduled.first?.0)
+        #expect(abs(next - GameHUDWindowTracker.fullscreenIdleInterval) < 0.000001)
     }
 
     @Test func stoppedAndReplacedTimersCannotQueryOldWindow() throws {
@@ -486,5 +510,73 @@ struct GameHUDWindowTrackingTests {
             controller.show(in: CGRect(x: 0, y: 0, width: 100, height: 50), screen: screen, reserveTop: false, content: content)
             #expect(!controller.isVisible)
         }
+    }
+
+    @Test func coordinatorRespondsToMetricChangesAndKeepsSessionActiveDuringMotion() async throws {
+        let app = NSRunningApplication.current
+        let bundleID = try #require(app.bundleIdentifier)
+        try await withMainActorSettings { settings in
+            settings.addGameHUDManualApp(bundleID: bundleID, name: "Test", applicationPath: nil)
+            let clock = Clock()
+            var record = info(pid: Int(app.processIdentifier))
+            let session = GameHUDSessionController(
+                settings: settings,
+                windowLocator: GameHUDWindowLocator(windowInfo: { _, _ in [record] }),
+                frontmostApplication: { app },
+                trackerScheduler: clock.schedule,
+                trackingMousePressed: { clock.pressed },
+                trackingNow: { clock.time }
+            )
+            let panel = GameHUDPanelController(settings: settings)
+            let source = SnapshotSource()
+            let meter = FrameMeter()
+            let coordinator = GameHUDCoordinator(
+                settings: settings,
+                dataSource: source,
+                sessionController: session,
+                panelController: panel,
+                frameMeter: meter
+            )
+            session.onGameLaunched = nil
+            defer { settings.gameHUDMasterEnabled = false; session.poll() }
+
+            settings.gameHUDMasterEnabled = true
+            session.poll()
+            try await Task.sleep(for: .milliseconds(50))
+            #expect(coordinator.isSessionActive)
+            #expect(coordinator.isShowing)
+
+            // 拖动期间临时隐藏浮窗，但会话保持活跃态不触发探针启停抖动
+            clock.pressed = true
+            var bounds = try #require(record[kCGWindowBounds as String] as? [String: CGFloat])
+            bounds["X"] = (bounds["X"] ?? 0) + 40
+            record[kCGWindowBounds as String] = bounds
+            session.poll()
+            #expect(!coordinator.isShowing)
+            #expect(coordinator.isSessionActive)
+            clock.pressed = false
+            for _ in 0..<8 { clock.fire() }
+            #expect(coordinator.isShowing)
+
+            // 运行中取消全部指标应立即隐藏，重新勾选立即恢复
+            for id in GameHUDMetricID.allCases {
+                settings.setGameHUDMetric(id, enabled: false)
+            }
+            try await Task.sleep(for: .milliseconds(50))
+            #expect(!panel.isVisible)
+            #expect(!coordinator.isShowing)
+
+            settings.setGameHUDMetric(.fps, enabled: true)
+            try await Task.sleep(for: .milliseconds(50))
+            #expect(panel.isVisible)
+            #expect(coordinator.isShowing)
+        }
+    }
+
+    private func withMainActorSettings(_ body: (MonitorSettings) async throws -> Void) async throws {
+        let suite = "GameHUDWindowTrackingTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        try await body(MonitorSettings(defaults: defaults))
     }
 }

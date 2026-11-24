@@ -150,13 +150,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = gameHUDCoordinator
         // 浮窗显隐不走负载动画,徽章要在同一轮界面更新里跟上。
         fluidPanelController.observeGameHUDBadge(gameHUDCoordinator)
-        // Game HUD 也是独立温度消费者:正在显示且勾选温度时,主面板关闭、
-        // 菜单栏不含温度也继续读取 SMC 温度。
+        // Game HUD 也是独立温度消费者:会话活跃且勾选温度时,主面板关闭、
+        // 菜单栏不含温度也继续读取 SMC 温度(窗口拖动期临时隐藏不反复启停探针)。
         Publishers.CombineLatest(
-            gameHUDCoordinator.$isShowing,
+            gameHUDCoordinator.$isSessionActive,
             store.settings.$gameHUDEnabledMetricIDs
         )
-        .map { isShowing, ids in isShowing && ids.contains(.cpuTemperature) }
+        .map { active, ids in active && ids.contains(.cpuTemperature) }
         .removeDuplicates()
         .receive(on: DispatchQueue.main)
         .sink { [weak store] required in

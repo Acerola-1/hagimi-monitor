@@ -20,7 +20,13 @@ struct GameHUDTopStripView: View {
                     Text(title(for: entry))
                         .foregroundStyle(Color.white.opacity(0.72))
                     Text(value(for: entry.id))
+                        .fontWeight(.medium)
+                        .monospacedDigit()
                         .foregroundStyle(Color.white)
+                        .frame(
+                            minWidth: GameHUDMetricCatalog.topStripValueMinWidth(for: entry.id),
+                            alignment: .trailing
+                        )
                 }
                 .font(.system(size: 11, design: .monospaced))
                 .lineLimit(1)
@@ -31,6 +37,12 @@ struct GameHUDTopStripView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .fixedSize(horizontal: true, vertical: true)
+        .shadow(
+            color: .black.opacity(GameHUDBackgroundAppearance.textShadowOpacity(for: backgroundTransparency)),
+            radius: 1.5,
+            x: 0,
+            y: 0.5
+        )
         .background(
             GameHUDBackgroundAppearance.backgroundShape
                 .fill(GameHUDBackgroundAppearance.backgroundColor(
@@ -38,6 +50,13 @@ struct GameHUDTopStripView: View {
                     transparency: backgroundTransparency
                 ))
         )
+        .overlay {
+            GameHUDBackgroundAppearance.backgroundShape
+                .strokeBorder(
+                    Color.white.opacity(GameHUDBackgroundAppearance.borderOpacity(for: backgroundTransparency)),
+                    lineWidth: 0.75
+                )
+        }
     }
 
     private var entries: [GameHUDMetricCatalog.Entry] {
@@ -45,13 +64,7 @@ struct GameHUDTopStripView: View {
     }
 
     private func title(for entry: GameHUDMetricCatalog.Entry) -> String {
-        switch entry.id {
-        case .fps: String(localized: "gamehud.view.fps")
-        case .averageFPS: String(localized: "gamehud.view.average-fps")
-        case .onePercentLow: String(localized: "gamehud.view.one-percent-low")
-        case .frameTime: String(localized: "gamehud.view.frame-time")
-        default: String(localized: entry.titleKey)
-        }
+        String(localized: GameHUDMetricCatalog.compactTitleKey(for: entry.id))
     }
 
     private func value(for id: GameHUDMetricID) -> String {
@@ -65,7 +78,10 @@ struct GameHUDTopStripView: View {
         case .frameTime:
             return fpsStats?.frameTimeMs.map { String(format: "%.1f ms", $0) } ?? "—"
         default:
-            return snapshot.readings.first { $0.metricID == id.rawValue }?.value ?? "—"
+            guard let reading = snapshot.readings.first(where: { $0.metricID == id.rawValue }) else {
+                return "—"
+            }
+            return reading.compactValue ?? reading.value ?? "—"
         }
     }
 }

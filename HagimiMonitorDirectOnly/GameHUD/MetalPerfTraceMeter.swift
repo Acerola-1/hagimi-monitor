@@ -1,10 +1,11 @@
+import Combine
+import Darwin
 import Foundation
 import OSLog
-import Combine
 
 /// 每次探针会话独立持有缓冲区；仅在 readerQueue 上访问其内容。
 nonisolated private final class MetalTraceJSONBuffer: @unchecked Sendable {
-    var text = ""
+    var data = Data()
 }
 
 /// 通过系统 `metalperftrace` 命令行工具监听目标 Metal 进程的上屏帧率统计。
@@ -13,6 +14,12 @@ nonisolated private final class MetalTraceJSONBuffer: @unchecked Sendable {
 /// 不使用屏幕录制或像素捕获。
 @MainActor
 final class MetalPerfTraceMeter: ObservableObject {
+
+    private nonisolated static let executablePath = "/usr/bin/metalperftrace"
+
+    nonisolated static var isSystemProbeAvailable: Bool {
+        FileManager.default.isExecutableFile(atPath: executablePath)
+    }
 
     struct SecondSample: Sendable {
         let timestamp: TimeInterval
@@ -29,6 +36,8 @@ final class MetalPerfTraceMeter: ObservableObject {
     private var process: Process?
     private var pipe: Pipe?
     private(set) var currentPID: pid_t?
+    var isRunning: Bool { process?.isRunning == true }
+    var onUnexpectedExit: ((pid_t) -> Void)?
     private var samples: [SecondSample] = []
     private static let windowDuration: TimeInterval = 60.0
     private static let sampleTimeout: Duration = .seconds(3)
@@ -36,7 +45,41 @@ final class MetalPerfTraceMeter: ObservableObject {
     private var generation = 0
     private let readerQueue = DispatchQueue(label: "gamehud.metalperftrace.reader", qos: .utility)
 
-    /// 启动对指定 PID 进程的 Metal 帧统计监听。
+    /// 收集目标进程及其子进程 PID（用于支持启动器/转译器/多进程渲染架构）。
+    nonisolated static func targetProcessTreePIDs(rootPID: pid_t, limit: Int = 8) -> [pid_t] {
+        guard rootPID > 0, limit > 0 else { return [] }
+        var result: [pid_t] = [rootPID]
+        var seen: Set<pid_t> = [rootPID]
+        var queue: [pid_t] = [rootPID]
+        var cursor = 0
+
+        while cursor < queue.count, result.count < limit {
+            let parent = queue[cursor]
+            cursor += 1
+            let estimated = proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), nil, 0)
+            guard estimated > 0 else { continue }
+            let capacity = max(Int(estimated) / MemoryLayout<pid_t>.size + 8, 16)
+            var buffer = [pid_t](repeating: 0, count: capacity)
+            let bytes = proc_listpids(
+                UInt32(PROC_PPID_ONLY),
+                UInt32(parent),
+                &buffer,
+                Int32(buffer.count * MemoryLayout<pid_t>.size)
+            )
+            guard bytes > 0 else { continue }
+            let count = Int(bytes) / MemoryLayout<pid_t>.size
+            for idx in 0..<count {
+                let child = buffer[idx]
+                guard child > 0, seen.insert(child).inserted else { continue }
+                result.append(child)
+                queue.append(child)
+                if result.count >= limit { break }
+            }
+        }
+        return result
+    }
+
+    /// 启动对指定 PID 进程及其子进程的 Metal 帧统计监听。
     func start(pid: pid_t) {
         guard pid > 0 else { return }
         if currentPID == pid, process != nil, process?.isRunning == true {
@@ -46,8 +89,8 @@ final class MetalPerfTraceMeter: ObservableObject {
         stop()
         let sessionGeneration = generation
 
-        let executablePath = "/usr/bin/metalperftrace"
-        guard FileManager.default.isExecutableFile(atPath: executablePath) else {
+        let executablePath = Self.executablePath
+        guard Self.isSystemProbeAvailable else {
             AppLogger.diagnostics.info("metalperftrace not executable at \(executablePath, privacy: .public)")
             return
         }
@@ -55,9 +98,16 @@ final class MetalPerfTraceMeter: ObservableObject {
         currentPID = pid
         samples.removeAll()
 
+        let pids = Self.targetProcessTreePIDs(rootPID: pid)
+        var arguments = ["listen", "--json", "--interval", "1"]
+        for targetPID in pids {
+            arguments.append("--pid")
+            arguments.append("\(targetPID)")
+        }
+
         let p = Process()
         p.executableURL = URL(fileURLWithPath: executablePath)
-        p.arguments = ["listen", "--json", "--interval", "1", "--pid", "\(pid)"]
+        p.arguments = arguments
 
         let stdoutPipe = Pipe()
         p.standardOutput = stdoutPipe
@@ -71,16 +121,19 @@ final class MetalPerfTraceMeter: ObservableObject {
             let data = handle.availableData
             guard !data.isEmpty else {
                 handle.readabilityHandler = nil
-                try? handle.close()
+                readerQueue.async {
+                    try? handle.close()
+                }
                 return
             }
             readerQueue.async { [weak self] in
-                guard let self, let str = String(data: data, encoding: .utf8) else { return }
-                buffer.text.append(str)
+                guard let self else { return }
+                buffer.data.append(data)
 
-                let jsonObjects = Self.extractJSONObjects(from: &buffer.text)
-                for jsonStr in jsonObjects {
-                    if let sample = Self.parseSample(from: jsonStr) {
+                let jsonObjects = Self.extractJSONObjects(from: &buffer.data)
+                for objData in jsonObjects {
+                    if let jsonStr = String(data: objData, encoding: .utf8),
+                       let sample = Self.parseSample(from: jsonStr) {
                         Task { @MainActor [weak self] in
                             guard let self, self.generation == sessionGeneration else { return }
                             self.recordSample(sample)
@@ -88,8 +141,8 @@ final class MetalPerfTraceMeter: ObservableObject {
                     }
                 }
 
-                if buffer.text.count > 512 * 1024 {
-                    buffer.text = ""
+                if buffer.data.count > 512 * 1024 {
+                    buffer.data.removeAll(keepingCapacity: false)
                 }
             }
         }
@@ -97,19 +150,28 @@ final class MetalPerfTraceMeter: ObservableObject {
         p.terminationHandler = { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.generation == sessionGeneration else { return }
+                let exitedPID = self.currentPID
                 self.stop()
+                if let exitedPID {
+                    self.onUnexpectedExit?(exitedPID)
+                }
             }
         }
 
         do {
             try p.run()
             scheduleSampleTimeout(for: sessionGeneration)
-            AppLogger.diagnostics.info("metalperftrace started for pid=\(pid, privacy: .public)")
+            AppLogger.diagnostics.info("metalperftrace started for pids=\(pids.map(String.init).joined(separator: ","), privacy: .public)")
             // 动态抑制 Apple 官方 HUD 浮层，避免系统自带 HUD 叠加弹出
             DispatchQueue.global(qos: .utility).async {
                 let setup = Process()
                 setup.executableURL = URL(fileURLWithPath: executablePath)
-                setup.arguments = ["setup", "--disable", "hud", "--pid", "\(pid)"]
+                var setupArgs = ["setup", "--disable", "hud"]
+                for targetPID in pids {
+                    setupArgs.append("--pid")
+                    setupArgs.append("\(targetPID)")
+                }
+                setup.arguments = setupArgs
                 setup.standardOutput = FileHandle.nullDevice
                 setup.standardError = FileHandle.nullDevice
                 try? setup.run()
@@ -127,17 +189,20 @@ final class MetalPerfTraceMeter: ObservableObject {
         sampleTimeoutTask?.cancel()
         sampleTimeoutTask = nil
         if let pipe {
-            pipe.fileHandleForReading.readabilityHandler = nil
-            try? pipe.fileHandleForReading.close()
+            let handle = pipe.fileHandleForReading
+            handle.readabilityHandler = nil
+            readerQueue.async {
+                try? handle.close()
+            }
         }
         if let p = process, p.isRunning {
             p.terminate()
         }
         process = nil
         pipe = nil
-        currentPID = nil
         samples.removeAll()
         stats = nil
+        currentPID = nil
     }
 
     private func scheduleSampleTimeout(for sessionGeneration: Int) {
@@ -151,6 +216,52 @@ final class MetalPerfTraceMeter: ObservableObject {
     }
 
     // MARK: - JSON 流式解析
+
+    /// 从字节缓冲区中提取闭合的 JSON 对象，避免多字节 UTF-8 跨块拆包丢数据。
+    nonisolated static func extractJSONObjects(from buffer: inout Data) -> [Data] {
+        var objects: [Data] = []
+        var startIndex: Data.Index?
+        var depth = 0
+        var inString = false
+        var escape = false
+
+        var currentIndex = buffer.startIndex
+        while currentIndex < buffer.endIndex {
+            let byte = buffer[currentIndex]
+            if escape {
+                escape = false
+            } else if byte == 0x5C && inString { // '\'
+                escape = true
+            } else if byte == 0x22 { // '"'
+                inString.toggle()
+            } else if !inString {
+                if byte == 0x7B { // '{'
+                    if depth == 0 {
+                        startIndex = currentIndex
+                    }
+                    depth += 1
+                } else if byte == 0x7D { // '}'
+                    if depth > 0 {
+                        depth -= 1
+                        if depth == 0, let start = startIndex {
+                            let endIndex = buffer.index(after: currentIndex)
+                            objects.append(Data(buffer[start..<endIndex]))
+                            startIndex = nil
+                        }
+                    }
+                }
+            }
+            currentIndex = buffer.index(after: currentIndex)
+        }
+
+        if let start = startIndex {
+            buffer = Data(buffer[start...])
+        } else {
+            buffer.removeAll(keepingCapacity: true)
+        }
+
+        return objects
+    }
 
     /// 从缓冲区中提取闭合的 JSON 对象字符串。
     nonisolated static func extractJSONObjects(from buffer: inout String) -> [String] {
@@ -296,25 +407,34 @@ final class MetalPerfTraceMeter: ObservableObject {
         let pooledVariance = sumVar / Double(totalFrames)
         let pooledStdDev = sqrt(max(0.0, pooledVariance))
 
-        // 正态分布 99% 分位数 (1% 最慢帧时间) 连续估计: mean + 2.326 * stdDev
-        let normalWorstInterval = meanInterval + 2.326 * pooledStdDev
+        // 对数正态分布上 1% 条件尾均值: E[X | X >= Q_0.99] = mu * Phi(sigma_ln - z_0.99) / 0.01
+        let cv = meanInterval > 0 ? (pooledStdDev / meanInterval) : 0
+        let sigmaLn = sqrt(log(1.0 + cv * cv))
+        let z99 = 2.3263478740408408
+        let phi = 0.5 * erfc(-(sigmaLn - z99) / sqrt(2.0))
+        let logNormalWorstInterval = meanInterval * max(1.0, phi / 0.01)
 
         // 离散掉帧统计: 收集各采样秒内的最慢帧 Max (ms)
         let sortedMaxIntervals = intervalSamples.compactMap(\.maxMs).filter { $0 > 0 }.sorted(by: >)
         let worstCount = min(sortedMaxIntervals.count, max(1, totalFrames / 100))
 
-        // 取前 worstCount 个离散峰值(至多 samples.count 个)的加权均值
+        // 取前 worstCount 个离散峰值(至多 samples.count 个)的均值，高帧率按样本覆盖率折减权重
         let peakSlice = sortedMaxIntervals.prefix(worstCount)
         let peakWorstInterval = peakSlice.isEmpty ? meanInterval : (peakSlice.reduce(0.0, +) / Double(peakSlice.count))
+        let framesPerSample = Double(totalFrames) / Double(intervalSamples.count)
+        let peakCoverage = framesPerSample > 100 ? min(1.0, 100.0 / framesPerSample) : 1.0
+        let effectivePeak = peakCoverage * peakWorstInterval + (1.0 - peakCoverage) * logNormalWorstInterval
 
         let worstInterval: Double
         if !sortedMaxIntervals.isEmpty {
             let absoluteMax = sortedMaxIntervals[0]
-            // worstInterval 在连续 99% 分位数与离散最差帧均值之间取更保守的较大帧间隔, 并以物理最大峰值为上界
-            let estimatedWorst = max(normalWorstInterval, peakWorstInterval)
+            // 冷启动单秒且帧数很少时仅用连续分布估计，避免加载毛刺直接锁死 1% Low
+            let estimatedWorst = (intervalSamples.count == 1 && totalFrames < 30)
+                ? logNormalWorstInterval
+                : max(logNormalWorstInterval, effectivePeak)
             worstInterval = min(absoluteMax, max(meanInterval, estimatedWorst))
         } else {
-            worstInterval = max(meanInterval, normalWorstInterval)
+            worstInterval = max(meanInterval, logNormalWorstInterval)
         }
 
         let onePercentLow: Double

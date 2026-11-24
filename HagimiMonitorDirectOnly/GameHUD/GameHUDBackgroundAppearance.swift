@@ -52,6 +52,18 @@ nonisolated enum GameHUDBackgroundAppearance {
     static func percent(_ transparency: Double, for style: GameHUDPresentationStyle) -> Int {
         Int((normalized(transparency, for: style) * 100).rounded())
     }
+
+    /// 随背景透明度递增的文字投影强度，确保全透明或高透高亮游戏场景下文字依然可读。
+    static func textShadowOpacity(for transparency: Double) -> Double {
+        let clamped = transparency.isFinite ? min(max(transparency, 0), 1) : 0.3
+        return 0.24 + 0.56 * clamped
+    }
+
+    /// 极细内描边不透明度，在纯黑游戏画面中区分浮窗轮廓。
+    static func borderOpacity(for transparency: Double) -> Double {
+        let clamped = transparency.isFinite ? min(max(transparency, 0), 1) : 0.3
+        return 0.12 * (1.0 - clamped * 0.65)
+    }
 }
 
 /// 透明度示例预览的几何合同。预览是局部样本,不是正式 HUD 的缩略图:
