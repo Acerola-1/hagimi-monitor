@@ -1,47 +1,34 @@
 ## 更新内容
 
-### 新功能
-
-- 开启「媒体键接管」后，调节亮度、音量会新增浮层反馈：在菜单栏附近实时显示当前档位与刻度，亮度在可用时一并显示面板物理亮度（尼特）；指针移入后可直接拖动滑条微调，停止操作约 1.5 秒后自动淡出，主面板展开期间不弹出。
-- 媒体键跟随实际设备：亮度键作用于鼠标所在的可控屏幕，内建屏也支持平滑调光；音量键跟随系统当前音频输出。目标无法唯一确定时，仍交还系统处理。
+感谢 @xyy386 提供 AirPods 实机验证和修复方案（#150）。
 
 ### 修复
 
-- 稳定 CPU 逐核圆环的悬停读数：改为逐环跟踪指针，占用率不再随刷新闪烁或落到相邻核心，并避免与长按拖动排序的提示互相干扰。
+- 修复同一副 AirPods 在蓝牙设备列表中重复显示、设备数偏高的问题，保留自定义名称以及左右耳、充电盒分别上报的电量（#147）。
+- 改用 M2 系列对应的 CPU 温度传感器，过滤空闲时的异常低值，避免平均温度被拉低（#149）。
+- 更新应用后自动清除旧版本遗留的更新提示（#143）。
 
 ### 优化与体验
 
-- 蓝牙主行按明细顺序显示设备类型图标；展开区按设备实际上报的电量部件（整机 / 左耳、右耳、充电盒）排布，不再依据名称或广播来源猜测，同一连接内偶尔缺少分部读数时布局也保持稳定。
-- 蓝牙已开启但没有连接设备时，明确显示「未连接设备」，不再显示为「0 台设备」。
-- 媒体键浮层的读数气泡随刻度平滑移动、箭头始终指向填充边界；玻璃材质改用更清透的系统材质，并收敛上下沿高光。
+- 改善音量与亮度浮层的玻璃效果。连续调节亮度时，滑条跟随按键变化，百分比和尼特读数在背光稳定后同步显示。
 
 ### 目前已知的问题
 
 #### 未修复
 
-- Mac mini 无法正常显示能耗（#106）：仍待对应设备验证。
-- 开启代理软件 TUN 模式后网络显示未连接（#98）：本机开启 TUN 模式未出现该问题。
-- MacBook Air M4 无法正常显示充电功率（#86）：仍待受影响设备验证。
+- Mac mini 能耗（#106）与 MacBook Air M4 充电功率（#86）仍待受影响设备验证。
+- 部分用户反馈开启代理 TUN 模式后网络显示未连接（#98）。
 
 #### 正在修复
 
-- Apple Watch 无法正常显示电量余量（#131）：已能读取连接数据，但取不到准确的电量读数。
+- Apple Watch 可以识别连接，电量读数仍待解决（#131）。
 
 ### English
 
-This release adds an on-screen readout for media-key adjustments, along with refinements to Bluetooth and per-core CPU details.
+- Fixed duplicate AirPods entries and inflated device counts while preserving the custom name and battery levels for each earbud and the case (#147). Thanks to @xyy386 for the fix and hardware verification (#150).
+- Updated CPU temperature sensor selection on M2 Macs and filtered invalid idle readings out of the average (#149).
+- Cleared stale update prompts after installing an update (#143).
+- Refined the volume and brightness overlay. When brightness keys are pressed repeatedly, the slider follows the input and the percentage and nits appear together once the backlight settles.
 
-- With Media Key Takeover enabled, brightness and volume adjustments now show a floating readout near the menu bar with the current level and step bar. Brightness also shows physical panel luminance (nits) when available. Move the pointer in to drag the slider directly; it fades out after about 1.5 seconds of inactivity and stays hidden while the main panel is open.
-- Media keys now follow the active device: brightness keys target the controllable screen under the pointer (including smooth dimming on the built-in display), and volume keys follow the current audio output. When no unique target can be determined, the keys are handed back to macOS.
-- Stabilized per-core CPU usage tooltips: pointer tracking is now per ring, so the reading no longer flickers with refreshes or lands on a neighboring core, and it no longer competes with the long-press reorder hint.
-- The Bluetooth row now shows device-type icons in detail order, and the expanded list follows the battery parts each device actually reports (single / left, right, case) instead of inferring them from the name or broadcast source. The layout also stays stable when a sample briefly omits part readings.
-- When Bluetooth is on but no device is connected, the row now reads “No devices connected” instead of “0 devices”.
-- The media-key readout bubble now moves smoothly with the level and its arrow stays aligned to the fill edge; the glass uses a clearer system material with softer top and bottom highlights.
-
-#### Known Issues
-
-- Missing power-consumption readings on Mac mini still require verification on the affected hardware (#106).
-- Network may appear disconnected when a proxy app enables TUN mode; not reproduced locally (#98).
-- Missing charging-power readings on MacBook Air M4 remain unverified on the affected hardware (#86).
-- Apple Watch connections can be detected, but accurate battery readings remain unavailable (#131, in progress).
+Known issues include Mac mini power consumption (#106), MacBook Air M4 charging power (#86), network status with TUN mode (#98), and Apple Watch battery readings (#131).
 
