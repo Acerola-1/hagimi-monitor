@@ -109,4 +109,26 @@ nonisolated enum StatisticsDisplayFormat: Sendable {
             return decimalRate(raw)
         }
     }
+
+    // MARK: - 系统热状态（0~3 档位单一定义）
+
+    /// 将平均热状态（0~3）映射为整数档位（0=正常, 1=中度, 2=严重, 3=紧急）。
+    static func thermalLevelIndex(_ level: Double?) -> Int? {
+        guard let level, level.isFinite else { return nil }
+        if level < 0.5 { return 0 }
+        if level < 1.5 { return 1 }
+        if level < 2.5 { return 2 }
+        return 3
+    }
+
+    /// 热状态本地化短标签，缺失返回 "—"（全报表/表格/导出共用）。
+    static func thermalStateLabel(_ level: Double?) -> String {
+        guard let index = thermalLevelIndex(level) else { return "—" }
+        switch index {
+        case 0: return String(localized: "stats.r.thermalNominal", defaultValue: "正常")
+        case 1: return String(localized: "stats.r.thermalFair", defaultValue: "中度")
+        case 2: return String(localized: "stats.r.thermalSerious", defaultValue: "严重")
+        default: return String(localized: "stats.r.thermalCritical", defaultValue: "紧急")
+        }
+    }
 }

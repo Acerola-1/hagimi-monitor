@@ -136,7 +136,7 @@ struct UXAcceptanceRenderingTests {
         for oldSnapshot in [false, true] {
             let failed = NativeReportViewModel(previewSnapshot: oldSnapshot ? snapshot() : nil,
                 hardwareHasBattery: true, hardwareHasFans: true, loadFailed: true)
-            let content = try await capture(NativeReportView(viewModel: failed, onReload: {}, onPrint: {}, onExport: {}),
+            let content = try await capture(NativeReportView(viewModel: failed, onReload: {}, onPrint: {}, onExport: { _ in }),
                 name: oldSnapshot ? "refresh-failed" : "first-read-failed", height: 800)
             #expect(content.contains(String(localized: "stats.report.read-failed")))
             #expect(content.contains(String(localized: "stats.report.retry")))

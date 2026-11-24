@@ -2,23 +2,16 @@ import Foundation
 import Testing
 @testable import HagimiMonitorDirect
 
-/// 生成一份真实导出样本到仓库 tmp 目录，供人工检查打印版面与范围说明。
-/// 平常等同常规断言；样本路径固定，便于核对。
+/// 生成真实原生导出样本（Markdown / JSON / PDF）到仓库 tmp 目录，供人工检查版面与内容口径。
 struct ReportExportSampleTests {
-    @Test func writesInspectableSampleForWeekRange() throws {
+    @Test @MainActor func writesInspectableSamplesForWeekRange() throws {
         let outDir = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .appendingPathComponent("tmp/statistics-metric/export", isDirectory: true)
         try FileManager.default.createDirectory(at: outDir, withIntermediateDirectories: true)
-        let target = outDir.appendingPathComponent("sample-week.html")
 
         let now = Date()
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: now)
-        let from = calendar.date(byAdding: .day, value: -6, to: today) ?? today
-
-        // 造一段有内容的样本：近 7 日的轻度压力与两个应用。
         var rows: [StatisticsRow] = []
         for index in 0..<(7 * 24) {
             var values = [Double?](repeating: nil, count: StatisticsRow.columns.count)
@@ -34,25 +27,41 @@ struct ReportExportSampleTests {
             rows.append(StatisticsRow(t: t, n: 3600, values: values))
         }
 
-        _ = try StandaloneHTMLReportExporter.write(
-            to: target,
-            snapshot: (minutes: [], hours: rows, days: []),
-            meta: [
-                "device": "REDMI Book Pro 14",
-                "model": "Mac16,1",
-                "os": "macOS 27.0",
-                "days": 60,
-                "appVersion": "1.6.1",
-                "direct": true,
-            ],
-            committedRange: (label: "近 7 日", from: from, to: now)
+        let meta = ReportMeta(
+            deviceName: "REDMI Book Pro 14",
+            modelName: "Mac16,1",
+            osVersion: "macOS 27.0",
+            recordDays: 60,
+            appVersion: "1.6.1",
+            isDirect: true
         )
+        let snapshot = ReportSnapshot(
+            capturedAt: now,
+            meta: meta,
+            minutes: [],
+            hours: rows,
+            days: [],
+            process: nil,
+            hardware: nil,
+            systemSleepIntervals: []
+        )
+        let model = ReportDataAggregator.aggregate(snapshot: snapshot, range: .week, now: now)
 
-        let html = try String(contentsOf: target, encoding: .utf8)
-        #expect(FileManager.default.fileExists(atPath: target.path))
-        // 范围与来源说明必须出现在纸面可见的元信息里。
-        #expect(html.contains("committedRange"))
-        #expect(html.contains("scopeNote"))
-        #expect(html.contains("updatePrintScope"))
+        let mdTarget = outDir.appendingPathComponent("sample-week.md")
+        let md = ReportExportService.generateMarkdownReport(model: model, meta: meta)
+        try md.write(to: mdTarget, atomically: true, encoding: .utf8)
+
+        let jsonTarget = outDir.appendingPathComponent("sample-week.json")
+        let jsonData = try ReportExportService.generateJSONReport(model: model, meta: meta)
+        try jsonData.write(to: jsonTarget, options: .atomic)
+
+        let pdfTarget = outDir.appendingPathComponent("sample-week.pdf")
+        let pdfData = ReportExportService.renderPDFData(model: model, meta: meta, hardware: nil)
+        try pdfData.write(to: pdfTarget, options: .atomic)
+
+        #expect(FileManager.default.fileExists(atPath: mdTarget.path))
+        #expect(FileManager.default.fileExists(atPath: jsonTarget.path))
+        #expect(FileManager.default.fileExists(atPath: pdfTarget.path))
+        #expect(pdfData.starts(with: Data("%PDF".utf8)))
     }
 }

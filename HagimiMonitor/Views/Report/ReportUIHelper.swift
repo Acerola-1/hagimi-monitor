@@ -84,19 +84,10 @@ enum ReportUIHelper {
         }
     }
 
-    // MARK: - 热状态语义映射（0~3 档位）
+    // MARK: - 热状态语义映射（0~3 档位，单源代理至 StatisticsDisplayFormat）
 
     static func thermalStateLabel(_ level: Double?) -> String {
-        guard let level else { return "—" }
-        if level < 0.5 {
-            return String(localized: "stats.r.thermalNominal", defaultValue: "正常")
-        } else if level < 1.5 {
-            return String(localized: "stats.r.thermalFair", defaultValue: "中度")
-        } else if level < 2.5 {
-            return String(localized: "stats.r.thermalSerious", defaultValue: "严重")
-        } else {
-            return String(localized: "stats.r.thermalCritical", defaultValue: "紧急")
-        }
+        StatisticsDisplayFormat.thermalStateLabel(level)
     }
 
     static func formatThermalLevel(_ level: Double?) -> String {
@@ -153,39 +144,51 @@ enum ReportUIHelper {
     }
 }
 
-/// 通用 KPI 卡片组件
+/// 通用 KPI 卡片组件（与概览卡片共用语义字体层级和等宽数字规范）
 struct ReportKpiCard: View {
     let title: String
     let value: String
     let caption: String?
     let color: Color
 
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+
+    private var reportPalette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
+        let isMissing = value == "—"
+        VStack(alignment: .leading, spacing: 6) {
             Text(title)
-                .font(.system(size: 11, weight: .medium))
+                .font(.callout.weight(.medium))
                 .foregroundStyle(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(value)
-                    .font(.system(size: 20, weight: .bold, design: .rounded))
-                    .foregroundStyle(color)
-                if let caption, !caption.isEmpty {
-                    Text(caption)
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
+                .lineLimit(1)
+
+            Text(value)
+                .font(.system(.title2, design: .rounded).weight(.semibold))
+                .monospacedDigit()
+                .foregroundStyle(isMissing ? Color.secondary.opacity(0.6) : color)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if let caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .frame(maxWidth: .infinity, minHeight: 82, alignment: .topLeading)
         .background {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.45))
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .fill(reportPalette.cardFill)
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .strokeBorder(reportPalette.cardBorder, lineWidth: 0.75)
         }
     }
 }

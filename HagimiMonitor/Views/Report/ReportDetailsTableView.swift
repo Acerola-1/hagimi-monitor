@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// 原始采样数据记录表视图：展示真实底层采样多维指标，具备多列排序、横向平滑滚动、单页定容分页与完整悬浮提示，并支持导出为 CSV、HTML 及 Markdown 表格。
+/// 原始采样数据记录表视图：支持异常快捷筛选、多列空值安全排序、全英文/中文国际化、行复制与 CSV/Markdown/JSON 导出。
 struct ReportDetailsTableView: View {
     @ObservedObject var viewModel: NativeReportViewModel
 
@@ -25,12 +25,39 @@ struct ReportDetailsTableView: View {
         case thermal
     }
 
+    enum QuickFilter: String, CaseIterable, Identifiable {
+        case all
+        case highCpu
+        case memPressure
+        case thermalAnomaly
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .all: return String(localized: "stats.r.filter.all", defaultValue: "全部")
+            case .highCpu: return String(localized: "stats.r.filter.highCpu", defaultValue: "高 CPU ≥85%")
+            case .memPressure: return String(localized: "stats.r.filter.memPressure", defaultValue: "内存压力")
+            case .thermalAnomaly: return String(localized: "stats.r.filter.thermal", defaultValue: "热压力异常")
+            }
+        }
+    }
+
     @State private var sortColumn: SortColumn = .date
     @State private var sortAscending: Bool = false
+    @State private var quickFilter: QuickFilter = .all
     @State private var currentPage: Int = 0
     @State private var pageSize: Int = 50
+    @State private var hoveredRowID: Int64?
 
     private let pageSizeOptions = [50, 100, 200]
+
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+
+    private var palette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
 
     private var bucketSeconds: Double {
         viewModel.rangeModel?.granularity.bucketSeconds ?? 60.0
@@ -40,46 +67,58 @@ struct ReportDetailsTableView: View {
         viewModel.rangeModel?.rows ?? []
     }
 
+    private var filteredRows: [StatisticsRow] {
+        switch quickFilter {
+        case .all:
+            return allRows
+        case .highCpu:
+            return allRows.filter { ($0.cpuAvg ?? 0) >= 85 || ($0.cpuMax ?? 0) >= 90 }
+        case .memPressure:
+            return allRows.filter { ($0.memWarnS ?? 0) > 0 || ($0.memCritS ?? 0) > 0 || ($0.memPressureAvg ?? 0) >= 50 }
+        case .thermalAnomaly:
+            return allRows.filter {
+                (StatisticsDisplayFormat.thermalLevelIndex($0.cpuThermalAvg) ?? 0) >= 1
+                    || ($0.thSeriousS ?? 0) > 0 || ($0.thCritS ?? 0) > 0
+            }
+        }
+    }
+
     private var sortedRows: [StatisticsRow] {
-        return allRows.sorted { (a: StatisticsRow, b: StatisticsRow) -> Bool in
-            let res: Bool
+        func compareOptional(_ lhs: Double?, _ rhs: Double?) -> Bool {
+            switch (lhs, rhs) {
+            case let (l?, r?):
+                return sortAscending ? (l < r) : (l > r)
+            case (_?, nil):
+                return true
+            case (nil, _?):
+                return false
+            case (nil, nil):
+                return false
+            }
+        }
+
+        return filteredRows.sorted { a, b in
             switch sortColumn {
             case .date:
-                res = a.t < b.t
+                return sortAscending ? (a.t < b.t) : (a.t > b.t)
             case .frames:
-                res = a.n < b.n
-            case .cpuAvg:
-                res = (a.cpuAvg ?? 0) < (b.cpuAvg ?? 0)
-            case .cpuMax:
-                res = (a.cpuMax ?? 0) < (b.cpuMax ?? 0)
-            case .gpuAvg:
-                res = (a.gpuAvg ?? 0) < (b.gpuAvg ?? 0)
-            case .gpuMem:
-                res = (a.gpuMemAvg ?? 0) < (b.gpuMemAvg ?? 0)
-            case .memUsed:
-                res = (a.memUsedAvg ?? 0) < (b.memUsedAvg ?? 0)
-            case .memPressure:
-                res = (a.memPressureAvg ?? 0) < (b.memPressureAvg ?? 0)
-            case .memSwap:
-                res = (a.memSwapAvg ?? 0) < (b.memSwapAvg ?? 0)
-            case .netDown:
-                res = (a.netDown ?? 0) < (b.netDown ?? 0)
-            case .netUp:
-                res = (a.netUp ?? 0) < (b.netUp ?? 0)
-            case .diskRead:
-                res = (a.diskRead ?? 0) < (b.diskRead ?? 0)
-            case .diskWrite:
-                res = (a.diskWrite ?? 0) < (b.diskWrite ?? 0)
-            case .power:
-                res = (a.powerAvg ?? 0) < (b.powerAvg ?? 0)
-            case .temp:
-                res = (a.cpuTempAvg ?? 0) < (b.cpuTempAvg ?? 0)
-            case .fan:
-                res = (a.fanAvg ?? 0) < (b.fanAvg ?? 0)
-            case .thermal:
-                res = (a.cpuThermalAvg ?? 0) < (b.cpuThermalAvg ?? 0)
+                return sortAscending ? (a.n < b.n) : (a.n > b.n)
+            case .cpuAvg: return compareOptional(a.cpuAvg, b.cpuAvg)
+            case .cpuMax: return compareOptional(a.cpuMax, b.cpuMax)
+            case .gpuAvg: return compareOptional(a.gpuAvg, b.gpuAvg)
+            case .gpuMem: return compareOptional(a.gpuMemAvg, b.gpuMemAvg)
+            case .memUsed: return compareOptional(a.memUsedAvg, b.memUsedAvg)
+            case .memPressure: return compareOptional(a.memPressureAvg, b.memPressureAvg)
+            case .memSwap: return compareOptional(a.memSwapAvg, b.memSwapAvg)
+            case .netDown: return compareOptional(a.netDown, b.netDown)
+            case .netUp: return compareOptional(a.netUp, b.netUp)
+            case .diskRead: return compareOptional(a.diskRead, b.diskRead)
+            case .diskWrite: return compareOptional(a.diskWrite, b.diskWrite)
+            case .power: return compareOptional(a.powerAvg, b.powerAvg)
+            case .temp: return compareOptional(a.cpuTempAvg, b.cpuTempAvg)
+            case .fan: return compareOptional(a.fanAvg, b.fanAvg)
+            case .thermal: return compareOptional(a.cpuThermalAvg, b.cpuThermalAvg)
             }
-            return sortAscending ? res : !res
         }
     }
 
@@ -88,16 +127,20 @@ struct ReportDetailsTableView: View {
     }
 
     private var pagedRows: [StatisticsRow] {
-        let safePage = min(max(0, currentPage), totalPages - 1)
+        let rows = sortedRows
+        let safePage = min(max(0, currentPage), max(0, (rows.count + pageSize - 1) / pageSize - 1))
         let start = safePage * pageSize
-        let end = min(start + pageSize, sortedRows.count)
-        guard start < sortedRows.count else { return [] }
-        return Array(sortedRows[start..<end])
+        let end = min(start + pageSize, rows.count)
+        guard start < rows.count else { return [] }
+        return Array(rows[start..<end])
     }
 
     var body: some View {
         tableCard
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onChange(of: viewModel.rangeModel?.from) { _, _ in currentPage = 0 }
+            .onChange(of: viewModel.rangeModel?.to) { _, _ in currentPage = 0 }
+            .onChange(of: quickFilter) { _, _ in currentPage = 0 }
     }
 
     // MARK: - 主卡片
@@ -108,21 +151,21 @@ struct ReportDetailsTableView: View {
             icon: "tablecells"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                // 1. 固定顶部操作栏（不随数据行滚动）
                 topActionBar
 
                 if allRows.isEmpty {
                     ReportEmptyPlaceholder(text: String(localized: "stats.r.emptySection", defaultValue: "所选范围内无历史记录"))
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else if filteredRows.isEmpty {
+                    ReportEmptyPlaceholder(text: String(localized: "stats.r.filterEmpty", defaultValue: "当前筛选条件下无匹配采样记录"))
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // 2. 表格主容器（内含吸顶表头与独立垂直滚动数据区）
                     tableView
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                     Divider()
                         .padding(.vertical, 2)
 
-                    // 3. 固定底部翻页栏（绝对固定于底部，不随数据滚动）
                     paginationBar
                 }
             }
@@ -134,8 +177,9 @@ struct ReportDetailsTableView: View {
 
     private var topActionBar: some View {
         HStack(spacing: 12) {
-            Text(String(localized: "stats.r.rawTotalCount", defaultValue: "共 \(allRows.count) 条采样记录"))
+            Text(String(format: String(localized: "stats.r.rawCountSummary", defaultValue: "共 %d 条采样"), filteredRows.count))
                 .font(.system(size: 12, weight: .medium))
+                .monospacedDigit()
                 .foregroundStyle(.primary)
 
             if let granLabel = viewModel.rangeModel?.granularity.label {
@@ -146,9 +190,29 @@ struct ReportDetailsTableView: View {
                     .foregroundStyle(.secondary)
             }
 
+            // 快捷异常筛选胶囊
+            HStack(spacing: 6) {
+                ForEach(QuickFilter.allCases) { filter in
+                    let isSelected = quickFilter == filter
+                    Button {
+                        quickFilter = filter
+                    } label: {
+                        Text(filter.label)
+                            .font(.system(size: 10.5, weight: isSelected ? .semibold : .medium))
+                            .foregroundStyle(isSelected ? Color.white : .secondary)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(isSelected ? Color.accentColor : palette.insetFill)
+                            )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.leading, 6)
+
             Spacer()
 
-            // 分页容量选择
             HStack(spacing: 4) {
                 Text(String(localized: "stats.r.pageSize", defaultValue: "每页"))
                     .font(.system(size: 11))
@@ -166,24 +230,13 @@ struct ReportDetailsTableView: View {
                 }
             }
 
-            // 导出菜单
             Menu {
-                Button {
-                    exportData(format: .csv)
-                } label: {
-                    Label(ReportExportFormat.csv.label, systemImage: "doc.text")
-                }
-
-                Button {
-                    exportData(format: .html)
-                } label: {
-                    Label(ReportExportFormat.html.label, systemImage: "chevron.left.forwardslash.chevron.right")
-                }
-
-                Button {
-                    exportData(format: .markdown)
-                } label: {
-                    Label(ReportExportFormat.markdown.label, systemImage: "text.alignleft")
+                ForEach(ReportExportFormat.allCases) { format in
+                    Button {
+                        exportData(format: format)
+                    } label: {
+                        Label(format.label, systemImage: exportIcon(for: format))
+                    }
                 }
             } label: {
                 HStack(spacing: 5) {
@@ -194,28 +247,32 @@ struct ReportDetailsTableView: View {
                 }
             }
             .menuStyle(.borderedButton)
-            // macOS 27 默认会隐藏 Menu item 的 image;显式要求导出格式的
-            // SF Symbols 与标题一起呈现。该修饰符在旧系统保持原有 Label 语义。
             .labelStyle(.titleAndIcon)
             .controlSize(.small)
-            .disabled(allRows.isEmpty)
+            .disabled(sortedRows.isEmpty)
         }
     }
 
-    // MARK: - 表格主视图（横向滚动内套吸顶表头与纵向滚动数据区）
+    private func exportIcon(for format: ReportExportFormat) -> String {
+        switch format {
+        case .csv: return "doc.text"
+        case .markdown: return "text.alignleft"
+        case .json: return "curlybraces"
+        }
+    }
+
+    // MARK: - 表格主视图
 
     private var tableView: some View {
         ScrollView([.horizontal], showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
-                // 吸顶表头（随水平滚动同步，但在垂直方向严格置顶）
                 tableHeaderRow
-                    .background(Color(nsColor: .controlBackgroundColor))
+                    .background(palette.insetFill)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
 
                 Divider()
                     .padding(.vertical, 2)
 
-                // 独立垂直滚动数据区域（表头与翻页栏不随之滚动）
                 ScrollView(.vertical, showsIndicators: true) {
                     let bSec = bucketSeconds
                     let rows = pagedRows
@@ -228,7 +285,7 @@ struct ReportDetailsTableView: View {
                 }
                 .frame(maxHeight: .infinity)
             }
-            .frame(minWidth: 1540)
+            .frame(minWidth: 1560)
         }
     }
 
@@ -236,26 +293,26 @@ struct ReportDetailsTableView: View {
 
     private var tableHeaderRow: some View {
         HStack(spacing: 8) {
-            sortableHeader("时间", column: .date, width: 130, alignment: .leading)
-            sortableHeader("帧数", column: .frames, width: 48, alignment: .trailing)
-            sortableHeader("CPU均值", column: .cpuAvg, width: 62, alignment: .trailing)
-            sortableHeader("CPU峰值", column: .cpuMax, width: 62, alignment: .trailing)
-            plainHeader("P / E 核心", width: 100, alignment: .trailing)
-            plainHeader("U / S 态", width: 95, alignment: .trailing)
-            sortableHeader("GPU均值", column: .gpuAvg, width: 62, alignment: .trailing)
-            sortableHeader("显存已用", column: .gpuMem, width: 75, alignment: .trailing)
-            sortableHeader("内存已用", column: .memUsed, width: 80, alignment: .trailing)
-            sortableHeader("内存压力", column: .memPressure, width: 62, alignment: .trailing)
-            sortableHeader("Swap交换", column: .memSwap, width: 72, alignment: .trailing)
-            sortableHeader("网络下行", column: .netDown, width: 80, alignment: .trailing)
-            sortableHeader("网络上传", column: .netUp, width: 80, alignment: .trailing)
-            sortableHeader("磁盘读速", column: .diskRead, width: 80, alignment: .trailing)
-            sortableHeader("磁盘写速", column: .diskWrite, width: 80, alignment: .trailing)
-            sortableHeader("整机功耗", column: .power, width: 66, alignment: .trailing)
-            plainHeader("电池", width: 60, alignment: .trailing)
-            sortableHeader("CPU温度", column: .temp, width: 62, alignment: .trailing)
-            sortableHeader("风扇转速", column: .fan, width: 72, alignment: .trailing)
-            sortableHeader("热状态", column: .thermal, width: 64, alignment: .center)
+            sortableHeader(String(localized: "stats.r.tbl.time", defaultValue: "时间"), column: .date, width: 130, alignment: .leading)
+            sortableHeader(String(localized: "stats.r.tbl.frames", defaultValue: "帧数"), column: .frames, width: 48, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.cpuAvg", defaultValue: "CPU均值"), column: .cpuAvg, width: 64, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.cpuMax", defaultValue: "CPU峰值"), column: .cpuMax, width: 64, alignment: .trailing)
+            plainHeader(String(localized: "stats.r.tbl.peCore", defaultValue: "P / E 核心"), width: 100, alignment: .trailing)
+            plainHeader(String(localized: "stats.r.tbl.usMode", defaultValue: "U / S 态"), width: 95, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.gpuAvg", defaultValue: "GPU均值"), column: .gpuAvg, width: 64, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.gpuMem", defaultValue: "显存已用"), column: .gpuMem, width: 75, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.memUsed", defaultValue: "内存已用"), column: .memUsed, width: 80, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.memPressure", defaultValue: "内存压力"), column: .memPressure, width: 64, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.swap", defaultValue: "Swap交换"), column: .memSwap, width: 72, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.netDown", defaultValue: "网络下行"), column: .netDown, width: 80, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.netUp", defaultValue: "网络上传"), column: .netUp, width: 80, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.diskRead", defaultValue: "磁盘读速"), column: .diskRead, width: 80, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.diskWrite", defaultValue: "磁盘写速"), column: .diskWrite, width: 80, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.power", defaultValue: "整机功耗"), column: .power, width: 66, alignment: .trailing)
+            plainHeader(String(localized: "stats.r.tbl.battery", defaultValue: "电池"), width: 60, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.temp", defaultValue: "CPU温度"), column: .temp, width: 62, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.fan", defaultValue: "风扇转速"), column: .fan, width: 72, alignment: .trailing)
+            sortableHeader(String(localized: "stats.r.tbl.thermal", defaultValue: "热状态"), column: .thermal, width: 68, alignment: .center)
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 8)
@@ -269,6 +326,7 @@ struct ReportDetailsTableView: View {
                 sortColumn = column
                 sortAscending = (column == .date) ? false : true
             }
+            currentPage = 0
         } label: {
             HStack(spacing: 3) {
                 if alignment == .trailing && sortColumn == column {
@@ -300,7 +358,7 @@ struct ReportDetailsTableView: View {
             .frame(width: width, alignment: alignment)
     }
 
-    // MARK: - 数据行与单元格（支持超出截断与悬停全量显示）
+    // MARK: - 数据行与单元格
 
     private func tableDataRow(row: StatisticsRow, bucketSec: Double, isEven: Bool) -> some View {
         let date = Date(timeIntervalSince1970: TimeInterval(row.t))
@@ -310,27 +368,16 @@ struct ReportDetailsTableView: View {
         let readRate = (row.diskRead ?? 0) / max(bucketSec, 1.0)
         let writeRate = (row.diskWrite ?? 0) / max(bucketSec, 1.0)
 
-        // P/E 核心文本与完整提示
         let peText: String = {
             guard let p = row.cpuPAvg, let e = row.cpuEAvg else { return "—" }
             return String(format: "P %.0f%% · E %.0f%%", p, e)
         }()
-        let peFull: String = {
-            guard let p = row.cpuPAvg, let e = row.cpuEAvg else { return "无 P/E 核心细分数据" }
-            return String(format: "性能核 (P): %.1f%%, 能效核 (E): %.1f%%", p, e)
-        }()
 
-        // 用户/系统态
         let usText: String = {
             guard let u = row.cpuUserAvg, let s = row.cpuSysAvg else { return "—" }
             return String(format: "U %.0f%% · S %.0f%%", u, s)
         }()
-        let usFull: String = {
-            guard let u = row.cpuUserAvg, let s = row.cpuSysAvg else { return "无 CPU 用户/系统态细分" }
-            return String(format: "用户态 CPU: %.1f%%, 系统内核态: %.1f%%", u, s)
-        }()
 
-        // 电池电量与供电
         let battText: String = {
             if let b = row.battLevelAvg {
                 return String(format: "%.0f%%", b)
@@ -340,208 +387,138 @@ struct ReportDetailsTableView: View {
             }
             return "—"
         }()
-        let battFull: String = {
-            var s = ""
-            if let b = row.battLevelAvg {
-                s += String(format: "电池电量: %.0f%%", b)
-            }
-            if let ac = row.acFrac {
-                s += (s.isEmpty ? "" : ", ") + String(format: "交流电源占比: %.0f%%", ac * 100)
-            }
-            if let t = row.battTempAvg {
-                s += (s.isEmpty ? "" : ", ") + String(format: "电池包温度: %.1f°C", t)
-            }
-            return s.isEmpty ? "无电池或电源数据" : s
+
+        // 热状态严格使用 0~3 档位单源定义（修复原 < 0.05/0.35/0.75 误判为紧急 Bug）
+        let thermalIdx = StatisticsDisplayFormat.thermalLevelIndex(row.cpuThermalAvg)
+        let thermalStr = ReportDataExporter.fmtThermal(row.cpuThermalAvg)
+        let thermalColor: Color = {
+            guard let thermalIdx else { return .secondary }
+            return thermalIdx == 0 ? .secondary : palette.thermalLevelTint(thermalIdx)
         }()
 
-        // 热状态
-        let thermalStr: String = {
-            guard let th = row.cpuThermalAvg else { return "—" }
-            if th < 0.05 { return "正常(0)" }
-            if th < 0.35 { return "中度(1)" }
-            if th < 0.75 { return "严重(2)" }
-            return "紧急(3)"
-        }()
-        let thermalFull: String = {
-            guard let th = row.cpuThermalAvg else { return "无系统热状态档位数据" }
-            return String(format: "macOS 官方热状态: %@ (内部热应力值: %.2f)", thermalStr, th)
-        }()
+        let isHovered = hoveredRowID == row.id
 
         return HStack(spacing: 8) {
-            // 时间
-            cell(
-                text: dateStr,
-                fullText: "采样时间: \(dateStr) (Unix: \(row.t))",
-                width: 130,
-                alignment: .leading
-            )
-
-            // 采样帧数
-            cell(
-                text: "\(row.n)",
-                fullText: "时间桶内采集硬件帧数: \(row.n) 次",
-                width: 48,
-                alignment: .trailing,
-                color: .secondary
-            )
-
-            // CPU 均值
+            cell(text: dateStr, fullText: "\(dateStr) (Unix: \(row.t))", width: 130, alignment: .leading)
+            cell(text: "\(row.n)", fullText: "\(row.n)", width: 48, alignment: .trailing, color: .secondary)
             cell(
                 text: row.cpuAvg.map { String(format: "%.1f%%", $0) } ?? "—",
-                fullText: row.cpuAvg.map { String(format: "CPU 平均使用率: %.2f%%", $0) } ?? "无 CPU 均值",
-                width: 62,
+                fullText: row.cpuAvg.map { String(format: "CPU Avg: %.2f%%", $0) } ?? "—",
+                width: 64,
                 alignment: .trailing,
-                color: (row.cpuAvg ?? 0) >= 80 ? Color(hex: 0xFF3B30) : .primary
+                color: (row.cpuAvg ?? 0) >= 85 ? palette.base.severityTint(for: .warning) : .primary
             )
-
-            // CPU 峰值
             cell(
                 text: row.cpuMax.map { String(format: "%.1f%%", $0) } ?? "—",
-                fullText: row.cpuMax.map { String(format: "CPU 瞬时最高峰值: %.2f%%", $0) } ?? "无 CPU 峰值",
-                width: 62,
+                fullText: row.cpuMax.map { String(format: "CPU Peak: %.2f%%", $0) } ?? "—",
+                width: 64,
                 alignment: .trailing,
-                color: (row.cpuMax ?? 0) >= 90 ? Color(hex: 0xFF9500) : .secondary
+                color: (row.cpuMax ?? 0) >= 90 ? palette.cpuPeak : .secondary
             )
-
-            // P / E 核心
-            cell(
-                text: peText,
-                fullText: peFull,
-                width: 100,
-                alignment: .trailing
-            )
-
-            // 用户态 / 系统态
-            cell(
-                text: usText,
-                fullText: usFull,
-                width: 95,
-                alignment: .trailing
-            )
-
-            // GPU 均值
+            cell(text: peText, fullText: peText, width: 100, alignment: .trailing)
+            cell(text: usText, fullText: usText, width: 95, alignment: .trailing)
             cell(
                 text: row.gpuAvg.map { String(format: "%.1f%%", $0) } ?? "—",
-                fullText: row.gpuAvg.map { String(format: "GPU 平均使用率: %.2f%% (峰值: %@)", $0, row.gpuMax.map { String(format: "%.1f%%", $0) } ?? "—") } ?? "无 GPU 采样",
-                width: 62,
+                fullText: row.gpuAvg.map { String(format: "GPU: %.2f%% (Peak: %@)", $0, row.gpuMax.map { String(format: "%.1f%%", $0) } ?? "—") } ?? "—",
+                width: 64,
                 alignment: .trailing
             )
-
-            // 动态显存
             cell(
                 text: row.gpuMemAvg.map { ReportUIHelper.formatBytes($0) } ?? "—",
-                fullText: row.gpuMemAvg.map { String(format: "统一架构动态显存: %@ (%.0f 字节)", ReportUIHelper.formatBytes($0), $0) } ?? "无显存分配记录",
+                fullText: row.gpuMemAvg.map { ReportUIHelper.formatBytes($0) } ?? "—",
                 width: 75,
                 alignment: .trailing
             )
-
-            // 内存已用
             cell(
                 text: row.memUsedAvg.map { ReportUIHelper.formatBytes($0) } ?? "—",
-                fullText: row.memUsedAvg.map { String(format: "物理内存已用: %@, 占用比例: %@", ReportUIHelper.formatBytes($0), row.memPctAvg.map { String(format: "%.1f%%", $0) } ?? "—") } ?? "无内存采样",
+                fullText: row.memUsedAvg.map { "\(ReportUIHelper.formatBytes($0)) (\(row.memPctAvg.map { String(format: "%.1f%%", $0) } ?? "—"))" } ?? "—",
                 width: 80,
                 alignment: .trailing
             )
-
-            // 内存压力
             cell(
                 text: row.memPressureAvg.map { String(format: "%.0f%%", $0) } ?? "—",
-                fullText: row.memPressureAvg.map { String(format: "macOS 内存压力: %.1f%%", $0) } ?? "无内存压力",
-                width: 62,
+                fullText: row.memPressureAvg.map { String(format: "%.1f%%", $0) } ?? "—",
+                width: 64,
                 alignment: .trailing,
-                color: (row.memPressureAvg ?? 0) >= 50 ? Color(hex: 0xFF3B30) : ((row.memPressureAvg ?? 0) >= 20 ? Color(hex: 0xFF9500) : .primary)
+                color: (row.memPressureAvg ?? 0) >= 60 ? palette.base.severityTint(for: .critical) : ((row.memPressureAvg ?? 0) >= 35 ? palette.base.severityTint(for: .warning) : .primary)
             )
-
-            // Swap 交换
             cell(
                 text: row.memSwapAvg.map { ReportUIHelper.formatBytes($0) } ?? "—",
-                fullText: row.memSwapAvg.map { String(format: "磁盘交换分区 (Swap): %@", ReportUIHelper.formatBytes($0)) } ?? "无 Swap 记录",
+                fullText: row.memSwapAvg.map { ReportUIHelper.formatBytes($0) } ?? "—",
                 width: 72,
                 alignment: .trailing,
-                color: (row.memSwapAvg ?? 0) > 10 * 1024 * 1024 ? Color(hex: 0xFF9500) : .primary
+                color: (row.memSwapAvg ?? 0) > 512 * 1024 * 1024 ? palette.base.severityTint(for: .warning) : .primary
             )
-
-            // 网络下行速率
             cell(
                 text: row.netDown != nil ? ReportUIHelper.formatBytesRate(downRate) : "—",
-                fullText: row.netDown != nil ? String(format: "网络下行速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(downRate), ReportUIHelper.formatVolume(row.netDown ?? 0), row.netDownPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无下行网络流量",
+                fullText: row.netDown != nil ? "\(ReportUIHelper.formatBytesRate(downRate)) (Σ \(ReportUIHelper.formatVolume(row.netDown ?? 0)))" : "—",
                 width: 80,
                 alignment: .trailing
             )
-
-            // 网络上传速率
             cell(
                 text: row.netUp != nil ? ReportUIHelper.formatBytesRate(upRate) : "—",
-                fullText: row.netUp != nil ? String(format: "网络上行速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(upRate), ReportUIHelper.formatVolume(row.netUp ?? 0), row.netUpPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无上行网络流量",
+                fullText: row.netUp != nil ? "\(ReportUIHelper.formatBytesRate(upRate)) (Σ \(ReportUIHelper.formatVolume(row.netUp ?? 0)))" : "—",
                 width: 80,
                 alignment: .trailing
             )
-
-            // 磁盘读速
             cell(
                 text: row.diskRead != nil ? ReportUIHelper.formatBytesRate(readRate) : "—",
-                fullText: row.diskRead != nil ? String(format: "磁盘读取速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(readRate), ReportUIHelper.formatVolume(row.diskRead ?? 0), row.diskReadPeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无磁盘读取活动",
+                fullText: row.diskRead != nil ? "\(ReportUIHelper.formatBytesRate(readRate)) (Σ \(ReportUIHelper.formatVolume(row.diskRead ?? 0)))" : "—",
                 width: 80,
                 alignment: .trailing
             )
-
-            // 磁盘写速
             cell(
                 text: row.diskWrite != nil ? ReportUIHelper.formatBytesRate(writeRate) : "—",
-                fullText: row.diskWrite != nil ? String(format: "磁盘写入速率: %@ (区间累计: %@, 瞬时峰值: %@)", ReportUIHelper.formatBytesRate(writeRate), ReportUIHelper.formatVolume(row.diskWrite ?? 0), row.diskWritePeak.map { ReportUIHelper.formatBytesRate($0) } ?? "—") : "无磁盘写入活动",
+                fullText: row.diskWrite != nil ? "\(ReportUIHelper.formatBytesRate(writeRate)) (Σ \(ReportUIHelper.formatVolume(row.diskWrite ?? 0)))" : "—",
                 width: 80,
                 alignment: .trailing
             )
-
-            // 整机功耗
             cell(
                 text: row.powerAvg.map { String(format: "%.1f W", $0) } ?? "—",
-                fullText: row.powerAvg.map { String(format: "系统平均功耗: %.1f W (最高瞬时: %@)", $0, row.powerMax.map { String(format: "%.1f W", $0) } ?? "—") } ?? "无功耗采样",
+                fullText: row.powerAvg.map { String(format: "%.1f W (Peak: %@)", $0, row.powerMax.map { String(format: "%.1f W", $0) } ?? "—") } ?? "—",
                 width: 66,
                 alignment: .trailing
             )
-
-            // 电池
-            cell(
-                text: battText,
-                fullText: battFull,
-                width: 60,
-                alignment: .trailing
-            )
-
-            // CPU 温度
+            cell(text: battText, fullText: battText, width: 60, alignment: .trailing)
             cell(
                 text: row.cpuTempAvg.map { String(format: "%.0f°C", $0) } ?? "—",
-                fullText: row.cpuTempAvg.map { String(format: "CPU 封装传感器温度: %.1f°C", $0) } ?? "无芯片温度记录",
+                fullText: row.cpuTempAvg.map { String(format: "%.1f°C", $0) } ?? "—",
                 width: 62,
                 alignment: .trailing,
-                color: (row.cpuTempAvg ?? 0) >= 85 ? Color(hex: 0xFF3B30) : ((row.cpuTempAvg ?? 0) >= 75 ? Color(hex: 0xFF9500) : .primary)
+                color: (row.cpuTempAvg ?? 0) >= 85 ? palette.base.severityTint(for: .critical) : ((row.cpuTempAvg ?? 0) >= 75 ? palette.base.severityTint(for: .warning) : .primary)
             )
-
-            // 风扇转速
             cell(
                 text: row.fanAvg.map { String(format: "%.0f RPM", $0) } ?? "—",
-                fullText: row.fanAvg.map { String(format: "风扇转速均值: %.0f RPM (最高: %@)", $0, row.fanMax.map { String(format: "%.0f RPM", $0) } ?? "—") } ?? "无物理风扇或处于沙盒受限",
+                fullText: row.fanAvg.map { String(format: "%.0f RPM", $0) } ?? "—",
                 width: 72,
                 alignment: .trailing
             )
-
-            // 热状态
             cell(
                 text: thermalStr,
-                fullText: thermalFull,
-                width: 64,
+                fullText: ReportUIHelper.formatThermalLevel(row.cpuThermalAvg),
+                width: 68,
                 alignment: .center,
-                color: (row.cpuThermalAvg ?? 0) > 0.35 ? Color(hex: 0xFF3B30) : .secondary
+                color: thermalColor
             )
         }
         .padding(.vertical, 5)
         .padding(.horizontal, 8)
-        .background(isEven ? Color.primary.opacity(0.02) : Color.clear)
+        .background(isHovered ? Color.accentColor.opacity(0.08) : (isEven ? Color.primary.opacity(0.025) : Color.clear))
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        .onHover { hovering in
+            hoveredRowID = hovering ? row.id : (hoveredRowID == row.id ? nil : hoveredRowID)
+        }
+        .contextMenu {
+            Button {
+                let summary = ReportDataExporter.generateCSV(rows: [row], bucketSeconds: bucketSec)
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(summary, forType: .string)
+            } label: {
+                Label(String(localized: "stats.r.copyRow", defaultValue: "复制该行数据"), systemImage: "doc.on.doc")
+            }
+        }
     }
 
-    /// 统一单元格：单行截断省略，鼠标悬浮即弹出原生完整信息浮窗
     private func cell(
         text: String,
         fullText: String,
@@ -567,13 +544,13 @@ struct ReportDetailsTableView: View {
         let endIdx = min(startIdx + pageSize, total)
 
         return HStack {
-            Text("显示第 \(startIdx + 1) - \(endIdx) 条，共 \(total) 条采样")
+            Text(String(format: String(localized: "stats.r.paginationRange", defaultValue: "显示第 %d - %d 条，共 %d 条"), startIdx + 1, endIdx, total))
                 .font(.system(size: 11))
+                .monospacedDigit()
                 .foregroundStyle(.secondary)
 
             Spacer()
 
-            // 首页
             Button {
                 currentPage = 0
             } label: {
@@ -583,7 +560,6 @@ struct ReportDetailsTableView: View {
             .buttonStyle(.plain)
             .disabled(safePage == 0)
 
-            // 上一页
             Button {
                 if safePage > 0 { currentPage = safePage - 1 }
             } label: {
@@ -593,12 +569,11 @@ struct ReportDetailsTableView: View {
             .buttonStyle(.plain)
             .disabled(safePage == 0)
 
-            Text("第 \(safePage + 1) / \(totalPages) 页")
+            Text(String(format: String(localized: "stats.r.paginationPage", defaultValue: "第 %d / %d 页"), safePage + 1, totalPages))
                 .font(.system(size: 11, design: .monospaced))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 4)
 
-            // 下一页
             Button {
                 if safePage < totalPages - 1 { currentPage = safePage + 1 }
             } label: {
@@ -608,7 +583,6 @@ struct ReportDetailsTableView: View {
             .buttonStyle(.plain)
             .disabled(safePage >= totalPages - 1)
 
-            // 末页
             Button {
                 currentPage = totalPages - 1
             } label: {
@@ -630,9 +604,9 @@ struct ReportDetailsTableView: View {
             if let m = viewModel.rangeModel {
                 let df = DateFormatter()
                 df.dateFormat = "yyyy-MM-dd"
-                return "\(df.string(from: m.from)) 至 \(df.string(from: m.to))"
+                return "\(df.string(from: m.from)) - \(df.string(from: m.to))"
             }
-            return "当前筛选范围"
+            return "Filtered"
         }()
 
         let window = NSApp.keyWindow ?? NSApp.mainWindow

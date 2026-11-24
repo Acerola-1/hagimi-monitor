@@ -82,6 +82,10 @@ struct AppMenuCommands: Commands {
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(!reportCommands.isAvailable)
             Button(String(localized: "menu.export-report")) { ReportWindowPresenter.exportCurrentReport() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(!reportCommands.isAvailable)
+            Button(String(localized: "stats.report.toolbar.reload.tooltip")) { ReportWindowPresenter.reloadCurrentReport() }
+                .keyboardShortcut("r", modifiers: .command)
                 .disabled(!reportCommands.isAvailable)
         }
         CommandGroup(replacing: .appInfo) {

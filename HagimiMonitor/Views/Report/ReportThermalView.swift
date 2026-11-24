@@ -2,31 +2,52 @@ import AppKit
 import Charts
 import SwiftUI
 
-/// 热状态与风扇模块报表视图：包含热状态档位（0~3 档，杜绝乘 100 误读）、CPU 核心温度趋势、风扇转速，以及处理无风扇机型与沙盒传感器受限场景。
+/// 热状态与风扇模块报表视图：包含热状态档位（0~3 档）、CPU 核心温度趋势、风扇转速及事件时间窗高亮。
 struct ReportThermalView: View {
     @ObservedObject var viewModel: NativeReportViewModel
-    @State private var selectedTempDate: Date?
-    @State private var selectedThermalDate: Date?
-    @State private var selectedFanDate: Date?
 
-    private let tempColor = ReportUIHelper.thermalColor
-    private let peakColor = ReportUIHelper.peakColor
-    private let fanColor = Color(hex: 0x6366F1)
-    private let pressureColor = Color(hex: 0xFF9500)
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+
+    private var palette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
+
+    private var highlightWindows: [ReportChartHighlightWindow] {
+        var windows: [ReportChartHighlightWindow] = (viewModel.rangeModel?.events ?? [])
+            .filter { $0.kind == .thermal }
+            .map { event in
+                ReportChartHighlightWindow(
+                    id: event.id,
+                    start: event.start,
+                    end: event.end,
+                    tone: event.worstLevel >= 3 ? .critical : .warning,
+                    label: event.kind.title
+                )
+            }
+        if let focused = viewModel.focusedTimeWindow, focused.kind == .thermal || focused.kind == nil {
+            windows.append(ReportChartHighlightWindow(
+                id: "focus",
+                start: focused.start,
+                end: focused.end,
+                tone: .focus,
+                label: focused.title
+            ))
+        }
+        return windows
+    }
 
     var body: some View {
-        // R19: 本模块无 HardwareRail 契约，采用全宽布局
         VStack(spacing: 16) {
-            // 1. KPI 概览指标行 (R05: 正确语义呈现)
+            if let focused = viewModel.focusedTimeWindow, focused.kind == .thermal || focused.kind == nil {
+                ReportFocusedWindowBanner(window: focused) {
+                    viewModel.clearFocusedTimeWindow()
+                }
+            }
+
             kpiSummaryRow
-
-            // 2. CPU 核心温度趋势图（若有温度传感器数据）
             cpuTempTrendCard
-
-            // 3. 系统热状态历史档位图 (R05: 0~3 独立展示，沙盒与直连均可用)
             thermalStateTrendCard
-
-            // 4. 风扇转速趋势图 或 无风扇被动散热说明 (R03: 区分无风扇与 0 RPM 停转)
             fanSectionView
         }
         .frame(maxWidth: .infinity)
@@ -42,21 +63,22 @@ struct ReportThermalView: View {
             averageRPM: th?.fanAvgRPM,
             peakRPM: th?.fanMaxRPM
         )
+        let thermalIndex = StatisticsDisplayFormat.thermalLevelIndex(th?.cpuThermalAvg)
 
         return HStack(spacing: 12) {
             ReportKpiCard(
                 title: String(localized: "stats.r.secThermal", defaultValue: "系统热状态"),
-                value: ReportUIHelper.thermalStateLabel(th?.cpuThermalAvg),
+                value: StatisticsDisplayFormat.thermalStateLabel(th?.cpuThermalAvg),
                 caption: th?.cpuThermalAvg.map { level in
                     String(localized: "stats.r.thermalAverage \(String(format: "%.1f", level))")
                 },
-                color: (th?.cpuThermalAvg ?? 0) > 0.5 ? tempColor : Color(hex: 0x34C759)
+                color: palette.thermalLevelTint(thermalIndex)
             )
             ReportKpiCard(
                 title: String(localized: "stats.r.sAvgCpuTemp", defaultValue: "CPU 平均温度"),
                 value: th?.cpuTempAvg.map { String(format: "%.1f°C", $0) } ?? "—",
                 caption: nil,
-                color: tempColor
+                color: palette.thermal
             )
             fanKpiCard(for: fanReadout)
         }
@@ -91,14 +113,14 @@ struct ReportThermalView: View {
                 title: String(localized: "stats.r.sAvgFan"),
                 value: "0 RPM",
                 caption: String(localized: "stats.r.fanStoppedCaption"),
-                color: Color(hex: 0x34C759)
+                color: palette.base.severityTint(for: .calm)
             )
         case let .measured(averageRPM, peakRPM):
             ReportKpiCard(
                 title: String(localized: "stats.r.sAvgFan"),
                 value: averageRPM.map { String(format: "%.0f RPM", $0) } ?? "—",
                 caption: peakRPM.map { String(localized: "stats.r.fanPeak \(String(format: "%.0f", $0))") },
-                color: fanColor
+                color: palette.fan
             )
         }
     }
@@ -106,200 +128,74 @@ struct ReportThermalView: View {
     // MARK: - 2. CPU 核心温度趋势图卡片
 
     private var cpuTempTrendCard: some View {
-        let rows = viewModel.rangeModel?.rows ?? []
-        let granularity = viewModel.rangeModel?.granularity.bucketSeconds ?? 60
-
-        let tempPoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.cpuTempAvg,
-            seriesID: "temp",
-            granularitySeconds: granularity
-        )
+        let cache = viewModel.rangeModel?.chartCache ?? .empty
 
         return ReportCardView(
             title: String(localized: "stats.r.cpuTempTitle", defaultValue: "CPU 核心温度趋势"),
             icon: "thermometer.medium"
         ) {
-            if tempPoints.isEmpty {
+            if cache.cpuTemp.isEmpty {
                 ReportEmptyPlaceholder(
-                    text: viewModel.snapshot?.meta.isDirect == false
-                        ? String(localized: "stats.r.tempSandboxNotice", defaultValue: "沙盒受限：CPU 核心温度传感器仅在直连版可用，请参考下方系统热状态")
+                    text: !ReportEnvironment.isDirect
+                        ? String(localized: "stats.r.tempSandboxNotice", defaultValue: "受当前沙盒运行环境权限限制，无法读取核心温度传感器，请参考下方系统热状态")
                         : String(localized: "stats.r.emptySection", defaultValue: "所选范围内无温度传感器记录")
                 )
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 16) {
-                        ReportLegendItem(title: String(localized: "stats.r.cpuTemp", defaultValue: "CPU 温度 (°C)"), color: tempColor)
-
-                        Spacer()
-
-                        if let selectedTempDate, let row = ReportUIHelper.findClosestRow(to: selectedTempDate, in: rows), let t = row.cpuTempAvg {
-                            Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): 温度 \(String(format: "%.1f°C", t))")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    Chart {
-                        ForEach(tempPoints) { pt in
-                            if let val = pt.value {
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Temp", val),
-                                    series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
-                                )
-                                .foregroundStyle(tempColor)
-                                .interpolationMethod(.monotone)
-                            }
-                        }
-
-                        if let selectedTempDate {
-                            RuleMark(x: .value("Selected", selectedTempDate))
-                                .foregroundStyle(Color.secondary.opacity(0.4))
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks(position: .leading) { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.15))
-                            AxisValueLabel {
-                                if let val = value.as(Double.self) {
-                                    Text(String(format: "%.0f°C", val))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXAxis {
-                        AxisMarks { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.12))
-                            AxisValueLabel {
-                                if let date = value.as(Date.self) {
-                                    Text(viewModel.selectedRange == .today ? ReportUIHelper.formatTimeOnly(date) : ReportUIHelper.formatDateShort(date))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXSelection(value: $selectedTempDate)
-                    .frame(height: 180)
-                }
+                ReportTimeSeriesChart(
+                    descriptors: [
+                        ReportChartSeriesDescriptor(
+                            id: "temp",
+                            title: String(localized: "stats.r.cpuTemp", defaultValue: "CPU 温度 (°C)"),
+                            series: cache.cpuTemp,
+                            color: palette.thermal,
+                            lineWidth: 1.7
+                        )
+                    ],
+                    isSingleDay: viewModel.isSingleDaySelected,
+                    yAxisFormat: .celsius,
+                    highlightWindows: highlightWindows,
+                    height: 185
+                )
             }
         }
     }
 
-    // MARK: - 3. 系统热状态历史档位图 (R05: 0~3 档，使用阶梯插值展示)
+    // MARK: - 3. 系统热状态历史档位图 (0~3 档阶梯插值)
 
     private var thermalStateTrendCard: some View {
-        let rows = viewModel.rangeModel?.rows ?? []
-        let granularity = viewModel.rangeModel?.granularity.bucketSeconds ?? 60
-
-        let statePoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.cpuThermalAvg,
-            seriesID: "thermalState",
-            granularitySeconds: granularity
-        )
+        let cache = viewModel.rangeModel?.chartCache ?? .empty
 
         return ReportCardView(
             title: String(localized: "stats.r.secThermal", defaultValue: "系统热状态档位"),
             icon: "flame"
         ) {
-            if statePoints.isEmpty {
+            if cache.thermalState.isEmpty {
                 ReportEmptyPlaceholder(text: String(localized: "stats.r.emptySection", defaultValue: "所选范围内无热状态记录"))
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 16) {
-                        ReportLegendItem(title: String(localized: "stats.r.thermalNominal", defaultValue: "正常 (0)"), color: Color(hex: 0x34C759))
-                        ReportLegendItem(title: String(localized: "stats.r.thermalFair", defaultValue: "中度 (1)"), color: Color(hex: 0xF5A623))
-                        ReportLegendItem(title: String(localized: "stats.r.thermalSerious", defaultValue: "严重 (2)"), color: Color(hex: 0xFF9500))
-                        ReportLegendItem(title: String(localized: "stats.r.thermalCritical", defaultValue: "紧急 (3)"), color: Color(hex: 0xFF3B30))
-
-                        Spacer()
-
-                        if let selectedThermalDate, let row = ReportUIHelper.findClosestRow(to: selectedThermalDate, in: rows), let lvl = row.cpuThermalAvg {
-                            Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): \(ReportUIHelper.formatThermalLevel(lvl))")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    Chart {
-                        ForEach(statePoints) { pt in
-                            if let val = pt.value {
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Level", val),
-                                    series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
-                                )
-                                .foregroundStyle(pressureColor)
-                                .interpolationMethod(.stepEnd)
-
-                                AreaMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Level", val),
-                                    series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
-                                )
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [pressureColor.opacity(0.25), pressureColor.opacity(0.02)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .interpolationMethod(.stepEnd)
-                            }
-                        }
-
-                        if let selectedThermalDate {
-                            RuleMark(x: .value("Selected", selectedThermalDate))
-                                .foregroundStyle(Color.secondary.opacity(0.4))
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        }
-                    }
-                    .chartYScale(domain: 0...3)
-                    .chartYAxis {
-                        AxisMarks(position: .leading, values: [0, 1, 2, 3]) { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.15))
-                            AxisValueLabel {
-                                if let val = value.as(Int.self) {
-                                    switch val {
-                                    case 0: Text("正常").font(.system(size: 9)).foregroundStyle(.secondary)
-                                    case 1: Text("中度").font(.system(size: 9)).foregroundStyle(.secondary)
-                                    case 2: Text("严重").font(.system(size: 9)).foregroundStyle(.secondary)
-                                    case 3: Text("紧急").font(.system(size: 9)).foregroundStyle(.secondary)
-                                    default: EmptyView()
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    .chartXAxis {
-                        AxisMarks { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.12))
-                            AxisValueLabel {
-                                if let date = value.as(Date.self) {
-                                    Text(viewModel.selectedRange == .today ? ReportUIHelper.formatTimeOnly(date) : ReportUIHelper.formatDateShort(date))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXSelection(value: $selectedThermalDate)
-                    .frame(height: 160)
-                }
+                ReportTimeSeriesChart(
+                    descriptors: [
+                        ReportChartSeriesDescriptor(
+                            id: "thermalState",
+                            title: String(localized: "stats.r.secThermal", defaultValue: "系统热状态"),
+                            series: cache.thermalState,
+                            color: palette.base.severityTint(for: .warning),
+                            lineWidth: 1.6,
+                            showAreaFill: true,
+                            interpolation: .stepEnd
+                        )
+                    ],
+                    isSingleDay: viewModel.isSingleDaySelected,
+                    yAxisFormat: .thermalLevel,
+                    yDomain: 0...3,
+                    yAxisValues: [0, 1, 2, 3],
+                    highlightWindows: highlightWindows,
+                    height: 170
+                )
             }
         }
     }
 
-    // MARK: - 4. 风扇趋势或说明区域 (R03)
+    // MARK: - 4. 风扇趋势或说明区域
 
     @ViewBuilder
     private var fanSectionView: some View {
@@ -316,84 +212,30 @@ struct ReportThermalView: View {
     }
 
     private var fanTrendCard: some View {
-        let rows = viewModel.rangeModel?.rows ?? []
-        let granularity = viewModel.rangeModel?.granularity.bucketSeconds ?? 60
-
-        let fanPoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.fanAvg,
-            seriesID: "fan",
-            granularitySeconds: granularity
-        )
+        let cache = viewModel.rangeModel?.chartCache ?? .empty
 
         return ReportCardView(
             title: String(localized: "stats.r.fanTrendTitle", defaultValue: "风扇转速趋势"),
             icon: "fan.fill"
         ) {
-            if fanPoints.isEmpty {
+            if cache.fanRPM.isEmpty {
                 ReportEmptyPlaceholder(text: String(localized: "stats.r.fanNoTrend"))
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 16) {
-                        ReportLegendItem(title: String(localized: "stats.r.sAvgFan", defaultValue: "风扇转速 (RPM)"), color: fanColor)
-
-                        Spacer()
-
-                        if let selectedFanDate, let row = ReportUIHelper.findClosestRow(to: selectedFanDate, in: rows), let rpm = row.fanAvg {
-                            Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): \(String(format: "%.0f RPM", rpm))")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    Chart {
-                        ForEach(fanPoints) { pt in
-                            if let val = pt.value {
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("RPM", val),
-                                    series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
-                                )
-                                .foregroundStyle(fanColor)
-                                .interpolationMethod(.monotone)
-                            }
-                        }
-
-                        if let selectedFanDate {
-                            RuleMark(x: .value("Selected", selectedFanDate))
-                                .foregroundStyle(Color.secondary.opacity(0.4))
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks(position: .leading) { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.15))
-                            AxisValueLabel {
-                                if let val = value.as(Double.self) {
-                                    Text(String(format: "%.0f", val))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXAxis {
-                        AxisMarks { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.12))
-                            AxisValueLabel {
-                                if let date = value.as(Date.self) {
-                                    Text(ReportUIHelper.formatDateShort(date))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXSelection(value: $selectedFanDate)
-                    .frame(height: 180)
-                }
+                ReportTimeSeriesChart(
+                    descriptors: [
+                        ReportChartSeriesDescriptor(
+                            id: "fan",
+                            title: String(localized: "stats.r.sAvgFan", defaultValue: "风扇转速 (RPM)"),
+                            series: cache.fanRPM,
+                            color: palette.fan,
+                            lineWidth: 1.6
+                        )
+                    ],
+                    isSingleDay: viewModel.isSingleDaySelected,
+                    yAxisFormat: .rpm,
+                    highlightWindows: highlightWindows,
+                    height: 180
+                )
             }
         }
     }
@@ -408,11 +250,9 @@ struct ReportThermalView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "stats.r.fanUnavailableDescription"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+                Text(String(localized: "stats.r.fanUnavailableDescription"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
         }
@@ -428,11 +268,9 @@ struct ReportThermalView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "stats.r.fanlessDesc", defaultValue: "当前设备采用全被动静音散热架构（如 MacBook Air），机身内部未搭载机械主动散热风扇。系统热状态由能效核与调度器智能管控。"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+                Text(String(localized: "stats.r.fanlessDesc", defaultValue: "当前设备采用全被动静音散热架构（如 MacBook Air），机身内部未搭载机械主动散热风扇。系统热状态由能效核与调度器智能管控。"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
         }

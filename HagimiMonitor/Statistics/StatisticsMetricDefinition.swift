@@ -107,6 +107,29 @@ nonisolated enum StatisticsMetricDefinition: Sendable {
         return bands.last { rawValue >= $0.lowerBound }
     }
 
+    /// 某指标三个档位的展示标签，全端共用同一指标定义与单位格式化。
+    static func bandLabels(for metric: ProcessAlertEpisode.Metric) -> [String] {
+        let definition: Metric = switch metric {
+        case .cpu: .cpu
+        case .gpu: .gpu
+        case .memory: .memory
+        case .network: .network
+        }
+        let boundaries: [Double] = switch definition {
+        case .cpu: cpuBandBoundaries
+        case .gpu: gpuBandBoundaries
+        case .memory: memoryBands.map(\.lowerBound)
+        case .network: networkBandBoundaries.map { $0 * mebibyte }
+        }
+        return boundaries.map { boundary in
+            switch definition {
+            case .memory: StatisticsDisplayFormat.binaryCapacity(boundary)
+            case .network: StatisticsDisplayFormat.decimalRate(boundary)
+            default: StatisticsDisplayFormat.percent(boundary)
+            }
+        }
+    }
+
     // MARK: - 关注门槛
 
     /// CPU 关注门槛：取 100%（单核满载）与逻辑核总容量 15% 的较大值，避免高核数芯片被轻载进程误触发。

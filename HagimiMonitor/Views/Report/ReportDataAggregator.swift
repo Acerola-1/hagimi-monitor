@@ -612,18 +612,19 @@ nonisolated enum ReportDataAggregator: Sendable {
         batteryHistory: [StatisticsProcessStore.BatteryPoint],
         from: Date,
         to: Date,
-        hardwareHasBattery: Bool
+        hardwareHasBattery: Bool,
+        calendar: Calendar = .current
     ) -> ReportBatteryMetrics {
         let avgLevel = weightedAverage(of: rows, keyPath: \.battLevelAvg)
         let avgTemp = weightedAverage(of: rows, keyPath: \.battTempAvg)
         let acFrac = weightedAverage(of: rows, keyPath: \.acFrac)
         let chgFrac = weightedAverage(of: rows, keyPath: \.chargingFrac)
 
-        let dayRange = StatisticsProcessStore.dayRange(from: from, to: to, calendar: .current)
+        let dayRange = StatisticsProcessStore.dayRange(from: from, to: to, calendar: calendar)
 
         let filteredHistory = batteryHistory.filter { dayRange.contains(day: $0.day) }
         let dailyHealth = filteredHistory.map { item -> ReportBatteryMetrics.DailyHealth in
-            let date = parseDayKey(item.day)
+            let date = parseDayKey(item.day, calendar: calendar)
             return ReportBatteryMetrics.DailyHealth(
                 id: item.day,
                 day: item.day,
@@ -668,14 +669,15 @@ nonisolated enum ReportDataAggregator: Sendable {
         processData: ReportProcessData?,
         from: Date,
         to: Date,
-        isDirect: Bool
+        isDirect: Bool,
+        calendar: Calendar = .current
     ) -> ReportAppRankings {
         guard let processData, !processData.dailyRows.isEmpty else {
             return ReportAppRankings(cpuList: [], memList: [], gpuList: [], diskList: [], netList: [], highLoadAlerts: [])
         }
 
         // 应用日行按 [from, to) 右开区间过滤
-        let dayRange = StatisticsProcessStore.dayRange(from: from, to: to, calendar: .current)
+        let dayRange = StatisticsProcessStore.dayRange(from: from, to: to, calendar: calendar)
 
         // 权威名称表归并旧版记录：仅在旧键唯一对应已知身份显示名时映射，避免同名冲突误合
         let aliasMap = identityAliases(processData: processData)
@@ -685,26 +687,30 @@ nonisolated enum ReportDataAggregator: Sendable {
             cpuSum: Double, cpuN: Int,
             gpuSum: Double, gpuN: Int,
             memSum: Double, memN: Int,
-            netDownBytes: Double, netUpBytes: Double,
-            diskReadBytes: Double, diskWriteBytes: Double,
+            netDownBytes: Double, netUpBytes: Double, netDayPeakBytes: Double,
+            diskReadBytes: Double, diskWriteBytes: Double, diskDayPeakBytes: Double,
             cpuT1: Int, cpuT2: Int, cpuT3: Int, cpuPeak: Double,
             gpuT1: Int, gpuT2: Int, gpuT3: Int, gpuPeak: Double,
             memT1: Int, memT2: Int, memT3: Int, memPeak: Double
         )
 
         var agg: [String: AppAggEntry] = [:]
+        var hasLegacyInRange = false
 
         for row in processData.dailyRows {
             if !dayRange.contains(day: row.day) { continue }
             let canonicalKey = aliasMap[row.appKey] ?? row.appKey
+            if processData.identities[canonicalKey]?.isLegacyNameOnly ?? processData.identities[row.appKey]?.isLegacyNameOnly ?? false {
+                hasLegacyInRange = true
+            }
 
             var entry = agg[canonicalKey] ?? (
                 name: row.name,
                 cpuSum: 0, cpuN: 0,
                 gpuSum: 0, gpuN: 0,
                 memSum: 0, memN: 0,
-                netDownBytes: 0, netUpBytes: 0,
-                diskReadBytes: 0, diskWriteBytes: 0,
+                netDownBytes: 0, netUpBytes: 0, netDayPeakBytes: 0,
+                diskReadBytes: 0, diskWriteBytes: 0, diskDayPeakBytes: 0,
                 cpuT1: 0, cpuT2: 0, cpuT3: 0, cpuPeak: 0,
                 gpuT1: 0, gpuT2: 0, gpuT3: 0, gpuPeak: 0,
                 memT1: 0, memT2: 0, memT3: 0, memPeak: 0
@@ -718,8 +724,12 @@ nonisolated enum ReportDataAggregator: Sendable {
             entry.memN += row.memSamples
             entry.netDownBytes += row.netDownBytes
             entry.netUpBytes += row.netUpBytes
+            let dayNet = row.netDownBytes + row.netUpBytes
+            if dayNet > entry.netDayPeakBytes { entry.netDayPeakBytes = dayNet }
             entry.diskReadBytes += row.diskReadBytes
             entry.diskWriteBytes += row.diskWriteBytes
+            let dayDisk = row.diskReadBytes + row.diskWriteBytes
+            if dayDisk > entry.diskDayPeakBytes { entry.diskDayPeakBytes = dayDisk }
 
             entry.cpuT1 += row.cpuTier1
             entry.cpuT2 += row.cpuTier2
@@ -871,7 +881,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 let writePrefix = String(localized: "stats.r.prefixWrite", defaultValue: "写")
                 return "\(readPrefix) \(ReportUIHelper.formatVolume(val.diskReadBytes)) · \(writePrefix) \(ReportUIHelper.formatVolume(val.diskWriteBytes))"
             },
-            getPeak: { $0.diskReadBytes + $0.diskWriteBytes },
+            getPeak: { $0.diskDayPeakBytes },
             minThreshold: 1024,
             tag: "disk"
         ) : []
@@ -883,7 +893,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 let val = item.val
                 return "↓ \(ReportUIHelper.formatVolume(val.netDownBytes)) · ↑ \(ReportUIHelper.formatVolume(val.netUpBytes))"
             },
-            getPeak: { $0.netDownBytes + $0.netUpBytes },
+            getPeak: { $0.netDayPeakBytes },
             minThreshold: 1024,
             tag: "net"
         ) : []
@@ -936,7 +946,18 @@ nonisolated enum ReportDataAggregator: Sendable {
             diskList: diskList,
             netList: netList,
             highLoadAlerts: highLoadItems,
-            hasLegacyNameIdentities: processData.identities.values.contains { $0.isLegacyNameOnly }
+            hasLegacyNameIdentities: hasLegacyInRange
+        )
+    }
+
+    /// 提取单个应用在五大维度上的跨分类画像摘要。
+    static func appCrossMetricProfile(appKey: String, in rankings: ReportAppRankings) -> ReportAppProfile {
+        ReportAppProfile(
+            cpuText: rankings.cpuList.first(where: { $0.appKey == appKey })?.valueText,
+            memoryText: rankings.memList.first(where: { $0.appKey == appKey })?.valueText,
+            gpuText: rankings.gpuList.first(where: { $0.appKey == appKey })?.valueText,
+            diskText: rankings.diskList.first(where: { $0.appKey == appKey })?.valueText,
+            networkText: rankings.netList.first(where: { $0.appKey == appKey })?.valueText
         )
     }
 
@@ -951,19 +972,19 @@ nonisolated enum ReportDataAggregator: Sendable {
         let span = source.bucketSeconds
         let freshWindow: TimeInterval = 5 * 60
 
-        // 分别跟踪内存维度与热状态维度的最后有效观测时间点
+        // 分别跟踪内存维度与热状态维度的最后有效观测时间点（不超过快照时刻 now）
         let lastMemObsEnd = rows.compactMap { row -> Date? in
             let hasMemObs = (row.validMemS ?? 0) > 0 ||
                 (row.memNormalS ?? 0) > 0 || (row.memWarnS ?? 0) > 0 || (row.memCritS ?? 0) > 0
             guard hasMemObs else { return nil }
-            return Date(timeIntervalSince1970: TimeInterval(row.t) + span)
+            return min(now, Date(timeIntervalSince1970: TimeInterval(row.t) + span))
         }.max()
 
         let lastThermalObsEnd = rows.compactMap { row -> Date? in
             let hasThermalObs = (row.validThermalS ?? 0) > 0 ||
                 (row.thNominalS ?? 0) > 0 || (row.thFairS ?? 0) > 0 || (row.thSeriousS ?? 0) > 0 || (row.thCritS ?? 0) > 0
             guard hasThermalObs else { return nil }
-            return Date(timeIntervalSince1970: TimeInterval(row.t) + span)
+            return min(now, Date(timeIntervalSince1970: TimeInterval(row.t) + span))
         }.max()
 
         struct Spec {
@@ -1011,7 +1032,18 @@ nonisolated enum ReportDataAggregator: Sendable {
                     state = .interrupted
                 }
                 let spanSec = end.timeIntervalSince(start)
-                let detail = String(format: "%.0fm (%.0f%%)", pressureSeconds / 60.0, min(100, pressureSeconds / max(spanSec, 1) * 100))
+                let ratioPct = min(100, Int((pressureSeconds / max(spanSec, 1) * 100).rounded()))
+                let severityLabel: String = {
+                    switch spec.kind {
+                    case .memory:
+                        return worstLevel >= 2
+                            ? String(localized: "stats.r.severityCritical", defaultValue: "紧急")
+                            : String(localized: "stats.r.severityWarning", defaultValue: "警告")
+                    case .thermal:
+                        return StatisticsDisplayFormat.thermalStateLabel(Double(worstLevel))
+                    }
+                }()
+                let detail = String(format: String(localized: "stats.r.eventRatioDetail", defaultValue: "%@ · 占比 %d%%"), severityLabel, ratioPct)
                 events.append(ReportEventItem(
                     id: "\(spec.kind)-\(start.timeIntervalSince1970)",
                     kind: spec.kind,
@@ -1032,7 +1064,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 let levels = spec.getLevels(row)
                 let pressure = levels.filter { $0.level >= spec.threshold }.map(\.seconds).reduce(0, +)
                 let rowDate = Date(timeIntervalSince1970: TimeInterval(row.t))
-                let rowEnd = rowDate.addingTimeInterval(span)
+                let rowEnd = min(now, rowDate.addingTimeInterval(span))
 
                 if pressure <= 0 {
                     flush()
@@ -1113,7 +1145,7 @@ nonisolated enum ReportDataAggregator: Sendable {
         return ReportHeatmapData(cells: cells)
     }
 
-    // MARK: - 智能洞察生成 (R14: 修复模板变量替换，R16: 恢复最忙时段)
+    // MARK: - 智能洞察生成（对比环比、压力归因、长期趋势、可执行跳转）
 
     static func generateInsights(
         rows: [StatisticsRow],
@@ -1123,169 +1155,387 @@ nonisolated enum ReportDataAggregator: Sendable {
         to: Date,
         systemSleepIntervals: [SystemSleepInterval] = []
     ) -> [ReportInsightItem] {
+        let coverage = coverageRatio(rows: rows, from: from, to: to, systemSleepIntervals: systemSleepIntervals)
+        let events = deriveAlertEvents(rows: rows, source: source, now: to)
+        let thermal = computeThermalMetrics(rows: rows)
+        let disk = computeDiskMetrics(rows: rows, isHourly: false)
+        let battery = computeBatteryMetrics(rows: rows, batteryHistory: [], from: from, to: to, hardwareHasBattery: false)
+        return generateInsights(
+            rows: rows,
+            hourlyRows: hourlyRows,
+            previousRows: [],
+            source: source,
+            from: from,
+            to: to,
+            coverageRatio: coverage,
+            events: events,
+            apps: ReportAppRankings(cpuList: [], memList: [], gpuList: [], diskList: [], netList: [], highLoadAlerts: []),
+            battery: battery,
+            thermal: thermal,
+            disk: disk,
+            systemSleepIntervals: systemSleepIntervals
+        )
+    }
+
+    static func generateInsights(
+        rows: [StatisticsRow],
+        hourlyRows: [StatisticsRow],
+        previousRows: [StatisticsRow],
+        source: ReportSourceGranularity,
+        from: Date,
+        to: Date,
+        coverageRatio: Double?,
+        events: [ReportEventItem],
+        apps: ReportAppRankings,
+        battery: ReportBatteryMetrics,
+        thermal: ReportThermalMetrics,
+        disk: ReportDiskMetrics,
+        systemSleepIntervals: [SystemSleepInterval] = [],
+        calendar: Calendar = .current
+    ) -> [ReportInsightItem] {
+        guard !rows.isEmpty else { return [] }
         var insights: [ReportInsightItem] = []
 
-        // 1. CPU 负载与高负载压力
-        if let cpuAvg = weightedAverage(of: rows, keyPath: \.cpuAvg) {
-            let (levelText, icon, color): (String, String, String) = {
-                if cpuAvg < 20 {
-                    return ("负载较轻，算力充足", "gauge.with.dots.needle.33percent", "green")
-                } else if cpuAvg < 50 {
-                    return ("负载适中，平稳运转", "gauge.with.dots.needle.67percent", "orange")
+        // 1. 系统压力归因（将压力事件、并发 Swap/温度与高占用应用关联）
+        if !events.isEmpty {
+            let memEvents = events.filter { $0.kind == .memory }
+            let thEvents = events.filter { $0.kind == .thermal }
+            let totalPressureSec = events.map(\.pressureSeconds).reduce(0, +)
+            let worstEvent = events.max(by: { $0.worstLevel < $1.worstLevel }) ?? events[0]
+            let isCritical = events.contains {
+                ($0.kind == .memory && $0.worstLevel >= 2) || ($0.kind == .thermal && $0.worstLevel >= 2)
+            }
+
+            var detailParts: [String] = []
+            detailParts.append(String(
+                format: String(localized: "stats.r.insight.pressureSummary", defaultValue: "累计出现 %d 次系统压力（内存 %d · 热状态 %d），有效持续 %@"),
+                events.count, memEvents.count, thEvents.count, StatisticsDisplayFormat.duration(totalPressureSec)
+            ))
+            if !memEvents.isEmpty, let peakSwap = maximum(of: rows, keyPath: \.memSwapAvg), peakSwap > 256 * 1024 * 1024 {
+                detailParts.append(String(
+                    format: String(localized: "stats.r.insight.pressureSwap", defaultValue: "同期 Swap 峰值达 %@"),
+                    ReportUIHelper.formatBytes(peakSwap)
+                ))
+            }
+            if !thEvents.isEmpty, let peakTemp = maximum(of: rows, keyPath: \.cpuTempAvg) {
+                detailParts.append(String(
+                    format: String(localized: "stats.r.insight.pressureTemp", defaultValue: "CPU 温度最高 %.1f°C"),
+                    peakTemp
+                ))
+            }
+            if !apps.highLoadAlerts.isEmpty {
+                let topNames = apps.highLoadAlerts.prefix(3).map(\.name).joined(separator: "、")
+                detailParts.append(String(
+                    format: String(localized: "stats.r.insight.pressureApps", defaultValue: "同期高占用应用：%@"),
+                    topNames
+                ))
+            }
+
+            insights.append(ReportInsightItem(
+                id: "pressure-attribution",
+                systemIcon: "exclamationmark.triangle.fill",
+                colorName: isCritical ? "red" : "orange",
+                title: String(localized: "stats.r.insight.pressureTitle", defaultValue: "系统压力归因"),
+                detail: detailParts.joined(separator: "；"),
+                severity: isCritical ? .critical : .warning,
+                destination: worstEvent.kind == .memory ? .memory : .thermal,
+                focusStart: worstEvent.start,
+                focusEnd: worstEvent.end,
+                actionTitle: String(localized: "stats.r.insight.actionInspectWindow", defaultValue: "定位压力时段")
+            ))
+        }
+
+        // 2. 周期环比变化（对比上一等长周期的内存压力、功耗与磁盘写入）
+        if !previousRows.isEmpty {
+            let span = to.timeIntervalSince(from)
+            let prevStart = from.addingTimeInterval(-span)
+            let prevCoverage = self.coverageRatio(rows: previousRows, from: prevStart, to: from, systemSleepIntervals: systemSleepIntervals) ?? 0
+            if prevCoverage >= 0.3 {
+                if let curMemP = weightedAverage(of: rows, keyPath: \.memPressureAvg),
+                   let prevMemP = weightedAverage(of: previousRows, keyPath: \.memPressureAvg),
+                   abs(curMemP - prevMemP) >= 8.0 {
+                    let delta = curMemP - prevMemP
+                    let isUp = delta > 0
+                    let detail = String(
+                        format: String(localized: "stats.r.insight.momMemDetail", defaultValue: "本期平均内存压力 %.0f%%，较上一周期（%.0f%%）%@ %.0f 个百分点"),
+                        curMemP,
+                        prevMemP,
+                        isUp ? String(localized: "stats.r.insight.up", defaultValue: "上升") : String(localized: "stats.r.insight.down", defaultValue: "下降"),
+                        abs(delta)
+                    )
+                    insights.append(ReportInsightItem(
+                        id: "mom-memory",
+                        systemIcon: isUp ? "arrow.up.right.circle.fill" : "arrow.down.right.circle.fill",
+                        colorName: isUp ? "orange" : "blue",
+                        title: String(localized: "stats.r.insight.momMemTitle", defaultValue: "内存压力环比变化"),
+                        detail: detail,
+                        severity: (isUp && curMemP >= 40) ? .warning : .info,
+                        destination: .memory,
+                        actionTitle: String(localized: "stats.r.insight.actionViewMemory", defaultValue: "查看内存趋势")
+                    ))
+                }
+
+                if let curPower = weightedAverage(of: rows, keyPath: \.powerAvg),
+                   let prevPower = weightedAverage(of: previousRows, keyPath: \.powerAvg),
+                   prevPower > 1.0,
+                   abs(curPower - prevPower) / prevPower >= 0.20 {
+                    let pct = ((curPower - prevPower) / prevPower) * 100
+                    let isUp = pct > 0
+                    let detail = String(
+                        format: String(localized: "stats.r.insight.momPowerDetail", defaultValue: "平均整机功耗 %.1f W，较上一周期（%.1f W）%@ %.0f%%"),
+                        curPower,
+                        prevPower,
+                        isUp ? String(localized: "stats.r.insight.up", defaultValue: "上升") : String(localized: "stats.r.insight.down", defaultValue: "下降"),
+                        abs(pct)
+                    )
+                    insights.append(ReportInsightItem(
+                        id: "mom-power",
+                        systemIcon: "bolt.circle.fill",
+                        colorName: isUp ? "yellow" : "blue",
+                        title: String(localized: "stats.r.insight.momPowerTitle", defaultValue: "整机功耗环比变化"),
+                        detail: detail,
+                        severity: .info,
+                        destination: .power,
+                        actionTitle: String(localized: "stats.r.insight.actionViewPower", defaultValue: "查看功耗曲线")
+                    ))
+                }
+            }
+        }
+
+        // 3. 内存 Swap 活跃提示（未触发压力事件但 Swap 已升高时提醒）
+        if let peakSwap = maximum(of: rows, keyPath: \.memSwapAvg),
+           peakSwap >= 512 * 1024 * 1024 {
+            let avgSwap = weightedAverage(of: rows, keyPath: \.memSwapAvg) ?? peakSwap
+            let isElevated = peakSwap >= 2 * 1024 * 1024 * 1024
+            let detail = String(
+                format: String(localized: "stats.r.insight.swapDetail", defaultValue: "交换分区 (Swap) 均值 %@，峰值达 %@，说明内存常驻工作集接近物理容量上限"),
+                ReportUIHelper.formatBytes(avgSwap),
+                ReportUIHelper.formatBytes(peakSwap)
+            )
+            insights.append(ReportInsightItem(
+                id: "swap-activity",
+                systemIcon: "memorychip",
+                colorName: isElevated ? "orange" : "blue",
+                title: String(localized: "stats.r.insight.swapTitle", defaultValue: "交换分区 (Swap) 使用偏高"),
+                detail: detail,
+                severity: isElevated ? .warning : .info,
+                destination: .memory,
+                actionTitle: String(localized: "stats.r.insight.actionViewMemory", defaultValue: "查看内存趋势")
+            ))
+        }
+
+        // 4. 热状态与散热表现（严格遵循 0~3 档位定义，区分无风扇与传感器受限）
+        let maxThermal = maximum(of: rows, keyPath: \.cpuThermalAvg)
+        let maxTemp = maximum(of: rows, keyPath: \.cpuTempAvg)
+        if let thIdx = StatisticsDisplayFormat.thermalLevelIndex(maxThermal), thIdx >= 1 || (maxTemp ?? 0) >= 85 {
+            var parts: [String] = []
+            if let maxThermal, thIdx >= 1 {
+                parts.append(String(
+                    format: String(localized: "stats.r.insight.thermalPeakState", defaultValue: "系统热状态最高触及「%@」"),
+                    StatisticsDisplayFormat.thermalStateLabel(maxThermal)
+                ))
+            }
+            if let maxTemp {
+                parts.append(String(
+                    format: String(localized: "stats.r.insight.thermalPeakTemp", defaultValue: "CPU 温度最高 %.1f°C"),
+                    maxTemp
+                ))
+            }
+            if !thermal.hasFans {
+                parts.append(String(localized: "stats.r.insight.fanlessNote", defaultValue: "当前为被动散热机型"))
+            } else if !thermal.fanSensorAvailable {
+                parts.append(String(localized: "stats.r.insight.fanUnavailableNote", defaultValue: "当前运行环境未读取风扇转速"))
+            } else if let fanMax = thermal.fanMaxRPM, fanMax > 0 {
+                parts.append(String(
+                    format: String(localized: "stats.r.insight.fanPeakNote", defaultValue: "风扇最高提速至 %.0f RPM"),
+                    fanMax
+                ))
+            }
+            insights.append(ReportInsightItem(
+                id: "thermal-behavior",
+                systemIcon: "flame.fill",
+                colorName: thIdx >= 2 ? "red" : "orange",
+                title: String(localized: "stats.r.insight.thermalTitle", defaultValue: "温控与散热响应"),
+                detail: parts.joined(separator: "，"),
+                severity: thIdx >= 2 ? .critical : .warning,
+                destination: .thermal,
+                actionTitle: String(localized: "stats.r.insight.actionViewThermal", defaultValue: "查看热压力详情")
+            ))
+        }
+
+        // 5. 电池长期健康与循环变化
+        if battery.isSupported, battery.dailyHistory.count >= 2,
+           let first = battery.dailyHistory.first,
+           let last = battery.dailyHistory.last {
+            var parts: [String] = []
+            if let latestHealth = last.healthPercent {
+                if let firstHealth = first.healthPercent, abs(latestHealth - firstHealth) >= 0.5 {
+                    parts.append(String(
+                        format: String(localized: "stats.r.insight.battHealthDelta", defaultValue: "最大容量 %.1f%%（期内变化 %+.1f%%）"),
+                        latestHealth, latestHealth - firstHealth
+                    ))
                 } else {
-                    return ("负载偏高，计算密集", "gauge.with.dots.needle.100percent", "red")
-                }
-            }()
-            let highS = total(of: rows, keyPath: \.cpuHighS) ?? 0
-            var detail = "所选范围平均 CPU 占用 \(String(format: "%.1f%%", cpuAvg)) — \(levelText)"
-            if highS > 0 {
-                detail += "，高负载持续累计 \(StatisticsDisplayFormat.duration(highS))"
-            }
-            insights.append(ReportInsightItem(id: "cpu-load", systemIcon: icon, colorName: color, title: "CPU 负载与压力", detail: detail))
-        }
-
-        // 2. CPU 瞬时峰值
-        if let peakPair = maximumWithTime(of: rows, keyPath: \.cpuMax) {
-            let timeStr = ReportUIHelper.formatDateTime(peakPair.time)
-            let detail = "瞬时峰值达到 \(String(format: "%.1f%%", peakPair.value))（记录于 \(timeStr)）"
-            insights.append(ReportInsightItem(id: "cpu-peak", systemIcon: "bolt.fill", colorName: "yellow", title: "CPU 峰值记录", detail: detail))
-        }
-
-        // 3. GPU 图形处理器负荷
-        if let gpuAvg = weightedAverage(of: rows, keyPath: \.gpuAvg) {
-            let gpuPeak = maximum(of: rows, keyPath: \.gpuMax)
-            let gpuHighS = total(of: rows, keyPath: \.gpuHighS) ?? 0
-            var detail = "平均图形占用 \(String(format: "%.1f%%", gpuAvg))"
-            if let gpuPeak {
-                detail += "，瞬时峰值 \(String(format: "%.0f%%", gpuPeak))"
-            }
-            if gpuHighS > 0 {
-                detail += "，高负荷运行达 \(StatisticsDisplayFormat.duration(gpuHighS))"
-            } else {
-                detail += "，图形算力消耗平稳"
-            }
-            let color = gpuAvg > 50 ? "red" : (gpuAvg > 20 ? "orange" : "blue")
-            insights.append(ReportInsightItem(id: "gpu-load", systemIcon: "display", colorName: color, title: "GPU 渲染与算力", detail: detail))
-        }
-
-        // 4. 系统内存与交换空间压力
-        if let memPressure = weightedAverage(of: rows, keyPath: \.memPressureAvg) {
-            let memPct = weightedAverage(of: rows, keyPath: \.memPctAvg)
-            let swapBytes = maximum(of: rows, keyPath: \.memSwapAvg)
-            var detail = ""
-            if let memPct {
-                detail += "物理内存平均占用 \(String(format: "%.1f%%", memPct))，"
-            }
-            detail += "系统内存压力均值 \(String(format: "%.0f%%", memPressure))"
-            if let swapBytes, swapBytes > 10 * 1024 * 1024 {
-                detail += "，磁盘交换空间 (Swap) 活跃 \(ReportUIHelper.formatBytes(swapBytes))，提示内存偏紧"
-            } else {
-                detail += "，无显著 Swap 磁盘交换"
-            }
-            let color = memPressure >= 50 ? "red" : (memPressure >= 20 ? "orange" : "green")
-            insights.append(ReportInsightItem(id: "mem-pressure", systemIcon: "memorychip", colorName: color, title: "系统内存与压力", detail: detail))
-        }
-
-        // 5. 热状态与散热温控
-        let cpuTemp = weightedAverage(of: rows, keyPath: \.cpuTempAvg)
-        let cpuThermal = weightedAverage(of: rows, keyPath: \.cpuThermalAvg)
-        let fanRPM = maximum(of: rows, keyPath: \.fanMax) ?? weightedAverage(of: rows, keyPath: \.fanAvg)
-        if cpuTemp != nil || cpuThermal != nil {
-            var detail = ""
-            if let cpuTemp {
-                detail += "处理器平均温度 \(String(format: "%.1f°C", cpuTemp))"
-            }
-            if let fanRPM, fanRPM > 0 {
-                detail += "，风扇主动散热最高达 \(String(format: "%.0f RPM", fanRPM))"
-            } else {
-                detail += "，被动散热/静音运转"
-            }
-            if let cpuThermal, cpuThermal > 0.05 {
-                detail += "，曾出现温控降频或系统级轻微控温"
-            }
-            let color = (cpuThermal ?? 0) > 0.1 ? "red" : ((cpuTemp ?? 0) > 75 ? "orange" : "green")
-            insights.append(ReportInsightItem(id: "thermal-state", systemIcon: "flame.fill", colorName: color, title: "热压力与散热表现", detail: detail))
-        }
-
-        // 6. 整机功耗与供电
-        if let pAvg = weightedAverage(of: rows, keyPath: \.powerAvg) {
-            let pPeak = maximum(of: rows, keyPath: \.powerMax)
-            let acFrac = weightedAverage(of: rows, keyPath: \.acFrac)
-            var detail = "平均整机功耗 \(String(format: "%.1f W", pAvg))"
-            if let pPeak {
-                detail += "，最高瞬时功耗 \(String(format: "%.1f W", pPeak))"
-            }
-            if let acFrac {
-                detail += "，接电运行占比 \(String(format: "%.0f%%", acFrac * 100))"
-            }
-            insights.append(ReportInsightItem(id: "power-stats", systemIcon: "powerplug", colorName: "yellow", title: "功耗与供电特征", detail: detail))
-        }
-
-        // 7. 大额磁盘读写活动
-        let diskR = total(of: rows, keyPath: \.diskRead) ?? 0
-        let diskW = total(of: rows, keyPath: \.diskWrite) ?? 0
-        if diskR > 0 || diskW > 0 {
-            let totalDisk = diskR + diskW
-            let peakR = maximum(of: rows, keyPath: \.diskReadPeak)
-            var detail = "累计完成读写 \(ReportUIHelper.formatVolume(totalDisk))（读 \(ReportUIHelper.formatVolume(diskR))，写 \(ReportUIHelper.formatVolume(diskW))）"
-            if let peakR, peakR > 10 * 1024 * 1024 {
-                detail += "，突发读峰值达到 \(ReportUIHelper.formatBytesRate(peakR))"
-            }
-            insights.append(ReportInsightItem(id: "disk-io", systemIcon: "internaldrive", colorName: "blue", title: "磁盘读写吞吐", detail: detail))
-        }
-
-        // 8. 大额网络流量传输
-        let netDown = total(of: rows, keyPath: \.netDown) ?? 0
-        let netUp = total(of: rows, keyPath: \.netUp) ?? 0
-        if netDown > 0 || netUp > 0 {
-            let totalNet = netDown + netUp
-            let peakDown = maximum(of: rows, keyPath: \.netDownPeak)
-            var detail = "双向网络流量合计 \(ReportUIHelper.formatVolume(totalNet))（下行 \(ReportUIHelper.formatVolume(netDown))，上行 \(ReportUIHelper.formatVolume(netUp))）"
-            if let peakDown, peakDown > 1 * 1024 * 1024 {
-                detail += "，下行突发峰值 \(ReportUIHelper.formatBytesRate(peakDown))"
-            }
-            insights.append(ReportInsightItem(id: "net-down", systemIcon: "network", colorName: "blue", title: "网络传输吞吐", detail: detail))
-        }
-
-        // 9. 最忙时段 (R16: 从小时层数据推导)
-        if !hourlyRows.isEmpty {
-            var hourSlots: [Int: (sum: Double, frames: Int)] = [:]
-            for r in hourlyRows {
-                guard let cpu = r.cpuAvg, r.n > 0 else { continue }
-                let hour = Calendar.current.component(.hour, from: Date(timeIntervalSince1970: TimeInterval(r.t)))
-                var entry = hourSlots[hour] ?? (0.0, 0)
-                entry.sum += cpu * Double(r.n)
-                entry.frames += r.n
-                hourSlots[hour] = entry
-            }
-            var busiestHour: Int?
-            var busiestAvg = 0.0
-            for (h, entry) in hourSlots {
-                let avg = entry.frames > 0 ? entry.sum / Double(entry.frames) : 0
-                if avg > busiestAvg {
-                    busiestAvg = avg
-                    busiestHour = h
+                    parts.append(String(
+                        format: String(localized: "stats.r.insight.battHealthLatest", defaultValue: "当前最大容量 %.1f%%"),
+                        latestHealth
+                    ))
                 }
             }
-            if let bh = busiestHour, busiestAvg > 5.0 {
-                let slotStr = String(format: "%02d:00–%02d:00", bh, (bh + 1) % 24)
-                let detail = "\(slotStr) 整体负荷最高，时段 CPU 均值达到 \(String(format: "%.1f%%", busiestAvg))"
-                insights.append(ReportInsightItem(id: "busiest-hour", systemIcon: "clock.badge.exclamationmark", colorName: "red", title: "全天活跃节律", detail: detail))
+            if let latestCycle = last.cycleCount {
+                if let firstCycle = first.cycleCount, latestCycle > firstCycle {
+                    parts.append(String(
+                        format: String(localized: "stats.r.insight.battCycleDelta", defaultValue: "循环次数 %d 次（期内增加 +%d 次）"),
+                        latestCycle, latestCycle - firstCycle
+                    ))
+                } else {
+                    parts.append(String(
+                        format: String(localized: "stats.r.insight.battCycleLatest", defaultValue: "当前循环 %d 次"),
+                        latestCycle
+                    ))
+                }
+            }
+            if !parts.isEmpty {
+                insights.append(ReportInsightItem(
+                    id: "battery-health",
+                    systemIcon: "battery.100",
+                    colorName: "green",
+                    title: String(localized: "stats.r.insight.battTitle", defaultValue: "电池健康与循环趋势"),
+                    detail: parts.joined(separator: "，"),
+                    severity: .neutral,
+                    destination: .power,
+                    actionTitle: String(localized: "stats.r.insight.actionViewPower", defaultValue: "查看电池档案")
+                ))
             }
         }
 
-        // 10. 监测覆盖率
-        if let coverageRatio = coverageRatio(rows: rows, from: from, to: to, systemSleepIntervals: systemSleepIntervals) {
+        // 6. 磁盘持续写入强度（大额写入估算日均强度，辅助评估 SSD 磨损）
+        if let writeTotal = disk.totalWriteBytes, writeTotal >= 5_000_000_000 {
+            let daysSpan = max(1.0, to.timeIntervalSince(from) / 86400.0)
+            let dailyAvgWrite = writeTotal / daysSpan
+            let detail = String(
+                format: String(localized: "stats.r.insight.diskWriteDetail", defaultValue: "期内累计磁盘写入 %@，折合日均写入 %@/天"),
+                ReportUIHelper.formatVolume(writeTotal),
+                ReportUIHelper.formatVolume(dailyAvgWrite)
+            )
+            insights.append(ReportInsightItem(
+                id: "disk-write-intensity",
+                systemIcon: "internaldrive",
+                colorName: "blue",
+                title: String(localized: "stats.r.insight.diskTitle", defaultValue: "磁盘写入强度"),
+                detail: detail,
+                severity: dailyAvgWrite >= 50_000_000_000 ? .warning : .info,
+                destination: .disk,
+                actionTitle: String(localized: "stats.r.insight.actionViewDisk", defaultValue: "查看磁盘 I/O")
+            ))
+        }
+
+        // 7. 高峰活动时段（优先小时表，单日稀疏时回退当前采样行；高负载仅中性提示，不染红）
+        let rhythmRows = !hourlyRows.isEmpty ? hourlyRows : rows
+        var hourSlots: [Int: (sum: Double, frames: Int)] = [:]
+        for r in rhythmRows {
+            guard let cpu = r.cpuAvg, r.n > 0 else { continue }
+            let hour = calendar.component(.hour, from: Date(timeIntervalSince1970: TimeInterval(r.t)))
+            var entry = hourSlots[hour] ?? (0.0, 0)
+            entry.sum += cpu * Double(r.n)
+            entry.frames += r.n
+            hourSlots[hour] = entry
+        }
+        if let best = hourSlots.max(by: {
+            ($0.value.frames > 0 ? $0.value.sum / Double($0.value.frames) : 0) <
+            ($1.value.frames > 0 ? $1.value.sum / Double($1.value.frames) : 0)
+        }) {
+            let avg = best.value.frames > 0 ? best.value.sum / Double(best.value.frames) : 0
+            if avg > 5.0 {
+                let slotStr = String(format: "%02d:00–%02d:00", best.key, (best.key + 1) % 24)
+                let detail = String(
+                    format: String(localized: "stats.r.insight.busiestDetail", defaultValue: "%@ 算力活动最集中，该时段 CPU 平均占用 %.1f%%"),
+                    slotStr, avg
+                )
+                insights.append(ReportInsightItem(
+                    id: "busiest-hour",
+                    systemIcon: "clock",
+                    colorName: "blue",
+                    title: String(localized: "stats.r.insight.busiestTitle", defaultValue: "活跃高峰时段"),
+                    detail: detail,
+                    severity: .neutral,
+                    destination: .cpu,
+                    actionTitle: String(localized: "stats.r.insight.actionViewCpu", defaultValue: "查看处理器趋势")
+                ))
+            }
+        }
+
+        // 8. 数据完整度提醒（仅在覆盖率明显偏低时出现）
+        if let coverageRatio, coverageRatio < 0.90 {
             let totalCover = rows.reduce(0.0) { $0 + max(0, coverSeconds(for: $1)) }
-            let percentage = coverageRatio * 100
-            let detail = String(format: String(localized: "stats.r.coverageInsight", defaultValue: "所选时段累计有效采样 %@，清醒时间覆盖率 %.1f%%（已排除系统确认的休眠）"), ReportUIHelper.formatHours(totalCover), percentage)
-            insights.append(ReportInsightItem(id: "coverage", systemIcon: "checkmark.seal.fill", colorName: "gray", title: "数据覆盖度", detail: detail))
+            let detail = String(
+                format: String(localized: "stats.r.coverageInsight", defaultValue: "所选时段累计有效采样 %@，清醒时间覆盖率 %.1f%%（已排除系统确认的休眠）"),
+                ReportUIHelper.formatHours(totalCover), coverageRatio * 100
+            )
+            insights.append(ReportInsightItem(
+                id: "coverage-caveat",
+                systemIcon: "info.circle",
+                colorName: "gray",
+                title: String(localized: "stats.r.insight.coverageTitle", defaultValue: "监测覆盖存在空缺"),
+                detail: detail,
+                severity: .info,
+                destination: .details,
+                actionTitle: String(localized: "stats.r.insight.actionViewDetails", defaultValue: "查看采样记录")
+            ))
         }
 
         return insights
     }
 
-    // MARK: - 每日汇总表聚合 (R15)
+    // MARK: - 预计算图表序列缓存
+
+    static func buildChartCache(rows: [StatisticsRow], granularity: ReportSourceGranularity) -> ReportChartCache {
+        let bucketSec = granularity.bucketSeconds
+        func series(
+            _ keyPath: KeyPath<StatisticsRow, Double?>,
+            id: String,
+            transform: ((Double) -> Double)? = nil
+        ) -> ReportChartSeries {
+            let pts = buildTimeSeries(
+                rows: rows,
+                keyPath: keyPath,
+                seriesID: id,
+                granularitySeconds: bucketSec,
+                transform: transform
+            )
+            return ReportChartSeries.from(pts, seriesID: id)
+        }
+
+        let toGiB: (Double) -> Double = { $0 / 1_073_741_824.0 }
+        let toMiB: (Double) -> Double = { $0 / 1_048_576.0 }
+        let toDecimalMBps: (Double) -> Double = { rateFromTotal(totalBytes: $0, bucketSeconds: bucketSec) / 1_000_000.0 }
+
+        return ReportChartCache(
+            cpuAvg: series(\.cpuAvg, id: "cpuAvg"),
+            cpuPeak: series(\.cpuMax, id: "cpuPeak"),
+            cpuP: series(\.cpuPAvg, id: "cpuP"),
+            cpuE: series(\.cpuEAvg, id: "cpuE"),
+            gpuAvg: series(\.gpuAvg, id: "gpuAvg"),
+            gpuPeak: series(\.gpuMax, id: "gpuPeak"),
+            gpuVramMB: series(\.gpuMemAvg, id: "gpuVram", transform: toMiB),
+            memUsedGB: series(\.memUsedAvg, id: "memUsed", transform: toGiB),
+            memCompressedGB: series(\.memCompAvg, id: "memComp", transform: toGiB),
+            memPressure: series(\.memPressureAvg, id: "memPressure"),
+            memSwapMB: series(\.memSwapAvg, id: "memSwap", transform: toMiB),
+            netDownMBps: series(\.netDown, id: "netDown", transform: toDecimalMBps),
+            netUpMBps: series(\.netUp, id: "netUp", transform: toDecimalMBps),
+            diskReadMBps: series(\.diskRead, id: "diskRead", transform: toDecimalMBps),
+            diskWriteMBps: series(\.diskWrite, id: "diskWrite", transform: toDecimalMBps),
+            powerWatts: series(\.powerAvg, id: "power"),
+            batteryLevel: series(\.battLevelAvg, id: "battLevel"),
+            batteryTemp: series(\.battTempAvg, id: "battTemp"),
+            cpuTemp: series(\.cpuTempAvg, id: "cpuTemp"),
+            thermalState: series(\.cpuThermalAvg, id: "thermalState"),
+            fanRPM: series(\.fanAvg, id: "fan"),
+            memUsagePct: series(\.memPctAvg, id: "memUsagePct")
+        )
+    }
+
+    // MARK: - 每日汇总表聚合 (供单测保留，主聚合不再无谓重复计算)
 
     static func aggregateDailySummary(
         minutes: [StatisticsRow],
@@ -1305,8 +1555,6 @@ nonisolated enum ReportDataAggregator: Sendable {
         var results: [ReportDailySummaryRow] = []
         var currentDay = calendar.startOfDay(for: from)
         let endDay = calendar.startOfDay(for: to)
-        // 「今日」桶的实时聚合上界:今天还没过完,只聚合已发生的采样。
-        // now 可注入,报表页用真实时钟,测试注入固定时刻保证确定性。
         let today = calendar.startOfDay(for: now)
 
         while currentDay <= endDay {
@@ -1314,7 +1562,6 @@ nonisolated enum ReportDataAggregator: Sendable {
             var targetRow = dayMap[currentDay]
 
             if targetRow == nil && currentDay == today {
-                // 今日用分钟数据实时聚合
                 let dayMinutes = filterRows(minutes, from: currentDay, to: min(nextDay, now))
                 if !dayMinutes.isEmpty {
                     targetRow = aggregateRows(dayMinutes, timestamp: Int64(currentDay.timeIntervalSince1970))
@@ -1322,7 +1569,6 @@ nonisolated enum ReportDataAggregator: Sendable {
             }
 
             if targetRow == nil {
-                // 近期小时数据兜底
                 let dayHours = filterRows(hours, from: currentDay, to: nextDay)
                 if !dayHours.isEmpty {
                     targetRow = aggregateRows(dayHours, timestamp: Int64(currentDay.timeIntervalSince1970))
@@ -1401,13 +1647,42 @@ nonisolated enum ReportDataAggregator: Sendable {
 
         let filtered = filterRows(sourceRows, from: from, to: to)
         let hourlyFiltered = filterRows(snapshot.hours, from: from, to: to)
+
+        // 上一等长周期（用于洞察中的周期环比分析）
+        let span = to.timeIntervalSince(from)
+        let prevFrom = from.addingTimeInterval(-span)
+        let prevGranularity = pickSource(
+            from: prevFrom,
+            to: from,
+            minutes: snapshot.minutes,
+            hours: snapshot.hours,
+            days: snapshot.days
+        )
+        let prevSourceRows: [StatisticsRow] = switch prevGranularity {
+        case .minutes: snapshot.minutes
+        case .hours: snapshot.hours
+        case .days: snapshot.days
+        }
+        let previousFiltered = filterRows(prevSourceRows, from: prevFrom, to: from)
+
         let coverageRatioValue = coverageRatio(rows: filtered, from: from, to: to, systemSleepIntervals: snapshot.systemSleepIntervals)
         let coveredSeconds = filtered.reduce(0.0) { $0 + max(0, coverSeconds(for: $1)) }
+
+        let apps = aggregateApps(
+            processData: snapshot.process,
+            from: from,
+            to: to,
+            isDirect: snapshot.meta.isDirect,
+            calendar: calendar
+        )
+        let appsHasRangeData = !apps.cpuList.isEmpty || !apps.memList.isEmpty
+            || !apps.gpuList.isEmpty || !apps.diskList.isEmpty || !apps.netList.isEmpty
+
         let quality = dataQuality(
             rows: filtered,
             coverageRatio: coverageRatioValue,
             granularity: granularity,
-            appsEstimateLeadingSample: !(snapshot.process?.dailyRows.isEmpty ?? true)
+            appsEstimateLeadingSample: appsHasRangeData
         )
 
         // 健康评分计算
@@ -1434,41 +1709,35 @@ nonisolated enum ReportDataAggregator: Sendable {
             batteryHistory: snapshot.process?.batteryHistory ?? [],
             from: from,
             to: to,
-            hardwareHasBattery: hardwareHasBattery
+            hardwareHasBattery: hardwareHasBattery,
+            calendar: calendar
         )
         let thermal = computeThermalMetrics(
             rows: filtered,
             hardwareHasFans: hardwareHasFans,
             fanSensorAvailable: fanSensorAvailable
         )
-        let apps = aggregateApps(
-            processData: snapshot.process,
-            from: from,
-            to: to,
-            isDirect: snapshot.meta.isDirect
-        )
         let events = deriveAlertEvents(rows: filtered, source: granularity, now: snapshot.capturedAt)
         let insights = generateInsights(
             rows: filtered,
             hourlyRows: hourlyFiltered,
+            previousRows: previousFiltered,
             source: granularity,
             from: from,
             to: to,
-            systemSleepIntervals: snapshot.systemSleepIntervals
+            coverageRatio: coverageRatioValue,
+            events: events,
+            apps: apps,
+            battery: battery,
+            thermal: thermal,
+            disk: disk,
+            systemSleepIntervals: snapshot.systemSleepIntervals,
+            calendar: calendar
         )
 
         // R06: 7x24 热力图始终使用小时数据输入
         let heatmap = range == .today ? nil : buildHeatmap(hourlyRows: hourlyFiltered, calendar: calendar)
-
-        // R15: 每日汇总聚合表
-        let dailySummary = aggregateDailySummary(
-            minutes: snapshot.minutes,
-            hours: snapshot.hours,
-            days: snapshot.days,
-            from: from,
-            to: to,
-            calendar: calendar
-        )
+        let chartCache = buildChartCache(rows: filtered, granularity: granularity)
 
         return ReportActiveRangeModel(
             range: range,
@@ -1495,11 +1764,12 @@ nonisolated enum ReportDataAggregator: Sendable {
             events: events,
             insights: insights,
             heatmap: heatmap,
-            dailySummaryRows: dailySummary
+            dailySummaryRows: [],
+            chartCache: chartCache
         )
     }
 
-    private static func parseDayKey(_ day: Int64) -> Date {
+    private static func parseDayKey(_ day: Int64, calendar: Calendar = .current) -> Date {
         let y = Int(day / 10000)
         let m = Int((day % 10000) / 100)
         let d = Int(day % 100)
@@ -1507,6 +1777,6 @@ nonisolated enum ReportDataAggregator: Sendable {
         components.year = y
         components.month = m
         components.day = d
-        return Calendar.current.date(from: components) ?? Date()
+        return calendar.date(from: components) ?? Date()
     }
 }

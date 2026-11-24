@@ -6,7 +6,7 @@ struct NativeReportView: View {
     @ObservedObject var viewModel: NativeReportViewModel
     let onReload: () -> Void
     let onPrint: () -> Void
-    let onExport: () -> Void
+    let onExport: (ReportBundleExportFormat) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -32,7 +32,10 @@ struct NativeReportView: View {
 
             // 下方主工作区：左侧模块导航 + 右侧内容容器
             HStack(spacing: 0) {
-                ReportSidebarView(selectedModule: $viewModel.selectedModule)
+                ReportSidebarView(
+                    selectedModule: $viewModel.selectedModule,
+                    eventCount: viewModel.rangeModel?.events.count ?? 0
+                )
 
                 ZStack {
                     if viewModel.isLoading {
