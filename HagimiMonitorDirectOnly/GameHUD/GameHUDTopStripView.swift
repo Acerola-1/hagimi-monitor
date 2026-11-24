@@ -63,6 +63,13 @@ struct GameHUDTopStripView: View {
         GameHUDMetricCatalog.displayEntries(enabledIDs: enabledMetricIDs)
     }
 
+    /// 等宽数字的内容变化共用尺寸，位数、单位或占位符变化时重新测量。
+    var valueWidthSignatures: [String] {
+        entries.map { entry in
+            String(value(for: entry.id).map { $0.isASCII && $0.isNumber ? "0" : $0 })
+        }
+    }
+
     private func title(for entry: GameHUDMetricCatalog.Entry) -> String {
         String(localized: GameHUDMetricCatalog.compactTitleKey(for: entry.id))
     }

@@ -29132,13 +29132,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "System Pressure Attribution"
+            "value": "Related System Pressure Records"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "系统压力归因"
+            "value": "系统压力相关记录"
           }
         }
       }
@@ -29166,13 +29166,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "peak Swap reached %@"
+            "value": "Peak swap in pressure buckets: %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "同期 Swap 峰值达 %@"
+            "value": "压力所在统计桶内 Swap 峰值达 %@"
           }
         }
       }
@@ -29183,13 +29183,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "peak CPU temp %.1f°C"
+            "value": "Peak CPU temperature in pressure buckets: %.1f°C"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "CPU 温度最高 %.1f°C"
+            "value": "压力所在统计桶内 CPU 温度最高 %.1f°C"
           }
         }
       }
@@ -29200,13 +29200,13 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "contemporaneous high-usage apps: %@"
+            "value": "High usage recorded in pressure buckets: %@"
           }
         },
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
-            "value": "同期高占用应用：%@"
+            "value": "压力所在统计桶内有高占用记录：%@"
           }
         }
       }
@@ -30074,6 +30074,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "无压力事件"
+          }
+        }
+      }
+    },
+    "report.print.trends": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load & Pressure Trends"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "负载与压力趋势"
+          }
+        }
+      }
+    },
+    "report.print.pageNumber": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Page %d of %d"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "第 %d / %d 页"
           }
         }
       }

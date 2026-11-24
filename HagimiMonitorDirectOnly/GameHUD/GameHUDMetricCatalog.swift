@@ -147,17 +147,17 @@ nonisolated enum GameHUDMetricCatalog {
         }
     }
 
-    /// 顶部横条各数值槽固定最小宽度，避免位数跳变引起横条左右抖动。
+    /// 顶部横条的数值槽为常见读数预留宽度，较长内容由横条自然尺寸容纳。
     static func topStripValueMinWidth(for id: GameHUDMetricID) -> CGFloat {
         switch id {
-        case .fps, .averageFPS, .onePercentLow: 36
-        case .frameTime: 48
+        case .fps, .averageFPS, .onePercentLow: 38
+        case .frameTime: 58
         case .cpuUsage, .gpuRender, .gpuTiler, .memoryPressure: 30
-        case .cpuTemperature: 36
-        case .cpuPower, .gpuPower, .systemPower: 46
-        case .gpuMemory, .memoryUsed: 52
+        case .cpuTemperature: 38
+        case .cpuPower, .gpuPower, .systemPower: 48
+        case .gpuMemory, .memoryUsed: 54
         case .fanSpeed: 58
-        case .networkUpload, .networkDownload: 64
+        case .networkUpload, .networkDownload: 72
         case .networkRates: 0
         }
     }

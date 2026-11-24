@@ -8,14 +8,29 @@ nonisolated private final class MetalTraceJSONBuffer: @unchecked Sendable {
     var data = Data()
 }
 
+@MainActor
+protocol GameHUDMetalTraceProbing: AnyObject {
+    var statsPublisher: AnyPublisher<GameHUDFPSStats?, Never> { get }
+    var currentPID: pid_t? { get }
+    var isRunning: Bool { get }
+    var onUnexpectedExit: ((pid_t) -> Void)? { get set }
+    func start(pid: pid_t)
+    func stop()
+}
+
 /// 通过系统 `metalperftrace` 命令行工具监听目标 Metal 进程的上屏帧率统计。
 ///
 /// 直接读取系统报告的呈现 FPS；帧间隔统计可能缺失，此时不估算帧时间与 1% Low。
 /// 不使用屏幕录制或像素捕获。
 @MainActor
-final class MetalPerfTraceMeter: ObservableObject {
+final class MetalPerfTraceMeter: ObservableObject, GameHUDMetalTraceProbing {
+
+    typealias ProcessTreeProvider = @Sendable (pid_t) -> [pid_t]
+    typealias ProbeLauncher = @MainActor ([pid_t]) -> Bool
 
     private nonisolated static let executablePath = "/usr/bin/metalperftrace"
+    private nonisolated static let maximumMonitoredPIDs = 8
+    private static let defaultPIDRefreshInterval: Duration = .seconds(3)
 
     nonisolated static var isSystemProbeAvailable: Bool {
         FileManager.default.isExecutableFile(atPath: executablePath)
@@ -33,28 +48,44 @@ final class MetalPerfTraceMeter: ObservableObject {
     }
 
     @Published private(set) var stats: GameHUDFPSStats?
+    var statsPublisher: AnyPublisher<GameHUDFPSStats?, Never> { $stats.eraseToAnyPublisher() }
     private var process: Process?
     private var pipe: Pipe?
+    private var isCustomProbeRunning = false
     private(set) var currentPID: pid_t?
-    var isRunning: Bool { process?.isRunning == true }
+    private(set) var monitoredPIDs: [pid_t] = []
+    var isRunning: Bool { (process?.isRunning == true) || isCustomProbeRunning }
     var onUnexpectedExit: ((pid_t) -> Void)?
     private var samples: [SecondSample] = []
     private static let windowDuration: TimeInterval = 60.0
     private static let sampleTimeout: Duration = .seconds(3)
     private var sampleTimeoutTask: Task<Void, Never>?
+    private var pidRefreshTask: Task<Void, Never>?
     private var generation = 0
     private let readerQueue = DispatchQueue(label: "gamehud.metalperftrace.reader", qos: .utility)
+    private let processTreeProvider: ProcessTreeProvider
+    private let pidRefreshInterval: Duration
+    private let customLauncher: ProbeLauncher?
+
+    init(
+        processTreeProvider: @escaping ProcessTreeProvider = { MetalPerfTraceMeter.targetProcessTreePIDs(rootPID: $0) },
+        pidRefreshInterval: Duration = MetalPerfTraceMeter.defaultPIDRefreshInterval,
+        customLauncher: ProbeLauncher? = nil
+    ) {
+        self.processTreeProvider = processTreeProvider
+        self.pidRefreshInterval = pidRefreshInterval
+        self.customLauncher = customLauncher
+    }
 
     /// 收集目标进程及其子进程 PID（用于支持启动器/转译器/多进程渲染架构）。
-    nonisolated static func targetProcessTreePIDs(rootPID: pid_t, limit: Int = 8) -> [pid_t] {
+    nonisolated static func targetProcessTreePIDs(rootPID: pid_t, limit: Int = maximumMonitoredPIDs) -> [pid_t] {
         guard rootPID > 0, limit > 0 else { return [] }
         var result: [pid_t] = [rootPID]
         var seen: Set<pid_t> = [rootPID]
-        var queue: [pid_t] = [rootPID]
         var cursor = 0
 
-        while cursor < queue.count, result.count < limit {
-            let parent = queue[cursor]
+        while cursor < result.count, result.count < limit {
+            let parent = result[cursor]
             cursor += 1
             let estimated = proc_listpids(UInt32(PROC_PPID_ONLY), UInt32(parent), nil, 0)
             guard estimated > 0 else { continue }
@@ -68,37 +99,62 @@ final class MetalPerfTraceMeter: ObservableObject {
             )
             guard bytes > 0 else { continue }
             let count = Int(bytes) / MemoryLayout<pid_t>.size
-            for idx in 0..<count {
-                let child = buffer[idx]
+            for child in buffer.prefix(count).sorted() {
                 guard child > 0, seen.insert(child).inserted else { continue }
                 result.append(child)
-                queue.append(child)
                 if result.count >= limit { break }
             }
         }
         return result
     }
 
+    private static func probePIDs(rootPID: pid_t, discovered: [pid_t]) -> [pid_t] {
+        let children = Set(discovered.filter { $0 > 0 && $0 != rootPID })
+        return [rootPID] + children.sorted().prefix(maximumMonitoredPIDs - 1)
+    }
+
     /// 启动对指定 PID 进程及其子进程的 Metal 帧统计监听。
     func start(pid: pid_t) {
         guard pid > 0 else { return }
-        if currentPID == pid, process != nil, process?.isRunning == true {
+        if currentPID == pid, isRunning {
             return
         }
 
-        stop()
+        let pids = Self.probePIDs(rootPID: pid, discovered: processTreeProvider(pid))
+        launchProbe(rootPID: pid, pids: pids, preserveSamples: false)
+    }
+
+    private func launchProbe(rootPID: pid_t, pids: [pid_t], preserveSamples: Bool) {
+        tearDownActiveProbe()
         let sessionGeneration = generation
+
+        if !preserveSamples {
+            samples.removeAll()
+            stats = nil
+        }
+
+        if let customLauncher {
+            currentPID = rootPID
+            monitoredPIDs = pids
+            guard customLauncher(pids) else {
+                reportProbeFailure(rootPID: rootPID)
+                return
+            }
+            isCustomProbeRunning = true
+            schedulePIDRefresh(for: sessionGeneration, rootPID: rootPID)
+            return
+        }
 
         let executablePath = Self.executablePath
         guard Self.isSystemProbeAvailable else {
             AppLogger.diagnostics.info("metalperftrace not executable at \(executablePath, privacy: .public)")
+            stop()
             return
         }
 
-        currentPID = pid
-        samples.removeAll()
+        currentPID = rootPID
+        monitoredPIDs = pids
 
-        let pids = Self.targetProcessTreePIDs(rootPID: pid)
         var arguments = ["listen", "--json", "--interval", "1"]
         for targetPID in pids {
             arguments.append("--pid")
@@ -150,17 +206,14 @@ final class MetalPerfTraceMeter: ObservableObject {
         p.terminationHandler = { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, self.generation == sessionGeneration else { return }
-                let exitedPID = self.currentPID
-                self.stop()
-                if let exitedPID {
-                    self.onUnexpectedExit?(exitedPID)
-                }
+                self.reportProbeFailure(rootPID: rootPID)
             }
         }
 
         do {
             try p.run()
             scheduleSampleTimeout(for: sessionGeneration)
+            schedulePIDRefresh(for: sessionGeneration, rootPID: rootPID)
             AppLogger.diagnostics.info("metalperftrace started for pids=\(pids.map(String.init).joined(separator: ","), privacy: .public)")
             // 动态抑制 Apple 官方 HUD 浮层，避免系统自带 HUD 叠加弹出
             DispatchQueue.global(qos: .utility).async {
@@ -179,15 +232,49 @@ final class MetalPerfTraceMeter: ObservableObject {
             }
         } catch {
             AppLogger.diagnostics.error("Failed to run metalperftrace: \(error, privacy: .public)")
-            stop()
+            reportProbeFailure(rootPID: rootPID)
         }
     }
 
-    /// 停止监听并释放外部进程与流。
-    func stop() {
+    private func reportProbeFailure(rootPID: pid_t) {
+        stop()
+        onUnexpectedExit?(rootPID)
+    }
+
+    /// 定期复核目标进程树；监听集合变化时更新探针，并保留当前游戏会话的采样窗口。
+    private func schedulePIDRefresh(for sessionGeneration: Int, rootPID: pid_t) {
+        pidRefreshTask?.cancel()
+        let interval = pidRefreshInterval
+        let provider = processTreeProvider
+        pidRefreshTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: interval)
+                guard !Task.isCancelled, let self,
+                      self.generation == sessionGeneration,
+                      self.currentPID == rootPID,
+                      self.isRunning else { return }
+                let discovered = await Task.detached(priority: .utility) {
+                    provider(rootPID)
+                }.value
+                guard !Task.isCancelled,
+                      self.generation == sessionGeneration,
+                      self.currentPID == rootPID,
+                      self.isRunning else { return }
+                let pids = Self.probePIDs(rootPID: rootPID, discovered: discovered)
+                guard pids != self.monitoredPIDs else { continue }
+                self.launchProbe(rootPID: rootPID, pids: pids, preserveSamples: true)
+                return
+            }
+        }
+    }
+
+    private func tearDownActiveProbe() {
         generation += 1
         sampleTimeoutTask?.cancel()
         sampleTimeoutTask = nil
+        pidRefreshTask?.cancel()
+        pidRefreshTask = nil
+        isCustomProbeRunning = false
         if let pipe {
             let handle = pipe.fileHandleForReading
             handle.readabilityHandler = nil
@@ -200,9 +287,15 @@ final class MetalPerfTraceMeter: ObservableObject {
         }
         process = nil
         pipe = nil
+    }
+
+    /// 停止监听并释放外部进程与流。
+    func stop() {
+        tearDownActiveProbe()
         samples.removeAll()
         stats = nil
         currentPID = nil
+        monitoredPIDs = []
     }
 
     private func scheduleSampleTimeout(for sessionGeneration: Int) {

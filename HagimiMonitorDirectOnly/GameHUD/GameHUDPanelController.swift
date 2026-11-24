@@ -79,6 +79,7 @@ final class GameHUDPanelController {
     private var renderState: GameHUDRenderState?
     private var stripMeasureHost: NSHostingView<GameHUDTopStripView>?
     private var lastMeasuredStripMetricIDs: Set<GameHUDMetricID>?
+    private var lastMeasuredStripValueSignatures: [String]?
     private var activeStyle: GameHUDPresentationStyle = .card
     private var cardHeight: CGFloat?
     private var stripSize: CGSize?
@@ -88,6 +89,9 @@ final class GameHUDPanelController {
     static let cardWindowMargin: CGFloat = 4
     private static let topStripHorizontalMargin: CGFloat = 16
     private static let topStripFallbackHysteresis: CGFloat = 24
+    private var topStripHysteresis: CGFloat {
+        hostingView != nil && activeStyle == .card ? Self.topStripFallbackHysteresis : 0
+    }
     /// 受控会话下给官方 HUD 预留的顶部高度(pt)。官方实际高度不可查询,
     /// 这是保守值:预留不足可能重叠(MetalFX 瞬态),预留过度则小窗口
     /// 放不下 → 隐藏(宁可不见,不可裁切/盖错)。
@@ -115,23 +119,20 @@ final class GameHUDPanelController {
     ) {
         let stripFrame: CGRect?
         if settings.gameHUDPresentationStyle == .topStrip, let screen {
-            let measuredSize = measureTopStripSize(
+            let content = GameHUDTopStripView(
                 snapshot: snapshot,
                 fpsStats: fpsStats,
                 enabledMetricIDs: enabledMetricIDs,
-                transparency: topStripTransparency
+                backgroundTransparency: topStripTransparency
             )
-            stripSize = measuredSize
-            let hysteresis: CGFloat = (hostingView != nil && activeStyle == .card)
-                ? Self.topStripFallbackHysteresis
-                : 0
+            let measuredSize = measureTopStripSize(for: content)
             stripFrame = GameHUDTopStripPlacement.frame(
                 windowRect: windowRect,
                 screenRect: screen.frame,
                 topSafeInset: screen.safeAreaInsets.top,
                 contentSize: measuredSize,
                 margin: Self.topStripHorizontalMargin,
-                hysteresis: hysteresis
+                hysteresis: topStripHysteresis
             )
         } else {
             stripSize = nil
@@ -189,33 +190,28 @@ final class GameHUDPanelController {
         }
     }
 
-    private func measureTopStripSize(
-        snapshot: GameHUDSnapshot,
-        fpsStats: GameHUDFPSStats?,
-        enabledMetricIDs: Set<GameHUDMetricID>,
-        transparency: Double
-    ) -> CGSize {
-        if let cached = stripSize, lastMeasuredStripMetricIDs == enabledMetricIDs {
+    func measureTopStripSize(for content: GameHUDTopStripView) -> CGSize {
+        let signatures = content.valueWidthSignatures
+        if let cached = stripSize,
+           lastMeasuredStripMetricIDs == content.enabledMetricIDs,
+           lastMeasuredStripValueSignatures == signatures {
             return cached
         }
-        let stripView = GameHUDTopStripView(
-            snapshot: snapshot,
-            fpsStats: fpsStats,
-            enabledMetricIDs: enabledMetricIDs,
-            backgroundTransparency: transparency
-        )
         let host: NSHostingView<GameHUDTopStripView>
         if let existing = stripMeasureHost {
-            existing.rootView = stripView
+            existing.rootView = content
             host = existing
         } else {
-            let created = NSHostingView(rootView: stripView)
+            let created = NSHostingView(rootView: content)
             created.safeAreaRegions = []
             stripMeasureHost = created
             host = created
         }
-        lastMeasuredStripMetricIDs = enabledMetricIDs
-        return host.fittingSize
+        let size = host.fittingSize
+        lastMeasuredStripMetricIDs = content.enabledMetricIDs
+        lastMeasuredStripValueSignatures = signatures
+        stripSize = size
+        return size
     }
 
     /// 选择顶部横条时锚定屏幕或窗口顶边；单行放不下时显示卡片。
@@ -229,6 +225,7 @@ final class GameHUDPanelController {
               fpsStats: GameHUDFPSStats? = nil, content: GameHUDContent) {
         let stripFrame: CGRect?
         stripSize = nil
+        lastMeasuredStripValueSignatures = nil
         if settings.gameHUDPresentationStyle == .topStrip, let screen {
             let strip = NSHostingView(rootView: content.rootView(for: .topStrip))
             strip.safeAreaRegions = []
@@ -283,7 +280,7 @@ final class GameHUDPanelController {
         if settings.gameHUDPresentationStyle == .topStrip, let screen, let stripSize {
             stripFrame = GameHUDTopStripPlacement.frame(
                 windowRect: windowRect, screenRect: screen.frame, topSafeInset: screen.safeAreaInsets.top,
-                contentSize: stripSize, margin: Self.topStripHorizontalMargin)
+                contentSize: stripSize, margin: Self.topStripHorizontalMargin, hysteresis: topStripHysteresis)
         } else {
             stripFrame = nil
         }
@@ -308,12 +305,12 @@ final class GameHUDPanelController {
     }
 
     func hide() {
-        guard let panel else { return }
-        panel.orderOut(nil)
+        panel?.orderOut(nil)
         hostingView = nil
         renderState = nil
         stripMeasureHost = nil
         lastMeasuredStripMetricIDs = nil
+        lastMeasuredStripValueSignatures = nil
         activeStyle = .card
         cardHeight = nil
         stripSize = nil

@@ -961,130 +961,134 @@ nonisolated enum ReportDataAggregator: Sendable {
         )
     }
 
-    // MARK: - 异常事件流推导 (R08: 仅由对应维度的有效观测宣告恢复)
+    // MARK: - 压力事件
 
     static func deriveAlertEvents(
         rows: [StatisticsRow],
         source: ReportSourceGranularity,
-        now: Date
+        now: Date,
+        recentMinuteRows: [StatisticsRow] = [],
+        rangeStart: Date = .distantPast,
+        rangeEnd: Date? = nil,
+        calendar: Calendar = .current
     ) -> [ReportEventItem] {
-        guard !rows.isEmpty else { return [] }
-        let span = source.bucketSeconds
-        let freshWindow: TimeInterval = 5 * 60
+        let ceiling = min(now, rangeEnd ?? now)
+        let minuteSpan = ReportSourceGranularity.minutes.bucketSeconds
 
-        // 分别跟踪内存维度与热状态维度的最后有效观测时间点（不超过快照时刻 now）
-        let lastMemObsEnd = rows.compactMap { row -> Date? in
-            let hasMemObs = (row.validMemS ?? 0) > 0 ||
-                (row.memNormalS ?? 0) > 0 || (row.memWarnS ?? 0) > 0 || (row.memCritS ?? 0) > 0
-            guard hasMemObs else { return nil }
-            return min(now, Date(timeIntervalSince1970: TimeInterval(row.t) + span))
-        }.max()
+        func timestamp(_ row: StatisticsRow) -> Date {
+            Date(timeIntervalSince1970: TimeInterval(row.t))
+        }
 
-        let lastThermalObsEnd = rows.compactMap { row -> Date? in
-            let hasThermalObs = (row.validThermalS ?? 0) > 0 ||
-                (row.thNominalS ?? 0) > 0 || (row.thFairS ?? 0) > 0 || (row.thSeriousS ?? 0) > 0 || (row.thCritS ?? 0) > 0
-            guard hasThermalObs else { return nil }
-            return min(now, Date(timeIntervalSince1970: TimeInterval(row.t) + span))
-        }.max()
+        func endOfBucket(_ start: Date, source: ReportSourceGranularity) -> Date {
+            if source == .days, let end = calendar.date(byAdding: .day, value: 1, to: start) {
+                return end
+            }
+            return start.addingTimeInterval(source.bucketSeconds)
+        }
+
+        let selectedRows = rows.filter { row in
+            let start = timestamp(row)
+            return rangeStart <= start && start < ceiling
+        }.sorted { $0.t < $1.t }
+        var buckets = selectedRows.map { (row: $0, source: source) }
+        if source != .minutes {
+            // 小时与日表只保存已结束的桶，之后的分钟记录属于独立的历史尾段。
+            let tailStart = selectedRows.last.map { endOfBucket(timestamp($0), source: source) } ?? rangeStart
+            let tail = recentMinuteRows.filter { row in
+                let start = timestamp(row)
+                return tailStart <= start && start < ceiling
+            }.sorted { $0.t < $1.t }
+            buckets.append(contentsOf: tail.map { (row: $0, source: ReportSourceGranularity.minutes) })
+        }
 
         struct Spec {
             let kind: ReportEventItem.Kind
-            let threshold: Int
-            let lastObservedEnd: Date?
-            let getLevels: (StatisticsRow) -> [(level: Int, seconds: Double)]
+            let validSeconds: KeyPath<StatisticsRow, Double?>
+            let nonPressureSeconds: (StatisticsRow) -> Double
+            let pressureLevels: (StatisticsRow) -> [(level: Int, seconds: Double)]
         }
 
-        let specs: [Spec] = [
-            Spec(kind: .memory, threshold: 1, lastObservedEnd: lastMemObsEnd) { r in
-                var res: [(Int, Double)] = []
-                if let s = r.memCritS, s > 0 { res.append((2, s)) }
-                if let s = r.memWarnS, s > 0 { res.append((1, s)) }
-                return res
+        let specs = [
+            Spec(kind: .memory, validSeconds: \.validMemS, nonPressureSeconds: { $0.memNormalS ?? 0 }) {
+                [(2, $0.memCritS ?? 0), (1, $0.memWarnS ?? 0)]
             },
-            Spec(kind: .thermal, threshold: 2, lastObservedEnd: lastThermalObsEnd) { r in
-                var res: [(Int, Double)] = []
-                if let s = r.thCritS, s > 0 { res.append((3, s)) }
-                if let s = r.thSeriousS, s > 0 { res.append((2, s)) }
-                if let s = r.thFairS, s > 0 { res.append((1, s)) }
-                return res
+            Spec(kind: .thermal, validSeconds: \.validThermalS, nonPressureSeconds: {
+                ($0.thNominalS ?? 0) + ($0.thFairS ?? 0)
+            }) {
+                [(3, $0.thCritS ?? 0), (2, $0.thSeriousS ?? 0)]
             }
         ]
 
         var events: [ReportEventItem] = []
-
         for spec in specs {
-            var currentStart: Date?
-            var currentEnd: Date?
-            var pressureSeconds = 0.0
+            var eventStart: Date?
+            var eventEnd: Date?
+            var totalPressure = 0.0
             var worstLevel = 0
+            var lastSource: ReportSourceGranularity?
+            var lastBucketWasAllPressure = false
 
-            func flush() {
-                guard let start = currentStart, let end = currentEnd, pressureSeconds > 0 else { return }
-                let state: ReportEventItem.State
-                if let lastObs = spec.lastObservedEnd {
-                    if end < lastObs {
-                        state = .recovered
-                    } else {
-                        let isFresh = now.timeIntervalSince(lastObs) <= freshWindow
-                        state = isFresh ? .ongoing : .interrupted
-                    }
-                } else {
-                    state = .interrupted
+            func finish(_ state: ReportEventItem.State) {
+                guard let start = eventStart, let end = eventEnd else { return }
+                let ratio = min(100, Int((totalPressure / max(end.timeIntervalSince(start), 1) * 100).rounded()))
+                let severity: String
+                switch spec.kind {
+                case .memory:
+                    severity = worstLevel >= 2
+                        ? String(localized: "stats.r.severityCritical", defaultValue: "紧急")
+                        : String(localized: "stats.r.severityWarning", defaultValue: "警告")
+                case .thermal:
+                    severity = StatisticsDisplayFormat.thermalStateLabel(Double(worstLevel))
                 }
-                let spanSec = end.timeIntervalSince(start)
-                let ratioPct = min(100, Int((pressureSeconds / max(spanSec, 1) * 100).rounded()))
-                let severityLabel: String = {
-                    switch spec.kind {
-                    case .memory:
-                        return worstLevel >= 2
-                            ? String(localized: "stats.r.severityCritical", defaultValue: "紧急")
-                            : String(localized: "stats.r.severityWarning", defaultValue: "警告")
-                    case .thermal:
-                        return StatisticsDisplayFormat.thermalStateLabel(Double(worstLevel))
-                    }
-                }()
-                let detail = String(format: String(localized: "stats.r.eventRatioDetail", defaultValue: "%@ · 占比 %d%%"), severityLabel, ratioPct)
+                let detail = String(
+                    format: String(localized: "stats.r.eventRatioDetail", defaultValue: "%@ · 占比 %d%%"),
+                    severity, ratio
+                )
                 events.append(ReportEventItem(
                     id: "\(spec.kind)-\(start.timeIntervalSince1970)",
                     kind: spec.kind,
                     state: state,
                     start: start,
                     end: end,
-                    pressureSeconds: pressureSeconds,
+                    pressureSeconds: totalPressure,
                     worstLevel: worstLevel,
                     detailText: detail
                 ))
-                currentStart = nil
-                currentEnd = nil
-                pressureSeconds = 0.0
+                eventStart = nil
+                eventEnd = nil
+                totalPressure = 0
                 worstLevel = 0
             }
 
-            for row in rows {
-                let levels = spec.getLevels(row)
-                let pressure = levels.filter { $0.level >= spec.threshold }.map(\.seconds).reduce(0, +)
-                let rowDate = Date(timeIntervalSince1970: TimeInterval(row.t))
-                let rowEnd = min(now, rowDate.addingTimeInterval(span))
+            for bucket in buckets {
+                let row = bucket.row
+                let elevated = spec.pressureLevels(row).filter { $0.seconds > 0 }
+                let pressure = elevated.reduce(0) { $0 + $1.seconds }
+                let normal = spec.nonPressureSeconds(row)
+                let observed = max(row[keyPath: spec.validSeconds] ?? 0, pressure + normal)
 
-                if pressure <= 0 {
-                    flush()
+                guard pressure > 0 else {
+                    if observed > 0 { finish(.recovered) }
                     continue
                 }
 
-                if let end = currentEnd, rowDate.timeIntervalSince(end) > span * 1.5 {
-                    flush()
+                let start = timestamp(row)
+                if let end = eventEnd, start > end || bucket.source != lastSource {
+                    finish(.interrupted)
                 }
-
-                if currentStart == nil {
-                    currentStart = rowDate
-                }
-                currentEnd = rowEnd
-                pressureSeconds += pressure
-                for item in levels {
-                    if item.level > worstLevel { worstLevel = item.level }
-                }
+                if eventStart == nil { eventStart = start }
+                eventEnd = min(ceiling, endOfBucket(start, source: bucket.source))
+                totalPressure += pressure
+                worstLevel = max(worstLevel, elevated.map(\.level).max() ?? 0)
+                lastSource = bucket.source
+                lastBucketWasAllPressure = normal == 0 && pressure >= observed
             }
-            flush()
+
+            if let end = eventEnd {
+                let confirmedAtSnapshot = lastSource == .minutes && lastBucketWasAllPressure
+                    && now.timeIntervalSince(end) <= 3 * minuteSpan
+                finish(confirmedAtSnapshot ? .ongoing : .interrupted)
+            }
         }
 
         let stateRank: [ReportEventItem.State: Int] = [.ongoing: 0, .interrupted: 1, .recovered: 2]
@@ -1211,22 +1215,46 @@ nonisolated enum ReportDataAggregator: Sendable {
                 format: String(localized: "stats.r.insight.pressureSummary", defaultValue: "累计出现 %d 次系统压力（内存 %d · 热状态 %d），有效持续 %@"),
                 events.count, memEvents.count, thEvents.count, StatisticsDisplayFormat.duration(totalPressureSec)
             ))
-            if !memEvents.isEmpty, let peakSwap = maximum(of: rows, keyPath: \.memSwapAvg), peakSwap > 256 * 1024 * 1024 {
+            func rowsInEventBuckets(_ matchingEvents: [ReportEventItem]) -> [StatisticsRow] {
+                rows.filter { row in
+                    let start = Date(timeIntervalSince1970: TimeInterval(row.t))
+                    return matchingEvents.contains { $0.start <= start && start < $0.end }
+                }
+            }
+
+            if let peakSwap = maximum(of: rowsInEventBuckets(memEvents), keyPath: \.memSwapAvg),
+               peakSwap > 256 * 1024 * 1024 {
                 detailParts.append(String(
-                    format: String(localized: "stats.r.insight.pressureSwap", defaultValue: "同期 Swap 峰值达 %@"),
+                    format: String(localized: "stats.r.insight.pressureSwap", defaultValue: "压力所在统计桶内 Swap 峰值达 %@"),
                     ReportUIHelper.formatBytes(peakSwap)
                 ))
             }
-            if !thEvents.isEmpty, let peakTemp = maximum(of: rows, keyPath: \.cpuTempAvg) {
+            if let peakTemp = maximum(of: rowsInEventBuckets(thEvents), keyPath: \.cpuTempAvg) {
                 detailParts.append(String(
-                    format: String(localized: "stats.r.insight.pressureTemp", defaultValue: "CPU 温度最高 %.1f°C"),
+                    format: String(localized: "stats.r.insight.pressureTemp", defaultValue: "压力所在统计桶内 CPU 温度最高 %.1f°C"),
                     peakTemp
                 ))
             }
-            if !apps.highLoadAlerts.isEmpty {
-                let topNames = apps.highLoadAlerts.prefix(3).map(\.name).joined(separator: "、")
+
+            func overlapsPressureBucket(start: Date, end: Date) -> Bool {
+                events.contains { max(start, $0.start) < min(end, $0.end) }
+            }
+
+            let overlappingApps = apps.highLoadAlerts.filter { group in
+                group.episodes.contains { episode in
+                    if !episode.segments.isEmpty {
+                        return episode.segments.contains { overlapsPressureBucket(start: $0.start, end: $0.end) }
+                    }
+                    return overlapsPressureBucket(
+                        start: episode.startedAt,
+                        end: episode.endedAt ?? episode.lastSeenAt
+                    )
+                }
+            }
+            if !overlappingApps.isEmpty {
+                let topNames = overlappingApps.prefix(3).map(\.name).joined(separator: "、")
                 detailParts.append(String(
-                    format: String(localized: "stats.r.insight.pressureApps", defaultValue: "同期高占用应用：%@"),
+                    format: String(localized: "stats.r.insight.pressureApps", defaultValue: "压力所在统计桶内有高占用记录：%@"),
                     topNames
                 ))
             }
@@ -1235,7 +1263,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 id: "pressure-attribution",
                 systemIcon: "exclamationmark.triangle.fill",
                 colorName: isCritical ? "red" : "orange",
-                title: String(localized: "stats.r.insight.pressureTitle", defaultValue: "系统压力归因"),
+                title: String(localized: "stats.r.insight.pressureTitle", defaultValue: "系统压力相关记录"),
                 detail: detailParts.joined(separator: "；"),
                 severity: isCritical ? .critical : .warning,
                 destination: worstEvent.kind == .memory ? .memory : .thermal,
@@ -1502,7 +1530,7 @@ nonisolated enum ReportDataAggregator: Sendable {
                 granularitySeconds: bucketSec,
                 transform: transform
             )
-            return ReportChartSeries.from(pts, seriesID: id)
+            return ReportChartSeries.from(pts, seriesID: id, bucketSeconds: bucketSec)
         }
 
         let toGiB: (Double) -> Double = { $0 / 1_073_741_824.0 }
@@ -1717,7 +1745,15 @@ nonisolated enum ReportDataAggregator: Sendable {
             hardwareHasFans: hardwareHasFans,
             fanSensorAvailable: fanSensorAvailable
         )
-        let events = deriveAlertEvents(rows: filtered, source: granularity, now: snapshot.capturedAt)
+        let events = deriveAlertEvents(
+            rows: filtered,
+            source: granularity,
+            now: snapshot.capturedAt,
+            recentMinuteRows: snapshot.minutes,
+            rangeStart: from,
+            rangeEnd: to,
+            calendar: calendar
+        )
         let insights = generateInsights(
             rows: filtered,
             hourlyRows: hourlyFiltered,

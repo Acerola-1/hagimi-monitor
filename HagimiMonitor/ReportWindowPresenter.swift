@@ -134,18 +134,27 @@ enum ReportWindowPresenter {
         }
     }
 
-    /// 触发原生报表打印（通过 SwiftUI 原生排版视图驱动 NSPrintOperation，无 WebKit 开销）。
+    /// 系统打印使用与直接导出相同的分页内容。
     static func printCurrentReport() {
         guard !exportBusy, activePrintOperation == nil,
               let snapshot = viewModel?.snapshot,
               let rangeModel = viewModel?.rangeModel,
               viewModel?.committedExportRange() != nil else { return }
 
-        let operation = ReportExportService.makePrintOperation(
+        guard let operation = ReportExportService.makePrintOperation(
             model: rangeModel,
             meta: snapshot.meta,
             hardware: snapshot.hardware
-        )
+        ) else {
+            let alert = NSAlert()
+            alert.messageText = String(localized: "stats.report.print-interrupted")
+            if let window {
+                alert.beginSheetModal(for: window)
+            } else {
+                alert.runModal()
+            }
+            return
+        }
         activePrintOperation = operation
         refreshCommands()
 

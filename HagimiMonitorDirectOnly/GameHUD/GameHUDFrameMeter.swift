@@ -39,18 +39,18 @@ final class GameHUDFrameMeter: ObservableObject, GameHUDFrameMeasuring {
     @Published private(set) var stats: GameHUDFPSStats?
     var statsPublisher: AnyPublisher<GameHUDFPSStats?, Never> { $stats.eraseToAnyPublisher() }
 
-    private let metalTraceMeter = MetalPerfTraceMeter()
+    private let metalTraceMeter: any GameHUDMetalTraceProbing
     private var metalTraceCancellable: AnyCancellable?
-    private static let reconnectDelays: [Duration] = [.seconds(2), .seconds(5), .seconds(10)]
+    private let reconnectDelays: [Duration]
     private var reconnectTask: Task<Void, Never>?
     private var reconnectAttempts = 0
-    private var needsRestart = false
 
     /// 记录目标身份与切换代数；探针自身按代数丢弃迟到结果。
     private struct Session {
         let generation: Int
         let bundleID: String
         let pid: pid_t
+        let app: NSRunningApplication
     }
 
     private var session: Session?
@@ -60,14 +60,18 @@ final class GameHUDFrameMeter: ObservableObject, GameHUDFrameMeasuring {
         session?.generation ?? 0
     }
 
-    init() {
-        metalTraceCancellable = metalTraceMeter.$stats
+    init(
+        metalTraceMeter: any GameHUDMetalTraceProbing = MetalPerfTraceMeter(),
+        reconnectDelays: [Duration] = [.seconds(2), .seconds(5), .seconds(10)]
+    ) {
+        self.metalTraceMeter = metalTraceMeter
+        self.reconnectDelays = reconnectDelays
+        metalTraceCancellable = metalTraceMeter.statsPublisher
             .sink { [weak self] metalStats in
                 guard let self, let session = self.session else { return }
                 guard metalStats == nil || self.metalTraceMeter.currentPID == session.pid else { return }
                 if metalStats != nil {
                     self.reconnectAttempts = 0
-                    self.needsRestart = false
                 }
                 self.stats = metalStats
             }
@@ -86,16 +90,12 @@ final class GameHUDFrameMeter: ObservableObject, GameHUDFrameMeasuring {
         }
 
         if let session, session.bundleID == bundleID, session.pid == pid {
-            if needsRestart, !metalTraceMeter.isRunning, reconnectTask == nil {
-                needsRestart = false
-                metalTraceMeter.start(pid: pid)
-            }
             return
         }
 
         stop()
         nextGeneration += 1
-        session = Session(generation: nextGeneration, bundleID: bundleID, pid: pid)
+        session = Session(generation: nextGeneration, bundleID: bundleID, pid: pid, app: app)
         metalTraceMeter.start(pid: pid)
     }
 
@@ -103,7 +103,6 @@ final class GameHUDFrameMeter: ObservableObject, GameHUDFrameMeasuring {
         reconnectTask?.cancel()
         reconnectTask = nil
         reconnectAttempts = 0
-        needsRestart = false
         session = nil
         metalTraceMeter.stop()
         stats = nil
@@ -112,9 +111,8 @@ final class GameHUDFrameMeter: ObservableObject, GameHUDFrameMeasuring {
     private func handleUnexpectedExit(pid: pid_t) {
         guard let session, session.pid == pid else { return }
         stats = nil
-        needsRestart = true
-        guard reconnectAttempts < Self.reconnectDelays.count else { return }
-        let delay = Self.reconnectDelays[reconnectAttempts]
+        guard reconnectAttempts < reconnectDelays.count else { return }
+        let delay = reconnectDelays[reconnectAttempts]
         reconnectAttempts += 1
         let expectedGeneration = session.generation
         reconnectTask?.cancel()
@@ -125,10 +123,9 @@ final class GameHUDFrameMeter: ObservableObject, GameHUDFrameMeasuring {
             guard let current = self.session,
                   current.generation == expectedGeneration,
                   current.pid == pid,
-                  NSRunningApplication(processIdentifier: pid)?.isTerminated == false else {
+                  !current.app.isTerminated else {
                 return
             }
-            self.needsRestart = false
             self.metalTraceMeter.start(pid: pid)
         }
     }

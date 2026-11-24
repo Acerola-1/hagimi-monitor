@@ -177,7 +177,9 @@ final class GameHUDSnapshotProvider: ObservableObject, GameHUDSnapshotProviding 
             return (m?.value == nil || m?.value == "--") ? nil : m?.value
         case .fanSpeed:
             if let fans = module.fans, !fans.isEmpty {
-                let maxRPM = fans.map(\.currentRPM).max() ?? 0
+                let validFans = fans.filter(\.isCurrentRPMValid)
+                guard !validFans.isEmpty else { return nil }
+                let maxRPM = validFans.map(\.currentRPM).max() ?? 0
                 return "\(maxRPM) RPM"
             }
             if module.value > 0 {

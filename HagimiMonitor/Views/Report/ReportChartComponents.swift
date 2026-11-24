@@ -90,7 +90,7 @@ struct ReportTimeSeriesChart: View {
                     let segSeriesKey = "\(desc.id)-\(segIdx)"
                     ForEach(segPoints) { pt in
                         if let val = pt.value {
-                            if desc.showAreaFill {
+                            if desc.showAreaFill && segPoints.count > 1 {
                                 AreaMark(
                                     x: .value("Time", pt.date),
                                     y: .value("Value", val),
@@ -106,18 +106,24 @@ struct ReportTimeSeriesChart: View {
                                 .interpolationMethod(desc.interpolation)
                             }
 
-                            LineMark(
-                                x: .value("Time", pt.date),
-                                y: .value("Value", val),
-                                series: .value("Series", segSeriesKey)
-                            )
-                            .foregroundStyle(desc.color.opacity(desc.isDashed ? 0.85 : 1.0))
-                            .lineStyle(
-                                desc.isDashed
-                                    ? StrokeStyle(lineWidth: desc.lineWidth, dash: [4, 4])
-                                    : StrokeStyle(lineWidth: desc.lineWidth)
-                            )
-                            .interpolationMethod(desc.interpolation)
+                            if segPoints.count == 1 {
+                                PointMark(x: .value("Time", pt.date), y: .value("Value", val))
+                                    .foregroundStyle(desc.color)
+                                    .symbolSize(16)
+                            } else {
+                                LineMark(
+                                    x: .value("Time", pt.date),
+                                    y: .value("Value", val),
+                                    series: .value("Series", segSeriesKey)
+                                )
+                                .foregroundStyle(desc.color.opacity(desc.isDashed ? 0.85 : 1.0))
+                                .lineStyle(
+                                    desc.isDashed
+                                        ? StrokeStyle(lineWidth: desc.lineWidth, dash: [4, 4])
+                                        : StrokeStyle(lineWidth: desc.lineWidth)
+                                )
+                                .interpolationMethod(desc.interpolation)
+                            }
                         }
                     }
                 }
@@ -238,26 +244,15 @@ struct ReportTimeSeriesChart: View {
 
     private func resolveHoveredSnapshot() -> HoverSnapshot? {
         guard let target = hoveredDate else { return nil }
-        var matchedDate: Date?
-        var bestDistance: TimeInterval = .greatestFiniteMagnitude
-
-        for desc in descriptors {
-            if let pt = closestPoint(to: target, in: desc.series.segments) {
-                let dist = abs(pt.date.timeIntervalSince(target))
-                if dist < bestDistance {
-                    bestDistance = dist
-                    matchedDate = pt.date
-                }
-            }
+        guard let resolved = ReportChartHoverResolver.resolve(
+            target: target,
+            series: descriptors.map { (id: $0.id, series: $0.series) }
+        ) else {
+            return nil
         }
-        guard let anchorDate = matchedDate else { return nil }
 
         let items: [HoverItem] = descriptors.compactMap { desc in
-            guard let pt = closestPoint(to: anchorDate, in: desc.series.segments),
-                  let val = pt.value,
-                  abs(pt.date.timeIntervalSince(anchorDate)) <= 3600 else {
-                return nil
-            }
+            guard let val = resolved.values[desc.id] else { return nil }
             return HoverItem(
                 id: desc.id,
                 title: desc.title,
@@ -267,37 +262,7 @@ struct ReportTimeSeriesChart: View {
             )
         }
         guard !items.isEmpty else { return nil }
-        return HoverSnapshot(date: anchorDate, items: items)
-    }
-
-    private func closestPoint(to target: Date, in segments: [[ReportTimeSeriesPoint]]) -> ReportTimeSeriesPoint? {
-        var best: ReportTimeSeriesPoint?
-        var bestDiff = TimeInterval.greatestFiniteMagnitude
-        let targetTime = target.timeIntervalSince1970
-
-        for seg in segments where !seg.isEmpty {
-            var low = 0
-            var high = seg.count - 1
-            while low <= high {
-                let mid = (low + high) / 2
-                let midTime = seg[mid].date.timeIntervalSince1970
-                if midTime == targetTime {
-                    return seg[mid]
-                } else if midTime < targetTime {
-                    low = mid + 1
-                } else {
-                    high = mid - 1
-                }
-            }
-            for idx in [low, high] where idx >= 0 && idx < seg.count {
-                let diff = abs(seg[idx].date.timeIntervalSince1970 - targetTime)
-                if diff < bestDiff {
-                    bestDiff = diff
-                    best = seg[idx]
-                }
-            }
-        }
-        return best
+        return HoverSnapshot(date: resolved.date, items: items)
     }
 
     private func clampedPopoverX(_ rawX: CGFloat, plotFrame: CGRect) -> CGFloat {
@@ -528,5 +493,92 @@ struct ReportFocusedWindowBanner: View {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .strokeBorder(Color.accentColor.opacity(0.25), lineWidth: 0.75)
         )
+    }
+}
+
+/// 趋势图悬浮准星解析器：禁止跨越采样缺口吸附到远端数据点，并严格校验同一准星下的各序列数值必须来自同一统计桶。
+nonisolated enum ReportChartHoverResolver {
+    static func resolve(
+        target: Date,
+        series: [(id: String, series: ReportChartSeries)]
+    ) -> (date: Date, values: [String: Double])? {
+        let targetTime = target.timeIntervalSince1970
+
+        var matchedDate: Date?
+        var bestDistance = TimeInterval.greatestFiniteMagnitude
+
+        for entry in series {
+            let edgeSnapTolerance = entry.series.bucketSeconds * 0.5
+            for seg in entry.series.segments where !seg.isEmpty {
+                guard let firstTime = seg.first?.date.timeIntervalSince1970,
+                      let lastTime = seg.last?.date.timeIntervalSince1970 else { continue }
+                let insideSegment = targetTime >= firstTime && targetTime <= lastTime
+                guard let pt = closestPoint(toTime: targetTime, inSegment: seg), pt.value != nil else { continue }
+                let dist = abs(pt.date.timeIntervalSince1970 - targetTime)
+                // 落在缺口内（在连续分段起止之外且超过边缘容差）禁止吸附到远端采样点
+                guard insideSegment || dist <= edgeSnapTolerance else { continue }
+                if dist < bestDistance {
+                    bestDistance = dist
+                    matchedDate = pt.date
+                }
+            }
+        }
+
+        guard let anchorDate = matchedDate else { return nil }
+        let anchorTime = anchorDate.timeIntervalSince1970
+
+        var values: [String: Double] = [:]
+        for entry in series {
+            if let pt = closestPoint(toTime: anchorTime, in: entry.series.segments),
+               let val = pt.value,
+               pt.date == anchorDate {
+                values[entry.id] = val
+            }
+        }
+
+        guard !values.isEmpty else { return nil }
+        return (anchorDate, values)
+    }
+
+    private static func closestPoint(toTime targetTime: TimeInterval, in segments: [[ReportTimeSeriesPoint]]) -> ReportTimeSeriesPoint? {
+        var best: ReportTimeSeriesPoint?
+        var bestDiff = TimeInterval.greatestFiniteMagnitude
+        for seg in segments where !seg.isEmpty {
+            if let pt = closestPoint(toTime: targetTime, inSegment: seg) {
+                let diff = abs(pt.date.timeIntervalSince1970 - targetTime)
+                if diff < bestDiff {
+                    bestDiff = diff
+                    best = pt
+                }
+            }
+        }
+        return best
+    }
+
+    private static func closestPoint(toTime targetTime: TimeInterval, inSegment seg: [ReportTimeSeriesPoint]) -> ReportTimeSeriesPoint? {
+        guard !seg.isEmpty else { return nil }
+        var low = 0
+        var high = seg.count - 1
+        while low <= high {
+            let mid = (low + high) / 2
+            let midTime = seg[mid].date.timeIntervalSince1970
+            if midTime == targetTime {
+                return seg[mid]
+            } else if midTime < targetTime {
+                low = mid + 1
+            } else {
+                high = mid - 1
+            }
+        }
+        var best: ReportTimeSeriesPoint?
+        var bestDiff = TimeInterval.greatestFiniteMagnitude
+        for idx in [low, high] where idx >= 0 && idx < seg.count {
+            let diff = abs(seg[idx].date.timeIntervalSince1970 - targetTime)
+            if diff < bestDiff {
+                bestDiff = diff
+                best = seg[idx]
+            }
+        }
+        return best
     }
 }

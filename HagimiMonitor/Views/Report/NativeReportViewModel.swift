@@ -75,17 +75,84 @@ nonisolated enum ReportNavigationModule: String, CaseIterable, Identifiable, Sen
     }
 }
 
-/// 独立的 1 秒实时硬件读数数据源。
-///
-/// 源只读取当前模块，且同时受窗口可见性和模块是否有右栏控制。采样器注入为
-/// 闭包后，门控和去重可以在没有真实 MonitorStore 的测试中验证。
+nonisolated struct ReportLivePressureReading: Equatable {
+    let kind: ReportEventItem.Kind
+    let level: Int
+    let durationSeconds: TimeInterval
+
+    var isCritical: Bool { level >= (kind == .memory ? 2 : 3) }
+}
+
+/// 实时压力以每个维度的新采样为准，连续时长只累计到最后一次有效观测。
+nonisolated struct ReportLivePressureObservations {
+    private struct Observation {
+        let level: Int
+        let startedAt: Date
+        let observedAt: Date
+    }
+
+    private static let freshness: TimeInterval = 30
+    private var memory: Observation?
+    private var thermal: Observation?
+
+    mutating func record(
+        memoryLevel: Int?,
+        thermalLevel: Int?,
+        freshKinds: Set<MonitorKind>,
+        at date: Date
+    ) {
+        if freshKinds.contains(.memory) {
+            memory = Self.advance(memory, level: memoryLevel, threshold: 1, at: date)
+        }
+        if freshKinds.contains(.cpu) {
+            thermal = Self.advance(thermal, level: thermalLevel, threshold: 2, at: date)
+        }
+    }
+
+    private static func advance(
+        _ previous: Observation?,
+        level: Int?,
+        threshold: Int,
+        at date: Date
+    ) -> Observation? {
+        guard let level, level >= threshold else { return nil }
+        let startedAt = previous.flatMap { previous in
+            let gap = date.timeIntervalSince(previous.observedAt)
+            return (0...freshness).contains(gap) ? previous.startedAt : nil
+        } ?? date
+        return Observation(level: level, startedAt: startedAt, observedAt: date)
+    }
+
+    func current(at date: Date) -> ReportLivePressureReading? {
+        func reading(_ observation: Observation?, kind: ReportEventItem.Kind) -> ReportLivePressureReading? {
+            guard let observation, (0...Self.freshness).contains(date.timeIntervalSince(observation.observedAt))
+            else { return nil }
+            return ReportLivePressureReading(
+                kind: kind, level: observation.level,
+                durationSeconds: observation.observedAt.timeIntervalSince(observation.startedAt)
+            )
+        }
+
+        let memoryReading = reading(memory, kind: .memory)
+        let thermalReading = reading(thermal, kind: .thermal)
+        if let thermalReading, thermalReading.isCritical || memoryReading == nil {
+            return thermalReading
+        }
+        return memoryReading
+    }
+}
+
+/// 可见报表按当前模块读取缓存中的实时指标或压力。
 @MainActor
 final class ReportLiveHardwareSource: ObservableObject {
     typealias ReadingsProvider = @MainActor (ReportNavigationModule) -> [String: String]?
+    typealias PressureProvider = @MainActor () -> ReportLivePressureReading?
 
     @Published private(set) var liveReadings: [String: String] = [:]
+    @Published private(set) var livePressure: ReportLivePressureReading?
 
     private let readingsProvider: ReadingsProvider
+    private let pressureProvider: PressureProvider
     private let interval: TimeInterval
     private let tolerance: TimeInterval
     private var timer: Timer?
@@ -97,11 +164,15 @@ final class ReportLiveHardwareSource: ObservableObject {
     init(
         interval: TimeInterval = 1.0,
         tolerance: TimeInterval = 0.1,
-        readingsProvider: @escaping ReadingsProvider = ReportLiveHardwareSource.defaultReadingsProvider
+        readingsProvider: @escaping ReadingsProvider = ReportLiveHardwareSource.defaultReadingsProvider,
+        pressureProvider: @escaping PressureProvider = {
+            AppDelegate.shared?.store.reportLivePressure.current(at: Date())
+        }
     ) {
         self.interval = max(0.1, interval)
         self.tolerance = max(0, min(tolerance, self.interval * 0.5))
         self.readingsProvider = readingsProvider
+        self.pressureProvider = pressureProvider
     }
 
     func start() {
@@ -118,11 +189,13 @@ final class ReportLiveHardwareSource: ObservableObject {
         isManuallyPaused = false
         isWindowVisible = false
         liveReadings.removeAll()
+        publishPressureIfChanged(nil)
     }
 
     func pause() {
         guard !isManuallyPaused else { return }
         isManuallyPaused = true
+        publishPressureIfChanged(nil)
         reconcileTimer()
     }
 
@@ -138,6 +211,7 @@ final class ReportLiveHardwareSource: ObservableObject {
         guard activeModule != module else { return }
         activeModule = module
         publishIfChanged([:])
+        publishPressureIfChanged(nil)
         reconcileTimer()
         refreshIfEligible()
     }
@@ -149,18 +223,16 @@ final class ReportLiveHardwareSource: ObservableObject {
         reconcileTimer()
         if changed && isVisible {
             refreshIfEligible()
+        } else if !isVisible {
+            publishPressureIfChanged(nil)
         }
     }
 
     private var canSample: Bool {
         guard isRunning, !isManuallyPaused, isWindowVisible,
               let activeModule,
-              moduleSupportsLiveReadings(activeModule) else { return false }
+              activeModule == .overview || activeModule.liveMonitorKind != nil else { return false }
         return true
-    }
-
-    private func moduleSupportsLiveReadings(_ module: ReportNavigationModule) -> Bool {
-        module.liveMonitorKind != nil
     }
 
     private func reconcileTimer() {
@@ -190,12 +262,21 @@ final class ReportLiveHardwareSource: ObservableObject {
 
     private func refreshIfEligible() {
         guard canSample, let activeModule else { return }
-        publishIfChanged(readingsProvider(activeModule) ?? [:])
+        if activeModule == .overview {
+            publishPressureIfChanged(pressureProvider())
+        } else {
+            publishIfChanged(readingsProvider(activeModule) ?? [:])
+        }
     }
 
     private func publishIfChanged(_ readings: [String: String]) {
         guard readings != liveReadings else { return }
         liveReadings = readings
+    }
+
+    private func publishPressureIfChanged(_ reading: ReportLivePressureReading?) {
+        guard reading != livePressure else { return }
+        livePressure = reading
     }
 
     private static func defaultReadingsProvider(_ module: ReportNavigationModule) -> [String: String]? {
@@ -295,17 +376,26 @@ final class NativeReportViewModel: ObservableObject {
     let liveSource = ReportLiveHardwareSource()
 
     typealias SnapshotLoader = @Sendable (Date, [ProcessAlertEpisode]) -> StatisticsReportSnapshotInput?
+    typealias HardwareLoader = @Sendable ([DisplayScreenSnapshot]) -> HardwareInventory
     private let snapshotLoader: SnapshotLoader?
+    private let hardwareLoader: HardwareLoader?
     private weak var recorder: StatisticsRecorder?
     private var aggregateTask: Task<Void, Never>?
     private var loadTask: Task<Void, Never>?
     private var loadRequestID = UUID()
     private var aggregateRequestID = UUID()
+    /// 快照每次替换（包含第二阶段硬件补全）均递增，防止基于旧快照启动的聚合任务覆写新模型。
+    private var snapshotVersion: UInt64 = 0
     private var isClosed = false
 
-    init(recorder: StatisticsRecorder?, snapshotLoader: SnapshotLoader? = nil) {
+    init(
+        recorder: StatisticsRecorder?,
+        snapshotLoader: SnapshotLoader? = nil,
+        hardwareLoader: HardwareLoader? = nil
+    ) {
         self.recorder = recorder
         self.snapshotLoader = snapshotLoader
+        self.hardwareLoader = hardwareLoader
         liveSource.setActiveModule(selectedModule)
     }
 
@@ -315,6 +405,9 @@ final class NativeReportViewModel: ObservableObject {
                      hardwareHasFans: Bool, loadFailed: Bool = false) {
         self.init(recorder: nil)
         snapshot = previewSnapshot
+        if previewSnapshot != nil {
+            snapshotVersion &+= 1
+        }
         if let previewSnapshot {
             rangeModel = ReportDataAggregator.aggregate(snapshot: previewSnapshot, range: selectedRange,
                 now: previewSnapshot.capturedAt, hardwareHasBattery: hardwareHasBattery,
@@ -384,6 +477,9 @@ final class NativeReportViewModel: ObservableObject {
         let loadInput: SnapshotLoader = snapshotLoader ?? { [recorder] now, alerts in
             recorder?.reportDataProvider().load(now: now, alerts: alerts)
         }
+        let captureHardware: HardwareLoader = hardwareLoader ?? { snapshots in
+            HardwareInventoryReader().capture(screenSnapshots: snapshots)
+        }
         // ProcessAlertCenter 是 MainActor 状态;只复制不可变值,后台不直接访问它。
         let alertSnapshot = ProcessAlertCenter.shared.activeAlerts + ProcessAlertCenter.shared.recentAlerts
         // NSScreen 只能在 MainActor 读取;这里只复制轻量值,重型硬件探针仍在后台。
@@ -449,6 +545,7 @@ final class NativeReportViewModel: ObservableObject {
             await MainActor.run {
                 guard let self, self.loadRequestID == loadID, !self.isClosed else { return }
                 self.snapshot = statisticsSnapshot
+                self.snapshotVersion &+= 1
                 self.recordedDayKeys = dayKeys
                 self.deviceFormFactor = formFactor
                 // 若期间用户已触发范围重算（aggregateRequestID 变化），不再用旧范围结果覆盖，只更新基础快照。
@@ -464,8 +561,7 @@ final class NativeReportViewModel: ObservableObject {
             }
 
             // 第二阶段：硬件清单独立补充。失败或用户期间切范围都不丢弃硬件档案。
-            let hardware = HardwareInventoryReader().capture(
-                screenSnapshots: screenSnapshots)
+            let hardware = captureHardware(screenSnapshots)
 
             guard !Task.isCancelled else { return }
 
@@ -503,9 +599,15 @@ final class NativeReportViewModel: ObservableObject {
             await MainActor.run {
                 guard let self, self.loadRequestID == loadID, !self.isClosed else { return }
                 self.snapshot = enriched
+                self.snapshotVersion &+= 1
                 self.deviceFormFactor = refinedFormFactor
                 self.isHardwareLoading = false
                 if self.selectedRange == latestRange {
+                    // 取消任何基于旧快照在途的聚合任务并使旧 ID 失效，避免随后回写覆盖硬件补全模型
+                    self.aggregateTask?.cancel()
+                    self.aggregateTask = nil
+                    self.aggregateRequestID = UUID()
+                    self.isAggregating = false
                     self.rangeModel = enrichedModel
                     self.resolveFocusedEvent(in: enrichedModel)
                 } else {
@@ -670,6 +772,7 @@ final class NativeReportViewModel: ObservableObject {
         guard let snapshot, !isClosed else { return }
         isAggregating = true
         let aggID = UUID()
+        let expectedVersion = self.snapshotVersion
         self.aggregateRequestID = aggID
         let range = selectedRange
 
@@ -689,7 +792,12 @@ final class NativeReportViewModel: ObservableObject {
             )
             guard !Task.isCancelled else { return }
             await MainActor.run {
-                guard let self, self.aggregateRequestID == aggID, !self.isClosed else { return }
+                guard let self,
+                      self.aggregateRequestID == aggID,
+                      self.snapshotVersion == expectedVersion,
+                      !self.isClosed else {
+                    return
+                }
                 self.rangeModel = model
                 self.isAggregating = false
                 self.resolveFocusedEvent(in: model)

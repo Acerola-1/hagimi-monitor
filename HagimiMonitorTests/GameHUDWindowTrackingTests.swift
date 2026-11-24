@@ -579,4 +579,57 @@ struct GameHUDWindowTrackingTests {
         defer { defaults.removePersistentDomain(forName: suite) }
         try await body(MonitorSettings(defaults: defaults))
     }
+
+    @Test func coordinatorPublishesUpdatedActiveGameNameAcrossDirectGameSwitch() async throws {
+        let appA = NSRunningApplication.current
+        let bundleA = try #require(appA.bundleIdentifier)
+        let appB = try #require(
+            NSWorkspace.shared.runningApplications.first { candidate in
+                candidate.processIdentifier != appA.processIdentifier
+                    && !(candidate.bundleIdentifier ?? "").isEmpty
+                    && !(candidate.localizedName ?? "").isEmpty
+                    && candidate.localizedName != appA.localizedName
+            }
+        )
+        let bundleB = try #require(appB.bundleIdentifier)
+
+        try await withMainActorSettings { settings in
+            settings.addGameHUDManualApp(bundleID: bundleA, name: appA.localizedName ?? "AppA", applicationPath: nil)
+            settings.addGameHUDManualApp(bundleID: bundleB, name: appB.localizedName ?? "AppB", applicationPath: nil)
+            let clock = Clock()
+            var frontmost: NSRunningApplication = appA
+            let session = GameHUDSessionController(
+                settings: settings,
+                windowLocator: GameHUDWindowLocator(windowInfo: { _, _ in
+                    [self.info(pid: Int(frontmost.processIdentifier))]
+                }),
+                frontmostApplication: { frontmost },
+                trackerScheduler: clock.schedule,
+                trackingMousePressed: { clock.pressed },
+                trackingNow: { clock.time }
+            )
+            let coordinator = GameHUDCoordinator(
+                settings: settings,
+                dataSource: SnapshotSource(),
+                sessionController: session,
+                panelController: GameHUDPanelController(settings: settings),
+                frameMeter: FrameMeter()
+            )
+            session.onGameLaunched = nil
+            defer { settings.gameHUDMasterEnabled = false; session.poll() }
+
+            settings.gameHUDMasterEnabled = true
+            session.poll()
+            try await Task.sleep(for: .milliseconds(50))
+            #expect(coordinator.isSessionActive)
+            #expect(coordinator.activeGameName == appA.localizedName)
+
+            // 同处于活跃态下直接从游戏 A 切到游戏 B，activeGameName 必须同步刷新
+            frontmost = appB
+            session.poll()
+            try await Task.sleep(for: .milliseconds(50))
+            #expect(coordinator.isSessionActive)
+            #expect(coordinator.activeGameName == appB.localizedName)
+        }
+    }
 }

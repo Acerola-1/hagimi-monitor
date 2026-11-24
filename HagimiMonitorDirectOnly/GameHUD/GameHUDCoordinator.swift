@@ -20,8 +20,13 @@ final class GameHUDCoordinator {
     @Published private(set) var isShowing: Bool = false
     /// 合格游戏会话处于活跃态(窗口拖动期临时隐藏仍保持 true)，供 SMC 温度门控与设置页状态展示。
     @Published private(set) var isSessionActive: Bool = false
+    /// 当前会话监测的游戏名称(支持同活跃态切换游戏时实时发布给设置页)。
+    @Published private(set) var activeGameName: String?
 
     var foregroundGameName: String? {
+        if let activeGameName, !activeGameName.isEmpty {
+            return activeGameName
+        }
         guard let name = sessionController.foregroundGame?.localizedName, !name.isEmpty else {
             return nil
         }
@@ -38,6 +43,7 @@ final class GameHUDCoordinator {
     private let panelController: GameHUDPanelController
     private var snapshotCancellable: AnyCancellable?
     private var stateCancellable: AnyCancellable?
+    private var foregroundGameCancellable: AnyCancellable?
     private var sideCancellable: AnyCancellable?
     private var styleCancellable: AnyCancellable?
     private var metricsCancellable: AnyCancellable?
@@ -122,6 +128,15 @@ final class GameHUDCoordinator {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.apply(state: self.sessionController.state)
+            }
+        foregroundGameCancellable = sessionController.$foregroundGame
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] game in
+                guard let self else { return }
+                let resolved = game.flatMap { $0.localizedName.isEmpty ? nil : $0.localizedName }
+                if self.activeGameName != resolved {
+                    self.activeGameName = resolved
+                }
             }
         // 完整发现与移动状态共用呈现门控，移动期间的回调不能恢复浮窗。
         sessionController.onSessionUpdated = { [weak self] in self?.presentDisplay(refreshContent: false) }
@@ -254,6 +269,7 @@ final class GameHUDCoordinator {
     private func teardownDisplay() {
         if isShowing { isShowing = false }
         if isSessionActive { isSessionActive = false }
+        if activeGameName != nil { activeGameName = nil }
         snapshotCancellable = nil
         latestSnapshot = .empty
         frameMeter.stop()

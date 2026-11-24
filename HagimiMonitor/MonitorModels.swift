@@ -339,14 +339,34 @@ nonisolated struct FanInfo: Identifiable, Equatable, Sendable {
     let currentRPM: Int
     let minRPM: Int
     let maxRPM: Int
+    /// SMC 当前转速键 `F{i}Ac` 是否真实读取成功；false 表示读取失败（`currentRPM` 仅占位 0，并非真实停转）。
+    let isCurrentRPMValid: Bool
+
+    init(
+        id: Int,
+        name: String,
+        currentRPM: Int,
+        minRPM: Int,
+        maxRPM: Int,
+        isCurrentRPMValid: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.currentRPM = currentRPM
+        self.minRPM = minRPM
+        self.maxRPM = maxRPM
+        self.isCurrentRPMValid = isCurrentRPMValid
+    }
 
     /// 根据当前 RPM 与 min/max 范围判断风扇运行状态。
+    /// - !isCurrentRPMValid → unknown(当前转速读取失败,不误判为停转)
     /// - RPM = 0 → stopped(只表达实测转速，不判断健康状态)
     /// - RPM > maxRPM → fault(传感器读数异常)
     /// - RPM >= 85% maxRPM → warning(接近满载,散热压力高)
     /// - maxRPM <= 0 → unknown(SMC 未提供上限,无法判断)
     /// - 其余 → normal
     var status: FanStatus {
+        if !isCurrentRPMValid { return .unknown }
         if currentRPM < 0 { return .unknown }
         if currentRPM == 0 { return .stopped }
         if maxRPM <= 0 { return .unknown }
@@ -579,6 +599,7 @@ final class MonitorStore: ObservableObject {
 
     /// 未过滤的全量模块流：供压力/进程告警中心与菜单栏无障碍摘要订阅，不受面板模块显隐设置影响。
     let allModulesPublisher = PassthroughSubject<[MonitorModule], Never>()
+    private(set) var reportLivePressure = ReportLivePressureObservations()
 
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
@@ -1451,10 +1472,18 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         case .success(let snapshot):
             // 采样缓存和统计立即推进，界面发布独立等待运动收敛。
             allModules = snapshot.modules
+            let sampledAt = Date()
+            if freshKinds.contains(.memory) || freshKinds.contains(.cpu) {
+                let levels = PressureAlertCenter.levels(from: snapshot.modules)
+                reportLivePressure.record(
+                    memoryLevel: levels.memory, thermalLevel: levels.thermal,
+                    freshKinds: freshKinds, at: sampledAt
+                )
+            }
             allModulesPublisher.send(snapshot.modules)
             if statisticsSamplingActive {
                 statisticsRecorder.record(modules: snapshot.modules, fans: fanSampler.fans,
-                    freshKinds: freshKinds, at: Date())
+                    freshKinds: freshKinds, at: sampledAt)
             }
             deferUntilExpansionSettles(key: "modules") { [weak self] in
                 self?.publishSamplingSuccess()

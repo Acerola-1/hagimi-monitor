@@ -4,6 +4,13 @@ import Foundation
 nonisolated struct ReportChartSeries: Sendable, Equatable {
     let seriesID: String
     let segments: [[ReportTimeSeriesPoint]]
+    let bucketSeconds: TimeInterval
+
+    init(seriesID: String, segments: [[ReportTimeSeriesPoint]], bucketSeconds: TimeInterval = 60) {
+        self.seriesID = seriesID
+        self.segments = segments
+        self.bucketSeconds = bucketSeconds
+    }
 
     var isEmpty: Bool { segments.isEmpty || segments.allSatisfy(\.isEmpty) }
 
@@ -11,44 +18,65 @@ nonisolated struct ReportChartSeries: Sendable, Equatable {
         segments.reduce(0) { $0 + $1.count }
     }
 
-    /// 按已有分段构造平滑降采样序列，既消除分钟高频锯齿，又保留睡眠缺口与原始时间顺序。
-    func smoothed(targetMaxPoints: Int = 240) -> ReportChartSeries {
-        let total = pointCount
-        guard total > targetMaxPoints, targetMaxPoints > 0 else { return self }
-        let bucketSize = max(2, Int(ceil(Double(total) / Double(targetMaxPoints))))
+    /// 同一张图使用相同的原始行数和时间粒度，缺值多少不影响降采样网格。
+    func smoothed(targetMaxPoints: Int = 240, referencePointCount: Int) -> ReportChartSeries {
+        guard referencePointCount > targetMaxPoints, targetMaxPoints > 0 else { return self }
+        let multiplier = Int(ceil(Double(referencePointCount) / Double(targetMaxPoints)))
+        let binSeconds = bucketSeconds * Double(multiplier)
 
         let newSegments: [[ReportTimeSeriesPoint]] = segments.compactMap { seg in
-            guard !seg.isEmpty else { return nil }
-            if seg.count <= 2 { return seg }
+            guard let first = seg.first, let last = seg.last else { return nil }
+
             var result: [ReportTimeSeriesPoint] = []
-            var idx = 0
-            while idx < seg.count {
-                let end = min(idx + bucketSize, seg.count)
-                let slice = seg[idx..<end]
-                let valid = slice.compactMap(\.value)
-                if !valid.isEmpty {
-                    let avg = valid.reduce(0, +) / Double(valid.count)
-                    let mid = slice[slice.startIndex + (slice.count / 2)]
-                    result.append(ReportTimeSeriesPoint(
-                        id: "\(mid.id)-s",
-                        date: mid.date,
-                        seriesID: seriesID,
-                        segmentID: mid.segmentID,
-                        value: avg
-                    ))
-                }
-                idx = end
+            var currentBin: Int64?
+            var sum = 0.0
+            var count = 0
+            let segID = first.segmentID
+
+            func flushBin() {
+                guard let bin = currentBin, count > 0 else { return }
+                let centerEpoch = (Double(bin) + 0.5) * binSeconds
+                let center = Date(timeIntervalSince1970: centerEpoch)
+                let date = min(last.date, max(first.date, center))
+                result.append(ReportTimeSeriesPoint(
+                    id: "\(seriesID)-s-\(segID)-\(bin)",
+                    date: date,
+                    seriesID: seriesID,
+                    segmentID: segID,
+                    value: sum / Double(count)
+                ))
             }
+
+            for pt in seg {
+                guard let val = pt.value else { continue }
+                let bin = Int64(floor(pt.date.timeIntervalSince1970 / binSeconds))
+                if bin != currentBin {
+                    flushBin()
+                    currentBin = bin
+                    sum = val
+                    count = 1
+                } else {
+                    sum += val
+                    count += 1
+                }
+            }
+            flushBin()
             return result.isEmpty ? nil : result
         }
-        return ReportChartSeries(seriesID: seriesID, segments: newSegments)
+        return ReportChartSeries(seriesID: seriesID, segments: newSegments, bucketSeconds: bucketSeconds)
     }
 
     /// 由 `ReportDataAggregator.buildTimeSeries` 产出的点数组构造分段集合。
-    static func from(_ points: [ReportTimeSeriesPoint], seriesID: String) -> ReportChartSeries {
-        guard !points.isEmpty else { return ReportChartSeries(seriesID: seriesID, segments: []) }
+    static func from(
+        _ points: [ReportTimeSeriesPoint],
+        seriesID: String,
+        bucketSeconds: TimeInterval = 60
+    ) -> ReportChartSeries {
+        guard let first = points.first else {
+            return ReportChartSeries(seriesID: seriesID, segments: [], bucketSeconds: bucketSeconds)
+        }
         var segments: [[ReportTimeSeriesPoint]] = []
-        var currentSegID = points[0].segmentID
+        var currentSegID = first.segmentID
         var current: [ReportTimeSeriesPoint] = []
         for pt in points {
             if pt.segmentID != currentSegID {
@@ -60,7 +88,7 @@ nonisolated struct ReportChartSeries: Sendable, Equatable {
             }
         }
         if !current.isEmpty { segments.append(current) }
-        return ReportChartSeries(seriesID: seriesID, segments: segments)
+        return ReportChartSeries(seriesID: seriesID, segments: segments, bucketSeconds: bucketSeconds)
     }
 }
 

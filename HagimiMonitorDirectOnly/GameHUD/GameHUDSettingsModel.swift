@@ -93,12 +93,15 @@ final class GameHUDSettingsModel: ObservableObject {
             .store(in: &cancellables)
 
         if let coordinator = AppDelegate.shared?.gameHUDCoordinator {
-            coordinator.$isSessionActive
-                .receive(on: DispatchQueue.main)
-                .sink { [weak self] _ in
-                    self?.refreshStatusSubtitle()
-                }
-                .store(in: &cancellables)
+            Publishers.CombineLatest(
+                coordinator.$isSessionActive,
+                coordinator.$activeGameName
+            )
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshStatusSubtitle()
+            }
+            .store(in: &cancellables)
         }
         refreshStatusSubtitle()
     }

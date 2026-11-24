@@ -1,5 +1,6 @@
 import AppKit
 import Foundation
+import PDFKit
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -62,8 +63,9 @@ enum ReportExportService {
         model: ReportActiveRangeModel,
         meta: ReportMeta,
         hardware: HardwareInventory?
-    ) -> NSPrintOperation {
-        let hostingView = makePrintableHostingView(model: model, meta: meta, hardware: hardware)
+    ) -> NSPrintOperation? {
+        let data = renderPDFData(model: model, meta: meta, hardware: hardware)
+        guard let document = PDFDocument(data: data) else { return nil }
         let printInfo = (NSPrintInfo.shared.copy() as? NSPrintInfo) ?? NSPrintInfo()
         printInfo.topMargin = 28
         printInfo.bottomMargin = 28
@@ -71,10 +73,8 @@ enum ReportExportService {
         printInfo.rightMargin = 28
         printInfo.isHorizontallyCentered = true
         printInfo.isVerticallyCentered = false
-        printInfo.horizontalPagination = .fit
-        printInfo.verticalPagination = .automatic
-
-        let operation = NSPrintOperation(view: hostingView, printInfo: printInfo)
+        guard let operation = document.printOperation(for: printInfo, scalingMode: .pageScaleDownToFit, autoRotate: true)
+        else { return nil }
         operation.showsPrintPanel = true
         operation.showsProgressPanel = true
         return operation
@@ -86,41 +86,171 @@ enum ReportExportService {
         meta: ReportMeta,
         hardware: HardwareInventory?
     ) -> Data {
-        let view = ReportPrintableView(model: model, meta: meta, hardware: hardware)
-        let renderer = ImageRenderer(content: view)
-        let mutableData = NSMutableData()
+        // 标准 A4 纸张尺寸（595.28 × 841.89 pt），固定页边距与页脚页码区域
+        let pageWidth: CGFloat = 595.28
+        let pageHeight: CGFloat = 841.89
+        let margin: CGFloat = 28
+        let footerHeight: CGFloat = 20
+        let contentWidth: CGFloat = pageWidth - margin * 2
+        let usableHeight: CGFloat = pageHeight - margin * 2 - footerHeight
+        let blockSpacing: CGFloat = 8
 
-        renderer.render { size, draw in
-            let width = max(size.width, 540)
-            let height = max(size.height, 400)
-            var mediaBox = CGRect(x: 0, y: 0, width: width, height: height)
-            guard let consumer = CGDataConsumer(data: mutableData as CFMutableData),
-                  let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
-                return
-            }
-            pdfContext.beginPDFPage(nil)
-            draw(pdfContext)
-            pdfContext.endPDFPage()
-            pdfContext.closePDF()
+        let blocks = ReportPrintableView.printableBlocks(model: model, meta: meta, hardware: hardware)
+
+        struct MeasuredBlock {
+            let keepWithNext: Bool
+            let height: CGFloat
+            let renderer: ImageRenderer<AnyView>
         }
 
-        return mutableData as Data
-    }
+        var measured: [MeasuredBlock] = []
+        measured.reserveCapacity(blocks.count)
+        for block in blocks {
+            let framed = AnyView(
+                block.view
+                    .frame(width: contentWidth, alignment: .leading)
+                    .background(Color.white)
+                    .environment(\.colorScheme, .light)
+            )
+            let renderer = ImageRenderer(content: framed)
+            renderer.proposedSize = ProposedViewSize(width: contentWidth, height: nil)
+            var h: CGFloat = 0
+            renderer.render { size, _ in
+                h = max(1, size.height)
+            }
+            measured.append(MeasuredBlock(keepWithNext: block.keepWithNext, height: h, renderer: renderer))
+        }
 
-    @MainActor
-    private static func makePrintableHostingView(
-        model: ReportActiveRangeModel,
-        meta: ReportMeta,
-        hardware: HardwareInventory?
-    ) -> NSHostingView<ReportPrintableView> {
-        let view = ReportPrintableView(model: model, meta: meta, hardware: hardware)
-        let hostingView = NSHostingView(rootView: view)
-        let fitting = hostingView.fittingSize
-        let width: CGFloat = 540
-        let height = max(fitting.height, 400)
-        hostingView.frame = NSRect(x: 0, y: 0, width: width, height: height)
-        hostingView.layoutSubtreeIfNeeded()
-        return hostingView
+        struct PageSlice {
+            let renderer: ImageRenderer<AnyView>
+            let blockHeight: CGFloat
+            let sliceTopOffset: CGFloat
+            let sliceHeight: CGFloat
+            let yFromTop: CGFloat
+        }
+
+        var pages: [[PageSlice]] = [[]]
+        var cursorY: CGFloat = 0
+
+        for (index, item) in measured.enumerated() {
+            // 若章节标题与下一条加起来超页底，提前换页以免标题孤立留在页尾
+            if item.keepWithNext,
+               index + 1 < measured.count,
+               cursorY > 0 {
+                let nextH = measured[index + 1].height
+                let pairHeight = item.height + blockSpacing + min(nextH, usableHeight * 0.35)
+                if cursorY + pairHeight > usableHeight {
+                    pages.append([])
+                    cursorY = 0
+                }
+            }
+
+            if item.height <= usableHeight {
+                if cursorY > 0 && cursorY + item.height > usableHeight {
+                    pages.append([])
+                    cursorY = 0
+                }
+                pages[pages.count - 1].append(
+                    PageSlice(
+                        renderer: item.renderer,
+                        blockHeight: item.height,
+                        sliceTopOffset: 0,
+                        sliceHeight: item.height,
+                        yFromTop: cursorY
+                    )
+                )
+                cursorY += item.height + blockSpacing
+            } else {
+                // 单个超大块按页高垂直切片，保证不丢失任何信息
+                if cursorY > 0 {
+                    pages.append([])
+                    cursorY = 0
+                }
+                var offset: CGFloat = 0
+                while offset < item.height {
+                    let take = min(usableHeight, item.height - offset)
+                    pages[pages.count - 1].append(
+                        PageSlice(
+                            renderer: item.renderer,
+                            blockHeight: item.height,
+                            sliceTopOffset: offset,
+                            sliceHeight: take,
+                            yFromTop: 0
+                        )
+                    )
+                    offset += take
+                    if offset < item.height {
+                        pages.append([])
+                    }
+                }
+                cursorY = pages.last?.last.map { $0.yFromTop + $0.sliceHeight + blockSpacing } ?? 0
+            }
+        }
+
+        if pages.count > 1, pages.last?.isEmpty == true {
+            pages.removeLast()
+        }
+
+        let mutableData = NSMutableData()
+        var mediaBox = CGRect(x: 0, y: 0, width: pageWidth, height: pageHeight)
+        guard let consumer = CGDataConsumer(data: mutableData as CFMutableData),
+              let pdfContext = CGContext(consumer: consumer, mediaBox: &mediaBox, nil) else {
+            return Data()
+        }
+
+        let totalPages = pages.count
+        let footerAttrs: [NSAttributedString.Key: Any] = [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 8.5, weight: .regular),
+            .foregroundColor: NSColor(white: 0.42, alpha: 1.0)
+        ]
+
+        for (pageIndex, slices) in pages.enumerated() {
+            pdfContext.beginPDFPage(nil)
+
+            // 白底铺满整张 A4 页面
+            pdfContext.setFillColor(NSColor.white.cgColor)
+            pdfContext.fill(mediaBox)
+
+            for slice in slices {
+                let clipRect = CGRect(
+                    x: margin,
+                    y: pageHeight - margin - slice.yFromTop - slice.sliceHeight,
+                    width: contentWidth,
+                    height: slice.sliceHeight
+                )
+                pdfContext.saveGState()
+                pdfContext.clip(to: clipRect)
+                let blockOriginY = pageHeight - margin - slice.yFromTop - slice.blockHeight + slice.sliceTopOffset
+                pdfContext.translateBy(x: margin, y: blockOriginY)
+                slice.renderer.render { _, draw in
+                    draw(pdfContext)
+                }
+                pdfContext.restoreGState()
+            }
+
+            // 绘制页码页脚
+            let pageText = String(
+                format: String(localized: "report.print.pageNumber", defaultValue: "第 %d / %d 页"),
+                pageIndex + 1,
+                totalPages
+            )
+            let nsString = NSAttributedString(string: pageText, attributes: footerAttrs)
+            let textSize = nsString.size()
+            let drawOrigin = CGPoint(
+                x: pageWidth - margin - textSize.width,
+                y: margin * 0.45
+            )
+            let nsCtx = NSGraphicsContext(cgContext: pdfContext, flipped: false)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = nsCtx
+            nsString.draw(at: drawOrigin)
+            NSGraphicsContext.restoreGraphicsState()
+
+            pdfContext.endPDFPage()
+        }
+
+        pdfContext.closePDF()
+        return mutableData as Data
     }
 
     // MARK: - Markdown 完整报告导出

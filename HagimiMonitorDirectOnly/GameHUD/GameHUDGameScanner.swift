@@ -96,33 +96,34 @@ final class GameHUDGameScanner: ObservableObject {
     private var cachedGames: [GameHUDDiscoveredGame]?
     private var lastScanDate: Date?
     private var lastRescanDate: Date = .distantPast
-    /// 目录监听源(Steam steamapps / Epic Manifests)。
-    private var dirSources: [DispatchSourceFileSystemObject] = []
+    /// 目录监听源(按目录路径索引，支持动态增删后挂载的 Steam 库)。
+    private var watchedDirectories: [String: DispatchSourceFileSystemObject] = [:]
     private var workspaceObservers: [NSObjectProtocol] = []
     private var periodicTimer: AnyCancellable?
+    private var libraryRescanTask: Task<Void, Never>?
+    private var libraryRescanPending = false
     private var started = false
+    private let homeDirectory: URL
+    private let scan: @Sendable () -> GameHUDScanOutcome
+    private let libraryRescanInterval: TimeInterval
 
-    private init() {}
+    init(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        scan: @escaping @Sendable () -> GameHUDScanOutcome = GameHUDGameScanner.scanWithOutcome,
+        libraryRescanInterval: TimeInterval = 30
+    ) {
+        self.homeDirectory = homeDirectory
+        self.scan = scan
+        self.libraryRescanInterval = libraryRescanInterval
+    }
 
-    /// 常驻监听启动:目录监听 + 应用生命周期通知 + 自动定时扫描 + 启动即后台初扫。
+    /// 常驻监听启动:目录监听 + 卷挂载/应用生命周期通知 + 自动定时扫描 + 启动即后台初扫。
     /// 由总开关门控,关闭时停止这里的一切轮询。
     func startMonitoring() {
         guard !started else { return }
         started = true
         performRescan(force: true)
-        let steamApps = FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Steam/steamapps")
-        var watchedPaths: Set<String> = []
-        for library in Self.steamLibraryPaths(
-            vdfURL: steamApps.appendingPathComponent("libraryfolders.vdf"),
-            fallback: steamApps
-        ) where watchedPaths.insert(library.path).inserted {
-            watchDirectory(library)
-        }
-        watchDirectory(FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"))
+        syncDirectoryWatchers()
         let center = NSWorkspace.shared.notificationCenter
         let activated = center.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -150,7 +151,29 @@ final class GameHUDGameScanner: ObservableObject {
                 self?.handleActivation(bundleID: bundleID, name: name, appURL: url)
             }
         }
-        workspaceObservers = [activated, launched]
+        let mounted = center.addObserver(
+            forName: NSWorkspace.didMountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.started else { return }
+                if self.syncDirectoryWatchers() {
+                    self.scheduleLibraryRescan()
+                }
+            }
+        }
+        let unmounted = center.addObserver(
+            forName: NSWorkspace.didUnmountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.started else { return }
+                self.syncDirectoryWatchers()
+            }
+        }
+        workspaceObservers = [activated, launched, mounted, unmounted]
 
         periodicTimer = Timer.publish(every: 600, on: .main, in: .common)
             .autoconnect()
@@ -163,10 +186,13 @@ final class GameHUDGameScanner: ObservableObject {
     func stopMonitoring() {
         guard started else { return }
         started = false
-        for source in dirSources {
+        libraryRescanTask?.cancel()
+        libraryRescanTask = nil
+        libraryRescanPending = false
+        for source in watchedDirectories.values {
             source.cancel()
         }
-        dirSources.removeAll()
+        watchedDirectories.removeAll()
         for obs in workspaceObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(obs)
         }
@@ -203,9 +229,12 @@ final class GameHUDGameScanner: ObservableObject {
         if !force, let last = lastScanDate, Date().timeIntervalSince(last) < Self.cacheInterval, cachedGames != nil {
             return
         }
+        libraryRescanTask?.cancel()
+        libraryRescanTask = nil
+        libraryRescanPending = false
         isScanning = true
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let outcome = GameHUDGameScanner.scanWithOutcome()
+        DispatchQueue.global(qos: .utility).async { [weak self, scan] in
+            let outcome = scan()
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.cachedGames = outcome.games
@@ -215,6 +244,10 @@ final class GameHUDGameScanner: ObservableObject {
                 self.lastScanFailed = outcome.failed
                 self.lastScanCompletedAt = Date()
                 self.isScanning = false
+                if self.started {
+                    self.syncDirectoryWatchers()
+                    self.queueLibraryRescanIfNeeded()
+                }
             }
         }
     }
@@ -235,6 +268,25 @@ final class GameHUDGameScanner: ObservableObject {
         guard Date().timeIntervalSince(lastRescanDate) >= Self.rescanDebounce else { return }
         lastRescanDate = Date()
         performRescan(force: false)
+    }
+
+    private func scheduleLibraryRescan() {
+        guard started else { return }
+        libraryRescanPending = true
+        queueLibraryRescanIfNeeded()
+    }
+
+    /// 安装目录变化使扫描缓存失效；扫描中的新事件合并成下一轮扫描。
+    private func queueLibraryRescanIfNeeded() {
+        guard libraryRescanPending, !isScanning, libraryRescanTask == nil else { return }
+        let elapsed = lastScanDate.map { max(0, Date().timeIntervalSince($0)) } ?? libraryRescanInterval
+        let delay = max(min(1, libraryRescanInterval), libraryRescanInterval - elapsed)
+        libraryRescanTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            self.libraryRescanTask = nil
+            self.performRescan(force: true)
+        }
     }
 
     /// 仅用于触发重扫的线索:类别证据或商店安装目录。
@@ -270,8 +322,46 @@ final class GameHUDGameScanner: ObservableObject {
         }
     }
 
+    nonisolated static func watchedDirectoryURLs(
+        steamVDFURL: URL,
+        steamFallback: URL,
+        epicManifests: URL
+    ) -> [URL] {
+        var result: [URL] = []
+        var seen: Set<String> = []
+        for url in steamLibraryPaths(vdfURL: steamVDFURL, fallback: steamFallback) + [steamFallback, epicManifests] {
+            if seen.insert(url.path).inserted {
+                result.append(url)
+            }
+        }
+        return result
+    }
+
+    /// 按最新 `libraryfolders.vdf` 与卷挂载状态同步目录监听器：移除失效路径，为新增或后挂载目录补装监听。
+    @discardableResult
+    func syncDirectoryWatchers() -> Bool {
+        let steamFallback = homeDirectory.appendingPathComponent("Library/Application Support/Steam/steamapps")
+        let epicManifests = homeDirectory.appendingPathComponent("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests")
+        let targets = Self.watchedDirectoryURLs(
+            steamVDFURL: steamFallback.appendingPathComponent("libraryfolders.vdf"),
+            steamFallback: steamFallback,
+            epicManifests: epicManifests
+        )
+        let activePaths = Set(targets.filter { FileManager.default.fileExists(atPath: $0.path) }.map(\.path))
+        let newPaths = activePaths.subtracting(watchedDirectories.keys)
+
+        for path in Array(watchedDirectories.keys) where !activePaths.contains(path) {
+            watchedDirectories.removeValue(forKey: path)?.cancel()
+        }
+        for url in targets where newPaths.contains(url.path) {
+            watchDirectory(url)
+        }
+        return !newPaths.isEmpty
+    }
+
     private func watchDirectory(_ url: URL) {
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard watchedDirectories[url.path] == nil,
+              FileManager.default.fileExists(atPath: url.path) else { return }
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else { return }
         let source = DispatchSource.makeFileSystemObjectSource(
@@ -280,13 +370,13 @@ final class GameHUDGameScanner: ObservableObject {
             queue: .main
         )
         source.setEventHandler { [weak self] in
-            self?.scheduleRescan()
+            self?.scheduleLibraryRescan()
         }
         source.setCancelHandler {
             close(fd)
         }
         source.resume()
-        dirSources.append(source)
+        watchedDirectories[url.path] = source
     }
 
     // MARK: - 扫描聚合

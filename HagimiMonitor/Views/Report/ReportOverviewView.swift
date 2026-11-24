@@ -35,7 +35,12 @@ struct ReportOverviewView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             overviewHeading
-            ongoingPressureBanner
+            if let range = viewModel.rangeModel?.range {
+                ReportCurrentPressureBanner(source: viewModel.liveSource, range: range, palette: palette) { kind in
+                    viewModel.clearFocusedTimeWindow()
+                    navigateTo(kind == .memory ? .memory : .thermal)
+                }
+            }
             healthScoreSummary
             resourceGrid(primary: true)
             compositeTrendCard
@@ -80,73 +85,6 @@ struct ReportOverviewView: View {
                     .foregroundStyle(.tertiary)
                 }
             }
-        }
-    }
-
-    /// 仅当此刻存在尚未恢复的持续压力（`state == .ongoing`）时展示紧凑提醒条；
-    /// 历史已恢复事件与常规统计不再在页顶挂常驻警告横幅，避免制造持续焦虑。
-    @ViewBuilder
-    private var ongoingPressureBanner: some View {
-        let ongoingEvents = (viewModel.rangeModel?.events ?? []).filter { $0.state == .ongoing }
-        if let primary = ongoingEvents.sorted(by: { $0.worstLevel > $1.worstLevel }).first {
-            let severity: MonitorSeverity = primary.worstLevel >= 2 ? .critical : .warning
-            let tint = palette.base.severityTint(for: severity)
-            let kindLabel = primary.kind == .memory
-                ? String(localized: "stats.r.alertMem", defaultValue: "内存压力")
-                : String(localized: "stats.r.alertThermal", defaultValue: "热压力")
-            let durationText = StatisticsDisplayFormat.duration(primary.pressureSeconds)
-
-            HStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(tint)
-
-                Text(String(
-                    format: String(localized: "stats.r.overview.ongoingBanner", defaultValue: "当前%@持续中 · 已持续 %@"),
-                    kindLabel,
-                    durationText
-                ))
-                .font(.callout.weight(.medium))
-                .foregroundStyle(.primary)
-                .lineLimit(1)
-
-                if let topApp = primaryConsumerApp(preferMemory: primary.kind == .memory) {
-                    Text("·")
-                        .foregroundStyle(.tertiary)
-                    Text(String(
-                        format: String(localized: "stats.r.overview.topConsumer", defaultValue: "主要占用 %@"),
-                        topApp.name
-                    ))
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                }
-
-                Spacer(minLength: 8)
-
-                Button {
-                    viewModel.focusOnEvent(primary)
-                } label: {
-                    HStack(spacing: 4) {
-                        Text(String(localized: "stats.r.overview.locateEvent", defaultValue: "定位查看"))
-                            .font(.system(size: 11, weight: .medium))
-                        Image(systemName: "arrow.right")
-                            .font(.system(size: 10, weight: .semibold))
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
-            .background(
-                palette.bannerFill(isElevated: true),
-                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .strokeBorder(palette.bannerBorder(isElevated: true), lineWidth: 1)
-            )
         }
     }
 
@@ -623,10 +561,11 @@ struct ReportOverviewView: View {
     private var compositeTrendCard: some View {
         let model = viewModel.rangeModel
         let cache = model?.chartCache ?? .empty
-        let isDense = cache.cpuAvg.pointCount > 300
+        let sourceCount = model?.rows.count ?? 0
+        let isDense = sourceCount > 300
 
         func maybeSmooth(_ s: ReportChartSeries) -> ReportChartSeries {
-            (isDense && smoothDenseTrend) ? s.smoothed(targetMaxPoints: 240) : s
+            (isDense && smoothDenseTrend) ? s.smoothed(referencePointCount: sourceCount) : s
         }
 
         let descriptors: [ReportChartSeriesDescriptor] = {
@@ -853,5 +792,57 @@ struct ReportOverviewMetricRow: View {
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+}
+
+
+private struct ReportCurrentPressureBanner: View {
+    @ObservedObject var source: ReportLiveHardwareSource
+    let range: ReportTimeRange
+    let palette: ReportPalette
+    let onOpen: (ReportEventItem.Kind) -> Void
+
+    var body: some View {
+        let now = Date()
+        let bounds = range.bounds(now: now)
+        if let reading = source.livePressure, bounds.from <= now, now <= bounds.to {
+            let tint = palette.base.severityTint(for: reading.isCritical ? .critical : .warning)
+            let duration = StatisticsDisplayFormat.duration(reading.durationSeconds)
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tint)
+
+                Text(String(
+                    format: String(localized: "stats.r.overview.ongoingBanner", defaultValue: "当前%@持续中 · 已持续 %@"),
+                    reading.kind.title,
+                    duration
+                ))
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                Button {
+                    onOpen(reading.kind)
+                } label: {
+                    Text(reading.kind == .memory
+                         ? String(localized: "stats.r.insight.actionViewMemory")
+                         : String(localized: "stats.r.insight.actionViewThermal"))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                palette.bannerFill(isElevated: true),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(palette.bannerBorder(isElevated: true), lineWidth: 1)
+            )
+        }
     }
 }

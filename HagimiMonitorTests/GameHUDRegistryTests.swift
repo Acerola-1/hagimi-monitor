@@ -436,6 +436,102 @@ struct GameHUDAutoDetectionTests {
         #expect(parsedEscaped?.value == "Cyberpunk \"2077\"")
     }
 
+    @Test func watchedDirectoryURLsIncludesNewlyAddedSteamLibraries() throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GameHUD-VDF-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let vdfURL = tempRoot.appendingPathComponent("libraryfolders.vdf")
+        let fallback = tempRoot.appendingPathComponent("default/steamapps")
+        let epic = tempRoot.appendingPathComponent("Epic/Manifests")
+
+        let initialVDF = """
+        "libraryfolders"
+        {
+            "0"
+            {
+                "path" "/Volumes/DiskA/Steam"
+            }
+        }
+        """
+        try initialVDF.write(to: vdfURL, atomically: true, encoding: .utf8)
+        let initialWatched = GameHUDGameScanner.watchedDirectoryURLs(
+            steamVDFURL: vdfURL,
+            steamFallback: fallback,
+            epicManifests: epic
+        )
+        #expect(initialWatched.map(\.path).contains("/Volumes/DiskA/Steam/steamapps"))
+        #expect(!initialWatched.map(\.path).contains("/Volumes/DiskB/SteamLibrary/steamapps"))
+
+        let updatedVDF = """
+        "libraryfolders"
+        {
+            "0"
+            {
+                "path" "/Volumes/DiskA/Steam"
+            }
+            "1"
+            {
+                "path" "/Volumes/DiskB/SteamLibrary"
+            }
+        }
+        """
+        try updatedVDF.write(to: vdfURL, atomically: true, encoding: .utf8)
+        let updatedWatched = GameHUDGameScanner.watchedDirectoryURLs(
+            steamVDFURL: vdfURL,
+            steamFallback: fallback,
+            epicManifests: epic
+        )
+        #expect(updatedWatched.map(\.path).contains("/Volumes/DiskB/SteamLibrary/steamapps"))
+    }
+
+    @MainActor
+    @Test func mountedLibraryAndDirectoryChangesRefreshRecentScan() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("GameHUD-Watchers-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let steam = root.appendingPathComponent("Library/Application Support/Steam/steamapps")
+        let externalLibrary = root.appendingPathComponent("External Library")
+        let externalApps = externalLibrary.appendingPathComponent("steamapps")
+        let manifest = externalApps.appendingPathComponent("appmanifest_1.acf")
+        try FileManager.default.createDirectory(at: steam, withIntermediateDirectories: true)
+        try "\"path\" \"\(externalLibrary.path)\"".write(
+            to: steam.appendingPathComponent("libraryfolders.vdf"), atomically: true, encoding: .utf8
+        )
+        let scanner = GameHUDGameScanner(homeDirectory: root, scan: {
+            let game = (try? String(contentsOf: manifest, encoding: .utf8)).map {
+                GameHUDDiscoveredGame(bundleID: "test.game", name: $0, applicationURL: nil, source: .steam)
+            }
+            return GameHUDScanOutcome(games: game.map { [$0] } ?? [], failed: false)
+        }, libraryRescanInterval: 0.05)
+        scanner.startMonitoring()
+        defer { scanner.stopMonitoring() }
+
+        let initialDeadline = ContinuousClock.now + .seconds(3)
+        while scanner.lastScanCompletedAt == nil, ContinuousClock.now < initialDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try #require(scanner.lastScanCompletedAt != nil)
+        #expect(scanner.discoveredGames.isEmpty)
+
+        try FileManager.default.createDirectory(at: externalApps, withIntermediateDirectories: true)
+        try "First Game".write(to: manifest, atomically: true, encoding: .utf8)
+        NSWorkspace.shared.notificationCenter.post(name: NSWorkspace.didMountNotification, object: nil)
+        let mountDeadline = ContinuousClock.now + .seconds(3)
+        while scanner.discoveredGames.first?.name != "First Game", ContinuousClock.now < mountDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        try #require(scanner.discoveredGames.first?.name == "First Game")
+
+        try "Updated Game".write(to: manifest, atomically: true, encoding: .utf8)
+        let updateDeadline = ContinuousClock.now + .seconds(3)
+        while scanner.discoveredGames.first?.name != "Updated Game", ContinuousClock.now < updateDeadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(scanner.discoveredGames.first?.name == "Updated Game")
+    }
+
     @Test func launcherCategoriesAreExcludedFromAutomaticAdoption() throws {
         let launcher = try makeFixtureApp(
             category: "public.app-category.games",
