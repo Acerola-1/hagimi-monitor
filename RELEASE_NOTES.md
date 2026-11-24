@@ -1,16 +1,23 @@
 ## 更新内容
 
-感谢 @xyy386 提供 AirPods 实机验证和修复方案（#150）。
+### 新功能
+
+- 新增「异常警报」设置子页：支持独立开关 CPU、内存与热压力提醒，提供通知权限引导，并支持将指定应用加入忽略白名单（按应用标识精准匹配，避免同名应用误静音）。
+- 主面板 TOP 5 进程行新增快捷操作与右键菜单：指针悬停时冻结排行防止误点，支持激活、访达定位、复制名称或进程号及温和退出。
 
 ### 修复
 
-- 修复同一副 AirPods 在蓝牙设备列表中重复显示、设备数偏高的问题，保留自定义名称以及左右耳、充电盒分别上报的电量（#147）。
-- 改用 M2 系列对应的 CPU 温度传感器，过滤空闲时的异常低值，避免平均温度被拉低（#149）。
-- 更新应用后自动清除旧版本遗留的更新提示（#143）。
+- 修复统计报表与数据统计口径问题：存在压力事件时评分不再四舍五入为 100 分，统一热压力等级口径，修正 CSV 导出缺失值与十进制速率换算；同步更新统计汇总与压力事件快照，避免降级重复弹窗，并在通知投递失败时自动回滚状态。
+- 修复采样断档与状态同步问题：修正网络进程采样超时或系统时间回拨时误清空旧榜的问题；校准统计页明细浮层的悬浮触发范围；修复点击主面板右上角统计入口时面板未自动收起而遮挡设置页的问题；修复无法读取风扇当前转速时误显示为 `0 RPM` 停转的问题。
+- 修复 Game HUD 多项问题：修复测帧工具异常退出后 FPS 冻结且不自动重连的问题，改用字节级消息分帧避免多字节应用名丢数，支持多进程渲染游戏的帧率追踪；修复运行中增减指标不实时刷新以及切换游戏时设置页活跃名称不更新的问题。
 
 ### 优化与体验
 
-- 改善音量与亮度浮层的玻璃效果。连续调节亮度时，滑条跟随按键变化，百分比和尼特读数在背光稳定后同步显示。
+- 全面重构统计报表：退役旧 HTML 模板，升级为纯原生交互界面与原生图表，支持统一悬浮读数、平滑降噪曲线、经典定宽分段栏与锁定顶栏筛选控件；优化原生打印分页排版，并支持 PDF、Markdown、CSV 与 JSON 多格式导出。
+- 重构「数据统计」设置页概览：新增采样时间完整度浮层、并排「内存压力｜热压力」占比环与单行悬浮明细；2×3 核心指标卡支持高负载占比、自然语序均值及双向网络/磁盘速率展示，实时高负载提示条支持一键忽略。
+- 精修主面板与菜单栏：升级明暗及平衡/活力四象限配色与内衬质感，支持孤立半格自动拉满整行；网络 IP 地址指标支持点击或右键复制纯地址值，CPU 核心环悬停气泡下方新增底部 P/E/S 分组均值常驻展示，重构蓝牙设备展开行样式；统一菜单栏负载环同心几何与增强对比度适配，新增独立的紫色菱形 Game HUD 角标（可与压力提醒红点共存），面板展开或过渡期间抑制状态栏悬停摘要。
+- 调整媒体键接管与浮层体验：媒体键接管收窄至仅对第三方外接显示器生效，内建屏与 Apple 官方外接显示器改为展示只读信息卡；还原媒体键浮层系统液态玻璃质感，改善浅色背景下的图标与滑条可读性。
+- 全面优化 Game HUD 体验与设置页：恢复 GPU 占用指标，优化顶部横条槽宽与回退迟滞，为浮窗文字加入自适应阴影与内描边并避让刘海屏安全区；新增外置盘 Steam 库动态监听；设置页将启用与排除游戏名单整合为单卡分段切换，支持默认折叠与行内搜索。
 
 ### 目前已知的问题
 
@@ -25,10 +32,28 @@
 
 ### English
 
-- Fixed duplicate AirPods entries and inflated device counts while preserving the custom name and battery levels for each earbud and the case (#147). Thanks to @xyy386 for the fix and hardware verification (#150).
-- Updated CPU temperature sensor selection on M2 Macs and filtered invalid idle readings out of the average (#149).
-- Cleared stale update prompts after installing an update (#143).
-- Refined the volume and brightness overlay. When brightness keys are pressed repeatedly, the slider follows the input and the percentage and nits appear together once the backlight settles.
+### What's New
 
-Known issues include Mac mini power consumption (#106), MacBook Air M4 charging power (#86), network status with TUN mode (#98), and Apple Watch battery readings (#131).
+- Added a dedicated Anomaly Alerts settings page with notification permission guidance, separate toggles for CPU, memory, and thermal pressure alerts, and an ignored-apps allowlist matched precisely by bundle identifier.
+- Added quick actions and context menus to TOP 5 process rows in the main panel: hovering freezes the ranking order to prevent misclicks and lets you activate the app, reveal it in Finder, copy its name or PID, or quit it gracefully.
+
+### Fixes
+
+- Fixed statistics and report accuracy: scores no longer round up to 100 when pressure events exist, thermal levels are unified, and CSV missing values and decimal rate conversions are corrected. Synchronized summary and pressure event snapshots, prevented duplicate alerts when pressure steps down, and rolled back alert state on delivery failure.
+- Fixed sampling and UI state issues: preserved previous network process rankings when sampling times out or wall-clock jumps occur, calibrated hover trigger bounds in Statistics details, auto-collapsed the main panel when opening Statistics from its header button, and stopped misreporting unreadable fan RPMs as `0 RPM` stopped.
+- Fixed Game HUD frame metering and tracking: added automatic recovery when the frame meter exits unexpectedly, switched to byte-level JSON framing to avoid multi-byte UTF-8 truncation, added process-tree tracking for multi-process games, and ensured live metric updates and active game name syncing in Settings.
+
+### Improvements
+
+- Rebuilt Statistics Reports with native charts and controls (retiring the legacy HTML template): added unified hover readouts, noise-smoothed curves, fixed-width segmented controls, pagination-aware native printing, and PDF / Markdown / CSV / JSON export.
+- Redesigned the Statistics overview in Settings with a data-completeness popover, side-by-side memory/thermal pressure rings, compact hover details, a 2×3 core metrics grid, and a one-click ignore action on the live high-load banner.
+- Refined the main panel and menu bar: updated light/dark and balanced/vibrant palettes, stretched trailing half-width cells cleanly, added click/right-click copy for network IP address metrics, added persistent P/E/S group averages alongside per-core CPU hover tooltips, and redesigned expanded Bluetooth device rows; aligned the menu bar load ring geometry with High Contrast support, added an independent purple diamond badge for Game HUD, and suppressed status-item tooltips while the panel is open or transitioning.
+- Scoped Media Key Takeover to third-party external displays with read-only info cards for built-in and Apple external displays, and restored the system Liquid Glass appearance for the media-key overlay to improve readability over light backgrounds.
+- Polished Game HUD rendering and Settings: restored the GPU usage metric, stabilized top-strip slot widths and hysteresis, added adaptive text shadows/strokes with notch safe-area avoidance, added dynamic directory watching for external Steam libraries, and unified the enabled/excluded game lists into a searchable segmented card.
+
+#### Known Issues
+
+- Mac mini power consumption (#106) and MacBook Air M4 charging power (#86) still require verification on the affected hardware.
+- Network may appear disconnected when a proxy app enables TUN mode (#98).
+- Apple Watch connections can be detected, but accurate battery readings remain unavailable (#131, in progress).
 
