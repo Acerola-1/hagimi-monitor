@@ -577,6 +577,9 @@ final class MonitorStore: ObservableObject {
     /// Game HUD 勾选与其独立,必须直接读全量模块;只读出、不绕过任何过滤。
     var allModulesForHUD: [MonitorModule] { allModules }
 
+    /// 未过滤的全量模块流：供压力/进程告警中心与菜单栏无障碍摘要订阅，不受面板模块显隐设置影响。
+    let allModulesPublisher = PassthroughSubject<[MonitorModule], Never>()
+
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
     /// 面板进程采样代次。最后一个面板消失时推进，令关闭前已在途的采样结果失效；
@@ -1414,6 +1417,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         case .success(let snapshot):
             // 采样缓存和统计立即推进，界面发布独立等待运动收敛。
             allModules = snapshot.modules
+            allModulesPublisher.send(snapshot.modules)
             if statisticsSamplingActive {
                 statisticsRecorder.record(modules: snapshot.modules, fans: fanSampler.fans,
                     freshKinds: freshKinds, at: Date())

@@ -403,11 +403,23 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
                 }
             }
             .store(in: &cancellables)
-        // 环的进度和颜色都来自同一显示值，不再用每秒模块回报重刷原始颜色。
+        // 环的进度和颜色都来自同一显示值，不再用每秒模块回报重刷原始颜色；
+        // 指标模式沿面板可见模块变化刷新图标。
         store.$modules
             .sink { [weak self] _ in
                 guard let self, self.store.settings.menuBarDisplayMode == .metrics else { return }
                 self.refreshStatusItemImage()
+            }
+            .store(in: &cancellables)
+        // 环形模式下沿未过滤的全量采样流同步刷新 VoiceOver 分项读数，
+        // 避免隐藏 CPU/GPU/内存监控行后分项摘要滞留（内部已去重且不重绘图像）。
+        store.allModulesPublisher
+            .sink { [weak self] _ in
+                guard let self, self.store.settings.menuBarDisplayMode == .ring else { return }
+                self.updateStatusItemAccessibilityValue(
+                    displayedLoad: self.store.loadAnimator.displayedComputeLoad,
+                    coreLevel: self.store.loadAnimator.displayedCoreLevel
+                )
             }
             .store(in: &cancellables)
 
@@ -1084,8 +1096,8 @@ final class FluidPanelController: NSObject, NSWindowDelegate {
     private func updateStatusItemAccessibilityValue(
         displayedLoad: Double,
         coreLevel: MenuBarCoreLevel,
-        showsAlert: Bool,
-        showsHUDBadge: Bool
+        showsAlert: Bool? = nil,
+        showsHUDBadge: Bool? = nil
     ) {
         let summary = makeStatusSummary(
             displayedLoad: displayedLoad,
