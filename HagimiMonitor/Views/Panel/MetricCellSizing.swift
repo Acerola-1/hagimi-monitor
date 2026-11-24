@@ -286,14 +286,6 @@ nonisolated enum BluetoothComponentSizing {
     static let rowBatterySpacing: CGFloat = 3
     static let connectedDotSize: CGFloat = 5
     static let connectedLabelSize: CGFloat = 10.5
-    static let audioPillIconSize: CGFloat = 9
-    static let audioPillFontSize: CGFloat = 10
-    static let audioPillHorizontalPadding: CGFloat = 6
-    static let audioPillVerticalPadding: CGFloat = 2
-    static let audioPillSpacing: CGFloat = 3
-    /// 最窄面板下蓝牙单行右侧文本主列（副标题 + 音频输出胶囊同排）的可用宽度预算。
-    static let rowTextColumnMinWidth: CGFloat =
-        MonitorConstants.panelMinWidth - 12 - 20 - 2 * AccessoryDetailSizing.inset - rowIconWidth - rowHStackSpacing
 
     static let horizontalInset: CGFloat = 8
     static let valueSize: CGFloat = 13

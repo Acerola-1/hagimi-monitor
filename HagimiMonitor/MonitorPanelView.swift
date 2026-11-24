@@ -3729,7 +3729,6 @@ private struct BluetoothGlassRow: View, Equatable {
 struct BluetoothDeviceList: View {
     let devices: [BluetoothDeviceInfo]
     let theme: MonitorPanelTheme
-    @ObservedObject var audioOutput: BluetoothAudioOutputController = .shared
     var showsSeparator: Bool = true
 
     var body: some View {
@@ -3750,9 +3749,7 @@ struct BluetoothDeviceList: View {
     private let partOrder: [BluetoothBatteryComponent.Kind] = [.left, .right, .case]
 
     private func deviceRow(_ device: BluetoothDeviceInfo) -> some View {
-        let supportsAudio = device.type.supportsAudioOutput
-        let isDefaultAudio = audioOutput.isDefaultOutput(device)
-        return PanelAccessoryGroup(theme: theme) {
+        PanelAccessoryGroup(theme: theme) {
             VStack(spacing: 0) {
                 HStack(alignment: .center, spacing: BluetoothComponentSizing.rowHStackSpacing) {
                     Image(systemName: device.type.symbol)
@@ -3775,18 +3772,9 @@ struct BluetoothDeviceList: View {
                             }
                         }
 
-                        HStack(spacing: 6) {
-                            Text(LocalizedStringKey(typeLocalizationKey(device.type)))
-                                .monitorPanelCaptionFont()
-                                .foregroundStyle(theme.captionText)
-
-                            if supportsAudio {
-                                Spacer(minLength: 4)
-                                BluetoothAudioOutputPill(isActive: isDefaultAudio, theme: theme) {
-                                    audioOutput.selectOutput(for: device)
-                                }
-                            }
-                        }
+                        Text(LocalizedStringKey(typeLocalizationKey(device.type)))
+                            .monitorPanelCaptionFont()
+                            .foregroundStyle(theme.captionText)
                     }
                 }
                 .padding(.horizontal, AccessoryDetailSizing.inset)
@@ -3803,12 +3791,7 @@ struct BluetoothDeviceList: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(device.name)
-        .accessibilityValue(accessibilityValueForDevice(device, isDefaultAudioOutput: isDefaultAudio))
-        .modifier(BluetoothAudioOutputAccessibilityAction(
-            enabled: supportsAudio && !isDefaultAudio
-        ) {
-            audioOutput.selectOutput(for: device)
-        })
+        .accessibilityValue(accessibilityValueForDevice(device))
     }
 
     @ViewBuilder
@@ -3909,7 +3892,7 @@ struct BluetoothDeviceList: View {
     }
 
     /// 朗读所有部件，包括未上报的项，避免把缺失电量读成真实零值。
-    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo, isDefaultAudioOutput: Bool) -> String {
+    private func accessibilityValueForDevice(_ device: BluetoothDeviceInfo) -> String {
         var details = [typeLabel(for: device.type)]
         if device.hasSeparateBatteryParts {
             for kind in partOrder {
@@ -3922,9 +3905,6 @@ struct BluetoothDeviceList: View {
         } else {
             details.append(device.compactBatteryLevel.map { "\($0)%" } ?? String(localized: "bluetooth.status.connected"))
             if device.compactChargingState == true { details.append(String(localized: "bluetooth.charging")) }
-        }
-        if isDefaultAudioOutput {
-            details.append(String(localized: "bluetooth.audio.current-output"))
         }
         return details.joined(separator: ", ")
     }
@@ -3994,71 +3974,6 @@ private struct BluetoothBatteryBar: View {
             }
         }
         .accessibilityHidden(true)
-    }
-}
-
-/// 蓝牙音频设备（耳机/耳麦/音箱）的输出状态胶囊与一键切换按钮。
-private struct BluetoothAudioOutputPill: View {
-    let isActive: Bool
-    let theme: MonitorPanelTheme
-    let action: () -> Void
-    @State private var isHovered = false
-
-    private var isDark: Bool { theme.palette.colorScheme == .dark }
-    private var tint: Color { theme.moduleTint(for: .bluetooth) }
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: BluetoothComponentSizing.audioPillSpacing) {
-                Image(systemName: isActive ? "speaker.wave.2.fill" : "speaker.wave.2")
-                    .font(.system(size: BluetoothComponentSizing.audioPillIconSize,
-                                  weight: isActive ? .bold : .medium))
-                    .foregroundStyle(isActive ? tint : theme.secondaryText)
-                Text(LocalizedStringKey(isActive ? "bluetooth.audio.current-output" : "bluetooth.audio.set-output"))
-                    .font(.system(size: BluetoothComponentSizing.audioPillFontSize,
-                                  weight: isActive ? .semibold : .medium))
-                    .foregroundStyle(isActive ? (isDark ? theme.primaryText : tint) : theme.secondaryText)
-            }
-            .padding(.horizontal, BluetoothComponentSizing.audioPillHorizontalPadding)
-            .padding(.vertical, BluetoothComponentSizing.audioPillVerticalPadding)
-            .background {
-                Capsule()
-                    .fill(isActive
-                          ? theme.badgeFill(for: .bluetooth)
-                          : (isHovered ? theme.badgeFill(for: .bluetooth).opacity(0.45) : theme.trackFill))
-            }
-            .overlay {
-                Capsule()
-                    .strokeBorder(
-                        isActive ? tint.opacity(isDark ? 0.45 : 0.32)
-                                 : theme.captionText.opacity(isHovered ? 0.30 : 0.14),
-                        lineWidth: 0.5
-                    )
-            }
-            .contentShape(Capsule())
-        }
-        .buttonStyle(.plain)
-        .fixedSize()
-        .onHover { isHovered = $0 }
-        .help(String(localized: isActive
-                     ? "bluetooth.audio.current-output.help"
-                     : "bluetooth.audio.set-output.help"))
-    }
-}
-
-/// 仅当音频设备未处于当前输出时挂接无障碍切换动作。
-private struct BluetoothAudioOutputAccessibilityAction: ViewModifier {
-    let enabled: Bool
-    let action: () -> Void
-
-    func body(content: Content) -> some View {
-        if enabled {
-            content.accessibilityAction(named: Text("bluetooth.audio.set-output")) {
-                action()
-            }
-        } else {
-            content
-        }
     }
 }
 

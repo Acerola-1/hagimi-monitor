@@ -228,20 +228,6 @@ struct MetricWidthAuditTests {
                     + BluetoothComponentSizing.symbolSize + BluetoothComponentSizing.symbolLabelGap
                 #expect(required <= BluetoothComponentSizing.contentWidth, "部件标题超出三列预算: \(language) \(label)")
             }
-            for typeKey in ["bluetooth.type.headphones", "bluetooth.type.headset", "bluetooth.type.speaker"] {
-                let typeLabel = try localized(typeKey, language)
-                let typeWidth = width(typeLabel, font: NSFont.systemFont(ofSize: AccessoryDetailSizing.statusSize, weight: .medium))
-                for pillKey in ["bluetooth.audio.current-output", "bluetooth.audio.set-output"] {
-                    let pillLabel = try localized(pillKey, language)
-                    let pillWidth = BluetoothComponentSizing.audioPillIconSize
-                        + BluetoothComponentSizing.audioPillSpacing
-                        + width(pillLabel, font: NSFont.systemFont(ofSize: BluetoothComponentSizing.audioPillFontSize, weight: .semibold))
-                        + 2 * BluetoothComponentSizing.audioPillHorizontalPadding
-                    let totalSubtitleRow = typeWidth + 6 + 4 + pillWidth
-                    #expect(totalSubtitleRow <= BluetoothComponentSizing.rowTextColumnMinWidth,
-                            "蓝牙副标题行+音频输出胶囊超出最窄面板预算: \(language) \(typeLabel) + \(pillLabel)")
-                }
-            }
         }
     }
 
