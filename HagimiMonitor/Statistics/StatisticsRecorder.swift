@@ -187,8 +187,13 @@ final class StatisticsRecorder: ObservableObject {
     /// 超过该上限视为睡眠或长时间未采样，不补区间。
     nonisolated static let processSampleIntegrationCap: TimeInterval = 90
 
-    /// 各范围的聚合行(无数据为 nil)。分钟封口后随概览一起刷新。
-    @Published private(set) var rangeRows: [StatisticsOverviewRange: StatisticsRow?] = [:]
+    nonisolated struct Overview: Sendable {
+        let row: StatisticsRow
+        let events: [StatisticsOverviewModel.Event]
+    }
+
+    /// 各范围的汇总和事件来自同一次后台查询，切换范围时直接读取对应快照。
+    @Published private(set) var overviews: [StatisticsOverviewRange: Overview] = [:]
     /// 从最早一条记录至今的自然日数(0 = 尚无任何数据)。
     @Published private(set) var recordDays = 0
     /// 本地存储占用快照(统计库/应用统计库/系统开销),随概览一起刷新。
@@ -985,36 +990,7 @@ final class StatisticsRecorder: ObservableObject {
         }
     }
 
-    /// 统一获取各预设范围的指标时间序列（概览聚合与详情序列同源）。
-    /// `week` / `month` 在已完成小时桶后拼接当前小时的分钟聚合，避免整点后误报「观测中断」。
-    nonisolated private func rangeMetricRows(
-        for range: StatisticsOverviewRange,
-        database: StatisticsDatabase,
-        now: Date
-    ) -> [StatisticsRow] {
-        let windowStart = range.startOfDayWindow(from: now, calendar: calendar)
-        switch range {
-        case .today:
-            // 今日优先分钟层(最细);应用刚跨日启动时小时层兜底
-            let minutes = database.minuteRows(from: windowStart, to: now.addingTimeInterval(120))
-            return minutes.isEmpty
-                ? database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
-                : minutes
-        case .week, .month:
-            let currentHourStart = calendar.dateInterval(of: .hour, for: now)?.start ?? now
-            var hours = database.hourRows(from: windowStart, to: currentHourStart)
-            let currentMinutes = database.minuteRows(from: currentHourStart, to: now.addingTimeInterval(120))
-            if let currentHourRow = StatisticsRow.aggregate(
-                currentMinutes,
-                t: Int64(currentHourStart.timeIntervalSince1970)
-            ) {
-                hours.append(currentHourRow)
-            }
-            return hours
-        }
-    }
-
-    /// 后台重算各范围聚合行 + 元信息并回主线程发布。分钟一封口即刷新。
+    /// 后台重算各范围的指标和事件，并与元信息一起发布到主线程。
     nonisolated private func refreshOverview(
         completion: @escaping @MainActor @Sendable () -> Void = {}
     ) {
@@ -1027,12 +1003,42 @@ final class StatisticsRecorder: ObservableObject {
         }
         let now = Date()
         let todayStart = calendar.startOfDay(for: now)
+        let todayMinutes = database.minuteRows(from: todayStart, to: now.addingTimeInterval(120))
+        let currentHourStart = calendar.dateInterval(of: .hour, for: now)?.start ?? now
+        let currentHourTimestamp = Int64(currentHourStart.timeIntervalSince1970)
+        let currentHourMinutes = todayMinutes.filter { $0.t >= currentHourTimestamp }
+        let currentHour = StatisticsRow.aggregate(currentHourMinutes, t: currentHourTimestamp)
 
-        var rows: [StatisticsOverviewRange: StatisticsRow?] = [:]
+        var overviews: [StatisticsOverviewRange: Overview] = [:]
         for range in StatisticsOverviewRange.allCases {
             let windowStart = range.startOfDayWindow(from: now, calendar: calendar)
-            let source = rangeMetricRows(for: range, database: database, now: now)
-            rows[range] = StatisticsRow.aggregate(source, t: Int64(windowStart.timeIntervalSince1970))
+            let aggregateRows: [StatisticsRow]
+            let eventRows: [StatisticsRow]
+            let bucketSeconds: TimeInterval
+            let minuteBucketsFrom: Int64?
+            if range == .today {
+                // 今日优先分钟层，刚跨日且没有分钟数据时由小时层兜底。
+                aggregateRows = todayMinutes.isEmpty
+                    ? database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
+                    : todayMinutes
+                eventRows = aggregateRows
+                bucketSeconds = todayMinutes.isEmpty ? 3600 : 60
+                minuteBucketsFrom = nil
+            } else {
+                let completedHours = database.hourRows(from: windowStart, to: currentHourStart)
+                aggregateRows = completedHours + (currentHour.map { [$0] } ?? [])
+                // 保留当前小时各分钟的顺序，用于区分压力后恢复与无后续观测。
+                eventRows = completedHours + currentHourMinutes
+                bucketSeconds = 3600
+                minuteBucketsFrom = currentHourTimestamp
+            }
+            guard let row = StatisticsRow.aggregate(aggregateRows, t: Int64(windowStart.timeIntervalSince1970)) else {
+                continue
+            }
+            let events = StatisticsOverviewModel.events(
+                from: eventRows, bucketSeconds: bucketSeconds, now: now, minuteBucketsFrom: minuteBucketsFrom
+            )
+            overviews[range] = Overview(row: row, events: events)
         }
 
         var recordDays = 0
@@ -1060,7 +1066,7 @@ final class StatisticsRecorder: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             if let self {
-                self.rangeRows = rows
+                self.overviews = overviews
                 self.storageReadFailed = false
                 self.storageInfo = storage
                 self.recordDays = recordDays
@@ -1126,23 +1132,6 @@ final class StatisticsRecorder: ObservableObject {
         let end: Date
         let row: StatisticsRow
         var id: Int64 { row.t }
-    }
-
-    /// 拉取指定范围的时间序列(后台执行,主线程回调),供「时段分析」按桶渲染:
-    /// 今日优先分钟层(最细),周/月用小时层,与概览同源同窗口。
-    func rangeSeries(_ range: StatisticsOverviewRange, completion: @escaping @MainActor @Sendable ([StatisticsRow]) -> Void) {
-        maintenanceQueue.async { [weak self] in
-            guard let self, let database = self.database else {
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated { completion([]) }
-                }
-                return
-            }
-            let rows = self.rangeMetricRows(for: range, database: database, now: Date())
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated { completion(rows) }
-            }
-        }
     }
 
     /// 最近一次分钟观测(概览页「当前状态」用):返回最新一行与其桶起点。

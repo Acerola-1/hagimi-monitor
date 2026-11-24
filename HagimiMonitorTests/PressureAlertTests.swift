@@ -173,12 +173,14 @@ struct PressureAlertStateMachineTests {
         #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
     }
 
-    @Test func crossEpisodeCooldownSuppressesImmediateRepeatButFiresAfterExpiry() {
+    @Test func crossEpisodeCooldownSuppressesImmediateRepeatButFiresAfterExpiry() throws {
         var machine = PressureAlertStateMachine()
         let cooldown: TimeInterval = 15 * 60
 
         let first = hold(&machine, memory: 2, seconds: 0...60, cooldown: cooldown)
         #expect(first == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
+        let firstAlert = try #require(first.first)
+        machine.completeNotification(for: firstAlert, delivered: true, at: t0.addingTimeInterval(61))
 
         // 恢复并在 5 分钟后再次持续严重 60 秒：处于 15 分钟冷却期内，仅亮红点、不发重复通知。
         _ = hold(&machine, memory: 0, seconds: 65...70, cooldown: cooldown)
@@ -243,7 +245,7 @@ struct PressureAlertStateMachineTests {
         let first = hold(&machine, thermal: 2, seconds: 0...60, cooldown: cooldown)
         let firstAlert = try #require(first.first)
         #expect(first == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 1)])
-        machine.rollbackNotification(for: firstAlert, at: t0.addingTimeInterval(61))
+        machine.completeNotification(for: firstAlert, delivered: false, at: t0.addingTimeInterval(61))
         #expect(hold(&machine, thermal: 2, seconds: 62...120, cooldown: cooldown).isEmpty)
         let retried = hold(&machine, thermal: 2, seconds: 121...125, cooldown: cooldown)
         let retriedAlert = try #require(retried.first)
@@ -251,7 +253,7 @@ struct PressureAlertStateMachineTests {
 
         // 2. episode 已恢复后才收到迟到的投递失败回调：同样回滚冷却时间戳，不误伤下一次新 episode。
         _ = hold(&machine, thermal: 0, seconds: 126...130, cooldown: cooldown)
-        machine.rollbackNotification(for: retriedAlert, at: t0.addingTimeInterval(131))
+        machine.completeNotification(for: retriedAlert, delivered: false, at: t0.addingTimeInterval(131))
         let nextEpisode = hold(&machine, thermal: 2, seconds: 200...260, cooldown: cooldown)
         #expect(nextEpisode == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 3)])
     }
@@ -272,7 +274,7 @@ struct PressureAlertStateMachineTests {
         #expect(secondAlert.deliveryID != firstAlert.deliveryID)
 
         // 旧请求 #1 迟到报失败，不得撤销新请求 #2 的已通知档位或冷却记录。
-        machine.rollbackNotification(for: firstAlert, at: t0.addingTimeInterval(1081))
+        machine.completeNotification(for: firstAlert, delivered: false, at: t0.addingTimeInterval(1081))
         #expect(hold(&machine, thermal: 2, seconds: 1082...1200, cooldown: cooldown).isEmpty)
 
         _ = hold(&machine, thermal: 0, seconds: 1201...1205, cooldown: cooldown)
@@ -282,8 +284,43 @@ struct PressureAlertStateMachineTests {
         machine.reset(.thermal)
         let afterReset = hold(&machine, thermal: 2, seconds: 1400...1460, cooldown: cooldown)
         #expect(afterReset == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 3)])
-        machine.rollbackNotification(for: secondAlert, at: t0.addingTimeInterval(1461))
+        machine.completeNotification(for: secondAlert, delivered: false, at: t0.addingTimeInterval(1461))
         #expect(hold(&machine, thermal: 2, seconds: 1462...1550, cooldown: cooldown).isEmpty)
+    }
+
+    @Test(arguments: [true, false])
+    func twoFailedOverlappingThermalNotificationsAllowDowngradedRetry(olderFailsFirst: Bool) throws {
+        var machine = PressureAlertStateMachine()
+        let cooldown: TimeInterval = 15 * 60
+        let serious = try #require(hold(&machine, thermal: 2, seconds: 0...60, cooldown: cooldown).first)
+        let critical = try #require(hold(&machine, thermal: 3, seconds: 61...121, cooldown: cooldown).first)
+        #expect(serious.level == 2)
+        #expect(critical.level == 3)
+
+        machine.completeNotification(for: olderFailsFirst ? serious : critical, delivered: false, at: t0.addingTimeInterval(122))
+        machine.completeNotification(for: olderFailsFirst ? critical : serious, delivered: false, at: t0.addingTimeInterval(123))
+        #expect(hold(&machine, thermal: 2, seconds: 124...182, cooldown: cooldown).isEmpty)
+        let retry = hold(&machine, thermal: 2, seconds: 183...190, cooldown: cooldown)
+        #expect(retry.map(\.level) == [2])
+    }
+
+    @Test(arguments: [2, 3])
+    func failedThermalNotificationPreservesTheOtherConfirmedLevel(confirmedLevel: Int) throws {
+        var machine = PressureAlertStateMachine()
+        let cooldown: TimeInterval = 15 * 60
+        let serious = try #require(hold(&machine, thermal: 2, seconds: 0...60, cooldown: cooldown).first)
+        let critical = try #require(hold(&machine, thermal: 3, seconds: 61...121, cooldown: cooldown).first)
+
+        machine.completeNotification(
+            for: confirmedLevel == 2 ? serious : critical, delivered: true, at: t0.addingTimeInterval(122)
+        )
+        machine.completeNotification(
+            for: confirmedLevel == 2 ? critical : serious, delivered: false, at: t0.addingTimeInterval(123)
+        )
+        #expect(hold(&machine, thermal: 2, seconds: 124...190, cooldown: cooldown).isEmpty)
+
+        let retriedUpgrades = hold(&machine, thermal: 3, seconds: 191...255, cooldown: cooldown)
+        #expect(retriedUpgrades.map(\.level) == (confirmedLevel == 2 ? [3] : []))
     }
 }
 

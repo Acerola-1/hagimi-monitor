@@ -16,8 +16,6 @@ struct StatisticsSettingsView: View {
     /// 摘要数据源：正式运行跟随记录器发布；验证夹具模式下只读夹具。
     @StateObject private var dataSource: StatisticsOverviewDataSource
     @State private var range: StatisticsOverviewRange = StatisticsSettingsView.initialRange
-    /// 当前范围的时间序列：事件聚合与压力累计由它推导，换范围或新桶封口时重取。
-    @State private var series: [StatisticsRow] = []
     /// 压力告警：本页是「查看」落点，在屏即视为已读（红点清除）。
     @ObservedObject private var alerts = PressureAlertCenter.shared
     /// 实时应用高负载提示（与历史概览卡片空间分离）。
@@ -58,16 +56,7 @@ struct StatisticsSettingsView: View {
         MonitorPalette(preference: settings.colorSchemePreference, colorScheme: colorScheme)
     }
 
-    private var aggregate: StatisticsRow? { dataSource.range(range) }
-
-    private var events: [StatisticsOverviewModel.Event] {
-        StatisticsOverviewModel.events(from: series, bucketSeconds: bucketSeconds, now: dataSource.referenceNow)
-    }
-
-    /// 序列桶宽：从序列推断（判据见 StatisticsOverviewModel.bucketSeconds）。
-    private var bucketSeconds: TimeInterval {
-        StatisticsOverviewModel.bucketSeconds(for: range, series: series)
-    }
+    private var overview: StatisticsRecorder.Overview? { dataSource.overviews[range] }
 
     var body: some View {
         SettingsPage {
@@ -90,13 +79,10 @@ struct StatisticsSettingsView: View {
         }
         .task {
             dataSource.start()
-            loadSeries()
             notificationDelegate.refreshAuthorizationStatus()
         }
         .onAppear { recorder.setOverviewObservationActive(true) }
         .onDisappear { recorder.setOverviewObservationActive(false) }
-        .onChange(of: range) { _, _ in loadSeries() }
-        .onChange(of: aggregate?.t) { _, _ in loadSeries() }
         .background {
             SettingsPageOnScreenReader { isPageOnScreen = $0 }
         }
@@ -106,12 +92,6 @@ struct StatisticsSettingsView: View {
         }
         .onChange(of: alerts.statisticsEntryUnread) { _, unread in
             if unread, isPageOnScreen { alerts.markAllRead() }
-        }
-    }
-
-    private func loadSeries() {
-        dataSource.series(range) { rows in
-            series = rows
         }
     }
 
@@ -260,10 +240,10 @@ struct StatisticsSettingsView: View {
                         headline: String(localized: "stats.summary.off"),
                         detail: String(localized: "stats.summary.off.detail")
                     )
-                } else if let row = aggregate {
-                    pressureStatusRow(for: row)
+                } else if let overview {
+                    pressureStatusRow(for: overview)
                     fullBleedDivider
-                    metricsGrid(for: row)
+                    metricsGrid(for: overview.row)
                 } else {
                     statusNoticeRow(
                         icon: "tray",
@@ -278,7 +258,7 @@ struct StatisticsSettingsView: View {
     }
 
     private var coverageSummary: StatisticsOverviewModel.CoverageSummary {
-        StatisticsOverviewModel.coverageSummary(for: range, row: aggregate, now: dataSource.referenceNow)
+        StatisticsOverviewModel.coverageSummary(for: range, row: overview?.row, now: dataSource.referenceNow)
     }
 
     private var rangeBar: some View {
@@ -313,10 +293,10 @@ struct StatisticsSettingsView: View {
 
     // MARK: - 系统压力双格状态栏（内存压力 | 热压力）
 
-    private func pressureStatusRow(for row: StatisticsRow) -> some View {
+    private func pressureStatusRow(for overview: StatisticsRecorder.Overview) -> some View {
         HStack(spacing: 0) {
             PressureStatusCell(
-                status: StatisticsOverviewModel.dimensionStatus(for: .memory, row: row, events: events),
+                status: StatisticsOverviewModel.dimensionStatus(for: .memory, row: overview.row, events: overview.events),
                 palette: palette,
                 popoverCoordinator: popoverCoordinator,
                 onOpenReport: {
@@ -325,7 +305,7 @@ struct StatisticsSettingsView: View {
             )
             gridVerticalDivider
             PressureStatusCell(
-                status: StatisticsOverviewModel.dimensionStatus(for: .thermal, row: row, events: events),
+                status: StatisticsOverviewModel.dimensionStatus(for: .thermal, row: overview.row, events: overview.events),
                 palette: palette,
                 popoverCoordinator: popoverCoordinator,
                 onOpenReport: {

@@ -106,17 +106,26 @@ struct StatisticsOverviewFixture {
 /// 只读,不写采样或统计链路。
 @MainActor
 final class StatisticsOverviewDataSource: ObservableObject {
-    @Published private(set) var rows: [StatisticsOverviewRange: StatisticsRow?] = [:]
+    @Published private(set) var overviews: [StatisticsOverviewRange: StatisticsRecorder.Overview] = [:]
 
     private let recorder: StatisticsRecorder?
     private let fixture: StatisticsOverviewFixture?
-    private var cancellables: Set<AnyCancellable> = []
+    private var observation: AnyCancellable?
 
     init(recorder: StatisticsRecorder?, fixture: StatisticsOverviewFixture?) {
         self.recorder = recorder
         self.fixture = fixture
         if let fixture {
-            rows = fixture.rows
+            for range in StatisticsOverviewRange.allCases {
+                guard let row = fixture.rows[range] ?? nil else { continue }
+                let series = fixture.series[range] ?? []
+                let events = StatisticsOverviewModel.events(
+                    from: series,
+                    bucketSeconds: StatisticsOverviewModel.bucketSeconds(for: range, series: series),
+                    now: fixture.loadedAt
+                )
+                overviews[range] = StatisticsRecorder.Overview(row: row, events: events)
+            }
         }
     }
 
@@ -131,28 +140,11 @@ final class StatisticsOverviewDataSource: ObservableObject {
     /// 时间基准:夹具用载入时刻(状态稳定,便于目测),正式运行取实时当前时间。
     var referenceNow: Date { fixture?.loadedAt ?? Date() }
 
-    /// 订阅记录器的发布(概览行每分钟封口后刷新);夹具模式无需订阅。
-    /// 「当前状态」尚未接入展示,这里不预取最近观测,免得每分钟空跑一次查询。
+    /// 订阅每次封口后的完整概览。夹具模式在初始化时已生成快照。
     func start() {
-        guard let recorder else { return }
-        rows = recorder.rangeRows
-        recorder.$rangeRows
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] rows in
-                self?.rows = rows
-            }
-            .store(in: &cancellables)
-    }
-
-    func range(_ range: StatisticsOverviewRange) -> StatisticsRow? {
-        rows[range] ?? nil
-    }
-
-    func series(_ range: StatisticsOverviewRange, completion: @escaping @MainActor @Sendable ([StatisticsRow]) -> Void) {
-        if let fixture {
-            completion(fixture.series[range] ?? [])
-            return
+        guard let recorder, observation == nil else { return }
+        observation = recorder.$overviews.sink { [weak self] overviews in
+            self?.overviews = overviews
         }
-        recorder?.rangeSeries(range, completion: completion)
     }
 }

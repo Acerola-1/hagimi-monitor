@@ -2,7 +2,7 @@ import Foundation
 
 /// 概览与详情的聚合层:把范围序列里连续出现同类压力的桶合并成一段。
 /// 只陈述观测事实,不引入实时规则引擎;段的状态判定见 StatisticsOverviewModel。
-enum StatisticsSummary {
+nonisolated enum StatisticsSummary {
     /// 连续出现同一类压力的桶合并成的一段。
     struct Episode: Identifiable, Equatable {
         enum Kind: Equatable {
@@ -25,6 +25,12 @@ enum StatisticsSummary {
     /// 从范围序列聚合成压力时段。相邻桶(间隔不超过一个桶宽)连续出现压力时
     /// 合并为一段;中断(桶缺失或压力为零)即断开,不跨缺口连接。
     static func episodes(from series: [StatisticsRow], bucketSeconds: TimeInterval) -> [Episode] {
+        episodes(from: series, bucketDuration: { _ in bucketSeconds })
+    }
+
+    static func episodes(
+        from series: [StatisticsRow], bucketDuration: (StatisticsRow) -> TimeInterval
+    ) -> [Episode] {
         var episodes: [Episode] = []
         for kind in [Episode.Kind.thermal, .memory] {
             var runStart: Date?
@@ -54,14 +60,14 @@ enum StatisticsSummary {
                     continue
                 }
                 let start = Date(timeIntervalSince1970: TimeInterval(row.t))
-                if let previousEnd = runEnd, start.timeIntervalSince(previousEnd) > bucketSeconds {
+                if let previousEnd = runEnd, start > previousEnd {
                     // 与上一桶不连续(缺桶)时按新时段起算,不把缺口并在同一段里。
                     flush()
                 }
                 if runStart == nil {
                     runStart = start
                 }
-                runEnd = start.addingTimeInterval(bucketSeconds)
+                runEnd = start.addingTimeInterval(bucketDuration(row))
                 pressureSeconds += pressure
             }
             flush()

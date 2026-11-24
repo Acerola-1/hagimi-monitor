@@ -387,31 +387,82 @@ struct StatisticsRecorderTests {
             db.maintain(now: now)
         }
 
-        let recorder = StatisticsRecorder(databaseURL: dbURL, calendar: calendar)
+        let recorder = StatisticsRecorder(
+            databaseURL: dbURL, calendar: calendar, processStoreDirectory: dbURL.deletingPathExtension()
+        )
         defer { recorder.suspend() }
 
         let memory = makeModule(.memory, value: 80, metrics: [
             MonitorMetric(name: "pressure-level", value: "1", numericValue: 1),
         ])
         // 内存期望采样周期 3s、maxGap = 9s；间隔取 <= 4s 确保落入有效观测口径。
-        let delta = max(0.05, min(4.0, now.timeIntervalSince(currentHourStart) * 0.5))
-        recordFrame(recorder, [memory], at: currentHourStart)
-        recordFrame(recorder, [memory], at: currentHourStart.addingTimeInterval(delta))
+        let minute = recentMinuteBase(0)
+        recordFrame(recorder, [memory], at: minute)
+        recordFrame(recorder, [memory], at: minute.addingTimeInterval(2))
         recorder.sealCompletedMinuteForTesting()
 
-        let series: [StatisticsRow] = await withCheckedContinuation { continuation in
-            recorder.rangeSeries(.week) { rows in
-                continuation.resume(returning: rows)
-            }
+        await withCheckedContinuation { continuation in
+            recorder.loadOverview { continuation.resume() }
         }
 
-        let currentHourTimestamp = Int64(currentHourStart.timeIntervalSince1970)
-        #expect(series.contains { $0.t == currentHourTimestamp })
-        let bucketSeconds = StatisticsOverviewModel.bucketSeconds(for: .week, series: series)
-        #expect(bucketSeconds == 3600)
-        let events = StatisticsOverviewModel.events(from: series, bucketSeconds: bucketSeconds, now: Date())
-        let memoryEvent = events.first { $0.kind == .memory }
+        let week = recorder.overviews[.week]
+        #expect((week?.row.memNormalS ?? 0) >= 60)
+        #expect((week?.row.memWarnS ?? 0) > 0)
+        let memoryEvent = week?.events.first { $0.kind == .memory }
         #expect(memoryEvent?.state == .ongoing)
+    }
+
+    @Test func publishedOverviewRefreshesPressureOnMinuteSealWithinSameWindow() async throws {
+        let now = Date()
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = .gmt
+        // Keep both test buckets in the current hour, even when the clock is near an hour boundary.
+        let minuteOffset = 30 - calendar.component(.minute, from: now)
+        calendar.timeZone = try #require(TimeZone(secondsFromGMT: minuteOffset * 60))
+        let normalMinute = Date(timeIntervalSince1970: floor(now.timeIntervalSince1970 / 60) * 60)
+        let warningMinute = normalMinute.addingTimeInterval(-60)
+        let dbURL = tempDatabaseURL("overview-minute-refresh")
+        do {
+            let database = StatisticsDatabase(url: dbURL, calendar: calendar)
+            let fields: [String: Double] = ["cover_s": 60, "valid_mem_s": 60, "mem_warn_s": 60]
+            database.insertMinuteRow(StatisticsRow(
+                t: Int64(warningMinute.timeIntervalSince1970), n: 60,
+                values: StatisticsRow.columns.map { fields[$0.name] }
+            ))
+        }
+
+        let recorder = StatisticsRecorder(
+            databaseURL: dbURL, calendar: calendar, processStoreDirectory: dbURL.deletingPathExtension()
+        )
+        let dataSource = StatisticsOverviewDataSource(recorder: recorder, fixture: nil)
+        dataSource.start()
+        recorder.setOverviewObservationActive(true)
+        defer { recorder.suspend() }
+        await withCheckedContinuation { continuation in
+            recorder.loadOverview { continuation.resume() }
+        }
+        let previous = dataSource.overviews
+        for range in StatisticsOverviewRange.allCases {
+            #expect(previous[range]?.events.first?.state == .ongoing)
+        }
+
+        let normal = makeModule(.memory, value: 40, metrics: [
+            MonitorMetric(name: "pressure-level", value: "0", numericValue: 0),
+        ])
+        recordFrame(recorder, [normal], at: normalMinute)
+        recordFrame(recorder, [normal], at: normalMinute.addingTimeInterval(2))
+        recordFrame(recorder, [normal], at: normalMinute.addingTimeInterval(60))
+
+        let deadline = ContinuousClock.now.advanced(by: .seconds(2))
+        while (dataSource.overviews[.today]?.row.memNormalS ?? 0) == 0, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        for range in StatisticsOverviewRange.allCases {
+            let updated = try #require(dataSource.overviews[range])
+            #expect(updated.row.t == previous[range]?.row.t)
+            #expect((updated.row.memNormalS ?? 0) > 0)
+            #expect(updated.events.first?.state == .recovered)
+        }
     }
 }
 
@@ -750,6 +801,28 @@ struct StatisticsOverviewModelTests {
         let interruptedEvents = StatisticsOverviewModel.events(from: interrupted, bucketSeconds: bucket, now: now)
         #expect(interruptedEvents[0].state == .interrupted)
         #expect(interruptedEvents[0].pressureSeconds == 120, "中断不得继续累计持续时间")
+    }
+
+    @Test func recoveryRequiresObservationOfTheSamePressureDimension() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let pressure = row([
+            "valid_mem_s": 60, "mem_warn_s": 60,
+            "valid_thermal_s": 60, "th_serious_s": 60,
+        ], t: now.timeIntervalSince1970 - 480)
+        let onlyThermal = row([
+            "valid_thermal_s": 60, "th_nominal_s": 60,
+        ], t: now.timeIntervalSince1970 - 60)
+        let onlyMemory = row([
+            "valid_mem_s": 60, "mem_normal_s": 60,
+        ], t: now.timeIntervalSince1970 - 60)
+
+        let observedThermal = StatisticsOverviewModel.events(from: [pressure, onlyThermal], bucketSeconds: 60, now: now)
+        #expect(observedThermal.first { $0.kind == .memory }?.state == .interrupted)
+        #expect(observedThermal.first { $0.kind == .thermal }?.state == .recovered)
+
+        let observedMemory = StatisticsOverviewModel.events(from: [pressure, onlyMemory], bucketSeconds: 60, now: now)
+        #expect(observedMemory.first { $0.kind == .thermal }?.state == .interrupted)
+        #expect(observedMemory.first { $0.kind == .memory }?.state == .recovered)
     }
 
     @Test func conclusionCoversEmptyInsufficientQuietAndEvents() {

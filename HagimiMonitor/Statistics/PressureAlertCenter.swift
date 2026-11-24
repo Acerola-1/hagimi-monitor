@@ -250,10 +250,12 @@ final class PressureAlertCenter: ObservableObject {
             trigger: nil
         )
         UNUserNotificationCenter.current().add(request) { [weak self] error in
-            guard let error else { return }
-            AppLogger.sampler.error("发送压力告警通知失败: \(error.localizedDescription, privacy: .public)")
+            if let error {
+                AppLogger.sampler.error("发送压力告警通知失败: \(error.localizedDescription, privacy: .public)")
+            }
+            let delivered = error == nil
             DispatchQueue.main.async { [weak self] in
-                self?.machine.rollbackNotification(for: alert, at: Date())
+                self?.machine.completeNotification(for: alert, delivered: delivered, at: Date())
             }
         }
     }

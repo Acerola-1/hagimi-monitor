@@ -38,20 +38,34 @@ struct PressureAlertStateMachine: Sendable {
     }
 
     private struct KindState: Sendable {
+        var episodeID: UInt64 = 0
         /// episode 内到过的最高档;0 = 无 episode。
         var peakLevel = 0
         /// 本 episode 内已被哪些入口看过;新 episode 与升级时清空(重新点亮全部)。
         var readEntries: Set<Entry> = []
         var severeSince: Date?
-        var notifiedLevel: Int?
-        /// 最近一次成功发出通知的时刻（跨 episode 保留，用于 15 分钟防打扰冷却）。
-        var lastNotifiedAt: Date?
-        /// 最近一次待投递通知的回滚快照，防止系统拒绝投递时保留错误档位或冷却时间。
-        var lastAttemptID: UInt64?
-        var lastAttemptNotifiedLevel: Int?
-        var lastAttemptNotifiedAt: Date?
-        var lastAttemptPreviousNotifiedLevel: Int?
-        var lastAttemptPreviousNotifiedAt: Date?
+        var confirmedLevel = 0
+        var lastConfirmedAt: Date?
+        var pending: [UInt64: Delivery] = [:]
+
+        /// 待投递也占用当前档位，避免系统回调前重复提交同档请求。
+        var reservedLevel: Int {
+            pending.values.reduce(confirmedLevel) { level, delivery in
+                delivery.episodeID == episodeID ? max(level, delivery.level) : level
+            }
+        }
+
+        var lastReservedAt: Date? {
+            pending.values.lazy.map(\.submittedAt).reduce(lastConfirmedAt) { last, submittedAt in
+                max(last ?? submittedAt, submittedAt)
+            }
+        }
+    }
+
+    private struct Delivery: Sendable {
+        let episodeID: UInt64
+        let level: Int
+        let submittedAt: Date
     }
 
     private var memory = KindState()
@@ -137,20 +151,15 @@ struct PressureAlertStateMachine: Sendable {
         var state = self[kind]
         defer { self[kind] = state }
 
-        // 跌回红点门槛以下即 episode 结束:未读一并清除(告警过去后红点自动消失)，
-        // 但保留上次通知时间（及未落定的投递尝试快照）供跨事件冷却判断与失败回滚。
+        // 恢复时清除本事件状态。保留已确认时间和在途请求，供跨事件冷却使用。
         guard Self.isAlertLevel(kind, level: level) else {
-            let previousNotifiedAt = state.lastNotifiedAt
-            let attemptID = state.lastAttemptID
-            let attemptLevel = state.lastAttemptNotifiedLevel
-            let attemptAt = state.lastAttemptNotifiedAt
-            let attemptPreviousAt = state.lastAttemptPreviousNotifiedAt
-            state = KindState()
-            state.lastNotifiedAt = previousNotifiedAt
-            state.lastAttemptID = attemptID
-            state.lastAttemptNotifiedLevel = attemptLevel
-            state.lastAttemptNotifiedAt = attemptAt
-            state.lastAttemptPreviousNotifiedAt = attemptPreviousAt
+            if state.peakLevel > 0 {
+                state.episodeID &+= 1
+                state.peakLevel = 0
+                state.readEntries.removeAll()
+                state.severeSince = nil
+                state.confirmedLevel = 0
+            }
             return
         }
 
@@ -177,47 +186,33 @@ struct PressureAlertStateMachine: Sendable {
         }
         guard let since = state.severeSince, date.timeIntervalSince(since) >= sustain else { return }
         // 同 episode 内只向更高严重度升级通知，避免从临界降回严重时再次弹出通知。
-        guard level > (state.notifiedLevel ?? 0) else { return }
+        let reservedLevel = state.reservedLevel
+        guard level > reservedLevel else { return }
         // 跨事件冷却：同一 episode 内的严重度升级不受冷却限制，新 episode 在冷却期内不发通知。
-        if state.notifiedLevel == nil, cooldown > 0,
-           let lastNotified = state.lastNotifiedAt,
-           date.timeIntervalSince(lastNotified) < cooldown {
+        if reservedLevel == 0, cooldown > 0,
+           let lastReservedAt = state.lastReservedAt,
+           date.timeIntervalSince(lastReservedAt) < cooldown {
             return
         }
         nextDeliveryID &+= 1
         let deliveryID = nextDeliveryID
-        state.lastAttemptID = deliveryID
-        state.lastAttemptPreviousNotifiedLevel = state.notifiedLevel
-        state.lastAttemptPreviousNotifiedAt = state.lastNotifiedAt
-        state.lastAttemptNotifiedLevel = level
-        state.lastAttemptNotifiedAt = date
-        state.notifiedLevel = level
-        state.lastNotifiedAt = date
+        state.pending[deliveryID] = Delivery(episodeID: state.episodeID, level: level, submittedAt: date)
         alerts.append(Alert(kind: kind, level: level, deliveryID: deliveryID))
     }
 
-    /// 通知投递被系统拒绝时回滚最近一次未送达的档位与冷却记录；
-    /// 若当前仍处于严重档，则从回滚时刻起算新的 sustain 窗口，避免每秒重发形成风暴。
-    mutating func rollbackNotification(for alert: Alert, at date: Date) {
+    /// 投递回调只确认或释放自己的请求。当前档位失去投递占用时，重新等待持续门槛再重试。
+    mutating func completeNotification(for alert: Alert, delivered: Bool, at date: Date) {
         var state = self[alert.kind]
-        guard state.lastAttemptID == alert.deliveryID,
-              state.lastAttemptNotifiedLevel == alert.level,
-              let attemptAt = state.lastAttemptNotifiedAt,
-              state.lastNotifiedAt == attemptAt else {
-            return
-        }
-        if state.notifiedLevel == alert.level {
-            state.notifiedLevel = state.lastAttemptPreviousNotifiedLevel
-        }
-        state.lastNotifiedAt = state.lastAttemptPreviousNotifiedAt
-        if state.severeSince != nil {
+        guard let delivery = state.pending.removeValue(forKey: alert.deliveryID) else { return }
+        let isCurrentEpisode = delivery.episodeID == state.episodeID
+        if delivered {
+            state.lastConfirmedAt = max(state.lastConfirmedAt ?? delivery.submittedAt, delivery.submittedAt)
+            if isCurrentEpisode {
+                state.confirmedLevel = max(state.confirmedLevel, delivery.level)
+            }
+        } else if isCurrentEpisode, state.severeSince != nil, delivery.level > state.reservedLevel {
             state.severeSince = date
         }
-        state.lastAttemptID = nil
-        state.lastAttemptNotifiedLevel = nil
-        state.lastAttemptNotifiedAt = nil
-        state.lastAttemptPreviousNotifiedLevel = nil
-        state.lastAttemptPreviousNotifiedAt = nil
         self[alert.kind] = state
     }
 
