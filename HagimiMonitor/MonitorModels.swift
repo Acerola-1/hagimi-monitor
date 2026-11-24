@@ -903,7 +903,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             #else
             let cpu = enrichCPU(cpuCursor.sample(limit: 12, includeSystemProcesses: true))
             #endif
-            let memory = enrich(sampleTopMemoryProcesses(includeSystemProcesses: true))
+            let memory = enrich(sampleTopMemoryProcesses(limit: 12, includeSystemProcesses: true))
             let gpu = enrichGPU(gpuCursor.sample(limit: 12, includeSystemProcesses: true))
             #if DIRECT_DISTRIBUTION
             let disk = enrichDisk(diskCursor.sampleTopDiskProcesses(includeSystemProcesses: true))
@@ -912,18 +912,45 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             #endif
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.statisticsRecorder.recordProcesses(cpu: cpu, memory: memory, gpu: gpu, network: [], disk: disk, at: Date())
+                    self?.statisticsRecorder.recordProcesses(
+                        cpu: cpu,
+                        memory: memory,
+                        gpu: gpu,
+                        network: [],
+                        disk: disk,
+                        at: Date(),
+                        providedMetrics: [.cpu, .memory, .gpu]
+                    )
                 }
             }
         }
         procSampleQueue.async(execute: sampleFast)
         #if DIRECT_DISTRIBUTION
-        // nettop 独占 nettopQueue,单次实测数十~数百毫秒;速率为窗口均值,×60s 近似为分钟字节量
+        // nettop 独占 nettopQueue,单次实测数十~数百毫秒;速率为窗口均值,按真实窗口积分近似为分钟字节量
         let sampleNetwork: @Sendable () -> Void = { [weak self] in
-            let network = enrichNetwork(networkCursor.sample(limit: 5, includeSystemProcesses: true))
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    self?.statisticsRecorder.recordProcesses(cpu: [], memory: [], gpu: [], network: network, disk: [], at: Date())
+            switch networkCursor.sampleOutcome(limit: 5, includeSystemProcesses: true) {
+            case .failed:
+                return
+            case .baselineEstablished(let sampledAt):
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.statisticsRecorder.establishNetworkBaseline(at: sampledAt)
+                    }
+                }
+            case .sampled(let raw, let sampledAt):
+                let network = enrichNetwork(raw)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.statisticsRecorder.recordProcesses(
+                            cpu: [],
+                            memory: [],
+                            gpu: [],
+                            network: network,
+                            disk: [],
+                            at: sampledAt,
+                            providedMetrics: [.network]
+                        )
+                    }
                 }
             }
         }
@@ -1155,8 +1182,15 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         if active.contains(.network) {
             group.enter()
             nettopQueue.async {
-                let raw = networkCursor.sample(limit: 5, includeSystemProcesses: networkIncludeSystem)
-                collector.networkProcesses = enrichNetwork(raw)
+                switch networkCursor.sampleOutcome(limit: 5, includeSystemProcesses: networkIncludeSystem) {
+                case .failed:
+                    // 保留 nil，使 publish(_:assign:) 在探针超时或失败时保留上一次列表。
+                    break
+                case .baselineEstablished:
+                    collector.networkProcesses = []
+                case .sampled(let raw, _):
+                    collector.networkProcesses = enrichNetwork(raw)
+                }
                 group.leave()
             }
         }

@@ -61,6 +61,16 @@ nonisolated private final class OutputDataCaptureBox: @unchecked Sendable {
     }
 }
 
+/// 网络探针单次采样的结果，用于区分有效空榜、首次建立基线与探针失败。
+nonisolated enum NetworkSampleOutcome: Sendable {
+    /// 首次成功读取 nettop 并记录字节基线，尚无上一帧可做差分。
+    case baselineEstablished(at: Date)
+    /// 成功完成差分采样；数组为空表示当前窗口内确实无进程产生网络流量。
+    case sampled([RawNetworkProcess], at: Date)
+    /// nettop 启动失败、超时、非零退出、输出为空或墙钟回拨，未产出有效观测。
+    case failed
+}
+
 /// 网络差分游标:自持上拍字节快照,各使用方(面板 2s、统计 60s)各用独立游标,
 /// 互不截断对方的差分窗口。
 /// 安全不变式：内部状态仅在串行采样队列（nettopQueue）上读写，不存在跨线程并发修改。
@@ -71,53 +81,25 @@ nonisolated final class NetworkDeltaCursor: @unchecked Sendable {
     /// 后台采样网络流量最高的 N 个进程。
     /// 使用 `nettop -P -L 1 -n` 获取每个进程的上下行字节，维护快照计算速率（字节/秒）。
     /// 返回的 RawNetworkProcess 不含图标——图标由主线程 enrichNetwork(_:) 补齐。
-    func sample(limit: Int, includeSystemProcesses: Bool) -> [RawNetworkProcess] {
-        let task = Process()
-        task.launchPath = "/usr/bin/nettop"
-        task.arguments = [
-            "-P", "-L", "1", "-n", "-k",
-            "time,interface,state,rx_dupe,rx_ooo,re-tx,rtt_avg,rcvsize,tx_win,tc_class,tc_mgt,cc_algo,P,C,R,W,arch"
-        ]
-        task.environment = ["NSUnbufferedIO": "YES", "LC_ALL": "en_US.UTF-8"]
+    func sampleOutcome(limit: Int, includeSystemProcesses: Bool) -> NetworkSampleOutcome {
+        consume(
+            csvOutput: runNettop(),
+            at: Date(),
+            limit: limit,
+            includeSystemProcesses: includeSystemProcesses
+        )
+    }
 
-        let inputPipe = Pipe()
-        let outputPipe = Pipe()
-        task.standardInput = inputPipe
-        task.standardOutput = outputPipe
-        task.standardError = FileHandle.nullDevice
-
-        do {
-            try task.run()
-        } catch {
-            return []
-        }
-
-        inputPipe.fileHandleForWriting.closeFile()
-        // 读输出放后台线程,信号量等待,超时终止进程并放弃本次结果(保留上一次列表)。
-        let box = OutputDataCaptureBox()
-        let done = DispatchSemaphore(value: 0)
-        DispatchQueue.global(qos: .utility).async {
-            box.data = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            done.signal()
-        }
-        if done.wait(timeout: .now() + nettopSampleTimeout) == .timedOut {
-            task.terminate()
-            // SIGTERM 可能被挂死的 nettop 无视:后台兜一层升级 SIGKILL 并收尸,
-            // 避免僵尸进程与读取线程泄漏;本路径立即返回,不阻塞调用方。
-            DispatchQueue.global(qos: .utility).async {
-                if task.isRunning { kill(task.processIdentifier, SIGKILL) }
-                task.waitUntilExit()
-                _ = outputPipe.fileHandleForReading.readDataToEndOfFile()
-            }
-            return []
-        }
-        task.waitUntilExit()
-        let outputData = box.data ?? Data()
-        outputPipe.fileHandleForReading.closeFile()
-
-        guard task.terminationStatus == 0,
-              let output = String(data: outputData, encoding: .utf8), !output.isEmpty else {
-            return []
+    /// 消费一次 `nettop -P -L 1 -n` 输出并推进游标基线；供生产入口与确定性单测共用。
+    /// 仅当探针失败或墙钟回拨时返回 `.failed` 且保持游标基线不被空结果错推。
+    func consume(
+        csvOutput: String?,
+        at now: Date,
+        limit: Int,
+        includeSystemProcesses: Bool
+    ) -> NetworkSampleOutcome {
+        guard let output = csvOutput, !output.isEmpty else {
+            return .failed
         }
 
         // 解析 nettop CSV 输出
@@ -141,25 +123,34 @@ nonisolated final class NetworkDeltaCursor: @unchecked Sendable {
             currentList[pid] = NetworkSnapshotEntry(rawName: rawName, download: download, upload: upload)
         }
 
+        // 首拍尚无上一帧字节快照可做差分，先落地游标基线并通知上层同步时间起点。
+        guard let previousTime else {
+            previousSnapshot = currentList
+            self.previousTime = now
+            return .baselineEstablished(at: now)
+        }
+
         // 计算增量与速率（字节/秒）。
         //
         // `dt` 必须显式校验,不能只靠「首拍没有 prev」来保证它为正:`Date()` 是**墙钟**,
         // 同一瞬间的两次采样会得到 dt == 0(`x / 0` → `+inf`),墙钟回拨会得到负值——
         // 两种情况下 `UInt64(Double)` 都**直接 trap**(实测在测试宿主里稳定复现:
         // `_assertionFailure` @ TopNetworkProcess.swift:129)。
-        let now = Date()
-        let dt = previousTime.map { now.timeIntervalSince($0) } ?? 0
-        var perProcessRate: [pid_t: (download: UInt64, upload: UInt64)] = [:]
+        let dt = now.timeIntervalSince(previousTime)
+        guard dt > 0 else {
+            previousSnapshot = currentList
+            self.previousTime = now
+            return .failed
+        }
 
-        if dt > 0 {
-            for (pid, current) in currentList {
-                // 首次采样没有基线,跳过
-                guard let prev = previousSnapshot[pid] else { continue }
-                let downloadDelta = current.download >= prev.download ? current.download - prev.download : 0
-                let uploadDelta = current.upload >= prev.upload ? current.upload - prev.upload : 0
-                guard downloadDelta > 0 || uploadDelta > 0 else { continue }
-                perProcessRate[pid] = (rate(downloadDelta, over: dt), rate(uploadDelta, over: dt))
-            }
+        var perProcessRate: [pid_t: (download: UInt64, upload: UInt64)] = [:]
+        for (pid, current) in currentList {
+            // 新出现进程没有基线,跳过
+            guard let prev = previousSnapshot[pid] else { continue }
+            let downloadDelta = current.download >= prev.download ? current.download - prev.download : 0
+            let uploadDelta = current.upload >= prev.upload ? current.upload - prev.upload : 0
+            guard downloadDelta > 0 || uploadDelta > 0 else { continue }
+            perProcessRate[pid] = (rate(downloadDelta, over: dt), rate(uploadDelta, over: dt))
         }
 
         // 按宿主 App 归并:助手进程(浏览器渲染进程、各类 Helper)的流量并入宿主
@@ -199,10 +190,10 @@ nonisolated final class NetworkDeltaCursor: @unchecked Sendable {
         }
 
         previousSnapshot = currentList
-        previousTime = now
+        self.previousTime = now
 
         // 排序: max(download, upload) 降序
-        return Array(result.sorted {
+        let top = Array(result.sorted {
             let firstMax = max($0.download, $0.upload)
             let secondMax = max($1.download, $1.upload)
             if firstMax == secondMax {
@@ -210,6 +201,58 @@ nonisolated final class NetworkDeltaCursor: @unchecked Sendable {
             }
             return firstMax > secondMax
         }.prefix(limit))
+        return .sampled(top, at: now)
+    }
+
+    private func runNettop() -> String? {
+        let task = Process()
+        task.launchPath = "/usr/bin/nettop"
+        task.arguments = [
+            "-P", "-L", "1", "-n", "-k",
+            "time,interface,state,rx_dupe,rx_ooo,re-tx,rtt_avg,rcvsize,tx_win,tc_class,tc_mgt,cc_algo,P,C,R,W,arch"
+        ]
+        task.environment = ["NSUnbufferedIO": "YES", "LC_ALL": "en_US.UTF-8"]
+
+        let inputPipe = Pipe()
+        let outputPipe = Pipe()
+        task.standardInput = inputPipe
+        task.standardOutput = outputPipe
+        task.standardError = FileHandle.nullDevice
+
+        do {
+            try task.run()
+        } catch {
+            return nil
+        }
+
+        inputPipe.fileHandleForWriting.closeFile()
+        // 读输出放后台线程,信号量等待,超时终止进程并放弃本次结果(保留上一次列表)。
+        let box = OutputDataCaptureBox()
+        let done = DispatchSemaphore(value: 0)
+        DispatchQueue.global(qos: .utility).async {
+            box.data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            done.signal()
+        }
+        if done.wait(timeout: .now() + nettopSampleTimeout) == .timedOut {
+            task.terminate()
+            // SIGTERM 可能被挂死的 nettop 无视:后台兜一层升级 SIGKILL 并收尸,
+            // 避免僵尸进程与读取线程泄漏;本路径立即返回,不阻塞调用方。
+            DispatchQueue.global(qos: .utility).async {
+                if task.isRunning { kill(task.processIdentifier, SIGKILL) }
+                task.waitUntilExit()
+                _ = outputPipe.fileHandleForReading.readDataToEndOfFile()
+            }
+            return nil
+        }
+        task.waitUntilExit()
+        let outputData = box.data ?? Data()
+        outputPipe.fileHandleForReading.closeFile()
+
+        guard task.terminationStatus == 0,
+              let output = String(data: outputData, encoding: .utf8), !output.isEmpty else {
+            return nil
+        }
+        return output
     }
 
     /// 字节增量 → 速率(字节/秒),与 Stats 等行业惯例对齐。

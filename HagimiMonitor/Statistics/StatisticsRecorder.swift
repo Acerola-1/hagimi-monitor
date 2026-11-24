@@ -417,6 +417,16 @@ final class StatisticsRecorder: ObservableObject {
         return elapsed
     }
 
+    /// 网络探针首拍建立字节基线时同步记录网络通道时间基线，
+    /// 既避免向告警中心误报空榜，又让下一正常采样帧可按完整窗口积分。
+    func establishNetworkBaseline(at date: Date) {
+        guard recordingActive, !systemAsleep else { return }
+        if let lastNet = lastNetworkProcessSampleAt, date <= lastNet {
+            return
+        }
+        lastNetworkProcessSampleAt = date
+    }
+
     /// 一帧进程采样的直通入口(MonitorStore 统计定时器调用,主线程)。
     /// 网络速率为窗口均值,按各自通道的真实采样间隔折算为字节总量。
     /// 开关关闭后在途的异步采样帧经此门卫丢弃,不落入进程库。
