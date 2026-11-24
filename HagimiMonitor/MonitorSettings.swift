@@ -133,9 +133,23 @@ nonisolated struct AlertIgnoredApp: Codable, Identifiable, Equatable, Hashable, 
 
     func matches(appKey: String, name: String) -> Bool {
         if appKey == id { return true }
-        if let bundleIdentifier, !bundleIdentifier.isEmpty {
-            if appKey == "bundle:\(bundleIdentifier)" || appKey == bundleIdentifier {
-                return true
+        let selfBundleID: String? = {
+            if let bundleIdentifier, !bundleIdentifier.isEmpty {
+                return bundleIdentifier
+            }
+            if id.hasPrefix("bundle:") {
+                let suffix = String(id.dropFirst("bundle:".count))
+                return suffix.isEmpty ? nil : suffix
+            }
+            return nil
+        }()
+        if let selfBundleID, appKey == selfBundleID {
+            return true
+        }
+        if appKey.hasPrefix("bundle:") {
+            let otherBundleID = String(appKey.dropFirst("bundle:".count))
+            if let selfBundleID, !otherBundleID.isEmpty {
+                return selfBundleID == otherBundleID
             }
         }
         return !displayName.isEmpty && displayName.caseInsensitiveCompare(name) == .orderedSame
@@ -681,8 +695,9 @@ final class MonitorSettings: ObservableObject {
     func addIgnoredAlertApp(_ app: AlertIgnoredApp) {
         let duplicate = alertIgnoredApps.contains { existing in
             if existing.id == app.id { return true }
-            if let bundleID = app.bundleIdentifier, !bundleID.isEmpty, existing.bundleIdentifier == bundleID {
-                return true
+            if let existingBundle = existing.bundleIdentifier, !existingBundle.isEmpty,
+               let newBundle = app.bundleIdentifier, !newBundle.isEmpty {
+                return existingBundle == newBundle
             }
             return existing.matches(appKey: app.id, name: app.displayName)
         }

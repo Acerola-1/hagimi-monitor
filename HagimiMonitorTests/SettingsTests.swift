@@ -365,4 +365,33 @@ struct SettingsTests {
         #expect(restored.alertIgnoredApps == [windowServer])
         #expect(!restored.isAlertAppIgnored(appKey: "bundle:com.apple.Safari", name: "Safari"))
     }
+
+    @Test func alertIgnoredAppsDoNotMuteDistinctBundleIDWithSameDisplayName() {
+        let suiteName = "alertIgnoredAppsDoNotMuteDistinctBundleIDWithSameDisplayName"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defaults.removePersistentDomain(forName: suiteName)
+
+        let settings = MonitorSettings(defaults: defaults)
+        let first = AlertIgnoredApp(
+            id: "bundle:com.example.first",
+            displayName: "Helper",
+            bundleIdentifier: "com.example.first"
+        )
+        let second = AlertIgnoredApp(
+            id: "bundle:com.example.second",
+            displayName: "Helper",
+            bundleIdentifier: "com.example.second"
+        )
+
+        settings.addIgnoredAlertApp(first)
+        #expect(settings.isAlertAppIgnored(appKey: "bundle:com.example.first", name: "Helper"))
+        // 双方均有明确且不同的 Bundle ID 时，不回退按显示名误静音。
+        #expect(!settings.isAlertAppIgnored(appKey: "bundle:com.example.second", name: "Helper"))
+        // 缺失 Bundle ID 的观测记录仍允许按显示名兜底命中。
+        #expect(settings.isAlertAppIgnored(appKey: "unresolved:Helper", name: "Helper"))
+        #expect(settings.isAlertAppIgnored(appKey: "name:Helper", name: "Helper"))
+
+        settings.addIgnoredAlertApp(second)
+        #expect(settings.alertIgnoredApps.count == 2)
+    }
 }
