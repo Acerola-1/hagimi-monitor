@@ -125,13 +125,19 @@ nonisolated final class SMCReader: FanSMCReading, CPUTemperatureReading, @unchec
     /// 读取所有风扇的当前 RPM 与 min/max 范围(供面板展开用)。
     /// 任一字段失败用 0 占位;返回数组长度 = fanCount。
     func allFans() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)] {
+        allFansWithValidity().map { ($0.id, $0.currentRPM, $0.minRPM, $0.maxRPM) }
+    }
+
+    /// 读取所有风扇并保留 `F{i}Ac` 是否读取成功，防止将全量读取失败误显示为真实 `0 RPM`。
+    func allFansWithValidity() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int, isCurrentRPMValid: Bool)] {
         guard let count = fanCount() else { return [] }
-        var result: [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)] = []
+        var result: [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int, isCurrentRPMValid: Bool)] = []
         for i in 0..<count {
-            let current = Int(readValue("F\(i)Ac") ?? 0)
+            let rawCurrent = readValue("F\(i)Ac")
+            let current = Int(rawCurrent ?? 0)
             let min = Int(readValue("F\(i)Mn") ?? 0)
             let max = Int(readValue("F\(i)Mx") ?? 0)
-            result.append((id: i, currentRPM: current, minRPM: min, maxRPM: max))
+            result.append((id: i, currentRPM: current, minRPM: min, maxRPM: max, isCurrentRPMValid: rawCurrent != nil))
         }
         return result
     }

@@ -25,24 +25,26 @@ struct MonitorPalette {
     }
 
     var captionText: Color {
-        isDark ? Color.white.opacity(0.78) : Color(hex: 0x3E4756)
+        isDark ? Color.white.opacity(0.78) : Color(hex: 0x4A5362)
     }
 
-    /// 指标格、进度槽和展开区内衬共用。深色用 3% 白，浅色用同一块深石板的 5%。
+    /// 指标格、进度槽和展开区内衬共用。
     /// 调试构建可用 `-HagimiTrackFill` 覆盖当前外观下的浓度。
     var trackFill: Color {
-        if isDark {
-            let opacity = TemporaryInstanceOverrides.trackFillOpacity ?? 0.03
-            return Color.white.opacity(opacity)
+        if let override = TemporaryInstanceOverrides.trackFillOpacity {
+            return isDark ? Color.white.opacity(override) : Color(hex: 0x3C485A).opacity(override)
         }
-        let opacity = TemporaryInstanceOverrides.trackFillOpacity ?? 0.05
-        return Color(hex: 0x3C485A).opacity(opacity)
+        return isDark ? Color.white.opacity(0.03) : Color.black.opacity(0.042)
     }
 
-    /// 主行成对读数的浅底。浅色这块比指标格更需要轮廓，用 8% 深石板；深色仍跟指标格走。
+    /// 主行成对读数的浅底。
     var rowGrooveFill: Color {
-        guard !isDark else { return trackFill }
-        return Color(hex: 0x3C485A).opacity(0.08)
+        isDark ? trackFill : Color.black.opacity(0.058)
+    }
+
+    /// 卡片 0.5pt 细描边：浅色提供清晰物理边界，深色保持无边框。
+    var cardBorderColor: Color {
+        isDark ? .clear : Color.black.opacity(0.07)
     }
 
     /// 毛玻璃按钮描边。明暗和两种配色共用 10% 白。
@@ -57,10 +59,10 @@ struct MonitorPalette {
     var displayTint: Color {
         switch preference {
         case .balanced:
-            Color(hex: 0x4E7FD9)
+            return Color(hex: isDark ? 0x7D92B5 : 0x526787)
         case .vibrant:
-            // 中性蓝灰:紫族只留给 GPU,显示器是附属信息行,低饱和退场不抢色。
-            Color(hex: 0x64748B)
+            // 中性蓝灰作为附属信息行色相，浅色下压深以保证对比度。
+            return Color(hex: isDark ? 0x64748B : 0x52637A)
         }
     }
 
@@ -78,13 +80,28 @@ struct MonitorPalette {
     static let criticalTintHex: UInt32 = 0xD94848
 
     func severityTint(for severity: MonitorSeverity) -> Color {
+        if isDark {
+            switch preference {
+            case .balanced:
+                // 平衡深色使用高辨识度状态强调色，区分三档严重度。
+                switch severity {
+                case .calm: return Color(hex: 0x36B370)
+                case .warning: return Color(hex: 0xD4982A)
+                case .critical: return Color(hex: 0xE85454)
+                }
+            case .vibrant:
+                // 活力深色使用克制饱和度状态色，与高饱和模块底色保持平衡。
+                switch severity {
+                case .calm: return Color(hex: 0x2F9E64)
+                case .warning: return Color(hex: 0xB8872E)
+                case .critical: return Color(hex: Self.criticalTintHex)
+                }
+            }
+        }
         switch severity {
-        case .calm:
-            Color(hex: 0x2F9E64)
-        case .warning:
-            Color(hex: 0xB8872E)
-        case .critical:
-            Color(hex: Self.criticalTintHex)
+        case .calm: return Color(hex: 0x1D854D)
+        case .warning: return Color(hex: 0x9B6915)
+        case .critical: return Color(hex: 0xC93838)
         }
     }
 
@@ -148,71 +165,117 @@ struct MonitorPalette {
     var cpuCoreTrack: Color {
         switch preference {
         case .balanced:
-            neutralSeparator
+            return neutralSeparator
         case .vibrant:
-            isDark ? Color.white.opacity(0.22) : Color(hex: 0x3C485A).opacity(0.18)
+            return isDark ? Color.white.opacity(0.22) : Color.black.opacity(0.14)
         }
     }
 
-    /// 行玻璃填充:平衡为均布中性玻璃;活力为垂直衰减渐变——行头保持满浓度,
-    /// 向下衰减至近中性,展开区小字不受模块色相干扰(参数见 MonitorConstants)。
+    /// 行卡片表面渐变与填充规格：平衡为均布中性玻璃；活力深色采用高浓度渐变，浅色采用低浓度行头微晕并衰减归零。
+    struct RowGlassSpec {
+        let color: Color
+        let fullOpacity: Double
+        let faintOpacity: Double
+        let fadeEnd: Double
+        let isUniform: Bool
+    }
+
+    func rowGlassSpec(for kind: MonitorKind?) -> RowGlassSpec {
+        if preference == .balanced {
+            return RowGlassSpec(color: neutralGlassTint, fullOpacity: 1, faintOpacity: 1,
+                                fadeEnd: MonitorConstants.rowTintFadeEnd, isUniform: true)
+        }
+        if isDark {
+            let tint = kind.map { moduleTint(for: $0) } ?? displayTint
+            return RowGlassSpec(color: tint, fullOpacity: vibrantGlassOpacity,
+                                faintOpacity: MonitorConstants.rowTintFaintOpacity,
+                                fadeEnd: MonitorConstants.rowTintFadeEnd, isUniform: false)
+        }
+        // 浅色活力：行头仅附轻度微晕（暖色使用解耦底色），在 108pt 处完全衰减至透明，保持展开区中性可读。
+        let surface = kind.map { vibrantLightSurfaceTint(for: $0) } ?? displayTint
+        let isWarm = kind == .cpu || kind == .storage
+        return RowGlassSpec(color: surface, fullOpacity: isWarm ? 0.024 : 0.032,
+                            faintOpacity: 0.0, fadeEnd: 108.0, isUniform: false)
+    }
+
+    /// 行玻璃填充:平衡为均布中性玻璃;活力按明暗分层衰减。
     @ViewBuilder
     func rowGlassFill(for kind: MonitorKind) -> some View {
-        switch preference {
-        case .balanced:
-            neutralGlassTint
-        case .vibrant:
-            RowGlassFadeFill(tint: moduleTint(for: kind), fullOpacity: vibrantGlassOpacity)
+        let spec = rowGlassSpec(for: kind)
+        if spec.isUniform {
+            spec.color
+        } else {
+            RowGlassFadeFill(
+                tint: spec.color,
+                fullOpacity: spec.fullOpacity,
+                faintOpacity: spec.faintOpacity,
+                fadeEnd: spec.fadeEnd
+            )
         }
     }
 
     @ViewBuilder
     var displayGlassFill: some View {
-        switch preference {
-        case .balanced:
-            neutralGlassTint
-        case .vibrant:
-            RowGlassFadeFill(tint: displayTint, fullOpacity: vibrantGlassOpacity)
+        let spec = rowGlassSpec(for: nil)
+        if spec.isUniform {
+            spec.color
+        } else {
+            RowGlassFadeFill(
+                tint: spec.color,
+                fullOpacity: spec.fullOpacity,
+                faintOpacity: spec.faintOpacity,
+                fadeEnd: spec.fadeEnd
+            )
         }
     }
 
-    /// 活力行玻璃满浓度不透明度:暗底需要更高浓度才能显出模块色相。
+    /// 活力行玻璃满浓度不透明度：深色 16% 呈现发光层次，浅色 3.2% 控制染色轻盈。
     var vibrantGlassOpacity: Double {
-        isDark ? 0.16 : 0.08
+        isDark ? 0.16 : 0.032
     }
 
     /// 行卡白罩，内容和原生底座共用，保持材质层次一致。
-    /// 深色统一 1%，展开区少被抬白。浅色 5%，把薄玻璃收成磨砂卡片，又不过度抬白。
     /// 调试构建可用 `-HagimiCardBrighten` 覆盖浅色这一层。
     var cardBrightenOpacity: Double {
         if isDark { return 0.01 }
-        return TemporaryInstanceOverrides.lightCardBrightenOpacity ?? 0.05
+        if let override = TemporaryInstanceOverrides.lightCardBrightenOpacity {
+            return override
+        }
+        switch preference {
+        case .balanced:
+            return 0.08
+        case .vibrant:
+            return 0.10
+        }
     }
 
     func rowSeparator(for kind: MonitorKind) -> Color {
         switch preference {
         case .balanced:
-            neutralSeparator
+            return neutralSeparator
         case .vibrant:
-            moduleTint(for: kind).opacity(isDark ? 0.28 : 0.18)
+            return moduleTint(for: kind).opacity(isDark ? 0.28 : 0.11)
         }
     }
 
     var displaySeparator: Color {
         switch preference {
         case .balanced:
-            neutralSeparator
+            return neutralSeparator
         case .vibrant:
-            displayTint.opacity(isDark ? 0.28 : 0.18)
+            return isDark ? displayTint.opacity(0.28) : Color.black.opacity(0.08)
         }
     }
 
     var displayBadgeFill: Color {
         switch preference {
         case .balanced:
-            Color(hex: 0x7A91B4).opacity(isDark ? 0.16 : 0.10)
+            if isDark {
+                return Color(hex: 0x7A91B4).opacity(0.16)
+            }
+            return displayTint.opacity(0.11)
         case .vibrant:
-            displayTint.opacity(isDark ? 0.18 : 0.10)
+            return displayTint.opacity(isDark ? 0.18 : 0.11)
         }
     }
 
@@ -225,61 +288,73 @@ struct MonitorPalette {
         }
     }
 
-    /// 平衡行的中性玻璃。深色用较重的黑罩把毛玻璃压暗，展开区小字落在深底上；
-    /// 浅色用低浓度石板色，只和窗口分开一层。
+    /// 平衡行的中性玻璃。
     var neutralGlassTint: Color {
         if isDark { return Color.black.opacity(0.22) }
-        return Color(hex: 0x7A91B4).opacity(0.06)
+        return Color.white.opacity(0.18)
     }
 
     private var neutralSeparator: Color {
-        Color(hex: 0x7A91B4).opacity(isDark ? 0.22 : 0.14)
+        if isDark {
+            return Color(hex: 0x7A91B4).opacity(0.22)
+        }
+        return Color.black.opacity(0.08)
     }
 
     private func balancedModuleTint(for kind: MonitorKind) -> Color {
         switch kind {
         case .cpu:
-            Color(hex: 0xD27A4A)
+            return Color(hex: isDark ? 0xE08355 : 0xC25E2E)
         case .gpu:
-            Color(hex: 0x5D8CF0)
+            return Color(hex: isDark ? 0x7E82F2 : 0x5B5FD1)
         case .memory:
-            Color(hex: 0x42A39A)
+            return Color(hex: isDark ? 0x45B2A5 : 0x22877C)
         case .storage:
-            Color(hex: 0x9A865E)
+            return Color(hex: isDark ? 0xB89D6E : 0x8A6F44)
         case .network:
-            Color(hex: 0x43A6A0)
+            return Color(hex: isDark ? 0x47A8D4 : 0x1E7CA6)
         case .battery:
-            Color(hex: 0x55BC6F)
+            return Color(hex: isDark ? 0x4CC275 : 0x2FA85F)
         case .fan:
-            // 风扇色与系统色温呼应:蓝青系,弱化视觉权重,避免与 CPU/内存(暖色)抢眼。
-            Color(hex: 0x5BB0C2)
+            return Color(hex: isDark ? 0x64B5CC : 0x368199)
         case .bluetooth:
-            // 蓝牙标志色:平衡主题降低饱和,与调色板其余模块的柔和度对齐。
-            Color(hex: 0x4A90D9)
+            return Color(hex: isDark ? 0x5594E8 : 0x2F6BC0)
         }
     }
 
     private func vibrantModuleTint(for kind: MonitorKind) -> Color {
+        if isDark {
+            // 深色活力使用高饱和前景，适配暗底发光层次。
+            switch kind {
+            case .cpu: return Color(hex: 0xF97316)
+            case .gpu: return Color(hex: 0xA855F7)
+            case .memory: return Color(hex: 0x1192E8)
+            case .storage: return Color(hex: 0xB28600)
+            case .network: return Color(hex: 0x009D9A)
+            case .battery: return Color(hex: 0x2AB55E)
+            case .fan: return Color(hex: 0x6366F1)
+            case .bluetooth: return Color(hex: 0x0082FC)
+            }
+        }
+        // 浅色活力使用压深提纯前景，确保浅底下的图形与文字对比度。
         switch kind {
-        case .cpu:
-            Color(hex: 0xF97316)
-        case .gpu:
-            Color(hex: 0xA855F7)
-        case .memory:
-            Color(hex: 0x1192E8)
-        case .storage:
-            Color(hex: 0xB28600)
-        case .network:
-            Color(hex: 0x009D9A)
-        case .battery:
-            Color(hex: 0x2AB55E)
-        case .fan:
-            // 靛蓝紫:与相邻内存行(#1192E8 蓝)、GPU 紫(#A855F7)同为蓝紫族,
-            // 色相相邻、保持可辨。
-            Color(hex: 0x6366F1)
-        case .bluetooth:
-            // Bluetooth SIG 官方蓝。
-            Color(hex: 0x0082FC)
+        case .cpu: return Color(hex: 0xD95B08)
+        case .gpu: return Color(hex: 0x8B3DFF)
+        case .memory: return Color(hex: 0x0B7AD1)
+        case .storage: return Color(hex: 0x9C6B00)
+        case .network: return Color(hex: 0x008280)
+        case .battery: return Color(hex: 0x26AD59)
+        case .fan: return Color(hex: 0x5254E8)
+        case .bluetooth: return Color(hex: 0x0072E3)
+        }
+    }
+
+    /// 浅色活力底色解耦：暖色向清透蜜柑/琥珀偏移，避开肉粉与泥黄。
+    private func vibrantLightSurfaceTint(for kind: MonitorKind) -> Color {
+        switch kind {
+        case .cpu: Color(hex: 0xF58220)
+        case .storage: Color(hex: 0xC88A14)
+        default: vibrantModuleTint(for: kind)
         }
     }
 }
@@ -349,6 +424,8 @@ extension Color {
 private struct RowGlassFadeFill: View {
     var tint: Color
     var fullOpacity: Double
+    var faintOpacity: Double = MonitorConstants.rowTintFaintOpacity
+    var fadeEnd: Double = MonitorConstants.rowTintFadeEnd
 
     var body: some View {
         GeometryReader { proxy in
@@ -358,8 +435,8 @@ private struct RowGlassFadeFill: View {
                     .init(color: tint.opacity(fullOpacity), location: 0),
                     .init(color: tint.opacity(fullOpacity),
                           location: min(MonitorConstants.rowTintPlateau / height, 1)),
-                    .init(color: tint.opacity(MonitorConstants.rowTintFaintOpacity),
-                          location: min(MonitorConstants.rowTintFadeEnd / height, 1))
+                    .init(color: tint.opacity(faintOpacity),
+                          location: min(fadeEnd / height, 1))
                 ],
                 startPoint: .top,
                 endPoint: .bottom

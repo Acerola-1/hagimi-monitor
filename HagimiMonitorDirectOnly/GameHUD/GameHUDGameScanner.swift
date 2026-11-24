@@ -96,26 +96,34 @@ final class GameHUDGameScanner: ObservableObject {
     private var cachedGames: [GameHUDDiscoveredGame]?
     private var lastScanDate: Date?
     private var lastRescanDate: Date = .distantPast
-    /// 目录监听源(Steam steamapps / Epic Manifests)。
-    private var dirSources: [DispatchSourceFileSystemObject] = []
+    /// 目录监听源(按目录路径索引，支持动态增删后挂载的 Steam 库)。
+    private var watchedDirectories: [String: DispatchSourceFileSystemObject] = [:]
     private var workspaceObservers: [NSObjectProtocol] = []
     private var periodicTimer: AnyCancellable?
+    private var libraryRescanTask: Task<Void, Never>?
+    private var libraryRescanPending = false
     private var started = false
+    private let homeDirectory: URL
+    private let scan: @Sendable () -> GameHUDScanOutcome
+    private let libraryRescanInterval: TimeInterval
 
-    private init() {}
+    init(
+        homeDirectory: URL = FileManager.default.homeDirectoryForCurrentUser,
+        scan: @escaping @Sendable () -> GameHUDScanOutcome = GameHUDGameScanner.scanWithOutcome,
+        libraryRescanInterval: TimeInterval = 30
+    ) {
+        self.homeDirectory = homeDirectory
+        self.scan = scan
+        self.libraryRescanInterval = libraryRescanInterval
+    }
 
-    /// 常驻监听启动:目录监听 + 应用生命周期通知 + 自动定时扫描 + 启动即后台初扫。
+    /// 常驻监听启动:目录监听 + 卷挂载/应用生命周期通知 + 自动定时扫描 + 启动即后台初扫。
     /// 由总开关门控,关闭时停止这里的一切轮询。
     func startMonitoring() {
         guard !started else { return }
         started = true
         performRescan(force: true)
-        watchDirectory(FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Steam/steamapps"))
-        watchDirectory(FileManager.default
-            .homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests"))
+        syncDirectoryWatchers()
         let center = NSWorkspace.shared.notificationCenter
         let activated = center.addObserver(
             forName: NSWorkspace.didActivateApplicationNotification,
@@ -143,7 +151,29 @@ final class GameHUDGameScanner: ObservableObject {
                 self?.handleActivation(bundleID: bundleID, name: name, appURL: url)
             }
         }
-        workspaceObservers = [activated, launched]
+        let mounted = center.addObserver(
+            forName: NSWorkspace.didMountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.started else { return }
+                if self.syncDirectoryWatchers() {
+                    self.scheduleLibraryRescan()
+                }
+            }
+        }
+        let unmounted = center.addObserver(
+            forName: NSWorkspace.didUnmountNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in
+                guard let self, self.started else { return }
+                self.syncDirectoryWatchers()
+            }
+        }
+        workspaceObservers = [activated, launched, mounted, unmounted]
 
         periodicTimer = Timer.publish(every: 600, on: .main, in: .common)
             .autoconnect()
@@ -156,10 +186,13 @@ final class GameHUDGameScanner: ObservableObject {
     func stopMonitoring() {
         guard started else { return }
         started = false
-        for source in dirSources {
+        libraryRescanTask?.cancel()
+        libraryRescanTask = nil
+        libraryRescanPending = false
+        for source in watchedDirectories.values {
             source.cancel()
         }
-        dirSources.removeAll()
+        watchedDirectories.removeAll()
         for obs in workspaceObservers {
             NSWorkspace.shared.notificationCenter.removeObserver(obs)
         }
@@ -196,9 +229,12 @@ final class GameHUDGameScanner: ObservableObject {
         if !force, let last = lastScanDate, Date().timeIntervalSince(last) < Self.cacheInterval, cachedGames != nil {
             return
         }
+        libraryRescanTask?.cancel()
+        libraryRescanTask = nil
+        libraryRescanPending = false
         isScanning = true
-        DispatchQueue.global(qos: .utility).async { [weak self] in
-            let outcome = GameHUDGameScanner.scanWithOutcome()
+        DispatchQueue.global(qos: .utility).async { [weak self, scan] in
+            let outcome = scan()
             DispatchQueue.main.async {
                 guard let self else { return }
                 self.cachedGames = outcome.games
@@ -208,6 +244,10 @@ final class GameHUDGameScanner: ObservableObject {
                 self.lastScanFailed = outcome.failed
                 self.lastScanCompletedAt = Date()
                 self.isScanning = false
+                if self.started {
+                    self.syncDirectoryWatchers()
+                    self.queueLibraryRescanIfNeeded()
+                }
             }
         }
     }
@@ -228,6 +268,25 @@ final class GameHUDGameScanner: ObservableObject {
         guard Date().timeIntervalSince(lastRescanDate) >= Self.rescanDebounce else { return }
         lastRescanDate = Date()
         performRescan(force: false)
+    }
+
+    private func scheduleLibraryRescan() {
+        guard started else { return }
+        libraryRescanPending = true
+        queueLibraryRescanIfNeeded()
+    }
+
+    /// 安装目录变化使扫描缓存失效；扫描中的新事件合并成下一轮扫描。
+    private func queueLibraryRescanIfNeeded() {
+        guard libraryRescanPending, !isScanning, libraryRescanTask == nil else { return }
+        let elapsed = lastScanDate.map { max(0, Date().timeIntervalSince($0)) } ?? libraryRescanInterval
+        let delay = max(min(1, libraryRescanInterval), libraryRescanInterval - elapsed)
+        libraryRescanTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(delay))
+            guard !Task.isCancelled, let self else { return }
+            self.libraryRescanTask = nil
+            self.performRescan(force: true)
+        }
     }
 
     /// 仅用于触发重扫的线索:类别证据或商店安装目录。
@@ -263,8 +322,46 @@ final class GameHUDGameScanner: ObservableObject {
         }
     }
 
+    nonisolated static func watchedDirectoryURLs(
+        steamVDFURL: URL,
+        steamFallback: URL,
+        epicManifests: URL
+    ) -> [URL] {
+        var result: [URL] = []
+        var seen: Set<String> = []
+        for url in steamLibraryPaths(vdfURL: steamVDFURL, fallback: steamFallback) + [steamFallback, epicManifests] {
+            if seen.insert(url.path).inserted {
+                result.append(url)
+            }
+        }
+        return result
+    }
+
+    /// 按最新 `libraryfolders.vdf` 与卷挂载状态同步目录监听器：移除失效路径，为新增或后挂载目录补装监听。
+    @discardableResult
+    func syncDirectoryWatchers() -> Bool {
+        let steamFallback = homeDirectory.appendingPathComponent("Library/Application Support/Steam/steamapps")
+        let epicManifests = homeDirectory.appendingPathComponent("Library/Application Support/Epic/EpicGamesLauncher/Data/Manifests")
+        let targets = Self.watchedDirectoryURLs(
+            steamVDFURL: steamFallback.appendingPathComponent("libraryfolders.vdf"),
+            steamFallback: steamFallback,
+            epicManifests: epicManifests
+        )
+        let activePaths = Set(targets.filter { FileManager.default.fileExists(atPath: $0.path) }.map(\.path))
+        let newPaths = activePaths.subtracting(watchedDirectories.keys)
+
+        for path in Array(watchedDirectories.keys) where !activePaths.contains(path) {
+            watchedDirectories.removeValue(forKey: path)?.cancel()
+        }
+        for url in targets where newPaths.contains(url.path) {
+            watchDirectory(url)
+        }
+        return !newPaths.isEmpty
+    }
+
     private func watchDirectory(_ url: URL) {
-        guard FileManager.default.fileExists(atPath: url.path) else { return }
+        guard watchedDirectories[url.path] == nil,
+              FileManager.default.fileExists(atPath: url.path) else { return }
         let fd = open(url.path, O_EVTONLY)
         guard fd >= 0 else { return }
         let source = DispatchSource.makeFileSystemObjectSource(
@@ -273,13 +370,13 @@ final class GameHUDGameScanner: ObservableObject {
             queue: .main
         )
         source.setEventHandler { [weak self] in
-            self?.scheduleRescan()
+            self?.scheduleLibraryRescan()
         }
         source.setCancelHandler {
             close(fd)
         }
         source.resume()
-        dirSources.append(source)
+        watchedDirectories[url.path] = source
     }
 
     // MARK: - 扫描聚合
@@ -321,7 +418,7 @@ final class GameHUDGameScanner: ObservableObject {
                 let commonDir = library.appendingPathComponent("common").appendingPathComponent(installdir)
                 let gameName = fields["name"] ?? installdir
                 // 不在多应用包目录里随便取第一个 .app:唯一候选或名称唯一匹配才采用。
-                let candidates = GameHUDAppAssociation.candidates(inDirectory: commonDir, maxDepth: 1)
+                let candidates = GameHUDAppAssociation.candidates(inDirectory: commonDir, maxDepth: 2)
                 guard let app = GameHUDAppAssociation.select(gameName: gameName, candidates: candidates) else {
                     continue
                 }
@@ -345,38 +442,88 @@ final class GameHUDGameScanner: ObservableObject {
         return flags & 4 != 0
     }
 
+    /// 从单行 VDF/ACF 文本提取 `"key" "value"` 引号对，不依赖制表符分隔，并还原简单转义。
+    nonisolated static func parseQuotedKeyValue(_ line: Substring) -> (key: String, value: String)? {
+        var tokens: [String] = []
+        var index = line.startIndex
+        while index < line.endIndex, tokens.count < 2 {
+            let ch = line[index]
+            if ch == "\"" {
+                index = line.index(after: index)
+                var value = ""
+                var escaped = false
+                var closed = false
+                while index < line.endIndex {
+                    let current = line[index]
+                    if escaped {
+                        value.append(current)
+                        escaped = false
+                    } else if current == "\\" {
+                        escaped = true
+                    } else if current == "\"" {
+                        closed = true
+                        index = line.index(after: index)
+                        break
+                    } else {
+                        value.append(current)
+                    }
+                    index = line.index(after: index)
+                }
+                guard closed else { return nil }
+                tokens.append(value)
+                continue
+            }
+            if ch == "/" {
+                let next = line.index(after: index)
+                if next < line.endIndex, line[next] == "/" {
+                    break
+                }
+            }
+            index = line.index(after: index)
+        }
+        guard tokens.count == 2 else { return nil }
+        return (tokens[0], tokens[1])
+    }
+
     /// libraryfolders.vdf 里的 "path" 字段列表;解析失败回退默认库。
-    nonisolated private static func steamLibraryPaths(vdfURL: URL, fallback: URL) -> [URL] {
+    nonisolated static func steamLibraryPaths(vdfURL: URL, fallback: URL) -> [URL] {
         guard let text = try? String(contentsOf: vdfURL, encoding: .utf8) else {
             return [fallback]
         }
         var paths: [URL] = []
+        var seen: Set<String> = []
         for line in text.split(separator: "\n") {
-            let trimmed = line.trimmingCharacters(in: .whitespaces)
-            // 形如 "path" "/Users/xxx/Library/Application Support/Steam"
-            guard trimmed.hasPrefix("\"path\"") else { continue }
-            let parts = trimmed.split(separator: "\t")
-            guard parts.count >= 2 else { continue }
-            let value = parts.last?.trimmingCharacters(in: CharacterSet(charactersIn: "\" \t")) ?? ""
-            guard !value.isEmpty else { continue }
-            paths.append(URL(fileURLWithPath: value).appendingPathComponent("steamapps"))
+            guard let pair = parseQuotedKeyValue(line),
+                  pair.key == "path", !pair.value.isEmpty else { continue }
+            let steamApps = URL(fileURLWithPath: pair.value).appendingPathComponent("steamapps")
+            if seen.insert(steamApps.path).inserted {
+                paths.append(steamApps)
+            }
         }
         return paths.isEmpty ? [fallback] : paths
     }
 
-    /// 抓 ACF 顶层字段(进 "AppState" 一层即取,不递归嵌套节)。
-    nonisolated private static func acfFields(at url: URL, keys: [String]) -> [String: String]? {
+    /// 抓 ACF 顶层字段(进 "AppState" depth == 1 即取, 跳过更深层嵌套节)。
+    nonisolated static func acfFields(at url: URL, keys: [String]) -> [String: String]? {
         guard let text = try? String(contentsOf: url, encoding: .utf8) else { return nil }
+        let keySet = Set(keys)
         var result: [String: String] = [:]
+        var depth = 0
         for line in text.split(separator: "\n") {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
-            for key in keys {
-                if result[key] == nil, trimmed.hasPrefix("\"\(key)\"") {
-                    let segments = trimmed.split(separator: "\t").map { $0.trimmingCharacters(in: CharacterSet(charactersIn: "\" \t")) }
-                    if segments.count >= 2 {
-                        result[key] = segments[1]
-                    }
-                }
+            if trimmed == "{" {
+                depth += 1
+                continue
+            }
+            if trimmed == "}" {
+                depth = max(0, depth - 1)
+                continue
+            }
+            guard depth <= 1, let pair = parseQuotedKeyValue(line), keySet.contains(pair.key) else {
+                continue
+            }
+            if result[pair.key] == nil {
+                result[pair.key] = pair.value
             }
         }
         return result.isEmpty ? nil : result
@@ -457,6 +604,15 @@ final class GameHUDGameScanner: ObservableObject {
         )
     }
 
+    nonisolated private static let ignoredBundlePathComponents: [String] = [
+        "/.Trash/",
+        "/DerivedData/",
+        "/Backups.backupdb/",
+        "/CoreSimulator/",
+        "/node_modules/",
+        "/.build/",
+    ]
+
     nonisolated private static func applicationBundlePaths() -> (paths: [String], failed: Bool) {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/mdfind")
@@ -469,8 +625,15 @@ final class GameHUDGameScanner: ObservableObject {
         } catch {
             return ([], true)
         }
+        let timeoutWorkItem = DispatchWorkItem {
+            if process.isRunning {
+                process.terminate()
+            }
+        }
+        DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + 10, execute: timeoutWorkItem)
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
         process.waitUntilExit()
+        timeoutWorkItem.cancel()
         guard process.terminationStatus == 0, let text = String(data: data, encoding: .utf8) else {
             return ([], true)
         }
@@ -479,6 +642,7 @@ final class GameHUDGameScanner: ObservableObject {
         for line in text.split(separator: "\n") {
             let path = line.trimmingCharacters(in: .whitespaces)
             guard path.hasSuffix(".app"), !path.hasPrefix("/System/") else { continue }
+            guard !ignoredBundlePathComponents.contains(where: { path.contains($0) }) else { continue }
             // 只接受最外层应用包,跳过 .app 内部嵌套的 helper/插件。
             guard path.components(separatedBy: ".app").count <= 2 else { continue }
             guard seen.insert(path).inserted else { continue }

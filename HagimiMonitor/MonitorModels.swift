@@ -339,14 +339,34 @@ nonisolated struct FanInfo: Identifiable, Equatable, Sendable {
     let currentRPM: Int
     let minRPM: Int
     let maxRPM: Int
+    /// SMC 当前转速键 `F{i}Ac` 是否真实读取成功；false 表示读取失败（`currentRPM` 仅占位 0，并非真实停转）。
+    let isCurrentRPMValid: Bool
+
+    init(
+        id: Int,
+        name: String,
+        currentRPM: Int,
+        minRPM: Int,
+        maxRPM: Int,
+        isCurrentRPMValid: Bool = true
+    ) {
+        self.id = id
+        self.name = name
+        self.currentRPM = currentRPM
+        self.minRPM = minRPM
+        self.maxRPM = maxRPM
+        self.isCurrentRPMValid = isCurrentRPMValid
+    }
 
     /// 根据当前 RPM 与 min/max 范围判断风扇运行状态。
+    /// - !isCurrentRPMValid → unknown(当前转速读取失败,不误判为停转)
     /// - RPM = 0 → stopped(只表达实测转速，不判断健康状态)
     /// - RPM > maxRPM → fault(传感器读数异常)
     /// - RPM >= 85% maxRPM → warning(接近满载,散热压力高)
     /// - maxRPM <= 0 → unknown(SMC 未提供上限,无法判断)
     /// - 其余 → normal
     var status: FanStatus {
+        if !isCurrentRPMValid { return .unknown }
         if currentRPM < 0 { return .unknown }
         if currentRPM == 0 { return .stopped }
         if maxRPM <= 0 { return .unknown }
@@ -576,6 +596,10 @@ final class MonitorStore: ObservableObject {
     /// Game HUD 的未过滤采样结果访问器。主面板行显隐由 `modules` 承担,
     /// Game HUD 勾选与其独立,必须直接读全量模块;只读出、不绕过任何过滤。
     var allModulesForHUD: [MonitorModule] { allModules }
+
+    /// 未过滤的全量模块流：供压力/进程告警中心与菜单栏无障碍摘要订阅，不受面板模块显隐设置影响。
+    let allModulesPublisher = PassthroughSubject<[MonitorModule], Never>()
+    private(set) var reportLivePressure = ReportLivePressureObservations()
 
     /// 可见面板来源集合。任一来源可见时 isPanelVisible 为真,仅当集合为空时为假。
     private var visiblePanelKinds: Set<PanelKind> = []
@@ -900,7 +924,7 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             #else
             let cpu = enrichCPU(cpuCursor.sample(limit: 12, includeSystemProcesses: true))
             #endif
-            let memory = enrich(sampleTopMemoryProcesses(includeSystemProcesses: true))
+            let memory = enrich(sampleTopMemoryProcesses(limit: 12, includeSystemProcesses: true))
             let gpu = enrichGPU(gpuCursor.sample(limit: 12, includeSystemProcesses: true))
             #if DIRECT_DISTRIBUTION
             let disk = enrichDisk(diskCursor.sampleTopDiskProcesses(includeSystemProcesses: true))
@@ -909,18 +933,45 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             #endif
             DispatchQueue.main.async {
                 MainActor.assumeIsolated {
-                    self?.statisticsRecorder.recordProcesses(cpu: cpu, memory: memory, gpu: gpu, network: [], disk: disk, at: Date())
+                    self?.statisticsRecorder.recordProcesses(
+                        cpu: cpu,
+                        memory: memory,
+                        gpu: gpu,
+                        network: [],
+                        disk: disk,
+                        at: Date(),
+                        providedMetrics: [.cpu, .memory, .gpu]
+                    )
                 }
             }
         }
         procSampleQueue.async(execute: sampleFast)
         #if DIRECT_DISTRIBUTION
-        // nettop 独占 nettopQueue,单次实测数十~数百毫秒;速率为窗口均值,×60s 近似为分钟字节量
+        // nettop 独占 nettopQueue,单次实测数十~数百毫秒;速率为窗口均值,按真实窗口积分近似为分钟字节量
         let sampleNetwork: @Sendable () -> Void = { [weak self] in
-            let network = enrichNetwork(networkCursor.sample(limit: 5, includeSystemProcesses: true))
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated {
-                    self?.statisticsRecorder.recordProcesses(cpu: [], memory: [], gpu: [], network: network, disk: [], at: Date())
+            switch networkCursor.sampleOutcome(limit: 5, includeSystemProcesses: true) {
+            case .failed:
+                return
+            case .baselineEstablished(let sampledAt):
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.statisticsRecorder.establishNetworkBaseline(at: sampledAt)
+                    }
+                }
+            case .sampled(let raw, let sampledAt):
+                let network = enrichNetwork(raw)
+                DispatchQueue.main.async {
+                    MainActor.assumeIsolated {
+                        self?.statisticsRecorder.recordProcesses(
+                            cpu: [],
+                            memory: [],
+                            gpu: [],
+                            network: network,
+                            disk: [],
+                            at: sampledAt,
+                            providedMetrics: [.network]
+                        )
+                    }
                 }
             }
         }
@@ -1152,8 +1203,15 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         if active.contains(.network) {
             group.enter()
             nettopQueue.async {
-                let raw = networkCursor.sample(limit: 5, includeSystemProcesses: networkIncludeSystem)
-                collector.networkProcesses = enrichNetwork(raw)
+                switch networkCursor.sampleOutcome(limit: 5, includeSystemProcesses: networkIncludeSystem) {
+                case .failed:
+                    // 保留 nil，使 publish(_:assign:) 在探针超时或失败时保留上一次列表。
+                    break
+                case .baselineEstablished:
+                    collector.networkProcesses = []
+                case .sampled(let raw, _):
+                    collector.networkProcesses = enrichNetwork(raw)
+                }
                 group.leave()
             }
         }
@@ -1232,14 +1290,19 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
             ?? MonitorModule.placeholder(kind: selectedKind)
     }
 
-    var combinedComputeLoad: Double {
+    var computeLoadBreakdown: (cpu: Double, gpu: Double, memoryPressure: MemoryPressureLevel) {
         let cpuValue = allModules.first { $0.kind == .cpu }?.value ?? 0
         let gpuValue = allModules.first { $0.kind == .gpu }?.value ?? 0
         let memoryPressure = allModules.first { $0.kind == .memory }?.pressure ?? .unknown
+        return (cpuValue, gpuValue, memoryPressure)
+    }
+
+    var combinedComputeLoad: Double {
+        let breakdown = computeLoadBreakdown
         return ComputeLoadModel.combined(
-            cpuValue: cpuValue,
-            gpuValue: gpuValue,
-            memoryPressure: memoryPressure
+            cpuValue: breakdown.cpu,
+            gpuValue: breakdown.gpu,
+            memoryPressure: breakdown.memoryPressure
         )
     }
 
@@ -1409,9 +1472,18 @@ nonisolated private final class PowerSourceRunLoopBox: @unchecked Sendable {
         case .success(let snapshot):
             // 采样缓存和统计立即推进，界面发布独立等待运动收敛。
             allModules = snapshot.modules
+            let sampledAt = Date()
+            if freshKinds.contains(.memory) || freshKinds.contains(.cpu) {
+                let levels = PressureAlertCenter.levels(from: snapshot.modules)
+                reportLivePressure.record(
+                    memoryLevel: levels.memory, thermalLevel: levels.thermal,
+                    freshKinds: freshKinds, at: sampledAt
+                )
+            }
+            allModulesPublisher.send(snapshot.modules)
             if statisticsSamplingActive {
                 statisticsRecorder.record(modules: snapshot.modules, fans: fanSampler.fans,
-                    freshKinds: freshKinds, at: Date())
+                    freshKinds: freshKinds, at: sampledAt)
             }
             deferUntilExpansionSettles(key: "modules") { [weak self] in
                 self?.publishSamplingSuccess()

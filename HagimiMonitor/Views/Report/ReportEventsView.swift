@@ -1,30 +1,18 @@
 import AppKit
 import SwiftUI
 
-/// 异常事件报表视图：展示内存压力与热压力事件流，支持类型过滤与生命周期状态标记。
-/// 本页是事件流的索引，每行可点击直达事件来源模块。
+/// 异常事件报表视图：展示内存压力与热压力事件流，支持类型过滤、严重度分级与点击跳转到事件时间点。
 struct ReportEventsView: View {
     @ObservedObject var viewModel: NativeReportViewModel
-    @State private var filterKind: EventFilterKind = .all
 
-    enum EventFilterKind: String, CaseIterable, Identifiable {
-        case all
-        case memory
-        case thermal
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
 
-        var id: String { rawValue }
-
-        var label: String {
-            switch self {
-            case .all: return String(localized: "stats.r.allEvents", defaultValue: "全部事件")
-            case .memory: return String(localized: "stats.r.alertMem", defaultValue: "内存压力")
-            case .thermal: return String(localized: "stats.r.alertThermal", defaultValue: "热压力")
-            }
-        }
+    private var palette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
     }
 
     var body: some View {
-        // R19: 本模块无 HardwareRail 契约，采用全宽布局
         VStack(spacing: 16) {
             eventsCard
         }
@@ -40,28 +28,23 @@ struct ReportEventsView: View {
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 16) {
-                    // 分类切换选择器：与应用排行完全一致，嵌入卡片内部使用 ReportNavigationPicker
                     ReportNavigationPicker(
                         title: "",
-                        selection: $filterKind
-                    ) {
-                        ForEach(EventFilterKind.allCases) { filter in
-                            Text(filter.label).tag(filter)
-                        }
-                    }
+                        selection: $viewModel.eventFilterKind,
+                        options: ReportEventFilterKind.allCases.map { ReportSegmentOption(value: $0, label: $0.label) }
+                    )
                     .fixedSize()
 
                     Spacer()
                 }
 
-                // R04: 中性空态，不臆断“系统稳定/运行良好”
                 if events.isEmpty {
                     ReportEmptyPlaceholder(text: String(localized: "stats.r.emptyEventsNeutral", defaultValue: "所选时间范围内未检测到内存或热状态异常事件记录"))
                 } else {
                     VStack(spacing: 10) {
                         ForEach(events) { event in
-                            ReportEventRow(event: event) {
-                                navigateTo(event.kind == .memory ? .memory : .thermal)
+                            ReportEventRow(event: event, palette: palette) {
+                                viewModel.focusOnEvent(event)
                             }
                         }
                     }
@@ -72,7 +55,7 @@ struct ReportEventsView: View {
 
     private var filteredEvents: [ReportEventItem] {
         guard let all = viewModel.rangeModel?.events else { return [] }
-        switch filterKind {
+        switch viewModel.eventFilterKind {
         case .all:
             return all
         case .memory:
@@ -81,21 +64,39 @@ struct ReportEventsView: View {
             return all.filter { $0.kind == .thermal }
         }
     }
-
-    private func navigateTo(_ module: ReportNavigationModule) {
-        withAnimation(.easeInOut(duration: 0.15)) {
-            viewModel.selectedModule = module
-        }
-    }
 }
 
-/// 单条压力事件行：整行可点击。事件流只说明「哪一类何时出了什么事」，
-/// 下一步入口必须在这一行上，否则用户得回侧栏自己再找一遍模块。
+/// 单条压力事件行：整行可点击并跳转锚定对应模块图表的时间窗。
 private struct ReportEventRow: View {
     let event: ReportEventItem
+    let palette: ReportPalette
     let onOpen: () -> Void
 
     @State private var isHovered = false
+
+    private var isSameCalendarDay: Bool {
+        Calendar.current.isDate(event.start, inSameDayAs: event.end)
+    }
+
+    private var severityText: String {
+        switch event.kind {
+        case .memory:
+            return event.worstLevel >= 2
+                ? String(localized: "stats.r.severityCritical", defaultValue: "紧急")
+                : String(localized: "stats.r.severityWarning", defaultValue: "警告")
+        case .thermal:
+            return StatisticsDisplayFormat.thermalStateLabel(Double(event.worstLevel))
+        }
+    }
+
+    private var severityTint: Color {
+        switch event.kind {
+        case .memory:
+            return event.worstLevel >= 2 ? palette.base.severityTint(for: .critical) : palette.base.severityTint(for: .warning)
+        case .thermal:
+            return event.worstLevel >= 3 ? palette.base.severityTint(for: .critical) : palette.base.severityTint(for: .warning)
+        }
+    }
 
     var body: some View {
         Button(action: onOpen) {
@@ -108,23 +109,24 @@ private struct ReportEventRow: View {
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(.primary)
 
-                        statusBadge(for: event.state)
+                        badge(text: severityText, tint: severityTint)
+                        badge(text: event.state.label, tint: palette.eventStateTint(for: event.state))
 
                         Spacer()
 
-                        // 时间信息
                         HStack(spacing: 4) {
                             Text(ReportUIHelper.formatDateTime(event.start))
                             Text("~")
-                            Text(ReportUIHelper.formatTimeOnly(event.end))
+                            Text(isSameCalendarDay
+                                 ? ReportUIHelper.formatTimeOnly(event.end)
+                                 : ReportUIHelper.formatDateTime(event.end))
                         }
                         .font(.system(size: 11, design: .monospaced))
                         .foregroundStyle(.secondary)
                     }
 
-                    // 持续时间与峰值描述
                     HStack(spacing: 12) {
-                        Text("\(String(localized: "stats.r.prefixDuration", defaultValue: "持续时长:")) \(ReportUIHelper.formatHours(event.pressureSeconds))")
+                        Text("\(String(localized: "stats.r.prefixDuration", defaultValue: "持续时长:")) \(StatisticsDisplayFormat.duration(event.pressureSeconds))")
                             .font(.system(size: 11))
                             .foregroundStyle(.secondary)
 
@@ -146,19 +148,19 @@ private struct ReportEventRow: View {
             .padding(12)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.7 : 0.4))
+                    .fill(isHovered ? palette.cardHoverFill : palette.insetFill)
             }
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .strokeBorder(Color.primary.opacity(isHovered ? 0.14 : 0.06), lineWidth: 1)
+                    .strokeBorder(isHovered ? Color.accentColor.opacity(0.35) : palette.cardBorder, lineWidth: 0.75)
             }
             .contentShape(.rect(cornerRadius: 8))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
         .accessibilityLabel(Text(event.kind.title))
-        .accessibilityHint(Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细")))
-        .help(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
+        .accessibilityHint(Text(String(localized: "stats.r.insight.actionInspectWindow", defaultValue: "定位压力时段")))
+        .help(String(localized: "stats.r.insight.actionInspectWindow", defaultValue: "定位压力时段"))
     }
 
     private func eventIcon(for kind: ReportEventItem.Kind) -> some View {
@@ -166,10 +168,10 @@ private struct ReportEventRow: View {
             switch kind {
             case .memory:
                 Image(systemName: "memorychip")
-                    .foregroundStyle(ReportUIHelper.memoryColor)
+                    .foregroundStyle(palette.memory)
             case .thermal:
                 Image(systemName: "flame.fill")
-                    .foregroundStyle(ReportUIHelper.thermalColor)
+                    .foregroundStyle(palette.thermal)
             }
         }
         .font(.system(size: 16))
@@ -178,21 +180,13 @@ private struct ReportEventRow: View {
         .clipShape(Circle())
     }
 
-    private func statusBadge(for state: ReportEventItem.State) -> some View {
-        let color: Color = {
-            switch state {
-            case .ongoing: return Color.red
-            case .interrupted: return Color.orange
-            case .recovered: return Color.green
-            }
-        }()
-
-        return Text(state.label)
+    private func badge(text: String, tint: Color) -> some View {
+        Text(text)
             .font(.system(size: 10, weight: .medium))
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
-            .background(color.opacity(0.15))
-            .foregroundStyle(color)
+            .background(tint.opacity(0.14))
+            .foregroundStyle(tint)
             .clipShape(Capsule())
     }
 }

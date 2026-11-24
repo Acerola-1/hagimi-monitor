@@ -54,7 +54,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     private weak var panelMotion: SingleHostMotionCoordinator?
     private var awaitingGeometry = false
     private let store: MonitorStore
-    private let openSettingsAction: () -> Void
+    private let openSettingsAction: (SettingsTab?) -> Void
 
     private let panel: NSPanel
     private let presentation = QuickPanelPresentation()
@@ -69,7 +69,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
     /// 面板外框圆角:与 FluidPanelController 一致(panelCornerRadius)。
     private static let panelCornerRadius = CGFloat(MonitorConstants.panelCornerRadius)
 
-    init(store: MonitorStore, openSettings: @escaping () -> Void) {
+    init(store: MonitorStore, openSettings: @escaping (SettingsTab?) -> Void) {
         self.store = store
         self.openSettingsAction = openSettings
         panelRefreshGate = PanelRefreshGate(store: store)
@@ -104,6 +104,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panel.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
         panel.isReleasedWhenClosed = false
         panel.hidesOnDeactivate = false
+        panel.allowsToolTipsWhenApplicationIsInactive = true
         panel.delegate = self
         panel.autorecalculatesKeyViewLoop = true
 
@@ -120,9 +121,9 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         panel.contentView = glassHost
 
         let root = MonitorPanelView(store: store, refreshGate: panelRefreshGate, quickPanelPresentation: presentation)
-            .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action { [weak self] in
+            .environment(\.fluidOpenSettings, OpenSettingsActionKey.Action { [weak self] tab in
                 self?.hide(resetPin: true)
-                self?.openSettingsAction()
+                self?.openSettingsAction(tab)
             })
             .environment(\.panelMotionAdapter, self)
             .ignoresSafeArea()
@@ -260,6 +261,7 @@ final class PinnedPanelController: NSObject, NSWindowDelegate {
         ensureOnScreen()
 
         // 非激活方式呈现,保持当前 App 前台。
+        panel.ignoresMouseEvents = false
         panel.alphaValue = 1
         panel.orderFrontRegardless()
 panelMotion?.nativeLayer.panelDidShow()

@@ -1,4 +1,22 @@
+import CoreGraphics
 import Foundation
+
+/// Game HUD 指标分组(用于设置页按功能语义分组呈现)。
+nonisolated enum GameHUDMetricSection: String, CaseIterable, Identifiable, Sendable {
+    case fps
+    case compute
+    case system
+
+    var id: String { rawValue }
+
+    var titleKey: String.LocalizationValue {
+        switch self {
+        case .fps: "gamehud.settings.metrics.section.fps"
+        case .compute: "gamehud.settings.metrics.section.compute"
+        case .system: "gamehud.settings.metrics.section.system"
+        }
+    }
+}
 
 /// Game HUD 硬件指标的稳定标识。存储用字符串与主面板指标 ID 解耦:
 /// HUD 目录跨渠道能力不同,直接复用主面板勾选键会把「渠道不可读项」
@@ -71,6 +89,7 @@ nonisolated enum GameHUDMetricCatalog {
         entries.append(Entry(id: .cpuTemperature, kind: .cpu, titleKey: "menu-bar-metric.cpu-temperature"))
         entries.append(Entry(id: .cpuPower, kind: .battery, titleKey: "gamehud.metric.cpu-power"))
         #endif
+        entries.append(Entry(id: .gpuRender, kind: .gpu, titleKey: "gamehud.metric.gpu-render"))
         #if DIRECT_DISTRIBUTION
         entries.append(Entry(id: .gpuPower, kind: .battery, titleKey: "gamehud.metric.gpu-power"))
         #endif
@@ -85,9 +104,67 @@ nonisolated enum GameHUDMetricCatalog {
         return entries
     }
 
-    /// 内存压力默认开启，网络速率默认关闭。
+    /// 按功能语义分组返回当前渠道可用条目，用于设置页分块展示。
+    static func groupedAvailableEntries() -> [(section: GameHUDMetricSection, entries: [Entry])] {
+        let all = availableEntries()
+        return GameHUDMetricSection.allCases.compactMap { section in
+            let items = all.filter { self.section(for: $0.id) == section }
+            return items.isEmpty ? nil : (section, items)
+        }
+    }
+
+    static func section(for id: GameHUDMetricID) -> GameHUDMetricSection {
+        switch id {
+        case .fps, .averageFPS, .onePercentLow, .frameTime:
+            return .fps
+        case .cpuUsage, .cpuTemperature, .cpuPower, .gpuRender, .gpuTiler, .gpuPower, .gpuMemory:
+            return .compute
+        case .fanSpeed, .memoryPressure, .memoryUsed, .systemPower, .networkRates, .networkUpload, .networkDownload:
+            return .system
+        }
+    }
+
+    /// 顶部横条精简短标签，减少横条总宽度并提高扫描可读性。
+    static func compactTitleKey(for id: GameHUDMetricID) -> String.LocalizationValue {
+        switch id {
+        case .fps: "gamehud.view.fps"
+        case .averageFPS: "gamehud.view.average-fps"
+        case .onePercentLow: "gamehud.view.one-percent-low"
+        case .frameTime: "gamehud.strip.frame-time"
+        case .cpuUsage: "gamehud.strip.cpu-usage"
+        case .cpuTemperature: "gamehud.strip.cpu-temperature"
+        case .cpuPower: "gamehud.strip.cpu-power"
+        case .gpuRender, .gpuTiler: "gamehud.strip.gpu-render"
+        case .gpuPower: "gamehud.strip.gpu-power"
+        case .gpuMemory: "gamehud.strip.gpu-memory"
+        case .fanSpeed: "gamehud.strip.fan-speed"
+        case .memoryPressure: "gamehud.strip.memory-pressure"
+        case .memoryUsed: "gamehud.strip.memory-used"
+        case .systemPower: "gamehud.strip.system-power"
+        case .networkRates: "gamehud.metric.network-rates"
+        case .networkUpload: "gamehud.strip.network-upload"
+        case .networkDownload: "gamehud.strip.network-download"
+        }
+    }
+
+    /// 顶部横条的数值槽为常见读数预留宽度，较长内容由横条自然尺寸容纳。
+    static func topStripValueMinWidth(for id: GameHUDMetricID) -> CGFloat {
+        switch id {
+        case .fps, .averageFPS, .onePercentLow: 38
+        case .frameTime: 58
+        case .cpuUsage, .gpuRender, .gpuTiler, .memoryPressure: 30
+        case .cpuTemperature: 38
+        case .cpuPower, .gpuPower, .systemPower: 48
+        case .gpuMemory, .memoryUsed: 54
+        case .fanSpeed: 58
+        case .networkUpload, .networkDownload: 72
+        case .networkRates: 0
+        }
+    }
+
+    /// 内存压力与 GPU 占用默认开启，网络速率默认关闭。
     static func defaultEnabledIDs() -> Set<GameHUDMetricID> {
-        var ids: Set<GameHUDMetricID> = [.cpuUsage, .memoryPressure, .memoryUsed, .gpuMemory]
+        var ids: Set<GameHUDMetricID> = [.cpuUsage, .gpuRender, .memoryPressure, .memoryUsed, .gpuMemory]
         #if DIRECT_DISTRIBUTION
         ids.insert(.fps)
         ids.insert(.averageFPS)

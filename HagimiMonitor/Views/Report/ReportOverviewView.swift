@@ -2,14 +2,14 @@ import AppKit
 import Charts
 import SwiftUI
 
-/// 报表概览视图：包含异常告警提示条、系统健康评估与核心用量总览、多维综合负载趋势以及 7×24 小时活跃热力图。
+/// 报表概览视图：包含时段结论、状态评分与完整度、核心用量总览、综合趋势图及 7×24 活动热力图。
 struct ReportOverviewView: View {
     @ObservedObject var viewModel: NativeReportViewModel
-    @State private var selectedDate: Date?
     @State private var showScoreBasis = false
     /// 趋势视图模式：默认只看 CPU/GPU 两条负载曲线，内存单独切换查看。
-    /// 四条线同时叠在一根百分比轴上会让人误以为可以互相比较或相加。
     @State private var trendMode: TrendMode = .load
+    /// 高密度分钟曲线是否启用平滑降噪（默认开启以消除 1440 点高频锯齿）。
+    @State private var smoothDenseTrend = true
 
     enum TrendMode: String, CaseIterable, Identifiable {
         case load
@@ -28,22 +28,19 @@ struct ReportOverviewView: View {
     @Environment(\.colorScheme) private var colorScheme
     @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
 
-    private var palette: MonitorPalette {
-        MonitorPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    private var palette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
     }
-    private var cpuColor: Color { palette.moduleTint(for: .cpu) }
-    private var gpuColor: Color { palette.moduleTint(for: .gpu) }
-    private var memPressureColor: Color { palette.moduleTint(for: .memory) }
-    private var memUsageColor: Color { palette.moduleTint(for: .memory).opacity(0.6) }
-    private var powerColor: Color { palette.moduleTint(for: .battery) }
-    private var netColor: Color { palette.moduleTint(for: .network) }
-    private var diskColor: Color { palette.moduleTint(for: .storage) }
-    private var thermalColor: Color { palette.moduleTint(for: .fan) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             overviewHeading
-            periodConclusionCard
+            if let range = viewModel.rangeModel?.range {
+                ReportCurrentPressureBanner(source: viewModel.liveSource, range: range, palette: palette) { kind in
+                    viewModel.clearFocusedTimeWindow()
+                    navigateTo(kind == .memory ? .memory : .thermal)
+                }
+            }
             healthScoreSummary
             resourceGrid(primary: true)
             compositeTrendCard
@@ -56,44 +53,7 @@ struct ReportOverviewView: View {
         .frame(maxWidth: .infinity)
     }
 
-    /// 时段结论前置：先回答「这段时间怎么样」，再看评分与曲线。
-    /// 结论只讲系统压力维度，高占用应用作为补充，不与之混为一谈。
-    private var periodConclusionCard: some View {
-        let model = viewModel.rangeModel
-        let events = model?.events ?? []
-        let appAlerts = model?.apps.highLoadAlerts ?? []
-        let summary = ReportPeriodConclusion.summary(
-            events: events,
-            appAlertCount: appAlerts.count,
-            coveredSeconds: model?.coveredSeconds ?? 0,
-            quality: model?.quality ?? [.noObservation]
-        )
-        let tint: Color = summary.isElevated
-            ? palette.severityTint(for: .warning)
-            : palette.severityTint(for: .calm)
-
-        return HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: summary.isElevated ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
-                .foregroundStyle(tint)
-            VStack(alignment: .leading, spacing: 3) {
-                Text(summary.headline)
-                    .font(.title3.weight(.semibold))
-                if let detail = summary.detail {
-                    Text(detail)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                Text(String(localized: "stats.report.conclusion.scope"))
-                    .font(.caption)
-                    .foregroundStyle(.tertiary)
-            }
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .background(.quaternary.opacity(0.35), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
+    // MARK: - 头部与结论横幅
 
     private var overviewHeading: some View {
         HStack(alignment: .firstTextBaseline) {
@@ -116,7 +76,6 @@ struct ReportOverviewView: View {
                 Text("report.ui.historical")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                // 快照的采集时刻必须可见：报表是历史快照，不是每秒刷新的实时面板。
                 if let capturedAt = viewModel.rangeModel?.updatedAt {
                     Text(String(
                         format: String(localized: "stats.report.snapshotAt"),
@@ -129,10 +88,8 @@ struct ReportOverviewView: View {
         }
     }
 
-    // MARK: - 0. 压力告警分类计数
+    // MARK: - 压力告警分类计数
 
-    /// 概览只做分类计数,不铺开具体事件:事件按「连续压力片段」逐条生成,长范围动辄几十条,
-    /// 铺开会把首屏撑成流水账。计数胶囊各自带跳转,单条事件的细节留在压力警告模块。
     private struct AlertTally {
         var memoryCount = 0
         var memoryWorstLevel = 0
@@ -141,7 +98,6 @@ struct ReportOverviewView: View {
         var thermalWorstLevel = 0
         var thermalOngoing = false
         var appCount = 0
-        var appOngoing = false
 
         var pressureCount: Int { memoryCount + thermalCount }
         var isClear: Bool { memoryCount == 0 && thermalCount == 0 && appCount == 0 }
@@ -162,16 +118,8 @@ struct ReportOverviewView: View {
                 tally.thermalOngoing = tally.thermalOngoing || ongoing
             }
         }
-        let appAlerts = viewModel.rangeModel?.apps.highLoadAlerts ?? []
-        tally.appCount = appAlerts.count
-        tally.appOngoing = appAlerts.contains { $0.isOngoing }
+        tally.appCount = viewModel.rangeModel?.apps.highLoadAlerts.count ?? 0
         return tally
-    }
-
-    /// 单类告警配色:进行中的越级告警用严重色,其余进行中用警告色,已恢复一律中性色。
-    private func alertTint(worstLevel: Int, isOngoing: Bool) -> Color {
-        guard isOngoing else { return palette.severityTint(for: .calm) }
-        return palette.severityTint(for: worstLevel >= 2 ? .critical : .warning)
     }
 
     private func alertChip(
@@ -179,9 +127,9 @@ struct ReportOverviewView: View {
         label: String,
         count: Int,
         tint: Color,
-        destination: ReportNavigationModule
+        action: @escaping () -> Void
     ) -> some View {
-        Button { navigateTo(destination) } label: {
+        Button(action: action) {
             HStack(spacing: 4) {
                 Image(systemName: icon)
                     .font(.system(size: 10, weight: .semibold))
@@ -194,11 +142,26 @@ struct ReportOverviewView: View {
             .foregroundStyle(tint)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Capsule().fill(tint.opacity(0.12)))
-            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 1))
+            .background(Capsule().fill(tint.opacity(0.11)))
+            .overlay(Capsule().strokeBorder(tint.opacity(0.22), lineWidth: 0.75))
         }
         .buttonStyle(.plain)
         .help(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
+    }
+
+    /// 优先归因最相关的头号占用应用：存在内存压力时指向内存排行首位，否则指向高负载或 CPU 首位。
+    private func primaryConsumerApp(preferMemory: Bool) -> (name: String, appKey: String)? {
+        guard let apps = viewModel.rangeModel?.apps else { return nil }
+        if preferMemory, let topMem = apps.memList.first {
+            return (topMem.name, topMem.appKey)
+        }
+        if let firstAlert = apps.highLoadAlerts.first {
+            return (firstAlert.name, firstAlert.appKey)
+        }
+        if let topCPU = apps.cpuList.first {
+            return (topCPU.name, topCPU.appKey)
+        }
+        return nil
     }
 
     @ViewBuilder
@@ -209,8 +172,8 @@ struct ReportOverviewView: View {
                     icon: "memorychip",
                     label: String(localized: "stats.r.kMem", defaultValue: "内存"),
                     count: tally.memoryCount,
-                    tint: alertTint(worstLevel: tally.memoryWorstLevel, isOngoing: tally.memoryOngoing),
-                    destination: .memory
+                    tint: palette.pressureEventChipTint(worstLevel: tally.memoryWorstLevel, isOngoing: tally.memoryOngoing),
+                    action: { viewModel.openEvents(filter: .memory) }
                 )
             }
             if tally.thermalCount > 0 {
@@ -218,27 +181,64 @@ struct ReportOverviewView: View {
                     icon: "flame.fill",
                     label: String(localized: "stats.r.alertThermal", defaultValue: "热压力"),
                     count: tally.thermalCount,
-                    tint: alertTint(worstLevel: tally.thermalWorstLevel, isOngoing: tally.thermalOngoing),
-                    destination: .thermal
+                    tint: palette.pressureEventChipTint(worstLevel: tally.thermalWorstLevel, isOngoing: tally.thermalOngoing),
+                    action: { viewModel.openEvents(filter: .thermal) }
                 )
             }
-            if tally.appCount > 0 {
-                alertChip(
-                    icon: "app.badge.checkmark",
-                    label: String(localized: "stats.r.kApps", defaultValue: "应用"),
-                    count: tally.appCount,
-                    tint: alertTint(worstLevel: 1, isOngoing: tally.appOngoing),
-                    destination: .apps
-                )
+            if let topConsumer = primaryConsumerApp(preferMemory: tally.memoryCount > 0),
+               (tally.pressureCount > 0 || tally.appCount > 0) {
+                topConsumerChip(appName: topConsumer.name, alertCount: tally.appCount)
             }
         }
     }
 
-    /// 概览首屏的紧凑评分摘要：左侧分数与数据完整度，右侧压力告警分类计数。
-    /// 它只描述选定范围内的压力记录，不暗示硬件健康诊断。整行固定高度——告警计数与
-    /// 分数可用性都不参与高度计算，切换时间范围不会推动下方内容。
+    private func topConsumerChip(appName: String, alertCount: Int) -> some View {
+        let label: String
+        if alertCount > 1 {
+            label = String(
+                format: String(localized: "stats.r.overview.topConsumerMulti", defaultValue: "主要占用 %@ 等 %d 项"),
+                appName,
+                alertCount
+            )
+        } else {
+            label = String(
+                format: String(localized: "stats.r.overview.topConsumer", defaultValue: "主要占用 %@"),
+                appName
+            )
+        }
+
+        return Button {
+            if alertCount > 0 {
+                viewModel.openAppAlerts()
+            } else {
+                viewModel.selectedModule = .apps
+            }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "app.badge.checkmark")
+                    .font(.system(size: 10, weight: .semibold))
+                Text(label)
+                    .font(.system(size: 11, weight: .medium))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+            }
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(maxWidth: 210, alignment: .leading)
+            .background(Capsule().fill(Color.primary.opacity(0.06)))
+            .overlay(Capsule().strokeBorder(Color.primary.opacity(0.12), lineWidth: 0.75))
+        }
+        .buttonStyle(.plain)
+        .help("\(label) · \(String(localized: "stats.r.overview.topConsumerHelp", defaultValue: "点击查看应用资源占用排行与明细"))")
+    }
+
+    // MARK: - 紧凑评分摘要卡
+
     private var healthScoreSummary: some View {
-        let result = viewModel.rangeModel?.healthScore
+        let model = viewModel.rangeModel
+        let result = model?.healthScore
+        let hasPressureEvents = !(model?.events.isEmpty ?? true)
         let tally = alertTally
 
         return ReportCardView(
@@ -247,7 +247,7 @@ struct ReportOverviewView: View {
             showsHeader: false
         ) {
             HStack(alignment: .center, spacing: 16) {
-                scoreSummary(result: result)
+                scoreSummary(result: result, hasPressureEvents: hasPressureEvents)
 
                 Divider()
                     .frame(height: 42)
@@ -257,15 +257,12 @@ struct ReportOverviewView: View {
                 Divider()
                     .frame(height: 42)
 
-                // 第三块:标签锚在左侧(紧接数据完整度),明细按钮锚在右边缘,两者位置都不随
-                // 范围切换移动;胶囊在中间生长,由后面的空隙吸收——既不留常驻空白,
-                // 也不会出现「胶囊一变多标签就乱跑」。
                 eventsBlockLabel
 
                 if tally.isClear {
-                    Text("—")
+                    Text(String(localized: "stats.r.overview.noPressureEvents", defaultValue: "无压力事件"))
                         .font(.caption)
-                        .foregroundStyle(.tertiary)
+                        .foregroundStyle(.secondary)
                 } else {
                     alertChips(tally)
                 }
@@ -277,7 +274,7 @@ struct ReportOverviewView: View {
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 56)
+            .frame(minHeight: 54)
         }
     }
 
@@ -289,7 +286,7 @@ struct ReportOverviewView: View {
     }
 
     private var viewDetailsButton: some View {
-        Button { navigateTo(.events) } label: {
+        Button { viewModel.openEvents(filter: .all) } label: {
             HStack(spacing: 4) {
                 Text(String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
                     .font(.system(size: 11, weight: .medium))
@@ -302,22 +299,25 @@ struct ReportOverviewView: View {
         .help(String(localized: "stats.r.secEvents", defaultValue: "压力警告"))
     }
 
-    private func scoreSummary(result: StatisticsHealthScore.Result?) -> some View {
+    private func scoreSummary(result: StatisticsHealthScore.Result?, hasPressureEvents: Bool) -> some View {
         HStack(spacing: 10) {
             Image(systemName: "gauge.medium")
                 .font(.system(size: 20, weight: .semibold))
-                .foregroundStyle(palette.moduleTint(for: .memory))
+                .foregroundStyle(palette.scoreTint(for: result?.level))
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(alignment: .firstTextBaseline, spacing: 5) {
-                    Text(result.map { String(format: "%.0f", $0.score) } ?? "—")
+                    let scoreText = result.map {
+                        "\(StatisticsHealthScore.displayScore($0.score, hasPressureEvents: hasPressureEvents))"
+                    } ?? "—"
+                    Text(scoreText)
                         .font(.system(size: 30, weight: .semibold, design: .rounded))
                         .monospacedDigit()
                     Text(String(localized: "stats.r.pts", defaultValue: "分"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
 
-                    scoreBasisButton
+                    scoreBasisButton(result: result)
                 }
 
                 if let result {
@@ -326,7 +326,6 @@ struct ReportOverviewView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 } else {
-                    // 固定行高容不下两行原因,溢出的部分交给悬停提示。
                     Text(nilReasonText)
                         .font(.caption2)
                         .foregroundStyle(.secondary)
@@ -337,8 +336,7 @@ struct ReportOverviewView: View {
         }
     }
 
-    /// 数据完整度:进度条定宽,不再跟着标签文字一路拉长——这一块的宽度由文字决定,
-    /// 所以真正省宽度的是短标签(见 stats.r.coverageSummary),进度条只负责视觉比例。
+    /// 系统数据完整度：只呈现系统级覆盖率与系统级质量警告，不再被全库应用采样估算说明覆盖。
     private var coverageSummary: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let coverage = viewModel.rangeModel?.coveragePercent {
@@ -349,7 +347,7 @@ struct ReportOverviewView: View {
                     .progressViewStyle(.linear)
                     .controlSize(.small)
                     .tint(.secondary)
-                    .frame(width: 64)
+                    .frame(width: 80)
             } else {
                 Text(String(localized: "stats.r.coverageUnavailable", defaultValue: "数据完整度 —"))
                     .font(.callout.weight(.medium))
@@ -359,12 +357,13 @@ struct ReportOverviewView: View {
                     .lineLimit(1)
             }
 
-            // 数据源与数据质量补充说明。
-            if let notice = viewModel.rangeModel?.qualityNotice {
+            if let notice = viewModel.rangeModel?.systemQualityNotice {
                 Text(notice)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .help(notice)
             }
         }
         .help(String(localized: "stats.r.coverageHelp", defaultValue: "有效采样时长占清醒时间的比例；系统确认的整机休眠不计入清醒时间。"))
@@ -375,11 +374,9 @@ struct ReportOverviewView: View {
             ?? String(localized: "stats.r.healthScoreInsufficient")
     }
 
-    // MARK: - 评分依据按需弹出
+    // MARK: - 评分依据与实测分项弹出窗
 
-    /// 评分依据按需弹出:公式与权重是解释性内容,常驻会占用横向排版预算并与分数抢宽度,
-    /// 其换行还会把这一行撑高。
-    private var scoreBasisButton: some View {
+    private func scoreBasisButton(result: StatisticsHealthScore.Result?) -> some View {
         Button { showScoreBasis.toggle() } label: {
             Image(systemName: "info.circle")
                 .font(.caption)
@@ -389,12 +386,12 @@ struct ReportOverviewView: View {
         .help(String(localized: "stats.r.scoreBasis", defaultValue: "评分依据"))
         .accessibilityLabel(Text(String(localized: "stats.r.scoreBasis", defaultValue: "评分依据")))
         .popover(isPresented: $showScoreBasis, arrowEdge: .bottom) {
-            scoreBasisPopover
+            scoreBasisPopover(result: result)
         }
     }
 
-    private var scoreBasisPopover: some View {
-        VStack(alignment: .leading, spacing: 6) {
+    private func scoreBasisPopover(result: StatisticsHealthScore.Result?) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             Text(String(localized: "stats.r.scoreBasis", defaultValue: "评分依据"))
                 .font(.system(size: 12, weight: .semibold))
 
@@ -402,12 +399,35 @@ struct ReportOverviewView: View {
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let result, !result.dimensions.isEmpty {
+                Divider()
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(result.dimensions) { dim in
+                        HStack {
+                            Text(dim.name)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Spacer()
+                            Text("\(dim.rawText) · \(dim.level.title)")
+                                .font(.caption.weight(.medium))
+                                .monospacedDigit()
+                        }
+                    }
+                }
+            }
+
+            Divider()
+            Text(String(localized: "stats.report.conclusion.scope"))
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
-        .frame(width: 260, alignment: .leading)
+        .frame(width: 275, alignment: .leading)
     }
 
-    // MARK: - 1.2 核心用量与传输总览卡片 (直达各模块明细)
+    // MARK: - 核心用量与传输总览卡片
 
     private func resourceGrid(primary: Bool) -> some View {
         let cpu = viewModel.rangeModel?.cpu
@@ -423,7 +443,7 @@ struct ReportOverviewView: View {
             if primary {
                 ReportOverviewMetricRow(
                     icon: MonitorKind.cpu.symbol,
-                    tint: cpuColor,
+                    tint: palette.cpu,
                     title: String(localized: "stats.metrics.cpu", defaultValue: "CPU"),
                     value: cpu?.avgUsage.map { String(format: "%.1f%%", $0) } ?? "—",
                     caption: formatUsageCaption(highSeconds: cpu?.highSeconds, peak: cpu?.peakUsage),
@@ -432,7 +452,7 @@ struct ReportOverviewView: View {
                 )
                 ReportOverviewMetricRow(
                     icon: MonitorKind.gpu.symbol,
-                    tint: gpuColor,
+                    tint: palette.gpu,
                     title: String(localized: "stats.metrics.gpu", defaultValue: "GPU"),
                     value: gpu?.avgUsage.map { String(format: "%.1f%%", $0) } ?? "—",
                     caption: formatUsageCaption(highSeconds: gpu?.highSeconds, peak: gpu?.peakUsage),
@@ -441,7 +461,7 @@ struct ReportOverviewView: View {
                 )
                 ReportOverviewMetricRow(
                     icon: MonitorKind.memory.symbol,
-                    tint: memPressureColor,
+                    tint: palette.memory,
                     title: String(localized: "stats.metrics.memoryUsage", defaultValue: "内存"),
                     value: mem?.memPctAvg.map { String(format: "%.1f%%", $0) } ?? (mem?.usedAvgBytes.map { ReportUIHelper.formatBytes($0) } ?? "—"),
                     caption: formatMemoryCaption(pressure: mem?.pressureAvgPercent, peak: mem?.usedPeakPercent),
@@ -450,7 +470,7 @@ struct ReportOverviewView: View {
                 )
                 ReportOverviewMetricRow(
                     icon: MonitorKind.battery.symbol,
-                    tint: powerColor,
+                    tint: palette.power,
                     title: String(localized: "stats.metrics.power", defaultValue: "功耗"),
                     value: power?.avgPowerWatts.map { String(format: "%.1f W", $0) } ?? "—",
                     caption: power?.peakPowerWatts.map { String(format: String(localized: "report.ui.peakPower"), $0) },
@@ -460,7 +480,7 @@ struct ReportOverviewView: View {
             } else {
                 ReportOverviewMetricRow(
                     icon: MonitorKind.network.symbol,
-                    tint: netColor,
+                    tint: palette.networkDown,
                     title: String(localized: "overview.resources.network", defaultValue: "网络"),
                     value: formatNetworkValue(net),
                     caption: net?.peakDownRate.map { String(localized: "report.ui.peakDownload") + ReportUIHelper.formatBytesRate($0) },
@@ -469,7 +489,7 @@ struct ReportOverviewView: View {
                 )
                 ReportOverviewMetricRow(
                     icon: MonitorKind.storage.symbol,
-                    tint: diskColor,
+                    tint: palette.diskRead,
                     title: String(localized: "stats.metrics.disk", defaultValue: "磁盘"),
                     value: formatDiskValue(disk),
                     caption: disk?.peakReadRate.map { String(localized: "report.ui.peakRead") + ReportUIHelper.formatBytesRate($0) },
@@ -478,9 +498,9 @@ struct ReportOverviewView: View {
                 )
                 ReportOverviewMetricRow(
                     icon: "flame",
-                    tint: thermalColor,
+                    tint: palette.thermal,
                     title: String(localized: "stats.r.secThermal", defaultValue: "热压力"),
-                    value: thermal?.cpuTempAvg.map { String(format: "%.1f°C", $0) } ?? "—",
+                    value: thermal?.cpuTempAvg.map { String(format: "%.1f°C", $0) } ?? StatisticsDisplayFormat.thermalStateLabel(thermal?.cpuThermalAvg),
                     caption: thermal?.fanAvgRPM.map { String(format: String(localized: "report.ui.fanSpeed"), $0) } ?? (thermal?.hasFans == false ? String(localized: "report.ui.fanless") : nil),
                     destination: .thermal,
                     onNavigate: { navigateTo($0) }
@@ -536,162 +556,109 @@ struct ReportOverviewView: View {
         }
     }
 
-    // MARK: - 2. 多维综合负载趋势折线图 (R16: 恢复四维趋势，R07: 缺口断开)
+    // MARK: - 综合负载与压力趋势（带事件色带叠加、Hover 浮窗与高频降噪切换）
 
     private var compositeTrendCard: some View {
-        let rows = viewModel.rangeModel?.rows ?? []
-        let granularity = viewModel.rangeModel?.granularity.bucketSeconds ?? 60
+        let model = viewModel.rangeModel
+        let cache = model?.chartCache ?? .empty
+        let sourceCount = model?.rows.count ?? 0
+        let isDense = sourceCount > 300
 
-        let cpuPoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.cpuAvg,
-            seriesID: "cpu",
-            granularitySeconds: granularity
-        )
-        let gpuPoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.gpuAvg,
-            seriesID: "gpu",
-            granularitySeconds: granularity
-        )
-        let pressurePoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.memPressureAvg,
-            seriesID: "memPressure",
-            granularitySeconds: granularity
-        )
-        let memUsagePoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.memPctAvg,
-            seriesID: "memUsage",
-            granularitySeconds: granularity
-        )
+        func maybeSmooth(_ s: ReportChartSeries) -> ReportChartSeries {
+            (isDense && smoothDenseTrend) ? s.smoothed(referencePointCount: sourceCount) : s
+        }
 
-        let cpuSegments = Dictionary(grouping: cpuPoints, by: \.segmentID)
-        let gpuSegments = Dictionary(grouping: gpuPoints, by: \.segmentID)
-        let pressureSegments = Dictionary(grouping: pressurePoints, by: \.segmentID)
-        let memUsageSegments = Dictionary(grouping: memUsagePoints, by: \.segmentID)
+        let descriptors: [ReportChartSeriesDescriptor] = {
+            switch trendMode {
+            case .load:
+                return [
+                    ReportChartSeriesDescriptor(
+                        id: "cpu",
+                        title: String(localized: "stats.r.sCpu", defaultValue: "CPU"),
+                        series: maybeSmooth(cache.cpuAvg),
+                        color: palette.cpu
+                    ),
+                    ReportChartSeriesDescriptor(
+                        id: "gpu",
+                        title: String(localized: "stats.r.sGpu", defaultValue: "GPU"),
+                        series: maybeSmooth(cache.gpuAvg),
+                        color: palette.gpu
+                    )
+                ]
+            case .memory:
+                return [
+                    ReportChartSeriesDescriptor(
+                        id: "memPressure",
+                        title: String(localized: "stats.r.sMemPressure", defaultValue: "内存压力"),
+                        series: maybeSmooth(cache.memPressure),
+                        color: palette.memory
+                    ),
+                    ReportChartSeriesDescriptor(
+                        id: "memUsage",
+                        title: String(localized: "stats.r.sMemUsage", defaultValue: "内存占比"),
+                        series: maybeSmooth(cache.memUsagePct),
+                        color: palette.memoryUsageLine,
+                        lineWidth: 1.4,
+                        isDashed: true
+                    )
+                ]
+            }
+        }()
+
+        let eventHighlights: [ReportChartHighlightWindow] = (model?.events ?? []).map { event in
+            let tone: ReportChartHighlightWindow.Tone = (event.worstLevel >= 2) ? .critical : .warning
+            return ReportChartHighlightWindow(
+                id: event.id,
+                start: event.start,
+                end: event.end,
+                tone: tone,
+                label: event.kind.title
+            )
+        }
 
         return ReportCardView(
             title: String(localized: "stats.r.overviewTrendTitle", defaultValue: "综合负载与压力趋势"),
-            icon: "chart.xyaxis.line"
+            icon: "chart.xyaxis.line",
+            trailing: {
+                HStack(spacing: 10) {
+                    if isDense {
+                        Toggle(isOn: $smoothDenseTrend) {
+                            Text(String(localized: "stats.report.trend.smooth", defaultValue: "降噪平滑"))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .toggleStyle(.switch)
+                        .controlSize(.mini)
+                    }
+
+                    ReportNavigationPicker(
+                        title: "",
+                        selection: $trendMode,
+                        options: TrendMode.allCases.map { ReportSegmentOption(value: $0, label: $0.label) },
+                        size: .compact
+                    )
+                    .fixedSize()
+                }
+            }
         ) {
-            if rows.isEmpty {
+            if model?.rows.isEmpty ?? true {
                 ReportEmptyPlaceholder(text: String(localized: "stats.r.emptySection", defaultValue: "所选范围内无采样记录"))
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 16) {
-                        ReportNavigationPicker(title: "", selection: $trendMode) {
-                            ForEach(TrendMode.allCases) { mode in
-                                Text(mode.label).tag(mode)
-                            }
-                        }
-                        .fixedSize()
-
-                        if trendMode == .load {
-                            ReportLegendItem(title: String(localized: "stats.r.sCpu", defaultValue: "CPU"), color: cpuColor)
-                            ReportLegendItem(title: String(localized: "stats.r.sGpu", defaultValue: "GPU"), color: gpuColor)
-                        } else {
-                            ReportLegendItem(title: String(localized: "stats.r.sMemPressure", defaultValue: "内存压力"), color: memPressureColor)
-                            ReportLegendItem(title: String(localized: "stats.r.sMemUsage", defaultValue: "内存占比"), color: memUsageColor, isDashed: true)
-                        }
-
-                        Spacer()
-
-                        if let selectedDate, let row = ReportUIHelper.findClosestRow(to: selectedDate, in: rows) {
-                            Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): CPU \(row.cpuAvg.map { String(format: "%.1f%%", $0) } ?? "—") | GPU \(row.gpuAvg.map { String(format: "%.1f%%", $0) } ?? "—") | 压 \(row.memPressureAvg.map { String(format: "%.0f%%", $0) } ?? "—")")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    Chart {
-                        // 1. CPU 均值（负载模式）
-                        ForEach(trendMode == .load ? Array(cpuSegments.keys.sorted()) : [], id: \.self) { seg in
-                            let segPoints = cpuSegments[seg] ?? []
-                            ForEach(segPoints) { pt in
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Value", pt.value ?? 0),
-                                    series: .value("Series", "cpu-\(seg)")
-                                )
-                                .foregroundStyle(cpuColor)
-                                .interpolationMethod(.monotone)
-                            }
-                        }
-
-                        // 2. GPU 均值（负载模式）
-                        ForEach(trendMode == .load ? Array(gpuSegments.keys.sorted()) : [], id: \.self) { seg in
-                            let segPoints = gpuSegments[seg] ?? []
-                            ForEach(segPoints) { pt in
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Value", pt.value ?? 0),
-                                    series: .value("Series", "gpu-\(seg)")
-                                )
-                                .foregroundStyle(gpuColor)
-                                .interpolationMethod(.monotone)
-                            }
-                        }
-
-                        // 3. 内存压力（内存模式）
-                        ForEach(trendMode == .memory ? Array(pressureSegments.keys.sorted()) : [], id: \.self) { seg in
-                            let segPoints = pressureSegments[seg] ?? []
-                            ForEach(segPoints) { pt in
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Value", pt.value ?? 0),
-                                    series: .value("Series", "memPressure-\(seg)")
-                                )
-                                .foregroundStyle(memPressureColor)
-                                .interpolationMethod(.monotone)
-                            }
-                        }
-
-                        // 4. 内存占用比（内存模式，虚线）
-                        ForEach(trendMode == .memory ? Array(memUsageSegments.keys.sorted()) : [], id: \.self) { seg in
-                            let segPoints = memUsageSegments[seg] ?? []
-                            ForEach(segPoints) { pt in
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Value", pt.value ?? 0),
-                                    series: .value("Series", "memUsage-\(seg)")
-                                )
-                                .foregroundStyle(memUsageColor)
-                                .lineStyle(StrokeStyle(lineWidth: 1.4, dash: [4, 4]))
-                                .interpolationMethod(.monotone)
-                            }
-                        }
-
-                        if let selectedDate {
-                            RuleMark(x: .value("Selected", selectedDate))
-                                .foregroundStyle(Color.secondary.opacity(0.4))
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        }
-                    }
-                    .chartYScale(domain: 0...100)
-                    .chartYAxis {
-                        AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { val in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.15))
-                            AxisValueLabel {
-                                if let intVal = val.as(Int.self) {
-                                    Text("\(intVal)%")
-                                        .font(.system(size: 10))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXSelection(value: $selectedDate)
-                    .frame(height: 260)
-                }
+                ReportTimeSeriesChart(
+                    descriptors: descriptors,
+                    isSingleDay: viewModel.isSingleDaySelected,
+                    yAxisFormat: .percent,
+                    yDomain: 0...100,
+                    yAxisValues: [0, 25, 50, 75, 100],
+                    highlightWindows: eventHighlights,
+                    height: 256
+                )
             }
         }
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - 3. 7×24 小时活跃热力图 (R06: 复合忙碌度)
+    // MARK: - 7×24 小时活跃热力图
 
     private func heatmapCard(heatmap: ReportHeatmapData) -> some View {
         let weekdayNames = [
@@ -710,7 +677,6 @@ struct ReportOverviewView: View {
             icon: "calendar.day.timeline.leading"
         ) {
             VStack(alignment: .leading, spacing: 10) {
-                // 顶部小时轴标头 (0..23)
                 HStack(spacing: 3) {
                     Text("")
                         .frame(width: 32)
@@ -722,7 +688,6 @@ struct ReportOverviewView: View {
                     }
                 }
 
-                // 7 天行网格
                 VStack(spacing: 3) {
                     ForEach(Array(displayRowOrder.enumerated()), id: \.offset) { idx, wd in
                         HStack(spacing: 3) {
@@ -739,7 +704,6 @@ struct ReportOverviewView: View {
                     }
                 }
 
-                // 底部图例
                 HStack {
                     Spacer()
                     Text(String(localized: "stats.r.low", defaultValue: "低"))
@@ -748,7 +712,7 @@ struct ReportOverviewView: View {
                     HStack(spacing: 2) {
                         ForEach([0.15, 0.35, 0.60, 0.85, 1.0], id: \.self) { op in
                             RoundedRectangle(cornerRadius: 2)
-                                .fill(cpuColor.opacity(op))
+                                .fill(palette.cpu.opacity(op))
                                 .frame(width: 12, height: 10)
                         }
                     }
@@ -765,7 +729,7 @@ struct ReportOverviewView: View {
         let opacity = cell.map { max(0.12, min(1.0, $0.intensity)) } ?? 0.04
 
         return RoundedRectangle(cornerRadius: 2)
-            .fill(cell != nil ? cpuColor.opacity(opacity) : Color.secondary.opacity(0.06))
+            .fill(cell != nil ? palette.cpu.opacity(opacity) : Color.secondary.opacity(0.06))
             .frame(maxWidth: .infinity, minHeight: 14, maxHeight: 18)
             .help(cell?.avgBusy.map { String(format: "%.1f%%", $0) } ?? String(localized: "stats.r.noData", defaultValue: "无数据"))
     }
@@ -783,8 +747,15 @@ struct ReportOverviewMetricRow: View {
     let onNavigate: (ReportNavigationModule) -> Void
 
     @State private var isHovered = false
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+
+    private var palette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
 
     var body: some View {
+        let isMissing = value == "—"
         Button {
             onNavigate(destination)
         } label: {
@@ -801,7 +772,7 @@ struct ReportOverviewMetricRow: View {
                 Text(value)
                     .font(.system(destination == .apps || destination == .network || destination == .disk ? .title3 : .title, design: .rounded).weight(.semibold))
                     .monospacedDigit()
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(isMissing ? Color.secondary.opacity(0.6) : .primary)
                     .fixedSize(horizontal: false, vertical: true)
                 Text(caption ?? " ")
                     .font(.callout).foregroundStyle(.secondary)
@@ -810,16 +781,68 @@ struct ReportOverviewMetricRow: View {
             .frame(maxWidth: .infinity, minHeight: 100, alignment: .topLeading)
             .padding(16)
             .background {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(nsColor: .controlBackgroundColor).opacity(isHovered ? 0.85 : 0.55))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isHovered ? palette.cardHoverFill : palette.cardFill)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(isHovered ? tint.opacity(0.4) : Color.primary.opacity(0.07))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isHovered ? tint.opacity(0.42) : palette.cardBorder, lineWidth: 0.75)
             }
             .contentShape(.rect(cornerRadius: 12))
         }
         .buttonStyle(.plain)
         .onHover { isHovered = $0 }
+    }
+}
+
+
+private struct ReportCurrentPressureBanner: View {
+    @ObservedObject var source: ReportLiveHardwareSource
+    let range: ReportTimeRange
+    let palette: ReportPalette
+    let onOpen: (ReportEventItem.Kind) -> Void
+
+    var body: some View {
+        let now = Date()
+        let bounds = range.bounds(now: now)
+        if let reading = source.livePressure, bounds.from <= now, now <= bounds.to {
+            let tint = palette.base.severityTint(for: reading.isCritical ? .critical : .warning)
+            let duration = StatisticsDisplayFormat.duration(reading.durationSeconds)
+            HStack(spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(tint)
+
+                Text(String(
+                    format: String(localized: "stats.r.overview.ongoingBanner", defaultValue: "当前%@持续中 · 已持续 %@"),
+                    reading.kind.title,
+                    duration
+                ))
+                .font(.callout.weight(.medium))
+                .lineLimit(1)
+
+                Spacer(minLength: 8)
+
+                Button {
+                    onOpen(reading.kind)
+                } label: {
+                    Text(reading.kind == .memory
+                         ? String(localized: "stats.r.insight.actionViewMemory")
+                         : String(localized: "stats.r.insight.actionViewThermal"))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                palette.bannerFill(isElevated: true),
+                in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .strokeBorder(palette.bannerBorder(isElevated: true), lineWidth: 1)
+            )
+        }
     }
 }

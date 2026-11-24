@@ -75,6 +75,7 @@ final class CompatiblePanelGlassHost: NSView {
 struct CompatibleGlassEffect<Fill: View>: ViewModifier {
     var cornerRadius: CGFloat
     var fill: Fill
+    var borderColor: Color = .clear
     @Environment(\.nativePanelOwnsCardBackdrop) private var ownsBackdrop
 
     @ViewBuilder func body(content: Content) -> some View {
@@ -89,6 +90,11 @@ struct CompatibleGlassEffect<Fill: View>: ViewModifier {
                         VisualEffectView(material: .menu, blendingMode: .withinWindow)
                             .clipShape(shape)
                     }
+            }
+            .overlay {
+                shape
+                    .strokeBorder(borderColor, lineWidth: 0.5)
+                    .allowsHitTesting(false)
             }
         }
     }
@@ -124,8 +130,8 @@ extension View {
 
     /// 跨版本兼容的 `.glassEffect` 替代(自定义填充版):填充可以是渐变等任意视图,
     /// 用于活力配色行 tint 的垂直衰减(见 `MonitorPalette.rowGlassFill`)。
-    func compatibleGlassEffect(cornerRadius: CGFloat, @ViewBuilder fill: () -> some View) -> some View {
-        modifier(CompatibleGlassEffect(cornerRadius: cornerRadius, fill: fill()))
+    func compatibleGlassEffect(cornerRadius: CGFloat, borderColor: Color = .clear, @ViewBuilder fill: () -> some View) -> some View {
+        modifier(CompatibleGlassEffect(cornerRadius: cornerRadius, fill: fill(), borderColor: borderColor))
     }
 
     /// 跨版本兼容的 `.glassEffectID` 替代。
@@ -179,7 +185,12 @@ private struct PanelMaterialButtonStyle: ButtonStyle {
                     .clipShape(shape)
             }
             .overlay(
-                shape.strokeBorder(palette.materialButtonStroke, lineWidth: 0.5)
+                shape.strokeBorder(
+                    colorScheme == .dark
+                        ? palette.materialButtonStroke
+                        : palette.cardBorderColor,
+                    lineWidth: 0.5
+                )
             )
             .contentShape(shape)
             .onHover { isHovering = $0 }

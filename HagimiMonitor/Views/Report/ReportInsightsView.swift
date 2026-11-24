@@ -1,12 +1,18 @@
 import AppKit
 import SwiftUI
 
-/// 智能洞察建议视图：根据长周期与短周期监控数据，自动提炼系统负荷特征、峰值时段与调优建议。
+/// 智能洞察建议视图：输出周期环比变化、压力归因、长期趋势与覆盖提示，并支持一键跳转定位。
 struct ReportInsightsView: View {
     @ObservedObject var viewModel: NativeReportViewModel
 
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+
+    private var palette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
+
     var body: some View {
-        // R19: 本模块无 HardwareRail 契约，采用全宽布局
         VStack(spacing: 16) {
             insightsCard
         }
@@ -20,7 +26,6 @@ struct ReportInsightsView: View {
             title: String(localized: "stats.r.secInsights", defaultValue: "智能诊断与运行洞察"),
             icon: "sparkles"
         ) {
-            // R04: 中性空态，不夸大“未发现瓶颈”
             if items.isEmpty {
                 ReportEmptyPlaceholder(text: String(localized: "stats.r.emptyInsightsNeutral", defaultValue: "所选时间范围内未提炼出突出的运行建议或指标异动"))
             } else {
@@ -34,10 +39,12 @@ struct ReportInsightsView: View {
     }
 
     private func insightRow(item: ReportInsightItem) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        let tint = palette.insightTint(for: item.severity, colorName: item.colorName)
+
+        return HStack(alignment: .top, spacing: 14) {
             Image(systemName: item.systemIcon)
                 .font(.system(size: 18))
-                .foregroundStyle(iconColor(for: item.colorName))
+                .foregroundStyle(tint)
                 .frame(width: 28, height: 28)
 
             VStack(alignment: .leading, spacing: 5) {
@@ -52,26 +59,31 @@ struct ReportInsightsView: View {
             }
 
             Spacer()
+
+            if item.destination != nil {
+                Button {
+                    viewModel.focusOnInsight(item)
+                } label: {
+                    HStack(spacing: 4) {
+                        Text(item.actionTitle ?? String(localized: "stats.process.view-details.btn", defaultValue: "查看明细"))
+                            .font(.system(size: 11, weight: .medium))
+                        Image(systemName: "arrow.right")
+                            .font(.system(size: 10, weight: .semibold))
+                    }
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .padding(.top, 2)
+            }
         }
         .padding(14)
         .background {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.4))
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(palette.insightFill(for: item.severity))
         }
         .overlay {
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .strokeBorder(Color.primary.opacity(0.06), lineWidth: 1)
-        }
-    }
-
-    private func iconColor(for colorName: String) -> Color {
-        switch colorName {
-        case "red": return Color(hex: 0xFF3B30)
-        case "orange": return Color(hex: 0xFF9500)
-        case "yellow": return Color(hex: 0xF5A623)
-        case "green": return Color(hex: 0x34C759)
-        case "blue": return Color(hex: 0x007AFF)
-        default: return Color.accentColor
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .strokeBorder(palette.insightBorder(for: item.severity), lineWidth: 0.75)
         }
     }
 }

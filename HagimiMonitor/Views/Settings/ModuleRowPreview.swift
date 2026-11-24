@@ -14,6 +14,7 @@ struct ModuleRowPreview: View {
     var chartStyle: PanelHistoryChartStyle = .bars
     /// 电池模块分页选择(健康/拓扑/供电):由设置页持有,驱动预览分页与下方指标选项联动。
     @Binding var batteryTab: BatteryPageTab
+    @Environment(\.nativePanelContentWidth) private var nativePanelContentWidth
 
     private var theme: MonitorPanelTheme {
         MonitorPanelTheme(palette: palette)
@@ -75,24 +76,28 @@ struct ModuleRowPreview: View {
             palette.rowGlassFill(for: kind)
                 .clipShape(RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous))
         )
+        .overlay(
+            RoundedRectangle(cornerRadius: MonitorConstants.rowCornerRadius, style: .continuous)
+                .strokeBorder(palette.cardBorderColor, lineWidth: 0.5)
+                .allowsHitTesting(false)
+        )
     }
 
     // MARK: 行头
 
     private var header: some View {
         HStack(spacing: 10) {
-            Image(systemName: kind.symbol)
-                .font(.callout.weight(.semibold))
-                .symbolRenderingMode(.monochrome)
-                .foregroundStyle(tint)
-                .frame(width: 18)
+            ModuleHeaderIcon(systemName: kind.symbol, tint: tint, theme: theme)
 
-            Text("\(kind.title):")
-                .monitorPanelMetricLabelFont()
-                .foregroundStyle(palette.primaryText)
-                .lineLimit(1)
+            HStack(spacing: 6) {
+                Text("\(kind.title):")
+                    .monitorPanelMetricLabelFont()
+                    .foregroundStyle(palette.primaryText)
+                    .lineLimit(1)
+                    .monitorPanelModuleTitleSlot()
 
-            headerSummary
+                headerSummary
+            }
 
             Spacer(minLength: 8)
 
@@ -173,7 +178,7 @@ struct ModuleRowPreview: View {
     }
 
     private func isFullRow(_ metric: MetricSwitch) -> Bool {
-        StaticMetricSizing.isFullRow(kind: kind, name: lookupName(metric))
+        StaticMetricSizing.isFullRow(kind: kind, name: lookupName(metric), panelWidth: nativePanelContentWidth + 12)
     }
 
     private var detailGrid: some View {
@@ -262,8 +267,8 @@ struct ModuleRowPreview: View {
     @ViewBuilder
     private func previewGrid(_ gridMetrics: [MetricSwitch], order: [String]) -> some View {
         let visible = gridMetrics
-        let short = visible.filter { !isFullRow($0) && !(mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure") }
-        let thermal = visible.filter { mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure" }
+        let short = visible.filter { !isFullRow($0) }
+        let thermal = visible.filter { mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure" && isFullRow($0) }
         let full = visible.filter {
             isFullRow($0) && !(mergesThermalRow && kind == .cpu && $0.id == "thermal-pressure")
         }
@@ -273,7 +278,7 @@ struct ModuleRowPreview: View {
         let byID = Dictionary(uniqueKeysWithValues: defaults.map { ($0.id, $0) })
         let cells = saved.compactMap { id -> PreviewCell? in
             guard let metric = byID[id] else { return nil }
-            return PreviewCell(metric: metric, span: isFullRow(metric) || (showsCoreDetail && kind == .cpu && id == "core-split") || (mergesThermalRow && kind == .cpu && id == "thermal-pressure") ? 2 : 1)
+            return PreviewCell(metric: metric, span: isFullRow(metric) || (showsCoreDetail && kind == .cpu && id == "core-split") ? 2 : 1)
         }
         PanelMetricColumns(measurementKey: cells.map(\.id).joined(separator: ",")) {
             ForEach(cells) { cell in

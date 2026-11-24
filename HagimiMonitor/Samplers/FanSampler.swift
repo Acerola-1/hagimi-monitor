@@ -9,6 +9,14 @@ nonisolated protocol FanSMCReading: AnyObject, Sendable {
     func fanCount() -> Int?
     /// 读取所有风扇的当前 RPM 与 min/max 范围。返回数组长度 = fanCount。
     func allFans() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)]
+    /// 读取所有风扇并附带当前转速 `F{i}Ac` 是否真实可读，用于区分「真实 0 RPM 停转」与「读取失败」。
+    func allFansWithValidity() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int, isCurrentRPMValid: Bool)]
+}
+
+nonisolated extension FanSMCReading {
+    func allFansWithValidity() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int, isCurrentRPMValid: Bool)] {
+        allFans().map { ($0.id, $0.currentRPM, $0.minRPM, $0.maxRPM, true) }
+    }
 }
 
 /// 风扇采样器:周期读 SMC 的 FNum / F0Ac.../F0Mn/F0Mx。
@@ -69,14 +77,15 @@ final class FanSampler {
 
     private func sample() {
         guard available, let smcReader else { return }
-        let raw = smcReader.allFans()
+        let raw = smcReader.allFansWithValidity()
         let newFans = raw.map { entry in
             FanInfo(
                 id: entry.id,
                 name: Self.fanName(id: entry.id, totalCount: fanCount),
                 currentRPM: entry.currentRPM,
                 minRPM: entry.minRPM,
-                maxRPM: entry.maxRPM
+                maxRPM: entry.maxRPM,
+                isCurrentRPMValid: entry.isCurrentRPMValid
             )
         }
         // 避免在数据未变时触发 Combine 重绘

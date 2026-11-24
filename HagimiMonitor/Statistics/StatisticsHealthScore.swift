@@ -244,4 +244,15 @@ nonisolated enum StatisticsHealthScore: Sendable {
         let pct = share * 100
         return pct < 0.05 ? "0%" : String(format: "%.1f%%", pct)
     }
+
+    /// 展示用整数分值：只要真实得分未达 100 或范围内出现过系统压力事件，
+    /// 绝不向上舍入显示为 100 分，避免「出现过系统压力却显示 100 分」的口径矛盾。
+    static func displayScore(_ score: Double, hasPressureEvents: Bool = false) -> Int {
+        guard score.isFinite else { return 0 }
+        let clamped = max(0, min(100, score))
+        if clamped >= 100 && !hasPressureEvents {
+            return 100
+        }
+        return max(0, min(99, Int(floor(clamped))))
+    }
 }

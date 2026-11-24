@@ -785,7 +785,11 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
             if let controller = reorderController {
                 reorderSubscriptions = [controller.pointer.$location.sink { [weak self] _ in self?.scheduleEdgeScroll() },
                     controller.$session.sink { [weak self] session in
-                        if session == nil { self?.stopEdgeScroll() } else { self?.scheduleEdgeScroll() }
+                        if session == nil {
+                            self?.stopEdgeScroll()
+                        } else {
+                            self?.scheduleEdgeScroll()
+                        }
                     }]
             }
         }
@@ -922,7 +926,10 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         window?.ignoresMouseEvents = true
         (window as? NativePanelWindow)?.pointerDidChange.send()
     }
-    func nativePanelDidShow() { installMonitors(); pointerDidChange() }
+    func nativePanelDidShow() {
+        installMonitors()
+        pointerDidChange()
+    }
     private func scheduleEdgeScroll(delay: TimeInterval = 0.05) {
         edgeScrollWork?.cancel(); edgeScrollWork = nil
         guard let controller = reorderController, let session = controller.session,
@@ -967,7 +974,9 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
         // 同一应用内的移动不会进入 global monitor，必须让容量窗口接收移动事件，
         // 才能在鼠标到达透明区域时于下一次按下前更新窗口边界。
         window?.acceptsMouseMovedEvents = true
-        let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDragged, .rightMouseDragged, .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp]
+        let events: NSEvent.EventTypeMask = [.mouseMoved, .scrollWheel, .leftMouseDragged, .rightMouseDragged,
+                                             .leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp,
+                                             .otherMouseDown, .otherMouseDragged]
         localMonitor = NSEvent.addLocalMonitorForEvents(matching: events) { [weak self] event in
             guard let self else { return event }
             if event.type == .leftMouseUp || event.type == .rightMouseUp { self.isDragging = false }
@@ -1041,8 +1050,11 @@ final class NativePanelSurface: NativePanelFlippedView, NativePanelLayerRenderer
             }
         }
         if header.frame.contains(surfacePoint) { return header.hitTest(surfacePoint) }
-        let viewport = CGRect(x: contentInset, y: bodyTop, width: scroll.frame.width, height: sample.frame.viewportHeight)
-        return viewport.contains(surfacePoint) ? scroll.hitTest(surfacePoint) : self
+        return bodyViewport(for: sample.frame).contains(surfacePoint) ? scroll.hitTest(surfacePoint) : self
+    }
+    private func bodyViewport(for frame: PanelFrame) -> CGRect {
+        CGRect(x: contentInset, y: header.frame.maxY + chromeStyle.headerSpacing,
+               width: scroll.frame.width, height: frame.viewportHeight)
     }
 }
 

@@ -107,10 +107,34 @@ nonisolated enum StatisticsMetricDefinition: Sendable {
         return bands.last { rawValue >= $0.lowerBound }
     }
 
+    /// 某指标三个档位的展示标签，全端共用同一指标定义与单位格式化。
+    static func bandLabels(for metric: ProcessAlertEpisode.Metric) -> [String] {
+        let definition: Metric = switch metric {
+        case .cpu: .cpu
+        case .gpu: .gpu
+        case .memory: .memory
+        case .network: .network
+        }
+        let boundaries: [Double] = switch definition {
+        case .cpu: cpuBandBoundaries
+        case .gpu: gpuBandBoundaries
+        case .memory: memoryBands.map(\.lowerBound)
+        case .network: networkBandBoundaries.map { $0 * mebibyte }
+        }
+        return boundaries.map { boundary in
+            switch definition {
+            case .memory: StatisticsDisplayFormat.binaryCapacity(boundary)
+            case .network: StatisticsDisplayFormat.decimalRate(boundary)
+            default: StatisticsDisplayFormat.percent(boundary)
+            }
+        }
+    }
+
     // MARK: - 关注门槛
 
-    /// CPU 关注门槛（单核 60%）。
-    static let cpuAttentionThreshold: Double = 60
+    /// CPU 关注门槛：取 100%（单核满载）与逻辑核总容量 15% 的较大值，避免高核数芯片被轻载进程误触发。
+    static let cpuAttentionFloor: Double = 100
+    static let cpuAttentionCoreFraction: Double = 0.15
 
     /// GPU 关注门槛（40%）。
     static let gpuAttentionThreshold: Double = 40
@@ -124,14 +148,24 @@ nonisolated enum StatisticsMetricDefinition: Sendable {
 
     struct AttentionThreshold: Sendable, Equatable {
         let value: Double
-        /// 是否考虑物理内存容量。若为 false 表示无法获取物理内存容量，采用固定门槛。
+        /// 是否考虑硬件容量（物理内存大小或逻辑核数）。若为 false 表示无法获取，采用固定门槛。
         let considersPhysicalCapacity: Bool
     }
 
-    static func attentionThreshold(for metric: Metric, physicalMemoryBytes: Double? = nil) -> AttentionThreshold? {
+    static func attentionThreshold(
+        for metric: Metric,
+        physicalMemoryBytes: Double? = nil,
+        logicalCoreCount: Int? = nil
+    ) -> AttentionThreshold? {
         switch metric {
         case .cpu:
-            return AttentionThreshold(value: cpuAttentionThreshold, considersPhysicalCapacity: false)
+            guard let logicalCoreCount, logicalCoreCount > 0 else {
+                return AttentionThreshold(value: cpuAttentionFloor, considersPhysicalCapacity: false)
+            }
+            return AttentionThreshold(
+                value: max(cpuAttentionFloor, Double(logicalCoreCount) * 100 * cpuAttentionCoreFraction),
+                considersPhysicalCapacity: true
+            )
         case .gpu:
             return AttentionThreshold(value: gpuAttentionThreshold, considersPhysicalCapacity: false)
         case .network:
@@ -152,6 +186,13 @@ nonisolated enum StatisticsMetricDefinition: Sendable {
         let bytes = ProcessInfo.processInfo.physicalMemory
         guard bytes > 0 else { return nil }
         return Double(bytes)
+    }
+
+    /// 本机逻辑 CPU 核数。
+    static func logicalCoreCount() -> Int? {
+        let count = ProcessInfo.processInfo.processorCount
+        guard count > 0 else { return nil }
+        return count
     }
 
     // MARK: - 单位常量

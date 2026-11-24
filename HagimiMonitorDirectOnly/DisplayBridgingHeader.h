@@ -13,16 +13,6 @@ extern CFDictionaryRef CoreDisplay_DisplayCreateInfoDictionary(CGDirectDisplayID
 
 extern int DisplayServicesGetBrightness(CGDirectDisplayID display, float *brightness);
 extern int DisplayServicesSetBrightness(CGDirectDisplayID display, float brightness);
-extern int DisplayServicesSetBrightnessSmooth(CGDirectDisplayID display, float delta) __attribute__((weak_import));
-
-// 平滑接口接受相对变化量。与绝对值写入共用同一串行队列，连续按键可从最新目标继续。
-static inline int HagimiSetSmoothBrightness(CGDirectDisplayID display, float target) {
-    if (DisplayServicesSetBrightnessSmooth == NULL) return DisplayServicesSetBrightness(display, target);
-    float current;
-    int status = DisplayServicesGetBrightness(display, &current);
-    if (status == 0 && DisplayServicesSetBrightnessSmooth(display, target - current) == 0) return 0;
-    return DisplayServicesSetBrightness(display, target);
-}
 
 // IOReport 为私有框架，仅在 Direct 分发 target 的桥接头文件中声明。
 // App Store target 既不引入这些符号，也不链接 libIOReport。

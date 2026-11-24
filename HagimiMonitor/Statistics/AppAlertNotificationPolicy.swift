@@ -17,9 +17,10 @@ nonisolated struct SystemPressureSnapshot: Sendable, Equatable {
 
     static let unknown = SystemPressureSnapshot()
 
-    /// 同期是否存在有效压力（任一路达到警告及以上）。
+    /// 同期是否存在有效压力（内存达到警告及以上，或热压力达到严重及以上）。
+    /// 轻微热压力（fair=1）属于日常负载波动，不放行应用高负载通知。
     var hasElevatedPressure: Bool {
-        hasValidObservation && (memoryLevel >= 1 || thermalLevel >= 1)
+        hasValidObservation && (memoryLevel >= 1 || thermalLevel >= 2)
     }
 
     /// 同期压力的严重度：0 正常、1 警告、2 及以上严重。
@@ -49,6 +50,8 @@ nonisolated enum AppAlertNotificationPolicy: Sendable {
         case noConcurrentSystemPressure
         /// 同一事件内已经通知过且严重度未升级。
         case alreadyNotified
+        /// 跨事件冷却期内，暂不重复提醒。
+        case inCooldown
     }
 
     /// 判定是否发送。
@@ -59,12 +62,14 @@ nonisolated enum AppAlertNotificationPolicy: Sendable {
     ///   - systemPressure: 同期的系统压力证据。
     ///   - tier: 本次事件的严重度档位（由指标与超出程度决定）。
     ///   - alreadyNotifiedTier: 该应用本次事件内已通知过的档位；未通知过为 nil。
+    ///   - inCooldown: 该应用同指标是否仍处于跨事件冷却期内（只阻断新通知，不阻断同事件升级）。
     static func decide(
         notificationsEnabled: Bool,
         isConfirmed: Bool,
         systemPressure: SystemPressureSnapshot,
         tier: Int,
-        alreadyNotifiedTier: Int?
+        alreadyNotifiedTier: Int?,
+        inCooldown: Bool = false
     ) -> Decision {
         guard notificationsEnabled else { return .skip(reason: .notificationsDisabled) }
         guard isConfirmed else { return .skip(reason: .belowSustainThreshold) }
@@ -72,7 +77,9 @@ nonisolated enum AppAlertNotificationPolicy: Sendable {
         guard systemPressure.hasElevatedPressure else {
             return .skip(reason: .noConcurrentSystemPressure)
         }
-        guard let previous = alreadyNotifiedTier else { return .send(tier: tier) }
+        guard let previous = alreadyNotifiedTier else {
+            return inCooldown ? .skip(reason: .inCooldown) : .send(tier: tier)
+        }
         // 仅在严重度升级时发送更新通知。
         guard tier > previous else { return .skip(reason: .alreadyNotified) }
         return .update(tier: tier)
@@ -88,7 +95,8 @@ nonisolated enum AppAlertNotificationPolicy: Sendable {
         }
         guard let threshold = StatisticsMetricDefinition.attentionThreshold(
             for: definition,
-            physicalMemoryBytes: metric == .memory ? StatisticsMetricDefinition.physicalMemoryBytes() : nil
+            physicalMemoryBytes: metric == .memory ? StatisticsMetricDefinition.physicalMemoryBytes() : nil,
+            logicalCoreCount: metric == .cpu ? StatisticsMetricDefinition.logicalCoreCount() : nil
         ), threshold.value > 0 else {
             return 1
         }

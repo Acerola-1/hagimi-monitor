@@ -316,7 +316,7 @@ nonisolated struct ReportAppRankingItem: Sendable, Equatable, Identifiable {
 
     /// 判断是否为 macOS 系统应用或系统后台服务进程
     var isSystemApp: Bool {
-        Self.isSystem(name: name)
+        Self.isSystem(appKey: appKey, name: name)
     }
 
     private static let knownSystemNames: Set<String> = [
@@ -346,14 +346,23 @@ nonisolated struct ReportAppRankingItem: Sendable, Equatable, Identifiable {
     ]
 
     /// 采集侧统一记录 NSRunningApplication.localizedName 或 fallbackName (lastPathComponent)，
-    /// 进程名恒为显示名或可执行文件基名，不存在 com.apple. 前缀或全路径。
+    /// 进程名恒为显示名或可执行文件基名；稳定身份键带 `bundle:` / `systemExecutable:` 前缀。
     static func isSystem(name: String) -> Bool {
         knownSystemNames.contains(name.lowercased())
     }
 
-    /// 双参数兼容重载（生产中 appKey 与 name 恒等）
     static func isSystem(appKey: String, name: String) -> Bool {
-        isSystem(name: name) || isSystem(name: appKey)
+        let lowerKey = appKey.lowercased()
+        if lowerKey.hasPrefix("systemexecutable:") || lowerKey.hasPrefix("bundle:com.apple.") {
+            return true
+        }
+        let strippedKey: String = {
+            for prefix in ["bundle:", "systemexecutable:", "unresolved:"] where lowerKey.hasPrefix(prefix) {
+                return String(lowerKey.dropFirst(prefix.count))
+            }
+            return lowerKey
+        }()
+        return isSystem(name: name) || knownSystemNames.contains(strippedKey)
     }
 }
 
@@ -450,11 +459,47 @@ nonisolated struct ReportEventItem: Sendable, Equatable, Identifiable {
 
 /// 智能洞察条目
 nonisolated struct ReportInsightItem: Sendable, Equatable, Identifiable {
+    enum Severity: String, Sendable, Equatable {
+        case neutral
+        case info
+        case warning
+        case critical
+    }
+
     let id: String
     let systemIcon: String
     let colorName: String
     let title: String
     let detail: String
+    let severity: Severity
+    let destination: ReportNavigationModule?
+    let focusStart: Date?
+    let focusEnd: Date?
+    let actionTitle: String?
+
+    init(
+        id: String,
+        systemIcon: String,
+        colorName: String,
+        title: String,
+        detail: String,
+        severity: Severity = .neutral,
+        destination: ReportNavigationModule? = nil,
+        focusStart: Date? = nil,
+        focusEnd: Date? = nil,
+        actionTitle: String? = nil
+    ) {
+        self.id = id
+        self.systemIcon = systemIcon
+        self.colorName = colorName
+        self.title = title
+        self.detail = detail
+        self.severity = severity
+        self.destination = destination
+        self.focusStart = focusStart
+        self.focusEnd = focusEnd
+        self.actionTitle = actionTitle
+    }
 }
 
 /// 7x24 活动热力图单元格
@@ -508,8 +553,8 @@ nonisolated struct ReportActiveRangeModel: Sendable, Equatable {
 
     var coveragePercent: Double? { coverageRatio.map { $0 * 100 } }
 
-    /// 估算或部分覆盖时的说明；数据可信时返回 nil，页面不显示多余提示。
-    var qualityNotice: String? {
+    /// 仅描述系统监测指标的质量说明（不被全库应用采样估算标签遮蔽）。
+    var systemQualityNotice: String? {
         if quality.contains(.noObservation) {
             return String(localized: "stats.quality.noObservation")
         }
@@ -519,11 +564,19 @@ nonisolated struct ReportActiveRangeModel: Sendable, Equatable {
         if quality.contains(.legacyDailyEstimate) {
             return String(localized: "stats.quality.legacyDaily")
         }
-        if quality.contains(.leadingSampleEstimate) {
-            return String(localized: "stats.quality.leadingSample")
-        }
         if quality.contains(.partialCoverage) {
             return String(localized: "stats.quality.partial")
+        }
+        return nil
+    }
+
+    /// 估算或部分覆盖时的说明；系统覆盖不足时优先显式警告，不被应用前列估算覆盖。
+    var qualityNotice: String? {
+        if let systemNotice = systemQualityNotice {
+            return systemNotice
+        }
+        if quality.contains(.leadingSampleEstimate) {
+            return String(localized: "stats.quality.leadingSample")
         }
         return nil
     }
@@ -544,6 +597,7 @@ nonisolated struct ReportActiveRangeModel: Sendable, Equatable {
     let insights: [ReportInsightItem]
     let heatmap: ReportHeatmapData?
     let dailySummaryRows: [ReportDailySummaryRow]
+    var chartCache: ReportChartCache = .empty
 
     var hasData: Bool { !rows.isEmpty }
 }

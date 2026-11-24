@@ -283,15 +283,22 @@ struct MetricPreviewTile: View {
 
     private func partView(_ part: MetricSamplePart) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 2) {
-            Text(part.text)
-                .monitorPanelMonoFont(.footnote, weight: .bold)
-                .foregroundStyle(color(for: part.tone))
-                .lineLimit(1)
-            if let unit = part.unit {
-                Text(unit)
-                    .monitorPanelCaptionFont(.footnote)
-                    .foregroundStyle(palette.captionText)
-                    .fixedSize()
+            if part.unit == "%" {
+                Text("\(part.text)%")
+                    .monitorPanelMonoFont(.footnote, weight: .bold)
+                    .foregroundStyle(color(for: part.tone))
+                    .lineLimit(1)
+            } else {
+                Text(part.text)
+                    .monitorPanelMonoFont(.footnote, weight: .bold)
+                    .foregroundStyle(color(for: part.tone))
+                    .lineLimit(1)
+                if let unit = part.unit {
+                    Text(unit)
+                        .monitorPanelCaptionFont(.footnote)
+                        .foregroundStyle(palette.captionText)
+                        .fixedSize()
+                }
             }
         }
     }

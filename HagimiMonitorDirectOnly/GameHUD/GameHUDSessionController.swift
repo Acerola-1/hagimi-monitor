@@ -11,8 +11,6 @@ nonisolated enum GameHUDSessionState: Equatable, Sendable {
     case idle
     case eligibleNoWindow
     case hardwareVisible
-    case controlledPending
-    case controlledTelemetryVisible
 
     var rawValue: String {
         switch self {
@@ -20,8 +18,6 @@ nonisolated enum GameHUDSessionState: Equatable, Sendable {
         case .idle: "idle"
         case .eligibleNoWindow: "eligibleNoWindow"
         case .hardwareVisible: "hardwareVisible"
-        case .controlledPending: "controlledPending"
-        case .controlledTelemetryVisible: "controlledTelemetryVisible"
         }
     }
 }
@@ -130,9 +126,7 @@ final class GameHUDSessionController: ObservableObject {
             targetIdentity = identity
             targetScreen = screen
             targetRect = rect
-            transition(to: state == .controlledPending || state == .controlledTelemetryVisible
-                ? state
-                : .hardwareVisible)
+            transition(to: .hardwareVisible)
             windowTracker.start(identity: identity, initialTarget: target)
         }
     }

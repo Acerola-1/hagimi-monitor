@@ -189,13 +189,23 @@ struct EpisodeTierDurationTests {
     private func cpu(_ usage: Double) -> [(name: String, pid: pid_t, usage: Double)] {
         [(name: "Heavy", pid: 400, usage: usage)]
     }
+    private func gpu(_ usage: Double) -> [(name: String, pid: pid_t, usage: Double)] {
+        [(name: "Heavy", pid: 400, usage: usage)]
+    }
+
+    private var highCPU: Double {
+        (StatisticsMetricDefinition.attentionThreshold(
+            for: .cpu,
+            logicalCoreCount: StatisticsMetricDefinition.logicalCoreCount()
+        )?.value ?? StatisticsMetricDefinition.cpuAttentionFloor) + 10
+    }
 
     @Test func tierSecondsAccumulateByRealCoverageNotObservationCount() {
         let alerts = ProcessAlertCenter()
-        // 三拍各 60 秒，前两拍 70%（tier2），第三拍 90%（tier3）。
-        alerts.ingest(cpu: cpu(70), memory: [], gpu: [], network: [], at: at(0))
-        alerts.ingest(cpu: cpu(70), memory: [], gpu: [], network: [], at: at(60))
-        alerts.ingest(cpu: cpu(90), memory: [], gpu: [], network: [], at: at(120))
+        // GPU 档位边界 [20, 40, 70]、关注门槛 40%；前两拍 45%（tier2），第三拍 80%（tier3）。
+        alerts.ingest(cpu: [], memory: [], gpu: gpu(45), network: [], at: at(0))
+        alerts.ingest(cpu: [], memory: [], gpu: gpu(45), network: [], at: at(60))
+        alerts.ingest(cpu: [], memory: [], gpu: gpu(80), network: [], at: at(120))
         let episode = alerts.activeAlerts.first
         // 首拍没有覆盖秒数，因此 tier2 收到 60 秒、tier3 收到 60 秒。
         #expect(episode?.tier2Seconds == 60)
@@ -209,7 +219,7 @@ struct EpisodeTierDurationTests {
     @Test func tierSecondsNeverExceedContinuousDuration() {
         let alerts = ProcessAlertCenter()
         for offset in stride(from: 0.0, through: 300.0, by: 60.0) {
-            alerts.ingest(cpu: cpu(95), memory: [], gpu: [], network: [], at: at(offset))
+            alerts.ingest(cpu: cpu(highCPU), memory: [], gpu: [], network: [], at: at(offset))
         }
         let episode = alerts.activeAlerts.first
         let total = (episode?.tier1Seconds ?? 0) + (episode?.tier2Seconds ?? 0) + (episode?.tier3Seconds ?? 0)
@@ -218,15 +228,15 @@ struct EpisodeTierDurationTests {
 
     @Test func bandLabelsComeFromSharedDefinition() {
         // 内存档位是 1/2/4 × 1024³ 字节，展示为 GB，不是旧模板里的 8+。
-        let memory = StandaloneHTMLReportExporter.bandLabels(for: .memory)
+        let memory = StatisticsMetricDefinition.bandLabels(for: .memory)
         #expect(memory == ["1.0 GB", "2.0 GB", "4.0 GB"])
         #expect(memory.contains { $0.contains("8") } == false)
 
         // 网络标签是十进制单位（原始边界是 MiB/s）。
-        let network = StandaloneHTMLReportExporter.bandLabels(for: .network)
+        let network = StatisticsMetricDefinition.bandLabels(for: .network)
         #expect(network.first == "5.2 MB/s")
 
-        let cpu = StandaloneHTMLReportExporter.bandLabels(for: .cpu)
+        let cpu = StatisticsMetricDefinition.bandLabels(for: .cpu)
         #expect(cpu == ["30%", "50%", "80%"])
     }
 }

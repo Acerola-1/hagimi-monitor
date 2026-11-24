@@ -18,6 +18,24 @@ final class GameHUDCoordinator {
 
     /// 硬件浮窗「正在显示」标记:供菜单栏图标绘制 HUD 运行徽章。
     @Published private(set) var isShowing: Bool = false
+    /// 合格游戏会话处于活跃态(窗口拖动期临时隐藏仍保持 true)，供 SMC 温度门控与设置页状态展示。
+    @Published private(set) var isSessionActive: Bool = false
+    /// 当前会话监测的游戏名称(支持同活跃态切换游戏时实时发布给设置页)。
+    @Published private(set) var activeGameName: String?
+
+    var foregroundGameName: String? {
+        if let activeGameName, !activeGameName.isEmpty {
+            return activeGameName
+        }
+        guard let name = sessionController.foregroundGame?.localizedName, !name.isEmpty else {
+            return nil
+        }
+        return name
+    }
+
+    var sessionState: GameHUDSessionState {
+        sessionController.state
+    }
 
     private let settings: MonitorSettings
     private let dataSource: any GameHUDSnapshotProviding
@@ -25,13 +43,14 @@ final class GameHUDCoordinator {
     private let panelController: GameHUDPanelController
     private var snapshotCancellable: AnyCancellable?
     private var stateCancellable: AnyCancellable?
+    private var foregroundGameCancellable: AnyCancellable?
     private var sideCancellable: AnyCancellable?
     private var styleCancellable: AnyCancellable?
+    private var metricsCancellable: AnyCancellable?
     private var transparencyCancellables: Set<AnyCancellable> = []
     private var registryCancellable: AnyCancellable?
-    /// 最近一次快照；移动期继续缓存，真正结束会话时清空并重置历史。
+    /// 最近一次快照；移动期继续缓存，真正结束会话时清空。
     private var latestSnapshot = GameHUDSnapshot.empty
-    private var history = GameHUDSampleHistory()
     /// 系统 Metal 呈现统计；无可信样本时 HUD 保留占位。
     private let frameMeter: any GameHUDFrameMeasuring
     private var frameStatsCancellable: AnyCancellable?
@@ -58,6 +77,19 @@ final class GameHUDCoordinator {
                 guard let self, self.sessionController.targetRect != nil else { return }
                 self.presentDisplay()
             }
+        metricsCancellable = settings.$gameHUDEnabledMetricIDs
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] ids in
+                guard let self, self.sessionController.isTargetPermitted else { return }
+                self.latestSnapshot = self.dataSource.currentSnapshot(enabledIDs: ids)
+                if GameHUDMetricCatalog.readableIDs(from: ids).isEmpty {
+                    self.panelController.hide()
+                    if self.isShowing { self.isShowing = false }
+                    return
+                }
+                self.refreshVisibleContent()
+            }
         // 透明度只改变背景渲染;数值更新不重启测帧/采样,也不重建材质。
         settings.$gameHUDCardTransparency
             .dropFirst()
@@ -83,12 +115,8 @@ final class GameHUDCoordinator {
             }
         frameStatsCancellable = frameMeter.statsPublisher
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] stats in
-                guard let self else { return }
-                if let fps = stats?.displayFPS {
-                    self.history.recordFPS(fps)
-                }
-                self.refreshVisibleContent()
+            .sink { [weak self] _ in
+                self?.refreshVisibleContent()
             }
     }
 
@@ -100,6 +128,15 @@ final class GameHUDCoordinator {
             .sink { [weak self] _ in
                 guard let self else { return }
                 self.apply(state: self.sessionController.state)
+            }
+        foregroundGameCancellable = sessionController.$foregroundGame
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] game in
+                guard let self else { return }
+                let resolved = game.flatMap { $0.localizedName.isEmpty ? nil : $0.localizedName }
+                if self.activeGameName != resolved {
+                    self.activeGameName = resolved
+                }
             }
         // 完整发现与移动状态共用呈现门控，移动期间的回调不能恢复浮窗。
         sessionController.onSessionUpdated = { [weak self] in self?.presentDisplay(refreshContent: false) }
@@ -121,9 +158,7 @@ final class GameHUDCoordinator {
         case .disabled, .idle, .eligibleNoWindow:
             teardownDisplay()
         case .hardwareVisible:
-            presentDisplay()
-        case .controlledPending, .controlledTelemetryVisible:
-            // 预留状态，对齐 hardwareVisible 呈现
+            if !isSessionActive { isSessionActive = true }
             presentDisplay()
         }
     }
@@ -136,20 +171,28 @@ final class GameHUDCoordinator {
             teardownDisplay()
             return
         }
+        if !isSessionActive { isSessionActive = true }
         subscribeSnapshotIfNeeded()
         syncFrameMeterTarget()
         guard !deferPresentationDuringMotion() else { return }
+        if GameHUDMetricCatalog.readableIDs(from: settings.gameHUDEnabledMetricIDs).isEmpty {
+            panelController.hide()
+            if isShowing { isShowing = false }
+            return
+        }
         if !refreshContent {
             updateGeometry()
             return
         }
         // 身份/内容路径负责提交视图，停稳与位置设置走 updateGeometry。
-        panelController.show(
+        panelController.present(
             in: rect,
             screen: sessionController.targetScreen,
-            reserveTop: false,
+            snapshot: latestSnapshot,
             fpsStats: frameMeter.stats,
-            content: makeContentView()
+            enabledMetricIDs: settings.gameHUDEnabledMetricIDs,
+            cardTransparency: settings.gameHUDCardTransparency,
+            topStripTransparency: settings.gameHUDTopStripTransparency
         )
         finishPresentation()
     }
@@ -160,6 +203,11 @@ final class GameHUDCoordinator {
             return
         }
         guard !deferPresentationDuringMotion() else { return }
+        if GameHUDMetricCatalog.readableIDs(from: settings.gameHUDEnabledMetricIDs).isEmpty {
+            panelController.hide()
+            if isShowing { isShowing = false }
+            return
+        }
         let needsContent = panelController.updateFrame(
             in: rect, screen: sessionController.targetScreen, reserveTop: false, fpsStats: frameMeter.stats)
         if needsContent { refreshVisibleContent() }
@@ -181,17 +229,24 @@ final class GameHUDCoordinator {
         return true
     }
 
-    /// 透明度/样式变化只重建已显示内容,不触碰会话、测帧或采样。
+    /// 透明度/样式变化只更新持久化内容状态,不触碰会话、测帧或采样。
     private func refreshVisibleContent() {
         guard sessionController.isTargetPermitted,
               let rect = sessionController.targetRect else { return }
         guard !deferPresentationDuringMotion() else { return }
-        panelController.show(
+        if GameHUDMetricCatalog.readableIDs(from: settings.gameHUDEnabledMetricIDs).isEmpty {
+            panelController.hide()
+            if isShowing { isShowing = false }
+            return
+        }
+        panelController.present(
             in: rect,
             screen: sessionController.targetScreen,
-            reserveTop: false,
+            snapshot: latestSnapshot,
             fpsStats: frameMeter.stats,
-            content: makeContentView()
+            enabledMetricIDs: settings.gameHUDEnabledMetricIDs,
+            cardTransparency: settings.gameHUDCardTransparency,
+            topStripTransparency: settings.gameHUDTopStripTransparency
         )
         finishPresentation()
     }
@@ -213,70 +268,39 @@ final class GameHUDCoordinator {
 
     private func teardownDisplay() {
         if isShowing { isShowing = false }
+        if isSessionActive { isSessionActive = false }
+        if activeGameName != nil { activeGameName = nil }
         snapshotCancellable = nil
-        history.reset()
         latestSnapshot = .empty
         frameMeter.stop()
         panelController.hide()
     }
 
-    /// 清理正在显示游戏的官方 HUD 偏好:删除 per-app `MetalForceHudEnabled`,
-    /// 确保纯净呈现 Hagimi 自研 HUD,避免系统自带 HUD 干扰。
-    ///
-    /// 只由“总开关开启且目标已获得显示资格”的会话启动钩子触发。
+    /// 名单内游戏启动时的运行时钩子:仅同步启动进程级 Metal 测帧与动态抑制，
+    /// 不改写外部应用的持久化偏好。
     private func observeGameLaunches() {
         sessionController.onGameLaunched = { [weak self] game in
             guard let self else { return }
             guard self.settings.gameHUDMasterEnabled,
                   self.settings.gameHUDRegistry.isEligible(game.bundleID) else { return }
-            self.cleanGame(bundleID: game.bundleID)
             if let running = NSRunningApplication(processIdentifier: game.processIdentifier) {
                 self.frameMeter.start(target: running)
             }
         }
     }
 
-    /// 已清理过的游戏(进程内去重,避免重复 fork defaults)。
-    private var cleanedBundleIDs: Set<String> = []
-
-    private func cleanGame(bundleID: String) {
-        guard !cleanedBundleIDs.contains(bundleID) else { return }
-        cleanedBundleIDs.insert(bundleID)
-        GameHUDGameScanner.cleanupPerAppHUD(bundleID: bundleID)
-    }
-
     // MARK: - 快照订阅
 
-    /// 合格会话订阅快照；移动期只缓存，真正 teardown 才取消并清空历史。
+    /// 合格会话订阅快照；移动期只缓存，真正 teardown 才取消。
     private func subscribeSnapshotIfNeeded() {
         guard snapshotCancellable == nil else { return }
-        history.reset()
         latestSnapshot = dataSource.currentSnapshot(enabledIDs: settings.gameHUDEnabledMetricIDs)
-        history.record(latestSnapshot)
         snapshotCancellable = dataSource.snapshotPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] snapshot in
                 guard let self else { return }
                 self.latestSnapshot = snapshot
-                self.history.record(snapshot)
                 self.refreshVisibleContent()
             }
-    }
-
-    private func makeContentView() -> GameHUDContent {
-        GameHUDContent(
-            cardView: AnyView(GameHUDView(
-                snapshot: latestSnapshot,
-                fpsStats: frameMeter.stats,
-                enabledMetricIDs: settings.gameHUDEnabledMetricIDs,
-                backgroundTransparency: settings.gameHUDCardTransparency
-            )),
-            topStripView: AnyView(GameHUDTopStripView(
-                snapshot: latestSnapshot,
-                fpsStats: frameMeter.stats,
-                enabledMetricIDs: settings.gameHUDEnabledMetricIDs,
-                backgroundTransparency: settings.gameHUDTopStripTransparency
-            ))
-        )
     }
 }

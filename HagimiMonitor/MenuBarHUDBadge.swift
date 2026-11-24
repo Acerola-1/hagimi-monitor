@@ -1,43 +1,42 @@
 import AppKit
 
-/// 菜单栏右上角徽章的互斥语义:告警优先,其次 Game HUD;两者都不显示时不加覆盖层。
+/// 菜单栏角标语义：压力告警占右上角红圆，Game HUD 占右下角紫菱，两者位置与形态均不同，可同时独立展示。
 nonisolated struct MenuBarBadgePresentation: Equatable, Sendable {
     let showsAlert: Bool
     let showsHUDBadge: Bool
 
     var drawsAlert: Bool { showsAlert }
-    var drawsHUD: Bool { showsHUDBadge && !showsAlert }
+    var drawsHUD: Bool { showsHUDBadge }
     var needsOverlay: Bool { drawsAlert || drawsHUD }
 }
 
-/// 菜单栏图标右上角的 Game HUD 徽章:HUD 显示中时出现,紫色(与工具区
-/// Game HUD 磁贴点亮色同源)。几何与 `MenuBarAlertBadge` 完全一致,仅
-/// 颜色不同;两者互斥绘制(告警红点优先),避免两枚叠在同一位。
+/// 菜单栏图标右下角的 Game HUD 徽章：HUD 显示中时出现，紫色（与工具区
+/// Game HUD 磁贴点亮色同源）且采用 45° 旋转菱形，与右上角红色圆点告警在
+/// 位置、形状与色彩三重维度区分，既避免仅靠颜色辨识也支持两者共存。
 enum MenuBarHUDBadge {
-    private static let radius: CGFloat = 1.8
-    private static let haloWidth: CGFloat = 0.7
-    private static let inset: CGFloat = 2.4
+    private static let halfDiagonal: CGFloat = 1.9
+    private static let haloHalfDiagonal: CGFloat = 2.55
+    private static let inset: CGFloat = 2.7
 
     static func draw(in rect: NSRect, darkMode: Bool) {
-        let center = NSPoint(x: rect.maxX - inset, y: rect.maxY - inset)
-        let haloRadius = radius + haloWidth / 2
-        let halo = NSBezierPath(ovalIn: NSRect(
-            x: center.x - haloRadius,
-            y: center.y - haloRadius,
-            width: haloRadius * 2,
-            height: haloRadius * 2
-        ))
+        let center = NSPoint(x: rect.maxX - inset, y: rect.minY + inset)
+        let halo = diamondPath(center: center, halfDiagonal: haloHalfDiagonal)
         (darkMode ? NSColor.black : NSColor.white).setFill()
         halo.fill()
 
-        let dot = NSBezierPath(ovalIn: NSRect(
-            x: center.x - radius,
-            y: center.y - radius,
-            width: radius * 2,
-            height: radius * 2
-        ))
+        let diamond = diamondPath(center: center, halfDiagonal: halfDiagonal)
         dotColor.setFill()
-        dot.fill()
+        diamond.fill()
+    }
+
+    private static func diamondPath(center: NSPoint, halfDiagonal: CGFloat) -> NSBezierPath {
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: center.x, y: center.y + halfDiagonal))
+        path.line(to: NSPoint(x: center.x + halfDiagonal, y: center.y))
+        path.line(to: NSPoint(x: center.x, y: center.y - halfDiagonal))
+        path.line(to: NSPoint(x: center.x - halfDiagonal, y: center.y))
+        path.close()
+        return path
     }
 
     /// 与 `MonitorPalette.quickToolTint` 同源:AppKit 绘制路径取同一常量。

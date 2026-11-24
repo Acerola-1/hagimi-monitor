@@ -321,6 +321,11 @@ private struct ShortcutKeyCap: View {
 private struct MenuBarDisplaySettingsSection: View {
     @ObservedObject var settings: MonitorSettings
     @ObservedObject var store: MonitorStore
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+
+    private var isDarkAppearance: Bool { colorScheme == .dark }
+    private var isHighContrast: Bool { colorSchemeContrast == .increased }
 
     var body: some View {
         SettingsGroup(String(localized: "settings.menu-bar")) {
@@ -361,7 +366,14 @@ private struct MenuBarDisplaySettingsSection: View {
                 .frame(width: 220)
             }
 
-            if settings.menuBarDisplayMode == .metrics {
+            if settings.menuBarDisplayMode == .ring {
+                SettingsDivider()
+
+                MenuBarRingLegendSection(
+                    darkMode: isDarkAppearance,
+                    increaseContrast: isHighContrast
+                )
+            } else if settings.menuBarDisplayMode == .metrics {
                 SettingsDivider()
 
                 SettingsRow(title: String(localized: "menu-bar-metric-layout.style")) {
@@ -515,13 +527,111 @@ private struct MenuBarDisplaySettingsSection: View {
     @ViewBuilder
     private var preview: some View {
         if settings.menuBarDisplayMode == .ring {
-            MenuBarLoadRingPreview(animator: store.loadAnimator, darkMode: NSApp.effectiveAppearance.isDark)
+            MenuBarLoadRingPreview(
+                animator: store.loadAnimator,
+                darkMode: isDarkAppearance,
+                increaseContrast: isHighContrast
+            )
         } else {
             MenuBarMetricLabel(
                 items: store.previewMenuBarMetricItems(),
                 style: .preview,
                 layoutStyle: settings.menuBarMetricLayoutStyle
             )
+        }
+    }
+}
+
+/// 负载环说明与三档图例：直接调用 `MenuBarComputeRingIcon` 绘制真实样例，
+/// 确保说明卡片里的环弧比例、核心颜色及角标位置与菜单栏实际显示完全一致。
+private struct MenuBarRingLegendSection: View {
+    let darkMode: Bool
+    let increaseContrast: Bool
+
+    private var levelSpecimens: [(load: Double, level: MenuBarCoreLevel, titleKey: String, rangeKey: String)] {
+        [
+            (22, .normal, "menu-bar-ring.level.normal", "menu-bar-ring.legend.range.normal"),
+            (62, .busy, "menu-bar-ring.level.busy", "menu-bar-ring.legend.range.busy"),
+            (88, .stressed, "menu-bar-ring.level.stressed", "menu-bar-ring.legend.range.stressed")
+        ]
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(String(localized: "menu-bar-display.ring-description"))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack(spacing: 8) {
+                ForEach(levelSpecimens, id: \.titleKey) { specimen in
+                    HStack(spacing: 8) {
+                        Image(nsImage: MenuBarComputeRingIcon.image(
+                            load: specimen.load,
+                            darkMode: darkMode,
+                            coreLevel: specimen.level,
+                            increaseContrast: increaseContrast
+                        ))
+                        .resizable()
+                        .frame(width: 21, height: 21)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(LocalizedStringKey(specimen.titleKey))
+                                .font(.caption.weight(.medium))
+                                .foregroundStyle(.primary)
+
+                            Text(LocalizedStringKey(specimen.rangeKey))
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity)
+                    .background(.quaternary.opacity(0.45), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+            }
+
+            HStack(spacing: 16) {
+                badgeLegendItem(
+                    showsAlert: true,
+                    showsHUDBadge: false,
+                    titleKey: "menu-bar-ring.legend.alert-badge"
+                )
+
+                #if DIRECT_DISTRIBUTION
+                badgeLegendItem(
+                    showsAlert: false,
+                    showsHUDBadge: true,
+                    titleKey: "menu-bar-ring.legend.hud-badge"
+                )
+                #endif
+
+                Spacer(minLength: 0)
+            }
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+    }
+
+    private func badgeLegendItem(showsAlert: Bool, showsHUDBadge: Bool, titleKey: String) -> some View {
+        HStack(spacing: 6) {
+            Image(nsImage: MenuBarComputeRingIcon.image(
+                load: 45,
+                darkMode: darkMode,
+                coreLevel: .normal,
+                showsAlert: showsAlert,
+                showsHUDBadge: showsHUDBadge,
+                increaseContrast: increaseContrast
+            ))
+            .resizable()
+            .frame(width: 21, height: 21)
+
+            Text(LocalizedStringKey(titleKey))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
         }
     }
 }

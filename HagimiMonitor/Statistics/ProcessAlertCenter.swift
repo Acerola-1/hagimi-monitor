@@ -168,12 +168,17 @@ final class ProcessAlertCenter: ObservableObject {
     private var observedKeys = Set<String>()
     private var cancellables = Set<AnyCancellable>()
     private var isNotificationsEnabled = false
+    private var isHighLoadAppAlertEnabled = true
     private var isStatisticsEnabled = true
+    /// 忽略名单：白名单内的应用不推送通知也不出现在活跃提示中，但仍计入历史统计。
+    private var ignoredApps: [AlertIgnoredApp] = []
     /// 同期系统压力证据，由 PressureAlertCenter 的最新档位更新。
     /// 没有有效观测时保持 unknown，通知策略据此不发系统通知。
     private var systemPressure: SystemPressureSnapshot = .unknown
     /// 已通知档位，按 (应用, 指标) 记录，用于同事件内的升级判断与去重。
     private var notifiedTiers: [String: Int] = [:]
+    /// 跨事件通知冷却记录，按 (应用, 指标) 保存上次成功通知时刻。
+    private var lastNotifiedAt: [String: Date] = [:]
     /// 通知发送器可注入：验证失败重试与「不虚记成功」时用替身，正式运行走系统通知中心。
     private let notificationDispatcher: AppAlertNotificationDispatcher
     /// 确认事件的持久化钩子。由持有进程库的调用方设置；未设置时事件只存在于内存。
@@ -181,6 +186,8 @@ final class ProcessAlertCenter: ObservableObject {
 
     /// 高负载持续判定门槛（秒）：连续有效覆盖达到门槛才确认事件。
     static let sustainedThresholdSeconds = AppResourceEventStateMachine.defaultSustainedSeconds
+    /// 跨事件通知冷却时间（秒）：默认 15 分钟。
+    static let notificationCooldown: TimeInterval = 15 * 60
     /// 兼容既有调用的分钟表示。
     static var sustainedThresholdMinutes: Int { Int(sustainedThresholdSeconds / 60) }
 
@@ -206,8 +213,22 @@ final class ProcessAlertCenter: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // 同期系统压力状态提取。
-        store.$modules
+        store.settings.$alertHighLoadAppEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                self?.isHighLoadAppAlertEnabled = enabled
+            }
+            .store(in: &cancellables)
+
+        store.settings.$alertIgnoredApps
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] apps in
+                self?.updateIgnoredApps(apps)
+            }
+            .store(in: &cancellables)
+
+        // 同期系统压力状态提取：订阅未过滤的全量采样快照，不受面板模块显隐影响。
+        store.allModulesPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] modules in
                 guard let self else { return }
@@ -224,8 +245,26 @@ final class ProcessAlertCenter: ObservableObject {
     func reset() {
         episodes.removeAll()
         states.removeAll()
+        observedKeys.removeAll()
         notifiedTiers.removeAll()
+        lastNotifiedAt.removeAll()
         activeAlerts.removeAll()
+    }
+
+    /// 更新忽略应用白名单并立即刷新活跃提示列表。
+    func updateIgnoredApps(_ apps: [AlertIgnoredApp]) {
+        ignoredApps = apps
+        refreshActiveList()
+    }
+
+    /// 更新通知总开关与分项开关（供单测直接驱动）。
+    func updateNotificationPreferences(enabled: Bool, highLoadAppEnabled: Bool = true) {
+        isNotificationsEnabled = enabled
+        isHighLoadAppAlertEnabled = highLoadAppEnabled
+    }
+
+    func isAppIgnored(appKey: String, name: String) -> Bool {
+        ignoredApps.contains { $0.matches(appKey: appKey, name: name) }
     }
 
     /// 更新同期系统压力证据快照。
@@ -269,14 +308,27 @@ final class ProcessAlertCenter: ObservableObject {
         gpu: [(name: String, pid: pid_t, usage: Double)],
         network: [(name: String, pid: pid_t, downBytes: Double, upBytes: Double)],
         at date: Date,
-        iconProvider: ((String, pid_t) -> Data?)? = nil
+        providedMetrics: Set<ProcessAlertEpisode.Metric>? = nil,
+        iconProvider: ((String, String, pid_t) -> Data?)? = nil
     ) {
         guard isStatisticsEnabled else { return }
 
         // 门槛与档位统一来自 StatisticsMetricDefinition,调用点不再各写一套数字。
         let physicalMemory = StatisticsMetricDefinition.physicalMemoryBytes()
+        let logicalCores = StatisticsMetricDefinition.logicalCoreCount()
         // 本拍实际提供的 (应用, 指标)。空数组不是「已恢复」的证据。
         observedKeys.removeAll()
+
+        let effectiveProvided: Set<ProcessAlertEpisode.Metric>
+        if let providedMetrics {
+            effectiveProvided = providedMetrics
+        } else if !network.isEmpty && cpu.isEmpty && memory.isEmpty && gpu.isEmpty {
+            effectiveProvided = [.network]
+        } else {
+            var inferred: Set<ProcessAlertEpisode.Metric> = [.cpu, .memory, .gpu]
+            if !network.isEmpty { inferred.insert(.network) }
+            effectiveProvided = inferred
+        }
 
         // 各维度独立分批更新。
         if let threshold = StatisticsMetricDefinition.attentionThreshold(for: .gpu) {
@@ -289,8 +341,8 @@ final class ProcessAlertCenter: ObservableObject {
             )
         }
 
-        // CPU 60% 按单逻辑核基准。
-        if let threshold = StatisticsMetricDefinition.attentionThreshold(for: .cpu) {
+        // CPU 门槛按逻辑核数自适应，以单逻辑核 100% 为基准。
+        if let threshold = StatisticsMetricDefinition.attentionThreshold(for: .cpu, logicalCoreCount: logicalCores) {
             ingestBatch(
                 entries: cpu.map { (name: $0.name, pid: $0.pid, value: $0.usage) },
                 metric: .cpu,
@@ -323,9 +375,17 @@ final class ProcessAlertCenter: ObservableObject {
         }
 
         // 对未出现在本拍有效指标结果中的关注事件标记为观测未知。
-        settleUnobservedMetrics(at: date)
+        settleUnobservedMetrics(at: date, providedMetrics: effectiveProvided)
 
         refreshActiveList()
+    }
+
+    /// 优先将存活进程解析为与 StatisticsProcessStore 同源的稳定身份键，
+    /// 解析失败或为测试假 PID 时回退为进程显示名称。
+    static func resolveAppKey(name: String, pid: pid_t) -> String {
+        guard pid > 0 else { return name }
+        let identity = AppIdentityResolver.resolve(pid: pid, name: name)
+        return identity.isStableAcrossLaunches ? identity.storageKey : name
     }
 
     /// 处理单个指标批次，按门槛转换为高/低观测信号。
@@ -334,37 +394,41 @@ final class ProcessAlertCenter: ObservableObject {
         metric: ProcessAlertEpisode.Metric,
         threshold: Double,
         at date: Date,
-        iconProvider: ((String, pid_t) -> Data?)?
+        iconProvider: ((String, String, pid_t) -> Data?)?
     ) {
+        var mergedByKey: [String: (appKey: String, name: String, pid: pid_t, value: Double)] = [:]
+        var orderedKeys: [String] = []
         for entry in entries {
-            let key = Self.stateKey(appKey: entry.name, metric: metric)
+            let appKey = Self.resolveAppKey(name: entry.name, pid: entry.pid)
+            if let existing = mergedByKey[appKey] {
+                if entry.value > existing.value {
+                    mergedByKey[appKey] = (appKey, entry.name, entry.pid, entry.value)
+                }
+            } else {
+                orderedKeys.append(appKey)
+                mergedByKey[appKey] = (appKey, entry.name, entry.pid, entry.value)
+            }
+        }
+        for appKey in orderedKeys {
+            guard let item = mergedByKey[appKey] else { continue }
+            let key = Self.stateKey(appKey: item.appKey, metric: metric)
             observedKeys.insert(key)
-            let signal: AppResourceEventStateMachine.Signal = entry.value >= threshold
-                ? .high(value: entry.value)
-                : .low(value: entry.value)
-            consume(signal, key: key, appKey: entry.name, name: entry.name,
-                    metric: metric, at: date, pid: entry.pid, iconProvider: iconProvider)
+            let signal: AppResourceEventStateMachine.Signal = item.value >= threshold
+                ? .high(value: item.value)
+                : .low(value: item.value)
+            consume(signal, key: key, appKey: item.appKey, name: item.name,
+                    metric: metric, at: date, pid: item.pid, iconProvider: iconProvider)
         }
     }
 
     /// 对未出现在本拍该指标结果中的关注事件发送未知信号。
-    private func settleUnobservedMetrics(at date: Date) {
+    private func settleUnobservedMetrics(at date: Date, providedMetrics: Set<ProcessAlertEpisode.Metric>) {
         let runningKeys = states.compactMap { $0.value.isRunning ? $0.key : nil }
         for key in runningKeys where !observedKeys.contains(key) {
-            let metric = episodes[key]?.metric
-            // 仅在本拍有效采集了该指标时发送未知信号。
-            guard let metric, batchWasProvided(metric) else { continue }
-            consume(.unknown, key: key, appKey: episodes[key]?.appKey ?? "",
-                    name: episodes[key]?.name ?? "", metric: metric, at: date,
+            guard let episode = episodes[key], providedMetrics.contains(episode.metric) else { continue }
+            consume(.unknown, key: key, appKey: episode.appKey,
+                    name: episode.name, metric: episode.metric, at: date,
                     pid: 0, iconProvider: nil)
-        }
-    }
-
-    /// 本拍是否采集了某个指标。判定依据是门槛可用性与采样来源的渠道边界。
-    private func batchWasProvided(_ metric: ProcessAlertEpisode.Metric) -> Bool {
-        switch metric {
-        case .cpu, .memory: return true
-        case .gpu, .network: return true
         }
     }
 
@@ -377,7 +441,7 @@ final class ProcessAlertCenter: ObservableObject {
         metric: ProcessAlertEpisode.Metric,
         at date: Date,
         pid: pid_t,
-        iconProvider: ((String, pid_t) -> Data?)?
+        iconProvider: ((String, String, pid_t) -> Data?)?
     ) {
         let transition = AppResourceEventStateMachine.reduce(
             state: states[key] ?? .init(),
@@ -401,7 +465,7 @@ final class ProcessAlertCenter: ObservableObject {
             )
             episode.updated(from: transition.state, at: date)
             if isNew || episode.iconPNG == nil {
-                episode.iconPNG = iconProvider?(name, pid)
+                episode.iconPNG = iconProvider?(appKey, name, pid)
                     ?? ProcessIconCache.fullSizePNG(forPID: pid, sidePixels: 128)
             }
             // 档位时长按有效覆盖秒数累加。
@@ -417,29 +481,37 @@ final class ProcessAlertCenter: ObservableObject {
             }
             // 评估通知策略并决定是否发送。
             let tier = AppAlertNotificationPolicy.tier(metric: metric, rawValue: value)
+            let ignored = isAppIgnored(appKey: appKey, name: name)
+            let inCooldown = lastNotifiedAt[key].map { date.timeIntervalSince($0) < Self.notificationCooldown } ?? false
             let decision = AppAlertNotificationPolicy.decide(
-                notificationsEnabled: isNotificationsEnabled,
+                notificationsEnabled: isNotificationsEnabled && isHighLoadAppAlertEnabled && !ignored,
                 isConfirmed: transition.state.isConfirmed,
                 systemPressure: systemPressure,
                 tier: tier,
-                alreadyNotifiedTier: notifiedTiers[key]
+                alreadyNotifiedTier: notifiedTiers[key],
+                inCooldown: inCooldown
             )
             switch decision {
             case .send(let tier), .update(let tier):
                 notifiedTiers[key] = tier
+                lastNotifiedAt[key] = date
                 episode.notified = true
-                sendNotification(for: episode)
+                sendNotification(for: episode, sentAt: date)
             case .skip:
                 break
             }
             episodes[key] = episode
 
-        case .low, .unknown:
+        case .low:
             if let episode = episodes[key] {
                 var updated = episode
                 updated.updated(from: transition.state, at: date)
                 episodes[key] = updated
             }
+
+        case .unknown:
+            // 未观测时段不推进 lastSeenAt 与 eventSpanSeconds。
+            break
 
         case .ended:
             break
@@ -551,14 +623,18 @@ final class ProcessAlertCenter: ObservableObject {
     }
 
     private func refreshActiveList() {
-        // 仅将达到持续门槛的进行中事件展示在活跃列表中。
+        // 仅将达到持续门槛且未在忽略名单中的进行中事件展示在活跃列表中。
         activeAlerts = episodes.values
-            .filter { $0.state == .ongoing && $0.continuousHighSeconds >= Self.sustainedThresholdSeconds }
+            .filter {
+                $0.state == .ongoing
+                    && $0.continuousHighSeconds >= Self.sustainedThresholdSeconds
+                    && !isAppIgnored(appKey: $0.appKey, name: $0.name)
+            }
             .sorted { $0.continuousHighSeconds > $1.continuousHighSeconds }
     }
 
     /// 异步发送高负载进程通知。
-    private func sendNotification(for episode: ProcessAlertEpisode) {
+    private func sendNotification(for episode: ProcessAlertEpisode, sentAt: Date) {
         let content = makeNotificationContent(for: episode)
         let key = Self.stateKey(appKey: episode.appKey, metric: episode.metric)
         let dispatcher = notificationDispatcher
@@ -571,8 +647,11 @@ final class ProcessAlertCenter: ObservableObject {
             guard let self else { return }
             await MainActor.run {
                 if !result.shouldMarkNotified {
-                    // 发送未成功时清空已记录档位，允许后续重试。
+                    // 发送未成功时清空已记录档位与本次冷却时间，允许后续重试。
                     self.notifiedTiers[key] = nil
+                    if self.lastNotifiedAt[key] == sentAt {
+                        self.lastNotifiedAt[key] = nil
+                    }
                 }
             }
         }

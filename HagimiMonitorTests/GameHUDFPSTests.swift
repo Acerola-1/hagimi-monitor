@@ -2,6 +2,7 @@ import Foundation
 import AppKit
 import SwiftUI
 import Combine
+import Synchronization
 import Testing
 @testable import HagimiMonitorDirect
 
@@ -23,6 +24,24 @@ struct GameHUDFPSTests {
         #expect(secondPass.count == 1)
         #expect(secondPass[0].contains("\"done\": 123"))
         #expect(buffer.isEmpty)
+    }
+
+    @Test func extractJSONObjectsFromDataHandlesSplitMultibyteUTF8() {
+        let json = #"{"Process":"黑神话：悟空","Layers":[{"Performance Stats":{"Presented Frame Stats":{"FPS":90.5,"Frame Count":90}}}]}"#
+        let bytes = Data(json.utf8)
+        // 故意在中文多字节 UTF-8 字符中间切分数据块
+        let splitPoint = 14
+        var buffer = Data()
+        buffer.append(bytes.prefix(splitPoint))
+        #expect(MetalPerfTraceMeter.extractJSONObjects(from: &buffer).isEmpty)
+
+        buffer.append(bytes.dropFirst(splitPoint))
+        let objects = MetalPerfTraceMeter.extractJSONObjects(from: &buffer)
+        #expect(objects.count == 1)
+        #expect(buffer.isEmpty)
+        let decoded = String(data: objects[0], encoding: .utf8)
+        #expect(decoded == json)
+        #expect(decoded.flatMap(MetalPerfTraceMeter.parseSample(from:))?.fps == 90.5)
     }
 
     // MARK: - Sample 解析测试
@@ -184,6 +203,24 @@ struct GameHUDFPSTests {
         #expect((stats?.onePercentLow ?? 0) > 105.0 && (stats?.onePercentLow ?? 0) <= 120.0)
     }
 
+    @Test func onePercentLowDoesNotOverPenalizeSmooth240FPS() {
+        let samples = (0..<10).map { i in
+            MetalPerfTraceMeter.SecondSample(
+                timestamp: Double(i),
+                fps: 240.0,
+                frameCount: 240,
+                avgMs: 4.17,
+                stdDevMs: 0.25,
+                maxMs: 5.2,
+                minMs: 3.7,
+                totalMs: 1000.0
+            )
+        }
+        let stats = MetalPerfTraceMeter.computeFPSStats(from: samples)
+        #expect(stats != nil)
+        #expect((stats?.onePercentLow ?? 0) > 196.0 && (stats?.onePercentLow ?? 0) <= 240.0)
+    }
+
     @MainActor
     @Test func frameMeterIsIdempotentForSameTarget() {
         let meter = GameHUDFrameMeter()
@@ -290,6 +327,7 @@ struct GameHUDFPSTests {
         #expect(entries.contains(where: { $0.id == .onePercentLow }))
         #expect(entries.contains(where: { $0.id == .frameTime }))
         #expect(entries.contains(where: { $0.id == .fanSpeed }))
+        #expect(entries.contains(where: { $0.id == .gpuRender }))
         #expect(entries.contains(where: { $0.id == .gpuPower }))
         #expect(entries.contains(where: { $0.id == .cpuPower }))
         let pressureIndex = entries.firstIndex(where: { $0.id == .memoryPressure })
@@ -356,10 +394,24 @@ struct GameHUDFPSTests {
             "gamehud.metric.one-percent-low",
             "gamehud.metric.frame-time",
             "gamehud.metric.fan-speed",
+            "gamehud.metric.gpu-render",
             "gamehud.metric.cpu-power",
             "gamehud.metric.gpu-power",
             "gamehud.metric.memory-pressure",
-            "gamehud.metric.network-rates"
+            "gamehud.metric.network-rates",
+            "gamehud.strip.cpu-usage",
+            "gamehud.strip.cpu-temperature",
+            "gamehud.strip.gpu-render",
+            "gamehud.strip.frame-time",
+            "gamehud.settings.master-subtitle.off",
+            "gamehud.settings.master-subtitle.idle",
+            "gamehud.settings.master-subtitle.active %@",
+            "gamehud.settings.metrics.count %lld %lld",
+            "gamehud.settings.metrics.empty-hint",
+            "gamehud.settings.metrics.section.fps",
+            "gamehud.settings.metrics.section.compute",
+            "gamehud.settings.metrics.section.system",
+            "gamehud.settings.fps-probe-unavailable"
         ]
 
         for key in requiredKeys {
@@ -554,5 +606,198 @@ struct GameHUDFPSTests {
         meter.stop()
         #expect(meter.currentPID == nil)
         #expect(meter.stats == nil)
+    }
+
+    @Test func snapshotProviderKeepsZeroRPMFanAndCompactTemperature() {
+        let fan = MonitorModule(
+            kind: .fan,
+            value: 0,
+            summary: "0 RPM",
+            metrics: [],
+            samples: [],
+            fans: [FanInfo(id: 0, name: "Left", currentRPM: 0, minRPM: 0, maxRPM: 5000)]
+        )
+        let cpu = MonitorModule(
+            kind: .cpu,
+            value: 18,
+            summary: "18%",
+            metrics: [
+                MonitorMetric(name: "temperature", value: "64°C", numericValue: 64),
+                MonitorMetric(name: "thermal-pressure", value: "normal"),
+            ],
+            samples: []
+        )
+        let readings = GameHUDSnapshotProvider.readings(
+            enabledIDs: [.fanSpeed, .cpuTemperature],
+            in: [fan, cpu]
+        )
+        let fanReading = readings.first { $0.metricID == GameHUDMetricID.fanSpeed.rawValue }
+        let tempReading = readings.first { $0.metricID == GameHUDMetricID.cpuTemperature.rawValue }
+        #expect(fanReading?.value == "0 RPM")
+        #expect(tempReading?.compactValue == "64°C")
+        #expect(tempReading?.value?.contains("64°C") == true)
+    }
+
+    @Test func snapshotProviderTreatsInvalidFanRPMAsUnavailableAndZeroRPMAsValid() {
+        let invalidFan = FanInfo(id: 0, name: "Left", currentRPM: 0, minRPM: 0, maxRPM: 5000, isCurrentRPMValid: false)
+        #expect(invalidFan.status == .unknown)
+        let failedModule = MonitorModule(
+            kind: .fan,
+            value: 0,
+            summary: "—",
+            metrics: [],
+            samples: [],
+            fans: [invalidFan]
+        )
+        let readings = GameHUDSnapshotProvider.readings(enabledIDs: [.fanSpeed], in: [failedModule])
+        #expect(readings.first?.value == nil)
+
+        let validStoppedFan = FanInfo(id: 0, name: "Left", currentRPM: 0, minRPM: 0, maxRPM: 5000, isCurrentRPMValid: true)
+        #expect(validStoppedFan.status == .stopped)
+
+        nonisolated final class MockInvalidRPMReader: FanSMCReading {
+            func fanCount() -> Int? { 1 }
+            func allFans() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int)] {
+                [(id: 0, currentRPM: 0, minRPM: 1000, maxRPM: 5000)]
+            }
+            func allFansWithValidity() -> [(id: Int, currentRPM: Int, minRPM: Int, maxRPM: Int, isCurrentRPMValid: Bool)] {
+                [(id: 0, currentRPM: 0, minRPM: 1000, maxRPM: 5000, isCurrentRPMValid: false)]
+            }
+        }
+        let sampler = FanSampler(smcReader: MockInvalidRPMReader())
+        sampler.start()
+        defer { sampler.stop() }
+        #expect(sampler.fans.count == 1)
+        #expect(sampler.fans.first?.isCurrentRPMValid == false)
+        #expect(sampler.status == .unknown)
+    }
+
+    @MainActor
+    @Test func delayedChildIsPickedUpEvenWhenPreviousPIDListWasFull() async throws {
+        let initial: [pid_t] = [4242, 9001, 9002, 9003, 9004, 9005, 9006, 9007]
+        let updated: [pid_t] = [4242, 9002, 9003, 9004, 9005, 9006, 9007, 9008]
+        let processTree = Mutex(initial)
+        var launchedPIDLists: [[pid_t]] = []
+        let meter = MetalPerfTraceMeter(
+            processTreeProvider: { _ in processTree.withLock { $0 } },
+            pidRefreshInterval: .milliseconds(25),
+            customLauncher: { pids in
+                launchedPIDLists.append(pids)
+                return true
+            }
+        )
+
+        meter.start(pid: 4242)
+        defer { meter.stop() }
+        #expect(launchedPIDLists == [initial])
+
+        processTree.withLock { $0 = updated }
+        let deadline = ContinuousClock.now + .seconds(2)
+        while meter.monitoredPIDs != updated, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(meter.monitoredPIDs == updated)
+
+        processTree.withLock { $0 = Array(updated.reversed()) }
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(launchedPIDLists == [initial, updated])
+    }
+
+    @MainActor
+    @Test func frameMeterRecoversIfLaunchingUpdatedPIDListFails() async throws {
+        let app = NSRunningApplication.current
+        let pid = app.processIdentifier
+        _ = try #require(app.bundleIdentifier)
+        let child: pid_t = pid == 9001 ? 9002 : 9001
+        let processTree = Mutex<[pid_t]>([pid])
+        var launches: [[pid_t]] = []
+        let probe = MetalPerfTraceMeter(
+            processTreeProvider: { _ in processTree.withLock { $0 } },
+            pidRefreshInterval: .milliseconds(25),
+            customLauncher: { pids in
+                launches.append(pids)
+                return launches.count != 2
+            }
+        )
+        let meter = GameHUDFrameMeter(metalTraceMeter: probe, reconnectDelays: [.milliseconds(10)])
+        meter.start(target: app)
+        defer { meter.stop() }
+
+        processTree.withLock { $0 = [pid, child] }
+        let deadline = ContinuousClock.now + .seconds(2)
+        while launches.count < 3, ContinuousClock.now < deadline {
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        #expect(launches == [[pid], [pid, child], [pid, child]])
+        #expect(probe.isRunning)
+    }
+
+    @MainActor
+    @Test func frameMeterStopsRestartingAfterReconnectLimitExhausted() async {
+        final class FailingProbe: GameHUDMetalTraceProbing {
+            let subject = PassthroughSubject<GameHUDFPSStats?, Never>()
+            var statsPublisher: AnyPublisher<GameHUDFPSStats?, Never> { subject.eraseToAnyPublisher() }
+            var currentPID: pid_t?
+            var isRunning: Bool = false
+            var onUnexpectedExit: ((pid_t) -> Void)?
+            var startCalls = 0
+
+            func start(pid: pid_t) {
+                startCalls += 1
+                currentPID = pid
+                isRunning = false
+                currentPID = nil
+                onUnexpectedExit?(pid)
+            }
+
+            func stop() {
+                isRunning = false
+                currentPID = nil
+            }
+        }
+
+        let probe = FailingProbe()
+        let meter = GameHUDFrameMeter(
+            metalTraceMeter: probe,
+            reconnectDelays: [.milliseconds(10), .milliseconds(10), .milliseconds(10)]
+        )
+        let currentApp = NSRunningApplication.current
+        meter.start(target: currentApp)
+
+        let deadline = Date().addingTimeInterval(2.0)
+        while probe.startCalls < 4, Date() < deadline {
+            try? await Task.sleep(for: .milliseconds(20))
+        }
+        // 初次启动 1 次 + 退避重试 3 次 = 4 次；耗尽后同目标轮询不得再每秒重启。
+        #expect(probe.startCalls == 4)
+
+        meter.start(target: currentApp)
+        meter.start(target: currentApp)
+        meter.start(target: currentApp)
+        try? await Task.sleep(for: .milliseconds(60))
+        #expect(probe.startCalls == 4)
+        meter.stop()
+    }
+
+    @MainActor
+    @Test func topStripRemeasuresWhenPopulatedReadingsExceedPlaceholderWidth() throws {
+        let suite = "GameHUDFPSTests.\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suite))
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let settings = MonitorSettings(defaults: defaults)
+        let panel = GameHUDPanelController(settings: settings)
+        let ids: Set<GameHUDMetricID> = [.memoryUsed, .frameTime]
+        let placeholder = GameHUDTopStripView(snapshot: .empty, fpsStats: nil, enabledMetricIDs: ids)
+        let initialWidth = panel.measureTopStripSize(for: placeholder).width
+
+        let snapshot = GameHUDSnapshot(readings: [
+            GameHUDReading(metricID: GameHUDMetricID.memoryUsed.rawValue, kind: .memory, value: "100.55 GB", percent: nil),
+        ], date: .now)
+        let fps = GameHUDFPSStats(currentFPS: 1, averageFPS: 60, onePercentLow: 1, frameTimeMs: 1320.7)
+        let live = GameHUDTopStripView(snapshot: snapshot, fpsStats: fps, enabledMetricIDs: ids)
+        let liveWidth = NSHostingView(rootView: live).fittingSize.width
+        #expect(liveWidth > initialWidth)
+        #expect(panel.measureTopStripSize(for: live).width == liveWidth)
+        #expect(panel.measureTopStripSize(for: placeholder).width == initialWidth)
     }
 }

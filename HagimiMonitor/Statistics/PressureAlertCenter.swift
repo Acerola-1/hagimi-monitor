@@ -25,6 +25,9 @@ final class PressureAlertCenter: ObservableObject {
     /// 持续计时从新帧重新起算——跨断档不累计。
     static let observationBreak: TimeInterval = 30
 
+    /// 跨事件冷却时间（秒）：同一维度连续发通知至少间隔 15 分钟。
+    static let notificationCooldown: TimeInterval = 15 * 60
+
     /// 菜单栏负载环 / 指标图标的红点:点开面板即清。
     @Published private(set) var menuBarUnread = false
     /// 面板右上角数据统计入口的红点:查看「数据统计」页即清。
@@ -36,6 +39,8 @@ final class PressureAlertCenter: ObservableObject {
     /// 通知总开关(默认关)。关着时连判定都不做:红点与系统通知一起静默,
     /// 重新打开后按新观测重新累计——与「关闭记录即静音」同一套语义。
     private var isNotificationsEnabled = false
+    private var isMemoryAlertEnabled = true
+    private var isThermalAlertEnabled = true
 
     /// 验证夹具(仅环境变量触发,正式运行零开销):
     /// - `1`:跳过实时判定、两处红点常亮,供截图核对落点;
@@ -55,7 +60,8 @@ final class PressureAlertCenter: ObservableObject {
             return
         }
 
-        store.$modules
+        // 订阅未过滤的全量采样快照，避免用户隐藏面板某行后压力告警失明。
+        store.allModulesPublisher
             .receive(on: DispatchQueue.main)
             .sink { [weak self] modules in
                 self?.ingest(modules: modules)
@@ -73,6 +79,20 @@ final class PressureAlertCenter: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] enabled in
                 self?.setNotificationsEnabled(enabled)
+            }
+            .store(in: &cancellables)
+
+        store.settings.$alertMemoryPressureEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                self?.setMemoryAlertEnabled(enabled)
+            }
+            .store(in: &cancellables)
+
+        store.settings.$alertThermalPressureEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] enabled in
+                self?.setThermalAlertEnabled(enabled)
             }
             .store(in: &cancellables)
     }
@@ -94,13 +114,16 @@ final class PressureAlertCenter: ObservableObject {
 
     private func ingest(modules: [MonitorModule]) {
         guard isEnabled, isNotificationsEnabled else { return }
-        let levels = isSimulating ? (memory: 1, thermal: nil) : Self.levels(from: modules)
+        let rawLevels = isSimulating ? (memory: 1, thermal: nil) : Self.levels(from: modules)
+        let memoryLevel = isMemoryAlertEnabled ? rawLevels.memory : nil
+        let thermalLevel = isThermalAlertEnabled ? rawLevels.thermal : nil
         let alerts = machine.ingest(
-            memoryLevel: levels.memory,
-            thermalLevel: levels.thermal,
+            memoryLevel: memoryLevel,
+            thermalLevel: thermalLevel,
             at: Date(),
             sustain: Self.notificationSustain,
-            breakThreshold: Self.observationBreak
+            breakThreshold: Self.observationBreak,
+            cooldown: Self.notificationCooldown
         )
         publishIfChanged()
         let temperature = isSimulating ? nil : Self.cpuTemperatureCelsius(from: modules)
@@ -121,6 +144,20 @@ final class PressureAlertCenter: ObservableObject {
         guard enabled != isNotificationsEnabled else { return }
         isNotificationsEnabled = enabled
         if !enabled { machine.reset() }
+        publishIfChanged()
+    }
+
+    private func setMemoryAlertEnabled(_ enabled: Bool) {
+        guard enabled != isMemoryAlertEnabled else { return }
+        isMemoryAlertEnabled = enabled
+        if !enabled { machine.reset(.memory) }
+        publishIfChanged()
+    }
+
+    private func setThermalAlertEnabled(_ enabled: Bool) {
+        guard enabled != isThermalAlertEnabled else { return }
+        isThermalAlertEnabled = enabled
+        if !enabled { machine.reset(.thermal) }
         publishIfChanged()
     }
 
@@ -212,9 +249,13 @@ final class PressureAlertCenter: ObservableObject {
             content: content,
             trigger: nil
         )
-        UNUserNotificationCenter.current().add(request) { error in
+        UNUserNotificationCenter.current().add(request) { [weak self] error in
             if let error {
                 AppLogger.sampler.error("发送压力告警通知失败: \(error.localizedDescription, privacy: .public)")
+            }
+            let delivered = error == nil
+            DispatchQueue.main.async { [weak self] in
+                self?.machine.completeNotification(for: alert, delivered: delivered, at: Date())
             }
         }
     }

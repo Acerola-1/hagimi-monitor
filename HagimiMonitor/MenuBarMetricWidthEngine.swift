@@ -26,25 +26,66 @@ enum MenuBarMetricWidthEngine {
     /// 尾部单位字形字号:比数字小一档,弱化单位、突出数字(iStat 式层次)。
     static let unitFontSize: CGFloat = 9
 
+    /// 横排文字模式前缀字号:略小于主数字并稍作弱化，拉开标签与数值的层次同时节省横宽。
+    static let horizontalTextPrefixFontSize: CGFloat = 9.5
+
+    /// 紧凑模式上排标签字号。
+    static let compactLabelFontSize: CGFloat = 7
+
+    /// 紧凑模式下排主数字字号。
+    static let compactValueFontSize: CGFloat = 10
+
+    /// 紧凑模式下排尾部单位字号:比主数字小一档，形成组尾视觉收口。
+    static let compactUnitFontSize: CGFloat = 7.5
+
     /// icon 字号:比数值小 2pt,让数字视觉上比 icon 略大一圈(贴近 iStat Menus
     /// 「数字突出、icon 作标识」的视觉权重)。icon 与文本前缀共用此测量口径。
     static let iconFontSize: CGFloat = 9
 
-    /// 前缀与数值之间的间距。
-    static let symbolSpacing: CGFloat = 1
+    /// 格内前缀与数值之间的间距(与格间最小间距保持约 3 倍视觉区分)。
+    static let symbolSpacing: CGFloat = 2.5
 
-    /// 格间最小间距:全部指标同时打满最宽值时总宽不再有富余,间距收缩到此下限。
-    /// 横排常态下实际间距 = 该下限 + 均摊富余,观感是刻意留白的分隔,不是挤压。
-    static let minInterPairGap: CGFloat = 2
+    /// 格间最小间距基准:全部指标同时打满最宽值时，仍保证不同指标间清晰可分。
+    static let minInterPairGap: CGFloat = 7
+
+    /// 紧凑模式指标列之间的间距。
+    static let compactInterCellSpacing: CGFloat = 7
+
+    static func minInterPairGap(for layout: MenuBarMetricLayoutStyle) -> CGFloat {
+        switch layout {
+        case .icon:
+            7
+        case .text:
+            8
+        case .compact:
+            compactInterCellSpacing
+        }
+    }
 
     /// 横排字体(rounded + medium + 等宽数字):渲染由视图经 `Font(nsFont)` 桥接,
     /// 与本引擎的测量共用同一 NSFont 实例,测量/渲染天然同源。
     static let horizontalValueFont: NSFont =
         roundedMeasuringFont(size: horizontalValueFontSize, weight: .medium, monospacedDigit: true)
 
+    /// 横排文字前缀字体:比数字小一号，让数值成为第一眼焦点。
+    static let horizontalTextPrefixFont: NSFont =
+        roundedMeasuringFont(size: horizontalTextPrefixFontSize, weight: .medium, monospacedDigit: false)
+
     /// 尾部单位字形字体:与数值同族同字重、小一号。
     static let unitFont: NSFont =
         roundedMeasuringFont(size: unitFontSize, weight: .medium, monospacedDigit: true)
+
+    /// 紧凑模式上排标签字体:medium 轻字重配合弱化透明度，避免小字发糊发重。
+    static let compactLabelFont: NSFont =
+        roundedMeasuringFont(size: compactLabelFontSize, weight: .medium, monospacedDigit: false)
+
+    /// 紧凑模式下排数字字体:semibold 保证清晰度同时避免与相邻列连成黑块。
+    static let compactValueFont: NSFont =
+        roundedMeasuringFont(size: compactValueFontSize, weight: .semibold, monospacedDigit: true)
+
+    /// 紧凑模式下排尾部单位字体:小一号且弱化字重，自然标示每一列的结束。
+    static let compactUnitFont: NSFont =
+        roundedMeasuringFont(size: compactUnitFontSize, weight: .medium, monospacedDigit: true)
 
     // MARK: - 横排布局
 
@@ -61,16 +102,17 @@ enum MenuBarMetricWidthEngine {
     /// 冲出常用宽度(如 CPU 100%)时该格占位变大、间距轻微收缩,内容总宽仍恒等于
     /// 总宽(两端贴边),边缘永不推移。单指标无间距概念,富余留在右缘内。
     static func horizontalLayout(for items: [MenuBarMetricItem], layout: MenuBarMetricLayoutStyle) -> HorizontalLayout {
+        let minGap = minInterPairGap(for: layout)
         let gapCount = max(items.count - 1, 0)
         let total = items.reduce(CGFloat(0)) { $0 + maxPairWidth(for: $1.kind, layout: layout) }
-            + CGFloat(gapCount) * minInterPairGap
+            + CGFloat(gapCount) * minGap
         guard gapCount > 0 else {
-            return HorizontalLayout(totalWidth: total, gap: minInterPairGap)
+            return HorizontalLayout(totalWidth: total, gap: minGap)
         }
         let placed = items.reduce(CGFloat(0)) {
             $0 + max(naturalPairWidth(for: $1, layout: layout), commonPairWidth(for: $1.kind, layout: layout))
         }
-        return HorizontalLayout(totalWidth: total, gap: max((total - placed) / CGFloat(gapCount), minInterPairGap))
+        return HorizontalLayout(totalWidth: total, gap: max((total - placed) / CGFloat(gapCount), minGap))
     }
 
     /// 单指标最大预留格宽:前缀 + 最宽可能值。
@@ -175,25 +217,33 @@ enum MenuBarMetricWidthEngine {
         return value.trimmingCharacters(in: .whitespaces)
     }
 
-    /// 会以小一号字号渲染的尾部单位字形集合。其余(纯数字、小数点)走主字号。
+    /// 会以小一号字号渲染的尾部单位集合（优先匹配多字符单位，如 `Hz`）。
+    private static let multiCharUnitSuffixes: [String] = ["Hz"]
     private static let unitSuffixes: Set<Character> = ["%", "W", "K", "M", "G", "T", "B", "°"]
 
-    /// 数值拆分:尾部单位字形独立出来,渲染用小一号字号弱化,测量分别按各自字号计宽。
+    /// 数值拆分:尾部单位独立出来,渲染用小一号字号弱化,测量分别按各自字号计宽。
     static func splitValueUnit(_ value: String) -> (digits: String, unit: String) {
-        if let last = value.last, unitSuffixes.contains(last) {
+        for suffix in multiCharUnitSuffixes {
+            if value.count > suffix.count, value.hasSuffix(suffix) {
+                return (String(value.dropLast(suffix.count)), suffix)
+            }
+        }
+        if let last = value.last, value.count > 1, unitSuffixes.contains(last) {
             return (String(value.dropLast()), String(last))
         }
         return (value, "")
     }
 
-    /// 前缀宽度:文字模式实测文本;icon 模式用同配置 NSImage 的固有宽度。
+    /// 前缀宽度:文字模式用缩小的 `horizontalTextPrefixFont` 实测文本;icon 模式用同配置 NSImage 固有宽度。
     /// ceil 对齐渲染取整;icon 额外 +1 兜底 NSImage 与 SwiftUI 渲染的亚像素差异。
     private static func prefixWidth(for kind: MenuBarMetricKind, layout: MenuBarMetricLayoutStyle) -> CGFloat {
         switch layout {
         case .icon:
             iconWidths[kind] ?? fallbackIconWidth
-        case .text, .compact:
-            ceil(measuredTextWidth(of: textPrefix(for: kind), font: horizontalValueFont))
+        case .text:
+            ceil(measuredTextWidth(of: textPrefix(for: kind), font: horizontalTextPrefixFont))
+        case .compact:
+            ceil(measuredTextWidth(of: textPrefix(for: kind), font: compactLabelFont))
         }
     }
 
@@ -216,16 +266,42 @@ enum MenuBarMetricWidthEngine {
     /// Symbol 测量失败时的兜底宽度(略宽于 9pt 常规 symbol,无截断风险)。
     private static let fallbackIconWidth: CGFloat = 13
 
+    // MARK: - 紧凑模式列宽
+
+    /// 紧凑模式各指标固定列宽：取「上排标签宽」与「下排拆分单位后的最宽可能值」较大者 +2pt 亚像素兜底。
+    private static let compactCellWidths: [MenuBarMetricKind: CGFloat] = {
+        var cache: [MenuBarMetricKind: CGFloat] = [:]
+        for kind in MenuBarMetricKind.allCases {
+            let labelWidth = measuredTextWidth(of: textPrefix(for: kind), font: compactLabelFont)
+            let reserved = reservedValues[kind] ?? reservedFallback
+            let valueWidth = measuredCompactValueWidth(of: reserved)
+            cache[kind] = ceil(max(labelWidth, valueWidth)) + 2
+        }
+        return cache
+    }()
+
+    static func compactCellWidth(for kind: MenuBarMetricKind) -> CGFloat {
+        compactCellWidths[kind] ?? ceil(measuredCompactValueWidth(of: reservedFallback)) + 2
+    }
+
     // MARK: - 测量基础设施
 
-    /// 数值实测宽:数字部分按主字号、尾部单位按小一号字号分别测量后求和,
-    /// 与 `MenuBarMetricLabel` 的拆分渲染一一对应。
+    /// 横排数值实测宽:数字部分按主字号、尾部单位按小一号字号分别测量后求和。
     static func measuredValueWidth(of value: String) -> CGFloat {
+        measuredSplitValueWidth(of: value, digitFont: horizontalValueFont, unitFont: unitFont)
+    }
+
+    /// 紧凑模式数值实测宽:按紧凑主字号与紧凑单位字号分别测量后求和。
+    static func measuredCompactValueWidth(of value: String) -> CGFloat {
+        measuredSplitValueWidth(of: value, digitFont: compactValueFont, unitFont: compactUnitFont)
+    }
+
+    private static func measuredSplitValueWidth(of value: String, digitFont: NSFont, unitFont: NSFont) -> CGFloat {
         let parts = splitValueUnit(value)
         let unitWidth = parts.unit.isEmpty
             ? 0
             : measuredTextWidth(of: parts.unit, font: unitFont)
-        return measuredTextWidth(of: parts.digits, font: horizontalValueFont) + unitWidth
+        return measuredTextWidth(of: parts.digits, font: digitFont) + unitWidth
     }
 
     /// 文本实测宽度缓存:键含字体名与字号(横排/单位/紧凑各自缓存),

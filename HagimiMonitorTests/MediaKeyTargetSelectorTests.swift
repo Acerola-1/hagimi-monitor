@@ -91,61 +91,73 @@ struct MediaKeyTargetSelectorTests {
 
     // MARK: - 亮度目标
 
-    @Test func brightnessTargetsCapableInternalPanel() {
-        let displays: [(CGDirectDisplayID, Bool)] = [(7, true), (9, true)]
-        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: 7, displays: displays) == 7)
-        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: nil, displays: displays) == nil)
-        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: nil, displays: [displays[0]]) == 7)
+    @Test func brightnessOnSystemManagedDisplaysHandsBackToSystem() {
+        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
+            (0, true, true),  // 内建屏
+            (1, true, true),  // Apple 原生外接屏
+            (2, false, true), // 第三方外接屏
+        ]
+        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: 0, displays: displays) == nil, "鼠标在内建屏时交还系统")
+        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: 1, displays: displays) == nil, "鼠标在 Apple 原生外接屏时交还系统")
+        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: 2, displays: displays) == 2, "鼠标在第三方外接屏时接管")
     }
 
     @Test func brightnessUsesMouseExternalDisplay() {
-        let displays: [(CGDirectDisplayID, Bool)] = [
-            (0, false), // 内建屏
-            (1, true), // 外接可控 A
-            (2, true), // 外接可控 B
+        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
+            (0, true, true),  // 内建屏
+            (1, false, true), // 第三方外接可控 A
+            (2, false, true), // 第三方外接可控 B
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
             mouseDisplayID: 2,
             displays: displays
         )
-        #expect(target == 2, "鼠标所在外接屏优先")
+        #expect(target == 2, "鼠标所在第三方外接屏优先")
     }
 
-    @Test func brightnessOnUnsupportedBuiltInDisplayHandsBackToSystem() {
-        let displays: [(CGDirectDisplayID, Bool)] = [
-            (0, false),
-            (1, true), // 唯一外接可控
+    @Test func brightnessOnUnsupportedExternalDisplayHandsBackToSystem() {
+        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
+            (0, true, true),
+            (1, false, false), // 第三方外接不支持亮度
+            (2, false, true),  // 另一台可控第三方外接屏
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
-            mouseDisplayID: 0, // 鼠标在内建屏
+            mouseDisplayID: 1,
             displays: displays
         )
-        #expect(target == nil, "鼠标在内建屏时应交还系统")
+        #expect(target == nil, "鼠标所在屏不支持亮度时交还系统")
     }
 
     @Test func brightnessUnknownWithSingleExternalFallsBackToExternal() {
-        let displays: [(CGDirectDisplayID, Bool)] = [
-            (0, false),
-            (1, true), // 唯一外接可控
+        let displays: [(CGDirectDisplayID, Bool, Bool)] = [
+            (0, true, true), // 内建屏
+            (3, true, true), // Apple 原生外接屏
+            (1, false, true), // 唯一可控第三方外接屏
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
             mouseDisplayID: nil,
             displays: displays
         )
-        #expect(target == 1, "无法取得鼠标所在屏幕时保留单外接屏兜底")
+        #expect(target == 1, "无法取得鼠标所在屏幕时仅在唯一第三方外接屏时兜底")
     }
 
-    @Test func brightnessUnknownWithMultipleExternalsHandsBack() {
-        let displays: [(CGDirectDisplayID, Bool)] = [
-            (0, false),
-            (1, true),
-            (2, true),
+    @Test func brightnessUnknownWithoutExternalOrWithMultipleExternalsHandsBack() {
+        let systemOnly: [(CGDirectDisplayID, Bool, Bool)] = [
+            (0, true, true),
+            (3, true, true),
+        ]
+        #expect(MediaKeyTargetSelector.brightnessTarget(mouseDisplayID: nil, displays: systemOnly) == nil, "仅有系统原生管理屏时交还系统")
+
+        let multipleExternals: [(CGDirectDisplayID, Bool, Bool)] = [
+            (0, true, true),
+            (1, false, true),
+            (2, false, true),
         ]
         let target = MediaKeyTargetSelector.brightnessTarget(
             mouseDisplayID: nil,
-            displays: displays
+            displays: multipleExternals
         )
-        #expect(target == nil, "多台无法确定交还系统")
+        #expect(target == nil, "多台第三方外接屏无法确定时交还系统")
     }
 
     // MARK: - shouldAccept

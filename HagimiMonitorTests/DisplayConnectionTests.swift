@@ -800,7 +800,7 @@ private nonisolated final class ConnectionControlBackendFake: DisplayControlBack
                 brightness: 50, volume: 0, contrast: 0, connectionIdentity: screen.identity)
         }
     }
-    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay, smoothBrightness: Bool) -> DisplayWriteOutcome {
+    func setValue(_ value: Double, for control: DisplayControlKind, display: ControlledDisplay) -> DisplayWriteOutcome {
         let action = lock.withLock {
             written.append((display.id, value))
             let result = nextWrite; nextWrite = nil; return result

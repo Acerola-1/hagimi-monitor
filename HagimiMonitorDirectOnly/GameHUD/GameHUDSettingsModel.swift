@@ -50,6 +50,11 @@ nonisolated enum GameHUDActionFeedback: Equatable, Sendable {
 final class GameHUDSettingsModel: ObservableObject {
     @Published private(set) var feedback: GameHUDActionFeedback?
     @Published private(set) var isScanning = false
+    @Published private(set) var statusSubtitle: String = ""
+
+    var isFPSProbeAvailable: Bool {
+        MetalPerfTraceMeter.isSystemProbeAvailable
+    }
 
     private let settings: MonitorSettings
     private let scanner: GameHUDGameScanner
@@ -79,6 +84,40 @@ final class GameHUDSettingsModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        settings.$gameHUDMasterEnabled
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshStatusSubtitle()
+            }
+            .store(in: &cancellables)
+
+        if let coordinator = AppDelegate.shared?.gameHUDCoordinator {
+            Publishers.CombineLatest(
+                coordinator.$isSessionActive,
+                coordinator.$activeGameName
+            )
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.refreshStatusSubtitle()
+            }
+            .store(in: &cancellables)
+        }
+        refreshStatusSubtitle()
+    }
+
+    func refreshStatusSubtitle() {
+        guard settings.gameHUDMasterEnabled else {
+            statusSubtitle = String(localized: "gamehud.settings.master-subtitle.off")
+            return
+        }
+        if let coordinator = AppDelegate.shared?.gameHUDCoordinator,
+           coordinator.isSessionActive,
+           let gameName = coordinator.foregroundGameName {
+            statusSubtitle = String(localized: "gamehud.settings.master-subtitle.active \(gameName)")
+            return
+        }
+        statusSubtitle = String(localized: "gamehud.settings.master-subtitle.idle")
     }
 
     /// 总开关开启时复用常驻扫描缓存;关闭时不用打开页面本身触发扫描。

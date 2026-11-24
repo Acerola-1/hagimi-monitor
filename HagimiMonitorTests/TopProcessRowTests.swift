@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 import Testing
 @testable import HagimiMonitorDirect
@@ -90,5 +91,154 @@ struct TopProcessRowTests {
         if let own = arguments, let expected = CommandLine.arguments.last {
             #expect(own.contains(expected))
         }
+    }
+
+    @MainActor
+    @Test func processActionSafetyBlocksSelfSystemAndMismatchedPIDReuse() {
+        let selfPID = ProcessInfo.processInfo.processIdentifier
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 0, name: "kernel_task"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 1, name: "launchd"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 1234, name: "WindowServer"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: selfPID, name: "HagimiMonitorDirect"))
+        #expect(ProcessActionHelper.isProtectedSystemProcess(pid: 99999, name: "Safari") == false)
+
+        #if DIRECT_DISTRIBUTION
+        #expect(ProcessActionHelper.canTerminate(pid: selfPID, name: "HagimiMonitorDirect") == false)
+        #expect(ProcessActionHelper.canTerminate(pid: 1, name: "launchd") == false)
+        if let finder = NSWorkspace.shared.runningApplications.first(where: { $0.bundleIdentifier == "com.apple.finder" }) {
+            #expect(ProcessActionHelper.matchesIdentity(app: finder, expectedName: "DefinitelyNotFinderApp") == false)
+            #expect(ProcessActionHelper.terminate(pid: finder.processIdentifier, expectedName: "DefinitelyNotFinderApp") == false)
+        }
+        #endif
+    }
+
+    @Test func processRankingFreezePreservesOrderRefreshesValuesAndUnfreezes() {
+        struct Item: Equatable {
+            let pid: pid_t
+            let name: String
+            var value: String
+        }
+        let initial = [
+            Item(pid: 101, name: "Safari", value: "42.0%"),
+            Item(pid: 202, name: "Xcode", value: "30.0%")
+        ]
+        let updatedLive = [
+            Item(pid: 303, name: "Finder", value: "60.0%"),
+            Item(pid: 202, name: "Xcode", value: "50.0%")
+        ]
+        let frozenResolved = ProcessRankingFreeze.resolve(
+            live: updatedLive,
+            frozen: initial,
+            id: \.pid
+        ) { existing, updated in
+            Item(pid: existing.pid, name: existing.name, value: updated.value)
+        }
+        #expect(frozenResolved == [
+            Item(pid: 101, name: "Safari", value: "42.0%"),
+            Item(pid: 202, name: "Xcode", value: "50.0%")
+        ])
+        let unfrozenResolved = ProcessRankingFreeze.resolve(
+            live: updatedLive,
+            frozen: nil,
+            id: \.pid
+        ) { existing, updated in
+            Item(pid: existing.pid, name: existing.name, value: updated.value)
+        }
+        #expect(unfrozenResolved == updatedLive)
+    }
+
+    @MainActor
+    @Test func onlyNetworkAddressMetricsAreCopyableAndBadgeFormatsSingleCore() {
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "ipv4"))
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "ipv6"))
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "public-ip"))
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "ip-address"))
+
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "wifi-ssid") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .network, name: "wifi-rssi") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .cpu, name: "idle") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .cpu, name: "thermal-pressure") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .memory, name: "used") == false)
+        #expect(MetricDetailGrid.isCopyableMetric(kind: .battery, name: "power") == false)
+
+        let cores = [
+            CPUCoreLoad(index: 0, usage: 12.2, kind: .performance),
+            CPUCoreLoad(index: 1, usage: 44.6, kind: .performance),
+            CPUCoreLoad(index: 2, usage: 18.1, kind: .efficiency),
+            CPUCoreLoad(index: 3, usage: 62.4, kind: .superCore)
+        ]
+        let shortLabel: (CPUCoreKind) -> String = {
+            switch $0 {
+            case .superCore: "S"
+            case .performance: "P"
+            case .efficiency: "E"
+            }
+        }
+        #expect(CPUCoresDetail.hoverBadgeText(for: cores[1], in: cores, shortLabel: shortLabel) == "P2 · 45%")
+        #expect(CPUCoresDetail.hoverBadgeText(for: cores[2], in: cores, shortLabel: shortLabel) == "E1 · 18%")
+        #expect(CPUCoresDetail.hoverBadgeText(for: cores[3], in: cores, shortLabel: shortLabel) == "S1 · 62%")
+    }
+
+    @MainActor
+    @Test func delayedTooltipHitAreaStaysWithinHeaderBoundsWhenUnclipped() {
+        final class FlippedContainer: NSView {
+            override var isFlipped: Bool { true }
+        }
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 364, height: 824),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+
+        let root = FlippedContainer(frame: NSRect(x: 0, y: 0, width: 364, height: 824))
+        let trackingView = DelayedTooltipOverlay.TrackingView(frame: NSRect(x: 22, y: 8, width: 298, height: 16))
+        root.addSubview(trackingView)
+        window.contentView = root
+        root.layoutSubtreeIfNeeded()
+
+        #expect(trackingView.clipsToBounds == false)
+        #expect(!trackingView.hitRect.isEmpty)
+        #expect(trackingView.bounds.contains(trackingView.hitRect))
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 150, y: 8)))
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 150, y: -60)) == false)
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 150, y: 60)) == false)
+        #expect(trackingView.containsLocalPoint(CGPoint(x: 310, y: 8)) == false)
+    }
+
+    @MainActor
+    @Test func delayedTooltipCentersNarrowButtonAndClampsToScreen() {
+        let screen = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        // 16pt 按钮配 64pt 提示框：水平居中在按钮中点（208 - 32 = 176）。
+        let narrowAnchor = NSRect(x: 200, y: 500, width: 16, height: 15)
+        let centered = DelayedTooltipOverlay.Coordinator.resolvedOriginX(
+            anchorRect: narrowAnchor,
+            tipWidth: 64,
+            mouseX: 202,
+            screenFrame: screen
+        )
+        #expect(centered == 176)
+
+        // 紧靠屏幕右缘的 16pt 按钮仍被收在可见区 4pt 内边距内。
+        let rightEdgeAnchor = NSRect(x: 1420, y: 500, width: 16, height: 15)
+        let clamped = DelayedTooltipOverlay.Coordinator.resolvedOriginX(
+            anchorRect: rightEdgeAnchor,
+            tipWidth: 64,
+            mouseX: 1428,
+            screenFrame: screen
+        )
+        #expect(clamped == 1372)
+
+        // 宽锚点仍沿鼠标居中并受锚点左右边界限制。
+        let wideAnchor = NSRect(x: 100, y: 500, width: 200, height: 24)
+        let wideCentered = DelayedTooltipOverlay.Coordinator.resolvedOriginX(
+            anchorRect: wideAnchor,
+            tipWidth: 60,
+            mouseX: 180,
+            screenFrame: screen
+        )
+        #expect(wideCentered == 150)
     }
 }

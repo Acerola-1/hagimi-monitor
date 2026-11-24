@@ -98,6 +98,12 @@ struct GameHUDView: View {
         .padding(.vertical, GameHUDViewContract.Metrics.verticalPadding)
         .padding(.horizontal, 14)
         .frame(width: GameHUDViewContract.Metrics.cardWidth, alignment: .topLeading)
+        .shadow(
+            color: .black.opacity(GameHUDBackgroundAppearance.textShadowOpacity(for: backgroundTransparency)),
+            radius: 1.5,
+            x: 0,
+            y: 0.5
+        )
         .background(
             GameHUDBackgroundAppearance.backgroundShape
                 .fill(GameHUDBackgroundAppearance.backgroundColor(
@@ -105,33 +111,44 @@ struct GameHUDView: View {
                     transparency: backgroundTransparency
                 ))
         )
+        .overlay {
+            GameHUDBackgroundAppearance.backgroundShape
+                .strokeBorder(
+                    Color.white.opacity(GameHUDBackgroundAppearance.borderOpacity(for: backgroundTransparency)),
+                    lineWidth: 0.75
+                )
+        }
     }
 
-    /// 官方 HUD 风格的行:等宽字体,左标签、右数值,同为白色同字号。
+    /// 官方 HUD 风格的行:等宽字体,左标签、右数值,标签略降对比度突出实时数值。
     private func metricRow(label: String, value: String) -> some View {
         HStack(alignment: .firstTextBaseline) {
             Text(label)
                 .font(.system(size: GameHUDViewContract.Metrics.font, design: .monospaced))
-                .foregroundStyle(Color.white.opacity(0.92))
+                .foregroundStyle(Color.white.opacity(0.72))
                 .lineLimit(1)
             Spacer(minLength: 12)
             Text(value)
-                .font(.system(size: GameHUDViewContract.Metrics.font, design: .monospaced))
-                .foregroundStyle(Color.white.opacity(0.92))
+                .font(.system(size: GameHUDViewContract.Metrics.font, weight: .medium, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(Color.white)
                 .lineLimit(1)
         }
         .frame(height: GameHUDViewContract.Metrics.rowHeight - GameHUDViewContract.Metrics.rowSpacing)
     }
 
-    private var macOSVersion: String {
+    private static let cachedMacOSVersion: String = {
         let v = ProcessInfo.processInfo.operatingSystemVersion
         return "macOS \(v.majorVersion).\(v.minorVersion)"
-    }
+    }()
 
     /// 芯片型号(如 "Apple M4"):sysctl machdep.cpu.brand_string。读不到时用占位。
-    private var chipName: String {
+    private static let cachedChipName: String = {
         HardwareSysctl.string("machdep.cpu.brand_string") ?? "Apple Silicon"
-    }
+    }()
+
+    private var macOSVersion: String { Self.cachedMacOSVersion }
+    private var chipName: String { Self.cachedChipName }
 
     private var enabledIDs: Set<GameHUDMetricID> {
         enabledMetricIDs
@@ -144,25 +161,17 @@ struct GameHUDView: View {
     }
 
     private var displayRows: [DisplayRow] {
-        let hardware = snapshot.readings.filter {
-            $0.metricID != GameHUDMetricID.fps.rawValue &&
-            $0.metricID != GameHUDMetricID.averageFPS.rawValue &&
-            $0.metricID != GameHUDMetricID.onePercentLow.rawValue &&
-            $0.metricID != GameHUDMetricID.frameTime.rawValue
+        let readingsByID = Dictionary(
+            snapshot.readings.map { ($0.metricID, $0) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let entries = GameHUDMetricCatalog.displayEntries(enabledIDs: enabledMetricIDs).filter {
+            $0.id != .fps && $0.id != .averageFPS && $0.id != .onePercentLow && $0.id != .frameTime
         }
-        return hardware.map { reading in
-            let title = title(for: reading)
-            let value = reading.value ?? "—"
-            return DisplayRow(id: reading.metricID, title: title, value: value)
+        return entries.map { entry in
+            let title = String(localized: entry.titleKey)
+            let value = readingsByID[entry.id.rawValue]?.value ?? "—"
+            return DisplayRow(id: entry.id.rawValue, title: title, value: value)
         }
-    }
-
-    /// 标题取目录 key 本地化;value 为 nil 的行同样保留标题(spec:保留行)。
-    private func title(for reading: GameHUDReading) -> String {
-        guard let id = GameHUDMetricID(rawValue: reading.metricID) else {
-            return reading.metricID
-        }
-        let entry = GameHUDMetricCatalog.displayEntries(enabledIDs: enabledMetricIDs).first { $0.id == id }
-        return String(localized: entry?.titleKey ?? String.LocalizationValue(reading.metricID))
     }
 }

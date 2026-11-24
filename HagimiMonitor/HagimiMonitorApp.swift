@@ -1,8 +1,49 @@
 import SwiftUI
 
-extension NSAppearance {
+nonisolated extension NSAppearance {
+    /// 优先级把高对比度变体放在普通变体之前，确保系统开启「增强对比度」时命中高对比度分支；
+    /// 未开启增强对比度时，AppKit 只会匹配普通变体。
+    static let supportedAppearances: [NSAppearance.Name] = [
+        .accessibilityHighContrastVibrantDark,
+        .accessibilityHighContrastVibrantLight,
+        .accessibilityHighContrastDarkAqua,
+        .accessibilityHighContrastAqua,
+        .vibrantDark,
+        .vibrantLight,
+        .darkAqua,
+        .aqua
+    ]
+
     var isDark: Bool {
-        bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        Self.isDark(appearanceName: bestMatch(from: Self.supportedAppearances))
+    }
+
+    var isHighContrast: Bool {
+        Self.isHighContrast(appearanceName: bestMatch(from: Self.supportedAppearances))
+    }
+
+    static func isDark(appearanceName: NSAppearance.Name?) -> Bool {
+        switch appearanceName {
+        case .darkAqua,
+             .vibrantDark,
+             .accessibilityHighContrastDarkAqua,
+             .accessibilityHighContrastVibrantDark:
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func isHighContrast(appearanceName: NSAppearance.Name?) -> Bool {
+        switch appearanceName {
+        case .accessibilityHighContrastAqua,
+             .accessibilityHighContrastDarkAqua,
+             .accessibilityHighContrastVibrantLight,
+             .accessibilityHighContrastVibrantDark:
+            return true
+        default:
+            return false
+        }
     }
 }
 
@@ -41,6 +82,10 @@ struct AppMenuCommands: Commands {
                 .keyboardShortcut("p", modifiers: .command)
                 .disabled(!reportCommands.isAvailable)
             Button(String(localized: "menu.export-report")) { ReportWindowPresenter.exportCurrentReport() }
+                .keyboardShortcut("e", modifiers: [.command, .shift])
+                .disabled(!reportCommands.isAvailable)
+            Button(String(localized: "stats.report.toolbar.reload.tooltip")) { ReportWindowPresenter.reloadCurrentReport() }
+                .keyboardShortcut("r", modifiers: .command)
                 .disabled(!reportCommands.isAvailable)
         }
         CommandGroup(replacing: .appInfo) {

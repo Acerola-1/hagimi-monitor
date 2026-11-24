@@ -5,8 +5,14 @@ import AppKit
 final class GameHUDWindowTracker {
     typealias Scheduler = @MainActor (TimeInterval, @escaping @MainActor () -> Void) -> Timer
     static let movingInterval: TimeInterval = 1.0 / 30
-    static let idleInterval: TimeInterval = 1.0 / 20
+    static let idleInterval: TimeInterval = 1.0 / 6
+    static let fullscreenIdleInterval: TimeInterval = 0.5
     static let settlingDuration: TimeInterval = 0.18
+
+    static func isFullscreenTarget(_ target: GameHUDWindowTarget) -> Bool {
+        guard case .target(_, let rect, let screen, _) = target else { return false }
+        return rect.width >= screen.frame.width * 0.98 && rect.height >= screen.frame.height * 0.95
+    }
 
     private let readTarget: (GameHUDWindowIdentity) -> GameHUDWindowTarget
     private let isPermitted: (GameHUDWindowIdentity) -> Bool
@@ -55,7 +61,14 @@ final class GameHUDWindowTracker {
         let expectedGeneration = generation
         if isMoving { onChange?(initialTarget, true) }
         guard self.identity == identity, generation == expectedGeneration else { return }
-        scheduleNext(at: now() + (isMoving ? Self.movingInterval : Self.idleInterval))
+        scheduleNext(at: now() + currentCadence())
+    }
+
+    private func currentCadence() -> TimeInterval {
+        if isMoving { return Self.movingInterval }
+        if Self.isFullscreenTarget(lastTarget) { return Self.fullscreenIdleInterval }
+        if mousePressed() { return Self.movingInterval }
+        return Self.idleInterval
     }
 
     func stop() {
@@ -113,7 +126,7 @@ final class GameHUDWindowTracker {
             let target = self.readTarget(identity)
             self.accept(target, identity: identity)
             guard self.identity == identity, self.generation == expectedGeneration else { return }
-            let cadence = self.isMoving || self.mousePressed() ? Self.movingInterval : Self.idleInterval
+            let cadence = self.currentCadence()
             var next = deadline + cadence
             let completedAt = self.now()
             if next <= completedAt {

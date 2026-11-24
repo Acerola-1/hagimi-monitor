@@ -13,14 +13,14 @@ import Foundation
 /// - 通知只在严重档发出且需持续满门槛,同一 episode 同一档位只发一次。
 /// - nil(该维度本帧无有效观测)不改变任何状态:既不判恢复也不外推;
 ///   断档超过阈值后严重档计时重新起算,跨睡眠/停摆不累计。
-struct PressureAlertStateMachine {
-    enum Kind {
+struct PressureAlertStateMachine: Sendable {
+    enum Kind: Sendable {
         case memory
         case thermal
     }
 
     /// 红点入口:已读按入口独立——用户点了哪个入口,就清哪个入口的红点。
-    enum Entry: Hashable {
+    enum Entry: Hashable, Sendable {
         /// 菜单栏负载环 / 指标图标:点开面板即视为看过。
         case menuBar
         /// 面板右上角的数据统计入口:点它进统计页,随页面被查看而清
@@ -29,24 +29,50 @@ struct PressureAlertStateMachine {
     }
 
     /// 本帧新产生的一条通知。
-    struct Alert: Equatable {
+    struct Alert: Equatable, Sendable {
         let kind: Kind
         /// 触发的原生档位(内存 2;热 2/3)。
         let level: Int
+        /// 递增投递序号，确保旧请求的异步失败回调不会误撤销更新的同档通知。
+        let deliveryID: UInt64
     }
 
-    private struct KindState {
+    private struct KindState: Sendable {
+        var episodeID: UInt64 = 0
         /// episode 内到过的最高档;0 = 无 episode。
         var peakLevel = 0
         /// 本 episode 内已被哪些入口看过;新 episode 与升级时清空(重新点亮全部)。
         var readEntries: Set<Entry> = []
         var severeSince: Date?
-        var notifiedLevel: Int?
+        var confirmedLevel = 0
+        var lastConfirmedAt: Date?
+        var pending: [UInt64: Delivery] = [:]
+
+        /// 待投递也占用当前档位，避免系统回调前重复提交同档请求。
+        var reservedLevel: Int {
+            pending.values.reduce(confirmedLevel) { level, delivery in
+                delivery.episodeID == episodeID ? max(level, delivery.level) : level
+            }
+        }
+
+        var lastReservedAt: Date? {
+            pending.values.lazy.map(\.submittedAt).reduce(lastConfirmedAt) { last, submittedAt in
+                max(last ?? submittedAt, submittedAt)
+            }
+        }
+    }
+
+    private struct Delivery: Sendable {
+        let episodeID: UInt64
+        let level: Int
+        let submittedAt: Date
     }
 
     private var memory = KindState()
     private var thermal = KindState()
     private var lastFrameAt: Date?
+    /// 单调递增投递编号，不随 reset() 清零，避免重置前在途请求撞上重置后的新序号。
+    private var nextDeliveryID: UInt64 = 0
 
     /// 该入口的红点是否该亮:存在进行中且尚未被这个入口看过的告警。
     func isUnread(_ entry: Entry) -> Bool {
@@ -72,21 +98,27 @@ struct PressureAlertStateMachine {
         lastFrameAt = nil
     }
 
+    /// 清空单个维度的状态(分项开关关闭时静音该维度，含冷却时间)。
+    mutating func reset(_ kind: Kind) {
+        self[kind] = KindState()
+    }
+
     mutating func ingest(
         memoryLevel: Int?,
         thermalLevel: Int?,
         at date: Date,
         sustain: TimeInterval,
-        breakThreshold: TimeInterval
+        breakThreshold: TimeInterval,
+        cooldown: TimeInterval = 0
     ) -> [Alert] {
         let resumesAfterBreak = lastFrameAt.map { date.timeIntervalSince($0) > breakThreshold } ?? false
         lastFrameAt = date
 
         var alerts: [Alert] = []
         advance(.memory, level: memoryLevel, at: date, sustain: sustain,
-                resumesAfterBreak: resumesAfterBreak, alerts: &alerts)
+                resumesAfterBreak: resumesAfterBreak, cooldown: cooldown, alerts: &alerts)
         advance(.thermal, level: thermalLevel, at: date, sustain: sustain,
-                resumesAfterBreak: resumesAfterBreak, alerts: &alerts)
+                resumesAfterBreak: resumesAfterBreak, cooldown: cooldown, alerts: &alerts)
         return alerts
     }
 
@@ -112,15 +144,22 @@ struct PressureAlertStateMachine {
         at date: Date,
         sustain: TimeInterval,
         resumesAfterBreak: Bool,
+        cooldown: TimeInterval,
         alerts: inout [Alert]
     ) {
         guard let level else { return }
         var state = self[kind]
         defer { self[kind] = state }
 
-        // 跌回红点门槛以下即 episode 结束:未读一并清除(告警过去后红点自动消失)。
+        // 恢复时清除本事件状态。保留已确认时间和在途请求，供跨事件冷却使用。
         guard Self.isAlertLevel(kind, level: level) else {
-            state = KindState()
+            if state.peakLevel > 0 {
+                state.episodeID &+= 1
+                state.peakLevel = 0
+                state.readEntries.removeAll()
+                state.severeSince = nil
+                state.confirmedLevel = 0
+            }
             return
         }
 
@@ -146,9 +185,35 @@ struct PressureAlertStateMachine {
             return
         }
         guard let since = state.severeSince, date.timeIntervalSince(since) >= sustain else { return }
-        guard state.notifiedLevel != level else { return }
-        state.notifiedLevel = level
-        alerts.append(Alert(kind: kind, level: level))
+        // 同 episode 内只向更高严重度升级通知，避免从临界降回严重时再次弹出通知。
+        let reservedLevel = state.reservedLevel
+        guard level > reservedLevel else { return }
+        // 跨事件冷却：同一 episode 内的严重度升级不受冷却限制，新 episode 在冷却期内不发通知。
+        if reservedLevel == 0, cooldown > 0,
+           let lastReservedAt = state.lastReservedAt,
+           date.timeIntervalSince(lastReservedAt) < cooldown {
+            return
+        }
+        nextDeliveryID &+= 1
+        let deliveryID = nextDeliveryID
+        state.pending[deliveryID] = Delivery(episodeID: state.episodeID, level: level, submittedAt: date)
+        alerts.append(Alert(kind: kind, level: level, deliveryID: deliveryID))
+    }
+
+    /// 投递回调只确认或释放自己的请求。当前档位失去投递占用时，重新等待持续门槛再重试。
+    mutating func completeNotification(for alert: Alert, delivered: Bool, at date: Date) {
+        var state = self[alert.kind]
+        guard let delivery = state.pending.removeValue(forKey: alert.deliveryID) else { return }
+        let isCurrentEpisode = delivery.episodeID == state.episodeID
+        if delivered {
+            state.lastConfirmedAt = max(state.lastConfirmedAt ?? delivery.submittedAt, delivery.submittedAt)
+            if isCurrentEpisode {
+                state.confirmedLevel = max(state.confirmedLevel, delivery.level)
+            }
+        } else if isCurrentEpisode, state.severeSince != nil, delivery.level > state.reservedLevel {
+            state.severeSince = date
+        }
+        self[alert.kind] = state
     }
 
     private subscript(kind: Kind) -> KindState {

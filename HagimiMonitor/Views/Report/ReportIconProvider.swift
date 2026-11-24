@@ -31,10 +31,20 @@ final class ReportIconProvider {
     /// 根据进程名或 Bundle ID 获取对齐 MonitorKind / 系统契约的兜底 SF Symbol (R13)
     func fallbackSymbol(forAppKey key: String) -> String {
         let lower = key.lowercased()
+        let stripped: String = {
+            for prefix in ["bundle:", "systemexecutable:", "unresolved:"] where lower.hasPrefix(prefix) {
+                return String(lower.dropFirst(prefix.count))
+            }
+            return lower
+        }()
         if lower.contains("windowserver") {
             return "display"
         }
-        if lower.hasPrefix("com.apple.") || lower.contains("daemon") || lower.contains("helper") || !lower.contains(".") {
+        if lower.hasPrefix("systemexecutable:")
+            || stripped.hasPrefix("com.apple.")
+            || stripped.contains("daemon")
+            || stripped.contains("helper")
+            || !stripped.contains(".") {
             return "terminal"
         }
         return "app.fill"

@@ -20,17 +20,39 @@ enum MenuBarComputeRingIcon {
         Int(min(100.0, max(0.0, load)).rounded())
     }
 
-    private static func cacheKey(loadBucket: Int, coreLevel: MenuBarCoreLevel, darkMode: Bool, showsAlert: Bool, showsHUDBadge: Bool) -> NSNumber {
-        // 告警优先于 HUD，两者同时开启与仅有告警是同一图像。
-        let badge = showsAlert ? 1 : (showsHUDBadge ? 2 : 0)
-        return NSNumber(value: ((loadBucket * 3 + coreLevel.rawValue) * 2 + (darkMode ? 1 : 0)) * 3 + badge)
+    private static func cacheKey(
+        loadBucket: Int,
+        coreLevel: MenuBarCoreLevel,
+        darkMode: Bool,
+        increaseContrast: Bool,
+        showsAlert: Bool,
+        showsHUDBadge: Bool
+    ) -> NSNumber {
+        // 告警红点（右上）与 HUD 紫菱（右下）可同时存在，按 2 位标志组合编码。
+        let badge = (showsAlert ? 1 : 0) | (showsHUDBadge ? 2 : 0)
+        let appearanceSlot = (darkMode ? 1 : 0) + (increaseContrast ? 2 : 0)
+        return NSNumber(value: ((loadBucket * 3 + coreLevel.rawValue) * 4 + appearanceSlot) * 4 + badge)
     }
 
-    static func image(load: Double, darkMode: Bool, coreLevel: MenuBarCoreLevel? = nil, showsAlert: Bool = false, showsHUDBadge: Bool = false) -> NSImage {
+    static func image(
+        load: Double,
+        darkMode: Bool,
+        coreLevel: MenuBarCoreLevel? = nil,
+        showsAlert: Bool = false,
+        showsHUDBadge: Bool = false,
+        increaseContrast: Bool = false
+    ) -> NSImage {
         let loadBucket = loadBucket(for: load)
         let canonicalLoad = Double(loadBucket)
         let resolvedCoreLevel = coreLevel ?? MenuBarCoreLevel.normal.updated(for: canonicalLoad)
-        let key = cacheKey(loadBucket: loadBucket, coreLevel: resolvedCoreLevel, darkMode: darkMode, showsAlert: showsAlert, showsHUDBadge: showsHUDBadge)
+        let key = cacheKey(
+            loadBucket: loadBucket,
+            coreLevel: resolvedCoreLevel,
+            darkMode: darkMode,
+            increaseContrast: increaseContrast,
+            showsAlert: showsAlert,
+            showsHUDBadge: showsHUDBadge
+        )
         lock.lock()
         if let cached = cache.object(forKey: key) {
             lock.unlock()
@@ -43,19 +65,23 @@ enum MenuBarComputeRingIcon {
             NSColor.clear.setFill()
             rect.fill()
 
-            let isDark: Bool
             let appearance = NSAppearance.currentDrawing()
-            if let match = appearance.bestMatch(from: [.aqua, .darkAqua, .vibrantDark, .vibrantLight]) {
-                isDark = match == .darkAqua || match == .vibrantDark
-            } else {
-                isDark = darkMode
-            }
+            let matchedAppearance = appearance.bestMatch(from: NSAppearance.supportedAppearances)
+            let isDark = matchedAppearance.map(NSAppearance.isDark(appearanceName:)) ?? darkMode
+            let isHighContrast = increaseContrast
+                || (matchedAppearance.map(NSAppearance.isHighContrast(appearanceName:)) ?? false)
 
-            let style = MenuBarComputeRingImageStyle(load: canonicalLoad, darkMode: isDark, coreLevel: resolvedCoreLevel)
+            let style = MenuBarComputeRingImageStyle(
+                load: canonicalLoad,
+                darkMode: isDark,
+                coreLevel: resolvedCoreLevel,
+                increaseContrast: isHighContrast
+            )
             drawRing(style: style, center: NSPoint(x: rect.midX, y: rect.midY))
             if showsAlert {
                 MenuBarAlertBadge.draw(in: rect, darkMode: isDark)
-            } else if showsHUDBadge {
+            }
+            if showsHUDBadge {
                 MenuBarHUDBadge.draw(in: rect, darkMode: isDark)
             }
             return true
@@ -87,23 +113,25 @@ enum MenuBarComputeRingIcon {
             width: style.ringSize,
             height: style.ringSize
         )
+        let endAngle = 90 - CGFloat(style.progress * 360)
 
-        style.trackColor.setStroke()
-        // 底环与弧线、核心同圆心:画布扩容后不能再按固定内衬定位,否则会与弧线错开。
-        let trackRect = NSRect(
-            x: center.x - style.trackSize / 2,
-            y: center.y - style.trackSize / 2,
-            width: style.trackSize,
-            height: style.trackSize
+        // 底轨与活跃弧共用同心同半径，且仅绘制未覆盖的剩余弧段，
+        // 避免半透明活跃弧叠加全圆底轨导致中轴发虚或出现内外双层边缘。
+        drawArc(
+            in: ringRect,
+            startAngle: endAngle,
+            endAngle: -270,
+            lineWidth: style.trackWidth,
+            lineCapStyle: .butt,
+            color: style.trackColor
         )
-        let track = NSBezierPath(ovalIn: trackRect)
-        track.lineWidth = style.trackWidth
-        track.stroke()
 
         drawArc(
             in: ringRect,
-            progress: style.progress,
+            startAngle: 90,
+            endAngle: endAngle,
             lineWidth: style.lineWidth,
+            lineCapStyle: .round,
             color: style.tint
         )
 
@@ -128,17 +156,24 @@ enum MenuBarComputeRingIcon {
         ).fill()
     }
 
-    private static func drawArc(in rect: NSRect, progress: Double, lineWidth: CGFloat, color: NSColor) {
+    private static func drawArc(
+        in rect: NSRect,
+        startAngle: CGFloat,
+        endAngle: CGFloat,
+        lineWidth: CGFloat,
+        lineCapStyle: NSBezierPath.LineCapStyle,
+        color: NSColor
+    ) {
         let path = NSBezierPath()
         path.appendArc(
             withCenter: NSPoint(x: rect.midX, y: rect.midY),
             radius: rect.width / 2,
-            startAngle: 90,
-            endAngle: 90 - CGFloat(progress * 360),
+            startAngle: startAngle,
+            endAngle: endAngle,
             clockwise: true
         )
         path.lineWidth = lineWidth
-        path.lineCapStyle = .round
+        path.lineCapStyle = lineCapStyle
         color.setStroke()
         path.stroke()
     }
@@ -148,31 +183,36 @@ private struct MenuBarComputeRingImageStyle {
     let load: Double
     let darkMode: Bool
     let coreLevel: MenuBarCoreLevel
+    let increaseContrast: Bool
 
     private var normalizedLoad: Double {
         min(1, max(0, load / 100))
     }
 
+    /// 补偿 `.round` 圆头端帽的半线宽延伸，控制 0% 克制起步并确保 100% 保留顶部微缺口。
     var progress: Double {
-        min(0.98, max(0.08, 0.12 + normalizedLoad * 0.86))
+        min(0.89, max(0.06, 0.06 + normalizedLoad * 0.83))
     }
 
     var tint: NSColor {
-        let alpha = 0.72 + normalizedLoad * 0.24
+        let alpha = increaseContrast ? 1.0 : (0.90 + normalizedLoad * 0.10)
         return ink.withAlphaComponent(alpha)
     }
 
     var trackColor: NSColor {
-        ink.withAlphaComponent(darkMode ? 0.34 : 0.28)
+        let alpha: Double = increaseContrast
+            ? (darkMode ? 0.56 : 0.50)
+            : (darkMode ? 0.34 : 0.28)
+        return ink.withAlphaComponent(alpha)
     }
 
     var coreColor: NSColor {
+        // 核心点实色填充，避免下方隔离背板透色使其发灰。
         coreLevel.color(darkMode: darkMode)
-            .withAlphaComponent((darkMode ? 0.76 : 0.88) + normalizedLoad * 0.10)
     }
 
     var lineWidth: CGFloat {
-        CGFloat(1.9 + normalizedLoad * 0.55)
+        CGFloat(2.0 + normalizedLoad * 0.25)
     }
 
     var ringSize: CGFloat {
@@ -180,25 +220,21 @@ private struct MenuBarComputeRingImageStyle {
     }
 
     var coreSize: CGFloat {
-        CGFloat(3.0 + normalizedLoad * 1.9)
+        CGFloat(3.4 + normalizedLoad * 0.9)
     }
 
     var coreBackplateSize: CGFloat {
-        coreSize + 1.8
-    }
-
-    var trackSize: CGFloat {
-        13.2
+        coreSize + 1.5
     }
 
     var trackWidth: CGFloat {
-        1.35
+        increaseContrast ? 1.5 : 1.35
     }
 
     var coreBackplateColor: NSColor {
         darkMode
-            ? NSColor.black.withAlphaComponent(0.48)
-            : NSColor.white.withAlphaComponent(0.76)
+            ? NSColor.black.withAlphaComponent(increaseContrast ? 0.72 : 0.52)
+            : NSColor.white.withAlphaComponent(increaseContrast ? 0.88 : 0.68)
     }
 
     private var ink: NSColor {
@@ -206,7 +242,7 @@ private struct MenuBarComputeRingImageStyle {
     }
 }
 
-enum MenuBarComputeLoadLevel: Sendable {
+nonisolated enum MenuBarComputeLoadLevel: Sendable {
     case idle
     case working
     case busy
@@ -214,28 +250,24 @@ enum MenuBarComputeLoadLevel: Sendable {
 
     func coreColor(darkMode: Bool) -> NSColor {
         switch self {
-        case .idle:
+        case .idle, .working:
             return darkMode
-                ? NSColor(red: 0.34, green: 0.86, blue: 0.66, alpha: 1)
-                : NSColor(red: 0.08, green: 0.50, blue: 0.34, alpha: 1)
-        case .working:
-            return darkMode
-                ? NSColor(red: 0.32, green: 0.88, blue: 0.72, alpha: 1)
-                : NSColor(red: 0.00, green: 0.55, blue: 0.42, alpha: 1)
+                ? NSColor(srgbRed: 0.26, green: 0.90, blue: 0.56, alpha: 1)
+                : NSColor(srgbRed: 0.04, green: 0.58, blue: 0.34, alpha: 1)
         case .busy:
             return darkMode
-                ? NSColor(red: 1.00, green: 0.74, blue: 0.32, alpha: 1)
-                : NSColor(red: 0.80, green: 0.44, blue: 0.06, alpha: 1)
+                ? NSColor(srgbRed: 1.00, green: 0.74, blue: 0.28, alpha: 1)
+                : NSColor(srgbRed: 0.82, green: 0.46, blue: 0.04, alpha: 1)
         case .stressed:
             return darkMode
-                ? NSColor(red: 1.00, green: 0.38, blue: 0.34, alpha: 1)
-                : NSColor(red: 0.78, green: 0.12, blue: 0.10, alpha: 1)
+                ? NSColor(srgbRed: 1.00, green: 0.36, blue: 0.32, alpha: 1)
+                : NSColor(srgbRed: 0.80, green: 0.14, blue: 0.12, alpha: 1)
         }
     }
 }
 
 /// 中心点使用三个固定语义色；下降留出余量，避免临界负载反复换色。
-enum MenuBarCoreLevel: Int, Sendable {
+nonisolated enum MenuBarCoreLevel: Int, Equatable, Sendable {
     case normal
     case busy
     case stressed

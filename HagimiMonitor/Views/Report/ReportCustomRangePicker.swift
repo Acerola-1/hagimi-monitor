@@ -4,6 +4,7 @@ import SwiftUI
 struct ReportCustomRangePicker: View {
     let selectedRange: ReportTimeRange
     @Binding var isPresented: Bool
+    let recordedDayKeys: Set<Int64>
     let onApply: (Date, Date) -> Void
 
     @State private var displayedMonth: Date
@@ -15,10 +16,12 @@ struct ReportCustomRangePicker: View {
     init(
         selectedRange: ReportTimeRange,
         isPresented: Binding<Bool>,
+        recordedDayKeys: Set<Int64> = [],
         onApply: @escaping (Date, Date) -> Void
     ) {
         self.selectedRange = selectedRange
         self._isPresented = isPresented
+        self.recordedDayKeys = recordedDayKeys
         self.onApply = onApply
 
         let bounds = Self.draftBounds(for: selectedRange, now: Date(), calendar: .current)
@@ -215,6 +218,8 @@ struct ReportCustomRangePicker: View {
         let isEnd = calendar.isDate(item.date, inSameDayAs: activeRange.to)
         let isInRange = item.date >= activeRange.from && item.date <= activeRange.to
         let isSingleDay = calendar.isDate(activeRange.from, inSameDayAs: activeRange.to)
+        let hasRecordedSample = item.isCurrentMonth && !isFuture
+            && recordedDayKeys.contains(StatisticsProcessStore.dayKey(item.date, calendar: calendar))
 
         return ZStack {
             // 连续流体区间色块
@@ -233,15 +238,22 @@ struct ReportCustomRangePicker: View {
                     }
                 }
 
-            Text("\(item.dayNumber)")
-                .font(.system(size: 11, weight: (isStart || isEnd || isToday) ? .semibold : .regular))
-                .foregroundStyle(
-                    (isStart || isEnd) ? Color.white :
-                    isFuture ? Color.secondary.opacity(0.25) :
-                    !item.isCurrentMonth ? Color.secondary.opacity(0.25) :
-                    isToday ? Color.accentColor :
-                    Color.primary
-                )
+            VStack(spacing: 1) {
+                Text("\(item.dayNumber)")
+                    .font(.system(size: 11, weight: (isStart || isEnd || isToday) ? .semibold : .regular))
+                    .foregroundStyle(
+                        (isStart || isEnd) ? Color.white :
+                        isFuture ? Color.secondary.opacity(0.25) :
+                        !item.isCurrentMonth ? Color.secondary.opacity(0.25) :
+                        isToday ? Color.accentColor :
+                        Color.primary
+                    )
+
+                Circle()
+                    .fill((isStart || isEnd) ? Color.white.opacity(0.9) : Color.accentColor.opacity(0.75))
+                    .frame(width: 3, height: 3)
+                    .opacity(hasRecordedSample ? 1 : 0)
+            }
         }
         .frame(height: 30)
         .contentShape(Rectangle())

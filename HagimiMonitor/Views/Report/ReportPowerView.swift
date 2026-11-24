@@ -2,31 +2,44 @@ import AppKit
 import Charts
 import SwiftUI
 
-/// 电源与电池模块报表视图：包含整机功耗趋势、电池电量与温度、电池健康与循环历史，以及区分台式机与笔记本无历史场景。
+/// 电源与电池模块报表视图：包含整机功耗趋势、电池电量/温度分切图、电池健康与循环历史，以及区分台式机与笔记本无历史场景。
 struct ReportPowerView: View {
     @ObservedObject var viewModel: NativeReportViewModel
-    @State private var selectedDate: Date?
+    @State private var batteryChartMode: BatteryChartMode = .level
+    @State private var hoveredHealthDate: Date?
 
-    private let powerColor = ReportUIHelper.powerColor
-    private let batteryColor = ReportUIHelper.batteryColor
-    private let tempColor = ReportUIHelper.thermalColor
+    enum BatteryChartMode: String, CaseIterable, Identifiable {
+        case level
+        case temperature
+
+        var id: String { rawValue }
+
+        var label: String {
+            switch self {
+            case .level: return String(localized: "stats.r.battLevel", defaultValue: "电量 (%)")
+            case .temperature: return String(localized: "stats.r.battTemp", defaultValue: "温度 (°C)")
+            }
+        }
+    }
+
+    @Environment(\.colorScheme) private var colorScheme
+    @AppStorage("settings.colorSchemePreference") private var colorPreference = MonitorColorSchemePreference.vibrant.rawValue
+
+    private var palette: ReportPalette {
+        ReportPalette(preference: MonitorColorSchemePreference(rawValue: colorPreference) ?? .vibrant, colorScheme: colorScheme)
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 18) {
-            // 左侧主要图表与指标区
             VStack(spacing: 16) {
-                // 1. KPI 概览指标行
                 kpiSummaryRow
-
-                // 2. 整机功耗趋势图
                 powerTrendCard
 
-                // 3. 电池电量与温度趋势（R03: 严格区分硬件支持与范围数据可用性）
                 if let battery = viewModel.rangeModel?.battery {
                     if battery.isSupported {
                         if battery.hasHistoryInRange {
                             batteryLevelCard
-                            if viewModel.selectedRange != .today && !battery.dailyHistory.isEmpty {
+                            if !viewModel.isSingleDaySelected && !battery.dailyHistory.isEmpty {
                                 batteryHealthHistoryCard(history: battery.dailyHistory)
                             }
                         } else {
@@ -39,7 +52,6 @@ struct ReportPowerView: View {
             }
             .frame(maxWidth: .infinity)
 
-            // 右侧硬件规格与实时读数侧栏 (R09: 隔离高频广播)
             ReportHardwareRailView(
                 moduleId: "power",
                 meta: viewModel.snapshot?.meta,
@@ -61,26 +73,28 @@ struct ReportPowerView: View {
                 title: String(localized: "stats.r.sAvgPower", defaultValue: "平均功耗"),
                 value: p?.avgPowerWatts.map { String(format: "%.1f W", $0) } ?? "—",
                 caption: nil,
-                color: powerColor
+                color: palette.power
             )
             ReportKpiCard(
                 title: String(localized: "stats.r.sPeakPower", defaultValue: "峰值功耗"),
                 value: p?.peakPowerWatts.map { String(format: "%.1f W", $0) } ?? "—",
                 caption: nil,
-                color: ReportUIHelper.peakColor
+                color: palette.cpuPeak
             )
             if hasBatt {
                 ReportKpiCard(
                     title: String(localized: "stats.r.battLevel", defaultValue: "电池均值"),
                     value: b?.avgLevel.map { String(format: "%.0f%%", $0) } ?? "—",
-                    caption: nil,
-                    color: batteryColor
+                    caption: b?.acFraction.map {
+                        String(format: String(localized: "stats.r.acShare"), $0 * 100)
+                    },
+                    color: palette.battery
                 )
                 ReportKpiCard(
                     title: String(localized: "stats.r.sBattTemp", defaultValue: "电池温度"),
                     value: b?.avgTemp.map { String(format: "%.1f°C", $0) } ?? "—",
                     caption: nil,
-                    color: (b?.avgTemp ?? 0) > 40 ? tempColor : .secondary
+                    color: (b?.avgTemp ?? 0) > 40 ? palette.thermal : .secondary
                 )
             } else {
                 ReportKpiCard(
@@ -93,197 +107,111 @@ struct ReportPowerView: View {
         }
     }
 
-    // MARK: - 2. 整机功耗趋势图卡片 (R07: 独立分段防跨睡眠连线)
+    // MARK: - 2. 整机功耗趋势图卡片
 
     private var powerTrendCard: some View {
-        let rows = viewModel.rangeModel?.rows ?? []
-        let granularity = viewModel.rangeModel?.granularity.bucketSeconds ?? 60
-
-        let powerPoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.powerAvg,
-            seriesID: "power",
-            granularitySeconds: granularity
-        )
+        let cache = viewModel.rangeModel?.chartCache ?? .empty
 
         return ReportCardView(
             title: String(localized: "stats.r.railPower", defaultValue: "整机功耗趋势"),
             icon: "powerplug"
         ) {
-            if powerPoints.isEmpty {
+            if cache.powerWatts.isEmpty {
                 ReportEmptyPlaceholder(text: String(localized: "stats.r.emptySection", defaultValue: "所选范围内无功耗采样记录"))
             } else {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(spacing: 16) {
-                        ReportLegendItem(title: String(localized: "stats.r.systemPower", defaultValue: "系统功耗 (W)"), color: powerColor)
-
-                        Spacer()
-
-                        if let selectedDate, let row = ReportUIHelper.findClosestRow(to: selectedDate, in: rows), let w = row.powerAvg {
-                            Text("\(ReportUIHelper.formatDateTime(Date(timeIntervalSince1970: TimeInterval(row.t)))): 功耗 \(String(format: "%.1f W", w))")
-                                .font(.system(size: 11, design: .monospaced))
-                                .foregroundStyle(.primary)
-                        }
-                    }
-
-                    Chart {
-                        ForEach(powerPoints) { pt in
-                            if let val = pt.value {
-                                AreaMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Power", val),
-                                    series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
-                                )
-                                .foregroundStyle(
-                                    LinearGradient(
-                                        colors: [powerColor.opacity(0.35), powerColor.opacity(0.04)],
-                                        startPoint: .top,
-                                        endPoint: .bottom
-                                    )
-                                )
-                                .interpolationMethod(.monotone)
-
-                                LineMark(
-                                    x: .value("Time", pt.date),
-                                    y: .value("Power", val),
-                                    series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
-                                )
-                                .foregroundStyle(powerColor)
-                                .lineStyle(StrokeStyle(lineWidth: 1.5))
-                                .interpolationMethod(.monotone)
-                            }
-                        }
-
-                        if let selectedDate {
-                            RuleMark(x: .value("Selected", selectedDate))
-                                .foregroundStyle(Color.secondary.opacity(0.4))
-                                .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
-                        }
-                    }
-                    .chartYAxis {
-                        AxisMarks(position: .leading) { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.15))
-                            AxisValueLabel {
-                                if let val = value.as(Double.self) {
-                                    Text(String(format: "%.0f W", val))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXAxis {
-                        AxisMarks { value in
-                            AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                                .foregroundStyle(Color.secondary.opacity(0.12))
-                            AxisValueLabel {
-                                if let date = value.as(Date.self) {
-                                    Text(viewModel.selectedRange == .today ? ReportUIHelper.formatTimeOnly(date) : ReportUIHelper.formatDateShort(date))
-                                        .font(.system(size: 9))
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                    }
-                    .chartXSelection(value: $selectedDate)
-                    .frame(height: 220)
-                }
+                ReportTimeSeriesChart(
+                    descriptors: [
+                        ReportChartSeriesDescriptor(
+                            id: "power",
+                            title: String(localized: "stats.r.systemPower", defaultValue: "系统功耗 (W)"),
+                            series: cache.powerWatts,
+                            color: palette.power,
+                            lineWidth: 1.6,
+                            showAreaFill: true
+                        )
+                    ],
+                    isSingleDay: viewModel.isSingleDaySelected,
+                    yAxisFormat: .watts,
+                    height: 220
+                )
             }
         }
     }
 
-    // MARK: - 3. 电池电量与温度趋势卡片 (R07: 独立分段防跨睡眠连线)
+    // MARK: - 3. 电池电量与温度分切卡片（独立单位轴，消除单轴混放）
 
     private var batteryLevelCard: some View {
-        let rows = viewModel.rangeModel?.rows ?? []
-        let granularity = viewModel.rangeModel?.granularity.bucketSeconds ?? 60
-
-        let levelPoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.battLevelAvg,
-            seriesID: "level",
-            granularitySeconds: granularity
-        )
-        let tempPoints = ReportDataAggregator.buildTimeSeries(
-            rows: rows,
-            keyPath: \.battTempAvg,
-            seriesID: "temp",
-            granularitySeconds: granularity
-        )
+        let cache = viewModel.rangeModel?.chartCache ?? .empty
+        let hasTemp = !cache.batteryTemp.isEmpty
 
         return ReportCardView(
             title: String(localized: "stats.r.battLevelTitle", defaultValue: "电池电量与温度"),
-            icon: "battery.100"
+            icon: "battery.100",
+            trailing: {
+                if hasTemp {
+                    ReportNavigationPicker(
+                        title: "",
+                        selection: $batteryChartMode,
+                        options: BatteryChartMode.allCases.map { ReportSegmentOption(value: $0, label: $0.label) },
+                        size: .compact
+                    )
+                    .fixedSize()
+                }
+            }
         ) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 16) {
-                    ReportLegendItem(title: String(localized: "stats.r.battLevel", defaultValue: "电量 (%)"), color: batteryColor)
-                    ReportLegendItem(title: String(localized: "stats.r.battTemp", defaultValue: "温度 (°C)"), color: tempColor, isDashed: true)
-                }
-
-                Chart {
-                    ForEach(levelPoints) { pt in
-                        if let val = pt.value {
-                            LineMark(
-                                x: .value("Time", pt.date),
-                                y: .value("Level", val),
-                                series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
+            if batteryChartMode == .level || !hasTemp {
+                if cache.batteryLevel.isEmpty {
+                    ReportEmptyPlaceholder(text: String(localized: "stats.r.emptySection", defaultValue: "所选范围内无电量采样"))
+                } else {
+                    ReportTimeSeriesChart(
+                        descriptors: [
+                            ReportChartSeriesDescriptor(
+                                id: "level",
+                                title: String(localized: "stats.r.battLevel", defaultValue: "电量 (%)"),
+                                series: cache.batteryLevel,
+                                color: palette.battery,
+                                lineWidth: 1.7,
+                                showAreaFill: true
                             )
-                            .foregroundStyle(batteryColor)
-                            .interpolationMethod(.monotone)
-                        }
-                    }
-
-                    ForEach(tempPoints) { pt in
-                        if let val = pt.value {
-                            LineMark(
-                                x: .value("Time", pt.date),
-                                y: .value("Temp", val),
-                                series: .value("Series", "\(pt.seriesID)_\(pt.segmentID)")
-                            )
-                            .foregroundStyle(tempColor)
-                            .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
-                            .interpolationMethod(.monotone)
-                        }
-                    }
+                        ],
+                        isSingleDay: viewModel.isSingleDaySelected,
+                        yAxisFormat: .percent,
+                        yDomain: 0...100,
+                        yAxisValues: [0, 25, 50, 75, 100],
+                        height: 185
+                    )
                 }
-                .chartYScale(domain: 0...100)
-                .chartYAxis {
-                    AxisMarks(position: .leading, values: [0, 25, 50, 75, 100]) { value in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
-                            .foregroundStyle(Color.secondary.opacity(0.15))
-                        AxisValueLabel {
-                            if let val = value.as(Double.self) {
-                                Text("\(Int(val))")
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks { value in
-                        AxisValueLabel {
-                            if let date = value.as(Date.self) {
-                                Text(ReportUIHelper.formatDateShort(date))
-                                    .font(.system(size: 9))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }
-                .frame(height: 180)
+            } else {
+                ReportTimeSeriesChart(
+                    descriptors: [
+                        ReportChartSeriesDescriptor(
+                            id: "battTemp",
+                            title: String(localized: "stats.r.battTemp", defaultValue: "温度 (°C)"),
+                            series: cache.batteryTemp,
+                            color: palette.thermal,
+                            lineWidth: 1.6,
+                            showAreaFill: true
+                        )
+                    ],
+                    isSingleDay: viewModel.isSingleDaySelected,
+                    yAxisFormat: .celsius,
+                    height: 185
+                )
             }
         }
     }
 
-    // MARK: - 4. 电池健康与循环历史 (R16: 动态 Y 轴不截断 <70% 健康度，保留循环独立呈现)
+    // MARK: - 4. 电池健康与循环历史（连续时间轴 + 悬浮提示，解决全年分类文字重叠）
 
     private func batteryHealthHistoryCard(history: [ReportBatteryMetrics.DailyHealth]) -> some View {
         let validHealths = history.compactMap(\.healthPercent)
         let minHealth = validHealths.min() ?? 80
         let lowerBound = max(0, min(minHealth - 5, 60))
+
+        let hoveredPoint: ReportBatteryMetrics.DailyHealth? = {
+            guard let target = hoveredHealthDate else { return nil }
+            return history.min(by: { abs($0.date.timeIntervalSince(target)) < abs($1.date.timeIntervalSince(target)) })
+        }()
 
         return ReportCardView(
             title: String(localized: "stats.r.battHistoryTitle", defaultValue: "电池健康度与循环变化"),
@@ -291,43 +219,55 @@ struct ReportPowerView: View {
         ) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 16) {
-                    ReportLegendItem(title: String(localized: "stats.r.sBattHealth", defaultValue: "最大容量 (%)"), color: batteryColor)
+                    ReportLegendItem(title: String(localized: "stats.r.sBattHealth", defaultValue: "最大容量 (%)"), color: palette.battery)
+                    Spacer()
+                    if let pt = hoveredPoint {
+                        let healthStr = pt.healthPercent.map { String(format: "%.1f%%", $0) } ?? "—"
+                        let cycleStr = pt.cycleCount.map {
+                            String(format: String(localized: "stats.r.battCyclesInline"), $0)
+                        } ?? ""
+                        Text("\(ReportUIHelper.formatDateShort(pt.date)): \(healthStr)\(cycleStr.isEmpty ? "" : " · \(cycleStr)")")
+                            .font(.system(size: 11, design: .monospaced))
+                            .foregroundStyle(.primary)
+                    } else if let latest = history.last, let latestCycles = latest.cycleCount {
+                        Text(String(format: String(localized: "stats.r.battLatestCycle"), latestCycles))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
 
                 Chart {
                     ForEach(history) { point in
-                        let dateStr = ReportUIHelper.formatDateShort(point.date)
-                        let healthVal = point.healthPercent ?? 100
-
-                        if point.healthPercent != nil {
+                        if let healthVal = point.healthPercent {
                             LineMark(
-                                x: .value("Date", dateStr),
+                                x: .value("Date", point.date),
                                 y: .value("Health", healthVal)
                             )
-                            .foregroundStyle(batteryColor)
+                            .foregroundStyle(palette.battery)
                             .lineStyle(StrokeStyle(lineWidth: 1.8))
                             .interpolationMethod(.monotone)
 
-                            PointMark(
-                                x: .value("Date", dateStr),
-                                y: .value("Health", healthVal)
-                            )
-                            .foregroundStyle(batteryColor)
-                            .symbolSize(20)
-                        }
-
-                        if let cycles = point.cycleCount {
-                            PointMark(
-                                x: .value("Date", dateStr),
-                                y: .value("Health", healthVal)
-                            )
-                            .foregroundStyle(point.healthPercent != nil ? batteryColor : Color.secondary)
-                            .annotation(position: .top) {
-                                Text("\(cycles)循")
-                                    .font(.system(size: 8))
-                                    .foregroundStyle(.secondary)
+                            if history.count <= 45 {
+                                PointMark(
+                                    x: .value("Date", point.date),
+                                    y: .value("Health", healthVal)
+                                )
+                                .foregroundStyle(palette.battery)
+                                .symbolSize(20)
                             }
                         }
+                    }
+
+                    if let hoveredPoint, let healthVal = hoveredPoint.healthPercent {
+                        RuleMark(x: .value("Hover", hoveredPoint.date))
+                            .foregroundStyle(Color.secondary.opacity(0.4))
+                            .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+                        PointMark(
+                            x: .value("Hover", hoveredPoint.date),
+                            y: .value("Health", healthVal)
+                        )
+                        .foregroundStyle(palette.battery)
+                        .symbolSize(40)
                     }
                 }
                 .chartYScale(domain: lowerBound...100)
@@ -344,13 +284,48 @@ struct ReportPowerView: View {
                         }
                     }
                 }
+                .chartXAxis {
+                    AxisMarks { val in
+                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                            .foregroundStyle(Color.secondary.opacity(0.12))
+                        AxisValueLabel {
+                            if let date = val.as(Date.self) {
+                                Text(ReportUIHelper.formatDateShort(date))
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+                .chartOverlay { proxy in
+                    GeometryReader { geo in
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onContinuousHover { phase in
+                                switch phase {
+                                case .active(let location):
+                                    guard let plotFrame = proxy.plotFrame else { return }
+                                    let frame = geo[plotFrame]
+                                    let x = location.x - frame.origin.x
+                                    guard x >= 0, x <= frame.size.width else {
+                                        hoveredHealthDate = nil
+                                        return
+                                    }
+                                    hoveredHealthDate = proxy.value(atX: x, as: Date.self)
+                                case .ended:
+                                    hoveredHealthDate = nil
+                                }
+                            }
+                    }
+                }
                 .frame(height: 180)
             }
         }
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - 电池历史无采样说明卡片 (R03)
+    // MARK: - 电池历史无采样说明 & 台式机卡片
 
     private var batteryNoHistoryCard: some View {
         ReportCardView(
@@ -362,17 +337,13 @@ struct ReportPowerView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "stats.r.battNoHistoryDesc", defaultValue: "当前设备具备内置电池，但在所选时间范围内未记录到电池充放电或健康度采样。"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+                Text(String(localized: "stats.r.battNoHistoryDesc", defaultValue: "当前设备具备内置电池，但在所选时间范围内未记录到电池充放电或健康度采样。"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
         }
     }
-
-    // MARK: - 台式机说明卡片 (R03)
 
     private var desktopMacCard: some View {
         ReportCardView(
@@ -384,11 +355,9 @@ struct ReportPowerView: View {
                     .font(.system(size: 28))
                     .foregroundStyle(.secondary)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(String(localized: "stats.r.desktopMacDesc", defaultValue: "当前设备由交流电源直接供电，系统内不存在电池模组或循环损耗记录。整机功耗已准确记录。"))
-                        .font(.system(size: 12))
-                        .foregroundStyle(.secondary)
-                }
+                Text(String(localized: "stats.r.desktopMacDesc", defaultValue: "当前设备由交流电源直接供电，系统内不存在电池模组或循环损耗记录。整机功耗已准确记录。"))
+                    .font(.system(size: 12))
+                    .foregroundStyle(.secondary)
             }
             .padding(.vertical, 8)
         }

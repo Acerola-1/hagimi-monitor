@@ -176,6 +176,7 @@ nonisolated private final class StatisticsStorage: @unchecked Sendable {
         lock.withLock { prepareLocked(); return storedProcessStore }
     }
     var existingDatabase: StatisticsDatabase? { lock.withLock { storedDatabase } }
+    var existingProcessStore: StatisticsProcessStore? { lock.withLock { storedProcessStore } }
 }
 
 /// 速率积分的分段上限:超过视为采样中断,不把旧速率外推成长时段流量。
@@ -186,8 +187,13 @@ final class StatisticsRecorder: ObservableObject {
     /// 超过该上限视为睡眠或长时间未采样，不补区间。
     nonisolated static let processSampleIntegrationCap: TimeInterval = 90
 
-    /// 各范围的聚合行(无数据为 nil)。分钟封口后随概览一起刷新。
-    @Published private(set) var rangeRows: [StatisticsOverviewRange: StatisticsRow?] = [:]
+    nonisolated struct Overview: Sendable {
+        let row: StatisticsRow
+        let events: [StatisticsOverviewModel.Event]
+    }
+
+    /// 各范围的汇总和事件来自同一次后台查询，切换范围时直接读取对应快照。
+    @Published private(set) var overviews: [StatisticsOverviewRange: Overview] = [:]
     /// 从最早一条记录至今的自然日数(0 = 尚无任何数据)。
     @Published private(set) var recordDays = 0
     /// 本地存储占用快照(统计库/应用统计库/系统开销),随概览一起刷新。
@@ -280,8 +286,10 @@ final class StatisticsRecorder: ObservableObject {
     private var lastDiskWrite: (rate: Double, at: Date)?
     /// 上一帧时刻,用于分段累计采样覆盖秒数(cover_s)。
     private var lastFrameAt: Date?
-    /// 上一次进程采样的时刻，用于按真实间隔积分速率型指标。
-    private var lastProcessSampleAt: Date?
+    /// 上一次快速进程采样（CPU/内存/GPU/磁盘）与网络采样的各自时刻。
+    /// 两条管线并发投递，分离游标防止无网络的快速批次消费掉真实网络采样区间。
+    private var lastFastProcessSampleAt: Date?
+    private var lastNetworkProcessSampleAt: Date?
 
     // MARK: - 秒数口径(运行状态评估模型 v0.1)
 
@@ -322,6 +330,8 @@ final class StatisticsRecorder: ObservableObject {
     /// 统计开关状态:关闭期间 record 直返,不积累分钟累加器。
     private var recordingActive = true
     private var systemAsleep = false
+    /// 设置页是否正在展示概览：仅在可见期间于分钟封口后重算 30 天概览与存储占用。
+    private var overviewObservationActive = false
 
     /// 概览/落库共用的后台队列;数据库自身另有串行队列,这里只避免主线程做 IO。
     private let maintenanceQueue = DispatchQueue(label: "com.acerola.hagimi-monitor.statistics-maintenance", qos: .utility)
@@ -345,9 +355,18 @@ final class StatisticsRecorder: ObservableObject {
             processDirectory: processStoreDirectory ?? StatisticsProcessStore.defaultDirectory(), calendar: calendar)
         recordingActive = recordingEnabled
         if recordingEnabled {
+            let retentionCutoff = calendar.date(
+                byAdding: .day,
+                value: -StatisticsProcessStore.eventRetentionDays,
+                to: calendar.startOfDay(for: Date())
+            )
             maintenanceQueue.async { [weak self] in
-                self?.database?.maintain(now: Date())
-                self?.refreshOverview()
+                guard let self else { return }
+                self.database?.maintain(now: Date())
+                if let retentionCutoff {
+                    self.processStore?.pruneExpiredEvents(before: retentionCutoff)
+                }
+                self.refreshOverview()
             }
         }
         // 确认事件落库，供重启后按历史日期查询。
@@ -384,15 +403,9 @@ final class StatisticsRecorder: ObservableObject {
     private func handleSystemDidWake(at date: Date) {
         storage.existingDatabase?.endSystemSleep(at: date)
         systemAsleep = false
-        // 唤醒后重置采样时间基线。
-        lastProcessSampleAt = nil
-    }
-
-    /// 计算本次采样覆盖的真实秒数，并推进基线。
-    private func processSampleInterval(at date: Date) -> TimeInterval {
-        let interval = Self.sampleInterval(previous: lastProcessSampleAt, at: date)
-        lastProcessSampleAt = date
-        return interval
+        // 唤醒后重置两条进程采样的时间基线。
+        lastFastProcessSampleAt = nil
+        lastNetworkProcessSampleAt = nil
     }
 
     /// 速率型指标在两次采样之间应积分的秒数。
@@ -409,8 +422,18 @@ final class StatisticsRecorder: ObservableObject {
         return elapsed
     }
 
+    /// 网络探针首拍建立字节基线时同步记录网络通道时间基线，
+    /// 既避免向告警中心误报空榜，又让下一正常采样帧可按完整窗口积分。
+    func establishNetworkBaseline(at date: Date) {
+        guard recordingActive, !systemAsleep else { return }
+        if let lastNet = lastNetworkProcessSampleAt, date <= lastNet {
+            return
+        }
+        lastNetworkProcessSampleAt = date
+    }
+
     /// 一帧进程采样的直通入口(MonitorStore 统计定时器调用,主线程)。
-    /// 网络速率为窗口均值,按 60s 统计节奏折算为分钟字节量。
+    /// 网络速率为窗口均值,按各自通道的真实采样间隔折算为字节总量。
     /// 开关关闭后在途的异步采样帧经此门卫丢弃,不落入进程库。
     func recordProcesses(
         cpu: [TopCPUProcess],
@@ -418,29 +441,66 @@ final class StatisticsRecorder: ObservableObject {
         gpu: [TopGPUProcess],
         network: [TopNetworkProcess],
         disk: [TopDiskProcess],
-        at date: Date
+        at date: Date,
+        providedMetrics: Set<ProcessAlertEpisode.Metric>? = nil
     ) {
         guard recordingActive, !systemAsleep else { return }
-        // 过滤时间戳重复或回退的采样批次。
-        if let last = lastProcessSampleAt, date <= last { return }
-        let cpuEntries = cpu.map { (name: $0.name, pid: $0.pid, usage: $0.cpuUsage) }
-        let memEntries = memory.map { (name: $0.name, pid: $0.pid, bytes: Double($0.memoryUsage)) }
-        let gpuEntries = gpu.map { (name: $0.name, pid: $0.pid, usage: $0.gpuUsage) }
-        // 告警消费速率（B/s），应用库消费区间总量。
-        let networkRates = network.map { (name: $0.name, pid: $0.pid, downBytes: Double($0.download), upBytes: Double($0.upload)) }
-        // 区间总量使用采样实际间隔进行积分，首次采样或越界间隔不累加。
-        let frameInterval = processSampleInterval(at: date)
-        let netEntries = network.map {
-            (name: $0.name, pid: $0.pid,
-             downBytes: Double($0.download) * frameInterval,
-             upBytes: Double($0.upload) * frameInterval)
+
+        let explicitFast = providedMetrics.map { !$0.isDisjoint(with: [.cpu, .memory, .gpu]) } ?? false
+        let explicitNetwork = providedMetrics?.contains(.network) ?? false
+        let hasFastInput = !cpu.isEmpty || !memory.isEmpty || !gpu.isEmpty || !disk.isEmpty || explicitFast
+        let hasNetworkInput = !network.isEmpty || explicitNetwork
+        guard hasFastInput || hasNetworkInput else { return }
+
+        let acceptFast: Bool
+        if hasFastInput {
+            if let lastFast = lastFastProcessSampleAt, date <= lastFast {
+                acceptFast = false
+            } else {
+                lastFastProcessSampleAt = date
+                acceptFast = true
+            }
+        } else {
+            acceptFast = false
         }
+
+        let acceptNetwork: Bool
+        let networkInterval: TimeInterval
+        if hasNetworkInput {
+            if let lastNet = lastNetworkProcessSampleAt, date <= lastNet {
+                acceptNetwork = false
+                networkInterval = 0
+            } else {
+                networkInterval = Self.sampleInterval(previous: lastNetworkProcessSampleAt, at: date)
+                lastNetworkProcessSampleAt = date
+                acceptNetwork = true
+            }
+        } else {
+            acceptNetwork = false
+            networkInterval = 0
+        }
+
+        guard acceptFast || acceptNetwork else { return }
+
+        let cpuEntries = acceptFast ? cpu.map { (name: $0.name, pid: $0.pid, usage: $0.cpuUsage) } : []
+        let memEntries = acceptFast ? memory.map { (name: $0.name, pid: $0.pid, bytes: Double($0.memoryUsage)) } : []
+        let gpuEntries = acceptFast ? gpu.map { (name: $0.name, pid: $0.pid, usage: $0.gpuUsage) } : []
         // 磁盘读写数据已经是采样间隔内的增量区间量，直接使用。
-        let diskEntries = disk.map {
+        let diskEntries = acceptFast ? disk.map {
             (name: $0.name, pid: $0.pid,
              readBytes: Double($0.bytesRead),
              writeBytes: Double($0.bytesWritten))
-        }
+        } : []
+
+        // 告警消费速率（B/s），应用库消费按网络通道自身间隔积分的区间总量。
+        let networkRates = acceptNetwork ? network.map {
+            (name: $0.name, pid: $0.pid, downBytes: Double($0.download), upBytes: Double($0.upload))
+        } : []
+        let netEntries = acceptNetwork ? network.map {
+            (name: $0.name, pid: $0.pid,
+             downBytes: Double($0.download) * networkInterval,
+             upBytes: Double($0.upload) * networkInterval)
+        } : []
 
         processStore?.record(
             cpu: cpuEntries,
@@ -452,14 +512,30 @@ final class StatisticsRecorder: ObservableObject {
             calendar: calendar
         )
 
+        let alertProvidedMetrics: Set<ProcessAlertEpisode.Metric>?
+        if let providedMetrics {
+            var filtered: Set<ProcessAlertEpisode.Metric> = []
+            if acceptFast {
+                filtered.formUnion(providedMetrics.intersection([.cpu, .memory, .gpu]))
+            }
+            if acceptNetwork, providedMetrics.contains(.network) {
+                filtered.insert(.network)
+            }
+            alertProvidedMetrics = filtered
+        } else {
+            alertProvidedMetrics = nil
+        }
+
         processAlertCenter.ingest(
             cpu: cpuEntries,
             memory: memEntries,
             gpu: gpuEntries,
             network: networkRates,
-            at: date
-        ) { [weak self] name, pid in
-            self?.processStore?.iconPNG(for: name)
+            at: date,
+            providedMetrics: alertProvidedMetrics
+        ) { [weak self] appKey, name, pid in
+            self?.processStore?.iconPNG(for: appKey)
+                ?? self?.processStore?.iconPNG(for: name)
                 ?? ProcessIconCache.fullSizePNG(forPID: pid, sidePixels: 128)
         }
     }
@@ -478,6 +554,8 @@ final class StatisticsRecorder: ObservableObject {
         lastDiskRead = nil
         lastDiskWrite = nil
         lastFrameAt = nil
+        lastFastProcessSampleAt = nil
+        lastNetworkProcessSampleAt = nil
         lastObservation = [:]
         lastIntersection = nil
         lastBatterySlow = nil
@@ -487,9 +565,18 @@ final class StatisticsRecorder: ObservableObject {
     /// 的分钟桶按水位正常汇总,随后刷新设置页概览。
     func resume() {
         recordingActive = true
+        let retentionCutoff = calendar.date(
+            byAdding: .day,
+            value: -StatisticsProcessStore.eventRetentionDays,
+            to: calendar.startOfDay(for: Date())
+        )
         maintenanceQueue.async { [weak self] in
-            self?.database?.maintain(now: Date())
-            self?.refreshOverview()
+            guard let self else { return }
+            self.database?.maintain(now: Date())
+            if let retentionCutoff {
+                self.processStore?.pruneExpiredEvents(before: retentionCutoff)
+            }
+            self.refreshOverview()
         }
     }
 
@@ -833,6 +920,7 @@ final class StatisticsRecorder: ObservableObject {
         }
         minuteSealCount += 1
         let shouldFlush = (minuteSealCount % 10 == 0)
+        let shouldRefreshOverview = overviewObservationActive
         maintenanceQueue.async { [weak self] in
             guard let self else { return }
             if let database = self.database {
@@ -852,8 +940,17 @@ final class StatisticsRecorder: ObservableObject {
             if shouldFlush {
                 self.processStore?.flush()
             }
-            self.refreshOverview()
+            if shouldRefreshOverview {
+                self.refreshOverview()
+            }
         }
+    }
+
+    /// 应用退出前收口进行中的告警事件并同步刷盘进程日统计累加器。
+    /// 仅在存储已打开时写入，不因退出触发首次建库。
+    func flushForTermination() {
+        processAlertCenter.interruptAll(reason: .suspended, at: Date())
+        storage.existingProcessStore?.flushSynchronously()
     }
 
     /// 分钟封口计数,驱动进程累加器的周期性刷库。
@@ -872,6 +969,15 @@ final class StatisticsRecorder: ObservableObject {
 
     // MARK: - 概览(设置页数据)
 
+    /// 设置页打开/关闭概览展示门控：开启时立刻拉取最新概览，关闭期间免除每分钟全量查询。
+    func setOverviewObservationActive(_ active: Bool) {
+        guard overviewObservationActive != active else { return }
+        overviewObservationActive = active
+        if active {
+            loadOverview()
+        }
+    }
+
     /// 设置窗口请求历史元信息；暂停记录时同样允许读取，初始化成本留在后台。
     func loadOverview(completion: @escaping @MainActor @Sendable () -> Void = {}) {
         maintenanceQueue.async { [weak self] in
@@ -884,7 +990,7 @@ final class StatisticsRecorder: ObservableObject {
         }
     }
 
-    /// 后台重算各范围聚合行 + 元信息并回主线程发布。分钟一封口即刷新。
+    /// 后台重算各范围的指标和事件，并与元信息一起发布到主线程。
     nonisolated private func refreshOverview(
         completion: @escaping @MainActor @Sendable () -> Void = {}
     ) {
@@ -897,22 +1003,42 @@ final class StatisticsRecorder: ObservableObject {
         }
         let now = Date()
         let todayStart = calendar.startOfDay(for: now)
+        let todayMinutes = database.minuteRows(from: todayStart, to: now.addingTimeInterval(120))
+        let currentHourStart = calendar.dateInterval(of: .hour, for: now)?.start ?? now
+        let currentHourTimestamp = Int64(currentHourStart.timeIntervalSince1970)
+        let currentHourMinutes = todayMinutes.filter { $0.t >= currentHourTimestamp }
+        let currentHour = StatisticsRow.aggregate(currentHourMinutes, t: currentHourTimestamp)
 
-        var rows: [StatisticsOverviewRange: StatisticsRow?] = [:]
+        var overviews: [StatisticsOverviewRange: Overview] = [:]
         for range in StatisticsOverviewRange.allCases {
             let windowStart = range.startOfDayWindow(from: now, calendar: calendar)
-            let source: [StatisticsRow]
-            switch range {
-            case .today:
-                // 今日优先分钟层(最细);应用刚跨日启动时小时层兜底
-                let minutes = database.minuteRows(from: windowStart, to: now.addingTimeInterval(120))
-                source = minutes.isEmpty
+            let aggregateRows: [StatisticsRow]
+            let eventRows: [StatisticsRow]
+            let bucketSeconds: TimeInterval
+            let minuteBucketsFrom: Int64?
+            if range == .today {
+                // 今日优先分钟层，刚跨日且没有分钟数据时由小时层兜底。
+                aggregateRows = todayMinutes.isEmpty
                     ? database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
-                    : minutes
-            case .week, .month:
-                source = database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
+                    : todayMinutes
+                eventRows = aggregateRows
+                bucketSeconds = todayMinutes.isEmpty ? 3600 : 60
+                minuteBucketsFrom = nil
+            } else {
+                let completedHours = database.hourRows(from: windowStart, to: currentHourStart)
+                aggregateRows = completedHours + (currentHour.map { [$0] } ?? [])
+                // 保留当前小时各分钟的顺序，用于区分压力后恢复与无后续观测。
+                eventRows = completedHours + currentHourMinutes
+                bucketSeconds = 3600
+                minuteBucketsFrom = currentHourTimestamp
             }
-            rows[range] = StatisticsRow.aggregate(source, t: Int64(windowStart.timeIntervalSince1970))
+            guard let row = StatisticsRow.aggregate(aggregateRows, t: Int64(windowStart.timeIntervalSince1970)) else {
+                continue
+            }
+            let events = StatisticsOverviewModel.events(
+                from: eventRows, bucketSeconds: bucketSeconds, now: now, minuteBucketsFrom: minuteBucketsFrom
+            )
+            overviews[range] = Overview(row: row, events: events)
         }
 
         var recordDays = 0
@@ -940,7 +1066,7 @@ final class StatisticsRecorder: ObservableObject {
 
         DispatchQueue.main.async { [weak self] in
             if let self {
-                self.rangeRows = rows
+                self.overviews = overviews
                 self.storageReadFailed = false
                 self.storageInfo = storage
                 self.recordDays = recordDays
@@ -1006,34 +1132,6 @@ final class StatisticsRecorder: ObservableObject {
         let end: Date
         let row: StatisticsRow
         var id: Int64 { row.t }
-    }
-
-    /// 拉取指定范围的时间序列(后台执行,主线程回调),供「时段分析」按桶渲染:
-    /// 今日优先分钟层(最细),周/月用小时层,与概览同源同窗口。
-    func rangeSeries(_ range: StatisticsOverviewRange, completion: @escaping @MainActor @Sendable ([StatisticsRow]) -> Void) {
-        maintenanceQueue.async { [weak self] in
-            guard let self, let database = self.database else {
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated { completion([]) }
-                }
-                return
-            }
-            let now = Date()
-            let windowStart = range.startOfDayWindow(from: now, calendar: self.calendar)
-            let rows: [StatisticsRow]
-            switch range {
-            case .today:
-                let minutes = database.minuteRows(from: windowStart, to: now.addingTimeInterval(120))
-                rows = minutes.isEmpty
-                    ? database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
-                    : minutes
-            case .week, .month:
-                rows = database.hourRows(from: windowStart, to: now.addingTimeInterval(3600))
-            }
-            DispatchQueue.main.async {
-                MainActor.assumeIsolated { completion(rows) }
-            }
-        }
     }
 
     /// 最近一次分钟观测(概览页「当前状态」用):返回最新一行与其桶起点。
