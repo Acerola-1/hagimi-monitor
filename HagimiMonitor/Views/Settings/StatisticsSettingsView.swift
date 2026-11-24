@@ -1,3 +1,4 @@
+import AppKit
 import Combine
 import SwiftUI
 import UserNotifications
@@ -25,6 +26,8 @@ struct StatisticsSettingsView: View {
     @ObservedObject private var notificationDelegate = AlertNotificationDelegate.shared
     /// 本页是否真的在屏（窗口可见且为活跃窗口）→ 新告警直接按已读处理。
     @State private var isPageOnScreen = false
+    /// 同一页面内的悬浮/点击明细浮层协调器：保证同一时刻至多只有一个详情浮层展开。
+    @StateObject private var popoverCoordinator = HoverPopoverCoordinator()
 
     init(
         recorder: StatisticsRecorder,
@@ -294,7 +297,8 @@ struct StatisticsSettingsView: View {
             CoverageClockButton(
                 range: range,
                 summary: coverageSummary,
-                isRecordingEnabled: settings.statisticsEnabled
+                isRecordingEnabled: settings.statisticsEnabled,
+                popoverCoordinator: popoverCoordinator
             )
         }
         .padding(.horizontal, 14)
@@ -314,6 +318,7 @@ struct StatisticsSettingsView: View {
             PressureStatusCell(
                 status: StatisticsOverviewModel.dimensionStatus(for: .memory, row: row, events: events),
                 palette: palette,
+                popoverCoordinator: popoverCoordinator,
                 onOpenReport: {
                     StatisticsReportFlow.open(recorder: recorder, context: StatisticsReportContext(range: range, anchor: .memory))
                 }
@@ -322,6 +327,7 @@ struct StatisticsSettingsView: View {
             PressureStatusCell(
                 status: StatisticsOverviewModel.dimensionStatus(for: .thermal, row: row, events: events),
                 palette: palette,
+                popoverCoordinator: popoverCoordinator,
                 onOpenReport: {
                     StatisticsReportFlow.open(recorder: recorder, context: StatisticsReportContext(range: range, anchor: .thermal))
                 }
@@ -382,14 +388,16 @@ struct StatisticsSettingsView: View {
                     label: String(localized: "stats.metrics.cpu"),
                     icon: MonitorKind.cpu.symbol,
                     tint: palette.moduleTint(for: .cpu),
-                    workload: StatisticsOverviewModel.workloadSummary(for: .cpu, row: row)
+                    workload: StatisticsOverviewModel.workloadSummary(for: .cpu, row: row),
+                    popoverCoordinator: popoverCoordinator
                 )
                 gridVerticalDivider
                 WorkloadMetricCell(
                     label: String(localized: "stats.metrics.gpu"),
                     icon: MonitorKind.gpu.symbol,
                     tint: palette.moduleTint(for: .gpu),
-                    workload: StatisticsOverviewModel.workloadSummary(for: .gpu, row: row)
+                    workload: StatisticsOverviewModel.workloadSummary(for: .gpu, row: row),
+                    popoverCoordinator: popoverCoordinator
                 )
             }
             .fixedSize(horizontal: false, vertical: true)
@@ -624,21 +632,216 @@ private enum OverviewShareFormat {
     }
 }
 
+/// 视图悬停边界判定：显式裁切到 `bounds` 与滚动可视区交集，隔离 macOS 14+ 默认
+/// `clipsToBounds == false` 时 `visibleRect` 向外溢出的祖先区域。
+enum NativeHoverGeometry {
+    static func activeRect(bounds: CGRect, visibleRect: CGRect) -> CGRect {
+        let rect = bounds.intersection(visibleRect)
+        return rect.isNull ? .zero : rect
+    }
+
+    static func contains(localPoint: CGPoint, bounds: CGRect, visibleRect: CGRect) -> Bool {
+        let rect = activeRect(bounds: bounds, visibleRect: visibleRect)
+        return !rect.isEmpty && rect.contains(localPoint)
+    }
+}
+
+/// 基于 AppKit `NSTrackingArea` 的精确悬停追踪器，替代 `ScrollView` + `fullSizeContentView`
+/// 工具栏窗口下可能出现坐标系漂移或穿透子浮层窗口的 SwiftUI `.onHover`。
+struct NativeHoverTracker: NSViewRepresentable {
+    let onHoverChange: (Bool) -> Void
+
+    func makeNSView(context: Context) -> TrackingView {
+        let view = TrackingView()
+        view.onHoverChange = onHoverChange
+        return view
+    }
+
+    func updateNSView(_ view: TrackingView, context: Context) {
+        view.onHoverChange = onHoverChange
+    }
+
+    static func dismantleNSView(_ view: TrackingView, coordinator: ()) {
+        view.stopTracking()
+        view.onHoverChange = nil
+    }
+
+    final class TrackingView: NSView {
+        var onHoverChange: ((Bool) -> Void)?
+        private var isHovering = false
+        private var trackingArea: NSTrackingArea?
+        private var trackedRect: CGRect = .zero
+        private let scrollObservers = NotificationObserversBox()
+
+        override var isFlipped: Bool { true }
+        override func hitTest(_ point: NSPoint) -> NSView? { nil }
+
+        override func layout() {
+            super.layout()
+            refreshTrackingArea()
+        }
+
+        override func updateTrackingAreas() {
+            super.updateTrackingAreas()
+            refreshTrackingArea()
+        }
+
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            if newWindow !== window {
+                stopTracking()
+            }
+            super.viewWillMove(toWindow: newWindow)
+        }
+
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            scrollObservers.removeAll()
+
+            guard window != nil else {
+                stopTracking()
+                return
+            }
+
+            if let clipView = enclosingScrollView?.contentView {
+                clipView.postsBoundsChangedNotifications = true
+                let observer = NotificationCenter.default.addObserver(
+                    forName: NSView.boundsDidChangeNotification,
+                    object: clipView,
+                    queue: .main
+                ) { [weak self] _ in
+                    MainActor.assumeIsolated {
+                        self?.refreshTrackingArea()
+                        self?.evaluatePointer()
+                    }
+                }
+                scrollObservers.add(observer)
+            }
+            refreshTrackingArea()
+        }
+
+        func refreshTrackingArea() {
+            let rect = NativeHoverGeometry.activeRect(bounds: bounds, visibleRect: visibleRect)
+            guard rect != trackedRect else { return }
+
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+                self.trackingArea = nil
+            }
+            trackedRect = rect
+            guard !rect.isEmpty else { return }
+
+            // 显式使用裁切后的子矩形且不传 `.inVisibleRect`，防止 tracking area 越过 `bounds`。
+            let area = NSTrackingArea(
+                rect: rect,
+                options: [.activeAlways, .mouseEnteredAndExited, .mouseMoved],
+                owner: self,
+                userInfo: nil
+            )
+            addTrackingArea(area)
+            trackingArea = area
+        }
+
+        override func mouseEntered(with event: NSEvent) {
+            evaluatePointer()
+        }
+
+        override func mouseMoved(with event: NSEvent) {
+            evaluatePointer()
+        }
+
+        override func mouseExited(with event: NSEvent) {
+            report(false)
+        }
+
+        func evaluatePointer() {
+            guard let window, window.isVisible, !window.ignoresMouseEvents, !isHiddenOrHasHiddenAncestor else {
+                report(false)
+                return
+            }
+            let screenPoint = NSEvent.mouseLocation
+            // 指针落在前端 `_NSPopoverWindow` 或其他应用窗口上时，禁止底层触发格穿透接管。
+            guard NSWindow.windowNumber(at: screenPoint, belowWindowWithWindowNumber: 0) == window.windowNumber else {
+                report(false)
+                return
+            }
+            let localPoint = convert(window.convertPoint(fromScreen: screenPoint), from: nil)
+            report(NativeHoverGeometry.contains(localPoint: localPoint, bounds: bounds, visibleRect: visibleRect))
+        }
+
+        func stopTracking() {
+            if let trackingArea {
+                removeTrackingArea(trackingArea)
+                self.trackingArea = nil
+            }
+            trackedRect = .zero
+            scrollObservers.removeAll()
+            report(false)
+        }
+
+        private func report(_ hovering: Bool) {
+            guard hovering != isHovering else { return }
+            isHovering = hovering
+            onHoverChange?(hovering)
+        }
+    }
+}
+
+/// 同页详情浮层的互斥协调器：保证同一时刻至多只有一个详情浮层展开。
+@MainActor
+final class HoverPopoverCoordinator: ObservableObject {
+    private weak var activeController: HoverPopoverController?
+
+    func willPresent(_ controller: HoverPopoverController) {
+        if let active = activeController, active !== controller {
+            active.dismissImmediately()
+        }
+        activeController = controller
+    }
+
+    func didDismiss(_ controller: HoverPopoverController) {
+        if activeController === controller {
+            activeController = nil
+        }
+    }
+}
+
 /// 悬浮/点击双驱弹窗控制器：触发区与弹窗本体共用悬停状态，离开两侧后防抖收起，点击可固定开关。
 @MainActor
-private final class HoverPopoverController: ObservableObject {
+final class HoverPopoverController: ObservableObject {
+    /// 弹出防抖高于收起防抖，避免指针在相邻格之间移过时旧浮层尚未收起、新浮层已抢先弹出。
+    static let defaultShowDelay: Duration = .milliseconds(200)
+    static let defaultHideDelay: Duration = .milliseconds(150)
+
     @Published var isPresented = false {
         didSet {
             if !isPresented {
                 openedByClick = false
+                coordinator?.didDismiss(self)
             }
         }
     }
 
+    private let showDelay: Duration
+    private let hideDelay: Duration
+    private weak var coordinator: HoverPopoverCoordinator?
     private var hoveringTrigger = false
     private var hoveringContent = false
     private var openedByClick = false
     private var pendingTask: Task<Void, Never>?
+
+    init(
+        coordinator: HoverPopoverCoordinator? = nil,
+        showDelay: Duration = HoverPopoverController.defaultShowDelay,
+        hideDelay: Duration = HoverPopoverController.defaultHideDelay
+    ) {
+        self.coordinator = coordinator
+        self.showDelay = showDelay
+        self.hideDelay = hideDelay
+    }
+
+    func attach(coordinator: HoverPopoverCoordinator?) {
+        self.coordinator = coordinator
+    }
 
     func setTriggerHover(_ hovering: Bool) {
         hoveringTrigger = hovering
@@ -659,8 +862,20 @@ private final class HoverPopoverController: ObservableObject {
             openedByClick = false
             isPresented = false
         } else {
+            coordinator?.willPresent(self)
             openedByClick = true
             isPresented = true
+        }
+    }
+
+    func dismissImmediately() {
+        pendingTask?.cancel()
+        pendingTask = nil
+        openedByClick = false
+        if isPresented {
+            isPresented = false
+        } else {
+            coordinator?.didDismiss(self)
         }
     }
 
@@ -668,12 +883,15 @@ private final class HoverPopoverController: ObservableObject {
         pendingTask?.cancel()
         let shouldShow = hoveringTrigger || hoveringContent
         guard shouldShow != isPresented else { return }
-        let delay: Duration = shouldShow ? .milliseconds(160) : .milliseconds(180)
+        let delay: Duration = shouldShow ? showDelay : hideDelay
         pendingTask = Task { @MainActor [weak self] in
             try? await Task.sleep(for: delay)
             guard !Task.isCancelled, let self, !self.openedByClick else { return }
             let current = self.hoveringTrigger || self.hoveringContent
             if self.isPresented != current {
+                if current {
+                    self.coordinator?.willPresent(self)
+                }
                 self.isPresented = current
             }
         }
@@ -685,9 +903,23 @@ private struct CoverageClockButton: View {
     let range: StatisticsOverviewRange
     let summary: StatisticsOverviewModel.CoverageSummary
     let isRecordingEnabled: Bool
+    let popoverCoordinator: HoverPopoverCoordinator
 
-    @StateObject private var hoverPopover = HoverPopoverController()
+    @StateObject private var hoverPopover: HoverPopoverController
     @State private var isHovered = false
+
+    init(
+        range: StatisticsOverviewRange,
+        summary: StatisticsOverviewModel.CoverageSummary,
+        isRecordingEnabled: Bool,
+        popoverCoordinator: HoverPopoverCoordinator
+    ) {
+        self.range = range
+        self.summary = summary
+        self.isRecordingEnabled = isRecordingEnabled
+        self.popoverCoordinator = popoverCoordinator
+        _hoverPopover = StateObject(wrappedValue: HoverPopoverController(coordinator: popoverCoordinator))
+    }
 
     private var rangeTitle: String {
         switch range {
@@ -712,9 +944,14 @@ private struct CoverageClockButton: View {
                 .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .onHover { hovering in
-            isHovered = hovering
-            hoverPopover.setTriggerHover(hovering)
+        .background(
+            NativeHoverTracker { hovering in
+                isHovered = hovering
+                hoverPopover.setTriggerHover(hovering)
+            }
+        )
+        .onAppear {
+            hoverPopover.attach(coordinator: popoverCoordinator)
         }
         .accessibilityLabel(Text(String(localized: "stats.coverage.accessibility")))
         .popover(isPresented: $hoverPopover.isPresented, arrowEdge: .bottom) {
@@ -794,7 +1031,11 @@ private struct CoverageClockButton: View {
             }
             .padding(14)
             .frame(width: 248)
-            .onHover { hoverPopover.setContentHover($0) }
+            .background(
+                NativeHoverTracker { hovering in
+                    hoverPopover.setContentHover(hovering)
+                }
+            )
         }
     }
 }
@@ -977,10 +1218,24 @@ private struct PressureDonutRing: View {
 private struct PressureStatusCell: View {
     let status: StatisticsOverviewModel.DimensionStatus
     let palette: MonitorPalette
+    let popoverCoordinator: HoverPopoverCoordinator
     let onOpenReport: () -> Void
 
-    @StateObject private var hoverPopover = HoverPopoverController()
+    @StateObject private var hoverPopover: HoverPopoverController
     @State private var isBodyHovered = false
+
+    init(
+        status: StatisticsOverviewModel.DimensionStatus,
+        palette: MonitorPalette,
+        popoverCoordinator: HoverPopoverCoordinator,
+        onOpenReport: @escaping () -> Void
+    ) {
+        self.status = status
+        self.palette = palette
+        self.popoverCoordinator = popoverCoordinator
+        self.onOpenReport = onOpenReport
+        _hoverPopover = StateObject(wrappedValue: HoverPopoverController(coordinator: popoverCoordinator))
+    }
 
     private var dimensionTitle: String {
         switch status.kind {
@@ -1039,14 +1294,23 @@ private struct PressureStatusCell: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .background(
+                NativeHoverTracker { hovering in
+                    isBodyHovered = hovering
+                    hoverPopover.setTriggerHover(hovering)
+                }
+            )
             .padding(.horizontal, -6)
-            .onHover { hovering in
-                isBodyHovered = hovering
-                hoverPopover.setTriggerHover(hovering)
+            .onAppear {
+                hoverPopover.attach(coordinator: popoverCoordinator)
             }
             .popover(isPresented: $hoverPopover.isPresented, arrowEdge: .bottom) {
                 PressureBreakdownPopover(status: status, palette: palette)
-                    .onHover { hoverPopover.setContentHover($0) }
+                    .background(
+                        NativeHoverTracker { hovering in
+                            hoverPopover.setContentHover(hovering)
+                        }
+                    )
             }
         }
         .padding(.horizontal, 14)
@@ -1242,38 +1506,63 @@ private struct WorkloadMetricCell: View {
     let icon: String
     let tint: Color
     let workload: StatisticsOverviewModel.WorkloadSummary
+    let popoverCoordinator: HoverPopoverCoordinator
 
-    @StateObject private var hoverPopover = HoverPopoverController()
+    @StateObject private var hoverPopover: HoverPopoverController
     @State private var isHovered = false
+
+    init(
+        label: String,
+        icon: String,
+        tint: Color,
+        workload: StatisticsOverviewModel.WorkloadSummary,
+        popoverCoordinator: HoverPopoverCoordinator
+    ) {
+        self.label = label
+        self.icon = icon
+        self.tint = tint
+        self.workload = workload
+        self.popoverCoordinator = popoverCoordinator
+        _hoverPopover = StateObject(wrappedValue: HoverPopoverController(coordinator: popoverCoordinator))
+    }
 
     var body: some View {
         if workload.hasBreakdown {
             Button {
                 hoverPopover.toggle()
             } label: {
-                cellContent
+                cellContent(horizontalPadding: 10, verticalPadding: 7)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(Color.primary.opacity(isHovered || hoverPopover.isPresented ? 0.045 : 0))
+                    )
+                    .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
             .buttonStyle(.plain)
             .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(isHovered || hoverPopover.isPresented ? 0.045 : 0))
-                    .padding(4)
+                NativeHoverTracker { hovering in
+                    isHovered = hovering
+                    hoverPopover.setTriggerHover(hovering)
+                }
             )
-            .contentShape(Rectangle())
-            .onHover { hovering in
-                isHovered = hovering
-                hoverPopover.setTriggerHover(hovering)
+            .onAppear {
+                hoverPopover.attach(coordinator: popoverCoordinator)
             }
             .popover(isPresented: $hoverPopover.isPresented, arrowEdge: .bottom) {
                 WorkloadBreakdownPopover(label: label, icon: icon, tint: tint, workload: workload)
-                    .onHover { hoverPopover.setContentHover($0) }
+                    .background(
+                        NativeHoverTracker { hovering in
+                            hoverPopover.setContentHover(hovering)
+                        }
+                    )
             }
+            .padding(4)
         } else {
-            cellContent
+            cellContent(horizontalPadding: 14, verticalPadding: 11)
         }
     }
 
-    private var cellContent: some View {
+    private func cellContent(horizontalPadding: CGFloat, verticalPadding: CGFloat) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack(spacing: 5) {
                 Image(systemName: icon)
@@ -1323,8 +1612,8 @@ private struct WorkloadMetricCell: View {
                     .lineLimit(1)
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 11)
+        .padding(.horizontal, horizontalPadding)
+        .padding(.vertical, verticalPadding)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
