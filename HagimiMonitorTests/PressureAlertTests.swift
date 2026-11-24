@@ -56,7 +56,7 @@ struct PressureAlertStateMachineTests {
         #expect(hold(&machine, memory: 2, seconds: 0...59).isEmpty)
         // 满 60 秒发一条,同 episode 同档位不再重复。
         let alerts = hold(&machine, memory: 2, seconds: 60...300)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
         #expect(machine.isUnread(.menuBar))
     }
 
@@ -111,12 +111,12 @@ struct PressureAlertStateMachineTests {
         var alerts = hold(&machine, memory: 2, seconds: 11...69)
         #expect(alerts.isEmpty)
         alerts = hold(&machine, memory: 2, seconds: 70...80)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
         // 热临界是独立档位,同样从升级时刻重新计时。
         alerts = hold(&machine, thermal: 3, seconds: 81...140)
         #expect(alerts.isEmpty)
         alerts = hold(&machine, thermal: 3, seconds: 141...150)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .thermal, level: 3)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .thermal, level: 3, deliveryID: 2)])
     }
 
     @Test func peakFallsBackBelowSevereDoesNotNotify() {
@@ -134,7 +134,7 @@ struct PressureAlertStateMachineTests {
         _ = hold(&machine, memory: nil, seconds: 1...5)
         #expect(machine.isUnread(.menuBar))
         let alerts = hold(&machine, memory: 2, seconds: 6...61)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
     }
 
     @Test func longGapRestartsSustainClockWithoutClearingUnread() {
@@ -145,7 +145,7 @@ struct PressureAlertStateMachineTests {
         var alerts = hold(&machine, memory: 2, seconds: 100...159)
         #expect(alerts.isEmpty)
         alerts = hold(&machine, memory: 2, seconds: 160...170)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
         #expect(machine.isUnread(.menuBar))
     }
 
@@ -157,7 +157,7 @@ struct PressureAlertStateMachineTests {
         _ = hold(&machine, thermal: 2, seconds: 11...20)
         #expect(machine.isUnread(.menuBar))
         let alerts = hold(&machine, memory: nil, thermal: 2, seconds: 21...71)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 1)])
     }
 
     @Test func resetDropsEpisodeAndSustainClock() {
@@ -170,7 +170,7 @@ struct PressureAlertStateMachineTests {
         var alerts = hold(&machine, memory: 2, seconds: 100...159)
         #expect(alerts.isEmpty)
         alerts = hold(&machine, memory: 2, seconds: 160...170)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
     }
 
     @Test func crossEpisodeCooldownSuppressesImmediateRepeatButFiresAfterExpiry() {
@@ -178,7 +178,7 @@ struct PressureAlertStateMachineTests {
         let cooldown: TimeInterval = 15 * 60
 
         let first = hold(&machine, memory: 2, seconds: 0...60, cooldown: cooldown)
-        #expect(first == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(first == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 1)])
 
         // 恢复并在 5 分钟后再次持续严重 60 秒：处于 15 分钟冷却期内，仅亮红点、不发重复通知。
         _ = hold(&machine, memory: 0, seconds: 65...70, cooldown: cooldown)
@@ -189,7 +189,7 @@ struct PressureAlertStateMachineTests {
         // 恢复并跨过 16 分钟后再次持续严重：冷却期已过，恢复通知。
         _ = hold(&machine, memory: 0, seconds: 425...430, cooldown: cooldown)
         let afterCooldown = hold(&machine, memory: 2, seconds: 1020...1080, cooldown: cooldown)
-        #expect(afterCooldown == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(afterCooldown == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 2)])
     }
 
     @Test func sameEpisodeEscalationIsNotBlockedByCooldown() {
@@ -197,11 +197,11 @@ struct PressureAlertStateMachineTests {
         let cooldown: TimeInterval = 15 * 60
 
         let serious = hold(&machine, thermal: 2, seconds: 0...60, cooldown: cooldown)
-        #expect(serious == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2)])
+        #expect(serious == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 1)])
 
         // 同 episode 内紧接着升级到临界并持续 60 秒：不得被 15 分钟冷却拦住。
         let escalated = hold(&machine, thermal: 3, seconds: 61...125, cooldown: cooldown)
-        #expect(escalated == [PressureAlertStateMachine.Alert(kind: .thermal, level: 3)])
+        #expect(escalated == [PressureAlertStateMachine.Alert(kind: .thermal, level: 3, deliveryID: 2)])
     }
 
     @Test func resetSingleKindPreservesOtherActiveDimension() {
@@ -211,13 +211,79 @@ struct PressureAlertStateMachineTests {
 
         // 热维度未读与计时保留，满 60 秒正常触发；内存被清空后重头计时，不随热一起提前触发。
         let alerts = hold(&machine, memory: 2, thermal: 2, seconds: 31...60)
-        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2)])
+        #expect(alerts == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 1)])
         #expect(machine.isUnread(.menuBar))
 
         // 内存从 31s 起重新计时，满 60s（91s）才独立触发。
         #expect(hold(&machine, memory: 2, thermal: 2, seconds: 61...90).isEmpty)
         let memoryAlerts = hold(&machine, memory: 2, thermal: 2, seconds: 91...95)
-        #expect(memoryAlerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2)])
+        #expect(memoryAlerts == [PressureAlertStateMachine.Alert(kind: .memory, level: 2, deliveryID: 2)])
+    }
+
+    @Test func thermalDowngradeFromCriticalToSeriousDoesNotNotifyAgain() {
+        var machine = PressureAlertStateMachine()
+        let cooldown: TimeInterval = 15 * 60
+
+        let serious = hold(&machine, thermal: 2, seconds: 0...60, cooldown: cooldown)
+        #expect(serious == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 1)])
+
+        let critical = hold(&machine, thermal: 3, seconds: 61...121, cooldown: cooldown)
+        #expect(critical == [PressureAlertStateMachine.Alert(kind: .thermal, level: 3, deliveryID: 2)])
+
+        // 同一 episode 内从临界(3)降回严重(2)，即便持续超过 sustain 也不再重复弹出严重档通知。
+        let downgraded = hold(&machine, thermal: 2, seconds: 122...242, cooldown: cooldown)
+        #expect(downgraded.isEmpty)
+    }
+
+    @Test func rollbackNotificationRestoresLevelAndCooldownWithoutStorm() throws {
+        var machine = PressureAlertStateMachine()
+        let cooldown: TimeInterval = 15 * 60
+
+        // 1. 同 episode 内投递失败回滚：重置持续计时，不在下一秒形成风暴，满新 sustain 后允许重试。
+        let first = hold(&machine, thermal: 2, seconds: 0...60, cooldown: cooldown)
+        let firstAlert = try #require(first.first)
+        #expect(first == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 1)])
+        machine.rollbackNotification(for: firstAlert, at: t0.addingTimeInterval(61))
+        #expect(hold(&machine, thermal: 2, seconds: 62...120, cooldown: cooldown).isEmpty)
+        let retried = hold(&machine, thermal: 2, seconds: 121...125, cooldown: cooldown)
+        let retriedAlert = try #require(retried.first)
+        #expect(retried == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 2)])
+
+        // 2. episode 已恢复后才收到迟到的投递失败回调：同样回滚冷却时间戳，不误伤下一次新 episode。
+        _ = hold(&machine, thermal: 0, seconds: 126...130, cooldown: cooldown)
+        machine.rollbackNotification(for: retriedAlert, at: t0.addingTimeInterval(131))
+        let nextEpisode = hold(&machine, thermal: 2, seconds: 200...260, cooldown: cooldown)
+        #expect(nextEpisode == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 3)])
+    }
+
+    @Test func staleRollbackDoesNotUndoNewerSameLevelNotification() throws {
+        var machine = PressureAlertStateMachine()
+        let cooldown: TimeInterval = 15 * 60
+
+        let first = hold(&machine, thermal: 2, seconds: 0...60, cooldown: cooldown)
+        let firstAlert = try #require(first.first)
+        #expect(first == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 1)])
+
+        // 恢复并在冷却期过后产生更新的同档(严重)通知。
+        _ = hold(&machine, thermal: 0, seconds: 65...70, cooldown: cooldown)
+        let second = hold(&machine, thermal: 2, seconds: 1020...1080, cooldown: cooldown)
+        let secondAlert = try #require(second.first)
+        #expect(second == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 2)])
+        #expect(secondAlert.deliveryID != firstAlert.deliveryID)
+
+        // 旧请求 #1 迟到报失败，不得撤销新请求 #2 的已通知档位或冷却记录。
+        machine.rollbackNotification(for: firstAlert, at: t0.addingTimeInterval(1081))
+        #expect(hold(&machine, thermal: 2, seconds: 1082...1200, cooldown: cooldown).isEmpty)
+
+        _ = hold(&machine, thermal: 0, seconds: 1201...1205, cooldown: cooldown)
+        #expect(hold(&machine, thermal: 2, seconds: 1300...1360, cooldown: cooldown).isEmpty)
+
+        // reset 后重新产生同档通知，reset 前的旧请求同样不得误回滚。
+        machine.reset(.thermal)
+        let afterReset = hold(&machine, thermal: 2, seconds: 1400...1460, cooldown: cooldown)
+        #expect(afterReset == [PressureAlertStateMachine.Alert(kind: .thermal, level: 2, deliveryID: 3)])
+        machine.rollbackNotification(for: secondAlert, at: t0.addingTimeInterval(1461))
+        #expect(hold(&machine, thermal: 2, seconds: 1462...1550, cooldown: cooldown).isEmpty)
     }
 }
 
