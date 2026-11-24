@@ -207,4 +207,38 @@ struct TopProcessRowTests {
         #expect(trackingView.containsLocalPoint(CGPoint(x: 150, y: 60)) == false)
         #expect(trackingView.containsLocalPoint(CGPoint(x: 310, y: 8)) == false)
     }
+
+    @MainActor
+    @Test func delayedTooltipCentersNarrowButtonAndClampsToScreen() {
+        let screen = NSRect(x: 0, y: 0, width: 1440, height: 900)
+        // 16pt 按钮配 64pt 提示框：水平居中在按钮中点（208 - 32 = 176）。
+        let narrowAnchor = NSRect(x: 200, y: 500, width: 16, height: 15)
+        let centered = DelayedTooltipOverlay.Coordinator.resolvedOriginX(
+            anchorRect: narrowAnchor,
+            tipWidth: 64,
+            mouseX: 202,
+            screenFrame: screen
+        )
+        #expect(centered == 176)
+
+        // 紧靠屏幕右缘的 16pt 按钮仍被收在可见区 4pt 内边距内。
+        let rightEdgeAnchor = NSRect(x: 1420, y: 500, width: 16, height: 15)
+        let clamped = DelayedTooltipOverlay.Coordinator.resolvedOriginX(
+            anchorRect: rightEdgeAnchor,
+            tipWidth: 64,
+            mouseX: 1428,
+            screenFrame: screen
+        )
+        #expect(clamped == 1372)
+
+        // 宽锚点仍沿鼠标居中并受锚点左右边界限制。
+        let wideAnchor = NSRect(x: 100, y: 500, width: 200, height: 24)
+        let wideCentered = DelayedTooltipOverlay.Coordinator.resolvedOriginX(
+            anchorRect: wideAnchor,
+            tipWidth: 60,
+            mouseX: 180,
+            screenFrame: screen
+        )
+        #expect(wideCentered == 150)
+    }
 }

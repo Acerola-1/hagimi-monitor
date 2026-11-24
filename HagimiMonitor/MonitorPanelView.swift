@@ -4555,23 +4555,29 @@ private struct InteractiveProcessRow<Leading: View, Trailing: View>: View {
                 if isHovering && pid > 0 {
                     HStack(spacing: 3) {
                         if canActivate {
-                            quickActionButton(systemName: "arrow.up.forward.app",
-                                              help: String(localized: "panel.process.activate"),
-                                              tint: theme.secondaryText) {
+                            ProcessQuickActionButton(
+                                role: .activate,
+                                help: String(localized: "panel.process.activate"),
+                                theme: theme
+                            ) {
                                 ProcessActionHelper.activate(pid: pid)
                             }
                         }
-                        quickActionButton(systemName: "doc.on.doc",
-                                          help: String(localized: "panel.process.copy-pid"),
-                                          tint: theme.secondaryText) {
+                        ProcessQuickActionButton(
+                            role: .copyPID,
+                            help: String(localized: "panel.process.copy-pid"),
+                            theme: theme
+                        ) {
                             ProcessActionHelper.copyText("\(pid)")
                             copyID = UUID()
                         }
                         #if DIRECT_DISTRIBUTION
                         if canTerminate {
-                            quickActionButton(systemName: "xmark.circle",
-                                              help: String(localized: "panel.process.quit"),
-                                              tint: theme.palette.severityTint(for: .critical)) {
+                            ProcessQuickActionButton(
+                                role: .quit,
+                                help: String(localized: "panel.process.quit"),
+                                theme: theme
+                            ) {
                                 setPendingQuit((pid: pid, name: name))
                             }
                         }
@@ -4622,18 +4628,100 @@ private struct InteractiveProcessRow<Leading: View, Trailing: View>: View {
             } catch {}
         }
     }
+}
 
-    private func quickActionButton(systemName: String, help: String, tint: Color, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 16, height: 15)
-                .contentShape(Rectangle())
+/// 进程行悬停快捷操作按钮：用统一 16×15 圆角微底盘承载无框符号，消除不同 SF Symbol 外框尺寸差，
+/// 并通过 DelayedTooltipOverlay 避免 1Hz 采样重绘打断悬浮提示。
+private enum ProcessQuickActionRole {
+    case activate
+    case copyPID
+    case quit
+
+    var isCritical: Bool { self == .quit }
+
+    var symbolName: String {
+        switch self {
+        case .activate: return "arrow.up.forward"
+        case .copyPID: return "square.on.square"
+        case .quit: return "xmark"
         }
-        .buttonStyle(.plain)
-        .help(help)
+    }
+
+    var glyphWeight: Font.Weight {
+        switch self {
+        case .activate, .quit: return .bold
+        case .copyPID: return .semibold
+        }
+    }
+}
+
+private struct ProcessQuickActionButton: View {
+    let role: ProcessQuickActionRole
+    let help: String
+    let theme: MonitorPanelTheme
+    let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var isHovering = false
+
+    private var baseTint: Color {
+        role.isCritical ? theme.palette.severityTint(for: .critical) : theme.secondaryText
+    }
+
+    private var hoverGlyphTint: Color {
+        role.isCritical ? baseTint : theme.primaryText
+    }
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: role.symbolName)
+                .font(.system(size: 8.5, weight: role.glyphWeight))
+                .frame(width: 16, height: 15)
+                .contentShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+        }
+        .buttonStyle(
+            ProcessQuickActionButtonStyle(
+                baseTint: baseTint,
+                hoverGlyphTint: hoverGlyphTint,
+                isDark: colorScheme == .dark,
+                isHovering: isHovering
+            )
+        )
+        .background {
+            DelayedTooltipOverlay(
+                text: help,
+                delay: 0.45
+            )
+        }
         .accessibilityLabel(help)
+        .onHover { isHovering = $0 }
+    }
+}
+
+private struct ProcessQuickActionButtonStyle: ButtonStyle {
+    let baseTint: Color
+    let hoverGlyphTint: Color
+    let isDark: Bool
+    let isHovering: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        let isActive = isHovering || configuration.isPressed
+        let glyphColor = isActive ? hoverGlyphTint : baseTint
+        let plateOpacity: Double = {
+            if configuration.isPressed { return isDark ? 0.40 : 0.30 }
+            if isHovering { return isDark ? 0.28 : 0.20 }
+            return isDark ? 0.15 : 0.10
+        }()
+
+        configuration.label
+            .foregroundStyle(glyphColor)
+            .background(
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(baseTint.opacity(plateOpacity))
+            )
+            .scaleEffect(configuration.isPressed ? 0.9 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .animation(.easeOut(duration: 0.12), value: isHovering)
     }
 }
 
@@ -4750,6 +4838,30 @@ struct DelayedTooltipOverlay: NSViewRepresentable {
             presentPanel(anchorView: anchorView, window: window, mouseX: screenPoint.x)
         }
 
+        /// 计算提示框水平起点：窄锚点（如 16pt 按钮）以锚点中心对齐，宽锚点沿鼠标位置并收在锚点边界内。
+        static func resolvedOriginX(
+            anchorRect: NSRect,
+            tipWidth: CGFloat,
+            mouseX: CGFloat,
+            screenFrame: NSRect?
+        ) -> CGFloat {
+            var originX: CGFloat
+            if anchorRect.width < tipWidth {
+                originX = anchorRect.midX - tipWidth / 2
+            } else {
+                let minX = anchorRect.minX
+                let maxX = anchorRect.maxX - tipWidth
+                originX = min(max(mouseX - tipWidth / 2, minX), maxX)
+            }
+            if let screenFrame {
+                originX = min(
+                    max(originX, screenFrame.minX + 4),
+                    max(screenFrame.minX + 4, screenFrame.maxX - tipWidth - 4)
+                )
+            }
+            return originX
+        }
+
         private func presentPanel(anchorView: NSView, window: NSWindow, mouseX: CGFloat) {
             let panel = tipPanel ?? makePanel()
             tipPanel = panel
@@ -4771,16 +4883,17 @@ struct DelayedTooltipOverlay: NSViewRepresentable {
 
             let rectInWindow = anchorView.convert(anchorView.bounds, to: nil)
             let rectOnScreen = window.convertToScreen(rectInWindow)
+            let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame
 
-            let minX = rectOnScreen.minX
-            let maxX = max(minX, rectOnScreen.maxX - tipSize.width)
-            var originX = min(max(mouseX - tipSize.width / 2, minX), maxX)
+            let originX = Self.resolvedOriginX(
+                anchorRect: rectOnScreen,
+                tipWidth: tipSize.width,
+                mouseX: mouseX,
+                screenFrame: screenFrame
+            )
             var originY = rectOnScreen.minY - tipSize.height - 4
-            if let screenFrame = (window.screen ?? NSScreen.main)?.visibleFrame {
-                originX = min(max(originX, screenFrame.minX + 4), max(screenFrame.minX + 4, screenFrame.maxX - tipSize.width - 4))
-                if originY < screenFrame.minY + 4 {
-                    originY = rectOnScreen.maxY + 4
-                }
+            if let screenFrame, originY < screenFrame.minY + 4 {
+                originY = rectOnScreen.maxY + 4
             }
 
             panel.level = window.level
@@ -4888,6 +5001,7 @@ struct DelayedTooltipOverlay: NSViewRepresentable {
             addTrackingArea(area)
             trackingArea = area
             trackedRect = rect
+            checkPointer()
         }
 
         override func viewWillMove(toWindow newWindow: NSWindow?) {
